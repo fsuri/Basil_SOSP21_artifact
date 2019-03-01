@@ -9,7 +9,7 @@ EXPAND = lib/tmpl/expand
 
 CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNASSERT
 #CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized 
-CXXFLAGS := -g -std=c++0x
+CXXFLAGS := -g -std=c++17
 LDFLAGS := -levent_pthreads
 ## Debian package: check
 #CHECK_CFLAGS := $(shell pkg-config --cflags check)
@@ -127,6 +127,7 @@ include replication/vr/Rules.mk
 include replication/ir/Rules.mk
 include store/common/Rules.mk
 include store/tapirstore/Rules.mk
+include store/mortystore/Rules.mk
 include store/strongstore/Rules.mk
 include store/weakstore/Rules.mk
 include store/benchmark/Rules.mk

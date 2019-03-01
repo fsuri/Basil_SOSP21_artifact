@@ -40,7 +40,7 @@ public:
     virtual std::vector<int> Stats() = 0;
 
     // Sharding logic: Given key, generates a number b/w 0 to nshards-1
-    uint64_t key_to_shard(const std::string &key, uint64_t nshards) {
+    static uint64_t key_to_shard(const std::string &key, uint64_t nshards) {
         uint64_t hash = 5381;
         const char* str = key.c_str();
         for (unsigned int i = 0; i < key.length(); i++) {

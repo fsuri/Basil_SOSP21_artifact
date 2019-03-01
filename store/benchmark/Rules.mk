@@ -2,7 +2,7 @@ d := $(dir $(lastword $(MAKEFILE_LIST)))
 
 SRCS += $(addprefix $(d), benchClient.cc retwisClient.cc terminalClient.cc)
 
-OBJS-all-clients := $(OBJS-strong-client) $(OBJS-weak-client) $(OBJS-tapir-client)
+OBJS-all-clients := $(OBJS-strong-client) $(OBJS-weak-client) $(OBJS-tapir-client) $(OBJS-morty-client)
 
 $(d)benchClient: $(OBJS-all-clients) $(o)benchClient.o
 
