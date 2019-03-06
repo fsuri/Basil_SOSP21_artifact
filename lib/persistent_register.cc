@@ -34,6 +34,7 @@
 
 #include <fstream>
 #include <memory>
+#include <iostream>
 
 #include "lib/message.h"
 
@@ -74,8 +75,13 @@ std::string PersistentRegister::Read() const
     }
     std::unique_ptr<char[]> buffer(new char[length]);
     std::size_t num_read = std::fread(buffer.get(), length, 1, file);
-    if (num_read != 1) {
-        Panic("Unable to read file %s", filename_.c_str());
+    if (num_read != 0 && num_read != 1) {
+        if (std::ferror(file) != 0) {
+        } else if (std::feof(file) != 0) {
+          Panic("Unexpectedly reached EOF while reading %s", filename_.c_str());
+        } else {
+          Panic("Unable to read file %s", filename_.c_str());
+        }
     }
 
     CloseFile(file);

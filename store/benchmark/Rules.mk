@@ -6,7 +6,7 @@ OBJS-all-clients := $(OBJS-strong-client) $(OBJS-weak-client) $(OBJS-tapir-clien
 
 $(d)benchClient: $(OBJS-all-clients) $(o)benchClient.o
 
-$(d)retwisClient: $(OBJS-all-clients) $(o)retwisClient.o
+$(d)retwisClient: $(OBJS-all-clients) $(LIB-retwis) $(o)retwisClient.o
 
 $(d)terminalClient: $(OBJS-all-clients) $(o)terminalClient.o
 

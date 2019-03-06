@@ -36,23 +36,27 @@ void AsyncTransaction::ExecuteNextOperation(AsyncClient *client) {
   switch (type) {
     case GET:
       GetNextOperationKey(key);
-      client->Get(key, [this, opId, client](const std::string &key,
+      client->Get(key, [this, opId, client](int reply, const std::string &key,
           const std::string &value) {
-        readValues.insert(std::make_pair(key, value));
-        //GetOperation op = {opId, GET, key, value};
-        GetOperation op(opId, GET, key, value);
-        OnOperationCompleted(&op); 
-        ExecuteNextOperation(client);
+        if (reply == REPLY_OK) {
+          readValues.insert(std::make_pair(key, value));
+          //GetOperation op = {opId, GET, key, value};
+          GetOperation op(opId, GET, key, value);
+          OnOperationCompleted(&op); 
+          ExecuteNextOperation(client);
+        }
       });
       break;
     case PUT:
       GetNextOperationKey(key); 
       GetNextPutValue(value);
-      client->Put(key, value, [this, opId, client](const std::string &key) {
+      client->Put(key, value, [this, opId, client](int reply, const std::string &key) {
         //PutOperation op = {opId, PUT, key};
-        PutOperation op(opId, PUT, key);
-        OnOperationCompleted(&op); 
-        ExecuteNextOperation(client);
+        if (reply == REPLY_OK) {
+          PutOperation op(opId, PUT, key);
+          OnOperationCompleted(&op); 
+          ExecuteNextOperation(client);
+        }
       });
       break;
     case COMMIT:

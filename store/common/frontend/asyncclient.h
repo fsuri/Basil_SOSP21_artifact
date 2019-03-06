@@ -11,15 +11,16 @@
 
 #include "lib/assert.h"
 #include "lib/message.h"
+#include "store/common/transaction.h"
 
 #include <functional>
 #include <string>
 #include <vector>
 
-typedef std::function<void(const std::string &,
+typedef std::function<void(int, const std::string &,
     const std::string &)> get_callback;
 
-typedef std::function<void(const std::string &)> put_callback;
+typedef std::function<void(int, const std::string &)> put_callback;
 
 typedef std::function<void(bool)> commit_callback;
 
