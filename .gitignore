@@ -6,6 +6,7 @@ lockserver/lockserver-repl
 store/benchmark/benchClient
 store/benchmark/retwisClient
 store/benchmark/terminalClient
+store/benchmark/async/tpcc/tpccClient
 store/strongstore/server
 store/tapirstore/server
 store/weakstore/server
