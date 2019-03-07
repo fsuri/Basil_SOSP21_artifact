@@ -9,7 +9,7 @@ namespace retwis {
 
 class PostTweet : public RetwisTransaction {
  public:
-  PostTweet(std::function<int()> chooseKey);
+  PostTweet(std::function<std::string()> chooseKey);
   virtual ~PostTweet();
 
  protected:

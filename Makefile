@@ -131,6 +131,7 @@ include store/mortystore/Rules.mk
 include store/strongstore/Rules.mk
 include store/weakstore/Rules.mk
 include store/benchmark/async/retwis/Rules.mk
+include store/benchmark/async/tpcc/Rules.mk
 include store/benchmark/Rules.mk
 include lockserver/Rules.mk
 include timeserver/Rules.mk

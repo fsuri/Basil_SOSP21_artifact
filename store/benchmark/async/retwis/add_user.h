@@ -9,7 +9,7 @@ namespace retwis {
 
 class AddUser : public RetwisTransaction {
  public:
-  AddUser(std::function<int()> chooseKey);
+  AddUser(std::function<std::string()> chooseKey);
   virtual ~AddUser();
  
  protected:

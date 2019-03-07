@@ -5,7 +5,7 @@ SRCS += $(addprefix $(d), promise.cc timestamp.cc tracer.cc \
 
 PROTOS += $(addprefix $(d), common-proto.proto)
 
-LIB-store-common := $(o)common-proto.o $(o)promise.o $(o)timestamp.o \
-							$(o)tracer.o $(o)transaction.o $(o)truetime.o
+LIB-store-common := $(LIB-message) $(o)common-proto.o $(o)promise.o \
+		$(o)timestamp.o $(o)tracer.o $(o)transaction.o $(o)truetime.o
 
 include $(d)backend/Rules.mk $(d)frontend/Rules.mk

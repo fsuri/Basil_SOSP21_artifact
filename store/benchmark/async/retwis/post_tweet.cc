@@ -2,7 +2,7 @@
 
 namespace retwis {
 
-PostTweet::PostTweet(std::function<int()> chooseKey) :
+PostTweet::PostTweet(std::function<std::string()> chooseKey) :
     RetwisTransaction(chooseKey, 5) {
 }
 
@@ -10,12 +10,13 @@ PostTweet::~PostTweet() {
 }
 
 void PostTweet::ExecuteNextOperation(Client *client) {
+  std::string value;
   if (GetOpsCompleted() < 6) {
     int k = GetOpsCompleted() / 2;
     if (GetOpsCompleted() % 2 == 0) {
-      client->Get(k);
+      client->Get(GetKey(k), value);
     } else {
-      client->Put(k, k);
+      client->Put(GetKey(k), GetKey(k));
     }
   } else if (GetOpsCompleted() == 6) {
     client->Put(GetKey(3), GetKey(3));

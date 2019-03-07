@@ -1,5 +1,6 @@
 d := $(dir $(lastword $(MAKEFILE_LIST)))
 
-SRCS += $(addprefix $(d), bufferclient.cc asynctransaction.cc)
+SRCS += $(addprefix $(d), bufferclient.cc async_transaction.cc)
 
-LIB-store-frontend := $(o)bufferclient.o $(o)asynctransaction.o
+LIB-store-frontend := $(LIB-store-common) $(o)bufferclient.o \
+		$(o)async_transaction.o

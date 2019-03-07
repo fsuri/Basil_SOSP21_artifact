@@ -4,9 +4,7 @@
  * latency.cc:
  *   latency profiling functions
  *
- * Copyright 2013-2015 Irene Zhang <iyzhang@cs.washington.edu>
- *                     Naveen Kr. Sharma <naveenks@cs.washington.edu>
- *                     Dan R. K. Ports  <drkp@cs.washington.edu>
+ * Copyright 2013 Dan R. K. Ports  <drkp@cs.washington.edu>
  * Copyright 2009-2012 Massachusetts Institute of Technology
  *
  * Permission is hereby granted, free of charge, to any person
@@ -67,21 +65,25 @@ _Latency_Init(Latency_t *l, const char *name)
     latencyHead = l;
 }
 
+/*
 static void
 LatencyMaybeFlush(void)
 {
 
-    static struct timespec lastFlush;
+    return;
 
-    struct timespec now;
-    if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
-        PPanic("Failed to get CLOCK_MONOTONIC");
+    // static struct timespec lastFlush;
 
-    if (now.tv_sec != lastFlush.tv_sec) {
-        lastFlush = now;
-        Latency_Flush();
-    }
+    // struct timespec now;
+    // if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
+    //     PPanic("Failed to get CLOCK_MONOTONIC");
+
+    // if (now.tv_sec != lastFlush.tv_sec) {
+    //     lastFlush = now;
+    //     Latency_Flush();
+    // }
 }
+*/
 
 static inline Latency_Dist_t *
 LatencyAddHist(Latency_t *l, char type, uint64_t val, uint32_t count)
@@ -140,7 +142,7 @@ Latency_StartRec(Latency_t *l, Latency_Frame_t *fr)
     Latency_Resume(l);
 }
 
-void
+uint64_t
 Latency_EndRecType(Latency_t *l, Latency_Frame_t *fr, char type)
 {
     Latency_Pause(l);
@@ -150,7 +152,7 @@ Latency_EndRecType(Latency_t *l, Latency_Frame_t *fr, char type)
 
     LatencyAdd(l, type, fr->accum);
 
-    LatencyMaybeFlush();
+    return fr->accum;
 }
 
 void
@@ -207,7 +209,7 @@ Latency_Sum(Latency_t *dest, Latency_t *summand)
     }
 }
 
-static char *
+char *
 LatencyFmtNS(uint64_t ns, char *buf)
 {
     static const char *units[] = {"ns", "us", "ms", "s"};
@@ -329,7 +331,7 @@ Latency_FlushTo(const char *fname)
     std::ofstream outfile(fname);
     Latency_t *l = latencyHead;
     ::transport::latency::format::LatencyFile out;
-    
+
     for (; l; l = l->next) {
         ::transport::latency::format::Latency lout;
         Latency_Put(l, lout);
@@ -360,7 +362,7 @@ Latency_Put(Latency_t *l, ::transport::latency::format::Latency &out)
 {
     out.Clear();
     out.set_name(l->name);
-    
+
     for (int i = 0; i < l->distPoolNext; ++i) {
         Latency_Dist_t *d = &l->distPool[i];
         ::transport::latency::format::LatencyDist *outd = out.add_dists();
@@ -369,9 +371,9 @@ Latency_Put(Latency_t *l, ::transport::latency::format::Latency &out)
         outd->set_max(d->max);
         outd->set_total(d->total);
         outd->set_count(d->count);
-        
+
         for (int b = 0; b < LATENCY_NUM_BUCKETS; ++b) {
-            outd->add_buckets(d->buckets[b]);            
+            outd->add_buckets(d->buckets[b]);
         }
     }
 }
@@ -396,3 +398,4 @@ Latency_TryGet(const ::transport::latency::format::Latency &in, Latency_t *l)
     }
     return true;
 }
+

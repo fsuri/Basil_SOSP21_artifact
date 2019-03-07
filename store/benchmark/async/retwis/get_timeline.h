@@ -9,7 +9,7 @@ namespace retwis {
 
 class GetTimeline : public RetwisTransaction {
  public:
-  GetTimeline(std::function<int()> chooseKey);
+  GetTimeline(std::function<std::string()> chooseKey);
   virtual ~GetTimeline();
 
  protected:

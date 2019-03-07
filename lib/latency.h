@@ -4,9 +4,7 @@
  * latency.h:
  *   latency profiling functions
  *
- * Copyright 2013-2015 Irene Zhang <iyzhang@cs.washington.edu>
- *                     Naveen Kr. Sharma <naveenks@cs.washington.edu>
- *                     Dan R. K. Ports  <drkp@cs.washington.edu>
+ * Copyright 2013 Dan R. K. Ports  <drkp@cs.washington.edu>
  * Copyright 2009-2012 Massachusetts Institute of Technology
  *
  * Permission is hereby granted, free of charge, to any person
@@ -96,7 +94,7 @@ typedef struct Latency_t
 void _Latency_Init(Latency_t *l, const char *name);
 
 void Latency_StartRec(Latency_t *l, Latency_Frame_t *fr);
-void Latency_EndRecType(Latency_t *l, Latency_Frame_t *fr, char type);
+uint64_t Latency_EndRecType(Latency_t *l, Latency_Frame_t *fr, char type);
 void Latency_Pause(Latency_t *l);
 void Latency_Resume(Latency_t *l);
 
@@ -118,22 +116,25 @@ Latency_Start(Latency_t *l)
     Latency_StartRec(l, &l->defaultFrame);
 }
 
-static inline void
+static inline uint64_t
 Latency_EndRec(Latency_t *l, Latency_Frame_t *fr)
 {
-    Latency_EndRecType(l, fr, '=');
+    return Latency_EndRecType(l, fr, '=');
 }
 
-static inline void
+static inline uint64_t
 Latency_EndType(Latency_t *l, char type)
 {
-    Latency_EndRecType(l, &l->defaultFrame, type);
+    return Latency_EndRecType(l, &l->defaultFrame, type);
 }
 
-static inline void
+static inline uint64_t
 Latency_End(Latency_t *l)
 {
-    Latency_EndRec(l, &l->defaultFrame);
+    return Latency_EndRec(l, &l->defaultFrame);
 }
+
+char *LatencyFmtNS(uint64_t ns, char *buf);
+
 
 #endif // _LIB_LATENCY_H_
