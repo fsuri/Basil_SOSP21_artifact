@@ -117,7 +117,7 @@ IRReplica::HandleProposeInconsistent(const TransportAddress &remote,
     uint64_t clientid = msg.req().clientid();
     uint64_t clientreqid = msg.req().clientreqid();
 
-    Debug("%lu:%lu Received inconsistent op: %s", clientid, clientreqid, (char *)msg.req().op().c_str());
+    Debug("%lu:%lu Received inconsistent op: %s", clientid, clientreqid, (char *)msg.req().op().substr(0, 10).c_str());
 
     opid_t opid = make_pair(clientid, clientreqid);
 
@@ -188,7 +188,7 @@ IRReplica::HandleProposeConsensus(const TransportAddress &remote,
     uint64_t clientid = msg.req().clientid();
     uint64_t clientreqid = msg.req().clientreqid();
 
-    Debug("%lu:%lu Received consensus op: %s", clientid, clientreqid, (char *)msg.req().op().c_str());
+    Debug("%lu:%lu Received consensus op: %s", clientid, clientreqid, (char *)msg.req().op().substr(0, 10).c_str());
 
     opid_t opid = make_pair(clientid, clientreqid);
 
@@ -412,13 +412,16 @@ IRReplica::HandleUnlogged(const TransportAddress &remote,
     string res;
 
     Debug("Received unlogged request %lu: %s", msg.req().clientreqid(),
-        (char *)msg.req().op().c_str());
+        (char *)msg.req().op().substr(0, 10).c_str());
 
     app->UnloggedUpcall(msg.req().op(), res);
     reply.set_reply(res);
     reply.set_clientreqid(msg.req().clientreqid());
-    if (!(transport->SendMessage(this, remote, reply)))
-        Warning("Failed to send reply message for %lu", msg.req().clientreqid());
+    if (transport->SendMessage(this, remote, reply)) {
+      Debug("Sent UnloggedReplyMessage for %lu", msg.req().clientreqid());
+    } else {
+      Warning("Failed to send reply message for %lu", msg.req().clientreqid());
+    }
 }
 
 void IRReplica::HandleViewChangeTimeout() {

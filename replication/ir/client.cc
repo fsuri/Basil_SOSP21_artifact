@@ -134,14 +134,9 @@ IRClient::InvokeConsensus(const string &request,
 				    decide,
                     error_continuation);
 
-    proto::ProposeConsensusMessage reqMsg;
-    reqMsg.mutable_req()->set_op(request);
-    reqMsg.mutable_req()->set_clientid(clientid);
-    reqMsg.mutable_req()->set_clientreqid(reqId);
-
 	pendingReqs[reqId] = req;
-    req->transition_to_slow_path_timer->Start();
-    SendConsensus(req);
+  req->transition_to_slow_path_timer->Start();
+  SendConsensus(req);
 }
 
 void
@@ -610,7 +605,8 @@ IRClient::UnloggedRequestTimeoutCallback(const uint64_t reqId)
     PendingUnloggedRequest *req = static_cast<PendingUnloggedRequest *>(it->second);
     ASSERT(req != NULL);
 
-    Warning("Unlogged request %lu timed out", reqId);
+    //Warning("Unlogged request %lu timed out", reqId);
+    Panic("Unlogged request %lu timed out", reqId);
     // delete timer event
     req->timer->Stop();
     // remove from pending list

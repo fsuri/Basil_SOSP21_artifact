@@ -13,6 +13,7 @@ AsyncTransaction::~AsyncTransaction() {
 
 void AsyncTransaction::Execute(execute_callback ecb) {
   currEcb = ecb;
+  client->Begin();
   ExecuteNextOperation();
 }
 

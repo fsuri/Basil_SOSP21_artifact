@@ -5,7 +5,7 @@
 namespace retwis {
 
 GetTimeline::GetTimeline(Client *client, KeySelector *keySelector)
-    : RetwisTransaction(client, keySelector, std::rand() % 10) {
+    : RetwisTransaction(client, keySelector, 1 + std::rand() % 10) {
 }
 
 GetTimeline::~GetTimeline() {
