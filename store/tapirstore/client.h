@@ -48,56 +48,88 @@
 
 namespace tapirstore {
 
-class Client : public ::Client
-{
-public:
-    Client(const std::string configPath, int nShards,
-	   int closestReplica, TrueTime timeserver = TrueTime(0,0));
-    virtual ~Client();
+class Client : public ::Client {
+ public:
+  Client(const std::string configPath, int nShards,
+      int closestReplica, Transport *transport,
+      TrueTime timeserver = TrueTime(0,0));
+  virtual ~Client();
 
-    // Overriding functions from ::Client.
-    void Begin();
-    int Get(const std::string &key, std::string &value);
-    // Interface added for Java bindings
-    std::string Get(const std::string &key);
-    int Put(const std::string &key, const std::string &value);
-    bool Commit();
-    void Abort();
-    std::vector<int> Stats();
+  // Begin a transaction.
+  virtual void Begin();
 
-private:
-    // Unique ID for this client.
-    uint64_t client_id;
+  // Get the value corresponding to key.
+  virtual void Get(const std::string &key, get_callback gcb,
+      get_timeout_callback gtcb, uint32_t timeout = GET_TIMEOUT);
 
-    // Ongoing transaction ID.
-    uint64_t t_id;
+  // Set the value for the given key.
+  virtual void Put(const std::string &key, const std::string &value,
+      put_callback pcb, put_timeout_callback ptcb,
+      uint32_t timeout = PUT_TIMEOUT);
 
-    // Number of shards.
-    uint64_t nshards;
+  // Commit all Get(s) and Put(s) since Begin().
+  virtual void Commit(commit_callback ccb, commit_timeout_callback ctcb,
+      uint32_t timeout);
+  
+  // Abort all Get(s) and Put(s) since Begin().
+  virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
+      uint32_t timeout);
 
-    // Number of retries for current transaction.
-    long retries;
+  virtual std::vector<int> Stats();
 
-    // List of participants in the ongoing transaction.
-    std::set<int> participants;
+ private:
+  struct PendingRequest {
+    PendingRequest(uint64_t id) : id(id), outstandingPrepares(0), commitTries(0),
+        maxRepliedTs(0UL), prepareStatus(REPLY_OK), prepareTimestamp(nullptr) {
+    }
 
-    // Transport used by IR client proxies.
-    UDPTransport transport;
-    
-    // Thread running the transport event loop.
-    std::thread *clientTransport;
+    ~PendingRequest() {
+      if (prepareTimestamp != nullptr) {
+        delete prepareTimestamp;
+      }
+    }
 
-    // Buffering client for each shard.
-    std::vector<BufferClient *> bclient;
+    commit_callback ccb;
+    commit_timeout_callback ctcb;
+    uint64_t id;
+    int outstandingPrepares;
+    int commitTries;
+    uint64_t maxRepliedTs;
+    int prepareStatus;
+    Timestamp *prepareTimestamp;
+  };
 
-    // TrueTime server.
-    TrueTime timeServer;
+  // Prepare function
+  void Prepare(PendingRequest *req, uint32_t timeout);
+  void PrepareCallback(uint64_t reqId, int status, Timestamp ts);
+  void HandleAllPreparesReceived(PendingRequest *req);
 
-    // Prepare function
-    int Prepare(Timestamp &timestamp);
+  // Unique ID for this client.
+  uint64_t client_id;
 
-    // Runs the transport event loop.
-    void run_client();
+  // Ongoing transaction ID.
+  uint64_t t_id;
+
+  // Number of shards.
+  uint64_t nshards;
+
+  // Number of retries for current transaction.
+  long retries;
+
+  // List of participants in the ongoing transaction.
+  std::set<int> participants;
+
+  // Transport used by IR client proxies.
+  Transport *transport;
+  
+  // Buffering client for each shard.
+  std::vector<BufferClient *> bclient;
+
+  // TrueTime server.
+  TrueTime timeServer;
+  
+  uint64_t lastReqId;
+  std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
 };
 
 } // namespace tapirstore

@@ -47,71 +47,129 @@
 
 namespace tapirstore {
 
-class ShardClient : public TxnClient
-{
-public:
-    /* Constructor needs path to shard config. */
-    ShardClient( const std::string &configPath,
-        Transport *transport,
-        uint64_t client_id,
-        int shard,
-        int closestReplica);
-    ~ShardClient();
+class ShardClient : public TxnClient {
+ public:
+  /* Constructor needs path to shard config. */
+  ShardClient(const std::string &configPath, Transport *transport,
+      uint64_t client_id, int shard, int closestReplica);
+  virtual ~ShardClient();
 
-    // Overriding from TxnClient
-    void Begin(uint64_t id);
-    void Get(uint64_t id,
-            const std::string &key,
-            Promise *promise = NULL);
-    void Get(uint64_t id,
-            const std::string &key,
-            const Timestamp &timestamp,
-            Promise *promise = NULL);
-    void Put(uint64_t id,
-	     const std::string &key,
-	     const std::string &value,
-	     Promise *promise = NULL);
-    void Prepare(uint64_t id,
-                 const Transaction &txn,
-                 const Timestamp &timestamp = Timestamp(),
-                 Promise *promise = NULL);
-    void Commit(uint64_t id,
-                const Transaction &txn,
-                uint64_t timestamp,
-                Promise *promise = NULL);
-    void Abort(uint64_t id,
-               const Transaction &txn,
-               Promise *promise = NULL);
+  // Begin a transaction.
+  virtual void Begin(uint64_t id);
 
-private:
-    uint64_t client_id; // Unique ID for this client.
-    Transport *transport; // Transport layer.
-    transport::Configuration *config;
-    int shard; // which shard this client accesses
-    int replica; // which replica to use for reads
+  // Get the value corresponding to key.
+  virtual void Get(uint64_t id, const std::string &key, get_callback gcb,
+      get_timeout_callback gtcb, uint32_t timeout);
+  virtual void Get(uint64_t id, const std::string &key,
+      const Timestamp &timestamp, get_callback gcb, get_timeout_callback gtcb,
+      uint32_t timeout);
 
-    replication::ir::IRClient *client; // Client proxy.
-    Promise *waiting; // waiting thread
-    Promise *blockingBegin; // block until finished
+  // Set the value for the given key.
+  virtual void Put(uint64_t id, const std::string &key,
+      const std::string &value, put_callback pcb, put_timeout_callback ptcb,
+      uint32_t timeout);
 
-    /* Tapir's Decide Function. */
-    std::string TapirDecide(const std::map<std::string, std::size_t> &results);
+  // Commit all Get(s) and Put(s) since Begin().
+  virtual void Commit(uint64_t id, const Transaction & txn,
+      uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
+      uint32_t timeout);
+  
+  // Abort all Get(s) and Put(s) since Begin().
+  virtual void Abort(uint64_t id, const Transaction &txn,
+      abort_callback acb, abort_timeout_callback atcb, uint32_t timeout);
 
-    /* Timeout for Get requests, which only go to one replica. */
-    void GetTimeout();
+  // Prepare the transaction.
+  virtual void Prepare(uint64_t id, const Transaction &txn,
+      const Timestamp &timestamp, prepare_callback pcb,
+      prepare_timeout_callback ptcb, uint32_t timeout);
 
-    /* Callbacks for hearing back from a shard for an operation. */
-    void GetCallback(const std::string &, const std::string &);
-    void PrepareCallback(const std::string &, const std::string &);
-    void CommitCallback(const std::string &, const std::string &);
-    void AbortCallback(const std::string &, const std::string &);
+ private:
+  struct PendingGet {
+    PendingGet(uint64_t reqId) : reqId(reqId) { }
+    uint64_t reqId;
+    std::string key;
+    get_callback gcb;
+    get_timeout_callback gtcb;
+  };
+  struct PendingPrepare {
+    PendingPrepare(uint64_t reqId) : reqId(reqId), requestTimeout(nullptr) { }
+    ~PendingPrepare() {
+      if (requestTimeout != nullptr) {
+        delete requestTimeout;
+      }
+    }
+    uint64_t reqId;
+    Timestamp ts;
+    Transaction txn;
+    prepare_callback pcb;
+    prepare_timeout_callback ptcb;
+    Timeout *requestTimeout;
+  };
+  struct PendingCommit {
+    PendingCommit(uint64_t reqId) : reqId(reqId), requestTimeout(nullptr) { }
+    ~PendingCommit() {
+      if (requestTimeout != nullptr) {
+        delete requestTimeout;
+      }
+    }
+    uint64_t reqId;
+    uint64_t ts;
+    Transaction txn;
+    commit_callback ccb;
+    commit_timeout_callback ctcb;
+    Timeout *requestTimeout;
+  };
+  struct PendingAbort {
+    PendingAbort(uint64_t reqId) : reqId(reqId), requestTimeout(nullptr) { }
+    ~PendingAbort() {
+      if (requestTimeout != nullptr) {
+        delete requestTimeout;
+      }
+    }
+    uint64_t reqId;
+    Transaction txn;
+    abort_callback acb;
+    abort_timeout_callback atcb;
+    Timeout *requestTimeout;
+  };
 
-    /* Helper Functions for starting and finishing requests */
-    void StartRequest();
-    void WaitForResponse();
-    void FinishRequest(const std::string &reply_str);
-    void FinishRequest();
-    int SendGet(const std::string &request_str);
+  uint64_t client_id; // Unique ID for this client.
+  Transport *transport; // Transport layer.
+  transport::Configuration *config;
+  int shard; // which shard this client accesses
+  int replica; // which replica to use for reads
+
+  replication::ir::IRClient *client; // Client proxy.
+
+  uint64_t lastReqId;
+  std::unordered_map<uint64_t, PendingGet *> pendingGets;
+  std::unordered_map<uint64_t, PendingPrepare *> pendingPrepares;
+  std::unordered_map<uint64_t, PendingCommit *> pendingCommits;
+  std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
+
+
+  /* Tapir's Decide Function. */
+  std::string TapirDecide(const std::map<std::string, std::size_t> &results);
+
+  /* Timeout for Get requests, which only go to one replica. */
+  void GetTimeout(PendingGet *pendingGet);
+
+  /* Callbacks for hearing back from a shard for an operation. */
+  void GetCallback(PendingGet *pendingGet, const std::string &,
+      const std::string &);
+  void PrepareCallback(PendingPrepare *pendingPrepare, const std::string &,
+      const std::string &);
+  void CommitCallback(PendingCommit *pendingCommit, const std::string &,
+      const std::string &);
+  void AbortCallback(PendingAbort *pendingAbort, const std::string &,
+      const std::string &);
+
+  /* Helper Functions for starting and finishing requests */
+  void StartRequest();
+  void WaitForResponse();
+  void FinishRequest(const std::string &reply_str);
+  void FinishRequest();
+  int SendGet(const std::string &request_str);
 };
 
 } // namespace tapirstore

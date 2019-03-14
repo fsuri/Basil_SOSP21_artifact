@@ -1,39 +1,41 @@
 #ifndef _ASYNC_TRANSACTION_H_
 #define _ASYNC_TRANSACTION_H_
 
-#include "store/common/frontend/asyncclient.h"
 #include "store/common/frontend/client.h"
 
 #include <functional>
 #include <map>
 #include <string>
 
+typedef std::function<void(bool, std::map<std::string, std::string>)> execute_callback;
+
 class AsyncTransaction {
  public:
-  AsyncTransaction();
+  AsyncTransaction(Client *client);
   AsyncTransaction(const AsyncTransaction &txn);
   virtual ~AsyncTransaction();
 
-  virtual void ExecuteNextOperation(Client *client) = 0;
-
-  inline bool IsFinished() const { return finished; }
-  inline bool IsCommitted() const { return committed; }
+  void Execute(execute_callback ecb);
+  virtual void ExecuteNextOperation() = 0;
 
  protected:
   void CopyStateInto(AsyncTransaction *txn) const {};
 
   inline size_t GetOpsCompleted() const { return opCount; }
-  inline void SetFinished(bool f) { finished = f; }
-  inline void SetCommitted(bool c) { committed = c; }
+
+  void Get(const std::string &key);
+  void Put(const std::string &key, const std::string &value);
+  void Commit();
+  void Abort();
 
   void GetReadValue(const std::string &key, std::string &value,
       bool &found) const;
 
  private:
+  Client *client;
   size_t opCount;
-  bool finished;
-  bool committed;
   std::map<std::string, std::string> readValues;
+  execute_callback currEcb;
 
 };
 

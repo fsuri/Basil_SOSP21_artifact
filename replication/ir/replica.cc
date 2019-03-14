@@ -224,6 +224,11 @@ IRReplica::HandleProposeConsensus(const TransportAddress &remote,
 
     // Send the reply
     transport->SendMessage(this, remote, reply);
+    if (transport->SendMessage(this, remote, reply)) {
+      Debug("%lu:%lu Replied to ProposeConsensusMessage", clientid, clientreqid);
+    } else {
+      Warning("%lu:%lu Failed to send ReplyConsensusMessage", clientid, clientreqid);
+    }
 }
 
 void
@@ -254,8 +259,10 @@ IRReplica::HandleFinalizeConsensus(const TransportAddress &remote,
         reply.set_replicaidx(myIdx);
         *reply.mutable_opid() = msg.opid();
 
-        if (!transport->SendMessage(this, remote, reply)) {
-            Warning("Failed to send reply message");
+        if (transport->SendMessage(this, remote, reply)) {
+          Debug("%lu:%lu Replied to finalize consensus op", clientid, clientreqid);
+        } else {
+          Warning("%lu:%lu Failed to send confirm message", clientid, clientreqid);
         }
     } else {
         // Ignore?
@@ -404,13 +411,14 @@ IRReplica::HandleUnlogged(const TransportAddress &remote,
     UnloggedReplyMessage reply;
     string res;
 
-    Debug("Received unlogged request %s", (char *)msg.req().op().c_str());
+    Debug("Received unlogged request %lu: %s", msg.req().clientreqid(),
+        (char *)msg.req().op().c_str());
 
     app->UnloggedUpcall(msg.req().op(), res);
     reply.set_reply(res);
     reply.set_clientreqid(msg.req().clientreqid());
     if (!(transport->SendMessage(this, remote, reply)))
-        Warning("Failed to send reply message");
+        Warning("Failed to send reply message for %lu", msg.req().clientreqid());
 }
 
 void IRReplica::HandleViewChangeTimeout() {

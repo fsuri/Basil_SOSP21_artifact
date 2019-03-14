@@ -2,13 +2,20 @@
 
 namespace tpcc {
 
-NewOrder::NewOrder() {
+NewOrder::NewOrder(Client *client) : TPCCTransaction(client) {
 }
 
 NewOrder::~NewOrder() {
 }
 
-void NewOrder::ExecuteNextOperation(Client *client) {
+void NewOrder::ExecuteNextOperation() {
+  if (GetOpsCompleted() == 0) {
+    Get("hello");
+  } else if (GetOpsCompleted() == 1) {
+    Put("hello", "world");
+  } else {
+    Commit();
+  }
 }
 
 }

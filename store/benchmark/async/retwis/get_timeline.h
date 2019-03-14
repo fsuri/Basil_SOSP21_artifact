@@ -9,11 +9,11 @@ namespace retwis {
 
 class GetTimeline : public RetwisTransaction {
  public:
-  GetTimeline(std::function<std::string()> chooseKey);
+  GetTimeline(Client *client, KeySelector *keySelector);
   virtual ~GetTimeline();
 
  protected:
-  void ExecuteNextOperation(Client *client);
+  void ExecuteNextOperation();
 
 };
 

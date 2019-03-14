@@ -49,61 +49,50 @@ BufferClient::Begin(uint64_t tid)
     txnclient->Begin(tid);
 }
 
-/* Get value for a key.
- * Returns 0 on success, else -1. */
-void
-BufferClient::Get(const string &key, Promise *promise)
-{
-    // Read your own writes, check the write set first.
-    if (txn.getWriteSet().find(key) != txn.getWriteSet().end()) {
-        promise->Reply(REPLY_OK, (txn.getWriteSet().find(key))->second);
-        return;
-    }
+void BufferClient::Get(const std::string &key, get_callback gcb,
+    get_timeout_callback gtcb, uint32_t timeout) {
 
-    // Consistent reads, check the read set.
-    if (txn.getReadSet().find(key) != txn.getReadSet().end()) {
-        // read from the server at same timestamp.
-        txnclient->Get(tid, key, (txn.getReadSet().find(key))->second, promise);
-        return;
+  // Read your own writes, check the write set first.
+  if (txn.getWriteSet().find(key) != txn.getWriteSet().end()) {
+    gcb(REPLY_OK, key, (txn.getWriteSet().find(key))->second, Timestamp());
+    return;
+  }
+
+  // Consistent reads, check the read set.
+  if (txn.getReadSet().find(key) != txn.getReadSet().end()) {
+    // read from the server at same timestamp.
+    txnclient->Get(tid, key, (txn.getReadSet().find(key))->second, gcb, gtcb,
+        timeout);
+    return;
+  }
+  
+  get_callback bufferCb = [this, gcb](int status, const std::string & key,
+      const std::string &value, Timestamp ts) {
+    if (status == REPLY_OK) {
+      txn.addReadSet(key, ts);
     }
+    gcb(status, key, value, ts);
+  };
+  txnclient->Get(tid, key, bufferCb, gtcb, GET_TIMEOUT);
+}
+
+void BufferClient::Put(const std::string &key, const std::string &value,
+    put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
+  txn.addWriteSet(key, value);
+  pcb(REPLY_OK, key, value);
+}
+
+void BufferClient::Prepare(const Timestamp &timestamp, prepare_callback pcb,
+       prepare_timeout_callback ptcb, uint32_t timeout) {
+  txnclient->Prepare(tid, txn, timestamp, pcb, ptcb, timeout);
+}
+
+void BufferClient::Commit(uint64_t timestamp, commit_callback ccb,
+    commit_timeout_callback ctcb, uint32_t timeout) {
+  txnclient->Commit(tid, txn, timestamp, ccb, ctcb, timeout);
+}
     
-    // Otherwise, get latest value from server.
-    Promise p(GET_TIMEOUT);
-    Promise *pp = (promise != NULL) ? promise : &p;
-
-    txnclient->Get(tid, key, pp);
-    if (pp->GetReply() == REPLY_OK) {
-        Debug("Adding [%s] with ts %lu", key.c_str(), pp->GetTimestamp().getTimestamp());
-        txn.addReadSet(key, pp->GetTimestamp());
-    }
-}
-
-/* Set value for a key. (Always succeeds).
- * Returns 0 on success, else -1. */
-void
-BufferClient::Put(const string &key, const string &value, Promise *promise)
-{
-    // Update the write set.
-    txn.addWriteSet(key, value);
-    promise->Reply(REPLY_OK);
-}
-
-/* Prepare the transaction. */
-void
-BufferClient::Prepare(const Timestamp &timestamp, Promise *promise)
-{
-    txnclient->Prepare(tid, txn, timestamp, promise);
-}
-
-void
-BufferClient::Commit(uint64_t timestamp, Promise *promise)
-{
-    txnclient->Commit(tid, txn, timestamp, promise);
-}
-
-/* Aborts the ongoing transaction. */
-void
-BufferClient::Abort(Promise *promise)
-{
-    txnclient->Abort(tid, Transaction(), promise);
+void BufferClient::Abort(abort_callback acb, abort_timeout_callback atcb,
+    uint32_t timeout) {
+  txnclient->Abort(tid, Transaction(), acb, atcb, timeout);
 }

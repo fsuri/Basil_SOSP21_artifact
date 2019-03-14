@@ -4,19 +4,19 @@
 
 namespace retwis {
 
-GetTimeline::GetTimeline(std::function<std::string()> chooseKey)
-    : RetwisTransaction(chooseKey, std::rand() % 10) {
+GetTimeline::GetTimeline(Client *client, KeySelector *keySelector)
+    : RetwisTransaction(client, keySelector, std::rand() % 10) {
 }
 
 GetTimeline::~GetTimeline() {
 }
 
-void GetTimeline::ExecuteNextOperation(Client *client) {
+void GetTimeline::ExecuteNextOperation() {
   std::string value;
   if (GetOpsCompleted() < GetNumKeys()) {
-    client->Get(GetKey(GetOpsCompleted()), value);
+    Get(GetKey(GetOpsCompleted()));
   } else {
-    client->Commit();
+    Commit();
   }
 }
 

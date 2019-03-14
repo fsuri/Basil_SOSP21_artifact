@@ -3,7 +3,6 @@
 
 #include "lib/udptransport.h"
 #include "store/common/frontend/client.h"
-#include "store/common/frontend/asyncclient.h"
 #include "store/mortystore/shardclient.h"
 
 #include <set>
@@ -13,7 +12,7 @@
 
 namespace mortystore {
 
-class SpecClient : public AsyncClient {
+class SpecClient {
  public:
   SpecClient(const std::string configPath, int nShards,
 	    int closestReplica);

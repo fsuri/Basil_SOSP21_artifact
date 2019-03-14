@@ -7,10 +7,10 @@ namespace tpcc {
 
 class NewOrder : public TPCCTransaction {
  public:
-  NewOrder();
+  NewOrder(Client *client);
   virtual ~NewOrder();
 
-  void ExecuteNextOperation(Client *client);
+  void ExecuteNextOperation();
 
 };
 

@@ -1,13 +1,15 @@
 d := $(dir $(lastword $(MAKEFILE_LIST)))
 
-SRCS += $(addprefix $(d), benchClient.cc retwisClient.cc terminalClient.cc)
+SRCS += $(addprefix $(d), retwisClient.cc bench_client.cc)
 
 OBJS-all-clients := $(OBJS-strong-client) $(OBJS-weak-client) $(OBJS-tapir-client) $(OBJS-morty-client)
 
-$(d)benchClient: $(OBJS-all-clients) $(o)benchClient.o
+$(d)benchClient: $(OBJS-all-clients)
 
-$(d)retwisClient: $(OBJS-all-clients) $(LIB-retwis) $(o)retwisClient.o
+$(d)retwisClient: $(OBJS-all-clients) $(LIB-retwis) $(o)bench_client.o
 
-$(d)terminalClient: $(OBJS-all-clients) $(o)terminalClient.o
+$(d)terminalClient: $(OBJS-all-clients)
 
-BINS += $(d)benchClient $(d)retwisClient $(d)terminalClient
+# TODO: need to add back other clients (benchClient, terminalClient)
+BINS += 
+

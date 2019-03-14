@@ -9,11 +9,11 @@ namespace retwis {
 
 class PostTweet : public RetwisTransaction {
  public:
-  PostTweet(std::function<std::string()> chooseKey);
+  PostTweet(Client *client, KeySelector *keySelector);
   virtual ~PostTweet();
 
  protected:
-  void ExecuteNextOperation(Client *client);
+  void ExecuteNextOperation();
 
 };
 

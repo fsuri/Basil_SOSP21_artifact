@@ -2,26 +2,25 @@
 
 namespace retwis {
 
-Follow::Follow(std::function<std::string()> chooseKey) :
-    RetwisTransaction(chooseKey, 2) {
+Follow::Follow(Client *client, KeySelector *keySelector) :
+    RetwisTransaction(client, keySelector, 2) {
 }
 
 Follow::~Follow() {
 
 }
 
-void Follow::ExecuteNextOperation(Client *client) {
-  std::string value;
+void Follow::ExecuteNextOperation() {
   if (GetOpsCompleted() == 0) {
-    client->Get(GetKey(0), value);
+    Get(GetKey(0));
   } else if (GetOpsCompleted() == 1) {
-    client->Put(GetKey(0), GetKey(0));
+    Put(GetKey(0), GetKey(0));
   } else if (GetOpsCompleted() == 2) {
-    client->Get(GetKey(1), value);
+    Get(GetKey(1));
   } else if (GetOpsCompleted() == 3) {
-    client->Put(GetKey(1), GetKey(1));
+    Put(GetKey(1), GetKey(1));
   } else {
-    client->Commit();
+    Commit();
   }
 }
 

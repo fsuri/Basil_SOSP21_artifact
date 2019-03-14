@@ -610,7 +610,7 @@ IRClient::UnloggedRequestTimeoutCallback(const uint64_t reqId)
     PendingUnloggedRequest *req = static_cast<PendingUnloggedRequest *>(it->second);
     ASSERT(req != NULL);
 
-    Warning("Unlogged request timed out");
+    Warning("Unlogged request %lu timed out", reqId);
     // delete timer event
     req->timer->Stop();
     // remove from pending list

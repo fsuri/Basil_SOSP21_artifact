@@ -36,9 +36,9 @@ namespace tapirstore {
 using namespace std;
 
 Client::Client(const string configPath, int nShards,
-                int closestReplica, TrueTime timeServer)
-    : nshards(nShards), transport(0.0, 0.0, 0, false), timeServer(timeServer)
-{
+                int closestReplica, Transport *transport, TrueTime timeServer)
+    : nshards(nShards), transport(transport), timeServer(timeServer),
+    lastReqId(0UL) {
     // Initialize all state here;
     client_id = 0;
     while (client_id == 0) {
@@ -57,32 +57,18 @@ Client::Client(const string configPath, int nShards,
     for (uint64_t i = 0; i < nshards; i++) {
         string shardConfigPath = configPath + to_string(i) + ".config";
         ShardClient *shardclient = new ShardClient(shardConfigPath,
-                &transport, client_id, i, closestReplica);
+                transport, client_id, i, closestReplica);
         bclient[i] = new BufferClient(shardclient);
     }
 
     Debug("Tapir client [%lu] created! %lu %lu", client_id, nshards, bclient.size());
-
-    /* Run the transport in a new thread. */
-    clientTransport = new thread(&Client::run_client, this);
-
-    Debug("Tapir client [%lu] created! %lu", client_id, bclient.size());
 }
 
 Client::~Client()
 {
-    transport.Stop();
     for (auto b : bclient) {
         delete b;
     }
-    clientTransport->join();
-}
-
-/* Runs the transport event loop. */
-void
-Client::run_client()
-{
-    transport.Run();
 }
 
 /* Begins a transaction. All subsequent operations before a commit() or
@@ -98,161 +84,180 @@ Client::Begin()
     participants.clear();
 }
 
-/* Returns the value corresponding to the supplied key. */
-int
-Client::Get(const string &key, string &value)
-{
-    Debug("GET [%lu : %s]", t_id, key.c_str());
+void Client::Get(const std::string &key, get_callback gcb,
+    get_timeout_callback gtcb, uint32_t timeout) {
+  Debug("GET [%lu : %s]", t_id, key.c_str());
 
-    // Contact the appropriate shard to get the value.
-    int i = key_to_shard(key, nshards);
+  // Contact the appropriate shard to get the value.
+  int i = key_to_shard(key, nshards);
 
-    // If needed, add this shard to set of participants and send BEGIN.
-    if (participants.find(i) == participants.end()) {
-        participants.insert(i);
-        bclient[i]->Begin(t_id);
-    }
+  // If needed, add this shard to set of participants and send BEGIN.
+  if (participants.find(i) == participants.end()) {
+    participants.insert(i);
+    bclient[i]->Begin(t_id);
+  }
 
-    // Send the GET operation to appropriate shard.
-    Promise promise(GET_TIMEOUT);
-
-    bclient[i]->Get(key, &promise);
-    value = promise.GetValue();
-    return promise.GetReply();
+  // Send the GET operation to appropriate shard.
+  bclient[i]->Get(key, gcb, gtcb, timeout);
 }
 
-string
-Client::Get(const string &key)
-{
-    string value;
-    Get(key, value);
-    return value;
+void Client::Put(const std::string &key, const std::string &value,
+    put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
+
+  Debug("PUT [%lu : %s]", t_id, key.c_str());
+
+  // Contact the appropriate shard to set the value.
+  int i = key_to_shard(key, nshards);
+
+  // If needed, add this shard to set of participants and send BEGIN.
+  if (participants.find(i) == participants.end()) {
+    participants.insert(i);
+    bclient[i]->Begin(t_id);
+  }
+
+  // Buffering, so no need to wait.
+  bclient[i]->Put(key, value, pcb, ptcb, timeout);
 }
 
-/* Sets the value corresponding to the supplied key. */
-int
-Client::Put(const string &key, const string &value)
-{
-    Debug("PUT [%lu : %s]", t_id, key.c_str());
+void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
+    uint32_t timeout) {
+  // TODO: this codepath is sketchy and probably has a bug (especially in the
+  // failure cases)
 
-    // Contact the appropriate shard to set the value.
-    int i = key_to_shard(key, nshards);
-
-    // If needed, add this shard to set of participants and send BEGIN.
-    if (participants.find(i) == participants.end()) {
-        participants.insert(i);
-        bclient[i]->Begin(t_id);
-    }
-
-    Promise promise(PUT_TIMEOUT);
-
-    // Buffering, so no need to wait.
-    bclient[i]->Put(key, value, &promise);
-    return promise.GetReply();
+  uint64_t reqId = lastReqId++;
+  PendingRequest *req = new PendingRequest(reqId);
+  pendingReqs[reqId] = req;
+  req->ccb = ccb;
+  req->ctcb = ctcb;
+  req->prepareTimestamp = new Timestamp(timeServer.GetTime(), client_id);
+  
+  Prepare(req, timeout);
 }
 
-int
-Client::Prepare(Timestamp &timestamp)
-{
-    // 1. Send commit-prepare to all shards.
-    uint64_t proposed = 0;
-    list<Promise *> promises;
+void Client::Prepare(PendingRequest *req, uint32_t timeout) {
+  Debug("PREPARE [%lu] at %lu", t_id, req->prepareTimestamp->getTimestamp());
+  ASSERT(participants.size() > 0);
 
-    Debug("PREPARE [%lu] at %lu", t_id, timestamp.getTimestamp());
-    ASSERT(participants.size() > 0);
+  for (auto p : participants) {
+    bclient[p]->Prepare(*req->prepareTimestamp, std::bind(
+          &Client::PrepareCallback, this, req->id, std::placeholders::_1,
+          std::placeholders::_2), std::bind(&Client::PrepareCallback, this,
+            req->id, std::placeholders::_1, std::placeholders::_2), timeout);
+    req->outstandingPrepares++;
+  }
+}
 
-    for (auto p : participants) {
-        promises.push_back(new Promise(PREPARE_TIMEOUT));
-        bclient[p]->Prepare(timestamp, promises.back());
-    }
+void Client::PrepareCallback(uint64_t reqId, int status, Timestamp ts) {
+  Debug("PREPARE [%lu] callback %d,%lu", t_id, status, ts.getTimestamp());
+  auto itr = this->pendingReqs.find(reqId);
+  if (itr == this->pendingReqs.end()) {
+    Debug("PrepareCallback for terminated request id %lu (txn already committed or aborted.", reqId);
+    return;
+  }
+  PendingRequest *req = itr->second;
 
-    int status = REPLY_OK;
-    uint64_t ts;
-    // 3. If all votes YES, send commit to all shards.
-    // If any abort, then abort. Collect any retry timestamps.
-    for (auto p : promises) {
-        uint64_t proposed = p->GetTimestamp().getTimestamp();
+  uint64_t proposed = ts.getTimestamp();
 
-        switch(p->GetReply()) {
-        case REPLY_OK:
-            Debug("PREPARE [%lu] OK", t_id);
-            continue;
-        case REPLY_FAIL:
-            // abort!
-            Debug("PREPARE [%lu] ABORT", t_id);
-            return REPLY_FAIL;
-        case REPLY_RETRY:
-            status = REPLY_RETRY;
-                if (proposed > ts) {
-                    ts = proposed;
-                }
-                break;
-        case REPLY_TIMEOUT:
-            status = REPLY_RETRY;
-            break;
-        case REPLY_ABSTAIN:
-            // just ignore abstains
-            break;
-        default:
-            break;
+  --req->outstandingPrepares;
+  switch(status) {
+    case REPLY_OK:
+      Debug("PREPARE [%lu] OK", t_id);
+      break;
+    case REPLY_FAIL:
+      // abort!
+      Debug("PREPARE [%lu] ABORT", t_id);
+      req->prepareStatus = REPLY_FAIL;
+      req->outstandingPrepares = 0;
+      break;
+    case REPLY_RETRY:
+      req->prepareStatus = REPLY_RETRY;
+      if (proposed > req->maxRepliedTs) {
+        req->maxRepliedTs = proposed;
+      }
+      break;
+    case REPLY_TIMEOUT:
+      req->prepareStatus = REPLY_RETRY;
+      break;
+    case REPLY_ABSTAIN:
+      // just ignore abstains
+      break;
+    default:
+      break;
+  }
+
+  if (req->outstandingPrepares == 0) {
+    HandleAllPreparesReceived(req);
+  }
+}
+
+void Client::HandleAllPreparesReceived(PendingRequest *req) {
+  Debug("All PREPARE's [%lu] received", t_id);
+  uint64_t reqId = req->id;
+  switch (req->prepareStatus) {
+    case REPLY_OK: {
+      Debug("COMMIT [%lu]", t_id);
+      // application doesn't need to be notified when commit has been acknowledged,
+      // so we use empty callback functions and directly call the commit callback
+      // function (with commit=true indicating a commit)
+      commit_callback ccb = [this, reqId](bool committed) {
+        auto itr = this->pendingReqs.find(reqId);
+        if (itr != this->pendingReqs.end()) {
+          this->pendingReqs.erase(itr);
+          delete itr->second;
         }
-        delete p;
+      };
+      commit_timeout_callback ctcb;
+      for (auto p : participants) {
+          bclient[p]->Commit(0, ccb, ctcb, 1000); // we don't really care about the timeout here
+      }
+      req->ccb(true);
+      break;
     }
-
-    if (status == REPLY_RETRY) {
+    case REPLY_RETRY: {
+      ++req->commitTries;
+      if (req->commitTries < COMMIT_RETRIES) {
         uint64_t now = timeServer.GetTime();
-        if (now > proposed) {
-            timestamp.setTimestamp(now);
+        if (now > req->maxRepliedTs) {
+          req->prepareTimestamp->setTimestamp(now);
         } else {
-            timestamp.setTimestamp(proposed);
+          req->prepareTimestamp->setTimestamp(req->maxRepliedTs);
         }
-        Debug("RETRY [%lu] at [%lu]", t_id, timestamp.getTimestamp());
+        Debug("RETRY [%lu] at [%lu]", t_id, req->prepareTimestamp->getTimestamp());
+        Prepare(req, 1000); // this timeout should probably be the same as 
+        // the timeout passed to Client::Commit, or maybe that timeout / COMMIT_RETRIES
+        break;
+      } 
+      // no break here since we should abort after failing COMMIT_RETRIES times
     }
-
-    Debug("All PREPARE's [%lu] received", t_id);
-    return status;
+    default: {
+      // application doesn't need to be notified when abort has been acknowledged,
+      // so we use empty callback functions and directly call the commit callback
+      // function (with commit=false indicating an abort)
+      abort_callback acb = [this, reqId]() {
+        auto itr = this->pendingReqs.find(reqId);
+        if (itr != this->pendingReqs.end()) {
+          this->pendingReqs.erase(itr);
+          delete itr->second;
+        }
+      };
+      abort_timeout_callback atcb;
+      Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
+      req->ccb(false);
+      break;
+    }
+  }
 }
 
-/* Attempts to commit the ongoing transaction. */
-bool
-Client::Commit()
-{
-    // Implementing 2 Phase Commit
-    Timestamp timestamp(timeServer.GetTime(), client_id);
-    int status;
+void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
+    uint32_t timeout) {
+  // presumably this will be called with empty callbacks as the application can
+  // immediately move on to its next transaction without waiting for confirmation
+  // that this transaction was aborted
+  Debug("ABORT [%lu]", t_id);
 
-    for (retries = 0; retries < COMMIT_RETRIES; retries++) {
-        status = Prepare(timestamp);
-        if (status == REPLY_RETRY) {
-            continue;
-        } else {
-            break;
-        }
-    }
-
-    if (status == REPLY_OK) {
-        Debug("COMMIT [%lu]", t_id);
-        
-        for (auto p : participants) {
-            bclient[p]->Commit(0);
-        }
-        return true;
-    }
-
-    // 4. If not, send abort to all shards.
-    Abort();
-    return false;
-}
-
-/* Aborts the ongoing transaction. */
-void
-Client::Abort()
-{
-    Debug("ABORT [%lu]", t_id);
-
-    for (auto p : participants) {
-        bclient[p]->Abort();
-    }
+  for (auto p : participants) {
+    bclient[p]->Abort(acb, atcb, timeout);
+  }
 }
 
 /* Return statistics of most recent transaction. */

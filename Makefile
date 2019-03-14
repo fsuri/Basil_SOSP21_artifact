@@ -17,8 +17,10 @@ LDFLAGS := -levent_pthreads
 # Debian package: libprotobuf-dev
 PROTOBUF_CFLAGS := $(shell pkg-config --cflags protobuf)
 PROTOBUF_LDFLAGS := $(shell pkg-config --cflags --libs protobuf)
-CFLAGS += $(PROTOBUF_CFLAGS)
-LDFLAGS += $(PROTOBUF_LDFLAGS)
+GFLAG_CFLAGS := -lgflags
+GFLAG_LDFLAGS := -lgflags
+CFLAGS += $(PROTOBUF_CFLAGS) $(GFLAG_CFLAGS)
+LDFLAGS += $(PROTOBUF_LDFLAGS) $(GFLAG_LDFLAGS)
 PROTOC := protoc
 # Debian package: libevent-dev
 LIBEVENT_CFLAGS := $(shell pkg-config --cflags libevent)
@@ -130,9 +132,10 @@ include store/tapirstore/Rules.mk
 include store/mortystore/Rules.mk
 include store/strongstore/Rules.mk
 include store/weakstore/Rules.mk
+include store/benchmark/async/common/Rules.mk
 include store/benchmark/async/retwis/Rules.mk
 include store/benchmark/async/tpcc/Rules.mk
-include store/benchmark/Rules.mk
+include store/benchmark/async/Rules.mk
 include lockserver/Rules.mk
 include timeserver/Rules.mk
 include libtapir/Rules.mk

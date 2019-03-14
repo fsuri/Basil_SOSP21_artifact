@@ -2,7 +2,7 @@
 
 namespace tpcc {
 
-TPCCTransaction::TPCCTransaction() {
+TPCCTransaction::TPCCTransaction(Client *client) : AsyncTransaction(client) {
 }
 
 TPCCTransaction::~TPCCTransaction() {

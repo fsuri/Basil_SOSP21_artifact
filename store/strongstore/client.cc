@@ -71,7 +71,8 @@ Client::Client(Mode mode, string configPath, int nShards,
         string shardConfigPath = configPath + to_string(i) + ".config";
         ShardClient *shardclient = new ShardClient(mode, shardConfigPath,
             &transport, client_id, i, closestReplica);
-        bclient[i] = new BufferClient(shardclient);
+        // TODO:
+        //bclient[i] = new BufferClient(shardclient);
     }
 
     /* Run the transport in a new thread. */
@@ -119,7 +120,7 @@ int
 Client::Get(const string &key, string &value)
 {
     // Contact the appropriate shard to get the value.
-    int i = key_to_shard(key, nshards);
+    int i = ::Client::key_to_shard(key, nshards);
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (participants.find(i) == participants.end()) {
@@ -129,7 +130,8 @@ Client::Get(const string &key, string &value)
     // Send the GET operation to appropriate shard.
     Promise promise(GET_TIMEOUT);
 
-    bclient[i]->Get(key, &promise);
+    // TODO:
+    //bclient[i]->Get(key, &promise);
     value = promise.GetValue();
 
     return promise.GetReply();
@@ -140,7 +142,7 @@ int
 Client::Put(const string &key, const string &value)
 {
     // Contact the appropriate shard to set the value.
-    int i = key_to_shard(key, nshards);
+    int i = ::Client::key_to_shard(key, nshards);
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (participants.find(i) == participants.end()) {
@@ -150,7 +152,8 @@ Client::Put(const string &key, const string &value)
     Promise promise(PUT_TIMEOUT);
 
     // Buffering, so no need to wait.
-    bclient[i]->Put(key, value, &promise);
+    // TODO:
+    // bclient[i]->Put(key, value, &promise);
     return promise.GetReply();
 }
 
@@ -166,7 +169,8 @@ Client::Prepare(uint64_t &ts)
     for (auto p : participants) {
         Debug("Sending prepare to shard [%d]", p);
         promises.push_back(new Promise(PREPARE_TIMEOUT));
-        bclient[p]->Prepare(Timestamp(),promises.back());
+        // TODO:
+        // bclient[p]->Prepare(Timestamp(),promises.back());
     }
 
     // In the meantime ... go get a timestamp for OCC
@@ -263,7 +267,8 @@ Client::Commit()
 
         for (auto p : participants) {
             Debug("Sending commit to shard [%d]", p);
-            bclient[p]->Commit(ts);
+            // TODO:
+            // bclient[p]->Commit(ts);
         }
         return true;
     }
@@ -279,7 +284,8 @@ Client::Abort()
 {
     Debug("ABORT Transaction");
     for (auto p : participants) {
-        bclient[p]->Abort();
+        // TODO:
+        // bclient[p]->Abort();
     }
 }
 

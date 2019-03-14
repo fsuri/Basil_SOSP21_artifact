@@ -35,41 +35,46 @@
 #include "lib/message.h"
 #include "store/common/promise.h"
 #include "store/common/transaction.h"
+#include "store/common/frontend/client.h"
 #include "store/common/frontend/txnclient.h"
 
-class BufferClient
-{
-public:
-    BufferClient(TxnClient *txnclient);
-    ~BufferClient();
+class BufferClient {
+ public:
+   BufferClient(TxnClient *txnclient);
+   virtual ~BufferClient();
 
-    // Begin a transaction with given tid.
-    void Begin(uint64_t tid);
+   // Begin a transaction with given tid.
+   void Begin(uint64_t tid);
 
-    // Get value corresponding to key.
-    void Get(const string &key, Promise *promise = NULL);
+   // Get the value corresponding to key.
+   virtual void Get(const std::string &key, get_callback gcb,
+       get_timeout_callback gtcb, uint32_t timeout);
 
-    // Put value for given key.
-    void Put(const string &key, const string &value, Promise *promise = NULL);
+   // Set the value for the given key.
+   virtual void Put(const std::string &key, const std::string &value,
+       put_callback pcb, put_timeout_callback ptcb, uint32_t timeout);
 
-    // Prepare (Spanner requires a prepare timestamp)
-    void Prepare(const Timestamp &timestamp = Timestamp(), Promise *promise = NULL); 
+   void Prepare(const Timestamp &timestamp, prepare_callback pcb,
+       prepare_timeout_callback ptcb, uint32_t timeout);
 
-    // Commit the ongoing transaction.
-    void Commit(uint64_t timestamp = 0, Promise *promise = NULL);
+   // Commit all Get(s) and Put(s) since Begin().
+   virtual void Commit(uint64_t timestamp, commit_callback ccb,
+       commit_timeout_callback ctcb, uint32_t timeout);
 
-    // Abort the running transaction.
-    void Abort(Promise *promise = NULL);
+    
+   // Abort all Get(s) and Put(s) since Begin().
+   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
+       uint32_t timeout);
 
-private:
-    // Underlying single shard transaction client implementation.
-    TxnClient* txnclient;
+ private:
+  // Underlying single shard transaction client implementation.
+  TxnClient* txnclient;
 
-    // Transaction to keep track of read and write set.
-    Transaction txn;
-
-    // Unique transaction id to keep track of ongoing transaction.
-    uint64_t tid;
+  // Transaction to keep track of read and write set.
+  Transaction txn;
+  
+  // Unique transaction id to keep track of ongoing transaction.
+  uint64_t tid;
 };
 
 #endif /* _BUFFER_CLIENT_H_ */

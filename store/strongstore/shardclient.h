@@ -52,7 +52,8 @@ enum Mode {
     MODE_SPAN_LOCK
 };
 
-class ShardClient : public TxnClient
+// TODO: convert to new TxnClient interface
+class ShardClient
 {
 public:
     /* Constructor needs path to shard config. */

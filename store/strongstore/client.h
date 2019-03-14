@@ -47,8 +47,7 @@
 
 namespace strongstore {
 
-class Client : public ::Client
-{
+class Client {
 public:
     Client(Mode mode, string configPath, int nshards,
             int closestReplica, TrueTime timeServer);

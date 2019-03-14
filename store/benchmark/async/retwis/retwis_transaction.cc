@@ -2,10 +2,11 @@
 
 namespace retwis {
 
-RetwisTransaction::RetwisTransaction(std::function<std::string()> chooseKey,
-    int numKeys) {
+RetwisTransaction::RetwisTransaction(Client *client,
+    KeySelector *keySelector, int numKeys)
+    : AsyncTransaction(client), keySelector(keySelector) {
   for (int i = 0; i < numKeys; ++i) {
-    keys.push_back(chooseKey());
+    keyIdxs.push_back(keySelector->GetKey());
   }
 }
 

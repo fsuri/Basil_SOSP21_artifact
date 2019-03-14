@@ -8,8 +8,8 @@
 #include "replication/ir/client.h"
 #include "store/common/timestamp.h"
 #include "store/common/transaction.h"
-#include "store/common/frontend/asyncclient.h"
 #include "store/mortystore/morty-proto.pb.h"
+#include "store/common/frontend/client.h"
 
 #include <map>
 #include <string>
