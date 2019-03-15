@@ -35,16 +35,16 @@
 #include "lib/message.h"
 #include "lib/udptransport.h"
 #include "lib/configuration.h"
+#include "store/server.h"
 #include "store/weakstore/store.h"
 #include "store/weakstore/weak-proto.pb.h"
 
 namespace weakstore {
 
-class Server : TransportReceiver
-{
+class Server : TransportReceiver, public ::Server {
 private:
     // Underlying single node transactional key-value store.
-    Store *store;
+    Store store;
 
     // Configuration of replicas.
     transport::Configuration configuration;
@@ -54,7 +54,7 @@ private:
 
 public:
     Server(const transport::Configuration &configuration, int myIdx,
-           Transport *transport, Store *store);
+           Transport *transport);
     ~Server();
 
     void ReceiveMessage(const TransportAddress &remote,
@@ -67,7 +67,8 @@ public:
     void HandlePut(const TransportAddress &remote,
                    const proto::PutMessage &msg);
 
-    void Load(const std::string &key, const std::string &value);
+    void Load(const std::string &key, const std::string &value,
+        Timestamp timestamp);
 
 };
 

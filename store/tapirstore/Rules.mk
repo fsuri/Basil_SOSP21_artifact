@@ -7,10 +7,10 @@ PROTOS += $(addprefix $(d), tapir-proto.proto)
 OBJS-tapir-store := $(LIB-message) $(LIB-store-common) $(LIB-store-backend) \
 	$(o)tapir-proto.o $(o)store.o 
 
-OBJS-tapir-client := $(OBJS-ir-client)  $(LIB-udptransport) $(LIB-store-frontend) $(LIB-store-common) $(o)tapir-proto.o \
-		$(o)shardclient.o $(o)client.o
+LIB-tapir-store := $(OBJS-ir-replica) $(o)server.o $(o)store.o \
+	$(o)tapir-proto.o
 
-$(d)server: $(LIB-udptransport) $(LIB-tcptransport) $(OBJS-ir-replica) \
-		$(OBJS-tapir-store) $(o)server.o
+LIB-tapir-client := $(OBJS-ir-client)  $(LIB-udptransport) \
+	$(LIB-store-frontend) $(LIB-store-common) $(o)tapir-proto.o \
+	$(o)shardclient.o $(o)client.o
 
-BINS += $(d)server

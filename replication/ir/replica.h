@@ -20,6 +20,7 @@
 #include "replication/common/replica.h"
 #include "replication/ir/ir-proto.pb.h"
 #include "replication/ir/record.h"
+#include "store/common/timestamp.h"
 
 namespace replication {
 namespace ir {
@@ -45,10 +46,11 @@ public:
         const std::map<opid_t, std::string> &majority_results_in_d) {
         return {};
     };
+
 };
 
 
-class IRReplica : TransportReceiver
+class IRReplica : public TransportReceiver
 {
 public:
     IRReplica(transport::Configuration config, int myIdx,
