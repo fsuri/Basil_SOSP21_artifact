@@ -2,7 +2,9 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
-- `client` will forward txn to a shard replica, who will then act as the coordinator for the txn
+- `client` instantiates several `shardclients` to forward one-shot txn = {pieces} to the appropriate replica(s)
+- coordinator dispatches the pieces to the appropriate replicas
+- Matt said that Janus has a dedicated coordinator for txns in the same data center => no need to entwine client and coordinator role, can simply have the client forward to a local replica to act as coordinator to dispatch the pieces
 
 # Timeline and TODOs
 - 3/17: Define headers and system design for Janus modules
