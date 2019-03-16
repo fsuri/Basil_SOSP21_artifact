@@ -51,6 +51,9 @@ class Client : public ::Client {
   virtual std::vector<int> Stats();
 
  private:
+
+  // TODO these should probably be defined in server.h because client is no longer a coordinator
+  /*
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), outstandingPrepares(0), commitTries(0),
         maxRepliedTs(0UL), prepareStatus(REPLY_OK), prepareTimestamp(nullptr) {
@@ -77,32 +80,31 @@ class Client : public ::Client {
   void PrepareCallback(uint64_t reqId, int status, Timestamp ts);
   void HandleAllPreparesReceived(PendingRequest *req);
 
-  // Unique ID for this client.
-  uint64_t client_id;
-
-  // Ongoing transaction ID.
-  uint64_t t_id;
-
-  // Number of shards.
-  uint64_t nshards;
+  uint64_t lastReqId;
+  std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
 
   // Number of retries for current transaction.
   long retries;
 
+  // Ongoing transaction ID.
+  uint64_t t_id;
+
   // List of participants in the ongoing transaction.
   std::set<int> participants;
 
-  // Transport used by IR client proxies.
-  Transport *transport;
-  
   // Buffering client for each shard.
   std::vector<BufferClient *> bclient;
+ */
 
-  // TrueTime server.
-  TrueTime timeServer;
-  
-  uint64_t lastReqId;
-  std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
+  // Unique ID for this client.
+  uint64_t client_id;
+
+  // Number of shards.
+  uint64_t nshards;
+
+  // Transport used by IR client proxies.
+  Transport *transport;
+
 };
 
 } // namespace janusstore
