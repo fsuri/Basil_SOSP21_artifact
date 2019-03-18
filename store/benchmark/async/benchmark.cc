@@ -39,27 +39,11 @@ enum benchmode_t {
 };
 
 /**
- * System settings."
+ * System settings.
  */
 DEFINE_uint64(client_id, 0, "unique identifier for client");
 DEFINE_string(config_path, "", "prefix of path to shard configuration file");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
-
-/**
- * Experiment settings.
- */
-DEFINE_uint64(exp_duration, 30, "duration (in seconds) of experiment");
-DEFINE_uint64(warmup_secs, 5, "time (in seconds) to warm up system before"
-    " recording stats");
-DEFINE_uint64(tput_interval, 0, "time (in seconds) between throughput"
-    " measurements");
-DEFINE_uint64(num_clients, 1, "number of clients to run in this process");
-DEFINE_uint64(num_requests, 100, "number of requests (transactions) per"
-    " client");
-DEFINE_int32(closest_replica, -1, "index of the replica closest to the client");
-DEFINE_uint64(delay, 0, "simulated communication delay");
-DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
-DEFINE_int32(clock_error, 0, "maximum error for clock");
 
 const std::string protocol_args[] = {
 	"txn-l",
@@ -126,14 +110,30 @@ DEFINE_string(benchmark, benchmark_args[0],	"the mode of the protocol to use"
 DEFINE_validator(benchmark, &ValidateBenchmark);
 
 /**
- * Retwis settings
+ * Experiment settings.
+ */
+DEFINE_uint64(exp_duration, 30, "duration (in seconds) of experiment");
+DEFINE_uint64(warmup_secs, 5, "time (in seconds) to warm up system before"
+    " recording stats");
+DEFINE_uint64(tput_interval, 0, "time (in seconds) between throughput"
+    " measurements");
+DEFINE_uint64(num_clients, 1, "number of clients to run in this process");
+DEFINE_uint64(num_requests, 100, "number of requests (transactions) per"
+    " client");
+DEFINE_int32(closest_replica, -1, "index of the replica closest to the client");
+DEFINE_uint64(delay, 0, "simulated communication delay");
+DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
+DEFINE_int32(clock_error, 0, "maximum error for clock");
+
+/**
+ * Retwis settings.
  */
 DEFINE_string(keys_path, "", "path to file containing keys in the system"
 		" (for retwis)");
 DEFINE_uint64(num_keys, 0, "number of keys to generate (for retwis");
 
 /**
- * TPCC settings
+ * TPCC settings.
  */
 DEFINE_int32(warehouse_per_shard, 1, "number of warehouses per shard"
 		" (for tpcc)");

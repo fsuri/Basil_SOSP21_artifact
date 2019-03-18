@@ -33,6 +33,7 @@
 #define _TAPIR_SERVER_H_
 
 #include "replication/ir/replica.h"
+#include "store/server.h"
 #include "store/common/timestamp.h"
 #include "store/common/truetime.h"
 #include "store/tapirstore/store.h"
@@ -43,8 +44,7 @@ namespace tapirstore {
 using opid_t = replication::ir::opid_t;
 using RecordEntry = replication::ir::RecordEntry;
 
-class Server : public replication::ir::IRAppReplica
-{
+class Server : public replication::ir::IRAppReplica, public ::Server {
 public:
     Server(bool linearizable);
     virtual ~Server();

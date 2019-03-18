@@ -39,6 +39,7 @@
 #include "replication/common/request.pb.h"
 #include "lib/transport.h"
 #include "replication/common/viewstamp.h"
+#include "store/common/timestamp.h"
 
 namespace replication {
     
@@ -61,6 +62,7 @@ public:
     virtual void ReplicaUpcall(opnum_t opnum, const string &str1, string &str2) { };
     // Invoke call back for unreplicated operations run on only one replica
     virtual void UnloggedUpcall(const string &str1, string &str2) { };
+
 };
 
 class Replica : public TransportReceiver

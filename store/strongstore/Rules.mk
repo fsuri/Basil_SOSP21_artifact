@@ -5,13 +5,9 @@ SRCS += $(addprefix $(d), occstore.cc lockstore.cc server.cc \
 
 PROTOS += $(addprefix $(d), strong-proto.proto)
 
-LIB-strong-store := $(o)occstore.o $(o)lockstore.o
-
-OBJS-strong-store := $(LIB-message) $(LIB-strong-store) $(LIB-store-common) \
-	$(LIB-store-backend) $(o)strong-proto.o $(o)server.o
-
 OBJS-strong-client := $(OBJS-vr-client) $(LIB-udptransport) $(LIB-store-frontend) $(LIB-store-common) $(o)strong-proto.o $(o)shardclient.o $(o)client.o
 
-$(d)server: $(LIB-udptransport) $(OBJS-vr-replica) $(OBJS-strong-store)
+LIB-strong-store := $(LIB-message) $(LIB-store-common) $(OBJS-vr-replica) \
+	$(LIB-store-backend) $(o)strong-proto.o $(o)server.o $(o)occstore.o \
+	$(o)lockstore.o
 
-BINS += $(d)server
