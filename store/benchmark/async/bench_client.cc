@@ -136,6 +136,7 @@ void BenchmarkClient::OnReply() {
 
   if ((started) && (!done) && (n != 0)) {
     uint64_t ns = Latency_End(&latency);
+    std::cout << GetLastOp() << ',' << ns << std::endl;
     latencies.push_back(ns);
     if (n > numRequests) {
       Finish();

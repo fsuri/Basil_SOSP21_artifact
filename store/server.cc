@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
   }
   transport::Configuration config(configStream);
 
-  if (FLAGS_replica_idx) {
+  if (FLAGS_replica_idx >= config.n) {
     std::cerr << "Replica index " << FLAGS_replica_idx << " is out of bounds"
                  "; only " << config.n << " replicas defined" << std::endl;
   }
@@ -199,7 +199,7 @@ int main(int argc, char **argv) {
   }
 
 
-  UDPTransport transport(0.0, 0.0, 0);
+  TCPTransport transport(0.0, 0.0, 0);
 
   ::Server *server;
   TransportReceiver *replica = nullptr;

@@ -22,10 +22,12 @@ class RetwisClient : public BenchmarkClient {
 
  protected:
   virtual void SendNext();
+  virtual std::string GetLastOp() const;
 
  private:
   KeySelector *keySelector; 
   RetwisTransaction *currTxn;
+  std::string lastOp;
 };
 
 } //namespace retwis

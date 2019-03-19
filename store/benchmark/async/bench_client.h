@@ -52,6 +52,7 @@ class BenchmarkClient {
   std::vector<uint64_t> latencies;
  protected:
   virtual void SendNext() = 0;
+  virtual std::string GetLastOp() const = 0;
   
   Client &client;
 

@@ -14,4 +14,9 @@ TPCCClient::~TPCCClient() {
 void TPCCClient::SendNext() {
 }
 
+std::string TPCCClient::GetLastOp() const {
+  return lastOp;
+}
+
+
 } //namespace tpcc

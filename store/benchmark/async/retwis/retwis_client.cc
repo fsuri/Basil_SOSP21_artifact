@@ -29,17 +29,25 @@ void RetwisClient::SendNext() {
   int ttype = std::rand() % 100;
   if (ttype < 5) {
     currTxn = new AddUser(&client, keySelector);
+    lastOp = "add_user";
   } else if (ttype < 20) {
     currTxn = new Follow(&client, keySelector);
+    lastOp = "follow";
   } else if (ttype < 50) {
     currTxn = new PostTweet(&client, keySelector);
+    lastOp = "post_tweet";
   } else {
     currTxn = new GetTimeline(&client, keySelector);
+    lastOp = "get_timeline";
   }
   currTxn->Execute([this](bool committed,
       std::map<std::string, std::string> readValues){
     this->OnReply();
   });
+}
+
+std::string RetwisClient::GetLastOp() const {
+  return lastOp;
 }
 
 } //namespace retwis

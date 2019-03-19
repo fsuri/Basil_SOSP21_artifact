@@ -15,6 +15,10 @@ class TPCCClient : public BenchmarkClient {
 
  protected:
   virtual void SendNext();
+  virtual std::string GetLastOp() const;
+
+ private:
+  std::string lastOp;
 
 };
 

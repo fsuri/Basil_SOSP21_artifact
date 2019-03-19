@@ -42,7 +42,7 @@ enum benchmode_t {
  * System settings.
  */
 DEFINE_uint64(client_id, 0, "unique identifier for client");
-DEFINE_string(config_path, "", "prefix of path to shard configuration file");
+DEFINE_string(config_prefix, "", "prefix of path to shard configuration file");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
 
 const std::string protocol_args[] = {
@@ -213,7 +213,7 @@ int main(int argc, char **argv) {
   // parse tpcc settings
 	int total_warehouses = FLAGS_num_shards * FLAGS_warehouse_per_shard;
   
-  UDPTransport transport(0.0, 0.0, 0, false);
+  TCPTransport transport(0.0, 0.0, 0, false);
 
   std::vector<::Client *> clients;
   std::vector<::BenchmarkClient *> benchClients;
@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
     Client *client;
     switch (mode) {
       case PROTO_TAPIR: {
-        client = new tapirstore::Client(FLAGS_config_path, FLAGS_num_shards,
+        client = new tapirstore::Client(FLAGS_config_prefix, FLAGS_num_shards,
             FLAGS_closest_replica, &transport, TrueTime(FLAGS_clock_skew,
               FLAGS_clock_error));
         break;
