@@ -95,7 +95,11 @@ private:
 
     // callback when majority of replicas in each shard returns Accept-OK
     void AcceptCallback(uint64_t t_id);
-    void Commit(uint64_t t_id, std::vector<uint64_t>> deps);
+
+    // different from the public Commit() function; this is a Janus commit
+    void CommitJanusTxn(uint64_t t_id, std::vector<uint64_t>> deps);
+    // TODO maybe change the type of [results]
+    void CommitJanusTxnCallback(uint64_t t_id, std::vector<uint64_t> results);
 };
 
 } // namespace janusstore
