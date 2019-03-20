@@ -7,11 +7,10 @@
 #include "lib/configuration.h"
 #include "lib/udptransport.h"
 #include "replication/ir/client.h"
-#include "store/common/timestamp.h"
-#include "store/common/truetime.h"
 #include "store/common/frontend/client.h"
 #include "store/common/frontend/bufferclient.h"
 
+#include "store/janusstore/transaction.h"
 // TODO define these
 #include "store/janusstore/shardclient.h"
 #include "store/janusstore/janus-proto.pb.h"
@@ -22,87 +21,81 @@
 namespace janusstore {
 
 class Client : public ::Client {
- public:
-  Client(const std::string configPath, int nShards,
-      int closestReplica, Transport *transport,
-      TrueTime timeserver = TrueTime(0,0));
-  virtual ~Client();
+public:
+    Client(const std::string configPath, int nShards, int closestReplica,
+        Transport *transport);
+    virtual ~Client();
 
-  // Begin a transaction.
-  virtual void Begin();
+    // Begin a transaction.
+    virtual void Begin();
 
-  // Get the value corresponding to key.
-  virtual void Get(const std::string &key, get_callback gcb,
-      get_timeout_callback gtcb, uint32_t timeout = GET_TIMEOUT);
+    // Get the value corresponding to key.
+    virtual void Get(const std::string &key, get_callback gcb,
+        get_timeout_callback gtcb, uint32_t timeout = GET_TIMEOUT);
 
-  // Set the value for the given key.
-  virtual void Put(const std::string &key, const std::string &value,
-      put_callback pcb, put_timeout_callback ptcb,
-      uint32_t timeout = PUT_TIMEOUT);
+    // Set the value for the given key.
+    virtual void Put(const std::string &key, const std::string &value,
+        put_callback pcb, put_timeout_callback ptcb,
+        uint32_t timeout = PUT_TIMEOUT);
 
-  // Commit all Get(s) and Put(s) since Begin().
-  virtual void Commit(commit_callback ccb, commit_timeout_callback ctcb,
-      uint32_t timeout);
+    // Commit all Get(s) and Put(s) since Begin().
+    virtual void Commit(commit_callback ccb, commit_timeout_callback ctcb,
+        uint32_t timeout);
   
-  // Abort all Get(s) and Put(s) since Begin().
-  virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
-      uint32_t timeout);
+    // Abort all Get(s) and Put(s) since Begin().
+    virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
+        uint32_t timeout);
 
-  virtual std::vector<int> Stats();
+    virtual std::vector<int> Stats();
 
- private:
+private:
+    // Unique ID for this client.
+    uint64_t client_id;
 
-  // TODO these should probably be defined in server.h because client is no longer a coordinator
-  struct PendingRequest {
-    PendingRequest(uint64_t id) : id(id), outstandingPrepares(0), commitTries(0),
-        maxRepliedTs(0UL), prepareStatus(REPLY_OK), prepareTimestamp(nullptr) {
-    }
+    // Number of shards.
+    uint64_t nshards;
 
-    ~PendingRequest() {
-      if (prepareTimestamp != nullptr) {
-        delete prepareTimestamp;
-      }
-    }
+    // Transport used by IR client proxies.
+    Transport *transport;
 
-    commit_callback ccb;
-    commit_timeout_callback ctcb;
-    uint64_t id;
-    int outstandingPrepares;
-    int commitTries;
-    uint64_t maxRepliedTs;
-    int prepareStatus;
-    Timestamp *prepareTimestamp;
-  };
+    // Current highest ballot
+    // TODO should probably also pair this with client_id
+    uint64_t ballot;
 
-  // Prepare function
-  void Prepare(PendingRequest *req, uint32_t timeout);
-  void PrepareCallback(uint64_t reqId, int status, Timestamp ts);
-  void HandleAllPreparesReceived(PendingRequest *req);
+    // Ongoing transaction ID.
+    // TODO figure out best way to pair this with client_id for unique t_id
+    uint64_t t_id;
 
-  uint64_t lastReqId;
-  std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
+    // Aggregated dependencies for the current transaction
+    std::vector<uint64_t>> deps;
 
-  // Number of retries for current transaction.
-  long retries;
+    // List of participants in the ongoing transaction.
+    std::set<int> participants;
 
-  // Ongoing transaction ID.
-  uint64_t t_id;
+    // Buffering client for each shard.
+    std::vector<BufferClient *> bclient;
 
-  // List of participants in the ongoing transaction.
-  std::set<int> participants;
+/* * coordinator role (co-located with client but not visible to client) * */
 
-  // Buffering client for each shard.
-  std::vector<BufferClient *> bclient;
+    // begins PreAccept phase
+    void PreAccept(Transaction txn, uint64_t ballot);
 
-  // Unique ID for this client.
-  uint64_t client_id;
+    // callback when all relevant replicas have replied
+    // shardclient aggregates these replies into a status variable to indicate the result of PreAccept phase
+    // deps is a map from replica ID to its deps for T (a list of other t_ids)
+    void PreAcceptCallback(
+        uint64_t t_id, int status,
+        std::unordered_map<uint64_t,std::vector<uint64_t>> deps);
 
-  // Number of shards.
-  uint64_t nshards;
+    // called from PreAcceptCallback when a fast quorum is not obtained
+    void Accept(
+        uint64_t t_id,
+        std::vector<std::string> deps,
+        uint64_t ballot);
 
-  // Transport used by IR client proxies.
-  Transport *transport;
-
+    // callback when majority of replicas in each shard returns Accept-OK
+    void AcceptCallback(uint64_t t_id);
+    void Commit(uint64_t t_id, std::vector<uint64_t>> deps);
 };
 
 } // namespace janusstore
