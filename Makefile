@@ -132,6 +132,7 @@ include store/tapirstore/Rules.mk
 include store/mortystore/Rules.mk
 include store/strongstore/Rules.mk
 include store/weakstore/Rules.mk
+include store/janusstore/Rules.mk
 include store/Rules.mk
 include store/benchmark/async/common/Rules.mk
 include store/benchmark/async/retwis/Rules.mk

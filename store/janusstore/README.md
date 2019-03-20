@@ -5,6 +5,17 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 - `client` instantiates several `shardclients` to forward one-shot txn = {pieces} to the appropriate replica(s)
 - coordinator dispatches the pieces to the appropriate replicas
 - Matt said that Janus has a dedicated coordinator for txns in the same data center => no need to entwine client and coordinator role, can simply have the client forward to a local replica to act as coordinator to dispatch the pieces
+- Paper mentions that client and coordinator are co-located; do we implement both? i.e. client == coordinator == a designated replica
+
+- client and coordinator are co-located, as in the paper => 
+- can have shardclient aggregates responses from replicas within the shard, so the client can aggregate those to determine conflicts/fast path
+- should have a proxy btwn client (coordinator) and shards to wrap the get/puts from client into a single transaction to be forwarded to the participating replicas
+
+- will want to extend common/replica/AppReplica and can ignore LeaderUpCall() function bc no leader in janus and ReplicaUpCall() bc replicas can independently act on receipt of COMMIT message from coordinator/proxy
+
+- params in ReplicaUpCall() are just for generic input/output
+
+- note any interesting observations while doing this thing
 
 # Timeline and TODOs
 - 3/17: Define headers and system design for Janus modules
@@ -12,8 +23,10 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 	- `shardclient` and `client` changes (if necessary) from TAPIR
 	- `server` replica with coordinator capabilities
 	- `store` changes (if necessary) from TAPIR
-- 3/22: Implement communication between `client` and replica `server`
-- 3/24: 
+- 3/19: Install deps and get everything to compile
+- Week of 3/25: Implement baseline communication between modules
+- Week of 4/7: Implement working/runnable transaction system
+- Week of 4/14 - 4/21: Testing/benchmarking
 
 # How to Run
 

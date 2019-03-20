@@ -53,7 +53,6 @@ class Client : public ::Client {
  private:
 
   // TODO these should probably be defined in server.h because client is no longer a coordinator
-  /*
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), outstandingPrepares(0), commitTries(0),
         maxRepliedTs(0UL), prepareStatus(REPLY_OK), prepareTimestamp(nullptr) {
@@ -94,7 +93,6 @@ class Client : public ::Client {
 
   // Buffering client for each shard.
   std::vector<BufferClient *> bclient;
- */
 
   // Unique ID for this client.
   uint64_t client_id;
