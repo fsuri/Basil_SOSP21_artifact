@@ -10,11 +10,12 @@
 namespace retwis {
 
 RetwisClient::RetwisClient(KeySelector *keySelector, Client &client,
-    Transport &transport, int numRequests, uint64_t delay, int warmupSec,
-    int tputInterval, const std::string &latencyFilename)
-    : BenchmarkClient(client, transport, numRequests, delay, warmupSec,
-        tputInterval, latencyFilename), keySelector(keySelector),
-      currTxn(nullptr) {
+    Transport &transport, int numRequests, int expDuration, uint64_t delay,
+    int warmupSec, int cooldownSec, int tputInterval,
+    const std::string &latencyFilename)
+    : BenchmarkClient(client, transport, numRequests, expDuration, delay,
+        warmupSec, cooldownSec, tputInterval, latencyFilename),
+        keySelector(keySelector), currTxn(nullptr) {
 }
 
 RetwisClient::~RetwisClient() {

@@ -8,8 +8,8 @@ namespace tpcc {
 class TPCCClient : public BenchmarkClient {
  public:
   TPCCClient(Client &client, Transport &transport, int numRequests,
-      uint64_t delay, int warmupSec, int tputInterval,
-      const std::string &latencyFilename = "");
+      int expDuration, uint64_t delay, int warmupSec, int cooldownSec,
+      int tputInterval, const std::string &latencyFilename = "");
 
   virtual ~TPCCClient();
 

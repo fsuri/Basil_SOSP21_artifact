@@ -3,9 +3,10 @@
 namespace tpcc {
 
 TPCCClient::TPCCClient(Client &client, Transport &transport, int numRequests,
-    uint64_t delay, int warmupSec, int tputInterval,
-    const std::string &latencyFilename) : BenchmarkClient(client, transport,
-      numRequests, delay, warmupSec, tputInterval, latencyFilename) {
+    int expDuration, uint64_t delay, int warmupSec, int cooldownSec,
+    int tputInterval,  const std::string &latencyFilename) :
+      BenchmarkClient(client, transport, numRequests, expDuration, delay,
+          warmupSec, cooldownSec, tputInterval, latencyFilename) {
 }
 
 TPCCClient::~TPCCClient() {

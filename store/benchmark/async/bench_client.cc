@@ -43,10 +43,12 @@
 DEFINE_LATENCY(op);
 
 BenchmarkClient::BenchmarkClient(Client &client, Transport &transport,
-		int numRequests, uint64_t delay, int warmupSec, int tputInterval,
-		const std::string &latencyFilename) : tputInterval(tputInterval),
-		client(client), transport(transport), numRequests(numRequests),
-		delay(delay), warmupSec(warmupSec), latencyFilename(latencyFilename) {
+		int numRequests, int expDuration, uint64_t delay, int warmupSec,
+    int cooldownSec, int tputInterval, const std::string &latencyFilename) :
+    tputInterval(tputInterval), client(client), transport(transport),
+    numRequests(numRequests), expDuration(expDuration),	delay(delay),
+    warmupSec(warmupSec), cooldownSec(cooldownSec),
+    latencyFilename(latencyFilename) {
 	if (delay != 0) {
 		Notice("Delay between requests: %ld ms", delay);
 	}
@@ -54,7 +56,9 @@ BenchmarkClient::BenchmarkClient(Client &client, Transport &transport,
 	done = false;
 	cooldownDone = false;
 	_Latency_Init(&latency, "op");
-	latencies.reserve(numRequests);
+  if (numRequests > 0) {
+	  latencies.reserve(numRequests);
+  }
 }
 
 BenchmarkClient::~BenchmarkClient() {
@@ -138,8 +142,18 @@ void BenchmarkClient::OnReply() {
     uint64_t ns = Latency_End(&latency);
     std::cout << GetLastOp() << ',' << ns << std::endl;
     latencies.push_back(ns);
-    if (n > numRequests) {
-      Finish();
+    if (numRequests == -1) {
+      struct timeval currTime;
+      gettimeofday(&currTime, NULL);
+
+      struct timeval diff = timeval_sub(currTime, startTime);
+      if (diff.tv_sec > expDuration) {
+        Finish();
+      }
+    } else { 
+      if (n > numRequests) {
+        Finish();
+      }
     }
   }
 
@@ -162,7 +176,7 @@ void BenchmarkClient::Finish() {
       VA_TIMEVAL_DIFF(diff));
   done = true;
 
-  transport.Timer(warmupSec * 1000, std::bind(&BenchmarkClient::CooldownDone,
+  transport.Timer(cooldownSec * 1000, std::bind(&BenchmarkClient::CooldownDone,
       this));
 
   if (latencyFilename.size() > 0) {
