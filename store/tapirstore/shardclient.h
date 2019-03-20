@@ -152,16 +152,16 @@ class ShardClient : public TxnClient {
   std::string TapirDecide(const std::map<std::string, std::size_t> &results);
 
   /* Timeout for Get requests, which only go to one replica. */
-  void GetTimeout(PendingGet *pendingGet);
+  void GetTimeout(uint64_t reqId);
 
   /* Callbacks for hearing back from a shard for an operation. */
-  void GetCallback(PendingGet *pendingGet, const std::string &,
+  void GetCallback(uint64_t reqId, const std::string &,
       const std::string &);
-  void PrepareCallback(PendingPrepare *pendingPrepare, const std::string &,
+  void PrepareCallback(uint64_t reqId, const std::string &,
       const std::string &);
-  void CommitCallback(PendingCommit *pendingCommit, const std::string &,
+  void CommitCallback(uint64_t reqId, const std::string &,
       const std::string &);
-  void AbortCallback(PendingAbort *pendingAbort, const std::string &,
+  void AbortCallback(uint64_t reqId, const std::string &,
       const std::string &);
 
   /* Helper Functions for starting and finishing requests */

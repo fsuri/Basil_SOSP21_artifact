@@ -28,6 +28,7 @@ class RetwisClient : public BenchmarkClient {
   KeySelector *keySelector; 
   RetwisTransaction *currTxn;
   std::string lastOp;
+  uint64_t tid = 0;
 };
 
 } //namespace retwis

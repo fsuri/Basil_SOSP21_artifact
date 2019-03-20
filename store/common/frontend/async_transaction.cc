@@ -1,7 +1,7 @@
 #include "store/common/frontend/async_transaction.h"
 
-AsyncTransaction::AsyncTransaction(Client *client_) : client(client_),
-    opCount(0UL) {
+AsyncTransaction::AsyncTransaction(uint64_t tid, Client *client_) : 
+    tid(tid), client(client_), opCount(0UL) {
 }
 
 AsyncTransaction::AsyncTransaction(const AsyncTransaction &txn) :

@@ -11,7 +11,7 @@ typedef std::function<void(bool, std::map<std::string, std::string>)> execute_ca
 
 class AsyncTransaction {
  public:
-  AsyncTransaction(Client *client);
+  AsyncTransaction(uint64_t tid, Client *client);
   AsyncTransaction(const AsyncTransaction &txn);
   virtual ~AsyncTransaction();
 
@@ -32,6 +32,7 @@ class AsyncTransaction {
       bool &found) const;
 
  private:
+  uint64_t tid;
   Client *client;
   size_t opCount;
   std::map<std::string, std::string> readValues;

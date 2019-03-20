@@ -45,6 +45,7 @@
 #include "store/tapirstore/tapir-proto.pb.h"
 
 #include <thread>
+#include <set>
 
 namespace tapirstore {
 
@@ -97,6 +98,7 @@ class Client : public ::Client {
     uint64_t maxRepliedTs;
     int prepareStatus;
     Timestamp *prepareTimestamp;
+    bool callbackInvoked;
   };
 
   // Prepare function

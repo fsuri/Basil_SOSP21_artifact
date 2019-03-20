@@ -9,7 +9,7 @@ namespace retwis {
 
 class GetTimeline : public RetwisTransaction {
  public:
-  GetTimeline(Client *client, KeySelector *keySelector);
+  GetTimeline(uint64_t tid, Client *client, KeySelector *keySelector);
   virtual ~GetTimeline();
 
  protected:
