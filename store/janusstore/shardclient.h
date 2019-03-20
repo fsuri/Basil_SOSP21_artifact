@@ -1,3 +1,4 @@
+// -*- mode: c++; c-file-style: "k&r"; c-basic-offset: 4 -*-
 #ifndef _JANUS_SHARDCLIENT_H_
 #define _JANUS_SHARDCLIENT_H_
 
@@ -6,10 +7,13 @@
 #include "lib/message.h"
 #include "lib/transport.h"
 #include "replication/ir/client.h"
-#include "store/common/timestamp.h"
-#include "store/common/transaction.h"
 #include "store/common/frontend/txnclient.h"
-#include "store/tapirstore/tapir-proto.pb.h"
+
+#include "store/janusstore/transaction.h"
+// TODO define these
+#include "store/janusstore/shardclient.h"
+#include "store/janusstore/janus-proto.pb.h"
+// end TODO
 
 #include <map>
 #include <string>
@@ -67,7 +71,7 @@ private:
     replication::ir::IRClient *client; // Client proxy.
 
     // TODO will probably need to add fields for aggregating replica responses
-    
+
     /* Callbacks for hearing back from a shard for a Janus phase. */
     void PreAcceptCallback(
         uint64_t t_id, int status,

@@ -39,6 +39,7 @@ public:
         uint32_t timeout = PUT_TIMEOUT);
 
     // Commit all Get(s) and Put(s) since Begin().
+    // This starts the Janus protocol
     virtual void Commit(commit_callback ccb, commit_timeout_callback ctcb,
         uint32_t timeout);
   
