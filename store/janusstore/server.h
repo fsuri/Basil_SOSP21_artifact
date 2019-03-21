@@ -20,13 +20,13 @@ public:
     virtual ~Server();
 
     // Invoke callback on the leader, with the option to replicate on success 
-    void LeaderUpcall(opnum_t opnum, const string &str1, bool &replicate, string &str2) { replicate = true; str2 = str1; };
+    void LeaderUpcall(opnum_t opnum, const string &str1, bool &replicate, string &str2) { return; };
 
     // Invoke callback on all replicas
-    // This will match on a RequestMessage and call a private handler function
-    void ReplicaUpcall(opnum_t opnum, const string &str1, string &str2) { };
+    void ReplicaUpcall(opnum_t opnum, const string &str1, string &str2) { return; };
 
     // Invoke call back for unreplicated operations run on only one replica
+    // This will match on a RequestMessage and call a private handler function
     void UnloggedUpcall(const string &str1, string &str2) { };
 
     // TODO only need this if we are extending store/server.h, but i dont think

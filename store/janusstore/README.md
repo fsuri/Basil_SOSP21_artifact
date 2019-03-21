@@ -2,18 +2,24 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
-- `client` instantiates several `shardclients` to forward one-shot txn = {pieces} to the appropriate replica(s)
+- as of 3/21:
+	- design decision: individual shardclients will wrap the get/puts from client into a single Transaction object to be forwarded to the participating replicas
+	- `client` handles transactions by ID but `shardclient` and `server` (replica) handle transactions by the full Transaction object in order to capture the appropriate operations
+	- `store` is just a map object wrapped by a class; unsure if more is needed
+	- `server` extends `AppReplica`, has an instance of the `store`, keeps the dependency graph as an adjacency list (implementation is a map from Transaction to list of Transactions), and has handlers for each phase of the protocol
+	- `transaction` defines the Transaction object; mostly similar to how the tapirstore defines it
+	- `client` and `shardclient` are similarly defined as their TAPIR counterparts without timestamps/truetime and TAPIR protocol functions
+
+- in TAPIR `client` instantiates several `shardclients` to forward one-shot txn = {pieces} to the appropriate replica(s)
 - coordinator dispatches the pieces to the appropriate replicas
-- Matt said that Janus has a dedicated coordinator for txns in the same data center => no need to entwine client and coordinator role, can simply have the client forward to a local replica to act as coordinator to dispatch the pieces
-- Paper mentions that client and coordinator are co-located; do we implement both? i.e. client == coordinator == a designated replica
 
 - client and coordinator are co-located, as in the paper => 
-- can have shardclient aggregates responses from replicas within the shard, so the client can aggregate those to determine conflicts/fast path
-- should have a proxy btwn client (coordinator) and shards to wrap the get/puts from client into a single transaction to be forwarded to the participating replicas
+
+- can have `shardclient` aggregate responses from replicas within the shard, so the client can aggregate those to determine conflicts/fast path
 
 - will want to extend common/replica/AppReplica and can ignore LeaderUpCall() function bc no leader in janus and ReplicaUpCall() bc replicas can independently act on receipt of COMMIT message from coordinator/proxy
 
-- params in ReplicaUpCall() are just for generic input/output
+- params in the UpCall() functions are just for generic input/output
 
 - note any interesting observations while doing this thing
 
