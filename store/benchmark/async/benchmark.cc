@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
   // parse tpcc settings
 	int total_warehouses = FLAGS_num_shards * FLAGS_warehouse_per_shard;
   
-  TCPTransport transport(0.0, 0.0, 0, false);
+  UDPTransport transport(0.0, 0.0, 0, false);
 
   std::vector<::Client *> clients;
   std::vector<::BenchmarkClient *> benchClients;
@@ -259,7 +259,7 @@ int main(int argc, char **argv) {
         NOT_REACHABLE();
     }
 
-	  transport.Timer(0, [=]() { bench->Start(); });
+	  transport.Timer(0, [bench]() { bench->Start(); });
     clients.push_back(client);
     benchClients.push_back(bench);
   }
