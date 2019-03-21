@@ -42,7 +42,7 @@ enum benchmode_t {
  * System settings.
  */
 DEFINE_uint64(client_id, 0, "unique identifier for client");
-DEFINE_string(config_path, "", "prefix of path to shard configuration file");
+DEFINE_string(config_prefix, "", "prefix of path to shard configuration file");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
 
 const std::string protocol_args[] = {
@@ -115,10 +115,12 @@ DEFINE_validator(benchmark, &ValidateBenchmark);
 DEFINE_uint64(exp_duration, 30, "duration (in seconds) of experiment");
 DEFINE_uint64(warmup_secs, 5, "time (in seconds) to warm up system before"
     " recording stats");
+DEFINE_uint64(cooldown_secs, 5, "time (in seconds) to cool down system after"
+    " recording stats");
 DEFINE_uint64(tput_interval, 0, "time (in seconds) between throughput"
     " measurements");
 DEFINE_uint64(num_clients, 1, "number of clients to run in this process");
-DEFINE_uint64(num_requests, 100, "number of requests (transactions) per"
+DEFINE_uint64(num_requests, -1, "number of requests (transactions) per"
     " client");
 DEFINE_int32(closest_replica, -1, "index of the replica closest to the client");
 DEFINE_uint64(delay, 0, "simulated communication delay");
@@ -213,7 +215,7 @@ int main(int argc, char **argv) {
   // parse tpcc settings
 	int total_warehouses = FLAGS_num_shards * FLAGS_warehouse_per_shard;
   
-  UDPTransport transport(0.0, 0.0, 0, false);
+  TCPTransport transport(0.0, 0.0, 0, false);
 
   std::vector<::Client *> clients;
   std::vector<::BenchmarkClient *> benchClients;
@@ -223,7 +225,7 @@ int main(int argc, char **argv) {
     Client *client;
     switch (mode) {
       case PROTO_TAPIR: {
-        client = new tapirstore::Client(FLAGS_config_path, FLAGS_num_shards,
+        client = new tapirstore::Client(FLAGS_config_prefix, FLAGS_num_shards,
             FLAGS_closest_replica, &transport, TrueTime(FLAGS_clock_skew,
               FLAGS_clock_error));
         break;
@@ -245,12 +247,13 @@ int main(int argc, char **argv) {
 	  switch (benchMode) {
       case BENCH_RETWIS:
         bench = new retwis::RetwisClient(keySelector, *client, transport,
-            FLAGS_num_requests, FLAGS_delay, FLAGS_warmup_secs,
-            FLAGS_tput_interval);
+            FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
+            FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval);
         break;
       case BENCH_TPCC:
         bench = new tpcc::TPCCClient(*client, transport, FLAGS_num_requests,
-            FLAGS_delay, FLAGS_warmup_secs, FLAGS_tput_interval);
+            FLAGS_exp_duration, FLAGS_delay, FLAGS_warmup_secs,
+            FLAGS_cooldown_secs, FLAGS_tput_interval);
         break;
       default:
         NOT_REACHABLE();

@@ -130,6 +130,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
   req->ccb = ccb;
   req->ctcb = ctcb;
   req->prepareTimestamp = new Timestamp(timeServer.GetTime(), client_id);
+  req->callbackInvoked = false;
   
   Prepare(req, timeout);
 }
@@ -206,11 +207,14 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
           delete itr->second;
         }
       };
-      commit_timeout_callback ctcb;
+      commit_timeout_callback ctcb = [](int status){};
       for (auto p : participants) {
           bclient[p]->Commit(0, ccb, ctcb, 1000); // we don't really care about the timeout here
       }
-      req->ccb(true);
+      if (!req->callbackInvoked) {
+        req->ccb(true);
+        req->callbackInvoked = true;
+      }
       break;
     }
     case REPLY_RETRY: {
@@ -240,9 +244,12 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
           delete itr->second;
         }
       };
-      abort_timeout_callback atcb;
+      abort_timeout_callback atcb = [](int status){};
       Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
-      req->ccb(false);
+      if (!req->callbackInvoked) {
+        req->ccb(false);
+        req->callbackInvoked = true;
+      }
       break;
     }
   }

@@ -37,8 +37,8 @@
 class BenchmarkClient {
  public:
   BenchmarkClient(Client &client, Transport &transport, int numRequests,
-      uint64_t delay, int warmupSec, int tputInterval,
-      const std::string &latencyFilename = "");
+      int expDuration, uint64_t delay, int warmupSec, int cooldownSec,
+      int tputInterval, const std::string &latencyFilename = "");
   virtual ~BenchmarkClient();
 
   void Start();
@@ -52,6 +52,7 @@ class BenchmarkClient {
   std::vector<uint64_t> latencies;
  protected:
   virtual void SendNext() = 0;
+  virtual std::string GetLastOp() const = 0;
   
   Client &client;
 
@@ -63,9 +64,11 @@ class BenchmarkClient {
 
   Transport &transport;
   int numRequests;
+  int expDuration;
   uint64_t delay;
   int n;
   int warmupSec;
+  int cooldownSec;
   struct timeval startTime;
   struct timeval endTime;
   string latencyFilename;

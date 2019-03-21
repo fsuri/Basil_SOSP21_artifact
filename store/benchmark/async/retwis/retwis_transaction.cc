@@ -2,9 +2,9 @@
 
 namespace retwis {
 
-RetwisTransaction::RetwisTransaction(Client *client,
+RetwisTransaction::RetwisTransaction(uint64_t tid, Client *client,
     KeySelector *keySelector, int numKeys)
-    : AsyncTransaction(client), keySelector(keySelector) {
+    : AsyncTransaction(tid, client), keySelector(keySelector) {
   for (int i = 0; i < numKeys; ++i) {
     keyIdxs.push_back(keySelector->GetKey());
   }

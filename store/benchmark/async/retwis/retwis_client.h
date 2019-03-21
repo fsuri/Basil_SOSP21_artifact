@@ -15,17 +15,21 @@ enum KeySelection {
 class RetwisClient : public BenchmarkClient {
  public:
   RetwisClient(KeySelector *keySelector, Client &client, Transport &transport,
-      int numRequests, uint64_t delay, int warmupSec, int tputInterval,
+      int numRequests, int expDuration, uint64_t delay, int warmupSec,
+      int cooldownSec, int tputInterval,
       const std::string &latencyFilename = "");
 
   virtual ~RetwisClient();
 
  protected:
   virtual void SendNext();
+  virtual std::string GetLastOp() const;
 
  private:
   KeySelector *keySelector; 
   RetwisTransaction *currTxn;
+  std::string lastOp;
+  uint64_t tid = 0;
 };
 
 } //namespace retwis
