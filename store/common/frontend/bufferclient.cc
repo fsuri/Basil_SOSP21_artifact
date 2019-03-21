@@ -73,7 +73,7 @@ void BufferClient::Get(const std::string &key, get_callback gcb,
     }
     gcb(status, key, value, ts);
   };
-  txnclient->Get(tid, key, bufferCb, gtcb, GET_TIMEOUT);
+  txnclient->Get(tid, key, bufferCb, gtcb, timeout);
 }
 
 void BufferClient::Put(const std::string &key, const std::string &value,
