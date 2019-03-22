@@ -199,7 +199,7 @@ int main(int argc, char **argv) {
   }
 
 
-  TCPTransport transport(0.0, 0.0, 0);
+  UDPTransport transport(0.0, 0.0, 0);
 
   ::Server *server;
   TransportReceiver *replica = nullptr;

@@ -68,6 +68,7 @@ void BenchmarkClient::Start() {
 	n = 0;
   transport.Timer(warmupSec * 1000, std::bind(&BenchmarkClient::WarmupDone,
 			this));
+  gettimeofday(&startTime, NULL);
 
   if (tputInterval > 0) {
 		msSinceStart = 0;
@@ -98,7 +99,6 @@ void BenchmarkClient::WarmupDone() {
   started = true;
   Notice("Completed warmup period of %d seconds with %d requests", warmupSec,
       n);
-  gettimeofday(&startTime, NULL);
   n = 0;
 }
 

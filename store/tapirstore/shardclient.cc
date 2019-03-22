@@ -85,6 +85,7 @@ void ShardClient::Get(uint64_t id, const std::string &key, get_callback gcb,
   pendingGet->gcb = gcb;
   pendingGet->gtcb = gtcb;
 
+  Debug("Invoking unlogged Get with timeout %lu", timeout);
   client->InvokeUnlogged(replica, request_str, bind(&ShardClient::GetCallback,
       this, pendingGet->reqId, placeholders::_1, placeholders::_2),
       bind(&ShardClient::GetTimeout, this, pendingGet->reqId), timeout);

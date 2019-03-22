@@ -115,10 +115,14 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
              * proposed timestamp not within validity range, then
              * conflict and abort
              */
-            ASSERT(timestamp > range.first);
-            Debug("[%lu] ABORT rw conflict key:%s",
-                  id, read.first.c_str());
-            return REPLY_FAIL;
+          if (timestamp <= range.first) {
+            Warning("timestamp %lu <= range.first %lu (range.second %lu)",
+                timestamp.getTimestamp(), range.first.getTimestamp(),
+                range.second.getTimestamp());
+          }
+          //ASSERT(timestamp > range.first);
+          Debug("[%lu] ABORT rw conflict key:%s", id, read.first.c_str());
+          return REPLY_FAIL;
         } else {
             /* there may be a pending write in the past.  check
              * pending writes again.  If proposed transaction is

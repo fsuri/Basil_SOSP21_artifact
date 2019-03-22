@@ -1,5 +1,7 @@
 #include "store/common/frontend/async_transaction.h"
 
+#include "lib/latency.h"
+
 AsyncTransaction::AsyncTransaction(uint64_t tid, Client *client_) : 
     tid(tid), client(client_), opCount(0UL) {
 }
@@ -18,9 +20,14 @@ void AsyncTransaction::Execute(execute_callback ecb) {
 }
 
 void AsyncTransaction::Get(const std::string &key) {
+  Latency_t *lat = new Latency_t();
+  Latency_Start(lat);
   client->Get(key,
-      [this](int status, const std::string &key, const std::string &val,
+      [this, lat](int status, const std::string &key, const std::string &val,
             Timestamp ts){
+        uint64_t ns = Latency_End(lat);
+        //std::cout << "g," << ns << std::endl;
+        delete lat;
         Debug("Get(%s) callback.", key.c_str());
         this->opCount++;
         this->readValues.insert(std::make_pair(key, val));
