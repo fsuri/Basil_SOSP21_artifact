@@ -30,13 +30,13 @@
 #ifndef BENCHMARK_CLIENT_H
 #define BENCHMARK_CLIENT_H
 
-#include "store/common/frontend/client.h"
+#include "store/common/frontend/async_client.h"
 #include "lib/latency.h"
 #include "lib/transport.h"
 
 class BenchmarkClient {
  public:
-  BenchmarkClient(Client &client, Transport &transport, int numRequests,
+  BenchmarkClient(AsyncClient &client, Transport &transport, int numRequests,
       int expDuration, uint64_t delay, int warmupSec, int cooldownSec,
       int tputInterval, const std::string &latencyFilename = "");
   virtual ~BenchmarkClient();
@@ -54,7 +54,7 @@ class BenchmarkClient {
   virtual void SendNext() = 0;
   virtual std::string GetLastOp() const = 0;
   
-  Client &client;
+  AsyncClient &client;
 
  private:
   void Finish();

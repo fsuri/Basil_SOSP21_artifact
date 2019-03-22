@@ -10,7 +10,8 @@
 #include "lib/timeval.h"
 #include "lib/tcptransport.h"
 #include "store/common/truetime.h"
-#include "store/common/frontend/client.h"
+#include "store/common/frontend/async_client.h"
+#include "store/common/frontend/async_adapter_client.h"
 #include "store/strongstore/client.h"
 #include "store/weakstore/client.h"
 #include "store/tapirstore/client.h"
@@ -217,17 +218,17 @@ int main(int argc, char **argv) {
   
   UDPTransport transport(0.0, 0.0, 0, false);
 
-  std::vector<::Client *> clients;
+  std::vector<::AsyncClient *> clients;
   std::vector<::BenchmarkClient *> benchClients;
   KeySelector *keySelector = new UniformKeySelector(keys);
 
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
-    Client *client;
+    AsyncClient *client;
     switch (mode) {
       case PROTO_TAPIR: {
-        client = new tapirstore::Client(FLAGS_config_prefix, FLAGS_num_shards,
-            FLAGS_closest_replica, &transport, TrueTime(FLAGS_clock_skew,
-              FLAGS_clock_error));
+        client = new AsyncAdapterClient(new tapirstore::Client(
+              FLAGS_config_prefix, FLAGS_num_shards, FLAGS_closest_replica,
+              &transport, TrueTime(FLAGS_clock_skew, FLAGS_clock_error)));
         break;
       }
       /*case MODE_WEAK: {

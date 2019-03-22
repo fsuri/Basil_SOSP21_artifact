@@ -10,7 +10,7 @@ namespace tpcc {
 
 class TPCCTransaction : public AsyncTransaction {
  public:
-  TPCCTransaction(Client *client);
+  TPCCTransaction();
   virtual ~TPCCTransaction();
 
 };

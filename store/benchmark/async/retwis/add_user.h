@@ -9,11 +9,12 @@ namespace retwis {
 
 class AddUser : public RetwisTransaction {
  public:
-  AddUser(uint64_t tid, Client *client, KeySelector *keySelector);
+  AddUser(uint64_t tid, KeySelector *keySelector);
   virtual ~AddUser();
  
  protected:
-  void ExecuteNextOperation();
+  Operation GetNextOperation(size_t opCount,
+      std::map<std::string, std::string> readValues);
 
 };
 

@@ -56,14 +56,6 @@
 #define ABORT_TIMEOUT 1000
 #define RETRY_TIMEOUT 500000
 
-enum OpType {
-  GET,
-  PUT,
-  PREPARE,
-  COMMIT,
-  ABORT
-};
-
 typedef std::function<void(int, Timestamp)> prepare_callback;
 typedef std::function<void(int, Timestamp)> prepare_timeout_callback;
 
