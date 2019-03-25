@@ -22,7 +22,7 @@ Client::Client(const std::string configPath, int nShards, int closestReplica,
 
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < nshards; i++) {
-    std::string shardConfigPath = configPath + to_string(i) + ".config";
+    std::string shardConfigPath = configPath + std::to_string(i) + ".config";
     sclient[i] = new ShardClient(shardConfigPath, transport,
         client_id, i, closestReplica);
   }
@@ -37,207 +37,96 @@ Client::~Client() {
   }
 }
 
-void Client::Execute(AsyncTransaction *txn) {
-  txn->ExecuteNextOperation();
+void Client::Execute(AsyncTransaction *txn, execute_callback ecb) {
 }
 
-/* Begins a transaction. All subsequent operations before a commit() or
- * abort() are part of this transaction.
- *
- * Return a TID for the transaction.
- */
-void Client::Begin() {
-  Debug("BEGIN [%lu]", t_id + 1);
-  t_id++;
+void Client::ExecuteNextOperation(AsyncTransaction *txn, Branch *branch) {
+Operation op = currTxn->GetNextOperation(branch->opCount, branch->readValues);
+  switch (op.type) {
+    case GET: {
+      Get(branch, op.key);
+      break;
+    }
+    case PUT: {
+      Put(branch, op.key, op.value);
+      break;
+    }
+    case COMMIT: {
+      Commit(branch);
+      break;
+    }
+    case ABORT: {
+      Abort(branch);
+      currEcb(false, std::map<std::string, std::string>());
+      break;
+    }
+    default:
+      NOT_REACHABLE();
+  }
 }
 
-void Client::Get(const std::string &key, get_callback gcb,
-    get_timeout_callback gtcb, uint32_t timeout) {
-  Debug("GET [%lu : %s]", t_id, key.c_str());
+void Client::Get(Branch *branch, const std::string &key) {
+  Debug("GET [%lu : %lu : %s]", t_id, branch->id, key.c_str());
 
   // Contact the appropriate shard to get the value.
-  int i = key_to_shard(key, nshards);
-
-  // If needed, add this shard to set of participants and send BEGIN.
-  if (participants.find(i) == participants.end()) {
-    participants.insert(i);
-    bclient[i]->Begin(t_id);
+  int i = ::Client::key_to_shard(key, nshards);
+  if (branch->participants.find(i) == branch->participants.end()) {
+    branch->participants.insert(i);
+    //sclient[i]->Begin(t_id);
   }
-
-  // Send the GET operation to appropriate shard.
-  bclient[i]->Get(key, gcb, gtcb, timeout);
-}
-
-void Client::Put(const std::string &key, const std::string &value,
-    put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
-
-  Debug("PUT [%lu : %s]", t_id, key.c_str());
-
-  // Contact the appropriate shard to set the value.
-  int i = key_to_shard(key, nshards);
-
-  // If needed, add this shard to set of participants and send BEGIN.
-  if (participants.find(i) == participants.end()) {
-    participants.insert(i);
-    bclient[i]->Begin(t_id);
-  }
-
-  // Buffering, so no need to wait.
-  bclient[i]->Put(key, value, pcb, ptcb, timeout);
-}
-
-void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
-    uint32_t timeout) {
-  // TODO: this codepath is sketchy and probably has a bug (especially in the
-  // failure cases)
-
-  uint64_t reqId = lastReqId++;
-  PendingRequest *req = new PendingRequest(reqId);
-  pendingReqs[reqId] = req;
-  req->ccb = ccb;
-  req->ctcb = ctcb;
-  req->prepareTimestamp = new Timestamp(timeServer.GetTime(), client_id);
-  req->callbackInvoked = false;
   
-  Prepare(req, timeout);
+  uint32_t timeout = 10000;
+  sclient[i]->Get(t_id, key, std::bind(&mortystore::Client::GetCallback, this,
+        branch, std::placeholders::_1, std::placeholders::_2,
+        std::placeholders::_3),
+      std::bind(&mortystore::Client::GetTimeout, this, branch,
+        std::placeholders::_1, std::placeholders::_2), timeout);
 }
 
-void Client::Prepare(PendingRequest *req, uint32_t timeout) {
-  Debug("PREPARE [%lu] at %lu", t_id, req->prepareTimestamp->getTimestamp());
-  ASSERT(participants.size() > 0);
+void Client::Put(Branch *branch, const std::string &key,
+    const std::string &value) {
+  Debug("GET [%lu : %lu : %s, %s]", t_id, branch->id, key.c_str(),
+      value.c_str());
 
-  for (auto p : participants) {
-    bclient[p]->Prepare(*req->prepareTimestamp, std::bind(
-          &Client::PrepareCallback, this, req->id, std::placeholders::_1,
-          std::placeholders::_2), std::bind(&Client::PrepareCallback, this,
-            req->id, std::placeholders::_1, std::placeholders::_2), timeout);
-    req->outstandingPrepares++;
+  // Contact the appropriate shard to get the value.
+  int i = ::Client::key_to_shard(key, nshards);
+  if (branch->participants.find(i) == branch->participants.end()) {
+    branch->participants.insert(i);
+    //sclient[i]->Begin(t_id);
   }
+  
+  uint32_t timeout = 10000;
+  sclient[i]->Put(t_id, key, value, std::bind(&mortystore::Client::PutCallback,
+        this, branch, std::placeholders::_1, std::placeholders::_2,
+        std::placeholders::_3),
+      std::bind(&mortystore::Client::PutTimeout, this, branch,
+        std::placeholders::_1, std::placeholders::_2,
+        std::placeholders::_3), timeout);
 }
 
-void Client::PrepareCallback(uint64_t reqId, int status, Timestamp ts) {
-  Debug("PREPARE [%lu] callback %d,%lu", t_id, status, ts.getTimestamp());
-  auto itr = this->pendingReqs.find(reqId);
-  if (itr == this->pendingReqs.end()) {
-    Debug("PrepareCallback for terminated request id %lu (txn already committed or aborted.", reqId);
-    return;
-  }
-  PendingRequest *req = itr->second;
-
-  uint64_t proposed = ts.getTimestamp();
-
-  --req->outstandingPrepares;
-  switch(status) {
-    case REPLY_OK:
-      Debug("PREPARE [%lu] OK", t_id);
-      break;
-    case REPLY_FAIL:
-      // abort!
-      Debug("PREPARE [%lu] ABORT", t_id);
-      req->prepareStatus = REPLY_FAIL;
-      req->outstandingPrepares = 0;
-      break;
-    case REPLY_RETRY:
-      req->prepareStatus = REPLY_RETRY;
-      if (proposed > req->maxRepliedTs) {
-        req->maxRepliedTs = proposed;
-      }
-      break;
-    case REPLY_TIMEOUT:
-      req->prepareStatus = REPLY_RETRY;
-      break;
-    case REPLY_ABSTAIN:
-      // just ignore abstains
-      break;
-    default:
-      break;
-  }
-
-  if (req->outstandingPrepares == 0) {
-    HandleAllPreparesReceived(req);
-  }
+void Client::Commit(Branch *branch) {
+  Debug("COMMIT [%lu : %lu]", t_id, branch->id);
+  Panic("Not implemented.");
 }
 
-void Client::HandleAllPreparesReceived(PendingRequest *req) {
-  Debug("All PREPARE's [%lu] received", t_id);
-  uint64_t reqId = req->id;
-  switch (req->prepareStatus) {
-    case REPLY_OK: {
-      Debug("COMMIT [%lu]", t_id);
-      // application doesn't need to be notified when commit has been acknowledged,
-      // so we use empty callback functions and directly call the commit callback
-      // function (with commit=true indicating a commit)
-      commit_callback ccb = [this, reqId](bool committed) {
-        auto itr = this->pendingReqs.find(reqId);
-        if (itr != this->pendingReqs.end()) {
-          this->pendingReqs.erase(itr);
-          delete itr->second;
-        }
-      };
-      commit_timeout_callback ctcb = [](int status){};
-      for (auto p : participants) {
-          bclient[p]->Commit(0, ccb, ctcb, 1000); // we don't really care about the timeout here
-      }
-      if (!req->callbackInvoked) {
-        req->ccb(true);
-        req->callbackInvoked = true;
-      }
-      break;
-    }
-    case REPLY_RETRY: {
-      ++req->commitTries;
-      if (req->commitTries < COMMIT_RETRIES) {
-        uint64_t now = timeServer.GetTime();
-        if (now > req->maxRepliedTs) {
-          req->prepareTimestamp->setTimestamp(now);
-        } else {
-          req->prepareTimestamp->setTimestamp(req->maxRepliedTs);
-        }
-        Debug("RETRY [%lu] at [%lu]", t_id, req->prepareTimestamp->getTimestamp());
-        Prepare(req, 1000); // this timeout should probably be the same as 
-        // the timeout passed to Client::Commit, or maybe that timeout / COMMIT_RETRIES
-        break;
-      } 
-      // no break here since we should abort after failing COMMIT_RETRIES times
-    }
-    default: {
-      // application doesn't need to be notified when abort has been acknowledged,
-      // so we use empty callback functions and directly call the commit callback
-      // function (with commit=false indicating an abort)
-      abort_callback acb = [this, reqId]() {
-        auto itr = this->pendingReqs.find(reqId);
-        if (itr != this->pendingReqs.end()) {
-          this->pendingReqs.erase(itr);
-          delete itr->second;
-        }
-      };
-      abort_timeout_callback atcb = [](int status){};
-      Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
-      if (!req->callbackInvoked) {
-        req->ccb(false);
-        req->callbackInvoked = true;
-      }
-      break;
-    }
-  }
+void Client::Abort(Branch *branch) {
+  Debug("ABORT [%lu : %lu]", t_id, branch->id);
+  Panic("Not implemented.");
 }
 
-void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
-    uint32_t timeout) {
-  // presumably this will be called with empty callbacks as the application can
-  // immediately move on to its next transaction without waiting for confirmation
-  // that this transaction was aborted
-  Debug("ABORT [%lu]", t_id);
-
-  for (auto p : participants) {
-    bclient[p]->Abort(acb, atcb, timeout);
-  }
+void Client::GetCallback(Branch *branch, int status, const std::string &key,
+    const std::string &val) {
 }
 
-/* Return statistics of most recent transaction. */
-std::vector<int> Client::Stats() {
-  vector<int> v;
-  return v;
+void Client::PutCallback(Branch *branch, int status, const std::string &key,
+    const std::string &val) {
+}
+
+void Client::GetTimeout(Branch *branch, int status, const std::string &key) {
+}
+
+void Client::PutTimeout(Branch *branch, int status, const std::string &key,
+    const std::string &value) {
 }
 
 } // namespace mortystore

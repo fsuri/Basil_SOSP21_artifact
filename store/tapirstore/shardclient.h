@@ -55,81 +55,69 @@ class ShardClient : public TxnClient {
   virtual ~ShardClient();
 
   // Begin a transaction.
-  virtual void Begin(uint64_t id);
+  virtual void Begin(uint64_t id) override;
 
   // Get the value corresponding to key.
   virtual void Get(uint64_t id, const std::string &key, get_callback gcb,
-      get_timeout_callback gtcb, uint32_t timeout);
+      get_timeout_callback gtcb, uint32_t timeout) override;
   virtual void Get(uint64_t id, const std::string &key,
       const Timestamp &timestamp, get_callback gcb, get_timeout_callback gtcb,
-      uint32_t timeout);
+      uint32_t timeout) override;
 
   // Set the value for the given key.
   virtual void Put(uint64_t id, const std::string &key,
       const std::string &value, put_callback pcb, put_timeout_callback ptcb,
-      uint32_t timeout);
+      uint32_t timeout) override;
 
   // Commit all Get(s) and Put(s) since Begin().
   virtual void Commit(uint64_t id, const Transaction & txn,
       uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
-      uint32_t timeout);
+      uint32_t timeout) override;
   
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(uint64_t id, const Transaction &txn,
-      abort_callback acb, abort_timeout_callback atcb, uint32_t timeout);
+      abort_callback acb, abort_timeout_callback atcb,
+      uint32_t timeout) override;
 
   // Prepare the transaction.
   virtual void Prepare(uint64_t id, const Transaction &txn,
       const Timestamp &timestamp, prepare_callback pcb,
-      prepare_timeout_callback ptcb, uint32_t timeout);
+      prepare_timeout_callback ptcb, uint32_t timeout) override;
 
  private:
-  struct PendingGet {
-    PendingGet(uint64_t reqId) : reqId(reqId) { }
-    uint64_t reqId;
-    std::string key;
-    get_callback gcb;
-    get_timeout_callback gtcb;
-  };
-  struct PendingPrepare {
-    PendingPrepare(uint64_t reqId) : reqId(reqId), requestTimeout(nullptr) { }
+  struct PendingPrepare : public TxnClient::PendingPrepare {
+    PendingPrepare(uint64_t reqId) : TxnClient::PendingPrepare(reqId),
+        requestTimeout(nullptr) { }
     ~PendingPrepare() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
       }
     }
-    uint64_t reqId;
     Timestamp ts;
     Transaction txn;
-    prepare_callback pcb;
-    prepare_timeout_callback ptcb;
     Timeout *requestTimeout;
   };
-  struct PendingCommit {
-    PendingCommit(uint64_t reqId) : reqId(reqId), requestTimeout(nullptr) { }
+  struct PendingCommit : public TxnClient::PendingCommit {
+    PendingCommit(uint64_t reqId) : TxnClient::PendingCommit(reqId),
+        requestTimeout(nullptr) { }
     ~PendingCommit() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
       }
     }
-    uint64_t reqId;
     uint64_t ts;
     Transaction txn;
-    commit_callback ccb;
-    commit_timeout_callback ctcb;
     Timeout *requestTimeout;
   };
-  struct PendingAbort {
-    PendingAbort(uint64_t reqId) : reqId(reqId), requestTimeout(nullptr) { }
+  struct PendingAbort : public TxnClient::PendingAbort {
+    PendingAbort(uint64_t reqId) : TxnClient::PendingAbort(reqId),
+        requestTimeout(nullptr) { }
     ~PendingAbort() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
       }
     }
-    uint64_t reqId;
     Transaction txn;
-    abort_callback acb;
-    abort_timeout_callback atcb;
     Timeout *requestTimeout;
   };
 
@@ -141,12 +129,10 @@ class ShardClient : public TxnClient {
 
   replication::ir::IRClient *client; // Client proxy.
 
-  uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingGet *> pendingGets;
   std::unordered_map<uint64_t, PendingPrepare *> pendingPrepares;
   std::unordered_map<uint64_t, PendingCommit *> pendingCommits;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
-
 
   /* Tapir's Decide Function. */
   std::string TapirDecide(const std::map<std::string, std::size_t> &results);

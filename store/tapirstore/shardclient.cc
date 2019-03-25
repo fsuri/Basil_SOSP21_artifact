@@ -38,7 +38,7 @@ using namespace proto;
 
 ShardClient::ShardClient(const string &configPath, Transport *transport,
     uint64_t client_id, int shard, int closestReplica) : client_id(client_id),
-      transport(transport), shard(shard), lastReqId(0UL) {
+      transport(transport), shard(shard) {
   ifstream configStream(configPath);
   if (configStream.fail()) {
     Panic("Unable to read configuration file: %s\n", configPath.c_str());

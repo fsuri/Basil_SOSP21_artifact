@@ -12,41 +12,27 @@
 #include "store/common/frontend/bufferclient.h"
 #include "store/mortystore/shardclient.h"
 #include "store/mortystore/morty-proto.pb.h"
+#include "store/common/frontend/async_client.h"
 
 #include <thread>
 #include <set>
 
 namespace mortystore {
 
-class Client : public ::Client {
+struct Branch {
+  uint64_t id;
+  std::set<int> participants;
+  size_t opCount;
+  std::map<std::string, std::string> readValues;
+};
+
+class Client : public ::AsyncClient {
  public:
   Client(const std::string configPath, int nShards, int closestReplica,
       Transport *transport);
   virtual ~Client();
 
-  // Begin a transaction.
-  virtual void Begin();
-
-  // Get the value corresponding to key.
-  virtual void Get(const std::string &key, get_callback gcb,
-      get_timeout_callback gtcb, uint32_t timeout);
-
-  // Set the value for the given key.
-  virtual void Put(const std::string &key, const std::string &value,
-      put_callback pcb, put_timeout_callback ptcb,
-      uint32_t timeout);
-
-  // Commit all Get(s) and Put(s) since Begin().
-  virtual void Commit(commit_callback ccb, commit_timeout_callback ctcb,
-      uint32_t timeout);
-  
-  // Abort all Get(s) and Put(s) since Begin().
-  virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
-      uint32_t timeout);
-
-  virtual std::vector<int> Stats();
-
-  void Execute(AsyncTransaction *txn);
+  virtual void Execute(AsyncTransaction *txn, execute_callback ecb);
 
  private:
   struct PendingRequest {
@@ -60,6 +46,8 @@ class Client : public ::Client {
       }
     }
 
+    AsyncTransaction *txn;
+    execute_callback ecb;
     commit_callback ccb;
     commit_timeout_callback ctcb;
     uint64_t id;
@@ -71,10 +59,21 @@ class Client : public ::Client {
     bool callbackInvoked;
   };
 
-  // Prepare function
-  void Prepare(PendingRequest *req, uint32_t timeout);
-  void PrepareCallback(uint64_t reqId, int status, Timestamp ts);
-  void HandleAllPreparesReceived(PendingRequest *req);
+  void ExecuteNextOperation(AsyncTransaction *txn, Branch *branch);
+
+  void Get(Branch *branch, const std::string &key);
+  void Put(Branch *branch, const std::string &key, const std::string &value);
+  void Commit(Branch *branch);
+  void Abort(Branch *branch);
+
+  void GetCallback(Branch *branch, int status, const std::string &key,
+      const std::string &val);
+  void PutCallback(Branch *branch, int status, const std::string &key,
+      const std::string &val);
+
+  void GetTimeout(Branch *branch, int status, const std::string &key);
+  void PutTimeout(Branch *branc, int status, const std::string &key,
+      const std::string &value);
 
   // Unique ID for this client.
   uint64_t client_id;
@@ -93,6 +92,8 @@ class Client : public ::Client {
 
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
+  AsyncTransaction *currTxn;
+  execute_callback currEcb;
 };
 
 } // namespace mortystore
