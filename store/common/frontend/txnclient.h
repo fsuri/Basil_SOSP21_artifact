@@ -56,20 +56,12 @@
 #define ABORT_TIMEOUT 1000
 #define RETRY_TIMEOUT 500000
 
-enum OpType {
-  GET,
-  PUT,
-  PREPARE,
-  COMMIT,
-  ABORT
-};
-
 typedef std::function<void(int, Timestamp)> prepare_callback;
 typedef std::function<void(int, Timestamp)> prepare_timeout_callback;
 
 class TxnClient {
  public:
-  TxnClient () { }
+  TxnClient () : lastReqId(0UL) { }
   virtual ~TxnClient() { }
   
   // Begin a transaction.
@@ -100,7 +92,42 @@ class TxnClient {
   virtual void Prepare(uint64_t id, const Transaction &txn,
       const Timestamp &timestamp, prepare_callback pcb,
       prepare_timeout_callback ptcb, uint32_t timeout) = 0;
+ 
+ protected:
+  struct PendingRequest {
+    PendingRequest(uint64_t reqId) : reqId(reqId) { }
+    uint64_t reqId;
+  };
+  struct PendingGet : public PendingRequest {
+    PendingGet(uint64_t reqId) : PendingRequest(reqId) { }
+    std::string key;
+    get_callback gcb;
+    get_timeout_callback gtcb;
+  };
+  struct PendingPut : public PendingRequest {
+    PendingPut(uint64_t reqId) : PendingRequest(reqId) { }
+    std::string key;
+    std::string value;
+    put_callback pcb;
+    put_timeout_callback ptcb;
+  };
+  struct PendingPrepare : public PendingRequest {
+    PendingPrepare(uint64_t reqId) : PendingRequest(reqId) { }
+    prepare_callback pcb;
+    prepare_timeout_callback ptcb;
+  };
+  struct PendingCommit : public PendingRequest {
+    PendingCommit(uint64_t reqId) : PendingRequest(reqId) { }
+    commit_callback ccb;
+    commit_timeout_callback ctcb;
+  };
+  struct PendingAbort : public PendingRequest {
+    PendingAbort(uint64_t reqId) : PendingRequest(reqId) { }
+    abort_callback acb;
+    abort_timeout_callback atcb;
+  };
 
+  uint64_t lastReqId;
 };
 
 #endif /* _TXN_CLIENT_H_ */

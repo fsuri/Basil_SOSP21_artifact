@@ -9,40 +9,34 @@
 
 namespace retwis {
 
-RetwisClient::RetwisClient(KeySelector *keySelector, Client &client,
+RetwisClient::RetwisClient(KeySelector *keySelector, AsyncClient &client,
     Transport &transport, int numRequests, int expDuration, uint64_t delay,
     int warmupSec, int cooldownSec, int tputInterval,
     const std::string &latencyFilename)
-    : BenchmarkClient(client, transport, numRequests, expDuration, delay,
-        warmupSec, cooldownSec, tputInterval, latencyFilename),
-        keySelector(keySelector), currTxn(nullptr) {
+    : AsyncTransactionBenchClient(client, transport, numRequests, expDuration,
+        delay, warmupSec, cooldownSec, tputInterval, latencyFilename),
+        keySelector(keySelector) {
 }
 
 RetwisClient::~RetwisClient() {
 }
 
-void RetwisClient::SendNext() {
+AsyncTransaction *RetwisClient::GetNextTransaction() {
   int ttype = std::rand() % 100;
   tid++;
   if (ttype < 5) {
-    currTxn = new AddUser(tid, &client, keySelector);
     lastOp = "add_user";
+    return new AddUser(tid, keySelector);
   } else if (ttype < 20) {
-    currTxn = new Follow(tid, &client, keySelector);
     lastOp = "follow";
+    return new Follow(tid, keySelector);
   } else if (ttype < 50) {
-    currTxn = new PostTweet(tid, &client, keySelector);
     lastOp = "post_tweet";
+    return new PostTweet(tid, keySelector);
   } else {
-    currTxn = new GetTimeline(tid, &client, keySelector);
     lastOp = "get_timeline";
+    return new GetTimeline(tid, keySelector);
   }
-  currTxn->Execute([this](bool committed,
-      std::map<std::string, std::string> readValues){
-    delete this->currTxn;
-    this->currTxn = nullptr;
-    this->OnReply();
-  });
 }
 
 std::string RetwisClient::GetLastOp() const {

@@ -221,6 +221,7 @@ int main(int argc, char **argv) {
       replica = new replication::vr::VRReplica(config, FLAGS_replica_idx,
           &transport, 1, dynamic_cast<replication::AppReplica *>(server));
       break;
+    // TODO add janus case here
     }
     default: {
       NOT_REACHABLE();

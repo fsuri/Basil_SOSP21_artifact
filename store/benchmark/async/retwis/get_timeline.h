@@ -9,11 +9,12 @@ namespace retwis {
 
 class GetTimeline : public RetwisTransaction {
  public:
-  GetTimeline(uint64_t tid, Client *client, KeySelector *keySelector);
+  GetTimeline(uint64_t tid, KeySelector *keySelector);
   virtual ~GetTimeline();
 
  protected:
-  void ExecuteNextOperation();
+  Operation GetNextOperation(size_t opCount,
+      std::map<std::string, std::string> readValues);
 
 };
 

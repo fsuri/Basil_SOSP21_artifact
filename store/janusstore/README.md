@@ -2,6 +2,20 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
+- client/coordinator for one person, server for the other
+
+- when we merge to master, may need to modify client API to fit evaluation framework
+
+- client should only worry about sending a full one-shot transaction to replicas
+
+- store/server.cc contains info about actually starting up the janus server
+- store/tapirstore/server.cc is just how we can match on the request op and call our handler logic
+- need to define protobuf for our messages
+
+- c++ will complain about not being able to convert Transaction to a key in a map; can just use tid
+
+- if c++ complains a lot, ask matt
+
 - as of 3/21:
 	- design decision: individual shardclients will wrap the get/puts from client into a single Transaction object to be forwarded to the participating replicas
 	- `client` handles transactions by ID but `shardclient` and `server` (replica) handle transactions by the full Transaction object in order to capture the appropriate operations
@@ -32,6 +46,7 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 - 3/19: Install deps and get everything to compile
 - Week of 3/25: Implement baseline communication between modules
 - Week of 4/7: Implement working/runnable transaction system
+- 4/12: System done
 - Week of 4/14 - 4/21: Testing/benchmarking
 
 # How to Run

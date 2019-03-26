@@ -20,32 +20,12 @@
 
 namespace janusstore {
 
-class ShardClient : public TxnClient {
+class ShardClient {
 public:
     /* Constructor needs path to shard config. */
     ShardClient(const std::string &configPath, Transport *transport,
         uint64_t client_id, int shard, int closestReplica);
     virtual ~ShardClient();
-
-    // Begin a transaction.
-    virtual void Begin(uint64_t id);
-
-    // Get the value corresponding to key.
-    virtual void Get(uint64_t id, const std::string &key, get_callback gcb,
-        get_timeout_callback gtcb, uint32_t timeout);
-
-    // Set the value for the given key.
-    virtual void Put(uint64_t id, const std::string &key,
-        const std::string &value, put_callback pcb,
-        put_timeout_callback ptcb, uint32_t timeout);
-
-    // Commit all Get(s) and Put(s) since Begin().
-    virtual void Commit(uint64_t id, const Transaction & txn,
-        commit_callback ccb, commit_timeout_callback ctcb, uint32_t timeout);
-  
-    // Abort all Get(s) and Put(s) since Begin().
-    virtual void Abort(uint64_t id, const Transaction &txn,
-        abort_callback acb, abort_timeout_callback atcb, uint32_t timeout);
 
 /* * coordinator role (co-located with client but not visible to client) * */
 

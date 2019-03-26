@@ -1,7 +1,7 @@
 #ifndef RETWIS_CLIENT_H
 #define RETWIS_CLIENT_H
 
-#include "store/benchmark/async/bench_client.h"
+#include "store/benchmark/async/async_transaction_bench_client.h"
 #include "store/benchmark/async/retwis/retwis_transaction.h"
 #include "store/benchmark/async/common/key_selector.h"
 
@@ -12,22 +12,21 @@ enum KeySelection {
   ZIPF
 };
 
-class RetwisClient : public BenchmarkClient {
+class RetwisClient : public AsyncTransactionBenchClient {
  public:
-  RetwisClient(KeySelector *keySelector, Client &client, Transport &transport,
-      int numRequests, int expDuration, uint64_t delay, int warmupSec,
-      int cooldownSec, int tputInterval,
+  RetwisClient(KeySelector *keySelector, AsyncClient &client,
+      Transport &transport, int numRequests, int expDuration, uint64_t delay,
+      int warmupSec, int cooldownSec, int tputInterval,
       const std::string &latencyFilename = "");
 
   virtual ~RetwisClient();
 
  protected:
-  virtual void SendNext();
+  virtual AsyncTransaction *GetNextTransaction();
   virtual std::string GetLastOp() const;
 
  private:
   KeySelector *keySelector; 
-  RetwisTransaction *currTxn;
   std::string lastOp;
   uint64_t tid = 0;
 };

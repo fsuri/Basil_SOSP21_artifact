@@ -7,10 +7,11 @@ namespace tpcc {
 
 class NewOrder : public TPCCTransaction {
  public:
-  NewOrder(Client *client);
+  NewOrder();
   virtual ~NewOrder();
 
-  void ExecuteNextOperation();
+  Operation GetNextOperation(size_t opCount,
+      const std::map<std::string, std::string> &readValues);
 
 };
 

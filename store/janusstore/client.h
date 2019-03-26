@@ -26,28 +26,17 @@ public:
         Transport *transport);
     virtual ~Client();
 
-    // Begin a transaction.
-    virtual void Begin();
+    // begins PreAccept phase
+    void PreAccept(Transaction txn, uint64_t ballot);
 
-    // Get the value corresponding to key.
-    virtual void Get(const std::string &key, get_callback gcb,
-        get_timeout_callback gtcb, uint32_t timeout = GET_TIMEOUT);
+    // called from PreAcceptCallback when a fast quorum is not obtained
+    void Accept(
+        Transaction txn,
+        std::vector<std::string> deps,
+        uint64_t ballot);
 
-    // Set the value for the given key.
-    virtual void Put(const std::string &key, const std::string &value,
-        put_callback pcb, put_timeout_callback ptcb,
-        uint32_t timeout = PUT_TIMEOUT);
-
-    // Commit all Get(s) and Put(s) since Begin().
-    // This starts the Janus protocol
-    virtual void Commit(commit_callback ccb, commit_timeout_callback ctcb,
-        uint32_t timeout);
-  
-    // Abort all Get(s) and Put(s) since Begin().
-    virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
-        uint32_t timeout);
-
-    virtual std::vector<int> Stats();
+    // different from the public Commit() function; this is a Janus commit
+    void CommitJanusTxn(uint64_t t_id, std::vector<uint64_t>> deps);
 
 private:
     // Unique ID for this client.
@@ -78,9 +67,6 @@ private:
 
 /* * coordinator role (co-located with client but not visible to client) * */
 
-    // begins PreAccept phase
-    void PreAccept(Transaction txn, uint64_t ballot);
-
     // callback when all relevant replicas have replied
     // shardclient aggregates these replies into a status variable to indicate the result of PreAccept phase
     // deps is a map from replica ID to its deps for T (a list of other t_ids)
@@ -88,17 +74,9 @@ private:
         uint64_t t_id, int status,
         std::unordered_map<uint64_t,std::vector<uint64_t>> deps);
 
-    // called from PreAcceptCallback when a fast quorum is not obtained
-    void Accept(
-        uint64_t t_id,
-        std::vector<std::string> deps,
-        uint64_t ballot);
-
     // callback when majority of replicas in each shard returns Accept-OK
     void AcceptCallback(uint64_t t_id);
 
-    // different from the public Commit() function; this is a Janus commit
-    void CommitJanusTxn(uint64_t t_id, std::vector<uint64_t>> deps);
     // TODO maybe change the type of [results]
     void CommitJanusTxnCallback(uint64_t t_id, std::vector<uint64_t> results);
 };

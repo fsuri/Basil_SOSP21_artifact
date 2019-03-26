@@ -2,20 +2,21 @@
 
 namespace retwis {
 
-AddUser::AddUser(uint64_t tid, Client *client, KeySelector *keySelector) :
-    RetwisTransaction(tid, client, keySelector, 4) {
+AddUser::AddUser(uint64_t tid, KeySelector *keySelector) :
+    RetwisTransaction(tid, keySelector, 4) {
 }
 
 AddUser::~AddUser() {
 }
 
-void AddUser::ExecuteNextOperation() {
-  if (GetOpsCompleted() == 0) {
-    Get(GetKey(0));
-  } else if (GetOpsCompleted() < 4) {
-    Put(GetKey(GetOpsCompleted() - 1), GetKey(GetOpsCompleted() - 1));
+Operation AddUser::GetNextOperation(size_t opCount,
+      std::map<std::string, std::string> readValues) {
+  if (opCount == 0) {
+    return Get(GetKey(0));
+  } else if (opCount < 4) {
+    return Put(GetKey(opCount - 1), GetKey(opCount - 1));
   } else {
-    Commit();
+    return Commit();
   }
 }
 

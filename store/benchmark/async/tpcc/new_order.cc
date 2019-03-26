@@ -2,19 +2,20 @@
 
 namespace tpcc {
 
-NewOrder::NewOrder(Client *client) : TPCCTransaction(client) {
+NewOrder::NewOrder() : TPCCTransaction() {
 }
 
 NewOrder::~NewOrder() {
 }
 
-void NewOrder::ExecuteNextOperation() {
-  if (GetOpsCompleted() == 0) {
-    Get("hello");
-  } else if (GetOpsCompleted() == 1) {
-    Put("hello", "world");
+Operation NewOrder::GetNextOperation(size_t opCount,
+    const std::map<std::string, std::string> &readValues) {
+  if (opCount == 0) {
+    return Get("hello");
+  } else if (opCount == 1) {
+    return Put("hello", "world");
   } else {
-    Commit();
+    return Commit();
   }
 }
 
