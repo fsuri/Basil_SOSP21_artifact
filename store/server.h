@@ -10,7 +10,7 @@ class Server {
   Server() { }
   virtual ~Server() { }
   virtual void Load(const std::string &key, const std::string &value,
-      const Timestamp timestapm) = 0;
+      const Timestamp timestamp) = 0;
 };
 
 #endif /* STORE_SERVER_H */
