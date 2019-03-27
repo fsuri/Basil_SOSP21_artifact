@@ -6,7 +6,7 @@ using namespace std;
 
 Client::Client(const std::string configPath, int nShards, 
 	int closestReplica, Transport *transport)
-	: nshards(nShards), transport(transport), lastReqId(0UL) {
+	: nshards(nShards), transport(transport) {
 
 		// initialize a random client ID
 		client_id = 0;
