@@ -7,16 +7,20 @@ package janusstore.proto;
 // TODO lots of types of messages with repeated fields - worth refactoring
 // or keep seperate for clarity?
 
+message DependencyList {
+    repeated uint64 txnid = 1; // TODO is this a string or int
+}
+
+message GetMessage {
+  required string key = 1;
+}
+
+message PutMessage {
+  required string key = 1;
+  required string value = 2;
+}
+
 message TransactionMessage {
-    message GetMessage {
-      required string key = 1;
-    }
-
-    message PutMessage {
-      required string key = 1;
-      required string value = 2;
-    }
-
     required uint64 txnid = 1;
     repeated GetMessage gets = 2;
     repeated PutMessage puts = 3;
@@ -53,8 +57,7 @@ message AcceptNotOKMessage {
 }
 
 message CommitMessage {
-    // TODO change to txnid? assuming server stores the original TransactionMessage
-    required TransactionMessage txn = 1;
+    required uint64 txnid = 1;
     required DependencyList dep = 2;
 }
 
@@ -65,30 +68,17 @@ message CommitOKMessage {
 }
 
 message InquireMessage {
-    // TODO change to txnid?
-    required TransactionMessage txn = 1;
+    required uint64 txnid = 1;
 }
 
 message InquireOKMessage {
     // InquireOK sent when the inquired txn status == committing
-
-    // TODO change to txnid?
-    required TransactionMessage txn = 1;
-}
-
-message DependencyList {
-    repeated uint64 txnid = 1; // TODO is this a string or int
+    required uint64 txnid = 1;
 }
 
 // for failure recovery; implement if time and for now don't care
-message PrepareMessage {
-    required BallotMessage = 1;
-}
-
-message PrepareOKMessage {
-    required BallotMessage = 1;
-    required DependencyList dep = 2;
-}
+// message PrepareMessage {}
+// message PrepareOKMessage {}
 
 message Request {
      enum Operation {
@@ -102,15 +92,13 @@ message Request {
           PREPARE = 6;
      }
      required Operation op = 1;
-     required uint64 txnid = 2; // TODO decide if we should leave all data in messages below
-     optional GetMessage get = 3;
-     optional PreAcceptMessage preaccept = 4;
-     optional AcceptMessage accept = 5;
-     optional CommitMessage commit = 6;
-     optional InquireMessage inquire = 7;
+     optional PreAcceptMessage preaccept = 2;
+     optional AcceptMessage accept = 3;
+     optional CommitMessage commit = 4;
+     optional InquireMessage inquire = 5;
 
      // for failure recovery
-     optional PrepareMessage prepare = 8;
+     // optional PrepareMessage prepare = 6;
 }
 
 message Reply {
@@ -134,5 +122,5 @@ message Reply {
      optional InquireOKMessage inquire_ok = 6;
 
      // for failure recovery
-     optional PrepareOKMessage prepare_ok = 7;
+     // optional PrepareOKMessage prepare_ok = 7;
 }
