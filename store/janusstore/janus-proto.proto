@@ -38,7 +38,7 @@ message CommitMessage {
 
 message CommitOKMessage {
     required bool abandon = 1;
-    required bool result = 1;
+    required bool result = 1; // TODO this correct?
 }
 
 message PrepareMessage {
@@ -51,7 +51,7 @@ message PrepareOKMessage {
 }
 
 message DependencyList {
-    repeated TransactionMessage txn = 1;
+    repeated uint64 txnid = 1; // TODO is this a string or int
 }
 
 message Request {
