@@ -7,10 +7,7 @@
 
 #include "store/janusstore/store.h"
 #include "store/janusstore/transaction.h"
-
-// TODO define these
 #include "store/janusstore/janus-proto.pb.h"
-// end TODO
 
 namespace janusstore {
 

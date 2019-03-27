@@ -11,10 +11,8 @@
 #include "store/common/frontend/bufferclient.h"
 
 #include "store/janusstore/transaction.h"
-// TODO define these
 #include "store/janusstore/shardclient.h"
 #include "store/janusstore/janus-proto.pb.h"
-// end TODO
 
 #include <thread>
 
