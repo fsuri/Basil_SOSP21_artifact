@@ -49,7 +49,8 @@ void ShardClient::PreAccept(uint64_t id, const Transaction &txn, uint64_t ballot
 	// now we can serialize the request and send it to replicas
 	request.SerializeToString(&request_str);
 
-	// TODO how to actually send this? use Invoke?
-	// client->Invoke()
+	// TODO is this ok?
+	client->InvokeUnlogged(replica, request_str,
+		bind(&ShardClient::PreAcceptCallback, this, placeholders::_1, placeholders::_2, placeholders::_3), nullptr); // no error case
 }
 }
