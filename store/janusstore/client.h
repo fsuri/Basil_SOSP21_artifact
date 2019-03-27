@@ -27,11 +27,11 @@ public:
     virtual ~Client();
 
     // begins PreAccept phase
-    void PreAccept(Transaction txn, uint64_t ballot);
+    void PreAccept(Transaction *txn, uint64_t ballot);
 
     // called from PreAcceptCallback when a fast quorum is not obtained
     void Accept(
-        Transaction txn,
+        Transaction *txn,
         std::vector<std::string> deps,
         uint64_t ballot);
 
@@ -63,7 +63,9 @@ private:
     std::set<int> participants;
 
     // Buffering client for each shard.
-    std::vector<BufferClient *> bclient;
+    std::vector<ShardClient *> bclient;
+
+    void setParticipants(Transaction *txn);
 
 /* * coordinator role (co-located with client but not visible to client) * */
 

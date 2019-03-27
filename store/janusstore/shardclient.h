@@ -20,6 +20,11 @@
 
 namespace janusstore {
 
+// TODO no idea if these are defined correctly
+typedef std::function<void(int, std::unordered_map<uint64_t,std::vector<uint64_t>>)> preaccept_callback;
+typedef std::function<void(int)> accept_callback;
+typedef std::function<void(int, std::vector<uint64_t> results)> commit_txn_callback;
+
 class ShardClient {
 public:
     /* Constructor needs path to shard config. */

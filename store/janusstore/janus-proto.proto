@@ -33,7 +33,7 @@ message BallotMessage {
 }
 
 message PreAcceptMessage {
-    required BallotMessage = 1;
+    required BallotMessage ballot = 1;
 }
 
 // TODO: should acceptOK and preacceptNotOK still have a message
@@ -47,7 +47,7 @@ message PreAcceptOKMessage {
 }
 
 message AcceptMessage {
-    required BallotMessage txn = 1;
+    required BallotMessage ballot = 1;
     required DependencyList dep = 2;
 }
 
