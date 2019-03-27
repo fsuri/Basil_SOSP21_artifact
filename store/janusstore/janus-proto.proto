@@ -4,15 +4,25 @@ import "store/common/common-proto.proto";
 
 package janusstore.proto;
 
-
-// TODO do we need TimestampMessage?
 // TODO lots of types of messages with repeated fields - worth refactoring
 // or keep seperate for clarity?
 
-message GetMessage {
-    required string key = 1;
+message TransactionMessage {
+    message GetMessage {
+      required string key = 1;
+    }
+
+    message PutMessage {
+      required string key = 1;
+      required string value = 2;
+    }
+
+    required uint64 txnid = 1;
+    repeated GetMessage gets = 2;
+    repeated PutMessage puts = 3;
 }
 
+// TODO unsure if it's worth coupling TransactionMessage with a ballot
 message BallotMessage {
     required TransactionMessage txn = 1;
     required uint64 ballot = 2;
@@ -22,8 +32,14 @@ message PreAcceptMessage {
     required BallotMessage = 1;
 }
 
+// TODO: should acceptOK and preacceptNotOK still have a message
+// that contains the transaction ID?
+
+// if so, should we just factor out the txn ID into the Reply message?
+
 message PreAcceptOKMessage {
-    required DependencyList dep = 1;
+    required TransactionMessage txn = 1;
+    required DependencyList dep = 2;
 }
 
 message AcceptMessage {
@@ -31,16 +47,40 @@ message AcceptMessage {
     required DependencyList dep = 2;
 }
 
+message AcceptNotOKMessage {
+    // the highest ballot number seen for the requested transaction
+    required BallotMessage highest_ballot = 1;
+}
+
 message CommitMessage {
+    // TODO change to txnid? assuming server stores the original TransactionMessage
     required TransactionMessage txn = 1;
     required DependencyList dep = 2;
 }
 
 message CommitOKMessage {
-    required bool abandon = 1;
-    required bool result = 1; // TODO this correct?
+    required uint64 txnid = 1;
+    required bool abandon = 2;
+    required bool result = 3; // TODO may need to change this type for reads
 }
 
+message InquireMessage {
+    // TODO change to txnid?
+    required TransactionMessage txn = 1;
+}
+
+message InquireOKMessage {
+    // InquireOK sent when the inquired txn status == committing
+
+    // TODO change to txnid?
+    required TransactionMessage txn = 1;
+}
+
+message DependencyList {
+    repeated uint64 txnid = 1; // TODO is this a string or int
+}
+
+// for failure recovery; implement if time and for now don't care
 message PrepareMessage {
     required BallotMessage = 1;
 }
@@ -50,38 +90,49 @@ message PrepareOKMessage {
     required DependencyList dep = 2;
 }
 
-message DependencyList {
-    repeated uint64 txnid = 1; // TODO is this a string or int
-}
-
 message Request {
      enum Operation {
-          GET = 1;
+          GET = 1; // TODO what is this?
           PREACCEPT = 2;
           ACCEPT = 3;
-          COMMIT = 5;
-          PREPARE = 4;
+          COMMIT = 4;
+          INQUIRE = 5;
+
+          // for failure recovery
+          PREPARE = 6;
      }
      required Operation op = 1;
-     required uint64 txnid = 2;
+     required uint64 txnid = 2; // TODO decide if we should leave all data in messages below
      optional GetMessage get = 3;
      optional PreAcceptMessage preaccept = 4;
      optional AcceptMessage accept = 5;
      optional CommitMessage commit = 6;
-     optional PrepareMessage prepare = 7;
+     optional InquireMessage inquire = 7;
+
+     // for failure recovery
+     optional PrepareMessage prepare = 8;
 }
 
 message Reply {
      enum Operation {
           GET = 1; // use value
           PREACCEPT_OK = 2;
-          ACCEPT_OK = 3; // contains no message
-          COMMIT_OK = 4;
-          PREPARE_OK = 5;
+          PREACCEPT_NOT_OK = 3; // contains no message
+          ACCEPT_OK = 4; // contains no message
+          ACCEPT_NOT_OK = 5;
+          COMMIT_OK = 6;
+          INQUIRE_OK = 7;
+
+          // for failure recovery
+          PREPARE_OK = 8;
      }
      required Operation op = 1;
-     optional string value = 2;
+     optional string value = 2; // TODO what is this for?
      optional PreAcceptOKMessage preaccept_ok = 3;
-     optional CommitOKMessage commit_ok = 4;
-     optional PrepareOKMessage prepare_ok = 5;
+     optional AcceptNotOKMessage accept_not_ok = 4;
+     optional CommitOKMessage commit_ok = 5;
+     optional InquireOKMessage inquire_ok = 6;
+
+     // for failure recovery
+     optional PrepareOKMessage prepare_ok = 7;
 }
