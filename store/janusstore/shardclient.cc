@@ -43,8 +43,8 @@ void ShardClient::PreAccept(uint64_t id, const Transaction &txn, uint64_t ballot
 	request.set_op(Request::PREACCEPT);
 
 	// serialize a Transaction into a TransactionMessage
-	txn.serialize(request.mutable_preaccept()->mutable_ballot()->mutable_txn());
-	request.mutable_preaccept()->mutable_ballot()->ballot = ballot;
+	txn.serialize(request.mutable_preaccept()->mutable_txn());
+	request.mutable_preaccept()->ballot = ballot;
 
 	// now we can serialize the request and send it to replicas
 	request.SerializeToString(&request_str);

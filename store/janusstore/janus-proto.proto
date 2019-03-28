@@ -12,12 +12,12 @@ message DependencyList {
 }
 
 message GetMessage {
-  required string key = 1;
+    required string key = 1;
 }
 
 message PutMessage {
-  required string key = 1;
-  required string value = 2;
+    required string key = 1;
+    required string value = 2;
 }
 
 message TransactionMessage {
@@ -26,14 +26,9 @@ message TransactionMessage {
     repeated PutMessage puts = 3;
 }
 
-// TODO unsure if it's worth coupling TransactionMessage with a ballot
-message BallotMessage {
+message PreAcceptMessage {
     required TransactionMessage txn = 1;
     required uint64 ballot = 2;
-}
-
-message PreAcceptMessage {
-    required BallotMessage ballot = 1;
 }
 
 // TODO: should acceptOK and preacceptNotOK still have a message
@@ -42,18 +37,20 @@ message PreAcceptMessage {
 // if so, should we just factor out the txn ID into the Reply message?
 
 message PreAcceptOKMessage {
-    required TransactionMessage txn = 1;
+    required uint64 txnid = 1;
     required DependencyList dep = 2;
 }
 
 message AcceptMessage {
-    required BallotMessage ballot = 1;
+    required uint64 txnid = 1;
     required DependencyList dep = 2;
+    required uint64 ballot = 3;
 }
 
 message AcceptNotOKMessage {
     // the highest ballot number seen for the requested transaction
-    required BallotMessage highest_ballot = 1;
+    required uint64 txnid = 1;
+    required uint64 highest_ballot = 2;
 }
 
 message CommitMessage {
