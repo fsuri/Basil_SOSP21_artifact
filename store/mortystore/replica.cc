@@ -73,10 +73,10 @@ void Replica::HandleGetMessage(const TransportAddress &remote, uint64_t tid,
 
   std::string value;
   do {
-    Branch *branch = GenerateBranch(tid); // using current permutation stored
+    //Branch *branch = GenerateBranch(tid); // using current permutation stored
     // in activeTidsSorted
-     
-    branch->store.Read(tid, get.key(), value);
+
+    //branch->store.Read(tid, get.key(), value);
 
     // one option is we generate all possible DGs with adjacency matrices
     //    for each DG, we must ensure:
