@@ -4,7 +4,7 @@
 namespace janusstore {
 using namespace std;
 
-Client::Client(const std::string configPath, int nShards, 
+Client::Client(const string configPath, int nShards, 
 	int closestReplica, Transport *transport)
 	: nshards(nShards), transport(transport) {
 
@@ -17,11 +17,11 @@ Client::Client(const std::string configPath, int nShards,
 	        client_id = dis(gen);
     	}
 
-    	// txn_id = bit concat of client_id and txn_num
-		txn_num = 0;
+    	// MSB = client ID, LSB = txn num
+    	txn_id = (client_id/10000)*10000;
 
-		// ballot = bit concat of client_id and ballot_num
-		ballot_num = 0;
+		// MSB = client_id, LSB = ballot num
+		ballot = (client_id/10000)*10000;
 
 		bclient.reserve(nshards);
 		Debug("Initializing Janus client with id [%lu] %lu", client_id, nshards);
@@ -60,17 +60,32 @@ void Client::setParticipants(Transaction *txn) {
 }
 
 void Client::PreAccept(Transaction *txn, uint64_t ballot) {
-	// TODO set [txn.txn_id]
+	txn->setTransactionId(txn_id);
+	txn_id++;
 
 	setParticipants(txn);
 	TransactionMessage *txn_message;
 	txn->serialize(txn_message);
 
 	for (auto p : participants) {
-		// TODO make ballot_num an actual ballot
 		// TODO how will the shardclients notify this client?
-		bclient[p]->PreAccept(client_id, *txn, ballot_num, std::bind(
-				&ShardClient::PreAcceptCallback, placeholders::_1, placeholders::_2, placeholders::_3)
+		bclient[p]->PreAccept(*txn, ballot,
+			std::bind(&Client::PreAcceptCallback, 
+				placeholders::_1, placeholders::_2, placeholders::_3)
+		);
+	}
+}
+
+void Client::Accept(uint64_t txn_id, vector<string> deps, uint64_t ballot) {
+	// TODO implement
+	return;
+}
+
+void Client::Commit(uint64_t txn_id, vector<uint64_t> deps) {
+	for (auto p : participants) {
+		bclient[p]->Commit(txn_id, deps, 
+			std::bind(&Client:CommitCallback,
+				placeholders::_1, placeholders::_2)
 		);
 	}
 }

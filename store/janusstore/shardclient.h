@@ -20,9 +20,15 @@
 
 namespace janusstore {
 
-typedef std::function<void(uint64_t, int, std::unordered_map<uint64_t,std::vector<uint64_t>>)> preaccept_callback;
-typedef std::function<void(int)> accept_callback;
-typedef std::function<void(int, std::vector<uint64_t>)> commit_txn_callback;
+// typedef std::function<void(uint64_t, int, std::unordered_map<uint64_t,std::vector<uint64_t>>)> preaccept_callback;
+// typedef std::function<void(int)> accept_callback;
+// typedef std::function<void(int, std::vector<uint64_t>)> commit_callback;
+
+// client callbacks
+typedef std::function<void(uint64_t, int, std::unordered_map<uint64_t,std::vector<uint64_t>>)> client_preaccept_callback;
+typedef std::function<void(int)> client_accept_callback;
+typedef std::function<void(int, std::vector<uint64_t>)> client_commit_callback;
+
 
 class ShardClient {
 public:
@@ -34,13 +40,14 @@ public:
 /* * coordinator role (co-located with client but not visible to client) * */
 
     // Initiate the PreAccept phase for this shard.
-    virtual void PreAccept(uint64_t id, const Transaction &txn, uint64_t ballot, preaccept_callback pcb);
+    // TODO unsure if id is needed
+    virtual void PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb);
 
     // Initiate the Accept phase for this shard.
-    virtual void Accept(uint64_t txn_id, std::vector<std::string> deps, uint64_t ballot, accept_callback acb);
+    virtual void Accept(uint64_t txn_id, std::vector<std::string> deps, uint64_t ballot, client_accept_callback acb);
 
     // Initiate the Commit phase for this shard.
-    virtual void Commit(uint64_t txn_id, std::vector<std::string> deps, commit_txn_callback ctcb);
+    virtual void Commit(uint64_t txn_id, std::vector<std::string> deps, client_commit_callback ccb);
 
 private:
     uint64_t client_id; // Unique ID for this client.
@@ -56,11 +63,12 @@ private:
     /* Callbacks for hearing back from a shard for a Janus phase. */
     void PreAcceptCallback(
         uint64_t txn_id, int status,
-        std::unordered_map<uint64_t,std::vector<uint64_t>> deps);
+        std::unordered_map<uint64_t,std::vector<uint64_t>> deps,
+        client_preaccept_callback pcb);
     // 
-    void AcceptCallback(uint64_t txn_id);
+    void AcceptCallback(uint64_t txn_id, client_accept_callback acb);
     // TODO maybe change the type of [results]
-    void CommitCallback(uint64_t txn_id, std::vector<uint64_t> results);
+    void CommitCallback(uint64_t txn_id, std::vector<uint64_t> results, client_commit_callback ccb);
 
     /* Helper Functions for starting and finishing requests */
     // TODO check if we can use these
