@@ -69,14 +69,6 @@ private:
     void AcceptCallback(uint64_t txn_id, client_accept_callback acb);
     // TODO maybe change the type of [results]
     void CommitCallback(uint64_t txn_id, std::vector<uint64_t> results, client_commit_callback ccb);
-
-    /* Helper Functions for starting and finishing requests */
-    // TODO check if we can use these
-    void StartRequest();
-    void WaitForResponse();
-    void FinishRequest(const std::string &reply_str);
-    void FinishRequest();
-    int SendGet(const std::string &request_str);
 };
 
 } // namespace janusstore
