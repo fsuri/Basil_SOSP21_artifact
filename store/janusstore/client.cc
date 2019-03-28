@@ -60,8 +60,8 @@ void Client::setParticipants(Transaction *txn) {
 }
 
 void Client::PreAccept(Transaction *txn, uint64_t ballot) {
-	// TODO where would we set [txn.t_id]?
-	// Client assumes Transaction is already constructed	
+	// TODO set [txn.txn_id]
+
 	setParticipants(txn);
 	TransactionMessage *txn_message;
 	txn->serialize(txn_message);

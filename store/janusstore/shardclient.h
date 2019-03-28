@@ -20,10 +20,9 @@
 
 namespace janusstore {
 
-// TODO no idea if these are defined correctly
-typedef std::function<void(int, std::unordered_map<uint64_t,std::vector<uint64_t>>)> preaccept_callback;
+typedef std::function<void(uint64_t, int, std::unordered_map<uint64_t,std::vector<uint64_t>>)> preaccept_callback;
 typedef std::function<void(int)> accept_callback;
-typedef std::function<void(int, std::vector<uint64_t> results)> commit_txn_callback;
+typedef std::function<void(int, std::vector<uint64_t>)> commit_txn_callback;
 
 class ShardClient {
 public:
@@ -35,16 +34,13 @@ public:
 /* * coordinator role (co-located with client but not visible to client) * */
 
     // Initiate the PreAccept phase for this shard.
-    // TODO check params
     virtual void PreAccept(uint64_t id, const Transaction &txn, uint64_t ballot, preaccept_callback pcb);
 
     // Initiate the Accept phase for this shard.
-    // TODO check params
-    virtual void Accept(uint64_t id, const Transaction &txn, std::vector<std::string> deps, uint64_t ballot, accept_callback acb);
+    virtual void Accept(uint64_t txn_id, std::vector<std::string> deps, uint64_t ballot, accept_callback acb);
 
     // Initiate the Commit phase for this shard.
-    // TODO check params
-    virtual void CommitJanusTxn(uint64_t id, const Transaction &txn, std::vector<std::string> deps, commit_txn_callback ctcb);
+    virtual void Commit(uint64_t txn_id, std::vector<std::string> deps, commit_txn_callback ctcb);
 
 private:
     uint64_t client_id; // Unique ID for this client.
@@ -59,12 +55,12 @@ private:
 
     /* Callbacks for hearing back from a shard for a Janus phase. */
     void PreAcceptCallback(
-        uint64_t t_id, int status,
+        uint64_t txn_id, int status,
         std::unordered_map<uint64_t,std::vector<uint64_t>> deps);
     // 
-    void AcceptCallback(uint64_t t_id);
+    void AcceptCallback(uint64_t txn_id);
     // TODO maybe change the type of [results]
-    void CommitJanusTxnCallback(uint64_t t_id, std::vector<uint64_t> results);
+    void CommitCallback(uint64_t txn_id, std::vector<uint64_t> results);
 
     /* Helper Functions for starting and finishing requests */
     // TODO check if we can use these

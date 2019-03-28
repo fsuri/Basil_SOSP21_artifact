@@ -29,12 +29,12 @@ public:
 
     // called from PreAcceptCallback when a fast quorum is not obtained
     void Accept(
-        Transaction *txn,
+        uint64_t txn_id,
         std::vector<std::string> deps,
         uint64_t ballot);
 
     // different from the public Commit() function; this is a Janus commit
-    void CommitJanusTxn(uint64_t t_id, std::vector<uint64_t>> deps);
+    void Commit(uint64_t txn_id, std::vector<uint64_t>> deps);
 
 private:
     // Unique ID for this client.
@@ -52,7 +52,7 @@ private:
 
     // Ongoing transaction ID.
     // TODO figure out best way to pair this with client_id for unique t_id
-    uint64_t t_id;
+    uint64_t txn_id;
 
     // Aggregated dependencies for the current transaction
     std::vector<uint64_t>> deps;
@@ -71,14 +71,14 @@ private:
     // shardclient aggregates these replies into a status variable to indicate the result of PreAccept phase
     // deps is a map from replica ID to its deps for T (a list of other t_ids)
     void PreAcceptCallback(
-        uint64_t t_id, int status,
+        uint64_t txn_id, int status,
         std::unordered_map<uint64_t,std::vector<uint64_t>> deps);
 
     // callback when majority of replicas in each shard returns Accept-OK
-    void AcceptCallback(uint64_t t_id);
+    void AcceptCallback(uint64_t txn_id);
 
     // TODO maybe change the type of [results]
-    void CommitJanusTxnCallback(uint64_t t_id, std::vector<uint64_t> results);
+    void CommitCallback(uint64_t txn_id, std::vector<uint64_t> results);
 };
 
 } // namespace janusstore

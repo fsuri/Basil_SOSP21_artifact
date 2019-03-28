@@ -25,7 +25,7 @@ namespace janusstore {
 class Transaction {
 private:
     // the unique transaction ID
-    uint64_t t_id;
+    uint64_t txn_id;
 
     // set of keys to be read
     std::unordered_set<std::string> readSet;
@@ -34,10 +34,11 @@ private:
     std::unordered_map<std::string, std::string> writeSet;
 
 public:
-    Transaction(uint64_t t_id);
-    Transaction(uint64_t t_id, const TransactionMessage &msg);
+    Transaction(uint64_t txn_id);
+    Transaction(uint64_t txn_id, const TransactionMessage &msg);
     ~Transaction();
 
+    void uint64_t setTransactionId(uint64_t txn_id);
     const uint64_t getTransactionId() const;
     const std::unordered_set<std::string>& getReadSet() const;
     const std::unordered_map<std::string, std::string>& getWriteSet() const;
