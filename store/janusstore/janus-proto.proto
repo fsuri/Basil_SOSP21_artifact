@@ -28,7 +28,7 @@ message TransactionMessage {
       COMMIT = 4;
     }
     required uint64 txnid = 1;
-    required Status status = 2
+    required Status status = 2;
     repeated GetMessage gets = 3;
     repeated PutMessage puts = 4;
 }
