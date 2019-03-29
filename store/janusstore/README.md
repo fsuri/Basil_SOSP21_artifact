@@ -2,40 +2,30 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
-- client/coordinator for one person, server for the other
+
+- 3/29:
+	- client partial impl
+	- server partial impl
+	- need config files to run
+	- eric's questions:
+		- 1) when would the txn already be in the graph
+		- 2) preaccept phase: why should ballot be < highestballot(T)
+		- 3) put txn status in the proto and Transaction class
+		- 4) ok to have a map from key to txnIDs that are touching the key?
 
 - when we merge to master, may need to modify client API to fit evaluation framework
 
-- client should only worry about sending a full one-shot transaction to replicas
-
 - store/server.cc contains info about actually starting up the janus server
 - store/tapirstore/server.cc is just how we can match on the request op and call our handler logic
-- need to define protobuf for our messages
 
 - c++ will complain about not being able to convert Transaction to a key in a map; can just use tid
 
 - if c++ complains a lot, ask matt
 
-- as of 3/21:
-	- design decision: individual shardclients will wrap the get/puts from client into a single Transaction object to be forwarded to the participating replicas
-	- `client` handles transactions by ID but `shardclient` and `server` (replica) handle transactions by the full Transaction object in order to capture the appropriate operations
-	- `store` is just a map object wrapped by a class; unsure if more is needed
-	- `server` extends `AppReplica`, has an instance of the `store`, keeps the dependency graph as an adjacency list (implementation is a map from Transaction to list of Transactions), and has handlers for each phase of the protocol
-	- `transaction` defines the Transaction object; mostly similar to how the tapirstore defines it
-	- `client` and `shardclient` are similarly defined as their TAPIR counterparts without timestamps/truetime and TAPIR protocol functions
-
-- in TAPIR `client` instantiates several `shardclients` to forward one-shot txn = {pieces} to the appropriate replica(s)
-- coordinator dispatches the pieces to the appropriate replicas
-
-- client and coordinator are co-located, as in the paper => 
-
-- can have `shardclient` aggregate responses from replicas within the shard, so the client can aggregate those to determine conflicts/fast path
-
-- will want to extend common/replica/AppReplica and can ignore LeaderUpCall() function bc no leader in janus and ReplicaUpCall() bc replicas can independently act on receipt of COMMIT message from coordinator/proxy
-
 - params in the UpCall() functions are just for generic input/output
 
 - note any interesting observations while doing this thing
+	- potential typos/unexplained cases in the paper?
 
 # Timeline and TODOs
 - 3/17: Define headers and system design for Janus modules
