@@ -17,7 +17,7 @@ public:
     Store();
     ~Store();
 
-    int Get(uint64_t id, const std::string &key, std::string> &value);
+    std::string Get(uint64_t id, const std::string &key, std::string> &value);
     int Put(uint64_t id, const std::string &key, const std::string &value);
 
 private:
