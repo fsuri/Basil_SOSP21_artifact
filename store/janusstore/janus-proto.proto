@@ -21,9 +21,16 @@ message PutMessage {
 }
 
 message TransactionMessage {
+    enum Status {
+      INIT = 1;
+      PREACCEPT = 2;
+      ACCEPT = 3;
+      COMMIT = 4;
+    }
     required uint64 txnid = 1;
-    repeated GetMessage gets = 2;
-    repeated PutMessage puts = 3;
+    required Status status = 2
+    repeated GetMessage gets = 3;
+    repeated PutMessage puts = 4;
 }
 
 message PreAcceptMessage {
