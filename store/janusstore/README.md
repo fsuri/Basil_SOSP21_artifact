@@ -28,13 +28,6 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 	- potential typos/unexplained cases in the paper?
 
 # Timeline and TODOs
-- 3/17: Define headers and system design for Janus modules
-	- serialization graph representation
-	- `shardclient` and `client` changes (if necessary) from TAPIR
-	- `server` replica with coordinator capabilities
-	- `store` changes (if necessary) from TAPIR
-- 3/19: Install deps and get everything to compile
-- Week of 3/25: Implement baseline communication between modules
 - Week of 4/7: Implement working/runnable transaction system
 - 4/12: System done
 - Week of 4/14 - 4/21: Testing/benchmarking
