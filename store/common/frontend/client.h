@@ -17,6 +17,15 @@
 #include <string>
 #include <vector>
 
+typedef std::function<void(int, const std::string &,
+    const std::string &, Timestamp)> get_callback;
+typedef std::function<void(int, const std::string &)> get_timeout_callback;
+
+typedef std::function<void(int, const std::string &,
+    const std::string &)> put_callback;
+typedef std::function<void(int, const std::string &,
+    const std::string &)> put_timeout_callback;
+
 typedef std::function<void(bool)> commit_callback;
 typedef std::function<void(int)> commit_timeout_callback;
 
