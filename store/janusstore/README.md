@@ -8,10 +8,13 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 	- server partial impl
 	- need config files to run
 	- eric's questions:
-		- 1) when would the txn already be in the graph
-		- 2) preaccept phase: why should ballot be < highestballot(T)
+		<!-- - 1) when would the txn already be in the graph -->
+		<!-- - 2) preaccept phase: why should ballot be < highestballot(T) -->
+			<!-- - answer: for coordinator failure, when multiple servers are trying to recover T after the original coordinator is suspected of failure ==> irrelevant for us -->
 		- 3) put txn status in the proto and Transaction class
+			- when comparing enum from proto and txn.h, may get incorrect comparisons if we dont define them the same way; could jsut fix by defining in a common place
 		- 4) ok to have a map from key to txnIDs that are touching the key?
+			- could be used to determine which txnIDs are supposed to be predecessors for a given txn T
 
 - when we merge to master, may need to modify client API to fit evaluation framework
 
