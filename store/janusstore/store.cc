@@ -26,9 +26,9 @@ int Store::Get(uint64_t id, string key, string &value) {
     }
 }
 
-int Put(uint64_t id, string key, string value) {
+int Store::Put(uint64_t id, string key, string value) {
     Debug("[%llu] PUT <%s, %s>", id, key.c_str(), value.c_str());
-    // compiler error here and i have no idea why
+
     kv_store.insert({{key, value}});
     return REPLY_OK;
 }
