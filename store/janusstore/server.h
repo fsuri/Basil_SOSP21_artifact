@@ -44,8 +44,8 @@ private:
     // must take in a full Transaction object in order to correctly bookkeep
     // and commit
     void HandlePreAccept(Transaction txn, uint64_t ballot);
-    void HandleAccept(Transaction txn, std::vector<std::string> deps, uint64_t ballot);
-    void HandleCommitJanusTxn(Transaction txn, std::vector<std::string> deps);
+    void HandleAccept(uint64_t txn_id, std::vector<std::string> deps, uint64_t ballot);
+    void HandleCommit(uint64_t txn_id, std::vector<std::string> deps);
 
     // for cyclic dependency case, compute SCCs and execute in order
     // to be called during the Commit phase from HandleCommitJanusTxn()
