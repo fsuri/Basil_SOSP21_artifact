@@ -5,6 +5,7 @@
 #include "lib/assert.h"
 #include "lib/message.h"
 
+// needed for the reply types
 #include "store/janusstore/transaction.h"
 
 #include <unordered_map>
@@ -17,12 +18,12 @@ public:
     Store();
     ~Store();
 
-    std::string Get(uint64_t id, const std::string &key, std::string> &value);
-    int Put(uint64_t id, const std::string &key, const std::string &value);
+    int Get(uint64_t id, std::string key, std::string &value);
+    int Put(uint64_t id, std::string key, std::string value);
 
 private:
     // unversioned data store (for a particular shard, i would think)
-    std::unordered_map<std::string, std::string> store;
+    std::unordered_map<std::string, std::string> kv_store;
 
     // TODO in janus, this store doesnt seem very interesting because
     // commit logic for a transaction is in the replica (server.h) that wraps

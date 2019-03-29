@@ -38,7 +38,7 @@ public:
     Transaction(uint64_t txn_id, const TransactionMessage &msg);
     ~Transaction();
 
-    void uint64_t setTransactionId(uint64_t txn_id);
+    void setTransactionId(uint64_t txn_id);
     const uint64_t getTransactionId() const;
     const std::unordered_set<std::string>& getReadSet() const;
     const std::unordered_map<std::string, std::string>& getWriteSet() const;
