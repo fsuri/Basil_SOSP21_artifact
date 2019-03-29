@@ -16,7 +16,7 @@ public:
     Server();
     virtual ~Server();
 
-    // Invoke callback on the leader, with the option to replicate on success 
+    // Invoke callback on the leader, with the option to replicate on success
     void LeaderUpcall(opnum_t opnum, const string &str1, bool &replicate, string &str2) { return; };
 
     // Invoke callback on all replicas
@@ -37,8 +37,11 @@ private:
     // highest ballot accepted
     uint64_t accepted_ballot;
 
-    // maps Transactions in the graph to ancestor Transactions
-    std::unordered_map<Transaction, std::list<Transaction>> dep_map;
+    // maps Transaction ids in the graph to ancestor Transaction ids
+    std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map;
+
+    // maps Transaction ids in the graph to ancestor Transaction ids
+    std::unordered_map<uint64_t, Transaction> id_txn_map;
 
     // functions to process shardclient requests
     // must take in a full Transaction object in order to correctly bookkeep

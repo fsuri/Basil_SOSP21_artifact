@@ -21,11 +21,18 @@
 
 namespace janusstore {
 
+
+enum TransactionStatus {
+    PREACCEPT,
+    ACCEPT,
+    COMMIT
+};
 /* Defines a transaction that is forwarded to a particular replica */
 class Transaction {
 private:
     // the unique transaction ID
     uint64_t txn_id;
+    TransactionStatus status;
 
     // set of keys to be read
     std::unordered_set<std::string> readSet;
@@ -39,13 +46,15 @@ public:
     ~Transaction();
 
     void setTransactionId(uint64_t txn_id);
+    void setTransactionStatus(TransactionStatus status);
     const uint64_t getTransactionId() const;
+    const TransactionStatus getTransactionStatus() const;
     const std::unordered_set<std::string>& getReadSet() const;
     const std::unordered_map<std::string, std::string>& getWriteSet() const;
 
     inline size_t GetNumRead() const { return readSet.size(); }
     inline size_t GetNumWritten() const { return writeSet.size(); }
-    
+
     void addReadSet(const std::string &key);
     void addWriteSet(const std::string &key, const std::string &value);
     void serialize(TransactionMessage *msg) const;
