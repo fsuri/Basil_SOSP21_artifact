@@ -44,10 +44,10 @@ public:
     virtual void PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb);
 
     // Initiate the Accept phase for this shard.
-    virtual void Accept(uint64_t txn_id, std::vector<std::string> deps, uint64_t ballot, client_accept_callback acb);
+    virtual void Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t ballot, client_accept_callback acb);
 
     // Initiate the Commit phase for this shard.
-    virtual void Commit(uint64_t txn_id, std::vector<std::string> deps, client_commit_callback ccb);
+    virtual void Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb);
 
 private:
     uint64_t client_id; // Unique ID for this client.

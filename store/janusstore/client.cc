@@ -76,7 +76,7 @@ void Client::PreAccept(Transaction *txn, uint64_t ballot) {
 	}
 }
 
-void Client::Accept(uint64_t txn_id, vector<string> deps, uint64_t ballot) {
+void Client::Accept(uint64_t txn_id, vector<uint64_t> deps, uint64_t ballot) {
 	for (auto p : participants) {
 		bclient[p]->Accept(txn_id, deps, ballot,
 			std::bind(&Client::AcceptCallback, placeholders::_1)

@@ -39,7 +39,6 @@ ShardClient::~ShardClient() {
 */
 
 void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb) {
-
 	Debug("[shard %i] Sending PREACCEPT [%lu]", shard, client_id);
 
 	// create PREACCEPT Request
@@ -62,23 +61,37 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 		placeholders::_1, placeholders::_2, placeholders::_3, pcb), nullptr); // no timeout case
 }
 
-void ShardClient::Accept(uint64_t txn_id, vector<string> deps, uint64_t ballot, client_accept_callback acb) {
-
-	// TODO implement
+void ShardClient::Accept(uint64_t txn_id, vector<uint64_t> deps, uint64_t ballot, client_accept_callback acb) {
 	Debug("[shard %i] Sending ACCEPT [%lu]", shard, client_id);
-	return;
+
+	// create ACCEPT Request
+	string request_str;
+	Request request;
+	request.set_op(Request::ACCEPT);
+
+	// AcceptMessage payload
+	request.mutable_accept()->set_txnid(txn_id);
+	request.mutable_accept()->set_ballot(ballot);
+	for (auto dep : deps) {
+		request.mutable_accept()->mutable_dep()->add_txnid(dep);
+	}
+	
+	request.SerializeToString(&request_str);
+
+	client->InvokeUnlogged(replica, request_str,
+		std::bind(&ShardClient::AcceptCallback,
+			placeholders::_1, acb), nullptr);
 }
 
-void ShardClient::Commit(uint64_t txn_id, vector<string> deps, client_commit_callback ccb) {
-
-	Debug("[shard %i] Sending PREACCEPT [%lu]", shard, client_id);
+void ShardClient::Commit(uint64_t txn_id, vector<uint64_t> deps, client_commit_callback ccb) {
+	Debug("[shard %i] Sending COMMIT [%lu]", shard, client_id);
 
 	// create COMMIT Request
 	string request_str;
 	Request request;
 	request.set_op(Request::COMMIT);
 	// CommitMessage payload
-	request.mutable_commit()->set_txn_id(txn_id);
+	request.mutable_commit()->set_txnid(txn_id);
 	for (auto dep : deps) {
 		request.mutable_commit()->mutable_dep()->add_txnid(dep);
 	}

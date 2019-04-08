@@ -30,11 +30,11 @@ public:
     // called from PreAcceptCallback when a fast quorum is not obtained
     void Accept(
         uint64_t txn_id,
-        std::vector<std::string> deps,
+        std::vector<uint64_t> deps,
         uint64_t ballot);
 
     // different from the public Commit() function; this is a Janus commit
-    void Commit(uint64_t txn_id, std::vector<uint64_t>> deps);
+    void Commit(uint64_t txn_id, std::vector<uint64_t> deps);
 
 private:
     // Unique ID for this client.
@@ -72,7 +72,7 @@ private:
     // deps is a map from replica ID to its deps for T (a list of other t_ids)
     void PreAcceptCallback(
         uint64_t txn_id, int status,
-        std::unordered_map<uint64_t,std::vector<uint64_t>> deps);
+        std::unordered_map<uint64_t, std::vector<uint64_t>> deps);
 
     // callback when majority of replicas in each shard returns Accept-OK
     void AcceptCallback(uint64_t txn_id);
