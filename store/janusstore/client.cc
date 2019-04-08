@@ -77,14 +77,17 @@ void Client::PreAccept(Transaction *txn, uint64_t ballot) {
 }
 
 void Client::Accept(uint64_t txn_id, vector<string> deps, uint64_t ballot) {
-	// TODO implement
-	return;
+	for (auto p : participants) {
+		bclient[p]->Accept(txn_id, deps, ballot,
+			std::bind(&Client::AcceptCallback, placeholders::_1)
+		);
+	}
 }
 
 void Client::Commit(uint64_t txn_id, vector<uint64_t> deps) {
 	for (auto p : participants) {
 		bclient[p]->Commit(txn_id, deps, 
-			std::bind(&Client:CommitCallback,
+			std::bind(&Client::CommitCallback,
 				placeholders::_1, placeholders::_2)
 		);
 	}
