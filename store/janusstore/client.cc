@@ -92,4 +92,18 @@ void Client::Commit(uint64_t txn_id, vector<uint64_t> deps) {
 		);
 	}
 }
+
+void Client::PreAcceptCallback(uint64_t txn_id, int status, std::unordered_map<uint64_t, std::vector<uint64_t>> deps) {
+	// TODO implement
+	return;
+}
+
+void Client::AcceptCallback(uint64_t txn_id) {
+	// TODO implement
+	return;
+}
+void Client::CommitCallback(uint64_t txn_id, std::vector<uint64_t> results) {
+	// TODO implement
+	return;
+}
 }
