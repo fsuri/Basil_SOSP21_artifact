@@ -36,6 +36,7 @@
 #include "store/strongstore/server.h"
 #include "store/tapirstore/server.h"
 #include "store/weakstore/server.h"
+#include "store/janusstore/server.h"
 
 #include <gflags/gflags.h>
 
@@ -43,7 +44,8 @@ enum protocol_t {
 	PROTO_UNKNOWN,
 	PROTO_TAPIR,
 	PROTO_WEAK,
-	PROTO_STRONG
+	PROTO_STRONG,
+  PROTO_JANUS
 };
 
 /**
@@ -57,12 +59,14 @@ DEFINE_uint64(num_shards, 1, "number of shards in the system");
 const std::string protocol_args[] = {
 	"tapir",
   "weak",
-  "strong"
+  "strong",
+  "janus"
 };
 const protocol_t protos[] {
   PROTO_TAPIR,
   PROTO_WEAK,
-  PROTO_STRONG
+  PROTO_STRONG,
+  PROTO_JANUS
 };
 static bool ValidateProtocol(const char* flagname,
     const std::string &value) {
@@ -221,7 +225,11 @@ int main(int argc, char **argv) {
       replica = new replication::vr::VRReplica(config, FLAGS_replica_idx,
           &transport, 1, dynamic_cast<replication::AppReplica *>(server));
       break;
-    // TODO add janus case here
+    }
+    case PROTO_JANUS: {
+      server = new janusstore::Server();
+      // TODO any more config?
+      break;
     }
     default: {
       NOT_REACHABLE();
