@@ -96,7 +96,7 @@ void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
 	}
 }
 
-void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
+void Client::PreAcceptCallback(uint64_t txn_id, int shard, vector<janusstore::proto::Reply> replies) {
 	// update dependencies and responded shards
 	responded.insert(shard);
 	for (auto reply : replies) {
@@ -122,7 +122,7 @@ void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstor
 	}
 }
 
-void Client::AcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
+void Client::AcceptCallback(uint64_t txn_id, int shard, vector<janusstore::proto::Reply> replies) {
 	responded.insert(shard);
 	for (auto reply : replies) {
 		if (reply.op() == Reply::ACCEPT_NOT_OK) {
@@ -137,7 +137,7 @@ void Client::AcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::
 	}
 	return;
 }
-void Client::CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
+void Client::CommitCallback(uint64_t txn_id, int shard, vector<janusstore::proto::Reply> replies) {
 	responded.insert(shard);
 
 	if (responded.size() == participants.size()) {

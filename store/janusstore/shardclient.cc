@@ -103,7 +103,7 @@ void ShardClient::Commit(uint64_t txn_id, vector<uint64_t> deps, client_commit_c
 			placeholders::_1, placeholders::_2, ccb), nullptr);
 }
 
-void ShardClient::PreAcceptCallback(uint64_t txn_id, int status, std::unordered_map<uint64_t,std::vector<uint64_t>> deps, client_preaccept_callback pcb) {
+void ShardClient::PreAcceptCallback(uint64_t txn_id, int status, unordered_map<uint64_t, vector<uint64_t>> deps, client_preaccept_callback pcb) {
 	// TODO implement
 	return;
 }
@@ -113,7 +113,7 @@ void ShardClient::AcceptCallback(uint64_t txn_id, client_accept_callback acb) {
 	return;
 }
 
-void ShardClient::CommitCallback(uint64_t txn_id, std::vector<uint64_t> results, client_commit_callback ccb) {
+void ShardClient::CommitCallback(uint64_t txn_id, vector<uint64_t> results, client_commit_callback ccb) {
 	// TODO implement
 	return;
 }

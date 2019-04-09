@@ -2,37 +2,30 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
+- 4/10:
+	- client impl
+		- how do we return transaction results?
+		- right now, we basically require that one client must process a transaction fully before starting another one; is this ok?
+	- shardclient impl
+		- how does the shardclient receive responses from replicas?
+		- is there a way to tell how many replicas there are in the shard?
 
 - 3/29:
 	- client partial impl
 	- server partial impl
 	- need config files to run
-	- eric's questions:
-		<!-- - 1) when would the txn already be in the graph -->
-		<!-- - 2) preaccept phase: why should ballot be < highestballot(T) -->
-			<!-- - answer: for coordinator failure, when multiple servers are trying to recover T after the original coordinator is suspected of failure ==> irrelevant for us -->
-		- 3) put txn status in the proto and Transaction class
-			- when comparing enum from proto and txn.h, may get incorrect comparisons if we dont define them the same way; could jsut fix by defining in a common place
-		- 4) ok to have a map from key to txnIDs that are touching the key?
-			- could be used to determine which txnIDs are supposed to be predecessors for a given txn T
 
 - when we merge to master, may need to modify client API to fit evaluation framework
 
 - store/server.cc contains info about actually starting up the janus server
 - store/tapirstore/server.cc is just how we can match on the request op and call our handler logic
 
-- c++ will complain about not being able to convert Transaction to a key in a map; can just use tid
-
-- if c++ complains a lot, ask matt
-
-- params in the UpCall() functions are just for generic input/output
-
 - note any interesting observations while doing this thing
 	- potential typos/unexplained cases in the paper?
 
 # Timeline and TODOs
 - Week of 4/7: Implement working/runnable transaction system
-- 4/12: System done
+- 4/12: System running
 - Week of 4/14 - 4/21: Testing/benchmarking
 
 # How to Run
