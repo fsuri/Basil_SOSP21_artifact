@@ -78,10 +78,10 @@ private:
         uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies);
 
     // callback when majority of replicas in each shard returns Accept-OK
-    void AcceptCallback(uint64_t txn_id, int shard);
+    void AcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies);
 
     // TODO maybe change the type of [results]
-    void CommitCallback(uint64_t txn_id, int shard, std::vector<uint64_t> results);
+    void CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies);
 };
 
 } // namespace janusstore
