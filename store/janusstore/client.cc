@@ -96,8 +96,7 @@ void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
 	}
 }
 
-void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
-	// TODO implement
+void Client::PreAcceptCallback(uint64_t txn_id, int shard, vector<janusstore::proto::Reply> replies) {
 	// update dependencies and responded shards
 	responded.insert(shard);
 	for (auto reply : replies) {
@@ -118,18 +117,35 @@ void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstor
 	// if all shards have responded, move onto Commit stage
 	if (responded.size() == participants.size()) {
 		// TODO check whether we have a fast quorum before doing commit
+		responded.clear();
 		Commit(txn_id, aggregated_deps.find(txn_id));
 	}
 }
 
-void Client::AcceptCallback(uint64_t txn_id) {
-	// TODO implement
+void Client::AcceptCallback(uint64_t txn_id, int shard, vector<janusstore::proto::Reply> replies) {
 	responded.insert(shard);
+	for (auto reply : replies) {
+		if (reply.op() == Reply::ACCEPT_NOT_OK) {
+			// TODO case where not ok
+		}
+	}
+
+	if (responded.size() == participants.size()) {
+		// no need to check for a quorum for every shard because we dont implement failure recovery
+		responded.clear();
+		Commit(txn_id, aggregated_deps.find(txn_id));
+	}
 	return;
 }
-void Client::CommitCallback(uint64_t txn_id, std::vector<uint64_t> results) {
-	// TODO implement
+void Client::CommitCallback(uint64_t txn_id, int shard, vector<janusstore::proto::Reply> replies) {
 	responded.insert(shard);
+
+	if (responded.size() == participants.size()) {
+		// return results to client
+		for (auto reply : replies) {
+			// TODO how to return results? may also need to update CommitOKMessage
+		}
+	}
 	return;
 }
 }
