@@ -56,6 +56,7 @@ private:
     // functions to process shardclient requests
     // must take in a full Transaction object in order to correctly bookkeep
     // and commit
+    void Accept(janusstore::proto::Request& request, janusstore::proto::Reply& reply);
     void PreAccept(janusstore::proto::Request& request, janusstore::proto::Reply& reply);
     void HandlePreAccept(Transaction txn, uint64_t ballot);
     void HandleAccept(uint64_t txn_id, std::vector<std::string> deps, uint64_t ballot);
