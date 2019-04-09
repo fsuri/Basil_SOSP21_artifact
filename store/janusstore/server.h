@@ -26,7 +26,7 @@ public:
 
     // Invoke call back for unreplicated operations run on only one replica
     // This will match on a RequestMessage and call a private handler function
-    void UnloggedUpcall(const string &str1, string &str2) { };
+    void UnloggedUpcall(const string &str1, string &str2);
 
     // TODO only need this if we are extending store/server.h, but i dont think
     // this is necessary

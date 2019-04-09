@@ -15,14 +15,6 @@ Server::~Server() {
     delete store;
 }
 
-void Server::LeaderUpcall(opnum_t opnum, const string &str1, bool &replicate, string &str2) {
-    Panic("Unimplemented!");
-}
-
-void Server::ReplicaUpcall(opnum_t opnum, const string &str1, string &str2) {
-    Panic("Unimplemented!");
-}
-
 void Server::UnloggedUpcall(const string &str1, string &str2) {
     Debug("Received Unlogged Request: %s", str1.substr(0,10).c_str());
 
