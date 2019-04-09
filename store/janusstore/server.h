@@ -11,7 +11,7 @@
 
 namespace janusstore {
 
-class Server : public replication::common::AppReplica {
+class Server : public replication::AppReplica {
 public:
     Server();
     virtual ~Server();
