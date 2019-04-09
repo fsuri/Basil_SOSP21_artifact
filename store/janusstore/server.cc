@@ -40,49 +40,7 @@ Server::UnloggedUpcall(const string &str1, string &str2)
 
     switch (request.op()) {
     case tapirstore::proto::Request::PREACCEPT:
-        uint64_t ballot = request.preaccept().ballot();
-        TransactionMessage txnMsg = request.preaccept().txn();
-        if (ballot < accepted_ballot) {
-            reply.set_op(PREACCEPT_NOT_OK);
-            break;
-        }
-        accepted_ballot = ballot;
-
-        // construct the transaction object
-        Transaction txn = Transaction(txnMsg.txind());
-        txn.setTransactionStatus(PREACCEPT)
-        for (int i = 0; i < txn.gets_size(); i++) {
-            txn.addReadSet(txn.gets(i).key());
-        }
-        for (int i = 0; i < txn.puts_size(); i++) {
-            PutMessage put = txn.puts(i);
-            txn.addWriteSet(put.key(), put.value());
-        }
-
-        // add to dependency graph
-        id_txn_map[txn.getTranscationId()] = txn;
-        if (dep_map.find(txn.getTranscationId()) == dep_map.end()) {
-          dep_map[txn.getTranscationId] = [];
-        } else {
-          // TODO when would this happen?
-        }
-        // TODO need another map of write/read set to check if txn ids conflict?
-
-        // create dep list
-        std::list<uint64_t> dep_list = dep_map[txn.getTranscationId];
-        DependencyList dep;
-        for (int i = 0; i < dep_list.size(); i++) {
-            dep.mutable_txnid(i).set_txnid(dep_list[i]);
-        }
-        PreAcceptOkMessage preaccept_ok_msg;
-        PreAcceptOkMessage.set_txnid(txn.getTranscationId());
-        preaccept_ok_msg.set_dep(dep);
-
-        // return accept ok
-        // set this txn's status to pre-accepted (with this ballot? TODO)
-        reply.set_op(PREACCEPT_OK);
-        reply.set_preaccept_ok(preaccept_ok_msg);
-        reply.SerializeToString(&str2);
+        PreAccept(request, reply);
         break;
     case tapirstore::proto::Request::ACCEPT:
         break;
@@ -93,6 +51,105 @@ Server::UnloggedUpcall(const string &str1, string &str2)
     default:
         Panic("Unrecognized Unlogged request.");
     }
+}
+
+void PreAccept(Request& request, Reply& reply) {
+    uint64_t ballot = request.preaccept().ballot();
+    uint64_t txn_id = txnMsg.txind();
+    TransactionMessage txnMsg = request.preaccept().txn();
+    if (ballot > accepted_ballot) {
+        reply.set_op(PREACCEPT_NOT_OK);
+        break;
+    }
+    accepted_ballots[txn_id] = ballot;
+
+    // construct the transaction object
+    Transaction txn = Transaction(txn_id);
+    txn.setTransactionStatus(PREACCEPT)
+    id_txn_map[txn.getTranscationId()] = txn;
+
+    // construct conflicts and read/write sets
+    std::vector<uint64_t> dep_list;
+    for (int i = 0; i < txnMsg.gets_size(); i++) {
+        string key = txnMsg.gets(i).key()
+        txn.addReadSet(key);
+        if (read_key_txn_map.find(key) == read_key_txn_map.end()) {
+          read_key_txn_map[key] = std::vector(txn_id)
+        } else {
+          read_key_txn_map[key].push_back(txn_id)
+        }
+
+        if (write_key_txn_map.find(key) != write_key_txn_map.end()) {
+            std::vector<uint64_t> other_txn_ids = write_key_txn_map[key];
+            // append conflicts
+            dep_list.insert(dep_list.end(), other_txn_ids.begin(), other_txn_ids.end());
+        }
+    }
+
+    for (int i = 0; i < txnMsg.puts_size(); i++) {
+        PutMessage put = txnMsg.puts(i);
+        txn.addWriteSet(put.key(), put.value());
+
+        if (write_key_txn_map.find(key) == write_key_txn_map.end()) {
+          write_key_txn_map[key] = std::vector(txn_id)
+        } else {
+          // append conflicts
+          std::vector<uint64_t> other_txn_ids = write_key_txn_map[key];
+          dep_list.insert(dep_list.end(), other_txn_ids.begin(), other_txn_ids.end());
+          write_key_txn_map[key].push_back(txn_id)
+        }
+
+        if (read_key_txn_map.find(key) != read_key_txn_map.end()) {
+          std::vector<uint64_t> other_txn_ids = read_key_txn_map[key];
+          // append conflicts
+          dep_list.insert(dep_list.end(), other_txn_ids.begin(), other_txn_ids.end());
+        }
+    }
+
+    // add to dependency graph
+    dep_map[txn.getTranscationId()] = conflicts;
+
+    // create dep list
+    DependencyList dep;
+    for (int i = 0; i < dep_list.size(); i++) {
+        dep.mutable_txnid(i).set_txnid(dep_list[i]);
+    }
+    PreAcceptOkMessage preaccept_ok_msg;
+    PreAcceptOkMessage.set_txnid(txn.getTranscationId());
+    preaccept_ok_msg.set_dep(dep);
+
+    // return accept ok
+    // set this txn's status to pre-accepted (with this ballot? TODO)
+    reply.set_op(PREACCEPT_OK);
+    reply.set_preaccept_ok(preaccept_ok_msg);
+    reply.SerializeToString(&str2);
+}
+
+void Accept(Request& request, Reply& reply) {
+    AcceptMessage accept_msg = request.accept();
+    uint64_t ballot = accept_msg.ballot();
+    uint64_t accepted_ballot = accepted_ballots[txn_id];
+    uint64_t txn_id = accept_msg.txnid();
+    if (id_txn_map[txn_id].getTranscationStatus() == COMMIT || ballot < accepted_ballot) {
+        // send back txn id and highest ballot for that txn
+        AcceptNotOKMessage accept_not_ok;
+        accept_not_ok.set_txnid(txn_id);
+        accept_not_ok.set_highest_ballot(accepted_ballot);
+        reply.set_op(PREACCEPT_NOT_OK);
+        reply.set_accept_not_ok(accept_not_ok);
+        break;
+    }
+    accepted_ballots[txin_id] = ballot;
+
+    // replace dep_map with the list from the message
+    std::vector<uint64_t> dep_list;
+    for (int i = 0; i < accept_msg.dep_size(); i++) {
+        dep_list.push_back(accept_msg.dep(i));
+    }
+    dep_map[txn_id] = dep_list;
+
+    id_txn_map[txn_id].setTransactionStatus(ACCEPT);
+    reply.set_op(ACCEPT_OK);
 }
 
 // std::map<opid_t, std::string>
@@ -106,7 +163,7 @@ Server::UnloggedUpcall(const string &str1, string &str2)
 // void
 // Server::Load(const string &key, const string &value, const Timestamp timestamp)
 // {
-//     store->Load(key, value, timestamp);
+//     Panic("Unimplemented!");
 // }
 
 } // namespace janusstore

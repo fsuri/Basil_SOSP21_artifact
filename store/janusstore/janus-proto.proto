@@ -26,7 +26,7 @@ message TransactionMessage {
       PREACCEPT = 2;
       ACCEPT = 3;
       COMMIT = 4;
-    }
+    } // TODO factor out to common class
     required uint64 txnid = 1;
     required Status status = 2;
     repeated GetMessage gets = 3;

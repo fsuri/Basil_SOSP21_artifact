@@ -21,7 +21,6 @@
 
 namespace janusstore {
 
-
 enum TransactionStatus {
     PREACCEPT,
     ACCEPT,

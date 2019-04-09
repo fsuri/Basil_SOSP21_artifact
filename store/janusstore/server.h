@@ -3,7 +3,7 @@
 #define _JANUS_SERVER_H_
 
 #include "replication/common/replica.h"
-// #include "store/server.h"
+#include "store/server.h"
 
 #include "store/janusstore/store.h"
 #include "store/janusstore/transaction.h"
@@ -11,7 +11,7 @@
 
 namespace janusstore {
 
-class Server : public replication::common::AppReplica {
+class Server : public replication::AppReplica, public ::Server {
 public:
     Server();
     virtual ~Server();
@@ -28,20 +28,28 @@ public:
 
     // TODO only need this if we are extending store/server.h, but i dont think
     // this is necessary
-    // void Load(const string &key, const string &value, const Timestamp timestamp);
+    void Load(const string &key, const string &value, const Timestamp timestamp);
 
 private:
     // simple key-value store
     Store *store;
 
-    // highest ballot accepted
-    uint64_t accepted_ballot;
+    // highest ballot accepted per txn id
+    std::unordered_map<uint64_t, uint64_t> accepted_ballots;
 
     // maps Transaction ids in the graph to ancestor Transaction ids
     std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map;
 
-    // maps Transaction ids in the graph to ancestor Transaction ids
+    // maps Transaction ids to Transcation objects
     std::unordered_map<uint64_t, Transaction> id_txn_map;
+
+    // maps keys to transaction ids that read it
+    // TODO ensure that this map is cleared per transaction
+    std::unordered_map<string, std::vector<uint64_t>> read_key_txn_map;
+
+    // maps keys to transaction ids that write to it
+    // TODO ensure that this map is cleared per transaction
+    std::unordered_map<string, std::vector<uint64_t>> write_key_txn_map;
 
     // functions to process shardclient requests
     // must take in a full Transaction object in order to correctly bookkeep
