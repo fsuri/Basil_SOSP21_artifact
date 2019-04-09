@@ -6,31 +6,23 @@ namespace janusstore {
 using namespace std;
 using namespace proto;
 
-Server::Server()
-{
+Server::Server() {
     store = new Store();
 }
 
-Server::~Server()
-{
+Server::~Server() {
     delete store;
 }
 
-void
-Server::LeaderUpcall(opnum_t opnum, const string &str1, bool &replicate, string &str2)
-{
+void Server::LeaderUpcall(opnum_t opnum, const string &str1, bool &replicate, string &str2) {
     Panic("Unimplemented!");
 }
 
-void
-Server::ReplicaUpcall(opnum_t opnum, const string &str1, bool &replicate, string &str2)
-{
+void Server::ReplicaUpcall(opnum_t opnum, const string &str1, bool &replicate, string &str2) {
     Panic("Unimplemented!");
 }
 
-void
-Server::UnloggedUpcall(const string &str1, string &str2)
-{
+void Server::UnloggedUpcall(const string &str1, string &str2) {
     Debug("Received Unlogged Request: %s", str1.substr(0,10).c_str());
 
     Request request;
@@ -39,14 +31,14 @@ Server::UnloggedUpcall(const string &str1, string &str2)
     request.ParseFromString(str1);
 
     switch (request.op()) {
-    case tapirstore::proto::Request::PREACCEPT:
+    case janusstore::proto::Request::PREACCEPT:
         PreAccept(request, reply);
         break;
-    case tapirstore::proto::Request::ACCEPT:
+    case janusstore::proto::Request::ACCEPT:
         break;
-    case tapirstore::proto::Request::COMMIT:
+    case janusstore::proto::Request::COMMIT:
         break;
-    case tapirstore::proto::Request::INQUIRE:
+    case janusstore::proto::Request::INQUIRE:
         break;
     default:
         Panic("Unrecognized Unlogged request.");
@@ -152,6 +144,9 @@ void Accept(Request& request, Reply& reply) {
     reply.set_op(ACCEPT_OK);
 }
 
+void Server::Load(const string &key, const string &value, const Timestamp timestamp) {
+    return;
+}
 // std::map<opid_t, std::string>
 // Server::Merge(const std::map<opid_t, std::vector<RecordEntry>> &d,
 //               const std::map<opid_t, std::vector<RecordEntry>> &u,

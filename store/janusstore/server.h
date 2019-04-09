@@ -7,6 +7,8 @@
 
 #include "store/janusstore/store.h"
 #include "store/janusstore/transaction.h"
+#include "store/common/timestamp.h"
+#include "store/common/truetime.h"
 #include "store/janusstore/janus-proto.pb.h"
 
 namespace janusstore {

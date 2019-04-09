@@ -206,7 +206,6 @@ int main(int argc, char **argv) {
   UDPTransport transport(0.0, 0.0, 0);
 
   ::Server *server;
-  janusstore::Server *janus_server;
   TransportReceiver *replica = nullptr;
 
   switch (proto) {
@@ -228,7 +227,7 @@ int main(int argc, char **argv) {
       break;
     }
     case PROTO_JANUS: {
-      janus_server = new janusstore::Server();
+      server = new janusstore::Server();
       // TODO any more config?
       break;
     }
