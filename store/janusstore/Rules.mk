@@ -6,7 +6,7 @@ SRCS += $(addprefix $(d), client.cc shardclient.cc server.cc store.cc)
 PROTOS += $(addprefix $(d), janus-proto.proto)
 
 OBJS-janus-store := $(LIB-message) $(LIB-store-common) $(LIB-store-backend) \
-	$(o)janus-proto.o $(o)store.o 
+	$(o)janus-proto.o $(o)store.o $(o)server.o
 
 LIB-janus-store := $(OBJS-ir-replica) $(o)server.o $(o)store.o \
 	$(o)janus-proto.o

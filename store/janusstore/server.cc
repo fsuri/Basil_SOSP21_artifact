@@ -1,4 +1,5 @@
-#include "store/janustore/server.h"
+// -*- mode: c++; c-file-style: "k&r"; c-basic-offset: 4 -*-
+#include "store/janusstore/server.h"
 #include "lib/tcptransport.h"
 
 namespace janusstore {
@@ -18,7 +19,7 @@ void Server::LeaderUpcall(opnum_t opnum, const string &str1, bool &replicate, st
     Panic("Unimplemented!");
 }
 
-void Server::ReplicaUpcall(opnum_t opnum, const string &str1, bool &replicate, string &str2) {
+void Server::ReplicaUpcall(opnum_t opnum, const string &str1, string &str2) {
     Panic("Unimplemented!");
 }
 
@@ -57,13 +58,13 @@ void PreAccept(Request& request, Reply& reply) {
 
     // construct the transaction object
     Transaction txn = Transaction(txn_id);
-    txn.setTransactionStatus(PREACCEPT)
-    id_txn_map[txn.getTranscationId()] = txn;
+    txn.setTransactionStatus(PREACCEPT);
+    id_txn_map[txn.getTransactionId()] = txn;
 
     // construct conflicts and read/write sets
     std::vector<uint64_t> dep_list;
     for (int i = 0; i < txnMsg.gets_size(); i++) {
-        string key = txnMsg.gets(i).key()
+        string key = txnMsg.gets(i).key();
         txn.addReadSet(key);
         if (read_key_txn_map.find(key) == read_key_txn_map.end()) {
           read_key_txn_map[key] = std::vector(txn_id)
@@ -99,7 +100,7 @@ void PreAccept(Request& request, Reply& reply) {
     }
 
     // add to dependency graph
-    dep_map[txn.getTranscationId()] = conflicts;
+    dep_map[txn.getTransactionId()] = conflicts;
 
     // create dep list
     DependencyList dep;
@@ -107,7 +108,7 @@ void PreAccept(Request& request, Reply& reply) {
         dep.mutable_txnid(i).set_txnid(dep_list[i]);
     }
     PreAcceptOkMessage preaccept_ok_msg;
-    PreAcceptOkMessage.set_txnid(txn.getTranscationId());
+    PreAcceptOkMessage.set_txnid(txn.getTransactionId());
     preaccept_ok_msg.set_dep(dep);
 
     // return accept ok
