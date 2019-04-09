@@ -25,9 +25,9 @@ namespace janusstore {
 // typedef std::function<void(int, std::vector<uint64_t>)> commit_callback;
 
 // client callbacks
-typedef std::function<void(uint64_t, int, std::unordered_map<uint64_t,std::vector<uint64_t>>)> client_preaccept_callback;
-typedef std::function<void(int)> client_accept_callback;
-typedef std::function<void(int, std::vector<uint64_t>)> client_commit_callback;
+typedef std::function<void(uint64_t, int, std::vector<janusstore::proto::Reply>)> client_preaccept_callback;
+typedef std::function<void(uint64_t, int)> client_accept_callback;
+typedef std::function<void(uint64_t, int, std::vector<uint64_t>)> client_commit_callback;
 
 
 class ShardClient {

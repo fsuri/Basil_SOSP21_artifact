@@ -2,7 +2,9 @@
 #include "store/janusstore/client.h"
 
 namespace janusstore {
+
 using namespace std;
+using namespace proto;
 
 Client::Client(const string configPath, int nShards, 
 	int closestReplica, Transport *transport)
@@ -44,6 +46,7 @@ Client::~Client() {
 }
 
 void Client::setParticipants(Transaction *txn) {
+	participants.clear();
 	for (const auto &key : txn->readSet) {
 		int i = key_to_shard(key, nshards);
 		if (participants.find(i) == participants.end()) {
@@ -76,7 +79,7 @@ void Client::PreAccept(Transaction *txn, uint64_t ballot) {
 	}
 }
 
-void Client::Accept(uint64_t txn_id, vector<uint64_t> deps, uint64_t ballot) {
+void Client::Accept(uint64_t txn_id, set<uint64_t> deps, uint64_t ballot) {
 	for (auto p : participants) {
 		bclient[p]->Accept(txn_id, deps, ballot,
 			std::bind(&Client::AcceptCallback, placeholders::_1)
@@ -84,7 +87,7 @@ void Client::Accept(uint64_t txn_id, vector<uint64_t> deps, uint64_t ballot) {
 	}
 }
 
-void Client::Commit(uint64_t txn_id, vector<uint64_t> deps) {
+void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
 	for (auto p : participants) {
 		bclient[p]->Commit(txn_id, deps, 
 			std::bind(&Client::CommitCallback,
@@ -93,17 +96,40 @@ void Client::Commit(uint64_t txn_id, vector<uint64_t> deps) {
 	}
 }
 
-void Client::PreAcceptCallback(uint64_t txn_id, int status, std::unordered_map<uint64_t, std::vector<uint64_t>> deps) {
+void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 	// TODO implement
-	return;
+	// update dependencies and responded shards
+	responded.insert(shard);
+	for (auto reply : replies) {
+		if (reply.op() == Reply::PREACCEPT_OK) {
+			// parse message for deps
+			DependencyList msg = reply.preaccept_ok().dep();
+			for (int i = 0; i < msg.txnid_size(); i++) {
+				uint64_t dep_id = msg.txnid(i);
+				// add dep to aggregated set
+				// TODO verify this is correct syntax
+				aggregated_deps.find(txn_id).insert(dep_id);
+			}
+		} else {
+			// TODO case where not ok
+		}
+	}
+
+	// if all shards have responded, move onto Commit stage
+	if (responded.size() == participants.size()) {
+		// TODO check whether we have a fast quorum before doing commit
+		Commit(txn_id, aggregated_deps.find(txn_id));
+	}
 }
 
 void Client::AcceptCallback(uint64_t txn_id) {
 	// TODO implement
+	responded.insert(shard);
 	return;
 }
 void Client::CommitCallback(uint64_t txn_id, std::vector<uint64_t> results) {
 	// TODO implement
+	responded.insert(shard);
 	return;
 }
 }
