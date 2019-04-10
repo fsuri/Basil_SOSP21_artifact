@@ -34,8 +34,6 @@ ShardClient::~ShardClient() {
 
 /* TODO:
 1. do we need to pass in [this] as well to the ShardClient's callbck
-2. maintain state about each transaction's responses for each phase
-3. Implement the callbacks
 */
 
 void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb) {
@@ -60,7 +58,6 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 
 	// ShardClient callback function will be able to invoke
 	// the Client's callback function when all responses returned
-	// TODO replace placeholders:_1 with txnid
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::PreAcceptCallback,
 		txn_id, placeholders::_2, pcb), nullptr); // no timeout case

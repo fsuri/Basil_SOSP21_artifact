@@ -65,36 +65,31 @@ void Client::setParticipants(Transaction *txn) {
 void Client::PreAccept(Transaction *txn, uint64_t ballot) {
 	txn->setTransactionId(txn_id);
 	txn_id++;
-
 	setParticipants(txn);
-	janusstore::proto::TransactionMessage txn_message;
-	txn->serialize(&txn_message);
 
 	for (auto p : participants) {
-		// TODO how will the shardclients notify this client?
-		bclient[p]->PreAccept(*txn, ballot,
-			std::bind(&Client::PreAcceptCallback, 
-				placeholders::_1, placeholders::_2, placeholders::_3)
-		);
+		auto pcb = std::bind(&Client::PreAcceptCallback, 
+				txn->getTransactionId(), placeholders::_2, placeholders::_3);
+		
+		bclient[p]->PreAccept(*txn, ballot, pcb);
 	}
 }
 
 void Client::Accept(uint64_t txn_id, set<uint64_t> deps, uint64_t ballot) {
 	for (auto p : participants) {
 		std::vector<uint64_t> vec_deps (deps.begin(), deps.end());
-		bclient[p]->Accept(txn_id, vec_deps, ballot,
-			std::bind(&Client::AcceptCallback, placeholders::_1)
-		);
+		auto acb = std::bind(&Client::AcceptCallback, placeholders::_1);
+
+		bclient[p]->Accept(txn_id, vec_deps, ballot, acb);
 	}
 }
 
 void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
 	for (auto p : participants) {
 		std::vector<uint64_t> vec_deps (deps.begin(), deps.end());
-		bclient[p]->Commit(txn_id, vec_deps, 
-			std::bind(&Client::CommitCallback,
-				placeholders::_1, placeholders::_2)
-		);
+		auto ccb = std::bind(&Client::CommitCallback, placeholders::_1, placeholders::_2);
+
+		bclient[p]->Commit(txn_id, vec_deps, ccb);
 	}
 }
 
