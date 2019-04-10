@@ -39,10 +39,10 @@ ShardClient::~ShardClient() {
 */
 
 void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb) {
-	Debug("[shard %i] Sending PREACCEPT [%lu]", shard, client_id);
+	Debug("[shard %i] Sending PREACCEPT [%llu]", shard, client_id);
 
-	vector<janusstore::proto::Reply> replies;
-	pair<uint64_t, vector<janusstore::proto::Reply>> entry (txn.txn_id, replies);
+	std::vector<janusstore::proto::Reply> replies;
+	pair<uint64_t, std::vector<janusstore::proto::Reply>> entry (txn.txn_id, replies);
 	preaccept_replies.insert(entry);
 
 	// create PREACCEPT Request
@@ -66,11 +66,11 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 		txn_id, placeholders::_2, pcb), nullptr); // no timeout case
 }
 
-void ShardClient::Accept(uint64_t txn_id, vector<uint64_t> deps, uint64_t ballot, client_accept_callback acb) {
-	Debug("[shard %i] Sending ACCEPT [%lu]", shard, client_id);
+void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t ballot, client_accept_callback acb) {
+	Debug("[shard %i] Sending ACCEPT [%llu]", shard, client_id);
 
-	vector<janusstore::proto::Reply> replies;
-	pair<uint64_t, vector<janusstore::proto::Reply>> entry (txn_id, replies);
+	std::vector<janusstore::proto::Reply> replies;
+	pair<uint64_t, std::vector<janusstore::proto::Reply>> entry (txn_id, replies);
 	accept_replies.insert(entry);
 
 	// create ACCEPT Request
@@ -92,11 +92,11 @@ void ShardClient::Accept(uint64_t txn_id, vector<uint64_t> deps, uint64_t ballot
 			txn_id, placeholders::_2, acb), nullptr);
 }
 
-void ShardClient::Commit(uint64_t txn_id, vector<uint64_t> deps, client_commit_callback ccb) {
-	Debug("[shard %i] Sending COMMIT [%lu]", shard, client_id);
+void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb) {
+	Debug("[shard %i] Sending COMMIT [%llu]", shard, client_id);
 
-	vector<janusstore::proto::Reply> replies;
-	pair<uint64_t, vector<janusstore::proto::Reply>> entry (txn_id, replies);
+	std::vector<janusstore::proto::Reply> replies;
+	pair<uint64_t, std::vector<janusstore::proto::Reply>> entry (txn_id, replies);
 	commit_replies.insert(entry);
 
 	// create COMMIT Request
@@ -121,40 +121,40 @@ void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply re
 	responded++;
 
 	// aggregate replies for this transaction
-	preaccept_replies.find(txn_id).insert(reply);
+	preaccept_replies[txn_id].insert(reply);
 
 	// TODO how do determine number of replicas?
 	if (responded) {
 		responded = 0;
-		pcb(txn_id, shard, preaccept_replies.find(txn_id));
+		pcb(txn_id, shard, preaccept_replies[txn_id]);
 	}
 }
 
-void ShardClient::AcceptCallback(uint64_t txn_id, vector<janusstore::proto::Reply> replies, client_accept_callback acb) {
+void ShardClient::AcceptCallback(uint64_t txn_id, std::vector<janusstore::proto::Reply> replies, client_accept_callback acb) {
 	// TODO who unwraps replica responses into the callback params?
 	responded++;
 	
 	// aggregate replies for this transaction
-	accept_replies.find(txn_id).insert(reply);
+	accept_replies[txn_id].insert(reply);
 
 	// TODO how do determine number of replicas?
 	if (responded) {
 		responded = 0;
-		acb(txn_id, shard, accept_replies.find(txn_id));
+		acb(txn_id, shard, accept_replies[txn_id]);
 	}
 }
 
-void ShardClient::CommitCallback(uint64_t txn_id, vector<uint64_t> results, client_commit_callback ccb) {
+void ShardClient::CommitCallback(uint64_t txn_id, std::vector<uint64_t> results, client_commit_callback ccb) {
 	// TODO who unwraps replica responses into the callback params?
 	responded++;
 	
 	// aggregate replies for this transaction
-	commit_replies.find(txn_id).insert(reply);
+	commit_replies[txn_id].insert(reply);
 
 	// TODO how do determine number of replicas?
 	if (responded) {
 		responded = 0;
-		ccb(txn_id, shard, accept_replies.find(txn_id));
+		ccb(txn_id, shard, accept_replies[txn_id]);
 	}
 }
 }

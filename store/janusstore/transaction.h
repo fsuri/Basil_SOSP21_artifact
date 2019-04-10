@@ -7,6 +7,7 @@
 #include "lib/assert.h"
 #include "lib/message.h"
 #include "store/common/common-proto.pb.h"
+#include "store/janusstore/janus-proto.pb.h"
 
 #include <unordered_map>
 
@@ -32,16 +33,15 @@ private:
     // the unique transaction ID
     uint64_t txn_id;
     TransactionStatus status;
-
+    
+public:
+    Transaction() {};
+    Transaction(uint64_t txn_id);
     // set of keys to be read
     std::unordered_set<std::string> read_set;
 
     // map between key and value(s)
     std::unordered_map<std::string, std::string> write_set;
-
-public:
-    Transaction() {};
-    Transaction(uint64_t txn_id);
     Transaction(uint64_t txn_id, const TransactionMessage &msg);
     ~Transaction();
 
@@ -57,7 +57,7 @@ public:
 
     void addReadSet(const std::string &key);
     void addWriteSet(const std::string &key, const std::string &value);
-    void serialize(TransactionMessage *msg) const;
+    void serialize(janusstore::proto::TransactionMessage *msg) const;
 };
 
 } // namespace janusstore

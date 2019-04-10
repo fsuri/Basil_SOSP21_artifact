@@ -10,19 +10,13 @@
 #include "store/common/frontend/txnclient.h"
 
 #include "store/janusstore/transaction.h"
-// TODO define these
 #include "store/janusstore/shardclient.h"
 #include "store/janusstore/janus-proto.pb.h"
-// end TODO
 
 #include <map>
 #include <string>
 
 namespace janusstore {
-
-// typedef std::function<void(uint64_t, int, std::unordered_map<uint64_t,std::vector<uint64_t>>)> preaccept_callback;
-// typedef std::function<void(int)> accept_callback;
-// typedef std::function<void(int, std::vector<uint64_t>)> commit_callback;
 
 // client callbacks
 typedef std::function<void(uint64_t, int, std::vector<janusstore::proto::Reply>)> client_preaccept_callback;
@@ -61,9 +55,9 @@ private:
     // TODO will probably need to add fields for aggregating replica responses
     // Map of txn_id to aggregated list of txn_id dependencies for this shard
     std::unordered_map<uint64_t, std::set<uint64_t>> aggregated_deps;
-    std::map<uint64_t, vector<janusstore::proto::Reply>> preaccept_replies;
-    std::map<uint64_t, vector<janusstore::proto::Reply>> accept_replies;
-    std::map<uint64_t, vector<janusstore::proto::Reply>> commit_replies;
+    std::map<uint64_t, std::vector<janusstore::proto::Reply>> preaccept_replies;
+    std::map<uint64_t, std::vector<janusstore::proto::Reply>> accept_replies;
+    std::map<uint64_t, std::vector<janusstore::proto::Reply>> commit_replies;
 
     /* Callbacks for hearing back from a shard for a Janus phase. */
     void PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply,

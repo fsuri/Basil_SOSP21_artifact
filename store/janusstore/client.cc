@@ -26,7 +26,7 @@ Client::Client(const string configPath, int nShards,
 		ballot = (client_id/10000)*10000;
 
 		bclient.reserve(nshards);
-		Debug("Initializing Janus client with id [%lu] %lu", client_id, nshards);
+		Debug("Initializing Janus client with id [%llu] %lu", client_id, nshards);
 
 		/* Start a client for each shard. */
 	    for (uint64_t i = 0; i < nshards; i++) {
@@ -37,7 +37,7 @@ Client::Client(const string configPath, int nShards,
 	        bclient[i] = shardclient;
 	    }
 
-	    Debug("Janus client [%lu] created! %lu %lu", client_id, nshards, bclient.size());
+	    Debug("Janus client [%lu] created! %llu %lu", client_id, nshards, bclient.size());
 	}
 Client::~Client() {
 	for (auto b : bclient) {
@@ -47,15 +47,15 @@ Client::~Client() {
 
 void Client::setParticipants(Transaction *txn) {
 	participants.clear();
-	for (const auto &key : txn->readSet) {
+	for (const auto &key : txn->read_set) {
 		int i = key_to_shard(key, nshards);
 		if (participants.find(i) == participants.end()) {
     		participants.insert(i);
   		}
 	}
 
-	for (const auto &pair : txn->writeSet) {
-		int i = key_to_shard(&(pair->first), nshards);
+	for (const auto &pair : txn->write_set) {
+		int i = key_to_shard((pair.first), nshards);
 		if (participants.find(i) == participants.end()) {
     		participants.insert(i);
   		}
@@ -67,8 +67,8 @@ void Client::PreAccept(Transaction *txn, uint64_t ballot) {
 	txn_id++;
 
 	setParticipants(txn);
-	TransactionMessage *txn_message;
-	txn->serialize(txn_message);
+	janusstore::proto::TransactionMessage txn_message;
+	txn->serialize(&txn_message);
 
 	for (auto p : participants) {
 		// TODO how will the shardclients notify this client?
@@ -81,7 +81,8 @@ void Client::PreAccept(Transaction *txn, uint64_t ballot) {
 
 void Client::Accept(uint64_t txn_id, set<uint64_t> deps, uint64_t ballot) {
 	for (auto p : participants) {
-		bclient[p]->Accept(txn_id, deps, ballot,
+		std::vector<uint64_t> vec_deps (deps.begin(), deps.end());
+		bclient[p]->Accept(txn_id, vec_deps, ballot,
 			std::bind(&Client::AcceptCallback, placeholders::_1)
 		);
 	}
@@ -89,14 +90,15 @@ void Client::Accept(uint64_t txn_id, set<uint64_t> deps, uint64_t ballot) {
 
 void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
 	for (auto p : participants) {
-		bclient[p]->Commit(txn_id, deps, 
+		std::vector<uint64_t> vec_deps (deps.begin(), deps.end());
+		bclient[p]->Commit(txn_id, vec_deps, 
 			std::bind(&Client::CommitCallback,
 				placeholders::_1, placeholders::_2)
 		);
 	}
 }
 
-void Client::PreAcceptCallback(uint64_t txn_id, int shard, vector<janusstore::proto::Reply> replies) {
+void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 	// update dependencies and responded shards
 	responded.insert(shard);
 	for (auto reply : replies) {
@@ -107,7 +109,7 @@ void Client::PreAcceptCallback(uint64_t txn_id, int shard, vector<janusstore::pr
 				uint64_t dep_id = msg.txnid(i);
 				// add dep to aggregated set
 				// TODO verify this is correct syntax
-				aggregated_deps.find(txn_id).insert(dep_id);
+				aggregated_deps[txn_id].insert(dep_id);
 			}
 		} else {
 			// TODO case where not ok
@@ -118,11 +120,11 @@ void Client::PreAcceptCallback(uint64_t txn_id, int shard, vector<janusstore::pr
 	if (responded.size() == participants.size()) {
 		// TODO check whether we have a fast quorum before doing commit
 		responded.clear();
-		Commit(txn_id, aggregated_deps.find(txn_id));
+		Commit(txn_id, aggregated_deps[txn_id]);
 	}
 }
 
-void Client::AcceptCallback(uint64_t txn_id, int shard, vector<janusstore::proto::Reply> replies) {
+void Client::AcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 	responded.insert(shard);
 	for (auto reply : replies) {
 		if (reply.op() == Reply::ACCEPT_NOT_OK) {
@@ -133,11 +135,11 @@ void Client::AcceptCallback(uint64_t txn_id, int shard, vector<janusstore::proto
 	if (responded.size() == participants.size()) {
 		// no need to check for a quorum for every shard because we dont implement failure recovery
 		responded.clear();
-		Commit(txn_id, aggregated_deps.find(txn_id));
+		Commit(txn_id, aggregated_deps[txn_id]);
 	}
 	return;
 }
-void Client::CommitCallback(uint64_t txn_id, int shard, vector<janusstore::proto::Reply> replies) {
+void Client::CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 	responded.insert(shard);
 
 	if (responded.size() == participants.size()) {
