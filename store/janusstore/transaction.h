@@ -34,12 +34,13 @@ private:
     TransactionStatus status;
 
     // set of keys to be read
-    std::unordered_set<std::string> readSet;
+    std::unordered_set<std::string> read_set;
 
     // map between key and value(s)
-    std::unordered_map<std::string, std::string> writeSet;
+    std::unordered_map<std::string, std::string> write_set;
 
 public:
+    Transaction() {};
     Transaction(uint64_t txn_id);
     Transaction(uint64_t txn_id, const TransactionMessage &msg);
     ~Transaction();
@@ -51,8 +52,8 @@ public:
     const std::unordered_set<std::string>& getReadSet() const;
     const std::unordered_map<std::string, std::string>& getWriteSet() const;
 
-    inline size_t GetNumRead() const { return readSet.size(); }
-    inline size_t GetNumWritten() const { return writeSet.size(); }
+    inline size_t GetNumRead() const { return read_set.size(); }
+    inline size_t GetNumWritten() const { return write_set.size(); }
 
     void addReadSet(const std::string &key);
     void addWriteSet(const std::string &key, const std::string &value);
