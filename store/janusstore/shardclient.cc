@@ -123,7 +123,7 @@ void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply re
 	// TODO how do determine number of replicas?
 	if (responded) {
 		responded = 0;
-		pcb(txn_id, shard, preaccept_replies[txn_id]);
+		pcb(shard, preaccept_replies[txn_id]);
 	}
 }
 
@@ -137,11 +137,11 @@ void ShardClient::AcceptCallback(uint64_t txn_id, std::vector<janusstore::proto:
 	// TODO how do determine number of replicas?
 	if (responded) {
 		responded = 0;
-		acb(txn_id, shard, accept_replies[txn_id]);
+		acb(shard, accept_replies[txn_id]);
 	}
 }
 
-void ShardClient::CommitCallback(uint64_t txn_id, std::vector<uint64_t> results, client_commit_callback ccb) {
+void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb) {
 	// TODO who unwraps replica responses into the callback params?
 	responded++;
 	
@@ -151,7 +151,7 @@ void ShardClient::CommitCallback(uint64_t txn_id, std::vector<uint64_t> results,
 	// TODO how do determine number of replicas?
 	if (responded) {
 		responded = 0;
-		ccb(txn_id, shard, accept_replies[txn_id]);
+		ccb(shard, commit_replies[txn_id]);
 	}
 }
 }
