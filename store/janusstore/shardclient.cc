@@ -8,7 +8,7 @@ using namespace proto;
 
 ShardClient::ShardClient(const string &configPath, Transport *transport,
 	uint64_t client_id, int shard, int closestReplica)
-	: client_id(client_id), transport(transport), shard(shard) {
+	: client_id(client_id), transport(transport), shard(shard), responded(0) {
   
   ifstream configStream(configPath);
   if (configStream.fail()) {
@@ -41,6 +41,10 @@ ShardClient::~ShardClient() {
 void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb) {
 	Debug("[shard %i] Sending PREACCEPT [%lu]", shard, client_id);
 
+	vector<janusstore::proto::Reply> replies;
+	pair<uint64_t, vector<janusstore::proto::Reply>> entry (txn.txn_id, replies);
+	preaccept_replies.insert(entry);
+
 	// create PREACCEPT Request
 	string request_str;
 	Request request;
@@ -56,13 +60,18 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 
 	// ShardClient callback function will be able to invoke
 	// the Client's callback function when all responses returned
+	// TODO replace placeholders:_1 with txnid
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::PreAcceptCallback,
-		placeholders::_1, placeholders::_2, placeholders::_3, pcb), nullptr); // no timeout case
+		txn_id, placeholders::_2, pcb), nullptr); // no timeout case
 }
 
 void ShardClient::Accept(uint64_t txn_id, vector<uint64_t> deps, uint64_t ballot, client_accept_callback acb) {
 	Debug("[shard %i] Sending ACCEPT [%lu]", shard, client_id);
+
+	vector<janusstore::proto::Reply> replies;
+	pair<uint64_t, vector<janusstore::proto::Reply>> entry (txn_id, replies);
+	accept_replies.insert(entry);
 
 	// create ACCEPT Request
 	string request_str;
@@ -80,11 +89,15 @@ void ShardClient::Accept(uint64_t txn_id, vector<uint64_t> deps, uint64_t ballot
 
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::AcceptCallback,
-			placeholders::_1, acb), nullptr);
+			txn_id, placeholders::_2, acb), nullptr);
 }
 
 void ShardClient::Commit(uint64_t txn_id, vector<uint64_t> deps, client_commit_callback ccb) {
 	Debug("[shard %i] Sending COMMIT [%lu]", shard, client_id);
+
+	vector<janusstore::proto::Reply> replies;
+	pair<uint64_t, vector<janusstore::proto::Reply>> entry (txn_id, replies);
+	commit_replies.insert(entry);
 
 	// create COMMIT Request
 	string request_str;
@@ -100,21 +113,48 @@ void ShardClient::Commit(uint64_t txn_id, vector<uint64_t> deps, client_commit_c
 
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::CommitCallback,
-			placeholders::_1, placeholders::_2, ccb), nullptr);
+			txn_id, placeholders::_2, ccb), nullptr);
 }
 
-void ShardClient::PreAcceptCallback(uint64_t txn_id, int status, unordered_map<uint64_t, vector<uint64_t>> deps, client_preaccept_callback pcb) {
-	// TODO implement
-	return;
+void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_preaccept_callback pcb) {
+	// TODO who unwraps replica responses into the proto?
+	responded++;
+
+	// aggregate replies for this transaction
+	preaccept_replies.find(txn_id).insert(reply);
+
+	// TODO how do determine number of replicas?
+	if (responded) {
+		responded = 0;
+		pcb(txn_id, shard, preaccept_replies.find(txn_id));
+	}
 }
 
-void ShardClient::AcceptCallback(uint64_t txn_id, client_accept_callback acb) {
-	// TODO implement
-	return;
+void ShardClient::AcceptCallback(uint64_t txn_id, vector<janusstore::proto::Reply> replies, client_accept_callback acb) {
+	// TODO who unwraps replica responses into the callback params?
+	responded++;
+	
+	// aggregate replies for this transaction
+	accept_replies.find(txn_id).insert(reply);
+
+	// TODO how do determine number of replicas?
+	if (responded) {
+		responded = 0;
+		acb(txn_id, shard, accept_replies.find(txn_id));
+	}
 }
 
 void ShardClient::CommitCallback(uint64_t txn_id, vector<uint64_t> results, client_commit_callback ccb) {
-	// TODO implement
-	return;
+	// TODO who unwraps replica responses into the callback params?
+	responded++;
+	
+	// aggregate replies for this transaction
+	commit_replies.find(txn_id).insert(reply);
+
+	// TODO how do determine number of replicas?
+	if (responded) {
+		responded = 0;
+		ccb(txn_id, shard, accept_replies.find(txn_id));
+	}
 }
 }

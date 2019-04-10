@@ -59,16 +59,19 @@ private:
     replication::ir::IRClient *client; // Client proxy.
 
     // TODO will probably need to add fields for aggregating replica responses
+    // Map of txn_id to aggregated list of txn_id dependencies for this shard
+    std::unordered_map<uint64_t, std::set<uint64_t>> aggregated_deps;
+    std::map<uint64_t, vector<janusstore::proto::Reply>> preaccept_replies;
+    std::map<uint64_t, vector<janusstore::proto::Reply>> accept_replies;
+    std::map<uint64_t, vector<janusstore::proto::Reply>> commit_replies;
 
     /* Callbacks for hearing back from a shard for a Janus phase. */
-    void PreAcceptCallback(
-        uint64_t txn_id, int status,
-        std::unordered_map<uint64_t,std::vector<uint64_t>> deps,
+    void PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply,
         client_preaccept_callback pcb);
     // 
-    void AcceptCallback(uint64_t txn_id, client_accept_callback acb);
+    void AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_accept_callback acb);
     // TODO maybe change the type of [results]
-    void CommitCallback(uint64_t txn_id, std::vector<uint64_t> results, client_commit_callback ccb);
+    void CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb);
 };
 
 } // namespace janusstore
