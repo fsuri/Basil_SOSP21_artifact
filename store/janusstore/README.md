@@ -4,12 +4,16 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 # Notes
 - 4/10:
 	- client impl
-		- how do we return transaction results?
-		- right now, we basically require that one client must process a transaction fully before starting another one; is this ok?
+		- how do we return transaction results from the client?
+			- use the callback function given from wrapper of client in PreAccept
+		- type issues with callback functions; likely same for shardclient
 	- shardclient impl
 		- how does the shardclient receive responses from replicas?
+			- answer: continuation callbacks that do the wrapping
 		- is there a way to tell how many replicas there are in the shard?
-
+			- otherwise, how can we decide when to forward responses to the client?
+			- answer: this->config.n is the number of replicas;
+			- additionally, this means we need to loop and call InvokeUnlogged for replica IDs 0...n-1
 - 3/29:
 	- client partial impl
 	- server partial impl

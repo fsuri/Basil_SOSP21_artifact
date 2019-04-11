@@ -19,9 +19,9 @@
 namespace janusstore {
 
 // client callbacks
-typedef std::function<void(uint64_t, int, std::vector<janusstore::proto::Reply>)> client_preaccept_callback;
-typedef std::function<void(uint64_t, int, std::vector<janusstore::proto::Reply>)> client_accept_callback;
-typedef std::function<void(uint64_t, int, std::vector<janusstore::proto::Reply>)> client_commit_callback;
+typedef std::function<void(int, std::vector<janusstore::proto::Reply>)> client_preaccept_callback;
+typedef std::function<void(int, std::vector<janusstore::proto::Reply>)> client_accept_callback;
+typedef std::function<void(int, std::vector<janusstore::proto::Reply>)> client_commit_callback;
 
 
 class ShardClient {
@@ -66,6 +66,10 @@ private:
     void AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_accept_callback acb);
     // TODO maybe change the type of [results]
     void CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb);
+
+    void PreAcceptContinuation();
+    void AcceptContinuation();
+    void CommitContinuation();
 };
 
 } // namespace janusstore

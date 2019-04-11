@@ -62,14 +62,16 @@ void Client::setParticipants(Transaction *txn) {
 	}
 }
 
-void Client::PreAccept(Transaction *txn, uint64_t ballot) {
+void Client::PreAccept(Transaction *txn, uint64_t ballot, commit_callback ccb) {
 	txn->setTransactionId(txn_id);
 	txn_id++;
 	setParticipants(txn);
 
+	// TODO add the callback to map
+
 	for (auto p : participants) {
-		auto pcb = std::bind(&Client::PreAcceptCallback, 
-				txn->getTransactionId(), placeholders::_2, placeholders::_3);
+		auto pcb = std::bind(&Client::PreAcceptCallback, this,
+				txn->getTransactionId(), placeholders::_1, placeholders::_2);
 		
 		bclient[p]->PreAccept(*txn, ballot, pcb);
 	}
@@ -78,7 +80,7 @@ void Client::PreAccept(Transaction *txn, uint64_t ballot) {
 void Client::Accept(uint64_t txn_id, set<uint64_t> deps, uint64_t ballot) {
 	for (auto p : participants) {
 		std::vector<uint64_t> vec_deps (deps.begin(), deps.end());
-		auto acb = std::bind(&Client::AcceptCallback, placeholders::_1);
+		auto acb = std::bind(&Client::AcceptCallback, this, txn_id, placeholders::_1, placeholders::_2);
 
 		bclient[p]->Accept(txn_id, vec_deps, ballot, acb);
 	}
@@ -87,7 +89,7 @@ void Client::Accept(uint64_t txn_id, set<uint64_t> deps, uint64_t ballot) {
 void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
 	for (auto p : participants) {
 		std::vector<uint64_t> vec_deps (deps.begin(), deps.end());
-		auto ccb = std::bind(&Client::CommitCallback, placeholders::_1, placeholders::_2);
+		auto ccb = std::bind(&Client::CommitCallback, this, txn_id, placeholders::_1, placeholders::_2);
 
 		bclient[p]->Commit(txn_id, vec_deps, ccb);
 	}

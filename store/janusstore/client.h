@@ -25,7 +25,7 @@ public:
     virtual ~Client();
 
     // begins PreAccept phase
-    void PreAccept(Transaction *txn, uint64_t ballot);
+    void PreAccept(Transaction *txn, uint64_t ballot, commit_callback ccb);
 
     // called from PreAcceptCallback when a fast quorum is not obtained
     void Accept(
@@ -56,6 +56,8 @@ private:
 
     // Map of txn_id to aggregated list of txn_id dependencies
     std::unordered_map<uint64_t, std::set<uint64_t>> aggregated_deps;
+    // Map of txn_id to aggregated list of txn_id dependencies
+    std::unordered_map<uint64_t, commit_callback> output_commits;
 
     // List of participants in the ongoing transaction.
     std::set<int> participants;
