@@ -45,6 +45,9 @@ private:
     // maps Transaction ids to Transcation objects
     std::unordered_map<uint64_t, Transaction> id_txn_map;
 
+    // maps Txn to locally processed status
+    std::unordered_map<uint64_t, bool> processed;
+
     // maps keys to transaction ids that read it
     // TODO ensure that this map is cleared per transaction
     std::unordered_map<string, std::vector<uint64_t>> read_key_txn_map;
@@ -54,17 +57,20 @@ private:
     std::unordered_map<string, std::vector<uint64_t>> write_key_txn_map;
 
     // functions to process shardclient requests
-    // must take in a full Transaction object in order to correctly bookkeep
-    // and commit
-    void Accept(janusstore::proto::Request& request, janusstore::proto::Reply& reply);
-    void PreAccept(janusstore::proto::Request& request, janusstore::proto::Reply& reply);
-    void HandlePreAccept(Transaction txn, uint64_t ballot);
-    void HandleAccept(uint64_t txn_id, std::vector<std::string> deps, uint64_t ballot);
-    void HandleCommit(uint64_t txn_id, std::vector<std::string> deps);
+    // must take in a full Transaction object in order to correctly bookkeep and commit
+
+    // returns the list of dependencies for given txn, NULL if PREACCEPT-NOT-OK
+    std::vector<uint64_t> HandlePreAccept(Transaction txn, uint64_t ballot);
+
+    // returns -1 if Accept-OK, the highest ballot for txn otherwise
+    uint64_t HandleAccept(Transaction &txn, std::vector<std::uint64_t> msg_deps, uint64_t ballot);
+
+    // TODO figure out what T.abandon and T.result are
+    void HandleCommit(uint64_t txn_id, std::vector<std::uint64_t> deps);
 
     // for cyclic dependency case, compute SCCs and execute in order
     // to be called during the Commit phase from HandleCommitJanusTxn()
-    void ResolveContention();
+    std::vector<uint64_t> ResolveContention(std::vector<uint64_t> scc);
 };
 } // namespace janusstore
 
