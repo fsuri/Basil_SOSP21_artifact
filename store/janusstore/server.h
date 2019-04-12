@@ -68,6 +68,12 @@ private:
     // TODO figure out what T.abandon and T.result are
     void HandleCommit(uint64_t txn_id, std::vector<std::uint64_t> deps);
 
+    std::unordered_map<string, string> _ExecutePhase(uint64_t txn_id);
+    std::vector<uint64_t> _StronglyConnectedComponent(uint64_t txn_id);
+    bool _ReadyToProcess(Transaction txn);
+
+    // TODO determine the return type??
+    std::unordered_map<string, string> Execute(Transaction txn);
     // for cyclic dependency case, compute SCCs and execute in order
     // to be called during the Commit phase from HandleCommitJanusTxn()
     std::vector<uint64_t> ResolveContention(std::vector<uint64_t> scc);

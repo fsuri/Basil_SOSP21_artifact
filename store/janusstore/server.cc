@@ -7,6 +7,8 @@ namespace janusstore {
 using namespace std;
 using namespace proto;
 
+bool _checkIfAllCommitting(std::unordered_map<uint64_t, Transaction> id_txn_map, std::vector<uint64_t> deps);
+
 Server::Server() {
     store = new Store();
 }
@@ -173,19 +175,6 @@ uint64_t Server::HandleAccept(Transaction &txn, std::vector<std::uint64_t> msg_d
     return -1;
 }
 
-// returns a strongly connected component that contains the given txn_id, if it exists
-std::vector<uint64_t> _StronglyConnectedComponent(std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map, uint64_t txn_id) {
-
-}
-
-bool _checkIfAllCommitting(std::unordered_map<uint64_t, Transaction> id_txn_map, std::vector<uint64_t> deps) {
-    for (int txn_id : deps) {
-        Transaction txn = id_txn_map[txn_id];
-        if (txn.getTransactionStatus() != COMMIT) return false;
-    }
-    return true;
-}
-
 void Server::HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
     Transaction txn = id_txn_map[txn_id];
     dep_map[txn_id] = deps;
@@ -206,20 +195,61 @@ void Server::HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
     for (int dep_id : deps) {
         processed[dep_id] = false;
     }
+    _ExecutePhase(txn_id);
+}
 
-    while (!processed[txn_id]) {
+std::unordered_map<string, string> Server::Execute(Transaction txn) {
+    uint64_t txn_id = txn.getTransactionId();
+    std::unordered_map<string, string> result;
 
+    for (string key : txn.getReadSet()) {
+        string val = string();
+        store->Get(txn_id, key, val);
+        result[key] = val;
     }
+
+    for (std::pair<std::string, string> write : txn.getWriteSet()) {
+        store->Put(txn_id, write.first, write.second);
+        result[write.first] = write.second;
+    }
+
+    return result;
+}
+
+std::unordered_map<string, string> Server::_ExecutePhase(uint64_t txn_id) {
+    std::unordered_map<string, string> result;
+    std::vector<uint64_t> deps = dep_map[txn_id];
+    while (!processed[txn_id]) {
+        // TODO make choosing other_txn_id more efficient
+        for (std::pair<uint64_t, std::vector<uint64_t>> pair : dep_map) {
+            uint64_t other_txn_id = pair.first;
+            if (_ReadyToProcess(id_txn_map[other_txn_id])) {
+                std::vector<uint64_t> scc = _StronglyConnectedComponent(txn_id);
+                for (int scc_id : scc) {
+                    // TODO check if scc_id is involved with S and not abandoned
+                    if (scc_id == txn_id) {
+                        result = Execute(id_txn_map[scc_id]);
+                    } else {
+                        Execute(id_txn_map[scc_id]);
+                    }
+                    processed[scc_id] = true;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+// returns a strongly connected component that contains the given txn_id, if it exists
+std::vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
 
 }
 
 // checks if txn is ready to be executed
-bool _ReadyToProcess(Transaction txn,
-    std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map,
-    std::unordered_map<uint64_t, bool> processed) {
+bool Server::_ReadyToProcess(Transaction txn) {
     uint64_t txn_id = txn.getTransactionId();
     if (processed[txn.getTransactionId()] || txn.getTransactionStatus() != COMMIT) return false;
-    std::vector<uint64_t> scc = _StronglyConnectedComponent(dep_map, txn_id);
+    std::vector<uint64_t> scc = _StronglyConnectedComponent(txn_id);
     std::vector<uint64_t> deps = dep_map[txn.getTransactionId()];
     for (int other_txn_id : deps) {
         std::vector<uint64_t>::iterator it = std::find(scc.begin(), scc.end(), other_txn_id);
@@ -235,6 +265,14 @@ void Server::Load(const string &key, const string &value, const Timestamp timest
 
 std::vector<uint64_t> Server::ResolveContention(std::vector<uint64_t> scc) {
     // just return a sorted order lol
+}
+
+bool _checkIfAllCommitting(std::unordered_map<uint64_t, Transaction> id_txn_map, std::vector<uint64_t> deps) {
+    for (int txn_id : deps) {
+        Transaction txn = id_txn_map[txn_id];
+        if (txn.getTransactionStatus() != COMMIT) return false;
+    }
+    return true;
 }
 
 } // namespace janusstore
