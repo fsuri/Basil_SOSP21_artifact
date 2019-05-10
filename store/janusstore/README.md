@@ -28,9 +28,6 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 	- potential typos/unexplained cases in the paper?
 
 # Timeline and TODOs
-- Week of 4/7: Implement working/runnable transaction system
-- 4/12: System running
-- Week of 4/14 - 4/21: Testing/benchmarking
 
 # How to Run
 

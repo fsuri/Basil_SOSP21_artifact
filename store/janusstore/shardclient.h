@@ -34,7 +34,6 @@ public:
 /* * coordinator role (co-located with client but not visible to client) * */
 
     // Initiate the PreAccept phase for this shard.
-    // TODO unsure if id is needed
     virtual void PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb);
 
     // Initiate the Accept phase for this shard.
@@ -64,7 +63,6 @@ private:
         client_preaccept_callback pcb);
     // 
     void AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_accept_callback acb);
-    // TODO maybe change the type of [results]
     void CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb);
 
     void PreAcceptContinuation();

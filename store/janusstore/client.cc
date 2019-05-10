@@ -29,9 +29,10 @@ Client::Client(const string configPath, int nShards,
 		Debug("Initializing Janus client with id [%llu] %lu", client_id, nshards);
 
 		/* Start a client for each shard. */
-	    for (uint64_t i = 0; i < nshards; i++) {
+	    for (int i = 0; i < nshards; i++) {
 	        string shardConfigPath = configPath + to_string(i) + ".config";
-	        ShardClient *shardclient = new ShardClient(shardConfigPath,
+	        string& path_ref = shardConfigPath;
+	        ShardClient *shardclient = new ShardClient(path_ref,
 	                transport, client_id, i, closestReplica);
 	        // we use shardclients instead of bufferclients here
 	        bclient[i] = shardclient;

@@ -1,5 +1,5 @@
 // -*- mode: c++; c-file-style: "k&r"; c-basic-offset: 4 -*-
-#include "store/tapirstore/shardclient.h"
+#include "store/janusstore/shardclient.h"
 
 namespace janusstore {
 
