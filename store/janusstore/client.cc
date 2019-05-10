@@ -26,19 +26,18 @@ Client::Client(const string configPath, int nShards,
 		ballot = (client_id/10000)*10000;
 
 		bclient.reserve(nshards);
-		Debug("Initializing Janus client with id [%llu] %lu", client_id, nshards);
+		Debug("Initializing Janus client with id [%llu] %llu", client_id, nshards);
 
 		/* Start a client for each shard. */
 	    for (int i = 0; i < nshards; i++) {
 	        string shardConfigPath = configPath + to_string(i) + ".config";
-	        string& path_ref = shardConfigPath;
-	        ShardClient *shardclient = new ShardClient(path_ref,
+	        ShardClient *shardclient = new ShardClient(shardConfigPath,
 	                transport, client_id, i, closestReplica);
 	        // we use shardclients instead of bufferclients here
 	        bclient[i] = shardclient;
 	    }
 
-	    Debug("Janus client [%lu] created! %llu %lu", client_id, nshards, bclient.size());
+	    Debug("Janus client [%llu] created! %llu %lu", client_id, nshards, bclient.size());
 	}
 Client::~Client() {
 	for (auto b : bclient) {

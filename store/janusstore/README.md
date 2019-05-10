@@ -2,6 +2,10 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
+- 5/10:
+	- client impl mostly done, need to get to compile and write the shim layer
+		- will probably need to sort out some bugs with client/shardclient state
+		- for now, dont need to write shim layer; can just have a main function that randomly generates a one-shot txn and tells the client to send it
 - 4/10:
 	- client impl
 		- how do we return transaction results from the client?
@@ -27,7 +31,15 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 - note any interesting observations while doing this thing
 	- potential typos/unexplained cases in the paper?
 
+<!-- questions: 
+	can we do this/other stuff for meng project? i know we're supposed to find an advisor for meng; would that be alvisi?
+-->
+
 # Timeline and TODOs
+5/17 - get client to compile and proofread logic
+
+9/08 - janus impl done and runnable (and debuggable)
+9/19 - paper deadline (3 wks after classes start)
 
 # How to Run
 

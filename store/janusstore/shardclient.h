@@ -10,7 +10,6 @@
 #include "store/common/frontend/txnclient.h"
 
 #include "store/janusstore/transaction.h"
-#include "store/janusstore/shardclient.h"
 #include "store/janusstore/janus-proto.pb.h"
 
 #include <map>
