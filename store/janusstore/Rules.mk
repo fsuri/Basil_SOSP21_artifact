@@ -10,5 +10,5 @@ LIB-janus-store := $(OBJS-ir-replica) $(o)transaction.o $(o)server.o $(o)store.o
 
 LIB-janus-client := $(OBJS-ir-client)  $(LIB-udptransport) \
 	$(LIB-store-frontend) $(LIB-store-common) $(o)janus-proto.o \
-	$(o)shardclient.o $(o)client.o
+	$(o)shardclient.o $(o)client.o $(o)transaction.o
 
