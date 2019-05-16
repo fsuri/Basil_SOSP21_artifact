@@ -1,6 +1,5 @@
 // -*- mode: c++; c-file-style: "k&r"; c-basic-offset: 4 -*-
 #include "store/janusstore/shardclient.h"
-#include <assert.h>
 
 namespace janusstore {
 
