@@ -69,6 +69,9 @@ private:
     void PreAcceptContinuation();
     void AcceptContinuation();
     void CommitContinuation();
+
+    int responded;
+    int txn_id;
 };
 
 } // namespace janusstore

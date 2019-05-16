@@ -10,6 +10,7 @@ store/benchmark/retwisClient
 store/benchmark/terminalClient
 store/server
 store/benchmark/async/benchmark
+store/benchmark/async/benchmark_oneshot
 timeserver/timeserver
 
 lib/tests/configuration-test
