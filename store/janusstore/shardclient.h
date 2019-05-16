@@ -47,12 +47,14 @@ private:
     transport::Configuration *config;
     int shard; // which shard this client accesses
     int replica; // which replica to use for reads
+    int responded;
 
     replication::ir::IRClient *client; // Client proxy.
 
     // TODO will probably need to add fields for aggregating replica responses
     // Map of txn_id to aggregated list of txn_id dependencies for this shard
     std::unordered_map<uint64_t, std::set<uint64_t>> aggregated_deps;
+    
     std::map<uint64_t, std::vector<janusstore::proto::Reply>> preaccept_replies;
     std::map<uint64_t, std::vector<janusstore::proto::Reply>> accept_replies;
     std::map<uint64_t, std::vector<janusstore::proto::Reply>> commit_replies;

@@ -18,6 +18,9 @@
 
 namespace janusstore {
 
+// callback for output commit
+typedef std::function<void(uint64_t)> output_commit_callback;
+
 class Client : public ::Client {
 public:
     Client(const std::string configPath, int nShards, int closestReplica,
@@ -25,7 +28,7 @@ public:
     virtual ~Client();
 
     // begins PreAccept phase
-    void PreAccept(Transaction *txn, uint64_t ballot, commit_callback ccb);
+    void PreAccept(Transaction *txn, uint64_t ballot, output_commit_callback ocb);
 
     // called from PreAcceptCallback when a fast quorum is not obtained
     void Accept(
@@ -56,8 +59,8 @@ private:
 
     // Map of txn_id to aggregated list of txn_id dependencies
     std::unordered_map<uint64_t, std::set<uint64_t>> aggregated_deps;
-    // Map of txn_id to aggregated list of txn_id dependencies
-    std::unordered_map<uint64_t, commit_callback> output_commits;
+    // Map of txn_id to callback for output commit; unsure if needed
+    std::unordered_map<uint64_t, output_commit_callback> output_commits;
 
     // List of participants in the ongoing transaction.
     std::set<int> participants;

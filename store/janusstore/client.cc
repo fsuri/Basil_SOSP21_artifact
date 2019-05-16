@@ -19,9 +19,9 @@ Client::Client(const string configPath, int nShards,
 	        client_id = dis(gen);
     	}
 
-    	// MSB = client ID, LSB = txn num
+    	// for now, it does not seem like we need txn_id or ballot
+    	// MSB = client_id, LSB = txn num
     	txn_id = (client_id/10000)*10000;
-
 		// MSB = client_id, LSB = ballot num
 		ballot = (client_id/10000)*10000;
 
@@ -62,12 +62,12 @@ void Client::setParticipants(Transaction *txn) {
 	}
 }
 
-void Client::PreAccept(Transaction *txn, uint64_t ballot, commit_callback ccb) {
+void Client::PreAccept(Transaction *txn, uint64_t ballot, output_commit_callback ocb) {
 	txn->setTransactionId(txn_id);
 	txn_id++;
 	setParticipants(txn);
 
-	// TODO add the callback to map
+	// TODO add the callback to map if needed
 
 	for (auto p : participants) {
 		auto pcb = std::bind(&Client::PreAcceptCallback, this,
@@ -96,6 +96,9 @@ void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
 }
 
 void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
+
+	/* shardclient invokes this when all replicas in a shard have responded */
+
 	// update dependencies and responded shards
 	responded.insert(shard);
 	for (auto reply : replies) {
@@ -122,6 +125,9 @@ void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstor
 }
 
 void Client::AcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
+
+	/* shardclient invokes this when all replicas in a shard have responded */
+
 	responded.insert(shard);
 	for (auto reply : replies) {
 		if (reply.op() == Reply::ACCEPT_NOT_OK) {
@@ -137,6 +143,9 @@ void Client::AcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::
 	return;
 }
 void Client::CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
+
+	/* shardclient invokes this when all replicas in a shard have responded */
+
 	responded.insert(shard);
 
 	if (responded.size() == participants.size()) {
@@ -145,6 +154,7 @@ void Client::CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::
 			// TODO how to return results? may also need to update CommitOKMessage
 		}
 	}
+	responded.clear();
 	return;
 }
 }
