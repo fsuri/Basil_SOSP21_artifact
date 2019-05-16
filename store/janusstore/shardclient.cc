@@ -92,9 +92,7 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 
 	// TODO store callback with txnid in a map for the preaccept cb
 	// TODO use the continuation callbacks instead
-	client->InvokeUnlogged(replica, request_str,
-		std::bind(&ShardClient::AcceptCallback, this,
-			txn_id, placeholders::_2, acb), nullptr);
+
 	//client->InvokeUnlogged(replica, request_str,
 	//	std::bind(&ShardClient::AcceptCallback,
 	//		txn_id, placeholders::_2, acb), nullptr);
