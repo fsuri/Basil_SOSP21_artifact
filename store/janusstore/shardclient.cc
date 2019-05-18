@@ -57,15 +57,17 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	// now we can serialize the request and send it to replicas
 	request.SerializeToString(&request_str);
 
-	// TODO store callback with txnid in a map for the preaccept cb
+	// store callback with txnid in a map for the preaccept cb
+	// because we can't pass it into a continuation function
+	pair<uint64_t, client_preaccept_callback> callback_entry (txn_id, pcb);
+	pcb_map.insert(callback_entry);
 
-	// ShardClient callback function will be able to invoke
+	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
-	// TODO use the continuation callbacks instead
-
-	//client->InvokeUnlogged(replica, request_str,
-	//	std::bind(&ShardClient::PreAcceptCallback, this,
-	//	txn_id, placeholders::_2, pcb), nullptr, 0); // no timeout case
+	client->InvokeUnlogged(replica, request_str,
+		std::bind(&ShardClient::PreAcceptContinuation, this,
+		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
+		// no timeout case; TODO verify 0 is OK
 }
 
 void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t ballot, client_accept_callback acb) {
@@ -89,12 +91,17 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 	
 	request.SerializeToString(&request_str);
 
-	// TODO store callback with txnid in a map for the preaccept cb
-	// TODO use the continuation callbacks instead
+	// store callback with txnid in a map for the preaccept cb
+	// because we can't pass it into a continuation function
+	pair<uint64_t, client_accept_callback> callback_entry (txn_id, acb);
+	acb_map.insert(callback_entry);
 
-	//client->InvokeUnlogged(replica, request_str,
-	//	std::bind(&ShardClient::AcceptCallback,
-	//		txn_id, placeholders::_2, acb), nullptr);
+	// ShardClient continutation will be able to invoke
+	// the Client's callback function when all responses returned
+	client->InvokeUnlogged(replica, request_str,
+		std::bind(&ShardClient::AcceptContinuation, this,
+		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
+		// no timeout case; TODO verify 0 is OK
 }
 
 void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb) {
@@ -116,11 +123,17 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 
 	request.SerializeToString(&request_str);
 
-	// TODO store callback with txnid in a map for the preaccept cb
-	// TODO use the continuation callbacks instead
-	//client->InvokeUnlogged(replica, request_str,
-	//	std::bind(&ShardClient::CommitCallback,
-	//		txn_id, placeholders::_2, ccb), nullptr);
+	// store callback with txnid in a map for the preaccept cb
+	// because we can't pass it into a continuation function
+	pair<uint64_t, client_commit_callback> callback_entry (txn_id, ccb);
+	ccb_map.insert(callback_entry);
+
+	// ShardClient continutation will be able to invoke
+	// the Client's callback function when all responses returned
+	client->InvokeUnlogged(replica, request_str,
+		std::bind(&ShardClient::CommitContinuation, this,
+		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
+		// no timeout case; TODO verify 0 is OK
 }
 
 void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_preaccept_callback pcb) {
@@ -183,15 +196,17 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	}
 }
 
-void ShardClient::PreAcceptContinuation() {
+void ShardClient::PreAcceptContinuation(uint64_t reqId, const string &request_str, const string &reply_str) {
 
 }
 
-void ShardClient::AcceptContinuation() {
+void ShardClient::AcceptContinuation(uint64_t reqId, const string &request_str,
+    const string &reply_str) {
 	
 }
 
-void ShardClient::CommitContinuation() {
+void ShardClient::CommitContinuation(uint64_t reqId, const string &request_str,
+    const string &reply_str) {
 	
 }
 }
