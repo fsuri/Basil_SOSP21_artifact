@@ -70,11 +70,11 @@ private:
     void AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_accept_callback acb);
     void CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb);
 
-    void PreAcceptContinuation(uint64_t reqId, const string &request_str,
+    void PreAcceptContinuation(uint64_t txn_id, const string &request_str,
     const string &reply_str);
-    void AcceptContinuation(uint64_t reqId, const string &request_str,
+    void AcceptContinuation(uint64_t txn_id, const string &request_str,
     const string &reply_str);
-    void CommitContinuation(uint64_t reqId, const string &request_str,
+    void CommitContinuation(uint64_t txn_id, const string &request_str,
     const string &reply_str);
 
     int responded;

@@ -32,10 +32,6 @@ ShardClient::~ShardClient() {
     delete client;
 }
 
-/* TODO:
-1. do we need to pass in [this] as well to the ShardClient's callbck
-*/
-
 void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb) {
 	Debug("[shard %i] Sending PREACCEPT [%llu]", shard, client_id);
 
@@ -60,7 +56,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	// store callback with txnid in a map for the preaccept cb
 	// because we can't pass it into a continuation function
 	pair<uint64_t, client_preaccept_callback> callback_entry (txn_id, pcb);
-	pcb_map.insert(callback_entry);
+	this->pcb_map.insert(callback_entry);
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
@@ -94,7 +90,7 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 	// store callback with txnid in a map for the preaccept cb
 	// because we can't pass it into a continuation function
 	pair<uint64_t, client_accept_callback> callback_entry (txn_id, acb);
-	acb_map.insert(callback_entry);
+	this->acb_map.insert(callback_entry);
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
@@ -126,7 +122,7 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 	// store callback with txnid in a map for the preaccept cb
 	// because we can't pass it into a continuation function
 	pair<uint64_t, client_commit_callback> callback_entry (txn_id, ccb);
-	ccb_map.insert(callback_entry);
+	this->ccb_map.insert(callback_entry);
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
@@ -196,17 +192,38 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	}
 }
 
-void ShardClient::PreAcceptContinuation(uint64_t reqId, const string &request_str, const string &reply_str) {
+void ShardClient::PreAcceptContinuation(uint64_t txn_id, const string &request_str, const string &reply_str) {
 
+	janusstore::proto::Reply reply;
+	reply.ParseFromString(reply_str);
+
+	// get the pcb
+  	client_preaccept_callback pcb = this->pcb_map.at(txn_id);
+  	// invoke the shardclient callback
+  	this->PreAcceptCallback(txn_id, reply, pcb);
 }
 
-void ShardClient::AcceptContinuation(uint64_t reqId, const string &request_str,
+void ShardClient::AcceptContinuation(uint64_t txn_id, const string &request_str,
     const string &reply_str) {
-	
+
+	janusstore::proto::Reply reply;
+  	reply.ParseFromString(reply_str);
+
+  	// get the acb
+  	client_accept_callback acb = this->acb_map.at(txn_id);
+  	// invoke the shardclient callback
+  	this->AcceptCallback(txn_id, reply, acb);
 }
 
-void ShardClient::CommitContinuation(uint64_t reqId, const string &request_str,
+void ShardClient::CommitContinuation(uint64_t txn_id, const string &request_str,
     const string &reply_str) {
-	
+
+	janusstore::proto::Reply reply;
+  	reply.ParseFromString(reply_str);
+
+  	// get the ccb
+  	client_commit_callback ccb = this->ccb_map.at(txn_id);
+  	// invoke the shardclient callback
+  	this->CommitCallback(txn_id, reply, ccb);
 }
 }
