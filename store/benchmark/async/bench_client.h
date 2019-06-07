@@ -42,7 +42,7 @@ class BenchmarkClient {
   virtual ~BenchmarkClient();
 
   void Start();
-  void OnReply();
+  void OnReply(bool success);
 
   struct Latency_t latency;
   bool started;

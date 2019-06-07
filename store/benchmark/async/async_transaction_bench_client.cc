@@ -20,6 +20,6 @@ void AsyncTransactionBenchClient::SendNext() {
         std::map<std::string, std::string> readValues){
     delete this->currTxn;
     this->currTxn = nullptr;
-    this->OnReply();
+    this->OnReply(committed);
   });
 }

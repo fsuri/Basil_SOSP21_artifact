@@ -220,6 +220,7 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
     case REPLY_RETRY: {
       ++req->commitTries;
       if (req->commitTries < COMMIT_RETRIES) {
+        statInts["retries"] += 1;
         uint64_t now = timeServer.GetTime();
         if (now > req->maxRepliedTs) {
           req->prepareTimestamp->setTimestamp(now);
@@ -231,6 +232,7 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         // the timeout passed to Client::Commit, or maybe that timeout / COMMIT_RETRIES
         break;
       } 
+      statInts["aborts_max_retries"] += 1;
       // no break here since we should abort after failing COMMIT_RETRIES times
     }
     default: {

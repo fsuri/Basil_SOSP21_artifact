@@ -133,15 +133,17 @@ void BenchmarkClient::CooldownDone() {
   Notice("99th percentile latency is %ld ns (%s)", ns, buf);
 }
 
-void BenchmarkClient::OnReply() {
+void BenchmarkClient::OnReply(bool success) {
   if (cooldownDone) {
     return;
   }
 
   if ((started) && (!done) && (n != 0)) {
     uint64_t ns = Latency_End(&latency);
-    std::cout << GetLastOp() << ',' << ns << std::endl;
-    latencies.push_back(ns);
+    if (success) {
+      std::cout << GetLastOp() << ',' << ns << std::endl;
+      latencies.push_back(ns);
+    }
     if (numRequests == -1) {
       struct timeval currTime;
       gettimeofday(&currTime, NULL);

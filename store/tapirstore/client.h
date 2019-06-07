@@ -132,6 +132,7 @@ class Client : public ::Client {
   
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
+  std::unordered_map<std::string, uint32_t> statInts;
 };
 
 } // namespace tapirstore
