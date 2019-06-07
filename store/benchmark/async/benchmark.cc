@@ -144,6 +144,12 @@ DEFINE_int32(clients_per_warehouse, 1, "number of clients per warehouse"
 		" (for tpcc)");
 DEFINE_int32(remote_item_milli_p, 0, "remote item milli p (for tpcc)");
 
+DEFINE_int32(tpcc_num_warehouses, 1, "number of warehouses (for tpcc)");
+DEFINE_int32(tpcc_w_id, 1, "home warehouse id for this client (for tpcc)");
+DEFINE_int32(tpcc_C_c_id, 1, "C value for NURand() when selecting"
+    " random customer id (for tpcc)");
+
+
 DEFINE_LATENCY(op);
 
 int main(int argc, char **argv) {
@@ -254,7 +260,8 @@ int main(int argc, char **argv) {
       case BENCH_TPCC:
         bench = new tpcc::TPCCClient(*client, transport, FLAGS_num_requests,
             FLAGS_exp_duration, FLAGS_delay, FLAGS_warmup_secs,
-            FLAGS_cooldown_secs, FLAGS_tput_interval);
+            FLAGS_cooldown_secs, FLAGS_tput_interval, FLAGS_tpcc_num_warehouses,
+            FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id);
         break;
       default:
         NOT_REACHABLE();

@@ -222,7 +222,6 @@ int main(int argc, char **argv) {
                 << std::endl;
       return 1;
     }
-    std::cerr << "Loaded 0 key-value pairs.";
     size_t loaded = 0;
     while (!in.eof()) {
       std::string key;
@@ -232,11 +231,9 @@ int main(int argc, char **argv) {
         ReadBytesFromStream(&in, value);
         server->Load(key, value, Timestamp());
       }
-      loaded++;
-      std::cerr << "\rLoaded " << loaded << " key-value pairs.";
+      ++loaded;
     }
-    std::cerr << std::endl;
-    Debug("Loaded all data from file %s.", FLAGS_data_file_path.c_str());
+    Debug("Loaded %d key-value pairs from file %s.", loaded, FLAGS_data_file_path.c_str());
   } else {
     std::ifstream in;
     in.open(FLAGS_keys_path);
