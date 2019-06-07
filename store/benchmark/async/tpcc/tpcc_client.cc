@@ -1,5 +1,9 @@
 #include "store/benchmark/async/tpcc/tpcc_client.h"
 
+#include <random>
+
+#include "store/benchmark/async/tpcc/new_order.h"
+
 namespace tpcc {
 
 TPCCClient::TPCCClient(AsyncClient &client, Transport &transport,
@@ -13,7 +17,8 @@ TPCCClient::~TPCCClient() {
 }
 
 AsyncTransaction* TPCCClient::GetNextTransaction() {
-  return nullptr;
+  lastOp = "new_order";
+  return new NewOrder(1, 0, 1, gen);
 }
 
 std::string TPCCClient::GetLastOp() const {

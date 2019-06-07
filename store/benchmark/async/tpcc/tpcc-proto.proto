@@ -1,0 +1,140 @@
+syntax = "proto2";
+
+package tpcc;
+
+enum Tables {
+  WAREHOUSE = 0;
+  DISTRICT = 1;
+  CUSTOMER = 2;
+  HISTORY = 3;
+  NEW_ORDER = 4;
+  ORDER = 5;
+  ORDER_LINE = 6;
+  ITEM = 7;
+  STOCK = 8;
+}
+
+message WarehouseRow {
+  required uint32 id = 1;
+  required string name = 2;
+  required string street_1 = 3;
+  required string street_2 = 4;
+  required string city = 5;
+  required string state = 6;
+  required string zip = 7;
+  required sint32 tax = 8;
+  required sint32 ytd = 9;
+}
+
+message DistrictRow {
+  required uint32 id = 1;
+  required uint32 w_id = 2;
+  required string name = 3;
+  required string street_1 = 4;
+  required string street_2 = 5;
+  required string city = 6;
+  required string state = 7;
+  required string zip = 8;
+  required sint32 tax = 9;
+  required sint32 ytd = 10;
+  required uint32 next_o_id = 11;
+}
+
+message CustomerRow {
+  required uint32 id = 1;
+  required uint32 d_id = 2;
+  required uint32 w_id = 3;
+  required string first = 4;
+  required string middle = 5;
+  required string last = 6;
+  required string street_1 = 7;
+  required string street_2 = 8;
+  required string city = 9;
+  required string state = 10;
+  required string zip = 11;
+  required string phone = 12;
+  required uint32 since = 13;
+  required string credit = 14;
+  required sint32 credit_lim = 15;
+  required sint32 discount = 16;
+  required sint32 balance = 17;
+  required sint32 ytd_payment = 18;
+  required uint32 payment_cnt = 19;
+  required uint32 delivery_cnt = 20;
+  required string data = 21;
+}
+
+message HistoryRow {
+  required uint32 c_id = 1;
+  required uint32 c_d_id = 2;
+  required uint32 c_w_id = 3;
+  required uint32 d_id = 4;
+  required uint32 w_id = 5;
+  required uint32 date = 6;
+  required sint32 amount = 7;
+  required string data = 8;
+}
+
+message NewOrderRow {
+  required uint32 o_id = 1;
+  required uint32 d_id = 2;
+  required uint32 w_id = 3;
+}
+
+message OrderRow {
+  required uint32 id = 1;
+  required uint32 d_id = 2;
+  required uint32 w_id = 3;
+  required uint32 c_id = 4;
+  required uint32 entry_d = 5;
+  required uint32 carrier_id = 6;
+  required uint32 ol_cnt = 7;
+  required bool all_local = 8;
+}
+
+message OrderLineRow {
+  required uint32 o_id = 1;
+  required uint32 d_id = 2;
+  required uint32 w_id = 3;
+  required uint32 number = 4;
+  required uint32 i_id = 5;
+  required uint32 supply_w_id = 6;
+  required uint32 delivery_d = 7;
+  required uint32 quantity = 8;
+  required sint32 amount = 9;
+  required string dist_info = 10;
+}
+
+message ItemRow {
+  required uint32 id = 1;
+  required uint32 im_id = 2;
+  required string name = 3;
+  required uint32 price = 4;
+  required string data = 5;
+}
+
+message StockRow {
+  required uint32 i_id = 1;
+  required uint32 w_id = 2;
+  required sint32 quantity = 3;
+  required string dist_01 = 4;
+  required string dist_02 = 5;
+  required string dist_03 = 6;
+  required string dist_04 = 7;
+  required string dist_05 = 8;
+  required string dist_06 = 9;
+  required string dist_07 = 10;
+  required string dist_08 = 11;
+  required string dist_09 = 12;
+  required string dist_10 = 13;
+  required uint32 ytd = 14;
+  required uint32 order_cnt = 15;
+  required uint32 remote_cnt = 16;
+  required string data = 17;
+}
+
+message OrderByCustomerRow {
+};
+
+message CustomerByNameRow {
+};

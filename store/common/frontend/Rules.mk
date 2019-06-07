@@ -1,6 +1,6 @@
 d := $(dir $(lastword $(MAKEFILE_LIST)))
 
-SRCS += $(addprefix $(d), bufferclient.cc async_adapter_client.cc)
+SRCS += $(addprefix $(d), bufferclient.cc async_adapter_client.cc transaction_utils.cc)
 
 LIB-store-frontend := $(LIB-store-common) $(o)bufferclient.o \
-		$(o)async_adapter_client.o
+		$(o)async_adapter_client.o $(o)transaction_utils.o

@@ -4,7 +4,7 @@ SRCS += $(addprefix $(d), \
 	lookup3.cc message.cc memory.cc \
 	latency.cc configuration.cc transport.cc \
 	udptransport.cc tcptransport.cc simtransport.cc repltransport.cc \
-	persistent_register.cc)
+	persistent_register.cc io_utils.cc)
 
 PROTOS += $(addprefix $(d), \
           latency-format.proto)
@@ -16,6 +16,8 @@ LIB-message := $(o)message.o $(LIB-hash)
 LIB-hashtable := $(LIB-hash) $(LIB-message)
 
 LIB-memory := $(o)memory.o
+
+LIB-io-utils := $(o)io_utils.o
 
 LIB-latency := $(o)latency.o $(o)latency-format.o $(LIB-message)
 

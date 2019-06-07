@@ -2,237 +2,185 @@
 
 #include <chrono>
 #include <sstream>
+#include <ctime>
 
 #include "store/benchmark/async/tpcc/limits.h"
 #include "store/benchmark/async/tpcc/tables.h"
+#include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
+#include "store/benchmark/async/tpcc/tpcc_utils.h"
 
 namespace tpcc {
-namespace {
 
-using std::string;
-using std::to_string;
-using std::vector;
-
-// Join the string with delimiter
-string Join(const vector<string>& strs) {
-  constexpr char delimiter = '-';
-  string res;
-  for (size_t i = 0; i < strs.size() - 1; ++i) {
-    res += strs[i] + delimiter;
-  }
-  res += strs.back();
-  return res;
-}
-
-// Split the string with delimiter
-vector<string> Split(const string& str) {
-  constexpr char delimiter = '-';
-  vector<string> res;
-  string token;
-  std::istringstream stream(str);
-  while (std::getline(stream, token, delimiter)) {
-    res.push_back(token);
-  }
-  return res;
-}
-
-string TimeStamp() {
-  using namespace std::chrono;
-  milliseconds ms = duration_cast<milliseconds>(
-      system_clock::now().time_since_epoch());
-  return to_string(ms.count());
-}
-
-} /* namespace */
-
-NewOrder::NewOrder()
-    : TPCCTransaction(), generator_(new RealRandomGenerator()) {
-  int w_id = generator_->number(1, limits::Warehouse::MAX_WAREHOUSE_ID);
-  int d_id = generator_->number(1, limits::District::NUM_PER_WAREHOUSE);
-  int c_id = generator_->NURand(1023, 1, limits::Customer::NUM_PER_DISTRICT);
-  int ol_cnt = generator_->number(limits::Order::MIN_OL_CNT,
-                                  limits::Order::MAX_OL_CNT);
-
-  // 1% of transactions roll back
-  bool rollback = generator_->number(1, 100) == 1;
-  bool all_local = true;
-  vector<string> i_ids;
-  vector<string> i_w_ids;
-  vector<string> i_qtys;
-  for (int i = 0; i < ol_cnt; ++i) {
-    int i_id;
-    if (rollback && (i + 1) == ol_cnt) {
-      i_id = limits::Item::NUM_ITEMS + 1;
+NewOrder::NewOrder(uint32_t w_id, uint32_t C, uint32_t num_warehouses, std::mt19937 &gen) : w_id(w_id) {
+  d_id = std::uniform_int_distribution<uint32_t>(1, 10)(gen); 
+  c_id = NURand(static_cast<uint32_t>(1023), static_cast<uint32_t>(1), static_cast<uint32_t>(3000), C, gen);
+  ol_cnt = std::uniform_int_distribution<uint8_t>(5, 15)(gen);
+  rbk = std::uniform_int_distribution<uint8_t>(1, 100)(gen);
+  all_local = true;
+  for (uint8_t i = 0; i < ol_cnt; ++i) {
+    if (rbk == 1 && i == ol_cnt - 1) {
+      o_ol_i_ids.push_back(0);
     } else {
-      i_id = generator_->NURand(8191, 1, limits::Item::NUM_ITEMS);
+      o_ol_i_ids.push_back(NURand(static_cast<uint32_t>(8191), static_cast<uint32_t>(1), static_cast<uint32_t>(100000), C, gen));
     }
-    i_ids.push_back(to_string(i_id));
-
-    // TPC-C suggests generating a number in range (1, 100) and selecting remote on 1
-    // This provides more variation, and lets us tune the fraction of "remote" transactions.
-    int i_w_id;
-    if (generator_->number(1, 1000) <= limits::OrderLine::REMOTE_PROBABILITY_MILLIS) {
-      i_w_id = generator_->numberExcluding(1, limits::Warehouse::MAX_WAREHOUSE_ID, w_id);
+    uint8_t x = std::uniform_int_distribution<uint8_t>(1, 100)(gen);
+    if (x == 1 && num_warehouses > 1) {
+      uint32_t remote_w_id = std::uniform_int_distribution<uint32_t>(1, num_warehouses - 1)(gen);
+      if (remote_w_id == w_id) {
+        remote_w_id = num_warehouses; // simple swap to ensure uniform distribution
+      }
+      o_ol_supply_w_ids.push_back(remote_w_id);
       all_local = false;
     } else {
-      i_w_id = w_id;
+      o_ol_supply_w_ids.push_back(w_id);
     }
-    i_w_ids.push_back(to_string(i_w_id));
-
-    int i_qty = generator_->number(1, limits::OrderLine::MAX_OL_QUANTITY);
-    i_qtys.push_back(to_string(i_qty));
+    o_ol_quantities.push_back(std::uniform_int_distribution<uint8_t>(1, 10)(gen));
   }
-
-  lists_["i_ids"] = i_ids;
-  lists_["i_w_ids"] = i_w_ids;
-  lists_["i_qtys"] = i_qtys;
-  params_["w_id"] = to_string(w_id);
-  params_["d_id"] = to_string(d_id);
-  params_["c_id"] = to_string(c_id);
-  params_["o_entry_d"] = TimeStamp();
-  params_["o_carrier_id"] = "0";
-  params_["ol_cnt"] = to_string(ol_cnt);
-  params_["all_local"] = all_local ? "1" : "0";
-  params_["total"] = "0";
+  o_entry_d = std::time(0);
+  s_row = new StockRow[ol_cnt];
+  i_row = new ItemRow[ol_cnt];
 }
 
 NewOrder::~NewOrder() {
+  delete [] s_row;
+  delete [] i_row;
 }
 
 Operation NewOrder::GetNextOperation(size_t opCount,
-    const std::map<std::string, std::string> &readValues) {
+  std::map<std::string, std::string> readValues) {
   if (opCount == 0) {
-    // Get Warehouse Tax Rate
-    last_query_ = Join({"WAREHOUSE",
-                        params_["w_id"]});  // W_ID
-    return Get(last_query_);
+    return Get(WarehouseRowKey(w_id));
   } else if (opCount == 1) {
-    auto res = Split(readValues.find(last_query_)->second);
-    params_["w_tax"] = res[W_TAX];
-
-    // Get District Tax Rate and Next Order ID
-    last_query_ = Join({"DISTRICT",
-                        params_["w_id"],    // D_W_ID
-                        params_["d_id"]});  // D_ID
-    return Get(last_query_);
+    return Get(DistrictRowKey(w_id, d_id));
   } else if (opCount == 2) {
-    auto res = Split(readValues.find(last_query_)->second);
-    params_["d_tax"] = res[D_TAX];
-    params_["d_next_o_id"] = res[D_NEXT_O_ID];
+    std::string d_key = DistrictRowKey(w_id, d_id);
+    auto d_row_itr = readValues.find(d_key);
+    ASSERT(d_row_itr != readValues.end());
+    ASSERT(d_row.ParseFromString(d_row_itr->second));
 
-    // Increment District Next Order ID
-    res[D_NEXT_O_ID] = to_string(std::stoi(params_["d_next_o_id"]) + 1);
-    return Put(last_query_, Join(res));
+    o_id = d_row.next_o_id();
+    d_row.set_next_o_id(d_row.next_o_id() + 1);
 
+    std::string d_row_out;
+    d_row.SerializeToString(&d_row_out);
+    return Put(d_key, d_row_out);
   } else if (opCount == 3) {
-    // Get Customer Discount
-    last_query_ = Join({"CUSTOMER",
-                        params_["w_id"],    // C_W_ID
-                        params_["d_id"],    // C_D_ID
-                        params_["c_id"]});  // C_ID
-    return Get(last_query_);
+    return Get(CustomerRowKey(w_id, d_id, c_id));
   } else if (opCount == 4) {
-    auto res = Split(readValues.find(last_query_)->second);
-    params_["c_discount"] = res[C_DISCOUNT];
+    NewOrderRow no_row;
+    no_row.set_o_id(o_id);
+    no_row.set_d_id(d_id);
+    no_row.set_w_id(w_id);
 
-    // Create Order
-    params_["order"] = Join({"ORDER",
-                             params_["w_id"],           // O_W_ID
-                             params_["d_id"],           // O_D_ID
-                             params_["d_next_o_id"]});  // O_ID
-    return Put(params_["order"],
-               Join({params_["d_next_o_id"],    // O_ID
-                     params_["d_id"],           // O_D_ID
-                     params_["w_id"],           // O_W_ID
-                     params_["c_id"],           // O_C_ID
-                     params_["o_entry_d"],      // O_ENTRY_D
-                     params_["o_carrier_id"],   // O_CARRIER_ID
-                     params_["ol_cnt"],         // O_OL_CNT
-                     params_["all_local"]}));   // O_ALL_LOCAL
-
+    std::string no_row_out;
+    no_row.SerializeToString(&no_row_out);
+    return Put(NewOrderRowKey(w_id, d_id, o_id), no_row_out);
   } else if (opCount == 5) {
-    // Create New Order
-    params_["new_order"] = Join({"NEW_ORDER",
-                                 params_["w_id"],           // NO_W_ID
-                                 params_["d_id"],           // NO_D_ID
-                                 params_["d_next_o_id"]});  // NO_O_ID
-    return Put(params_["new_order"],
-               Join({params_["d_next_o_id"],  // NO_O_ID
-                     params_["d_id"],         // NO_D_ID
-                     params_["w_id"]}));       // NO_W_ID
-  } else {
-    int ol_cnt = std::stoi(params_["ol_cnt"]);
-    int index = (opCount - 6) / 4;
-    int step = (opCount - 6) % 4;
-    if (step == 0 && index == ol_cnt) {
-      return Commit();
-    } else if (step == 0) {
-      // Get Stock Info
-      last_query_ = Join({"STOCK",
-                          lists_["i_w_ids"][index],   // S_W_ID
-                          lists_["i_ids"][index]});   // S_I_ID
-      return Get(last_query_);
-    } else if (step == 1) {
-      auto res = Split(readValues.find(last_query_)->second);
+    OrderRow o_row;
+    o_row.set_d_id(d_id);
+    o_row.set_w_id(w_id);
+    o_row.set_c_id(c_id);
+    o_row.set_entry_d(o_entry_d);
+    o_row.set_carrier_id(0);
+    o_row.set_ol_cnt(ol_cnt);
+    o_row.set_all_local(all_local);
 
-      // Update Stock
-      int ol_quantity = std::stoi(lists_["i_qtys"][index]);
-      int s_quantity = std::stoi(res[S_QUANTITY]);
-      int s_ytd = std::stoi(res[S_YTD]);
-      int s_order_cnt = std::stoi(res[S_ORDER_CNT]);
-      int s_remote_cnt = std::stoi(res[S_REMOTE_CNT]);
+    std::string o_row_out;
+    o_row.SerializeToString(&o_row_out);
+    return Put(OrderRowKey(w_id, d_id, o_id), o_row_out);
+  } else if (opCount < 6 + 4 * ol_cnt) {
+    int i = (opCount - 6) % 4;
+    size_t ol_number = (opCount - 6) / 4;
+    Debug("OL NUMBER %d %d %d", ol_number, opCount, ol_cnt);
+    ASSERT(o_ol_i_ids.size() > ol_number);
+    ASSERT(o_ol_supply_w_ids.size() > ol_number);
+    ASSERT(o_ol_quantities.size() > ol_number);
+    if (i == 0) {
+      return Get(ItemRowKey(o_ol_i_ids[ol_number]));
+    } else if (i == 1) {
+      std::string i_key = ItemRowKey(o_ol_i_ids[ol_number]);
+      auto i_row_itr = readValues.find(i_key);
+      ASSERT(i_row_itr != readValues.end());
 
-      s_ytd += ol_quantity;
-      if (s_quantity > ol_quantity + 10) {
-        s_quantity = s_quantity - ol_quantity;
+      if(i_row[ol_number].ParseFromString(i_row_itr->second)) {
+        Debug("Getting StockRow %d %d", o_ol_supply_w_ids[ol_number], o_ol_i_ids[ol_number]);
+        return Get(StockRowKey(o_ol_supply_w_ids[ol_number], o_ol_i_ids[ol_number]));
       } else {
-        s_quantity = s_quantity + 91 - ol_quantity;
+        // i_id was invalid and returned empty string
+        return Abort();
       }
-      ++s_order_cnt;
-      if (lists_["i_w_ids"][index] != params_["w_id"]) {
-        ++s_remote_cnt;
+    } else if (i == 2) {
+      std::string s_key = StockRowKey(o_ol_supply_w_ids[ol_number], o_ol_i_ids[ol_number]);
+      auto s_row_itr = readValues.find(s_key);
+      ASSERT(s_row_itr != readValues.end());
+      Debug("Parsing StockRow %d %d", o_ol_supply_w_ids[ol_number], o_ol_i_ids[ol_number]);
+      ASSERT(s_row[ol_number].ParseFromString(s_row_itr->second));
+
+      if (s_row[ol_number].quantity() - o_ol_quantities[ol_number] >= 10) {
+        s_row[ol_number].set_quantity(s_row[ol_number].quantity() - o_ol_quantities[ol_number]);
+      } else {
+        s_row[ol_number].set_quantity(s_row[ol_number].quantity() - o_ol_quantities[ol_number] + 91);
       }
-      params_["s_dist_xx"] = res[S_DIST_01 + std::stoi(params_["d_id"]) - 1];
+      s_row[ol_number].set_ytd(s_row[ol_number].ytd() + o_ol_quantities[ol_number]);
+      s_row[ol_number].set_order_cnt(s_row[ol_number].order_cnt() + 1);
+      if (w_id != o_ol_supply_w_ids[ol_number]) {
+        s_row[ol_number].set_remote_cnt(s_row[ol_number].remote_cnt() + 1);
+      }
 
-      res[S_YTD] = to_string(s_ytd);
-      res[S_QUANTITY] = to_string(s_quantity);
-      res[S_ORDER_CNT] = to_string(s_order_cnt);
-      res[S_REMOTE_CNT] = to_string(s_remote_cnt);
-      return Put(last_query_, Join(res));
-    } else if (step == 2) {
-      // Query Item
-      last_query_ = Join({"ITEM",
-                          lists_["i_ids"][index]});   // I_ID
-      return Get(last_query_);
-    } else if (step == 3) {
-      auto res = Split(readValues.find(last_query_)->second);
+      std::string s_row_out;
+      s_row[ol_number].SerializeToString(&s_row_out);
+      return Put(s_key, s_row_out);
+    } else {
+      OrderLineRow ol_row;
+      ol_row.set_o_id(o_id);
+      ol_row.set_d_id(d_id);
+      ol_row.set_w_id(w_id);
+      ol_row.set_number(ol_number);
+      ol_row.set_i_id(o_ol_i_ids[ol_number]);
+      ol_row.set_supply_w_id(o_ol_supply_w_ids[ol_number]);
+      ol_row.set_delivery_d(0);
+      ol_row.set_quantity(o_ol_quantities[ol_number]);
+      ol_row.set_amount(o_ol_quantities[ol_number] * i_row[ol_number].price());
+      switch (d_id) {
+        case 1:
+          ol_row.set_dist_info(s_row[ol_number].dist_01());
+          break;
+        case 2:
+          ol_row.set_dist_info(s_row[ol_number].dist_02());
+          break;
+        case 3:
+          ol_row.set_dist_info(s_row[ol_number].dist_03());
+          break;
+        case 4:
+          ol_row.set_dist_info(s_row[ol_number].dist_04());
+          break;
+        case 5:
+          ol_row.set_dist_info(s_row[ol_number].dist_05());
+          break;
+        case 6:
+          ol_row.set_dist_info(s_row[ol_number].dist_06());
+          break;
+        case 7:
+          ol_row.set_dist_info(s_row[ol_number].dist_07());
+          break;
+        case 8:
+          ol_row.set_dist_info(s_row[ol_number].dist_08());
+          break;
+        case 9:
+          ol_row.set_dist_info(s_row[ol_number].dist_09());
+          break;
+        case 10:
+          ol_row.set_dist_info(s_row[ol_number].dist_10());
+          break;
+      }
 
-      // Create New Order Line
-      int ol_quantity = std::stoi(lists_["i_qtys"][index]);
-      float i_price = std::stof(res[I_PRICE]);
-      int ol_amount = ol_quantity * i_price;
-      params_["total"] = to_string(std::stoi(params_["total"]) + ol_amount);
-      string ol_number = to_string(index + 1);
-      last_query_ = Join({"ORDER_LINE",
-                          params_["w_id"],          // OL_W_ID
-                          params_["d_id"],          // OL_D_ID
-                          params_["d_next_o_id"],   // OL_O_ID
-                          ol_number});              // OL_NUMBER add a "-"!!!!!
-      return Put(last_query_,Join({params_["d_next_o_id"],     // OL_O_ID
-                  params_["d_id"],            // OL_D_ID
-                  params_["w_id"],            // OL_W_ID
-                  ol_number,                  // OL_NUMBER
-                  lists_["i_id"][index],      // OL_I_ID
-                  lists_["i_w_ids"][index],   // OL_SUPPLY_W_ID
-                  params_["o_entry_d"],       // OL_DELIVERY_D
-                  lists_["i_qtys"][index],    // OL_QUANTITY
-                  to_string(ol_amount),  // OL_AMOUNT
-                  params_["s_dist_xx"]}));    // OL_DIST_INFO
+      std::string ol_row_out;
+      ol_row.SerializeToString(&ol_row_out);
+      return Put(OrderLineRowKey(w_id, d_id, o_id, ol_number), ol_row_out);
     }
+  } else {
+    return Commit();
   }
-
-  // Should Not Come Here
-  return Abort();
 }
 
 }

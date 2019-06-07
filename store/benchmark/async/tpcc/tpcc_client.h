@@ -1,6 +1,8 @@
 #ifndef TPCC_CLIENT_H
 #define TPCC_CLIENT_H
 
+#include <random>
+
 #include "store/benchmark/async/async_transaction_bench_client.h"
 
 namespace tpcc {
@@ -19,6 +21,7 @@ class TPCCClient : public AsyncTransactionBenchClient {
 
  private:
   std::string lastOp;
+  std::mt19937 gen;
 
 };
 

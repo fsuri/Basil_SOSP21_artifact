@@ -30,6 +30,7 @@
  **********************************************************************/
 
 #include "lib/tcptransport.h"
+#include "lib/io_utils.h"
 
 #include "store/common/frontend/client.h"
 #include "store/server.h"
@@ -125,6 +126,7 @@ DEFINE_int32(clock_error, 0, "maximum error for clock");
  */
 DEFINE_string(keys_path, "", "path to file containing keys in the system");
 DEFINE_uint64(num_keys, 0, "number of keys to generate");
+DEFINE_string(data_file_path, "", "path to file containing key-value pairs to be loaded");
 
 int main(int argc, char **argv) {
   gflags::SetUsageMessage(
@@ -171,33 +173,6 @@ int main(int argc, char **argv) {
     }
   }
 
-  // parse keys
-  std::vector<std::string> keys;
-  if (FLAGS_keys_path.empty()) {
-    if (FLAGS_num_keys > 0) {
-      for (size_t i = 0; i < FLAGS_num_keys; ++i) {
-        keys.push_back(std::to_string(i));
-      }
-    } else {
-      std::cerr << "Specified neither keys file nor number of keys."
-                << std::endl;
-      return 1;
-    }
-  } else {
-    std::ifstream in;
-    in.open(FLAGS_keys_path);
-    if (!in) {
-      std::cerr << "Could not read keys from: " << FLAGS_keys_path
-                << std::endl;
-      return 1;
-    }
-    std::string key;
-    while (std::getline(in, key)) {
-      keys.push_back(key);
-    }
-    in.close();
-  }
-
 
   UDPTransport transport(0.0, 0.0, 0);
 
@@ -227,11 +202,56 @@ int main(int argc, char **argv) {
     }
   }
 
-  // load keys
-  for (auto key : keys) {
-    if (Client::key_to_shard(key, FLAGS_num_shards) == FLAGS_shard_idx) {
-      server->Load(key, "null", Timestamp());
+  // parse keys
+  std::vector<std::string> keys;
+  if (FLAGS_data_file_path.empty() && FLAGS_keys_path.empty()) {
+    if (FLAGS_num_keys > 0) {
+      for (size_t i = 0; i < FLAGS_num_keys; ++i) {
+        keys.push_back(std::to_string(i));
+      }
+    } else {
+      std::cerr << "Specified neither keys file nor number of keys."
+                << std::endl;
+      return 1;
     }
+  } else if (FLAGS_data_file_path.length() > 0 && FLAGS_keys_path.empty()) {
+    std::ifstream in;
+    in.open(FLAGS_data_file_path);
+    if (!in) {
+      std::cerr << "Could not read data from: " << FLAGS_data_file_path
+                << std::endl;
+      return 1;
+    }
+    std::cerr << "Loaded 0 key-value pairs.";
+    size_t loaded = 0;
+    while (!in.eof()) {
+      std::string key;
+      std::string value;
+      int i = ReadBytesFromStream(&in, key);
+      if (i == 0) {
+        ReadBytesFromStream(&in, value);
+        server->Load(key, value, Timestamp());
+      }
+      loaded++;
+      std::cerr << "\rLoaded " << loaded << " key-value pairs.";
+    }
+    std::cerr << std::endl;
+    Debug("Loaded all data from file %s.", FLAGS_data_file_path.c_str());
+  } else {
+    std::ifstream in;
+    in.open(FLAGS_keys_path);
+    if (!in) {
+      std::cerr << "Could not read keys from: " << FLAGS_keys_path
+                << std::endl;
+      return 1;
+    }
+    std::string key;
+    while (std::getline(in, key)) {
+      if (Client::key_to_shard(key, FLAGS_num_shards) == FLAGS_shard_idx) {
+        server->Load(key, "null", Timestamp());
+      }
+    }
+    in.close();
   }
 
   transport.Run();

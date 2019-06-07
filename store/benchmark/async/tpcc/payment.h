@@ -1,5 +1,5 @@
-#ifndef NEW_ORDER_H
-#define NEW_ORDER_H
+#ifndef PAYMENT_H
+#define PAYMENT_H
 
 #include <string>
 #include <unordered_map>
@@ -11,10 +11,10 @@
 
 namespace tpcc {
 
-class NewOrder : public TPCCTransaction {
+class Payment : public TPCCTransaction {
  public:
-  NewOrder(uint32_t w_id, uint32_t C, uint32_t num_warehouses, std::mt19937 &gen);
-  virtual ~NewOrder();
+  Payment(uint32_t w_id, uint32_t c_last, uint32_t num_warehouses, std::mt19937 &gen);
+  virtual ~Payment();
 
   Operation GetNextOperation(size_t opCount,
       std::map<std::string, std::string> readValues);
@@ -40,4 +40,4 @@ class NewOrder : public TPCCTransaction {
 
 }
 
-#endif /* NEW_ORDER_H */
+#endif /* PAYMENT_H */
