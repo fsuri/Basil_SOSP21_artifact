@@ -29,6 +29,8 @@
  *
  **********************************************************************/
 
+#include <csignal>
+
 #include "lib/tcptransport.h"
 #include "lib/io_utils.h"
 
@@ -120,6 +122,7 @@ DEFINE_validator(strongmode, &ValidateStrongMode);
  */
 DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
 DEFINE_int32(clock_error, 0, "maximum error for clock");
+DEFINE_string(stats_file, "", "path to file for server stats");
 
 /**
  * Benchmark settings.
@@ -127,6 +130,11 @@ DEFINE_int32(clock_error, 0, "maximum error for clock");
 DEFINE_string(keys_path, "", "path to file containing keys in the system");
 DEFINE_uint64(num_keys, 0, "number of keys to generate");
 DEFINE_string(data_file_path, "", "path to file containing key-value pairs to be loaded");
+
+::Server *server;
+TransportReceiver *replica = nullptr;
+
+void Cleanup(int signal);
 
 int main(int argc, char **argv) {
   gflags::SetUsageMessage(
@@ -176,8 +184,6 @@ int main(int argc, char **argv) {
 
   UDPTransport transport(0.0, 0.0, 0);
 
-  ::Server *server;
-  TransportReceiver *replica = nullptr;
 
   switch (proto) {
     case PROTO_TAPIR: {
@@ -251,10 +257,20 @@ int main(int argc, char **argv) {
     in.close();
   }
 
+  std::signal(SIGKILL, Cleanup);
+  std::signal(SIGTERM, Cleanup);
+  std::signal(SIGINT, Cleanup);
   transport.Run();
+  return 0;
+}
+
+void Cleanup(int signal) {
+  if (FLAGS_stats_file.size() > 0) {
+    server->GetStats().ExportJSON(FLAGS_stats_file);
+  }
   delete server;
   if (replica != nullptr) {
     delete replica;
   }
-  return 0;
+  exit(0);
 }

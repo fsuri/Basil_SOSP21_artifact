@@ -194,6 +194,7 @@ void Client::PrepareCallback(uint64_t reqId, int status, Timestamp ts) {
 void Client::HandleAllPreparesReceived(PendingRequest *req) {
   Debug("All PREPARE's [%lu] received", t_id);
   uint64_t reqId = req->id;
+  int abortResult = -1;
   switch (req->prepareStatus) {
     case REPLY_OK: {
       Debug("COMMIT [%lu]", t_id);
@@ -212,7 +213,7 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
           bclient[p]->Commit(0, ccb, ctcb, 1000); // we don't really care about the timeout here
       }
       if (!req->callbackInvoked) {
-        req->ccb(true);
+        req->ccb(RESULT_COMMITTED);
         req->callbackInvoked = true;
       }
       break;
@@ -233,26 +234,33 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         break;
       } 
       statInts["aborts_max_retries"] += 1;
-      // no break here since we should abort after failing COMMIT_RETRIES times
+      abortResult = RESULT_MAX_RETRIES;
+      break;
+    }
+    case REPLY_FAIL: {
+      abortResult = RESULT_SYSTEM_ABORTED;
+      break;
     }
     default: {
-      // application doesn't need to be notified when abort has been acknowledged,
-      // so we use empty callback functions and directly call the commit callback
-      // function (with commit=false indicating an abort)
-      abort_callback acb = [this, reqId]() {
-        auto itr = this->pendingReqs.find(reqId);
-        if (itr != this->pendingReqs.end()) {
-          this->pendingReqs.erase(itr);
-          delete itr->second;
-        }
-      };
-      abort_timeout_callback atcb = [](int status){};
-      Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
-      if (!req->callbackInvoked) {
-        req->ccb(false);
-        req->callbackInvoked = true;
-      }
       break;
+    }
+  }
+  if (abortResult > 0) {
+    // application doesn't need to be notified when abort has been acknowledged,
+    // so we use empty callback functions and directly call the commit callback
+    // function (with commit=false indicating an abort)
+    abort_callback acb = [this, reqId]() {
+      auto itr = this->pendingReqs.find(reqId);
+      if (itr != this->pendingReqs.end()) {
+        this->pendingReqs.erase(itr);
+        delete itr->second;
+      }
+    };
+    abort_timeout_callback atcb = [](int status){};
+    Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
+    if (!req->callbackInvoked) {
+      req->ccb(abortResult);
+      req->callbackInvoked = true;
     }
   }
 }

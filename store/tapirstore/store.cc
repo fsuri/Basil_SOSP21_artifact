@@ -106,6 +106,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                   pWrites[read.first].upper_bound(timestamp) != pWrites[read.first].begin()) ) {
                 Debug("[%lu] ABSTAIN rw conflict w/ prepared key:%s",
                       id, read.first.c_str());
+                stats.Increment("abstains", 1);
                 return REPLY_ABSTAIN;
             }
 
@@ -122,6 +123,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
           }
           //ASSERT(timestamp > range.first);
           Debug("[%lu] ABORT rw conflict key:%s", id, read.first.c_str());
+          stats.Increment("aborts", 1);
           return REPLY_FAIL;
         } else {
             /* there may be a pending write in the past.  check
@@ -134,6 +136,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                         writeTime < timestamp) {
                         Debug("[%lu] ABSTAIN rw conflict w/ prepared key:%s",
                               id, read.first.c_str());
+                        stats.Increment("abstains", 1);
                         return REPLY_ABSTAIN;
                     }
                 }
@@ -155,6 +158,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                 Debug("[%lu] RETRY ww conflict w/ prepared key:%s", 
                       id, write.first.c_str());
                 proposedTimestamp = val.first;
+                stats.Increment("retries_committed_write", 1);
                 return REPLY_RETRY;	                    
             }
 
@@ -189,6 +193,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                 Debug("[%lu] RETRY ww conflict w/ prepared key:%s",
                       id, write.first.c_str());
                 proposedTimestamp = *it;
+                stats.Increment("retries_prepared_write", 1);
                 return REPLY_RETRY;
             }
         }
@@ -200,6 +205,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
              pReads[write.first].upper_bound(timestamp) != pReads[write.first].end() ) {
             Debug("[%lu] ABSTAIN wr conflict w/ prepared key:%s", 
                   id, write.first.c_str());
+            stats.Increment("abstains", 1);
             return REPLY_ABSTAIN;
         }
     }

@@ -69,6 +69,8 @@ public:
 
     void Load(const string &key, const string &value, const Timestamp timestamp);
 
+    inline Stats &GetStats() { return store->GetStats(); }
+
 private:
     TxnStore *store;
 };

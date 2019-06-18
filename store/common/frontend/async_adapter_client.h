@@ -18,7 +18,7 @@ class AsyncAdapterClient : public AsyncClient {
   void GetTimeout(int status, const std::string &key);
   void PutCallback(int status, const std::string &key, const std::string &val);
   void PutTimeout(int status, const std::string &key, const std::string &val);
-  void CommitCallback(bool committed);
+  void CommitCallback(int result);
   void CommitTimeout(int status);
   void AbortCallback();
   void AbortTimeout(int status);

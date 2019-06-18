@@ -16,10 +16,10 @@ AsyncTransactionBenchClient::~AsyncTransactionBenchClient() {
 
 void AsyncTransactionBenchClient::SendNext() {
   currTxn = GetNextTransaction();
-  client.Execute(currTxn, [this](bool committed,
+  client.Execute(currTxn, [this](int result,
         std::map<std::string, std::string> readValues){
     delete this->currTxn;
     this->currTxn = nullptr;
-    this->OnReply(committed);
+    this->OnReply(result);
   });
 }

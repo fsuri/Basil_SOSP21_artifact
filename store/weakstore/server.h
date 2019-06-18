@@ -69,6 +69,10 @@ public:
 
     void Load(const std::string &key, const std::string &value,
         Timestamp timestamp);
+  inline Stats &GetStats() { return stats; }
+
+ private:
+  Stats stats;
 
 };
 

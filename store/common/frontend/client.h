@@ -26,7 +26,7 @@ typedef std::function<void(int, const std::string &,
 typedef std::function<void(int, const std::string &,
     const std::string &)> put_timeout_callback;
 
-typedef std::function<void(bool)> commit_callback;
+typedef std::function<void(int)> commit_callback;
 typedef std::function<void(int)> commit_timeout_callback;
 
 typedef std::function<void()> abort_callback;

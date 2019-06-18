@@ -47,6 +47,11 @@
 #include <thread>
 #include <set>
 
+#define RESULT_COMMITTED 0
+#define RESULT_USER_ABORTED 1
+#define RESULT_SYSTEM_ABORTED 2
+#define RESULT_MAX_RETRIES 3
+
 namespace tapirstore {
 
 class Client : public ::Client {
