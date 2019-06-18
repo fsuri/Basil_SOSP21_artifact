@@ -12,6 +12,7 @@ enum Tables {
   ORDER_LINE = 6;
   ITEM = 7;
   STOCK = 8;
+  CUSTOMER_BY_NAME = 9;
 }
 
 message WarehouseRow {
@@ -137,4 +138,8 @@ message OrderByCustomerRow {
 };
 
 message CustomerByNameRow {
+  required uint32 w_id = 1;
+  required uint32 d_id = 2;
+  required string last = 3;
+  repeated uint32 ids = 4;
 };

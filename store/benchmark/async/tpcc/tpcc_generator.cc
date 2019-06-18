@@ -196,19 +196,22 @@ void GenerateCustomerTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
   std::mt19937 gen;
   tpcc::CustomerRow c_row;
   std::string c_row_out;
+
+  std::map<std::string, std::set<std::pair<std::string, uint32_t>>> custWithLast;
   for (uint32_t c_id = 1; c_id <= 3000; ++c_id) {
     c_row.set_id(c_id);
     c_row.set_d_id(d_id);
     c_row.set_w_id(w_id);
     int last;
     if (c_id <= 1000) {
-      last = std::uniform_int_distribution<int>(0, 999)(gen);
+      last = c_id - 1;
     } else {
       last = tpcc::NURand(255, 0, 999, static_cast<int>(c_last), gen); 
     }
     c_row.set_last(tpcc::GenerateCustomerLastName(last));
     c_row.set_middle("OE");
     c_row.set_first(RandomAString(8, 16, gen));
+    custWithLast[c_row.last()].insert(std::make_pair(c_row.first(), c_id));
     c_row.set_street_1(RandomAString(10, 20, gen));
     c_row.set_street_2(RandomAString(10, 20, gen));
     c_row.set_city(RandomAString(10, 20, gen));
@@ -232,6 +235,21 @@ void GenerateCustomerTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
     c_row.SerializeToString(&c_row_out);
     std::string c_key = tpcc::CustomerRowKey(w_id, d_id, c_id);
     q.Push(std::make_pair(c_key, c_row_out));    
+  }
+
+  tpcc::CustomerByNameRow cbn_row;
+  std::string cbn_row_out;
+  for (auto cwl : custWithLast) {
+    cbn_row.set_w_id(w_id);
+    cbn_row.set_d_id(d_id);
+    cbn_row.set_last(cwl.first);
+    cbn_row.clear_ids();
+    for (auto id : cwl.second) {
+      cbn_row.add_ids(id.second);
+    }
+    cbn_row.SerializeToString(&cbn_row_out);
+    std::string cbn_key = tpcc::CustomerByNameRowKey(w_id, d_id, cwl.first);
+    q.Push(std::make_pair(cbn_key, cbn_row_out));
   }
 }
 

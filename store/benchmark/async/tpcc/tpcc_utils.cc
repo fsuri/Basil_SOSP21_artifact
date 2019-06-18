@@ -102,4 +102,12 @@ std::string HistoryRowKey(uint32_t w_id, uint32_t d_id, uint32_t c_id) {
   return keyC;
 }
 
+std::string CustomerByNameRowKey(uint32_t w_id, uint32_t d_id, const std::string &c_last) {
+  char keyC[9];
+  keyC[0] = static_cast<char>(Tables::CUSTOMER_BY_NAME);
+  *reinterpret_cast<uint32_t*>(keyC + 1) = w_id; 
+  *reinterpret_cast<uint32_t*>(keyC + 5) = d_id; 
+  return keyC + c_last;
+}
+
 }
