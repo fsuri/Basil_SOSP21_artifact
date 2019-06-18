@@ -143,6 +143,8 @@ void BenchmarkClient::OnReply(bool success) {
     if (success) {
       std::cout << GetLastOp() << ',' << ns << std::endl;
       latencies.push_back(ns);
+    } else {
+      stats.Increment(GetLastOp() + "_aborts", 1);
     }
     if (numRequests == -1) {
       struct timeval currTime;

@@ -10,7 +10,7 @@ LIB-bench-client := $(o)benchmark.o $(o)bench_client.o \
 
 OBJS-all-bench-clients := $(LIB-retwis) $(LIB-tpcc)
 
-$(d)benchmark: $(LIB-key-selector) $(LIB-bench-client) $(LIB-latency) $(LIB-tcptransport) $(LIB-udptransport) $(OBJS-all-store-clients) $(OBJS-all-bench-clients) $(LIB-bench-client)
+$(d)benchmark: $(LIB-key-selector) $(LIB-bench-client) $(LIB-latency) $(LIB-tcptransport) $(LIB-udptransport) $(OBJS-all-store-clients) $(OBJS-all-bench-clients) $(LIB-bench-client) $(LIB-store-common)
 
 # TODO: need to add back other clients (benchClient, terminalClient)
 BINS +=  $(d)benchmark

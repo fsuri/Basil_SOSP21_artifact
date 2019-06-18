@@ -10,6 +10,7 @@
 #include "lib/timeval.h"
 #include "lib/tcptransport.h"
 #include "store/common/truetime.h"
+#include "store/common/stats.h"
 #include "store/common/frontend/async_client.h"
 #include "store/common/frontend/async_adapter_client.h"
 #include "store/strongstore/client.h"
@@ -127,6 +128,7 @@ DEFINE_int32(closest_replica, -1, "index of the replica closest to the client");
 DEFINE_uint64(delay, 0, "simulated communication delay");
 DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
 DEFINE_int32(clock_error, 0, "maximum error for clock");
+DEFINE_string(stats_file, "", "path to output stats file.");
 
 /**
  * Retwis settings.
@@ -285,8 +287,10 @@ int main(int argc, char **argv) {
 
     Latency_t sum;
     _Latency_Init(&sum, "total");
+    Stats total;
     for (unsigned int i = 0; i < benchClients.size(); i++) {
       Latency_Sum(&sum, &benchClients[i]->latency);
+      total.Merge(benchClients[i]->GetStats());
     }
     Latency_Dump(&sum);
     if (latencyFile.size() > 0) {
@@ -302,6 +306,10 @@ int main(int argc, char **argv) {
       if (!rawFile) {
         Warning("Failed to write raw latency output");
       }
+    }
+
+    if (FLAGS_stats_file.size() > 0) {
+      total.ExportJSON(FLAGS_stats_file);
     }
     exit(0);
   });

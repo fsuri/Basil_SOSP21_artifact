@@ -31,6 +31,7 @@
 #define BENCHMARK_CLIENT_H
 
 #include "store/common/frontend/async_client.h"
+#include "store/common/stats.h"
 #include "lib/latency.h"
 #include "lib/transport.h"
 
@@ -50,6 +51,8 @@ class BenchmarkClient {
   bool cooldownDone;
   int tputInterval;
   std::vector<uint64_t> latencies;
+
+  inline const Stats &GetStats() const { return stats; }
  protected:
   virtual void SendNext() = 0;
   virtual std::string GetLastOp() const = 0;
@@ -74,6 +77,7 @@ class BenchmarkClient {
   string latencyFilename;
   int msSinceStart;
   int opLastInterval;
+  Stats stats;
 };
 
 #endif /* BENCHMARK_CLIENT_H */
