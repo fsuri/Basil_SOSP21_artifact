@@ -227,7 +227,7 @@ int main(int argc, char **argv) {
   // parse tpcc settings
 	int total_warehouses = FLAGS_num_shards * FLAGS_warehouse_per_shard;
   
-  UDPTransport transport(0.0, 0.0, 0, false);
+  TCPTransport transport(0.0, 0.0, 0, false);
 
   std::vector<::AsyncClient *> clients;
   std::vector<::BenchmarkClient *> benchClients;

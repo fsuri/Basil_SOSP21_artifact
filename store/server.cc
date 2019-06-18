@@ -182,7 +182,7 @@ int main(int argc, char **argv) {
   }
 
 
-  UDPTransport transport(0.0, 0.0, 0);
+  TCPTransport transport(0.0, 0.0, 0);
 
 
   switch (proto) {
