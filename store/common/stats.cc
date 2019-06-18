@@ -37,6 +37,6 @@ void Stats::ExportJSON(const std::string &file) {
 void Stats::Merge(const Stats &other) {
   std::lock_guard<std::mutex> lock(mtx);
   for (auto s : other.statInts) {
-    statInts[s.first] += statInts[s.first];
+    statInts[s.first] += s.second;
   }
 }
