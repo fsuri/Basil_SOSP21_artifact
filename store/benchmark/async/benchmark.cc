@@ -280,14 +280,7 @@ int main(int argc, char **argv) {
 	std::string latencyFile;
   std::string latencyRawFile;
   std::vector<uint64_t> latencies;
-  Timeout checkTimeout(&transport, 100, [&]() {
-    for (auto x : benchClients) {
-      if (!x->cooldownDone) {
-        return;
-      }
-    }
-    Notice("All clients done.");
-
+  Timeout checkTimeout(&transport, FLAGS_exp_duration * 1000 + 100, [&]() {
     Latency_t sum;
     _Latency_Init(&sum, "total");
     Stats total;
