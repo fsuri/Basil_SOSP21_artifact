@@ -58,7 +58,7 @@ class BenchmarkClient {
   virtual std::string GetLastOp() const = 0;
   
   AsyncClient &client;
-
+  Stats stats;
  private:
   void Finish();
   void WarmupDone();
@@ -77,7 +77,6 @@ class BenchmarkClient {
   string latencyFilename;
   int msSinceStart;
   int opLastInterval;
-  Stats stats;
 };
 
 #endif /* BENCHMARK_CLIENT_H */

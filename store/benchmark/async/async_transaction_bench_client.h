@@ -18,8 +18,12 @@ class AsyncTransactionBenchClient : public BenchmarkClient {
   virtual AsyncTransaction *GetNextTransaction() = 0;
   virtual void SendNext();
 
+  void ExecuteCallback(int result,
+      std::map<std::string, std::string> readValues);
+
  private:
   AsyncTransaction *currTxn;
+  size_t currTxnAttempts;
 
 };
 

@@ -16,10 +16,25 @@ AsyncTransactionBenchClient::~AsyncTransactionBenchClient() {
 
 void AsyncTransactionBenchClient::SendNext() {
   currTxn = GetNextTransaction();
-  client.Execute(currTxn, [this](int result,
-        std::map<std::string, std::string> readValues){
-    delete this->currTxn;
-    this->currTxn = nullptr;
-    this->OnReply(result);
-  });
+  stats.Increment(GetLastOp() + "_attempts", 1);
+  client.Execute(currTxn,
+      std::bind(&AsyncTransactionBenchClient::ExecuteCallback, this,
+        std::placeholders::_1, std::placeholders::_2));
+}
+
+void AsyncTransactionBenchClient::ExecuteCallback(int result,
+    std::map<std::string, std::string> readValues) {
+  if (result == SUCCESS) {
+    stats.Increment(GetLastOp() + "_committed", 1);
+    delete currTxn;
+    currTxn = nullptr;
+    OnReply(result);
+  } else {
+    stats.Increment(GetLastOp() + "_" + std::to_string(result), 1);
+    // do we need exponential backoff?
+    stats.Increment(GetLastOp() + "_attempts", 1);
+    client.Execute(currTxn,
+        std::bind(&AsyncTransactionBenchClient::ExecuteCallback, this,
+          std::placeholders::_1, std::placeholders::_2));
+  }
 }

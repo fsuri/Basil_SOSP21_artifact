@@ -142,7 +142,6 @@ void BenchmarkClient::OnReply(int result) {
     uint64_t ns = Latency_End(&latency);
     std::cout << GetLastOp() << ',' << ns << std::endl;
     latencies.push_back(ns);
-    stats.Increment(GetLastOp() + "_" + std::to_string(result), 1);
     if (numRequests == -1) {
       struct timeval currTime;
       gettimeofday(&currTime, NULL);
