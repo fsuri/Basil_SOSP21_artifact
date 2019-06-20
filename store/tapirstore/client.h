@@ -57,7 +57,7 @@ namespace tapirstore {
 class Client : public ::Client {
  public:
   Client(const std::string configPath, int nShards,
-      int closestReplica, Transport *transport,
+      int closestReplica, Transport *transport, partitioner part,
       TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 
@@ -131,6 +131,8 @@ class Client : public ::Client {
   
   // Buffering client for each shard.
   std::vector<BufferClient *> bclient;
+
+  partitioner part;
 
   // TrueTime server.
   TrueTime timeServer;

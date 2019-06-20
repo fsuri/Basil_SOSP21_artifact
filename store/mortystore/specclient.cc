@@ -41,7 +41,7 @@ void SpecClient::Get(const std::string &key, get_callback cb) {
   Debug("GET [%lu : %s]", t_id, key.c_str());
 
   // Contact the appropriate shard to get the value.
-  int i = Client::key_to_shard(key, nshards);
+  int i = 0;//Client::key_to_shard(key, nshards);
 
   // If needed, add this shard to set of participants and send BEGIN.
   if (participants.find(i) == participants.end()) {

@@ -35,9 +35,8 @@ namespace weakstore {
 using namespace std;
 using namespace proto;
 
-Client::Client(string configPath, int nShards, int closestReplica)
-    : transport(0.0, 0.0, 0)
-{
+Client::Client(string configPath, int nShards, int closestReplica,
+    partitioner part) : transport(0.0, 0.0, 0), part(part) {
     // Initialize all state here;
     client_id = 0;
     while (client_id == 0) {
@@ -86,7 +85,7 @@ void Client::Get(const std::string &key, get_callback gcb,
   Debug("GET Operation [%s]", key.c_str());
 
   // Contact the appropriate shard to get the value.
-  int i = ::Client::key_to_shard(key, nshards);
+  int i = part(key, nshards);
 
   // Send the GET operation to appropriate shard.
   Promise promise;
@@ -100,7 +99,7 @@ void Client::Put(const std::string &key, const std::string &value,
   Debug("PUT Operation [%s]", key.c_str());
 
   // Contact the appropriate shard to set the value.
-  int i = ::Client::key_to_shard(key, nshards);
+  int i = part(key, nshards);
 
      // Send the GET operation to appropriate shard.
   Promise promise;

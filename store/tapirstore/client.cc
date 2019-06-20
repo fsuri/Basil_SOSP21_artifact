@@ -36,8 +36,9 @@ namespace tapirstore {
 using namespace std;
 
 Client::Client(const string configPath, int nShards,
-                int closestReplica, Transport *transport, TrueTime timeServer)
-    : nshards(nShards), transport(transport), timeServer(timeServer),
+                int closestReplica, Transport *transport, partitioner part,
+                TrueTime timeServer)
+    : nshards(nShards), transport(transport), part(part), timeServer(timeServer),
     lastReqId(0UL) {
     // Initialize all state here;
     client_id = 0;
@@ -89,7 +90,7 @@ void Client::Get(const std::string &key, get_callback gcb,
   Debug("GET [%lu : %s]", t_id, key.c_str());
 
   // Contact the appropriate shard to get the value.
-  int i = key_to_shard(key, nshards);
+  int i = part(key, nshards);
 
   // If needed, add this shard to set of participants and send BEGIN.
   if (participants.find(i) == participants.end()) {
@@ -107,7 +108,7 @@ void Client::Put(const std::string &key, const std::string &value,
   Debug("PUT [%lu : %s]", t_id, key.c_str());
 
   // Contact the appropriate shard to set the value.
-  int i = key_to_shard(key, nshards);
+  int i = part(key, nshards);
 
   // If needed, add this shard to set of participants and send BEGIN.
   if (participants.find(i) == participants.end()) {

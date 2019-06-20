@@ -4,6 +4,6 @@ SRCS += $(addprefix $(d), server.cc)
 
 $(d)server: $(LIB-tapir-store) $(LIB-strong-store) $(LIB-weak-store) \
 	$(LIB-udptransport) $(LIB-tcptransport) $(OBJS-tapir-store) $(o)server.o \
-	$(LIB-io-utils)
+	$(LIB-io-utils) $(LIB-store-frontend)
 
 BINS += $(d)server

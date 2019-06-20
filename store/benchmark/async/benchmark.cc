@@ -11,6 +11,7 @@
 #include "lib/tcptransport.h"
 #include "store/common/truetime.h"
 #include "store/common/stats.h"
+#include "store/common/partitioner.h"
 #include "store/common/frontend/async_client.h"
 #include "store/common/frontend/async_adapter_client.h"
 #include "store/strongstore/client.h"
@@ -241,13 +242,24 @@ int main(int argc, char **argv) {
   std::vector<::BenchmarkClient *> benchClients;
   KeySelector *keySelector = new UniformKeySelector(keys);
 
+  partitioner part;
+  switch (benchMode) {
+    case BENCH_TPCC:
+      part = warehouse_partitioner;
+      break;
+    default:
+      part = default_partitioner;
+      break;
+  }
+
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
     AsyncClient *client;
     switch (mode) {
       case PROTO_TAPIR: {
         client = new AsyncAdapterClient(new tapirstore::Client(
               FLAGS_config_prefix, FLAGS_num_shards, FLAGS_closest_replica,
-              &transport, TrueTime(FLAGS_clock_skew, FLAGS_clock_error)));
+              &transport, part,
+              TrueTime(FLAGS_clock_skew, FLAGS_clock_error)));
         break;
       }
       /*case MODE_WEAK: {

@@ -50,7 +50,7 @@ namespace strongstore {
 class Client {
 public:
     Client(Mode mode, string configPath, int nshards,
-            int closestReplica, TrueTime timeServer);
+            int closestReplica, partitioner part, TrueTime timeServer);
     ~Client();
 
     // Overriding functions from ::Client
@@ -100,6 +100,8 @@ private:
 
     // TrueTime server.
     TrueTime timeServer;
+
+    partitioner part;
 
     // Synchronization variables.
     std::condition_variable cv;

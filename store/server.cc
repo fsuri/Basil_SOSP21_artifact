@@ -34,6 +34,7 @@
 #include "lib/tcptransport.h"
 #include "lib/io_utils.h"
 
+#include "store/common/partitioner.h"
 #include "store/common/frontend/client.h"
 #include "store/server.h"
 #include "store/strongstore/server.h"
@@ -81,6 +82,30 @@ static bool ValidateProtocol(const char* flagname,
 DEFINE_string(protocol, protocol_args[0],	"the protocol to use during this"
     " experiment");
 DEFINE_validator(protocol, &ValidateProtocol);
+
+const std::string partitioner_args[] = {
+	"default",
+  "warehouse"
+};
+const Partitioner parts[] {
+  DEFAULT,
+  WAREHOUSE
+};
+static bool ValidatePartitioner(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(partitioner_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == partitioner_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(partitioner, partitioner_args[0],	"the partitioner to use during this"
+    " experiment");
+DEFINE_validator(partitioner, &ValidatePartitioner);
+
 
 /**
  * TAPIR settings.
@@ -208,6 +233,28 @@ int main(int argc, char **argv) {
     }
   }
 
+  // parse protocol and mode
+  Partitioner partType = DEFAULT;
+  int numParts = sizeof(partitioner_args);
+  for (int i = 0; i < numParts; ++i) {
+    if (FLAGS_partitioner == partitioner_args[i]) {
+      partType = parts[i];
+      break;
+    }
+  }
+
+  partitioner part;
+  switch (partType) {
+    case DEFAULT:
+      part = default_partitioner;
+      break;
+    case WAREHOUSE:
+      part = warehouse_partitioner;
+      break;
+    default:
+      NOT_REACHABLE();
+  }
+
   // parse keys
   std::vector<std::string> keys;
   if (FLAGS_data_file_path.empty() && FLAGS_keys_path.empty()) {
@@ -235,7 +282,9 @@ int main(int argc, char **argv) {
       int i = ReadBytesFromStream(&in, key);
       if (i == 0) {
         ReadBytesFromStream(&in, value);
-        server->Load(key, value, Timestamp());
+        if (part(key, FLAGS_num_shards) == FLAGS_shard_idx) {
+          server->Load(key, value, Timestamp());
+        }
       }
       ++loaded;
     }
@@ -250,7 +299,7 @@ int main(int argc, char **argv) {
     }
     std::string key;
     while (std::getline(in, key)) {
-      if (Client::key_to_shard(key, FLAGS_num_shards) == FLAGS_shard_idx) {
+      if (part(key, FLAGS_num_shards) == FLAGS_shard_idx) {
         server->Load(key, "null", Timestamp());
       }
     }
