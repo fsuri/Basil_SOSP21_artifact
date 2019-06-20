@@ -7,6 +7,8 @@
 #include <numeric>
 #include <algorithm>
 
+#include <gflags/gflags.h>
+
 #include "lib/io_utils.h"
 #include "store/benchmark/async/tpcc/tpcc_utils.h"
 #include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
@@ -253,13 +255,13 @@ void GenerateCustomerTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
   }
 }
 
-void GenerateCustomerTable(uint32_t num_warehouses, uint32_t time,
-    Queue<std::pair<std::string, std::string>> &q) {
+void GenerateCustomerTable(uint32_t num_warehouses, uint32_t c_load_c_last,
+    uint32_t time, Queue<std::pair<std::string, std::string>> &q) {
   std::mt19937 gen;
-  uint32_t c_last = std::uniform_int_distribution<uint32_t>(0, 255)(gen);
   for (uint32_t w_id = 1; w_id <= num_warehouses; ++w_id) {
     for (uint32_t d_id = 1; d_id <= 10; ++d_id) {
-      GenerateCustomerTableForWarehouseDistrict(w_id, d_id, time, c_last, q);
+      GenerateCustomerTableForWarehouseDistrict(w_id, d_id, time, c_load_c_last,
+          q);
     }
   }
 }
@@ -287,7 +289,7 @@ void GenerateHistoryTable(uint32_t num_warehouses,
 }
 
 void GenerateOrderTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
-    Queue<std::pair<std::string, std::string>> &q) {
+    uint32_t c_load_ol_i_id, Queue<std::pair<std::string, std::string>> &q) {
   std::mt19937 gen;
   tpcc::OrderRow o_row;
   std::string o_row_out;
@@ -318,7 +320,8 @@ void GenerateOrderTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
       ol_row.set_d_id(d_id);
       ol_row.set_w_id(w_id);
       ol_row.set_number(ol_number);
-      ol_row.set_i_id(std::uniform_int_distribution<uint32_t>(1, 100000)(gen));
+      ol_row.set_i_id(tpcc::NURand(8191, 1, 100000,
+          static_cast<int>(c_load_ol_i_id), gen));
       ol_row.set_supply_w_id(w_id);
       if (o_id < 2101) {
         ol_row.set_delivery_d(o_row.entry_d());
@@ -339,11 +342,11 @@ void GenerateOrderTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
   }
 }
 
-void GenerateOrderTable(uint32_t num_warehouses,
+void GenerateOrderTable(uint32_t num_warehouses, uint32_t c_load_ol_i_id, 
     Queue<std::pair<std::string, std::string>> &q) {
   for (uint32_t w_id = 1; w_id <= num_warehouses; ++w_id) {
     for (uint32_t d_id = 1; d_id <= 10; ++d_id) {
-      GenerateOrderTableForWarehouseDistrict(w_id, d_id, q);
+      GenerateOrderTableForWarehouseDistrict(w_id, d_id, c_load_ol_i_id, q);
     }
   }
 }
@@ -372,23 +375,33 @@ void GenerateNewOrderTable(uint32_t num_warehouses,
   }
 }
 
+DEFINE_int32(c_load_c_last, 0, "Run-time constant C used for generating C_LAST.");
+//DEFINE_int32(c_load_c_id, 0, "Run-time constant C used for generating C_ID.");
+DEFINE_int32(c_load_ol_i_id, 0, "Run-time constant C used for generating OL_I_ID.");
+DEFINE_int32(num_warehouses, 1, "number of warehouses");
 int main(int argc, char *argv[]) {
-  Queue<std::pair<std::string, std::string>> q(1e9);
+  gflags::SetUsageMessage(
+           "generates a file containing key-value pairs of TPC-C table data\n");
+	gflags::ParseCommandLineFlags(&argc, &argv, true);
+
+  Queue<std::pair<std::string, std::string>> q(2e9);
   uint32_t time = std::time(0);
-  uint32_t num_warehouses = 1;
+  std::cerr << "Generating " << FLAGS_num_warehouses << " warehouses." << std::endl;
   GenerateItemTable(q);
-  GenerateWarehouseTable(num_warehouses, q);
-  GenerateStockTable(num_warehouses, q);
-  GenerateDistrictTable(num_warehouses, q);
-  GenerateCustomerTable(num_warehouses, time, q);
-  GenerateHistoryTable(num_warehouses, q);
-  GenerateOrderTable(num_warehouses, q);
-  GenerateNewOrderTable(num_warehouses, q);
+  GenerateWarehouseTable(FLAGS_num_warehouses, q);
+  GenerateStockTable(FLAGS_num_warehouses, q);
+  GenerateDistrictTable(FLAGS_num_warehouses, q);
+  GenerateCustomerTable(FLAGS_num_warehouses, FLAGS_c_load_c_last, time, q);
+  GenerateHistoryTable(FLAGS_num_warehouses, q);
+  GenerateOrderTable(FLAGS_num_warehouses, FLAGS_c_load_ol_i_id, q);
+  GenerateNewOrderTable(FLAGS_num_warehouses, q);
   std::pair<std::string, std::string> out;
+  size_t count = 0;
   while (!q.IsEmpty()) {
     q.Pop(out);
-    WriteBytesToStream(&std::cout, out.first);
-    WriteBytesToStream(&std::cout, out.second);
+    count += WriteBytesToStream(&std::cout, out.first);
+    count += WriteBytesToStream(&std::cout, out.second);
   }
+  std::cerr << "Wrote " << count / 1024 / 1024 << "MB." << std::endl;
   return 0;
 }

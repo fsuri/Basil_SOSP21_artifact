@@ -12,7 +12,9 @@ class TPCCClient : public AsyncTransactionBenchClient {
   TPCCClient(AsyncClient &client, Transport &transport, int numRequests,
       int expDuration, uint64_t delay, int warmupSec, int cooldownSec,
       int tputInterval, uint32_t num_warehouses, uint32_t w_id,
-      uint32_t C_c_id, uint32_t C_c_last,
+      uint32_t C_c_id, uint32_t C_c_last, uint32_t new_order_ratio,
+      uint32_t delivery_ratio, uint32_t payment_ratio, uint32_t order_status_ratio,
+      uint32_t stock_level_ratio,
       const std::string &latencyFilename = "");
 
   virtual ~TPCCClient();
@@ -26,6 +28,11 @@ class TPCCClient : public AsyncTransactionBenchClient {
   uint32_t w_id;
   uint32_t C_c_id;
   uint32_t C_c_last;
+  uint32_t new_order_ratio;
+  uint32_t delivery_ratio;
+  uint32_t payment_ratio;
+  uint32_t order_status_ratio;
+  uint32_t stock_level_ratio;
   std::string lastOp;
   std::mt19937 gen;
 

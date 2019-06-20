@@ -21,6 +21,6 @@ int WriteBytesToStream(std::ostream *os, const std::string &value) {
   uint32_t length = value.length();
   os->write(reinterpret_cast<char*>(&length), sizeof(uint32_t));
   os->write(value.c_str(), value.length());
-  return 0;
+  return sizeof(uint32_t) + value.length();
 }
 

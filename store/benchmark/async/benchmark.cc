@@ -152,8 +152,16 @@ DEFINE_int32(tpcc_C_c_id, 1, "C value for NURand() when selecting"
     " random customer id (for tpcc)");
 DEFINE_int32(tpcc_C_c_last, 1, "C value for NURand() when selecting"
     " random customer last name (for tpcc)");
-
-
+DEFINE_int32(tpcc_new_order_ratio, 45, "ratio of new_order transactions to other"
+    " transaction types (for tpcc)");
+DEFINE_int32(tpcc_delivery_ratio, 4, "ratio of delivery transactions to other"
+    " transaction types (for tpcc)");
+DEFINE_int32(tpcc_stock_level_ratio, 4, "ratio of stock_level transactions to other"
+    " transaction types (for tpcc)");
+DEFINE_int32(tpcc_payment_ratio, 43, "ratio of payment transactions to other"
+    " transaction types (for tpcc)");
+DEFINE_int32(tpcc_order_status_ratio, 4, "ratio of order_status transactions to other"
+    " transaction types (for tpcc)");
 
 DEFINE_LATENCY(op);
 
@@ -266,7 +274,10 @@ int main(int argc, char **argv) {
         bench = new tpcc::TPCCClient(*client, transport, FLAGS_num_requests,
             FLAGS_exp_duration, FLAGS_delay, FLAGS_warmup_secs,
             FLAGS_cooldown_secs, FLAGS_tput_interval, FLAGS_tpcc_num_warehouses,
-            FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id, FLAGS_tpcc_C_c_last);
+            FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id, FLAGS_tpcc_C_c_last,
+            FLAGS_tpcc_new_order_ratio, FLAGS_tpcc_delivery_ratio,
+            FLAGS_tpcc_payment_ratio, FLAGS_tpcc_order_status_ratio,
+            FLAGS_tpcc_stock_level_ratio);
         break;
       default:
         NOT_REACHABLE();
