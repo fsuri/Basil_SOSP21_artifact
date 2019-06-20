@@ -11,7 +11,7 @@ message ReadMessage {
 }
 
 message WriteMessage {
-    required string key = 1;
+    required bytes key = 1;
     required bytes value = 2;
 }
 

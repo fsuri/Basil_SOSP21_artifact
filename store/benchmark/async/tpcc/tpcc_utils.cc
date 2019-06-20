@@ -30,7 +30,7 @@ std::string WarehouseRowKey(uint32_t w_id) {
   char keyC[5];
   keyC[0] = static_cast<char>(Tables::WAREHOUSE);
   *reinterpret_cast<uint32_t*>(keyC + 1) = w_id; 
-  return keyC;
+  return std::string(keyC, sizeof(keyC));
 }
 
 std::string DistrictRowKey(uint32_t w_id, uint32_t d_id) {
@@ -38,7 +38,7 @@ std::string DistrictRowKey(uint32_t w_id, uint32_t d_id) {
   keyC[0] = static_cast<char>(Tables::DISTRICT);
   *reinterpret_cast<uint32_t*>(keyC + 1) = w_id; 
   *reinterpret_cast<uint32_t*>(keyC + 5) = d_id; 
-  return keyC;
+  return std::string(keyC, sizeof(keyC));
 }
 
 std::string CustomerRowKey(uint32_t w_id, uint32_t d_id, uint32_t c_id) {
@@ -47,7 +47,7 @@ std::string CustomerRowKey(uint32_t w_id, uint32_t d_id, uint32_t c_id) {
   *reinterpret_cast<uint32_t*>(keyC + 1) = w_id; 
   *reinterpret_cast<uint32_t*>(keyC + 5) = d_id; 
   *reinterpret_cast<uint32_t*>(keyC + 9) = c_id; 
-  return keyC;
+  return std::string(keyC, sizeof(keyC));
 }
 
 std::string NewOrderRowKey(uint32_t w_id, uint32_t d_id, uint32_t o_id) {
@@ -56,7 +56,7 @@ std::string NewOrderRowKey(uint32_t w_id, uint32_t d_id, uint32_t o_id) {
   *reinterpret_cast<uint32_t*>(keyC + 1) = w_id; 
   *reinterpret_cast<uint32_t*>(keyC + 5) = d_id; 
   *reinterpret_cast<uint32_t*>(keyC + 9) = o_id; 
-  return keyC;
+  return std::string(keyC, sizeof(keyC));
 }
 
 std::string OrderRowKey(uint32_t w_id, uint32_t d_id, uint32_t o_id) {
@@ -65,7 +65,7 @@ std::string OrderRowKey(uint32_t w_id, uint32_t d_id, uint32_t o_id) {
   *reinterpret_cast<uint32_t*>(keyC + 1) = w_id; 
   *reinterpret_cast<uint32_t*>(keyC + 5) = d_id; 
   *reinterpret_cast<uint32_t*>(keyC + 9) = o_id; 
-  return keyC;
+  return std::string(keyC, sizeof(keyC));
 }
 
 std::string OrderLineRowKey(uint32_t w_id, uint32_t d_id, uint32_t o_id, uint32_t ol_number) {
@@ -75,14 +75,14 @@ std::string OrderLineRowKey(uint32_t w_id, uint32_t d_id, uint32_t o_id, uint32_
   *reinterpret_cast<uint32_t*>(keyC + 5) = d_id; 
   *reinterpret_cast<uint32_t*>(keyC + 9) = o_id; 
   *reinterpret_cast<uint32_t*>(keyC + 13) = ol_number; 
-  return keyC;
+  return std::string(keyC, sizeof(keyC));
 }
 
 std::string ItemRowKey(uint32_t i_id) {
   char keyC[5];
   keyC[0] = static_cast<char>(Tables::ITEM);
   *reinterpret_cast<uint32_t*>(keyC + 1) = i_id; 
-  return keyC;
+  return std::string(keyC, sizeof(keyC));
 }
 
 std::string StockRowKey(uint32_t w_id, uint32_t i_id) {
@@ -90,7 +90,7 @@ std::string StockRowKey(uint32_t w_id, uint32_t i_id) {
   keyC[0] = static_cast<char>(Tables::STOCK);
   *reinterpret_cast<uint32_t*>(keyC + 1) = w_id; 
   *reinterpret_cast<uint32_t*>(keyC + 5) = i_id; 
-  return keyC;
+  return std::string(keyC, sizeof(keyC));
 }
 
 std::string HistoryRowKey(uint32_t w_id, uint32_t d_id, uint32_t c_id) {
@@ -99,7 +99,7 @@ std::string HistoryRowKey(uint32_t w_id, uint32_t d_id, uint32_t c_id) {
   *reinterpret_cast<uint32_t*>(keyC + 1) = w_id; 
   *reinterpret_cast<uint32_t*>(keyC + 5) = d_id; 
   *reinterpret_cast<uint32_t*>(keyC + 9) = c_id; 
-  return keyC;
+  return std::string(keyC, sizeof(keyC));
 }
 
 std::string CustomerByNameRowKey(uint32_t w_id, uint32_t d_id, const std::string &c_last) {
@@ -107,7 +107,7 @@ std::string CustomerByNameRowKey(uint32_t w_id, uint32_t d_id, const std::string
   keyC[0] = static_cast<char>(Tables::CUSTOMER_BY_NAME);
   *reinterpret_cast<uint32_t*>(keyC + 1) = w_id; 
   *reinterpret_cast<uint32_t*>(keyC + 5) = d_id; 
-  return keyC + c_last;
+  return std::string(keyC, sizeof(keyC)) + c_last;
 }
 
 }

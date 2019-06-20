@@ -1,5 +1,7 @@
 #include "store/common/partitioner.h"
 
+#include "lib/message.h"
+
 partitioner default_partitioner = [](const std::string &key, uint64_t nshards){
   uint64_t hash = 5381;
   const char* str = key.c_str();
