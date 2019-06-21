@@ -13,6 +13,7 @@ enum Tables {
   ITEM = 7;
   STOCK = 8;
   CUSTOMER_BY_NAME = 9;
+  ORDER_BY_CUSTOMER = 10;
 }
 
 message WarehouseRow {
@@ -135,6 +136,10 @@ message StockRow {
 }
 
 message OrderByCustomerRow {
+  required uint32 w_id = 1;
+  required uint32 d_id = 2;
+  required uint32 c_id = 3;
+  required uint32 o_id = 4;
 };
 
 message CustomerByNameRow {

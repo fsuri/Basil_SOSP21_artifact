@@ -1,0 +1,94 @@
+#include "store/benchmark/async/tpcc/order_status.h"
+
+#include <chrono>
+#include <sstream>
+#include <ctime>
+
+#include "store/benchmark/async/tpcc/limits.h"
+#include "store/benchmark/async/tpcc/tables.h"
+#include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
+#include "store/benchmark/async/tpcc/tpcc_utils.h"
+
+namespace tpcc {
+
+OrderStatus::OrderStatus(uint32_t w_id, uint32_t c_c_last, uint32_t c_c_id, std::mt19937 &gen) : w_id(w_id) {
+  d_id = std::uniform_int_distribution<uint32_t>(1, 10)(gen); 
+  int y = std::uniform_int_distribution<int>(1, 100)(gen);
+  c_w_id = w_id;
+  c_d_id = d_id;
+  if (y <= 60) {
+    int last = NURand(255, 0, 999, static_cast<int>(c_c_last), gen);
+    c_last = GenerateCustomerLastName(last);
+    c_by_last_name = true;
+  } else {
+    c_id = NURand(1023, 1, 3000, static_cast<int>(c_c_id), gen);
+    c_by_last_name = false;
+  }
+}
+
+OrderStatus::~OrderStatus() {
+}
+
+Operation OrderStatus::GetNextOperation(size_t opCount,
+  std::map<std::string, std::string> readValues) {
+  if (opCount == 0) {
+    if (c_by_last_name) { // access customer by last name
+      return Get(CustomerByNameRowKey(c_w_id, c_d_id, c_last));
+    } else {
+      return Get(CustomerRowKey(c_w_id, c_d_id, c_id));
+    }
+  } else {
+    uint32_t count;
+    if (c_by_last_name) {
+      if (opCount == 1) {
+        std::string cbn_key = CustomerByNameRowKey(c_w_id, c_d_id, c_last);
+        auto cbn_row_itr = readValues.find(cbn_key);
+        ASSERT(cbn_row_itr != readValues.end());
+        ASSERT(cbn_row.ParseFromString(cbn_row_itr->second));
+
+        int idx = (cbn_row.ids_size() + 1) / 2;
+        if (idx == cbn_row.ids_size()) {
+          idx = cbn_row.ids_size() - 1;
+        }
+        c_id = cbn_row.ids(idx);
+
+        return Get(CustomerRowKey(c_w_id, c_d_id, c_id));
+      }
+      count = opCount - 1;
+    } else {
+      count = opCount;
+    }
+
+    if (count == 1) {
+      std::string c_key = CustomerRowKey(c_w_id, c_d_id, c_id);
+      auto c_row_itr = readValues.find(c_key);
+      ASSERT(c_row_itr != readValues.end());
+      ASSERT(c_row.ParseFromString(c_row_itr->second));
+
+      return Get(OrderByCustomerRowKey(c_w_id, c_d_id, c_id));
+    } else if (count == 2) {
+      std::string obc_key = OrderByCustomerRowKey(c_w_id, c_d_id, c_id);
+      auto obc_row_itr = readValues.find(obc_key);
+      ASSERT(obc_row_itr != readValues.end());
+      ASSERT(obc_row.ParseFromString(obc_row_itr->second));
+
+      o_id = obc_row.o_id();
+
+      return Get(OrderRowKey(c_w_id, c_d_id, o_id));
+    } else {
+      std::string o_key = OrderRowKey(c_w_id, c_d_id, o_id);
+      auto o_row_itr = readValues.find(o_key);
+      ASSERT(o_row_itr != readValues.end());
+      ASSERT(o_row.ParseFromString(o_row_itr->second));
+
+      if (count < 2 + o_row.ol_cnt()) {
+        uint32_t ol_number = count - 2;
+        return Get(OrderLineRowKey(c_w_id, c_d_id, o_id, ol_number));
+      } else {
+        return Commit();
+      }
+    }
+  }
+}
+
+}

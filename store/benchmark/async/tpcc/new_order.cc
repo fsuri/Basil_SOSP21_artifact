@@ -77,6 +77,7 @@ Operation NewOrder::GetNextOperation(size_t opCount,
     return Put(NewOrderRowKey(w_id, d_id, o_id), no_row_out);
   } else if (opCount == 5) {
     OrderRow o_row;
+    o_row.set_id(o_id);
     o_row.set_d_id(d_id);
     o_row.set_w_id(w_id);
     o_row.set_c_id(c_id);
@@ -88,9 +89,19 @@ Operation NewOrder::GetNextOperation(size_t opCount,
     std::string o_row_out;
     o_row.SerializeToString(&o_row_out);
     return Put(OrderRowKey(w_id, d_id, o_id), o_row_out);
-  } else if (opCount < 6 + 4 * ol_cnt) {
-    int i = (opCount - 6) % 4;
-    size_t ol_number = (opCount - 6) / 4;
+  } else if (opCount == 6) {
+    OrderByCustomerRow obc_row;
+    obc_row.set_w_id(w_id);
+    obc_row.set_d_id(d_id);
+    obc_row.set_c_id(c_id);
+    obc_row.set_o_id(o_id);
+
+    std::string obc_row_out;
+    obc_row.SerializeToString(&obc_row_out);
+    return Put(OrderByCustomerRowKey(w_id, d_id, c_id), obc_row_out);
+  } else if (opCount < 7 + 4 * ol_cnt) {
+    int i = (opCount - 7) % 4;
+    size_t ol_number = (opCount - 7) / 4;
     Debug("OL NUMBER %d %d %d", ol_number, opCount, ol_cnt);
     ASSERT(o_ol_i_ids.size() > ol_number);
     ASSERT(o_ol_supply_w_ids.size() > ol_number);

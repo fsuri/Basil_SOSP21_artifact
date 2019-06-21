@@ -110,4 +110,13 @@ std::string CustomerByNameRowKey(uint32_t w_id, uint32_t d_id, const std::string
   return std::string(keyC, sizeof(keyC)) + c_last;
 }
 
+std::string OrderByCustomerRowKey(uint32_t w_id, uint32_t d_id, uint32_t c_id) {
+  char keyC[13];
+  keyC[0] = static_cast<char>(Tables::ORDER_BY_CUSTOMER);
+  *reinterpret_cast<uint32_t*>(keyC + 1) = w_id; 
+  *reinterpret_cast<uint32_t*>(keyC + 5) = d_id; 
+  *reinterpret_cast<uint32_t*>(keyC + 9) = c_id; 
+  return std::string(keyC, sizeof(keyC));
+}
+
 }

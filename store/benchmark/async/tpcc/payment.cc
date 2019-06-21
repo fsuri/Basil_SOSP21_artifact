@@ -13,6 +13,7 @@ namespace tpcc {
 
 Payment::Payment(uint32_t w_id, uint32_t c_c_last, uint32_t c_c_id, uint32_t num_warehouses, std::mt19937 &gen) : w_id(w_id) {
   d_id = std::uniform_int_distribution<uint32_t>(1, 10)(gen); 
+  d_w_id = w_id;
   int x = std::uniform_int_distribution<int>(1, 100)(gen);
   int y = std::uniform_int_distribution<int>(1, 100)(gen);
   if (x <= 85) {
@@ -56,9 +57,9 @@ Operation Payment::GetNextOperation(size_t opCount,
     w_row.SerializeToString(&w_row_out);
     return Put(w_key, w_row_out);
   } else if (opCount == 2) {
-    return Get(DistrictRowKey(w_id, d_id));
+    return Get(DistrictRowKey(d_w_id, d_id));
   } else if (opCount == 3) {
-    std::string d_key = DistrictRowKey(w_id, d_id);
+    std::string d_key = DistrictRowKey(d_w_id, d_id);
     auto d_row_itr = readValues.find(d_key);
     ASSERT(d_row_itr != readValues.end());
     ASSERT(d_row.ParseFromString(d_row_itr->second));
@@ -70,15 +71,15 @@ Operation Payment::GetNextOperation(size_t opCount,
     return Put(d_key, d_row_out);
   } else if (opCount == 4) {
     if (c_by_last_name) { // access customer by last name
-      return Get(CustomerByNameRowKey(w_id, d_id, c_last));
+      return Get(CustomerByNameRowKey(c_w_id, c_d_id, c_last));
     } else {
-      return Get(CustomerRowKey(w_id, d_id, c_id));
+      return Get(CustomerRowKey(c_w_id, c_d_id, c_id));
     }
   } else {
     uint32_t count;
     if (c_by_last_name) {
       if (opCount == 5) {
-        std::string cbn_key = CustomerByNameRowKey(w_id, d_id, c_last);
+        std::string cbn_key = CustomerByNameRowKey(c_w_id, c_d_id, c_last);
         auto cbn_row_itr = readValues.find(cbn_key);
         ASSERT(cbn_row_itr != readValues.end());
         ASSERT(cbn_row.ParseFromString(cbn_row_itr->second));
@@ -89,7 +90,7 @@ Operation Payment::GetNextOperation(size_t opCount,
         }
         c_id = cbn_row.ids(idx);
 
-        return Get(CustomerRowKey(w_id, d_id, c_id));
+        return Get(CustomerRowKey(c_w_id, c_d_id, c_id));
       }
       count = opCount - 1;
     } else {
@@ -97,7 +98,7 @@ Operation Payment::GetNextOperation(size_t opCount,
     }
 
     if (count == 5) {
-      std::string c_key = CustomerRowKey(w_id, d_id, c_id);
+      std::string c_key = CustomerRowKey(c_w_id, c_d_id, c_id);
       auto c_row_itr = readValues.find(c_key);
       ASSERT(c_row_itr != readValues.end());
       ASSERT(c_row.ParseFromString(c_row_itr->second));
