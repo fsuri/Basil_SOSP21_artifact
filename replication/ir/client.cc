@@ -80,7 +80,7 @@ IRClient::InvokeInconsistent(const string &request,
     uint64_t reqId = ++lastReqId;
     // Create new timer
     auto timer = std::unique_ptr<Timeout>(new Timeout(
-        transport, 500, [this, reqId]() { ResendInconsistent(reqId); }));
+        transport, 1000, [this, reqId]() { ResendInconsistent(reqId); }));
     PendingInconsistentRequest *req =
 	new PendingInconsistentRequest(request,
                                    reqId,
@@ -117,9 +117,9 @@ IRClient::InvokeConsensus(const string &request,
 {
     uint64_t reqId = ++lastReqId;
     auto timer = std::unique_ptr<Timeout>(new Timeout(
-        transport, 500, [this, reqId]() { ResendConsensus(reqId); }));
+        transport, 1000, [this, reqId]() { ResendConsensus(reqId); }));
     auto transition_to_slow_path_timer =
-        std::unique_ptr<Timeout>(new Timeout(transport, 500, [this, reqId]() {
+        std::unique_ptr<Timeout>(new Timeout(transport, 1000, [this, reqId]() {
             TransitionToConsensusSlowPath(reqId);
         }));
 
