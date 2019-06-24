@@ -24,6 +24,7 @@ class AsyncTransactionBenchClient : public BenchmarkClient {
  private:
   AsyncTransaction *currTxn;
   size_t currTxnAttempts;
+  std::mt19937 gen;
 
 };
 

@@ -8,7 +8,7 @@ AsyncTransactionBenchClient::AsyncTransactionBenchClient(AsyncClient &client,
     const std::string &latencyFilename)
     : BenchmarkClient(client, transport, numRequests, expDuration, delay,
         warmupSec, cooldownSec, tputInterval, latencyFilename),
-    currTxn(nullptr) {
+    currTxn(nullptr), currTxnAttempts(0UL) {
 }
 
 AsyncTransactionBenchClient::~AsyncTransactionBenchClient() {
@@ -16,6 +16,7 @@ AsyncTransactionBenchClient::~AsyncTransactionBenchClient() {
 
 void AsyncTransactionBenchClient::SendNext() {
   currTxn = GetNextTransaction();
+  currTxnAttempts = 0;
   stats.Increment(GetLastOp() + "_attempts", 1);
   client.Execute(currTxn,
       std::bind(&AsyncTransactionBenchClient::ExecuteCallback, this,
@@ -31,10 +32,14 @@ void AsyncTransactionBenchClient::ExecuteCallback(int result,
     OnReply(result);
   } else {
     stats.Increment(GetLastOp() + "_" + std::to_string(result), 1);
-    // do we need exponential backoff?
     stats.Increment(GetLastOp() + "_attempts", 1);
-    client.Execute(currTxn,
-        std::bind(&AsyncTransactionBenchClient::ExecuteCallback, this,
-          std::placeholders::_1, std::placeholders::_2));
+    int backoff = std::uniform_int_distribution<int>(0,
+        (1 << currTxnAttempts) * 1000)(gen);
+    ++currTxnAttempts;
+    transport.Timer(backoff, [this]() {
+      client.Execute(currTxn,
+          std::bind(&AsyncTransactionBenchClient::ExecuteCallback, this,
+            std::placeholders::_1, std::placeholders::_2));
+    });
   }
 }

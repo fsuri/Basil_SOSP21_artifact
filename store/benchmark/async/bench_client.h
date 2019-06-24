@@ -59,13 +59,13 @@ class BenchmarkClient {
   
   AsyncClient &client;
   Stats stats;
+  Transport &transport;
  private:
   void Finish();
   void WarmupDone();
   void CooldownDone();
   void TimeInterval();
 
-  Transport &transport;
   int numRequests;
   int expDuration;
   uint64_t delay;
