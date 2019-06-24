@@ -55,7 +55,8 @@ enum protocol_t {
  */
 DEFINE_string(config_path, "", "path to shard configuration file");
 DEFINE_uint64(replica_idx, 0, "index of replica in shard configuration file");
-DEFINE_uint64(shard_idx, 0, "index of shard to which this replica belongs");
+DEFINE_uint64(group_idx, 0, "index of the group to which this replica belongs");
+DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
 
 const std::string protocol_args[] = {
@@ -175,7 +176,7 @@ int main(int argc, char **argv) {
   }
   transport::Configuration config(configStream);
 
-  if (FLAGS_replica_idx >= config.n) {
+  if (FLAGS_replica_idx >= static_cast<uint64_t>(config.n)) {
     std::cerr << "Replica index " << FLAGS_replica_idx << " is out of bounds"
                  "; only " << config.n << " replicas defined" << std::endl;
   }
@@ -282,13 +283,14 @@ int main(int argc, char **argv) {
       int i = ReadBytesFromStream(&in, key);
       if (i == 0) {
         ReadBytesFromStream(&in, value);
-        if (part(key, FLAGS_num_shards) == FLAGS_shard_idx) {
+        if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
           server->Load(key, value, Timestamp());
         }
       }
       ++loaded;
     }
-    Debug("Loaded %d key-value pairs from file %s.", loaded, FLAGS_data_file_path.c_str());
+    Debug("Loaded %lu key-value pairs from file %s.", loaded,
+        FLAGS_data_file_path.c_str());
   } else {
     std::ifstream in;
     in.open(FLAGS_keys_path);
@@ -299,7 +301,7 @@ int main(int argc, char **argv) {
     }
     std::string key;
     while (std::getline(in, key)) {
-      if (part(key, FLAGS_num_shards) == FLAGS_shard_idx) {
+      if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
         server->Load(key, "null", Timestamp());
       }
     }
