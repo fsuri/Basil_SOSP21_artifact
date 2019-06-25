@@ -47,6 +47,7 @@ enum benchmode_t {
 DEFINE_uint64(client_id, 0, "unique identifier for client");
 DEFINE_string(config_prefix, "", "prefix of path to shard configuration file");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
+DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
 
 const std::string protocol_args[] = {
 	"txn-l",
@@ -257,8 +258,8 @@ int main(int argc, char **argv) {
     switch (mode) {
       case PROTO_TAPIR: {
         client = new AsyncAdapterClient(new tapirstore::Client(
-              FLAGS_config_prefix, FLAGS_num_shards, FLAGS_closest_replica,
-              &transport, part,
+              FLAGS_config_prefix, FLAGS_num_shards, FLAGS_num_groups,
+              FLAGS_closest_replica, &transport, part,
               TrueTime(FLAGS_clock_skew, FLAGS_clock_error)));
         break;
       }

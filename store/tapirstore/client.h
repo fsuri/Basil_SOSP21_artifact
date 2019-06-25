@@ -56,7 +56,7 @@ namespace tapirstore {
 
 class Client : public ::Client {
  public:
-  Client(const std::string configPath, int nShards,
+  Client(const std::string configPath, int nShards, int nGroups,
       int closestReplica, Transport *transport, partitioner part,
       TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
@@ -119,6 +119,7 @@ class Client : public ::Client {
 
   // Number of shards.
   uint64_t nshards;
+  uint64_t ngroups;
 
   // Number of retries for current transaction.
   long retries;

@@ -4,8 +4,6 @@
 #include <sstream>
 #include <ctime>
 
-#include "store/benchmark/async/tpcc/limits.h"
-#include "store/benchmark/async/tpcc/tables.h"
 #include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
 #include "store/benchmark/async/tpcc/tpcc_utils.h"
 
@@ -49,8 +47,10 @@ NewOrder::~NewOrder() {
 Operation NewOrder::GetNextOperation(size_t opCount,
   std::map<std::string, std::string> readValues) {
   if (opCount == 0) {
+    Debug("Warehouse: %u", w_id);
     return Get(WarehouseRowKey(w_id));
   } else if (opCount == 1) {
+    Debug("District: %u", d_id);
     return Get(DistrictRowKey(w_id, d_id));
   } else if (opCount == 2) {
     std::string d_key = DistrictRowKey(w_id, d_id);
@@ -59,12 +59,14 @@ Operation NewOrder::GetNextOperation(size_t opCount,
     ASSERT(d_row.ParseFromString(d_row_itr->second));
 
     o_id = d_row.next_o_id();
+    Debug("Order Number: %u", o_id);
     d_row.set_next_o_id(d_row.next_o_id() + 1);
 
     std::string d_row_out;
     d_row.SerializeToString(&d_row_out);
     return Put(d_key, d_row_out);
   } else if (opCount == 3) {
+    Debug("Customer: %u", c_id);
     return Get(CustomerRowKey(w_id, d_id, c_id));
   } else if (opCount == 4) {
     NewOrderRow no_row;
@@ -99,32 +101,36 @@ Operation NewOrder::GetNextOperation(size_t opCount,
     std::string obc_row_out;
     obc_row.SerializeToString(&obc_row_out);
     return Put(OrderByCustomerRowKey(w_id, d_id, c_id), obc_row_out);
-  } else if (opCount < 7 + 4 * ol_cnt) {
+  } else if (static_cast<int32_t>(opCount) < 7 + 4 * ol_cnt) {
     int i = (opCount - 7) % 4;
     size_t ol_number = (opCount - 7) / 4;
-    Debug("OL NUMBER %d %d %d", ol_number, opCount, ol_cnt);
     ASSERT(o_ol_i_ids.size() > ol_number);
     ASSERT(o_ol_supply_w_ids.size() > ol_number);
     ASSERT(o_ol_quantities.size() > ol_number);
     if (i == 0) {
+      Debug("  Order Line %lu", ol_number);
+      Debug("    Item: %u", o_ol_i_ids[ol_number]);
       return Get(ItemRowKey(o_ol_i_ids[ol_number]));
     } else if (i == 1) {
       std::string i_key = ItemRowKey(o_ol_i_ids[ol_number]);
       auto i_row_itr = readValues.find(i_key);
       ASSERT(i_row_itr != readValues.end());
 
-      if(i_row[ol_number].ParseFromString(i_row_itr->second)) {
-        Debug("Getting StockRow %d %d", o_ol_supply_w_ids[ol_number], o_ol_i_ids[ol_number]);
-        return Get(StockRowKey(o_ol_supply_w_ids[ol_number], o_ol_i_ids[ol_number]));
-      } else {
+      if(i_row_itr->second.empty()) {
         // i_id was invalid and returned empty string
+        Debug("ABORT");
         return Abort();
+      } else {
+        Debug("    Item Name: %s", i_row[ol_number].name().c_str());
+        Debug("    Supply Warehouse: %u", o_ol_supply_w_ids[ol_number]);
+        return Get(StockRowKey(o_ol_supply_w_ids[ol_number],
+            o_ol_i_ids[ol_number]));
       }
     } else if (i == 2) {
-      std::string s_key = StockRowKey(o_ol_supply_w_ids[ol_number], o_ol_i_ids[ol_number]);
+      std::string s_key = StockRowKey(o_ol_supply_w_ids[ol_number],
+          o_ol_i_ids[ol_number]);
       auto s_row_itr = readValues.find(s_key);
       ASSERT(s_row_itr != readValues.end());
-      Debug("Parsing StockRow %d %d", o_ol_supply_w_ids[ol_number], o_ol_i_ids[ol_number]);
       ASSERT(s_row[ol_number].ParseFromString(s_row_itr->second));
 
       if (s_row[ol_number].quantity() - o_ol_quantities[ol_number] >= 10) {
@@ -132,8 +138,12 @@ Operation NewOrder::GetNextOperation(size_t opCount,
       } else {
         s_row[ol_number].set_quantity(s_row[ol_number].quantity() - o_ol_quantities[ol_number] + 91);
       }
+      Debug("    Quantity: %u", o_ol_quantities[ol_number]);
       s_row[ol_number].set_ytd(s_row[ol_number].ytd() + o_ol_quantities[ol_number]);
       s_row[ol_number].set_order_cnt(s_row[ol_number].order_cnt() + 1);
+      Debug("    Remaining Quantity: %u", s_row[ol_number].quantity());
+      Debug("    YTD: %u", s_row[ol_number].ytd());
+      Debug("    Order Count: %u", s_row[ol_number].order_cnt());
       if (w_id != o_ol_supply_w_ids[ol_number]) {
         s_row[ol_number].set_remote_cnt(s_row[ol_number].remote_cnt() + 1);
       }
@@ -190,6 +200,7 @@ Operation NewOrder::GetNextOperation(size_t opCount,
       return Put(OrderLineRowKey(w_id, d_id, o_id, ol_number), ol_row_out);
     }
   } else {
+    Debug("COMMIT");
     return Commit();
   }
 }

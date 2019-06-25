@@ -221,7 +221,7 @@ void
 Store::Commit(uint64_t id, uint64_t timestamp)
 {
 
-    Debug("[%lu] COMMIT", id);
+    Debug("[%lu, %lu] COMMIT", id, timestamp);
     
     // Nope. might not find it
     //ASSERT(prepared.find(id) != prepared.end());

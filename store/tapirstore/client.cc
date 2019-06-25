@@ -35,10 +35,11 @@ namespace tapirstore {
 
 using namespace std;
 
-Client::Client(const string configPath, int nShards,
+Client::Client(const string configPath, int nShards, int nGroups,
                 int closestReplica, Transport *transport, partitioner part,
                 TrueTime timeServer)
-    : nshards(nShards), transport(transport), part(part), timeServer(timeServer),
+    : nshards(nShards), ngroups(nGroups), transport(transport), part(part),
+    timeServer(timeServer),
     lastReqId(0UL) {
     // Initialize all state here;
     client_id = 0;
@@ -55,7 +56,7 @@ Client::Client(const string configPath, int nShards,
     Debug("Initializing Tapir client with id [%lu] %lu", client_id, nshards);
 
     /* Start a client for each shard. */
-    for (uint64_t i = 0; i < nshards; i++) {
+    for (uint64_t i = 0; i < ngroups; i++) {
         string shardConfigPath = configPath + to_string(i) + ".config";
         ShardClient *shardclient = new ShardClient(shardConfigPath,
                 transport, client_id, i, closestReplica);
@@ -90,7 +91,7 @@ void Client::Get(const std::string &key, get_callback gcb,
   Debug("GET [%lu : %s]", t_id, key.c_str());
 
   // Contact the appropriate shard to get the value.
-  int i = part(key, nshards);
+  int i = part(key, nshards) % ngroups;
 
   // If needed, add this shard to set of participants and send BEGIN.
   if (participants.find(i) == participants.end()) {
@@ -108,7 +109,7 @@ void Client::Put(const std::string &key, const std::string &value,
   Debug("PUT [%lu : %s]", t_id, key.c_str());
 
   // Contact the appropriate shard to set the value.
-  int i = part(key, nshards);
+  int i = part(key, nshards) % ngroups;
 
   // If needed, add this shard to set of participants and send BEGIN.
   if (participants.find(i) == participants.end()) {
@@ -211,7 +212,8 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
       };
       commit_timeout_callback ctcb = [](int status){};
       for (auto p : participants) {
-          bclient[p]->Commit(0, ccb, ctcb, 1000); // we don't really care about the timeout here
+          bclient[p]->Commit(req->prepareTimestamp->getTimestamp(), ccb, ctcb,
+              1000); // we don't really care about the timeout here
       }
       if (!req->callbackInvoked) {
         req->ccb(RESULT_COMMITTED);

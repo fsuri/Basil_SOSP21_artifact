@@ -12,6 +12,7 @@ void AsyncAdapterClient::Execute(AsyncTransaction *txn,
   currEcb = ecb;
   currTxn = txn;
   opCount = 0UL;
+  readValues.clear();
   client->Begin();
   ExecuteNextOperation();
 }

@@ -4,8 +4,6 @@
 #include <sstream>
 #include <ctime>
 
-#include "store/benchmark/async/tpcc/limits.h"
-#include "store/benchmark/async/tpcc/tables.h"
 #include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
 #include "store/benchmark/async/tpcc/tpcc_utils.h"
 

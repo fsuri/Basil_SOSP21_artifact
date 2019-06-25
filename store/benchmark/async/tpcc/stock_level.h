@@ -13,7 +13,7 @@ namespace tpcc {
 
 class StockLevel : public TPCCTransaction {
  public:
-  StockLevel(uint32_t w_id, uint32_t c_c_last, uint32_t c_c_id, std::mt19937 &gen);
+  StockLevel(uint32_t w_id, uint32_t d_id, std::mt19937 &gen);
   virtual ~StockLevel();
 
   Operation GetNextOperation(size_t opCount,
@@ -24,12 +24,12 @@ class StockLevel : public TPCCTransaction {
   uint32_t d_id;
   uint8_t min_quantity;
   uint32_t next_o_id;
+  uint32_t currOrderIdx;
+  uint32_t currOrderLineIdx;
+  uint32_t readAllOrderLines;
 
   DistrictRow d_row;
-  CustomerRow c_row;
-  CustomerByNameRow cbn_row;
-  OrderByCustomerRow obc_row;
-  OrderRow o_row;
+  std::vector<OrderLineRow> orderLines;
 };
 
 } // namespace tpcc
