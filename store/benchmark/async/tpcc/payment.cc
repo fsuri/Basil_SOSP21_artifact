@@ -3,6 +3,7 @@
 #include <chrono>
 #include <sstream>
 #include <ctime>
+#include <algorithm>
 
 #include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
 #include "store/benchmark/async/tpcc/tpcc_utils.h"
@@ -42,19 +43,23 @@ Payment::~Payment() {
 Operation Payment::GetNextOperation(size_t opCount,
   std::map<std::string, std::string> readValues) {
   if (opCount == 0) {
-    return Get(WarehouseRowKey(w_id));
+    Debug("Amount: %u", h_amount);
+    Debug("Warehouse: %u", d_w_id);
+    return Get(WarehouseRowKey(d_w_id));
   } else if (opCount == 1) {
-    std::string w_key = WarehouseRowKey(w_id);
+    std::string w_key = WarehouseRowKey(d_w_id);
     auto w_row_itr = readValues.find(w_key);
     ASSERT(w_row_itr != readValues.end());
     ASSERT(w_row.ParseFromString(w_row_itr->second));
 
     w_row.set_ytd(w_row.ytd() + h_amount);
+    Debug("  YTD: %u", w_row.ytd());
 
     std::string w_row_out;
     w_row.SerializeToString(&w_row_out);
     return Put(w_key, w_row_out);
   } else if (opCount == 2) {
+    Debug("District: %u", d_id);
     return Get(DistrictRowKey(d_w_id, d_id));
   } else if (opCount == 3) {
     std::string d_key = DistrictRowKey(d_w_id, d_id);
@@ -63,14 +68,17 @@ Operation Payment::GetNextOperation(size_t opCount,
     ASSERT(d_row.ParseFromString(d_row_itr->second));
 
     d_row.set_ytd(d_row.ytd() + h_amount);
+    Debug("  YTD: %u", d_row.ytd());
 
     std::string d_row_out;
     d_row.SerializeToString(&d_row_out);
     return Put(d_key, d_row_out);
   } else if (opCount == 4) {
     if (c_by_last_name) { // access customer by last name
+      Debug("Customer: %s", c_last.c_str());
       return Get(CustomerByNameRowKey(c_w_id, c_d_id, c_last));
     } else {
+      Debug("Customer: %u", c_id);
       return Get(CustomerRowKey(c_w_id, c_d_id, c_id));
     }
   } else {
@@ -87,6 +95,7 @@ Operation Payment::GetNextOperation(size_t opCount,
           idx = cbn_row.ids_size() - 1;
         }
         c_id = cbn_row.ids(idx);
+        Debug("  ID: %u", c_id);
 
         return Get(CustomerRowKey(c_w_id, c_d_id, c_id));
       }
@@ -104,13 +113,16 @@ Operation Payment::GetNextOperation(size_t opCount,
       c_row.set_balance(c_row.balance() - h_amount);
       c_row.set_ytd_payment(c_row.ytd_payment() + h_amount);
       c_row.set_payment_cnt(c_row.payment_cnt() + 1);
+      Debug("  Balance: %u", c_row.balance());
+      Debug("  YTD: %u", c_row.ytd_payment());
+      Debug("  Payment Count: %u", c_row.payment_cnt());
 
       if (c_row.credit() == "BC") {
         std::stringstream ss;
         ss << c_id << "," << c_d_id << "," << c_w_id << "," << d_id << ","
                  << w_id << "," << h_amount; 
         std::string new_data = ss.str() +  c_row.data();
-        new_data = new_data.substr(500);
+        new_data = new_data.substr(std::min(new_data.size(), 500UL));
         c_row.set_data(new_data);
       }
 
@@ -130,6 +142,7 @@ Operation Payment::GetNextOperation(size_t opCount,
       h_row.SerializeToString(&h_row_out);
       return Put(HistoryRowKey(w_id, d_id, c_id), h_row_out);
     } else {
+      Debug("COMMIT");
       return Commit();
     }
   }

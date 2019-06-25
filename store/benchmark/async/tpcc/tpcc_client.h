@@ -33,6 +33,7 @@ class TPCCClient : public AsyncTransactionBenchClient {
   uint32_t payment_ratio;
   uint32_t order_status_ratio;
   uint32_t stock_level_ratio;
+  uint32_t stockLevelDId;
   std::string lastOp;
   std::mt19937 gen;
 

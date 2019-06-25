@@ -30,9 +30,14 @@ OrderStatus::~OrderStatus() {
 Operation OrderStatus::GetNextOperation(size_t opCount,
   std::map<std::string, std::string> readValues) {
   if (opCount == 0) {
+    Debug("ORDER_STATUS");
+    Debug("Warehouse: %u", c_w_id);
+    Debug("District: %u", c_d_id);
     if (c_by_last_name) { // access customer by last name
+      Debug("Customer: %s", c_last.c_str());
       return Get(CustomerByNameRowKey(c_w_id, c_d_id, c_last));
     } else {
+      Debug("Customer: %u", c_id);
       return Get(CustomerRowKey(c_w_id, c_d_id, c_id));
     }
   } else {
@@ -49,6 +54,7 @@ Operation OrderStatus::GetNextOperation(size_t opCount,
           idx = cbn_row.ids_size() - 1;
         }
         c_id = cbn_row.ids(idx);
+        Debug("  ID: %u", c_id);
 
         return Get(CustomerRowKey(c_w_id, c_d_id, c_id));
       }
@@ -63,6 +69,9 @@ Operation OrderStatus::GetNextOperation(size_t opCount,
       ASSERT(c_row_itr != readValues.end());
       ASSERT(c_row.ParseFromString(c_row_itr->second));
 
+      Debug("  First: %s", c_row.first().c_str());
+      Debug("  Last: %s", c_row.last().c_str());
+
       return Get(OrderByCustomerRowKey(c_w_id, c_d_id, c_id));
     } else if (count == 2) {
       std::string obc_key = OrderByCustomerRowKey(c_w_id, c_d_id, c_id);
@@ -71,18 +80,26 @@ Operation OrderStatus::GetNextOperation(size_t opCount,
       ASSERT(obc_row.ParseFromString(obc_row_itr->second));
 
       o_id = obc_row.o_id();
+      Debug("Order: %u", o_id);
 
       return Get(OrderRowKey(c_w_id, c_d_id, o_id));
     } else {
-      std::string o_key = OrderRowKey(c_w_id, c_d_id, o_id);
-      auto o_row_itr = readValues.find(o_key);
-      ASSERT(o_row_itr != readValues.end());
-      ASSERT(o_row.ParseFromString(o_row_itr->second));
+      if (count == 3) {
+        std::string o_key = OrderRowKey(c_w_id, c_d_id, o_id);
+        auto o_row_itr = readValues.find(o_key);
+        ASSERT(o_row_itr != readValues.end());
+        ASSERT(o_row.ParseFromString(o_row_itr->second));
+
+        Debug("  Order Lines: %u", o_row.ol_cnt());
+        Debug("  Entry Date: %u", o_row.entry_d());
+        Debug("  Carrier ID: %u", o_row.carrier_id());
+      }
 
       if (count < 2 + o_row.ol_cnt()) {
         uint32_t ol_number = count - 2;
         return Get(OrderLineRowKey(c_w_id, c_d_id, o_id, ol_number));
       } else {
+        Debug("COMMIT");
         return Commit();
       }
     }

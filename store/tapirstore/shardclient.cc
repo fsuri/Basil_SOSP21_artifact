@@ -71,7 +71,6 @@ void ShardClient::Begin(uint64_t id) {
 void ShardClient::Get(uint64_t id, const std::string &key, get_callback gcb,
       get_timeout_callback gtcb, uint32_t timeout) {
   // Send the GET operation to appropriate shard.
-  Debug("[shard %i] Sending GET [%lu : %s]", shard, id, key.c_str());
 
   // create request
   string request_str;
@@ -88,10 +87,11 @@ void ShardClient::Get(uint64_t id, const std::string &key, get_callback gcb,
   pendingGet->gcb = gcb;
   pendingGet->gtcb = gtcb;
 
-  Debug("Invoking unlogged Get with timeout %u", timeout);
   client->InvokeUnlogged(replica, request_str, bind(&ShardClient::GetCallback,
       this, pendingGet->reqId, placeholders::_1, placeholders::_2),
       bind(&ShardClient::GetTimeout, this, pendingGet->reqId), timeout);
+
+  Debug("[shard %i] Sent GET [%lu : %s]", shard, id, key.c_str());
 }
 
 void ShardClient::Get(uint64_t id, const std::string &key,
@@ -173,7 +173,6 @@ void ShardClient::Commit(uint64_t id, const Transaction & txn,
       uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
       uint32_t timeout) {
   
-  Debug("[shard %i] Sending COMMIT [%lu]", shard, id);
 
   // create commit request
   string request_str;
@@ -203,6 +202,7 @@ void ShardClient::Commit(uint64_t id, const Transaction & txn,
 
   client->InvokeInconsistent(request_str, bind(&ShardClient::CommitCallback,
       this, pendingCommit->reqId, placeholders::_1, placeholders::_2));
+  Debug("[shard %i] Sent COMMIT [%lu]", shard, id);
 
   pendingCommit->requestTimeout->Reset();
 }  

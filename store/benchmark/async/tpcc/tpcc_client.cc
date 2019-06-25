@@ -4,6 +4,8 @@
 
 #include "store/benchmark/async/tpcc/new_order.h"
 #include "store/benchmark/async/tpcc/payment.h"
+#include "store/benchmark/async/tpcc/order_status.h"
+#include "store/benchmark/async/tpcc/stock_level.h"
 
 namespace tpcc {
 
@@ -19,6 +21,7 @@ TPCCClient::TPCCClient(AsyncClient &client, Transport &transport,
       C_c_last(C_c_last), new_order_ratio(new_order_ratio),
       delivery_ratio(delivery_ratio), payment_ratio(payment_ratio),
       order_status_ratio(order_status_ratio), stock_level_ratio(stock_level_ratio) {
+  stockLevelDId = std::uniform_int_distribution<uint32_t>(1, 10)(gen);
 }
 
 TPCCClient::~TPCCClient() {
@@ -35,8 +38,12 @@ AsyncTransaction* TPCCClient::GetNextTransaction() {
     lastOp = "payment";
     return new Payment(w_id, C_c_last, C_c_id, num_warehouses, gen);
   } else if (ttype < new_order_ratio + payment_ratio + order_status_ratio) {
+    lastOp = "order_status";
+    return new OrderStatus(w_id, C_c_last, C_c_id, gen);
   } else if (ttype < new_order_ratio + payment_ratio + order_status_ratio
-      + delivery_ratio) {
+      + stock_level_ratio) {
+    lastOp = "stock_level";
+    return new StockLevel(w_id, stockLevelDId, gen);
   } else {
   }
 }

@@ -92,6 +92,9 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
         pair<Timestamp, Timestamp> range;
         bool ret = store.getRange(read.first, read.second, range);
 
+        Debug("Range %lu %lu %lu", read.second.getTimestamp(),
+            range.first.getTimestamp(), range.second.getTimestamp());
+
         // if we don't have this key then no conflicts for read
         if (!ret) continue;
 
@@ -122,7 +125,8 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                 range.second.getTimestamp());
           }
           //ASSERT(timestamp > range.first);
-          Debug("[%lu] ABORT rw conflict key:%s", id, read.first.c_str());
+          Debug("[%lu] ABORT rw conflict: %lu > %lu", id,
+              timestamp.getTimestamp(), range.second.getTimestamp());
           stats.Increment("aborts", 1);
           return REPLY_FAIL;
         } else {

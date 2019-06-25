@@ -295,6 +295,8 @@ void GenerateOrderTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
   std::string o_row_out;
   tpcc::OrderLineRow ol_row;
   std::string ol_row_out;
+  tpcc::OrderByCustomerRow obc_row;
+  std::string obc_row_out;
   std::vector<uint32_t> c_ids(3000);
   std::iota(c_ids.begin(), c_ids.end(), 1);
   std::shuffle(c_ids.begin(), c_ids.end(), gen);
@@ -312,9 +314,20 @@ void GenerateOrderTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
       o_row.set_carrier_id(0);
     }
     o_row.set_ol_cnt(std::uniform_int_distribution<uint32_t>(5, 15)(gen));
+    o_row.set_all_local(true);
     o_row.SerializeToString(&o_row_out);
     std::string o_key = tpcc::OrderRowKey(w_id, d_id, c_id);
     q.Push(std::make_pair(o_key, o_row_out));    
+    
+    // initially, there is exactly one order per customer, so we do not need to
+    // worry about writing multiple OrderByCustomerRow with the same key.
+    obc_row.set_w_id(w_id);
+    obc_row.set_d_id(d_id);
+    obc_row.set_c_id(c_id);
+    obc_row.set_o_id(o_id);
+    obc_row.SerializeToString(&obc_row_out);
+    std::string obc_key = tpcc::OrderByCustomerRowKey(w_id, d_id, c_id);
+    q.Push(std::make_pair(obc_key, obc_row_out));
     for (uint32_t ol_number = 0; ol_number < o_row.ol_cnt(); ++ol_number) {
       ol_row.set_o_id(o_id);
       ol_row.set_d_id(d_id);

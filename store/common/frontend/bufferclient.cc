@@ -69,6 +69,7 @@ void BufferClient::Get(const std::string &key, get_callback gcb,
   get_callback bufferCb = [this, gcb](int status, const std::string & key,
       const std::string &value, Timestamp ts) {
     if (status == REPLY_OK) {
+      Debug("Added to %lu to read set.", ts.getTimestamp());
       this->txn.addReadSet(key, ts);
     }
     gcb(status, key, value, ts);
