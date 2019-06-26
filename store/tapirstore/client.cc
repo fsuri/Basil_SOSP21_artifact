@@ -37,9 +37,9 @@ using namespace std;
 
 Client::Client(const string configPath, int nShards, int nGroups,
                 int closestReplica, Transport *transport, partitioner part,
-                TrueTime timeServer)
+                bool syncCommit, TrueTime timeServer)
     : nshards(nShards), ngroups(nGroups), transport(transport), part(part),
-    timeServer(timeServer),
+    syncCommit(syncCommit), timeServer(timeServer),
     lastReqId(0UL) {
     // Initialize all state here;
     client_id = 0;
@@ -206,6 +206,10 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
       commit_callback ccb = [this, reqId](bool committed) {
         auto itr = this->pendingReqs.find(reqId);
         if (itr != this->pendingReqs.end()) {
+          if (!itr->second->callbackInvoked) {
+            itr->second->ccb(RESULT_COMMITTED);
+            itr->second->callbackInvoked = true;
+          }
           this->pendingReqs.erase(itr);
           delete itr->second;
         }
@@ -215,9 +219,11 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
           bclient[p]->Commit(req->prepareTimestamp->getTimestamp(), ccb, ctcb,
               1000); // we don't really care about the timeout here
       }
-      if (!req->callbackInvoked) {
-        req->ccb(RESULT_COMMITTED);
-        req->callbackInvoked = true;
+      if (!syncCommit) {
+        if (req->callbackInvoked) {
+          req->ccb(RESULT_COMMITTED);
+          req->callbackInvoked = true;
+        }
       }
       break;
     }

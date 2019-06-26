@@ -58,7 +58,7 @@ class Client : public ::Client {
  public:
   Client(const std::string configPath, int nShards, int nGroups,
       int closestReplica, Transport *transport, partitioner part,
-      TrueTime timeserver = TrueTime(0,0));
+      bool syncCommit, TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 
   // Begin a transaction.
@@ -134,6 +134,8 @@ class Client : public ::Client {
   std::vector<BufferClient *> bclient;
 
   partitioner part;
+  
+  bool syncCommit;
 
   // TrueTime server.
   TrueTime timeServer;
