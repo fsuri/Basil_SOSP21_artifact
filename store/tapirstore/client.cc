@@ -220,7 +220,7 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
               1000); // we don't really care about the timeout here
       }
       if (!syncCommit) {
-        if (req->callbackInvoked) {
+        if (!req->callbackInvoked) {
           req->ccb(RESULT_COMMITTED);
           req->callbackInvoked = true;
         }
