@@ -292,7 +292,7 @@ int main(int argc, char **argv) {
             FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id, FLAGS_tpcc_C_c_last,
             FLAGS_tpcc_new_order_ratio, FLAGS_tpcc_delivery_ratio,
             FLAGS_tpcc_payment_ratio, FLAGS_tpcc_order_status_ratio,
-            FLAGS_tpcc_stock_level_ratio);
+            FLAGS_tpcc_stock_level_ratio, (FLAGS_client_id << 4) | i);
         break;
       default:
         NOT_REACHABLE();
