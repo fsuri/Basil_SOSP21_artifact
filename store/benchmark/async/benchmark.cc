@@ -166,6 +166,7 @@ DEFINE_int32(tpcc_payment_ratio, 43, "ratio of payment transactions to other"
     " transaction types (for tpcc)");
 DEFINE_int32(tpcc_order_status_ratio, 4, "ratio of order_status transactions to other"
     " transaction types (for tpcc)");
+DEFINE_bool(static_w_id, false, "force clients to use same w_id for each treansaction");
 
 DEFINE_LATENCY(op);
 
@@ -292,7 +293,8 @@ int main(int argc, char **argv) {
             FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id, FLAGS_tpcc_C_c_last,
             FLAGS_tpcc_new_order_ratio, FLAGS_tpcc_delivery_ratio,
             FLAGS_tpcc_payment_ratio, FLAGS_tpcc_order_status_ratio,
-            FLAGS_tpcc_stock_level_ratio, (FLAGS_client_id << 4) | i);
+            FLAGS_tpcc_stock_level_ratio, FLAGS_static_w_id,
+            (FLAGS_client_id << 4) | i);
         break;
       default:
         NOT_REACHABLE();
