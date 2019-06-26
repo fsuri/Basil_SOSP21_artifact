@@ -35,6 +35,7 @@ void AsyncTransactionBenchClient::ExecuteCallback(int result,
     stats.Increment(GetLastOp() + "_attempts", 1);
     int backoff = std::uniform_int_distribution<int>(0,
         (1 << currTxnAttempts) * 1000)(gen);
+    stats.Increment(GetLastOp() + "_backoff", backoff);
     ++currTxnAttempts;
     transport.Timer(backoff, [this]() {
       client.Execute(currTxn,
