@@ -15,7 +15,7 @@ Payment::Payment(uint32_t w_id, uint32_t c_c_last, uint32_t c_c_id, uint32_t num
   d_w_id = w_id;
   int x = std::uniform_int_distribution<int>(1, 100)(gen);
   int y = std::uniform_int_distribution<int>(1, 100)(gen);
-  if (x <= 85) {
+  if (x <= 85 || num_warehouses == 1) {
     c_w_id = w_id;
     c_d_id = d_id;
   } else {
@@ -44,10 +44,10 @@ Operation Payment::GetNextOperation(size_t opCount,
   std::map<std::string, std::string> readValues) {
   if (opCount == 0) {
     Debug("Amount: %u", h_amount);
-    Debug("Warehouse: %u", d_w_id);
-    return Get(WarehouseRowKey(d_w_id));
+    Debug("Warehouse: %u", w_id);
+    return Get(WarehouseRowKey(w_id));
   } else if (opCount == 1) {
-    std::string w_key = WarehouseRowKey(d_w_id);
+    std::string w_key = WarehouseRowKey(w_id);
     auto w_row_itr = readValues.find(w_key);
     ASSERT(w_row_itr != readValues.end());
     ASSERT(w_row.ParseFromString(w_row_itr->second));

@@ -43,6 +43,13 @@ int
 Store::Get(uint64_t id, const string &key, pair<Timestamp,string> &value)
 {
     Debug("[%lu] GET %s", id, key.c_str());
+    if (key[0] ==  2) {
+      Debug("%u %u %u %u", (uint32_t) key[0],
+          *reinterpret_cast<const uint32_t*>(key.c_str() + 1),
+          *reinterpret_cast<const uint32_t*>(key.c_str() + 5),
+          *reinterpret_cast<const uint32_t*>(key.c_str() + 9));
+    }
+
 
     bool ret = store.get(key, value);
     if (ret) {

@@ -284,6 +284,12 @@ int main(int argc, char **argv) {
       if (i == 0) {
         ReadBytesFromStream(&in, value);
         if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
+          if (key[0] ==  2 && *reinterpret_cast<const uint32_t*>(key.c_str() + 1) == 1 && *reinterpret_cast<const uint32_t*>(key.c_str() + 5) == 2) {
+            Debug("%u %u %u %u", (uint32_t) key[0],
+                *reinterpret_cast<const uint32_t*>(key.c_str() + 1),
+                *reinterpret_cast<const uint32_t*>(key.c_str() + 5),
+                *reinterpret_cast<const uint32_t*>(key.c_str() + 9));
+          }
           server->Load(key, value, Timestamp());
         }
       }
