@@ -127,7 +127,25 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
           //ASSERT(timestamp > range.first);
           Debug("[%lu] ABORT rw conflict: %lu > %lu", id,
               timestamp.getTimestamp(), range.second.getTimestamp());
+          std::string s = std::to_string((uint32_t) read.first[0]); 
+          if (read.first.length() >= 5) {
+            s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
+                read.first.c_str() + 1));
+          }
+          if (read.first.length() >= 9) {
+            s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
+                read.first.c_str() + 5));
+          }
+          if (read.first.length() >= 13) {
+            s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
+                read.first.c_str() + 9));
+          }
+          if (read.first.length() >= 17) {
+            s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
+                read.first.c_str() + 13));
+          }
           stats.Increment("aborts", 1);
+          stats.Increment("aborts_" + s, 1);
           return REPLY_FAIL;
         } else {
             /* there may be a pending write in the past.  check
