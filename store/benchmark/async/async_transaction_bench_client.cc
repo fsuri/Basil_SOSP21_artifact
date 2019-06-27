@@ -4,11 +4,11 @@
 
 AsyncTransactionBenchClient::AsyncTransactionBenchClient(AsyncClient &client,
     Transport &transport, int numRequests, int expDuration, uint64_t delay,
-    int warmupSec, int cooldownSec, int tputInterval,
+    int warmupSec, int cooldownSec, int tputInterval, bool abortBackoff,
     const std::string &latencyFilename)
     : BenchmarkClient(client, transport, numRequests, expDuration, delay,
         warmupSec, cooldownSec, tputInterval, latencyFilename),
-    currTxn(nullptr), currTxnAttempts(0UL) {
+    abortBackoff(abortBackoff), currTxn(nullptr), currTxnAttempts(0UL) {
 }
 
 AsyncTransactionBenchClient::~AsyncTransactionBenchClient() {
@@ -33,9 +33,12 @@ void AsyncTransactionBenchClient::ExecuteCallback(int result,
   } else {
     stats.Increment(GetLastOp() + "_" + std::to_string(result), 1);
     stats.Increment(GetLastOp() + "_attempts", 1);
-    int backoff = std::uniform_int_distribution<int>(0,
+    int backoff = 0;
+    if (abortBackoff) {
+      backoff = std::uniform_int_distribution<int>(0,
         (1 << currTxnAttempts) * 1000)(gen);
-    stats.Increment(GetLastOp() + "_backoff", backoff);
+      stats.Increment(GetLastOp() + "_backoff", backoff);
+    }
     ++currTxnAttempts;
     transport.Timer(backoff, [this]() {
       client.Execute(currTxn,
