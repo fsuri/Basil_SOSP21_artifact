@@ -50,8 +50,14 @@ AsyncTransaction* TPCCClient::GetNextTransaction() {
     return new OrderStatus(wid, C_c_last, C_c_id, gen);
   } else if (ttype < new_order_ratio + payment_ratio + order_status_ratio
       + stock_level_ratio) {
+    uint32_t did;
+    if (static_w_id) {
+      did = stockLevelDId;
+    } else {
+      did = std::uniform_int_distribution<uint32_t>(1, num_warehouses)(gen);
+    }
     lastOp = "stock_level";
-    return new StockLevel(wid, stockLevelDId, gen);
+    return new StockLevel(wid, did, gen);
   } else {
   }
 }
