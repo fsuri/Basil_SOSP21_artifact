@@ -26,7 +26,9 @@ void AsyncTransactionBenchClient::SendNext() {
 void AsyncTransactionBenchClient::ExecuteCallback(int result,
     std::map<std::string, std::string> readValues) {
   if (result == SUCCESS) {
+    ++currTxnAttempts;
     stats.Increment(GetLastOp() + "_committed", 1);
+    stats.Add(GetLastOp() + "_attempts_list", currTxnAttempts);
     delete currTxn;
     currTxn = nullptr;
     OnReply(result);

@@ -5,6 +5,7 @@
 #include <ostream>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 class Stats {
  public:
@@ -12,6 +13,7 @@ class Stats {
   virtual ~Stats();
 
   void Increment(const std::string &key, int amount);
+  void Add(const std::string &key, int value);
 
   void ExportJSON(std::ostream &os);
   void ExportJSON(const std::string &file);
@@ -20,5 +22,6 @@ class Stats {
  private:
   std::mutex mtx;
   std::unordered_map<std::string, int> statInts;
+  std::unordered_map<std::string, std::vector<int>> statLists;
 };
 #endif /* STATS_H */
