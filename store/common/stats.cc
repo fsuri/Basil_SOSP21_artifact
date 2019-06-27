@@ -1,5 +1,6 @@
 #include "store/common/stats.h"
 
+#include <algorithm>
 #include <fstream>
 
 Stats::Stats() {
