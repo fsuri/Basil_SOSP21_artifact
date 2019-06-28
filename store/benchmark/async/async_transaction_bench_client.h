@@ -9,8 +9,8 @@ class AsyncTransactionBenchClient : public BenchmarkClient {
  public:
   AsyncTransactionBenchClient(AsyncClient &client, Transport &transport,
       int numRequests, int expDuration, uint64_t delay, int warmupSec,
-      int cooldownSec, int tputInterval, bool abortBackoff,
-      const std::string &latencyFilename = "");
+      int cooldownSec, int tputInterval, uint32_t abortBackoff,
+      bool retryAborted, const std::string &latencyFilename = "");
 
   virtual ~AsyncTransactionBenchClient();
 
@@ -22,7 +22,8 @@ class AsyncTransactionBenchClient : public BenchmarkClient {
       std::map<std::string, std::string> readValues);
 
  private:
-  bool abortBackoff;
+  uint32_t abortBackoff;
+  bool retryAborted;
   AsyncTransaction *currTxn;
   size_t currTxnAttempts;
   std::mt19937 gen;

@@ -133,7 +133,8 @@ DEFINE_uint64(delay, 0, "simulated communication delay");
 DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
 DEFINE_int32(clock_error, 0, "maximum error for clock");
 DEFINE_string(stats_file, "", "path to output stats file.");
-DEFINE_bool(abort_backoff, true, "sleep exponentially increasing amount after abort.");
+DEFINE_int32(abort_backoff, 100, "sleep exponentially increasing amount after abort.");
+DEFINE_bool(retry_aborted, true, "retry aborted transactions.");
 
 /**
  * Retwis settings.
@@ -283,7 +284,7 @@ int main(int argc, char **argv) {
         bench = new retwis::RetwisClient(keySelector, *client, transport,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
-            FLAGS_abort_backoff);
+            FLAGS_abort_backoff, FLAGS_retry_aborted);
         break;
       case BENCH_TPCC:
         bench = new tpcc::TPCCClient(*client, transport, FLAGS_num_requests,
@@ -293,7 +294,7 @@ int main(int argc, char **argv) {
             FLAGS_tpcc_new_order_ratio, FLAGS_tpcc_delivery_ratio,
             FLAGS_tpcc_payment_ratio, FLAGS_tpcc_order_status_ratio,
             FLAGS_tpcc_stock_level_ratio, FLAGS_static_w_id,
-            (FLAGS_client_id << 4) | i, FLAGS_abort_backoff);
+            (FLAGS_client_id << 4) | i, FLAGS_abort_backoff, FLAGS_retry_aborted);
         break;
       default:
         NOT_REACHABLE();

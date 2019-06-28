@@ -4,11 +4,12 @@
 
 AsyncTransactionBenchClient::AsyncTransactionBenchClient(AsyncClient &client,
     Transport &transport, int numRequests, int expDuration, uint64_t delay,
-    int warmupSec, int cooldownSec, int tputInterval, bool abortBackoff,
-    const std::string &latencyFilename)
+    int warmupSec, int cooldownSec, int tputInterval, uint32_t abortBackoff,
+    bool retryAborted, const std::string &latencyFilename)
     : BenchmarkClient(client, transport, numRequests, expDuration, delay,
         warmupSec, cooldownSec, tputInterval, latencyFilename),
-    abortBackoff(abortBackoff), currTxn(nullptr), currTxnAttempts(0UL) {
+    abortBackoff(abortBackoff), retryAborted(retryAborted),
+    currTxn(nullptr), currTxnAttempts(0UL) {
 }
 
 AsyncTransactionBenchClient::~AsyncTransactionBenchClient() {
@@ -17,7 +18,6 @@ AsyncTransactionBenchClient::~AsyncTransactionBenchClient() {
 void AsyncTransactionBenchClient::SendNext() {
   currTxn = GetNextTransaction();
   currTxnAttempts = 0;
-  stats.Increment(GetLastOp() + "_attempts", 1);
   client.Execute(currTxn,
       std::bind(&AsyncTransactionBenchClient::ExecuteCallback, this,
         std::placeholders::_1, std::placeholders::_2));
@@ -25,10 +25,16 @@ void AsyncTransactionBenchClient::SendNext() {
 
 void AsyncTransactionBenchClient::ExecuteCallback(int result,
     std::map<std::string, std::string> readValues) {
-  if (result == SUCCESS) {
-    ++currTxnAttempts;
-    stats.Increment(GetLastOp() + "_committed", 1);
-    stats.Add(GetLastOp() + "_attempts_list", currTxnAttempts);
+  stats.Increment(GetLastOp() + "_attempts", 1);
+  ++currTxnAttempts;
+  if (result == SUCCESS || !retryAborted) {
+    if (result == SUCCESS) {
+      stats.Increment(GetLastOp() + "_committed", 1);
+    }
+    if (retryAborted) {
+      stats.Add(GetLastOp() + "_attempts_list", currTxnAttempts);
+    }
+
     delete currTxn;
     currTxn = nullptr;
     OnReply(result);
@@ -36,12 +42,11 @@ void AsyncTransactionBenchClient::ExecuteCallback(int result,
     stats.Increment(GetLastOp() + "_" + std::to_string(result), 1);
     stats.Increment(GetLastOp() + "_attempts", 1);
     int backoff = 0;
-    if (abortBackoff) {
+    if (abortBackoff > 0) {
       backoff = std::uniform_int_distribution<int>(0,
-        (1 << currTxnAttempts) * 1000)(gen);
+        (1 << (currTxnAttempts - 1)) * abortBackoff)(gen);
       stats.Increment(GetLastOp() + "_backoff", backoff);
     }
-    ++currTxnAttempts;
     transport.Timer(backoff, [this]() {
       client.Execute(currTxn,
           std::bind(&AsyncTransactionBenchClient::ExecuteCallback, this,
