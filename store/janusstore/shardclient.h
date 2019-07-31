@@ -53,9 +53,15 @@ private:
     // TODO will probably need to add fields for aggregating replica responses
     // Map of txn_id to aggregated list of txn_id dependencies for this shard
     std::unordered_map<uint64_t, std::set<uint64_t>> aggregated_deps;
+    
     std::map<uint64_t, std::vector<janusstore::proto::Reply>> preaccept_replies;
     std::map<uint64_t, std::vector<janusstore::proto::Reply>> accept_replies;
     std::map<uint64_t, std::vector<janusstore::proto::Reply>> commit_replies;
+
+    std::map<uint64_t, client_preaccept_callback> pcb_map;
+    std::map<uint64_t, client_accept_callback> acb_map;
+    std::map<uint64_t, client_commit_callback> ccb_map;
+
 
     /* Callbacks for hearing back from a shard for a Janus phase. */
     void PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply,
@@ -64,9 +70,12 @@ private:
     void AcceptCallback(uint64_t txn_id, std::vector<janusstore::proto::Reply> reply, client_accept_callback acb);
     void CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb);
 
-    void PreAcceptContinuation();
-    void AcceptContinuation();
-    void CommitContinuation();
+    void PreAcceptContinuation(uint64_t txn_id, const string &request_str,
+    const string &reply_str);
+    void AcceptContinuation(uint64_t txn_id, const string &request_str,
+    const string &reply_str);
+    void CommitContinuation(uint64_t txn_id, const string &request_str,
+    const string &reply_str);
 
     int responded;
     int txn_id;

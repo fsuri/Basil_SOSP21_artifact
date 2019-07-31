@@ -32,15 +32,12 @@ ShardClient::~ShardClient() {
     delete client;
 }
 
-/* TODO:
-1. do we need to pass in [this] as well to the ShardClient's callbck
-*/
-
 void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb) {
 	Debug("[shard %i] Sending PREACCEPT [%llu]", shard, client_id);
 
 	std::vector<janusstore::proto::Reply> replies;
-	pair<uint64_t, std::vector<janusstore::proto::Reply>> entry (txn.getTransactionId(), replies);
+	uint64_t txn_id = txn.getTransactionId();
+	pair<uint64_t, std::vector<janusstore::proto::Reply>> entry (txn_id, replies);
 	preaccept_replies.insert(entry);
 
 	// create PREACCEPT Request
@@ -56,14 +53,17 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	// now we can serialize the request and send it to replicas
 	request.SerializeToString(&request_str);
 
-	// TODO store callback with txnid in a map for the preaccept cb
+	// store callback with txnid in a map for the preaccept cb
+	// because we can't pass it into a continuation function
+	pair<uint64_t, client_preaccept_callback> callback_entry (txn_id, pcb);
+	this->pcb_map.insert(callback_entry);
 
-	// ShardClient callback function will be able to invoke
+	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
-	// TODO use the continuation callbacks instead
-	//client->InvokeUnlogged(replica, request_str,
-	//	std::bind(&ShardClient::PreAcceptCallback, this,
-	//	txn_id, placeholders::_2, pcb), nullptr, 0); // no timeout case
+	client->InvokeUnlogged(replica, request_str,
+		std::bind(&ShardClient::PreAcceptContinuation, this,
+		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
+		// no timeout case; TODO verify 0 is OK
 }
 
 void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t ballot, client_accept_callback acb) {
@@ -87,11 +87,17 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 	
 	request.SerializeToString(&request_str);
 
-	// TODO store callback with txnid in a map for the preaccept cb
-	// TODO use the continuation callbacks instead
-	//client->InvokeUnlogged(replica, request_str,
-	//	std::bind(&ShardClient::AcceptCallback,
-	//		txn_id, placeholders::_2, acb), nullptr);
+	// store callback with txnid in a map for the preaccept cb
+	// because we can't pass it into a continuation function
+	pair<uint64_t, client_accept_callback> callback_entry (txn_id, acb);
+	this->acb_map.insert(callback_entry);
+
+	// ShardClient continutation will be able to invoke
+	// the Client's callback function when all responses returned
+	client->InvokeUnlogged(replica, request_str,
+		std::bind(&ShardClient::AcceptContinuation, this,
+		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
+		// no timeout case; TODO verify 0 is OK
 }
 
 void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb) {
@@ -113,24 +119,36 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 
 	request.SerializeToString(&request_str);
 
-	// TODO store callback with txnid in a map for the preaccept cb
-	// TODO use the continuation callbacks instead
-	//client->InvokeUnlogged(replica, request_str,
-	//	std::bind(&ShardClient::CommitCallback,
-	//		txn_id, placeholders::_2, ccb), nullptr);
+	// store callback with txnid in a map for the preaccept cb
+	// because we can't pass it into a continuation function
+	pair<uint64_t, client_commit_callback> callback_entry (txn_id, ccb);
+	this->ccb_map.insert(callback_entry);
+
+	// ShardClient continutation will be able to invoke
+	// the Client's callback function when all responses returned
+	client->InvokeUnlogged(replica, request_str,
+		std::bind(&ShardClient::CommitContinuation, this,
+		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
+		// no timeout case; TODO verify 0 is OK
 }
 
 void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_preaccept_callback pcb) {
 	// TODO who unwraps replica responses into the proto?
-	responded++;
+	this->responded++;
 
 	// aggregate replies for this transaction
-	//preaccept_replies[txn_id].insert(reply);
+	if (this->preaccept_replies.count(txn_id)) {
+		// key already exists, so append to list
+		// TODO may need to explicitly retrieve list, pushback, and set in map
+		this->preaccept_replies[txn_id].push_back(reply);
+	} else {
+		this->preaccept_replies[txn_id] = std::vector<janusstore::proto::Reply>({reply});
+	}
 
 	// TODO how do determine number of replicas?
-	if (responded) {
-		responded = 0;
-		pcb(shard, preaccept_replies[txn_id]);
+	if (this->responded) {
+		this->responded = 0;
+		pcb(shard, this->preaccept_replies[txn_id]);
 	}
 }
 
@@ -140,12 +158,18 @@ void ShardClient::AcceptCallback(uint64_t txn_id,
 	responded++;
 	
 	// aggregate replies for this transaction
-	//accept_replies[txn_id].insert(reply);
+	if (this->accept_replies.count(txn_id)) {
+		// key already exists, so append to list
+		// TODO may need to explicitly retrieve list, pushback, and set in map
+		this->accept_replies[txn_id].push_back(reply);
+	} else {
+		this->accept_replies[txn_id] = std::vector<janusstore::proto::Reply>({reply});
+	}
 
 	// TODO how do determine number of replicas?
 	if (responded) {
 		responded = 0;
-		acb(shard, accept_replies[txn_id]);
+		acb(shard, this->accept_replies[txn_id]);
 	}
 }
 
@@ -154,24 +178,53 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	responded++;
 	
 	// aggregate replies for this transaction
-	//commit_replies[txn_id].insert(reply);
-
+	if (this->commit_replies.count(txn_id)) {
+		// key already exists, so append to list
+		// TODO may need to explicitly retrieve list, pushback, and set in map
+		this->commit_replies[txn_id].push_back(reply);
+	} else {
+		this->commit_replies[txn_id] = std::vector<janusstore::proto::Reply>({reply});
+	}
+	
 	// TODO how do determine number of replicas?
 	if (responded) {
 		responded = 0;
-		ccb(shard, commit_replies[txn_id]);
+		ccb(shard, this->commit_replies[txn_id]);
 	}
 }
 
-void ShardClient::PreAcceptContinuation() {
+void ShardClient::PreAcceptContinuation(uint64_t txn_id, const string &request_str, const string &reply_str) {
 
+	janusstore::proto::Reply reply;
+	reply.ParseFromString(reply_str);
+
+	// get the pcb
+  	client_preaccept_callback pcb = this->pcb_map.at(txn_id);
+  	// invoke the shardclient callback
+  	this->PreAcceptCallback(txn_id, reply, pcb);
 }
 
-void ShardClient::AcceptContinuation() {
-	
+void ShardClient::AcceptContinuation(uint64_t txn_id, const string &request_str,
+    const string &reply_str) {
+
+	janusstore::proto::Reply reply;
+  	reply.ParseFromString(reply_str);
+
+  	// get the acb
+  	client_accept_callback acb = this->acb_map.at(txn_id);
+  	// invoke the shardclient callback
+  	this->AcceptCallback(txn_id, reply, acb);
 }
 
-void ShardClient::CommitContinuation() {
-	
+void ShardClient::CommitContinuation(uint64_t txn_id, const string &request_str,
+    const string &reply_str) {
+
+	janusstore::proto::Reply reply;
+  	reply.ParseFromString(reply_str);
+
+  	// get the ccb
+  	client_commit_callback ccb = this->ccb_map.at(txn_id);
+  	// invoke the shardclient callback
+  	this->CommitCallback(txn_id, reply, ccb);
 }
 }
