@@ -1,6 +1,7 @@
 // -*- mode: c++; c-file-style: "k&r"; c-basic-offset: 4 -*-
 #include "store/janusstore/server.h"
 #include "lib/tcptransport.h"
+#include <stack>
 
 namespace janusstore {
 
@@ -240,10 +241,56 @@ std::unordered_map<string, string> Server::_ExecutePhase(uint64_t txn_id) {
     return result;
 }
 
-// returns a strongly connected component that contains the given txn_id, if it exists
-std::vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
-
+void _DFS(uint64_t txn_id, std::set<uint64_t> &visited, std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map, std::vector<uint64_t> &v, std::stack<uint64_t> &s) {
+    visited.insert(txn_id);
+    v.push_back(txn_id);
+    for (std::vector<uint64_t>::iterator i = dep_map[txn_id].begin(); i != dep_map[txn_id].end(); i++) {
+        if(visited.find(*i) != visited.end()) {
+            _DFS(*i, visited, dep_map, v, s);
+        }
+    }
+    s.push(txn_id);
 }
+
+// return transpose graph of dep_map
+std::unordered_map<uint64_t, std::vector<uint64_t>> _getTranspose(std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map) {
+    std::unordered_map<uint64_t, std::vector<uint64_t>> transpose;
+    for (std::pair<uint64_t, std::vector<uint64_t>> pair : dep_map) {
+        uint64_t txn_id = pair.first;
+        for(std::vector<uint64_t>::iterator i = dep_map[txn_id].begin(); i != dep_map[txn_id].end(); ++i)
+        {
+            transpose[*i].push_back(txn_id);
+        }
+    }
+    return transpose;
+}
+
+// returns a strongly connected component that contains the given txn_id, if it exists using Kosaraju's
+std::vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
+    std::set<uint64_t> visited;
+    // // create empty stack, do DFS traversal. push vertex to stack at each visit
+    std::stack<uint64_t> s;
+    std::vector<uint64_t> dummy_v; // TODO make this unnecessary
+    _DFS(txn_id, visited, dep_map, dummy_v, s);
+
+    // obtain transpose graph
+    // TODO also just create the transpose to begin with and build it as txns come in
+    std::unordered_map<uint64_t, std::vector<uint64_t>> transpose = _getTranspose(dep_map);
+
+    visited.clear();
+    // guaranteed to return since stack will contain every txn_id in map
+    while (!s.empty()) {
+        uint64_t popped_txn_id = s.top();
+        s.pop();
+
+        std::stack<uint64_t> dummy_s; // TODO make this unnecessary
+        std::vector<uint64_t> scc;
+        _DFS(popped_txn_id, visited, transpose, scc, dummy_s);
+        std::vector<uint64_t>::iterator it = std::find(scc.begin(), scc.end(), txn_id);
+        if (it != scc.end()) return scc;
+    }
+}
+
 
 // checks if txn is ready to be executed
 bool Server::_ReadyToProcess(Transaction txn) {
@@ -263,8 +310,9 @@ void Server::Load(const string &key, const string &value, const Timestamp timest
     return;
 }
 
-std::vector<uint64_t> Server::ResolveContention(std::vector<uint64_t> scc) {
-    // just return a sorted order lol
+// sort in ascending order
+void Server::ResolveContention(std::vector<uint64_t> scc) {
+    sort(scc.begin(), scc.end());
 }
 
 bool _checkIfAllCommitting(std::unordered_map<uint64_t, Transaction> id_txn_map, std::vector<uint64_t> deps) {

@@ -1,6 +1,6 @@
 d := $(dir $(lastword $(MAKEFILE_LIST)))
 
-SRCS += $(addprefix $(d), benchmark.cc bench_client.cc async_transaction_bench_client.cc)
+SRCS += $(addprefix $(d), benchmark.cc benchmark_oneshot.cc bench_client.cc async_transaction_bench_client.cc)
 
 OBJS-all-store-clients := $(OBJS-strong-client) $(OBJS-weak-client) \
 		$(LIB-tapir-client) $(LIB-morty-client)
@@ -12,5 +12,6 @@ OBJS-all-bench-clients := $(LIB-retwis) $(LIB-tpcc)
 
 $(d)benchmark: $(LIB-key-selector) $(LIB-bench-client) $(LIB-latency) $(LIB-tcptransport) $(LIB-udptransport) $(OBJS-all-store-clients) $(OBJS-all-bench-clients) $(LIB-bench-client) $(LIB-store-common)
 
-# TODO: need to add back other clients (benchClient, terminalClient)
-BINS +=  $(d)benchmark
+$(d)benchmark_oneshot: $(LIB-janus-client) $(o)benchmark_oneshot.o
+
+BINS +=  $(d)benchmark $(d)benchmark_oneshot

@@ -46,7 +46,6 @@ private:
     Transport *transport; // Transport layer.
     transport::Configuration *config;
     int shard; // which shard this client accesses
-    int responded;
     int replica; // which replica to use for reads
 
     replication::ir::IRClient *client; // Client proxy.
@@ -65,15 +64,12 @@ private:
     void AcceptCallback(uint64_t txn_id, std::vector<janusstore::proto::Reply> reply, client_accept_callback acb);
     void CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb);
 
-
-
     void PreAcceptContinuation();
     void AcceptContinuation();
     void CommitContinuation();
-    void PreAcceptTimeout();
-    void AcceptTimeout();
-    void CommitTimeout();
 
+    int responded;
+    int txn_id;
 };
 
 } // namespace janusstore

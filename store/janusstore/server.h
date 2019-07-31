@@ -76,7 +76,7 @@ private:
     std::unordered_map<string, string> Execute(Transaction txn);
     // for cyclic dependency case, compute SCCs and execute in order
     // to be called during the Commit phase from HandleCommitJanusTxn()
-    std::vector<uint64_t> ResolveContention(std::vector<uint64_t> scc);
+    void ResolveContention(std::vector<uint64_t> scc);
 };
 } // namespace janusstore
 
