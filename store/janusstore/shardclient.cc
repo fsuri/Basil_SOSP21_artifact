@@ -40,7 +40,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	Debug("[shard %i] Sending PREACCEPT [%llu]", shard, client_id);
 
 	std::vector<janusstore::proto::Reply> replies;
-	pair<uint64_t, std::vector<janusstore::proto::Reply>> entry (txn.txn_id, replies);
+	pair<uint64_t, std::vector<janusstore::proto::Reply>> entry (txn.getTransactionId(), replies);
 	preaccept_replies.insert(entry);
 
 	// create PREACCEPT Request
@@ -61,9 +61,10 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	// ShardClient callback function will be able to invoke
 	// the Client's callback function when all responses returned
 	// TODO use the continuation callbacks instead
-	client->InvokeUnlogged(replica, request_str,
+	/*client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::PreAcceptCallback,
-		txn_id, placeholders::_2, pcb), nullptr); // no timeout case
+		txn.getTransactionId(), placeholders::_2, pcb),
+    std::bind(&ShardClient::PreAcceptTimeout, this), 0); // no timeout case*/
 }
 
 void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t ballot, client_accept_callback acb) {
@@ -89,9 +90,9 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 
 	// TODO store callback with txnid in a map for the preaccept cb
 	// TODO use the continuation callbacks instead
-	client->InvokeUnlogged(replica, request_str,
+	/*client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::AcceptCallback,
-			txn_id, placeholders::_2, acb), nullptr);
+			txn_id, placeholders::_2, acb), std::bind(&ShardClient::AcceptTimeout, this), 0);*/
 }
 
 void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb) {
@@ -115,9 +116,10 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 
 	// TODO store callback with txnid in a map for the preaccept cb
 	// TODO use the continuation callbacks instead
-	client->InvokeUnlogged(replica, request_str,
-		std::bind(&ShardClient::CommitCallback,
-			txn_id, placeholders::_2, ccb), nullptr);
+	/*client->InvokeUnlogged(replica, request_str,
+		std::bind(&ShardClient::CommitCallback, this,
+			txn_id, placeholders::_2, ccb),
+      std::bind(&ShardClient::CommitTimeout, this), 0);*/
 }
 
 void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_preaccept_callback pcb) {
@@ -125,7 +127,7 @@ void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply re
 	responded++;
 
 	// aggregate replies for this transaction
-	preaccept_replies[txn_id].insert(reply);
+	preaccept_replies[txn_id].push_back(reply);
 
 	// TODO how do determine number of replicas?
 	if (responded) {
@@ -139,7 +141,7 @@ void ShardClient::AcceptCallback(uint64_t txn_id, std::vector<janusstore::proto:
 	responded++;
 	
 	// aggregate replies for this transaction
-	accept_replies[txn_id].insert(reply);
+	//accept_replies[txn_id].insert(reply);
 
 	// TODO how do determine number of replicas?
 	if (responded) {
@@ -153,7 +155,7 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	responded++;
 	
 	// aggregate replies for this transaction
-	commit_replies[txn_id].insert(reply);
+	commit_replies[txn_id].push_back(reply);
 
 	// TODO how do determine number of replicas?
 	if (responded) {
@@ -173,4 +175,12 @@ void ShardClient::AcceptContinuation() {
 void ShardClient::CommitContinuation() {
 	
 }
+
+void ShardClient::PreAcceptTimeout() {
+}
+void ShardClient::AcceptTimeout() {
+}
+void ShardClient::CommitTimeout() {
+}
+
 }

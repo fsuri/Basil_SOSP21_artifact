@@ -51,7 +51,8 @@ namespace weakstore {
 class Client
 {
 public:
-    Client(std::string configPath, int nshards, int closestReplica);
+    Client(std::string configPath, int nshards, int closestReplica,
+        partitioner part);
     ~Client();
 
   // Begin a transaction.
@@ -88,6 +89,8 @@ private:
 
     // Transport used by shard clients.
     UDPTransport transport;
+
+    partitioner part;
     
     // Thread running the transport event loop.
     std::thread *clientTransport;

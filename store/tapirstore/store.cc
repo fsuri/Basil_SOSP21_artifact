@@ -92,6 +92,9 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
         pair<Timestamp, Timestamp> range;
         bool ret = store.getRange(read.first, read.second, range);
 
+        Debug("Range %lu %lu %lu", read.second.getTimestamp(),
+            range.first.getTimestamp(), range.second.getTimestamp());
+
         // if we don't have this key then no conflicts for read
         if (!ret) continue;
 
@@ -106,6 +109,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                   pWrites[read.first].upper_bound(timestamp) != pWrites[read.first].begin()) ) {
                 Debug("[%lu] ABSTAIN rw conflict w/ prepared key:%s",
                       id, read.first.c_str());
+                stats.Increment("abstains", 1);
                 return REPLY_ABSTAIN;
             }
 
@@ -121,7 +125,27 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                 range.second.getTimestamp());
           }
           //ASSERT(timestamp > range.first);
-          Debug("[%lu] ABORT rw conflict key:%s", id, read.first.c_str());
+          Debug("[%lu] ABORT rw conflict: %lu > %lu", id,
+              timestamp.getTimestamp(), range.second.getTimestamp());
+          std::string s = std::to_string((uint32_t) read.first[0]); 
+          if (read.first.length() >= 5) {
+            s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
+                read.first.c_str() + 1));
+          }
+          if (read.first.length() >= 9) {
+            s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
+                read.first.c_str() + 5));
+          }
+          if (read.first.length() >= 13) {
+            s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
+                read.first.c_str() + 9));
+          }
+          if (read.first.length() >= 17) {
+            s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
+                read.first.c_str() + 13));
+          }
+          stats.Increment("aborts", 1);
+          stats.Increment("aborts_" + s, 1);
           return REPLY_FAIL;
         } else {
             /* there may be a pending write in the past.  check
@@ -134,6 +158,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                         writeTime < timestamp) {
                         Debug("[%lu] ABSTAIN rw conflict w/ prepared key:%s",
                               id, read.first.c_str());
+                        stats.Increment("abstains", 1);
                         return REPLY_ABSTAIN;
                     }
                 }
@@ -155,6 +180,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                 Debug("[%lu] RETRY ww conflict w/ prepared key:%s", 
                       id, write.first.c_str());
                 proposedTimestamp = val.first;
+                stats.Increment("retries_committed_write", 1);
                 return REPLY_RETRY;	                    
             }
 
@@ -189,6 +215,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                 Debug("[%lu] RETRY ww conflict w/ prepared key:%s",
                       id, write.first.c_str());
                 proposedTimestamp = *it;
+                stats.Increment("retries_prepared_write", 1);
                 return REPLY_RETRY;
             }
         }
@@ -200,6 +227,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
              pReads[write.first].upper_bound(timestamp) != pReads[write.first].end() ) {
             Debug("[%lu] ABSTAIN wr conflict w/ prepared key:%s", 
                   id, write.first.c_str());
+            stats.Increment("abstains", 1);
             return REPLY_ABSTAIN;
         }
     }
@@ -215,7 +243,7 @@ void
 Store::Commit(uint64_t id, uint64_t timestamp)
 {
 
-    Debug("[%lu] COMMIT", id);
+    Debug("[%lu, %lu] COMMIT", id, timestamp);
     
     // Nope. might not find it
     //ASSERT(prepared.find(id) != prepared.end());

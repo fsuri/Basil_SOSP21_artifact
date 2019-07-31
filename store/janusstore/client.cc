@@ -48,14 +48,14 @@ Client::~Client() {
 void Client::setParticipants(Transaction *txn) {
 	participants.clear();
 	for (const auto &key : txn->read_set) {
-		int i = key_to_shard(key, nshards);
+		int i = 0;//key_to_shard(key, nshards);
 		if (participants.find(i) == participants.end()) {
     		participants.insert(i);
   		}
 	}
 
 	for (const auto &pair : txn->write_set) {
-		int i = key_to_shard((pair.first), nshards);
+		int i = 0;//key_to_shard((pair.first), nshards);
 		if (participants.find(i) == participants.end()) {
     		participants.insert(i);
   		}

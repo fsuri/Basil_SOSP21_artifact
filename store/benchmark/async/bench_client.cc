@@ -133,7 +133,7 @@ void BenchmarkClient::CooldownDone() {
   Notice("99th percentile latency is %ld ns (%s)", ns, buf);
 }
 
-void BenchmarkClient::OnReply() {
+void BenchmarkClient::OnReply(int result) {
   if (cooldownDone) {
     return;
   }

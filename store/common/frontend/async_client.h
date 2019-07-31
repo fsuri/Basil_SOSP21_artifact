@@ -5,7 +5,9 @@
 
 #include <functional>
 
-typedef std::function<void(bool, std::map<std::string, std::string>)> execute_callback;
+#define SUCCESS 0
+
+typedef std::function<void(int, std::map<std::string, std::string>)> execute_callback;
 
 class AsyncClient {
  public:

@@ -5,6 +5,7 @@
 
 #include "store/common/frontend/async_transaction.h"
 #include "store/common/frontend/client.h"
+#include "store/common/frontend/transaction_utils.h"
 
 namespace tpcc {
 
@@ -12,7 +13,6 @@ class TPCCTransaction : public AsyncTransaction {
  public:
   TPCCTransaction();
   virtual ~TPCCTransaction();
-
 };
 
 }

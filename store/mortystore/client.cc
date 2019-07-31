@@ -69,7 +69,7 @@ void Client::Get(Branch *branch, const std::string &key) {
   Debug("GET [%lu : %lu : %s]", t_id, branch->id, key.c_str());
 
   // Contact the appropriate shard to get the value.
-  int i = ::Client::key_to_shard(key, nshards);
+  int i = 0;//::Client::key_to_shard(key, nshards);
   if (branch->participants.find(i) == branch->participants.end()) {
     branch->participants.insert(i);
     //sclient[i]->Begin(t_id);
@@ -89,7 +89,7 @@ void Client::Put(Branch *branch, const std::string &key,
       value.c_str());
 
   // Contact the appropriate shard to get the value.
-  int i = ::Client::key_to_shard(key, nshards);
+  int i = 0;//::Client::key_to_shard(key, nshards);
   if (branch->participants.find(i) == branch->participants.end()) {
     branch->participants.insert(i);
     //sclient[i]->Begin(t_id);

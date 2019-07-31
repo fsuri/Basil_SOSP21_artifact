@@ -5,7 +5,7 @@ import "store/common/common-proto.proto";
 package tapirstore.proto;
 
 message GetMessage {
-    required string key = 1;
+    required bytes key = 1;
     optional TimestampMessage timestamp = 2;
 }
 
@@ -43,6 +43,6 @@ message Reply {
      // -2 = retry
      // -3 = abstain/no reply
      required int32 status = 1;
-     optional string value = 2;
+     optional bytes value = 2;
      optional TimestampMessage timestamp = 3;
 }

@@ -31,6 +31,7 @@
 #define BENCHMARK_CLIENT_H
 
 #include "store/common/frontend/async_client.h"
+#include "store/common/stats.h"
 #include "lib/latency.h"
 #include "lib/transport.h"
 
@@ -42,7 +43,7 @@ class BenchmarkClient {
   virtual ~BenchmarkClient();
 
   void Start();
-  void OnReply();
+  void OnReply(int result);
 
   struct Latency_t latency;
   bool started;
@@ -50,19 +51,21 @@ class BenchmarkClient {
   bool cooldownDone;
   int tputInterval;
   std::vector<uint64_t> latencies;
+
+  inline const Stats &GetStats() const { return stats; }
  protected:
   virtual void SendNext() = 0;
   virtual std::string GetLastOp() const = 0;
   
   AsyncClient &client;
-
+  Stats stats;
+  Transport &transport;
  private:
   void Finish();
   void WarmupDone();
   void CooldownDone();
   void TimeInterval();
 
-  Transport &transport;
   int numRequests;
   int expDuration;
   uint64_t delay;
