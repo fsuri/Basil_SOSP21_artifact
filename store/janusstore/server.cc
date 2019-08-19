@@ -8,7 +8,7 @@ namespace janusstore {
 using namespace std;
 using namespace proto;
 
-bool _checkIfAllCommitting(std::unordered_map<uint64_t, Transaction> id_txn_map, std::vector<uint64_t> deps);
+std::vector<uint64_t> _checkIfAllCommitting(std::unordered_map<uint64_t, Transaction> id_txn_map, std::vector<uint64_t> deps);
 
 Server::Server() {
     store = new Store();
@@ -180,13 +180,34 @@ void Server::HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
     Transaction txn = id_txn_map[txn_id];
     dep_map[txn_id] = deps;
     txn.setTransactionStatus(COMMIT);
+    // check if this unblocks others, and rerun HandleCommit for those
+    if (blocking_ids.find(txn_id) != blocking_ids.end()) {
+        for(uint64_t blocked_id : blocking_ids[txn_id]) {
+            Server::HandleCommit(blocked_id, dep_map[blocked_id]);
+        }
+    }
 
     // wait and inquire
-    while(!_checkIfAllCommitting(id_txn_map, deps)) {
-        // if txn_id not involved on S
-        // inquire S
+    std::vector<uint64_t> not_committing_ids = _checkIfAllCommitting(id_txn_map, deps);
+    if (not_committing_ids.size() != 0) {
+        // TODO: if txn_id not involved on S, inquire S
 
-        // wait for T to be committing
+        // HACK: find a more elegant way to do this
+        bool found_on_server = false;
+        for (uint64_t blocking_txn_id : not_committing_ids) {
+
+            // for every txn_id found on this server, add it to the list of blocking
+            if (id_txn_map.find(txn_id) != id_txn_map.end()){
+                if (blocking_ids.find(blocking_txn_id) == blocking_ids.end()) {
+                    blocking_ids[blocking_txn_id] = std::vector<uint64_t>(txn_id);
+                } else {
+                    blocking_ids[blocking_txn_id].push_back(txn_id);
+                }
+            }
+            found_on_server = true;
+        }
+        // need to wait for local server to set transactions to committing
+        if (found_on_server) return;
     }
 
     // execute phase TODO make this a seperate helper fn
@@ -315,12 +336,19 @@ void Server::ResolveContention(std::vector<uint64_t> scc) {
     sort(scc.begin(), scc.end());
 }
 
-bool _checkIfAllCommitting(std::unordered_map<uint64_t, Transaction> id_txn_map, std::vector<uint64_t> deps) {
-    for (int txn_id : deps) {
-        Transaction txn = id_txn_map[txn_id];
-        if (txn.getTransactionStatus() != COMMIT) return false;
+// return list of ids that are not committing
+std::vector<uint64_t> _checkIfAllCommitting(
+    std::unordered_map<uint64_t, Transaction> id_txn_map,
+    std::vector<uint64_t> deps
+    ) {
+        std::vector<uint64_t> not_committing_ids;
+        for (int txn_id : deps) {
+            Transaction txn = id_txn_map[txn_id];
+            if (txn.getTransactionStatus() != COMMIT) {
+                not_committing_ids.push_back(txn_id);
+            }
+        }
+        return not_committing_ids;
     }
-    return true;
-}
 
 } // namespace janusstore

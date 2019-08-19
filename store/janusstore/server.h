@@ -56,6 +56,9 @@ private:
     // TODO ensure that this map is cleared per transaction
     std::unordered_map<string, std::vector<uint64_t>> write_key_txn_map;
 
+    // maps txn_id -> list[other_ids] being blocked by txn_id
+    std::unordered_map<uint64_t, std::vector<uint64_t>> blocking_ids;
+
     // functions to process shardclient requests
     // must take in a full Transaction object in order to correctly bookkeep and commit
 
@@ -68,6 +71,7 @@ private:
     // TODO figure out what T.abandon and T.result are
     void HandleCommit(uint64_t txn_id, std::vector<std::uint64_t> deps);
 
+    std::unordered_map<string, string> WaitAndInquire(uint64_t txn_id);
     std::unordered_map<string, string> _ExecutePhase(uint64_t txn_id);
     std::vector<uint64_t> _StronglyConnectedComponent(uint64_t txn_id);
     bool _ReadyToProcess(Transaction txn);
