@@ -12,6 +12,7 @@ void AsyncAdapterClient::Execute(AsyncTransaction *txn,
   currEcb = ecb;
   currTxn = txn;
   opCount = 0UL;
+  readValues.clear();
   client->Begin();
   ExecuteNextOperation();
 }
@@ -80,9 +81,9 @@ void AsyncAdapterClient::PutTimeout(int status, const std::string &key,
   Debug("Put(%s,%s) timed out :(", key.c_str(), val.c_str());
 }
 
-void AsyncAdapterClient::CommitCallback(bool committed) {
+void AsyncAdapterClient::CommitCallback(int result) {
   Debug("Commit callback.");
-  currEcb(committed, readValues);
+  currEcb(result, readValues);
 }
 
 void AsyncAdapterClient::CommitTimeout(int status) {

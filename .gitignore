@@ -11,6 +11,7 @@ store/benchmark/terminalClient
 store/server
 store/benchmark/async/benchmark
 store/benchmark/async/benchmark_oneshot
+store/benchmark/async/tpcc/tpcc_generator
 timeserver/timeserver
 
 lib/tests/configuration-test

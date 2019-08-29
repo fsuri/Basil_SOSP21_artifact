@@ -47,13 +47,18 @@
 #include <thread>
 #include <set>
 
+#define RESULT_COMMITTED 0
+#define RESULT_USER_ABORTED 1
+#define RESULT_SYSTEM_ABORTED 2
+#define RESULT_MAX_RETRIES 3
+
 namespace tapirstore {
 
 class Client : public ::Client {
  public:
-  Client(const std::string configPath, int nShards,
-      int closestReplica, Transport *transport,
-      TrueTime timeserver = TrueTime(0,0));
+  Client(const std::string configPath, int nShards, int nGroups,
+      int closestReplica, Transport *transport, partitioner part,
+      bool syncCommit, TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 
   // Begin a transaction.
@@ -114,6 +119,7 @@ class Client : public ::Client {
 
   // Number of shards.
   uint64_t nshards;
+  uint64_t ngroups;
 
   // Number of retries for current transaction.
   long retries;
@@ -127,11 +133,16 @@ class Client : public ::Client {
   // Buffering client for each shard.
   std::vector<BufferClient *> bclient;
 
+  partitioner part;
+  
+  bool syncCommit;
+
   // TrueTime server.
   TrueTime timeServer;
   
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
+  std::unordered_map<std::string, uint32_t> statInts;
 };
 
 } // namespace tapirstore

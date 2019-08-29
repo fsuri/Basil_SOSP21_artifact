@@ -11,11 +11,11 @@ namespace retwis {
 
 RetwisClient::RetwisClient(KeySelector *keySelector, AsyncClient &client,
     Transport &transport, int numRequests, int expDuration, uint64_t delay,
-    int warmupSec, int cooldownSec, int tputInterval,
-    const std::string &latencyFilename)
+    int warmupSec, int cooldownSec, int tputInterval, uint32_t abortBackoff,
+    bool retryAborted, const std::string &latencyFilename)
     : AsyncTransactionBenchClient(client, transport, numRequests, expDuration,
-        delay, warmupSec, cooldownSec, tputInterval, latencyFilename),
-        keySelector(keySelector) {
+        delay, warmupSec, cooldownSec, tputInterval, abortBackoff,
+        retryAborted, latencyFilename), keySelector(keySelector) {
 }
 
 RetwisClient::~RetwisClient() {

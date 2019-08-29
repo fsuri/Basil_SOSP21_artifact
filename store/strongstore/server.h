@@ -60,11 +60,13 @@ public:
     virtual void UnloggedUpcall(const string &str1, string &str2);
     virtual void Load(const string &key, const string &value,
         const Timestamp timestamp);
+  inline Stats &GetStats() { return stats; }
 
 private:
     Mode mode;
     TxnStore *store;
     TrueTime timeServer;
+    Stats stats;
 };
 
 } // namespace strongstore

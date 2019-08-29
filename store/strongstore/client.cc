@@ -36,8 +36,8 @@ using namespace std;
 namespace strongstore {
 
 Client::Client(Mode mode, string configPath, int nShards,
-                int closestReplica, TrueTime timeServer)
-    : transport(0.0, 0.0, 0), mode(mode), timeServer(timeServer)
+                int closestReplica, partitioner part, TrueTime timeServer)
+    : transport(0.0, 0.0, 0), mode(mode), part(part), timeServer(timeServer)
 {
     // Initialize all state here;
     client_id = 0;
@@ -120,7 +120,7 @@ int
 Client::Get(const string &key, string &value)
 {
     // Contact the appropriate shard to get the value.
-    int i = ::Client::key_to_shard(key, nshards);
+    int i = part(key, nshards);
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (participants.find(i) == participants.end()) {
@@ -142,7 +142,7 @@ int
 Client::Put(const string &key, const string &value)
 {
     // Contact the appropriate shard to set the value.
-    int i = ::Client::key_to_shard(key, nshards);
+    int i = part(key, nshards);
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (participants.find(i) == participants.end()) {

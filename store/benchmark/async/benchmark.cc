@@ -10,6 +10,8 @@
 #include "lib/timeval.h"
 #include "lib/tcptransport.h"
 #include "store/common/truetime.h"
+#include "store/common/stats.h"
+#include "store/common/partitioner.h"
 #include "store/common/frontend/async_client.h"
 #include "store/common/frontend/async_adapter_client.h"
 #include "store/strongstore/client.h"
@@ -45,6 +47,9 @@ enum benchmode_t {
 DEFINE_uint64(client_id, 0, "unique identifier for client");
 DEFINE_string(config_prefix, "", "prefix of path to shard configuration file");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
+DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
+DEFINE_bool(tapir_sync_commit, true, "wait until commit phase completes before"
+    " sending additional transactions (for TAPIR)");
 
 const std::string protocol_args[] = {
 	"txn-l",
@@ -127,6 +132,9 @@ DEFINE_int32(closest_replica, -1, "index of the replica closest to the client");
 DEFINE_uint64(delay, 0, "simulated communication delay");
 DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
 DEFINE_int32(clock_error, 0, "maximum error for clock");
+DEFINE_string(stats_file, "", "path to output stats file.");
+DEFINE_int32(abort_backoff, 100, "sleep exponentially increasing amount after abort.");
+DEFINE_bool(retry_aborted, true, "retry aborted transactions.");
 
 /**
  * Retwis settings.
@@ -143,6 +151,24 @@ DEFINE_int32(warehouse_per_shard, 1, "number of warehouses per shard"
 DEFINE_int32(clients_per_warehouse, 1, "number of clients per warehouse"
 		" (for tpcc)");
 DEFINE_int32(remote_item_milli_p, 0, "remote item milli p (for tpcc)");
+
+DEFINE_int32(tpcc_num_warehouses, 1, "number of warehouses (for tpcc)");
+DEFINE_int32(tpcc_w_id, 1, "home warehouse id for this client (for tpcc)");
+DEFINE_int32(tpcc_C_c_id, 1, "C value for NURand() when selecting"
+    " random customer id (for tpcc)");
+DEFINE_int32(tpcc_C_c_last, 1, "C value for NURand() when selecting"
+    " random customer last name (for tpcc)");
+DEFINE_int32(tpcc_new_order_ratio, 45, "ratio of new_order transactions to other"
+    " transaction types (for tpcc)");
+DEFINE_int32(tpcc_delivery_ratio, 4, "ratio of delivery transactions to other"
+    " transaction types (for tpcc)");
+DEFINE_int32(tpcc_stock_level_ratio, 4, "ratio of stock_level transactions to other"
+    " transaction types (for tpcc)");
+DEFINE_int32(tpcc_payment_ratio, 43, "ratio of payment transactions to other"
+    " transaction types (for tpcc)");
+DEFINE_int32(tpcc_order_status_ratio, 4, "ratio of order_status transactions to other"
+    " transaction types (for tpcc)");
+DEFINE_bool(static_w_id, false, "force clients to use same w_id for each treansaction");
 
 DEFINE_LATENCY(op);
 
@@ -213,22 +239,30 @@ int main(int argc, char **argv) {
     }
   }
 
-  // parse tpcc settings
-	int total_warehouses = FLAGS_num_shards * FLAGS_warehouse_per_shard;
-  
-  UDPTransport transport(0.0, 0.0, 0, false);
+  TCPTransport transport(0.0, 0.0, 0, false);
 
   std::vector<::AsyncClient *> clients;
   std::vector<::BenchmarkClient *> benchClients;
   KeySelector *keySelector = new UniformKeySelector(keys);
+
+  partitioner part;
+  switch (benchMode) {
+    case BENCH_TPCC:
+      part = warehouse_partitioner;
+      break;
+    default:
+      part = default_partitioner;
+      break;
+  }
 
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
     AsyncClient *client;
     switch (mode) {
       case PROTO_TAPIR: {
         client = new AsyncAdapterClient(new tapirstore::Client(
-              FLAGS_config_prefix, FLAGS_num_shards, FLAGS_closest_replica,
-              &transport, TrueTime(FLAGS_clock_skew, FLAGS_clock_error)));
+              FLAGS_config_prefix, FLAGS_num_shards, FLAGS_num_groups,
+              FLAGS_closest_replica, &transport, part, FLAGS_tapir_sync_commit,
+              TrueTime(FLAGS_clock_skew, FLAGS_clock_error)));
         break;
       }
       /*case MODE_WEAK: {
@@ -249,12 +283,18 @@ int main(int argc, char **argv) {
       case BENCH_RETWIS:
         bench = new retwis::RetwisClient(keySelector, *client, transport,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
-            FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval);
+            FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
+            FLAGS_abort_backoff, FLAGS_retry_aborted);
         break;
       case BENCH_TPCC:
         bench = new tpcc::TPCCClient(*client, transport, FLAGS_num_requests,
             FLAGS_exp_duration, FLAGS_delay, FLAGS_warmup_secs,
-            FLAGS_cooldown_secs, FLAGS_tput_interval);
+            FLAGS_cooldown_secs, FLAGS_tput_interval, FLAGS_tpcc_num_warehouses,
+            FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id, FLAGS_tpcc_C_c_last,
+            FLAGS_tpcc_new_order_ratio, FLAGS_tpcc_delivery_ratio,
+            FLAGS_tpcc_payment_ratio, FLAGS_tpcc_order_status_ratio,
+            FLAGS_tpcc_stock_level_ratio, FLAGS_static_w_id,
+            (FLAGS_client_id << 4) | i, FLAGS_abort_backoff, FLAGS_retry_aborted);
         break;
       default:
         NOT_REACHABLE();
@@ -268,18 +308,13 @@ int main(int argc, char **argv) {
 	std::string latencyFile;
   std::string latencyRawFile;
   std::vector<uint64_t> latencies;
-  Timeout checkTimeout(&transport, 100, [&]() {
-    for (auto x : benchClients) {
-      if (!x->cooldownDone) {
-        return;
-      }
-    }
-    Notice("All clients done.");
-
+  Timeout checkTimeout(&transport, FLAGS_exp_duration * 1000 + 100, [&]() {
     Latency_t sum;
     _Latency_Init(&sum, "total");
+    Stats total;
     for (unsigned int i = 0; i < benchClients.size(); i++) {
       Latency_Sum(&sum, &benchClients[i]->latency);
+      total.Merge(benchClients[i]->GetStats());
     }
     Latency_Dump(&sum);
     if (latencyFile.size() > 0) {
@@ -295,6 +330,10 @@ int main(int argc, char **argv) {
       if (!rawFile) {
         Warning("Failed to write raw latency output");
       }
+    }
+
+    if (FLAGS_stats_file.size() > 0) {
+      total.ExportJSON(FLAGS_stats_file);
     }
     exit(0);
   });

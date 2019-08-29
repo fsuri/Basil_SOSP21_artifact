@@ -29,8 +29,12 @@
  *
  **********************************************************************/
 
-#include "lib/tcptransport.h"
+#include <csignal>
 
+#include "lib/tcptransport.h"
+#include "lib/io_utils.h"
+
+#include "store/common/partitioner.h"
 #include "store/common/frontend/client.h"
 #include "store/server.h"
 #include "store/strongstore/server.h"
@@ -53,7 +57,8 @@ enum protocol_t {
  */
 DEFINE_string(config_path, "", "path to shard configuration file");
 DEFINE_uint64(replica_idx, 0, "index of replica in shard configuration file");
-DEFINE_uint64(shard_idx, 0, "index of shard to which this replica belongs");
+DEFINE_uint64(group_idx, 0, "index of the group to which this replica belongs");
+DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
 
 const std::string protocol_args[] = {
@@ -82,6 +87,30 @@ static bool ValidateProtocol(const char* flagname,
 DEFINE_string(protocol, protocol_args[0],	"the protocol to use during this"
     " experiment");
 DEFINE_validator(protocol, &ValidateProtocol);
+
+const std::string partitioner_args[] = {
+	"default",
+  "warehouse"
+};
+const Partitioner parts[] {
+  DEFAULT,
+  WAREHOUSE
+};
+static bool ValidatePartitioner(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(partitioner_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == partitioner_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(partitioner, partitioner_args[0],	"the partitioner to use during this"
+    " experiment");
+DEFINE_validator(partitioner, &ValidatePartitioner);
+
 
 /**
  * TAPIR settings.
@@ -123,12 +152,19 @@ DEFINE_validator(strongmode, &ValidateStrongMode);
  */
 DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
 DEFINE_int32(clock_error, 0, "maximum error for clock");
+DEFINE_string(stats_file, "", "path to file for server stats");
 
 /**
  * Benchmark settings.
  */
 DEFINE_string(keys_path, "", "path to file containing keys in the system");
 DEFINE_uint64(num_keys, 0, "number of keys to generate");
+DEFINE_string(data_file_path, "", "path to file containing key-value pairs to be loaded");
+
+::Server *server;
+TransportReceiver *replica = nullptr;
+
+void Cleanup(int signal);
 
 int main(int argc, char **argv) {
   gflags::SetUsageMessage(
@@ -144,7 +180,7 @@ int main(int argc, char **argv) {
   }
   transport::Configuration config(configStream);
 
-  if (FLAGS_replica_idx >= config.n) {
+  if (FLAGS_replica_idx >= static_cast<uint64_t>(config.n)) {
     std::cerr << "Replica index " << FLAGS_replica_idx << " is out of bounds"
                  "; only " << config.n << " replicas defined" << std::endl;
   }
@@ -175,38 +211,9 @@ int main(int argc, char **argv) {
     }
   }
 
-  // parse keys
-  std::vector<std::string> keys;
-  if (FLAGS_keys_path.empty()) {
-    if (FLAGS_num_keys > 0) {
-      for (size_t i = 0; i < FLAGS_num_keys; ++i) {
-        keys.push_back(std::to_string(i));
-      }
-    } else {
-      std::cerr << "Specified neither keys file nor number of keys."
-                << std::endl;
-      return 1;
-    }
-  } else {
-    std::ifstream in;
-    in.open(FLAGS_keys_path);
-    if (!in) {
-      std::cerr << "Could not read keys from: " << FLAGS_keys_path
-                << std::endl;
-      return 1;
-    }
-    std::string key;
-    while (std::getline(in, key)) {
-      keys.push_back(key);
-    }
-    in.close();
-  }
 
+  TCPTransport transport(0.0, 0.0, 0);
 
-  UDPTransport transport(0.0, 0.0, 0);
-
-  ::Server *server;
-  TransportReceiver *replica = nullptr;
 
   switch (proto) {
     case PROTO_TAPIR: {
@@ -227,7 +234,7 @@ int main(int argc, char **argv) {
       break;
     }
     case PROTO_JANUS: {
-      server = new janusstore::Server();
+      //server = new janusstore::Server();
       // TODO any more config?
       break;
     }
@@ -236,17 +243,94 @@ int main(int argc, char **argv) {
     }
   }
 
-  // load keys
-  for (auto key : keys) {
-    if (Client::key_to_shard(key, FLAGS_num_shards) == FLAGS_shard_idx) {
-      server->Load(key, "null", Timestamp());
+  // parse protocol and mode
+  Partitioner partType = DEFAULT;
+  int numParts = sizeof(partitioner_args);
+  for (int i = 0; i < numParts; ++i) {
+    if (FLAGS_partitioner == partitioner_args[i]) {
+      partType = parts[i];
+      break;
     }
   }
 
+  partitioner part;
+  switch (partType) {
+    case DEFAULT:
+      part = default_partitioner;
+      break;
+    case WAREHOUSE:
+      part = warehouse_partitioner;
+      break;
+    default:
+      NOT_REACHABLE();
+  }
+
+  // parse keys
+  std::vector<std::string> keys;
+  if (FLAGS_data_file_path.empty() && FLAGS_keys_path.empty()) {
+    if (FLAGS_num_keys > 0) {
+      for (size_t i = 0; i < FLAGS_num_keys; ++i) {
+        keys.push_back(std::to_string(i));
+      }
+    } else {
+      std::cerr << "Specified neither keys file nor number of keys."
+                << std::endl;
+      return 1;
+    }
+  } else if (FLAGS_data_file_path.length() > 0 && FLAGS_keys_path.empty()) {
+    std::ifstream in;
+    in.open(FLAGS_data_file_path);
+    if (!in) {
+      std::cerr << "Could not read data from: " << FLAGS_data_file_path
+                << std::endl;
+      return 1;
+    }
+    size_t loaded = 0;
+    while (!in.eof()) {
+      std::string key;
+      std::string value;
+      int i = ReadBytesFromStream(&in, key);
+      if (i == 0) {
+        ReadBytesFromStream(&in, value);
+        if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
+          server->Load(key, value, Timestamp());
+        }
+      }
+      ++loaded;
+    }
+    Debug("Loaded %lu key-value pairs from file %s.", loaded,
+        FLAGS_data_file_path.c_str());
+  } else {
+    std::ifstream in;
+    in.open(FLAGS_keys_path);
+    if (!in) {
+      std::cerr << "Could not read keys from: " << FLAGS_keys_path
+                << std::endl;
+      return 1;
+    }
+    std::string key;
+    while (std::getline(in, key)) {
+      if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
+        server->Load(key, "null", Timestamp());
+      }
+    }
+    in.close();
+  }
+
+  std::signal(SIGKILL, Cleanup);
+  std::signal(SIGTERM, Cleanup);
+  std::signal(SIGINT, Cleanup);
   transport.Run();
+  return 0;
+}
+
+void Cleanup(int signal) {
+  if (FLAGS_stats_file.size() > 0) {
+    server->GetStats().ExportJSON(FLAGS_stats_file);
+  }
   delete server;
   if (replica != nullptr) {
     delete replica;
   }
-  return 0;
+  exit(0);
 }

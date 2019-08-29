@@ -152,7 +152,8 @@ void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply re
 	}
 }
 
-void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_accept_callback acb) {
+void ShardClient::AcceptCallback(uint64_t txn_id,
+    std::vector<janusstore::proto::Reply> reply, client_accept_callback acb) {
 	// TODO who unwraps replica responses into the callback params?
 	responded++;
 	

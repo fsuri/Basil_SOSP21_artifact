@@ -35,9 +35,11 @@ namespace tapirstore {
 
 using namespace std;
 
-Client::Client(const string configPath, int nShards,
-                int closestReplica, Transport *transport, TrueTime timeServer)
-    : nshards(nShards), transport(transport), timeServer(timeServer),
+Client::Client(const string configPath, int nShards, int nGroups,
+                int closestReplica, Transport *transport, partitioner part,
+                bool syncCommit, TrueTime timeServer)
+    : nshards(nShards), ngroups(nGroups), transport(transport), part(part),
+    syncCommit(syncCommit), timeServer(timeServer),
     lastReqId(0UL) {
     // Initialize all state here;
     client_id = 0;
@@ -54,7 +56,7 @@ Client::Client(const string configPath, int nShards,
     Debug("Initializing Tapir client with id [%lu] %lu", client_id, nshards);
 
     /* Start a client for each shard. */
-    for (uint64_t i = 0; i < nshards; i++) {
+    for (uint64_t i = 0; i < ngroups; i++) {
         string shardConfigPath = configPath + to_string(i) + ".config";
         ShardClient *shardclient = new ShardClient(shardConfigPath,
                 transport, client_id, i, closestReplica);
@@ -89,7 +91,7 @@ void Client::Get(const std::string &key, get_callback gcb,
   Debug("GET [%lu : %s]", t_id, key.c_str());
 
   // Contact the appropriate shard to get the value.
-  int i = key_to_shard(key, nshards);
+  int i = part(key, nshards) % ngroups;
 
   // If needed, add this shard to set of participants and send BEGIN.
   if (participants.find(i) == participants.end()) {
@@ -107,7 +109,7 @@ void Client::Put(const std::string &key, const std::string &value,
   Debug("PUT [%lu : %s]", t_id, key.c_str());
 
   // Contact the appropriate shard to set the value.
-  int i = key_to_shard(key, nshards);
+  int i = part(key, nshards) % ngroups;
 
   // If needed, add this shard to set of participants and send BEGIN.
   if (participants.find(i) == participants.end()) {
@@ -194,6 +196,7 @@ void Client::PrepareCallback(uint64_t reqId, int status, Timestamp ts) {
 void Client::HandleAllPreparesReceived(PendingRequest *req) {
   Debug("All PREPARE's [%lu] received", t_id);
   uint64_t reqId = req->id;
+  int abortResult = -1;
   switch (req->prepareStatus) {
     case REPLY_OK: {
       Debug("COMMIT [%lu]", t_id);
@@ -203,23 +206,31 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
       commit_callback ccb = [this, reqId](bool committed) {
         auto itr = this->pendingReqs.find(reqId);
         if (itr != this->pendingReqs.end()) {
+          if (!itr->second->callbackInvoked) {
+            itr->second->ccb(RESULT_COMMITTED);
+            itr->second->callbackInvoked = true;
+          }
           this->pendingReqs.erase(itr);
           delete itr->second;
         }
       };
       commit_timeout_callback ctcb = [](int status){};
       for (auto p : participants) {
-          bclient[p]->Commit(0, ccb, ctcb, 1000); // we don't really care about the timeout here
+          bclient[p]->Commit(req->prepareTimestamp->getTimestamp(), ccb, ctcb,
+              1000); // we don't really care about the timeout here
       }
-      if (!req->callbackInvoked) {
-        req->ccb(true);
-        req->callbackInvoked = true;
+      if (!syncCommit) {
+        if (!req->callbackInvoked) {
+          req->ccb(RESULT_COMMITTED);
+          req->callbackInvoked = true;
+        }
       }
       break;
     }
     case REPLY_RETRY: {
       ++req->commitTries;
       if (req->commitTries < COMMIT_RETRIES) {
+        statInts["retries"] += 1;
         uint64_t now = timeServer.GetTime();
         if (now > req->maxRepliedTs) {
           req->prepareTimestamp->setTimestamp(now);
@@ -231,26 +242,34 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         // the timeout passed to Client::Commit, or maybe that timeout / COMMIT_RETRIES
         break;
       } 
-      // no break here since we should abort after failing COMMIT_RETRIES times
+      statInts["aborts_max_retries"] += 1;
+      abortResult = RESULT_MAX_RETRIES;
+      break;
+    }
+    case REPLY_FAIL: {
+      abortResult = RESULT_SYSTEM_ABORTED;
+      break;
     }
     default: {
-      // application doesn't need to be notified when abort has been acknowledged,
-      // so we use empty callback functions and directly call the commit callback
-      // function (with commit=false indicating an abort)
-      abort_callback acb = [this, reqId]() {
-        auto itr = this->pendingReqs.find(reqId);
-        if (itr != this->pendingReqs.end()) {
-          this->pendingReqs.erase(itr);
-          delete itr->second;
-        }
-      };
-      abort_timeout_callback atcb = [](int status){};
-      Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
-      if (!req->callbackInvoked) {
-        req->ccb(false);
-        req->callbackInvoked = true;
-      }
       break;
+    }
+  }
+  if (abortResult > 0) {
+    // application doesn't need to be notified when abort has been acknowledged,
+    // so we use empty callback functions and directly call the commit callback
+    // function (with commit=false indicating an abort)
+    abort_callback acb = [this, reqId]() {
+      auto itr = this->pendingReqs.find(reqId);
+      if (itr != this->pendingReqs.end()) {
+        this->pendingReqs.erase(itr);
+        delete itr->second;
+      }
+    };
+    abort_timeout_callback atcb = [](int status){};
+    Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
+    if (!req->callbackInvoked) {
+      req->ccb(abortResult);
+      req->callbackInvoked = true;
     }
   }
 }
