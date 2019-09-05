@@ -34,6 +34,7 @@
 #include "store/common/stats.h"
 #include "lib/latency.h"
 #include "lib/transport.h"
+#include <random>
 
 class BenchmarkClient {
  public:

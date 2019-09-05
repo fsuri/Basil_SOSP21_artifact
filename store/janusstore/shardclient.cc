@@ -139,8 +139,9 @@ void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply re
 	// aggregate replies for this transaction
 	if (this->preaccept_replies.count(txn_id)) {
 		// key already exists, so append to list
-		// TODO may need to explicitly retrieve list, pushback, and set in map
-		this->preaccept_replies[txn_id].push_back(reply);
+		std::vector<janusstore::proto::Reply> list;
+		list = this->preaccept_replies.at(txn_id);
+		list.push_back(reply);
 	} else {
 		this->preaccept_replies[txn_id] = std::vector<janusstore::proto::Reply>({reply});
 	}
@@ -152,16 +153,17 @@ void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply re
 	}
 }
 
-void ShardClient::AcceptCallback(uint64_t txn_id,
-    std::vector<janusstore::proto::Reply> reply, client_accept_callback acb) {
+void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_accept_callback acb) {
 	// TODO who unwraps replica responses into the callback params?
 	responded++;
 	
 	// aggregate replies for this transaction
 	if (this->accept_replies.count(txn_id)) {
 		// key already exists, so append to list
-		// TODO may need to explicitly retrieve list, pushback, and set in map
-		this->accept_replies[txn_id].push_back(reply);
+		// key already exists, so append to list
+		std::vector<janusstore::proto::Reply> list;
+		list = this->accept_replies.at(txn_id);
+		list.push_back(reply);
 	} else {
 		this->accept_replies[txn_id] = std::vector<janusstore::proto::Reply>({reply});
 	}
@@ -180,8 +182,10 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	// aggregate replies for this transaction
 	if (this->commit_replies.count(txn_id)) {
 		// key already exists, so append to list
-		// TODO may need to explicitly retrieve list, pushback, and set in map
-		this->commit_replies[txn_id].push_back(reply);
+		// key already exists, so append to list
+		std::vector<janusstore::proto::Reply> list;
+		list = this->commit_replies.at(txn_id);
+		list.push_back(reply);
 	} else {
 		this->commit_replies[txn_id] = std::vector<janusstore::proto::Reply>({reply});
 	}
