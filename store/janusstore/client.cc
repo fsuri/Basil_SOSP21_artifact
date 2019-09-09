@@ -63,6 +63,11 @@ void Client::setParticipants(Transaction *txn) {
 }
 
 void Client::PreAccept(Transaction *txn, uint64_t ballot, output_commit_callback ocb) {
+  if (!txn) {
+    printf("preaccept here\r\n");
+    ocb(0);
+    return;
+  }
 	txn->setTransactionId(txn_id);
 	txn_id++;
 	setParticipants(txn);
