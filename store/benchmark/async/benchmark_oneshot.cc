@@ -15,12 +15,12 @@
 #include "store/strongstore/client.h"
 #include "store/weakstore/client.h"
 #include "store/tapirstore/client.h"
+#include "store/janusstore/client.h"
 #include "store/benchmark/async/bench_client.h"
 #include "store/benchmark/async/common/key_selector.h"
 #include "store/benchmark/async/common/uniform_key_selector.h"
 #include "store/benchmark/async/retwis/retwis_client.h"
 #include "store/benchmark/async/tpcc/tpcc_client.h"
-#include "store/janusstore/client.h"
 
 #include <gflags/gflags.h>
 
@@ -29,20 +29,23 @@
 
 #define N 1000
 void SendTxn(janusstore::Client *client, size_t *sent) {
-  commit_callback ccb = [client, sent](bool committed){
-    if (*sent < N) {
-      SendTxn(client, sent);
-    }
-  };
-  client->PreAccept(NULL, 0, ccb);
+	commit_callback ccb = [client, sent] (uint64_t committed) {
+		// TODO (andy): what is this for?s
+		// if (*sent < N) {
+		// 	SendTxn(client, sent);
+		// }
+		printf("ccb here\r\n");
+	};
+	client->PreAccept(NULL, 0, ccb);
+	printf("preaccept done\r\n");
 }
 
 int main(int argc, char **argv) {
-  UDPTransport transport(0.0, 0.0, 0, false);
-  size_t sent = 0;
-  janusstore::Client *client;
+	// transport is used to send messages btwn replicas and schedule msgs
+	UDPTransport transport(0.0, 0.0, 0, false);
+	size_t sent = 0;
+	janusstore::Client *client;
 	transport.Timer(0, [client, &sent]() { SendTxn(client, &sent); });
-  transport.Run();
+	transport.Run();
 	return 0;
 }
-
