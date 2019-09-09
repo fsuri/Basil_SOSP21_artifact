@@ -12,10 +12,8 @@
 #include "store/common/truetime.h"
 #include "store/common/frontend/async_client.h"
 #include "store/common/frontend/async_adapter_client.h"
-#include "store/strongstore/client.h"
-#include "store/weakstore/client.h"
-#include "store/tapirstore/client.h"
 #include "store/janusstore/client.h"
+#include "store/janusstore/transaction.h"
 #include "store/benchmark/async/bench_client.h"
 #include "store/benchmark/async/common/key_selector.h"
 #include "store/benchmark/async/common/uniform_key_selector.h"
@@ -30,12 +28,16 @@
 #define N 1000
 void SendTxn(janusstore::Client *client, size_t *sent) {
 	commit_callback ccb = [client, sent] (uint64_t committed) {
-		// TODO (andy): what is this for?s
-		// if (*sent < N) {
-		// 	SendTxn(client, sent);
-		// }
-		printf("ccb here\r\n");
+		if (*sent < N) {
+			// essentially repeatedly sends a transaction through preaccept
+			SendTxn(client, sent);
+		}
+		printf("ccb here %d \r\n", committed);
 	};
+
+	janusstore::Transaction txn(1111);
+	janusstore::Transaction* txn_ptr = &txn;
+	// TODO(andy): pass in txn to preaccept function
 	client->PreAccept(NULL, 0, ccb);
 	printf("preaccept done\r\n");
 }

@@ -113,7 +113,6 @@ void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstor
 			for (int i = 0; i < msg.txnid_size(); i++) {
 				uint64_t dep_id = msg.txnid(i);
 				// add dep to aggregated set
-				// TODO verify this is correct syntax
 				aggregated_deps[txn_id].insert(dep_id);
 			}
 		} else {

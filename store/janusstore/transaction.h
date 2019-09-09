@@ -37,13 +37,14 @@ private:
 public:
     Transaction() {};
     Transaction(uint64_t txn_id);
+    Transaction(uint64_t txn_id, const TransactionMessage &msg);
+    ~Transaction();
+    
     // set of keys to be read
     std::unordered_set<std::string> read_set;
 
     // map between key and value(s)
     std::unordered_map<std::string, std::string> write_set;
-    Transaction(uint64_t txn_id, const TransactionMessage &msg);
-    ~Transaction();
 
     void setTransactionId(uint64_t txn_id);
     void setTransactionStatus(TransactionStatus status);
