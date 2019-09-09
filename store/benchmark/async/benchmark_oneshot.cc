@@ -25,19 +25,20 @@
 #include <vector>
 #include <algorithm>
 
-#define N 1000
+#define N 10
 void SendTxn(janusstore::Client *client, size_t *sent) {
 	commit_callback ccb = [client, sent] (uint64_t committed) {
 		if (*sent < N) {
 			// essentially repeatedly sends a transaction through preaccept
+			*sent += 1;
 			SendTxn(client, sent);
 		}
 		printf("ccb here %d \r\n", committed);
 	};
 
-	janusstore::Transaction txn(1111);
+	janusstore::Transaction txn;
 	janusstore::Transaction* txn_ptr = &txn;
-	// TODO(andy): pass in txn to preaccept function
+	// TODO(andy): pass in txn to preaccept function after resolving segfault
 	client->PreAccept(NULL, 0, ccb);
 	printf("preaccept done\r\n");
 }
