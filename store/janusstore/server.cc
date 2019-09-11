@@ -37,7 +37,7 @@ void Server::UnloggedUpcall(const string &str1, string &str2) {
     {
         TransactionMessage txnMsg = request.preaccept().txn();
         uint64_t txn_id = txnMsg.txnid();
-        uint64_t server_id_txn = txnMsg.serverid();
+        string server_id_txn = txnMsg.serverid();
         uint64_t ballot = request.preaccept().ballot();
 
         // construct the transaction object
