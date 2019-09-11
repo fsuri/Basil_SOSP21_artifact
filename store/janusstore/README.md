@@ -6,6 +6,9 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 	- reclass server under TransportReceiver as in weakstore
 	- implement inquire function
 	- implement fast quorum check and accept stage in preaccept callback for client.cc
+	- finish benchmark_oneshot
+		- currently, client can start up arbitrary transactions
+		- goal by next week: client sends txns to server and server commits and client executes post-commit callback
 - 6/10:
 	- client impl done except for some TODOs that might need clarification
 	- what's the progress/update on the shim layer?

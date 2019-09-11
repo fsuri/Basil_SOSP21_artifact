@@ -89,7 +89,7 @@ namespace janusstore {
     txn_id++;
     setParticipants(txn);
 
-    // TODO add the callback to map if needed
+    // TODO add the callback to map
 
     for (auto p: participants) {
       auto pcb = std::bind(&Client::PreAcceptCallback, this,
