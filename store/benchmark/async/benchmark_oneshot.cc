@@ -33,7 +33,7 @@ void SendTxn(janusstore::Client *client, size_t *sent) {
 			*sent += 1;
 			SendTxn(client, sent);
 		}
-		printf("ccb here %d \r\n", committed);
+		printf("output commit from txn %d \r\n", committed);
 	};
 
 	janusstore::Transaction txn;

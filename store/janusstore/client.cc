@@ -76,10 +76,10 @@ namespace janusstore {
       ocb(0);
       return;
     } else {
-      for (const auto & key: txn->read_set) {
+      for (const auto &key: txn->read_set) {
         printf("%s\n", key.c_str());
       }
-      for (const auto & pair: txn->write_set) {
+      for (const auto &pair: txn->write_set) {
         printf("%s %s\n", pair.first.c_str(), pair.second.c_str());
       }
       ocb(0);
@@ -89,7 +89,8 @@ namespace janusstore {
     txn_id++;
     setParticipants(txn);
 
-    // TODO add the callback to map
+    // add the callback to map for post-commit action
+    this->output_commits[txn->getTransactionId()] = ocb;
 
     for (auto p: participants) {
       auto pcb = std::bind(&Client::PreAcceptCallback, this,
@@ -121,19 +122,34 @@ namespace janusstore {
 
     /* shardclient invokes this when all replicas in a shard have responded */
 
-    // update dependencies and responded shards
+    // update responded shards
     responded.insert(shard);
+
+    // check if each replica within shard has the same dependencies
+    // then aggregate dependencies
+    bool fast_quorum = true;
+    bool has_replica_deps = false;
+    std::unordered_set<uint64_t> replica_deps;
     for (auto reply: replies) {
+      std::unordered_set<uint64_t> current_replica_deps;
       if (reply.op() == Reply::PREACCEPT_OK) {
         // parse message for deps
         DependencyList msg = reply.preaccept_ok().dep();
         for (int i = 0; i < msg.txnid_size(); i++) {
           uint64_t dep_id = msg.txnid(i);
           // add dep to aggregated set
-          aggregated_deps[txn_id].insert(dep_id);
+          this->aggregated_deps[txn_id].insert(dep_id);
+          current_replica_deps.insert(dep_id);
+        }
+        if (has_replica_deps) {
+          // TODO check equality with current_replica_deps
+        } else {
+          replica_deps = current_replica_deps;
+          has_replica_deps = true;
         }
       } else {
         // TODO if not okay, invoke Accept stage after all responses received
+        fast_quorum = false;
       }
     }
 
@@ -141,7 +157,7 @@ namespace janusstore {
     if (responded.size() == participants.size()) {
       // TODO check whether we have a fast quorum before doing commit
       responded.clear();
-      Commit(txn_id, aggregated_deps[txn_id]);
+      Commit(txn_id, this->aggregated_deps[txn_id]);
     }
   }
 
@@ -152,14 +168,14 @@ namespace janusstore {
     responded.insert(shard);
     for (auto reply: replies) {
       if (reply.op() == Reply::ACCEPT_NOT_OK) {
-        // TODO case where not ok
+        // if majority not okay, then goto failure recovery (not supported)
       }
     }
 
     if (responded.size() == participants.size()) {
       // no need to check for a quorum for every shard because we dont implement failure recovery
       responded.clear();
-      Commit(txn_id, aggregated_deps[txn_id]);
+      Commit(txn_id, this->aggregated_deps[txn_id]);
     }
     return;
   }
@@ -171,9 +187,11 @@ namespace janusstore {
 
     if (responded.size() == participants.size()) {
       // return results to client
-      for (auto reply: replies) {
+      for (auto reply : replies) {
         // TODO how to return results? may also need to update CommitOKMessage
       }
+      // invoke output commit callback
+      this->output_commits[txn_id](txn_id);
     }
     responded.clear();
     return;
