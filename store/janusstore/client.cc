@@ -102,7 +102,7 @@ namespace janusstore {
   void Client::Accept(uint64_t txn_id, set <uint64_t> deps, uint64_t ballot) {
     for (auto p: participants) {
       std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
-      auto acb = std::bind( & Client::AcceptCallback, this, txn_id, placeholders::_1, placeholders::_2);
+      auto acb = std::bind(&Client::AcceptCallback, this, txn_id, placeholders::_1, placeholders::_2);
 
       bclient[p]->Accept(txn_id, vec_deps, ballot, acb);
     }
@@ -111,7 +111,7 @@ namespace janusstore {
   void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
     for (auto p: participants) {
       std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
-      auto ccb = std::bind( & Client::CommitCallback, this, txn_id, placeholders::_1, placeholders::_2);
+      auto ccb = std::bind(&Client::CommitCallback, this, txn_id, placeholders::_1, placeholders::_2);
 
       bclient[p]->Commit(txn_id, vec_deps, ccb);
     }
@@ -133,11 +133,11 @@ namespace janusstore {
           aggregated_deps[txn_id].insert(dep_id);
         }
       } else {
-        // TODO case where not ok
+        // TODO if not okay, invoke Accept stage after all responses received
       }
     }
 
-    // if all shards have responded, move onto Commit stage
+    // if all shards have responded, move onto Commit stage; else Accept stage
     if (responded.size() == participants.size()) {
       // TODO check whether we have a fast quorum before doing commit
       responded.clear();

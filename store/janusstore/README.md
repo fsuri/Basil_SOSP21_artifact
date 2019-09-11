@@ -2,6 +2,10 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
+- 9/11:
+	- reclass server under TransportReceiver as in weakstore
+	- implement inquire function
+	- implement fast quorum check and accept stage in preaccept callback for client.cc
 - 6/10:
 	- client impl done except for some TODOs that might need clarification
 	- what's the progress/update on the shim layer?
