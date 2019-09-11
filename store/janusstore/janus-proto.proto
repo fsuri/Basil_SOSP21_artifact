@@ -22,10 +22,9 @@ message PutMessage {
 
 message TransactionMessage {
     enum Status {
-      INIT = 1;
-      PREACCEPT = 2;
-      ACCEPT = 3;
-      COMMIT = 4;
+      PREACCEPT = 0;
+      ACCEPT = 1;
+      COMMIT = 2;
     } // TODO factor out to common class
     required uint64 serverid = 1;
     required uint64 txnid = 2;

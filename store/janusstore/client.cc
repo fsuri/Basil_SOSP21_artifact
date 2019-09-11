@@ -48,6 +48,7 @@ Client::~Client() {
 void Client::setParticipants(Transaction *txn) {
 	participants.clear();
 	for (const auto &key : txn->read_set) {
+    // TODO(andy): where is key_to_shard?
 		int i = 0;//key_to_shard(key, nshards);
 		if (participants.find(i) == participants.end()) {
     		participants.insert(i);
@@ -55,6 +56,7 @@ void Client::setParticipants(Transaction *txn) {
 	}
 
 	for (const auto &pair : txn->write_set) {
+    // TODO(andy): where is key_to_shard?
 		int i = 0;//key_to_shard((pair.first), nshards);
 		if (participants.find(i) == participants.end()) {
     		participants.insert(i);
@@ -63,8 +65,17 @@ void Client::setParticipants(Transaction *txn) {
 }
 
 void Client::PreAccept(Transaction *txn, uint64_t ballot, output_commit_callback ocb) {
+  printf("preaccept here\r\n");
   if (!txn) {
-    printf("preaccept here\r\n");
+    ocb(0);
+    return;
+  } else {
+    for (const auto &key : txn->read_set) {
+      printf("%s\n", key.c_str());
+    }
+    for (const auto &pair : txn->write_set) {
+      printf("%s %s\n", pair.first.c_str(), pair.second.c_str());
+    }
     ocb(0);
     return;
   }

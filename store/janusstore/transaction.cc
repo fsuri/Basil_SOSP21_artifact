@@ -42,6 +42,8 @@ void Transaction::addWriteSet(const std::string &key, const std::string &value){
 }
 void Transaction::serialize(janusstore::proto::TransactionMessage *msg) const {
 	// TODO(andy): implement conversion from Transaction to TransactionMessage
+	// TODO(andy): replace with this->status when the type is updated
+	msg->set_status(janusstore::proto::TransactionMessage::Status(0));
 }
 
 } // namespace janusstore

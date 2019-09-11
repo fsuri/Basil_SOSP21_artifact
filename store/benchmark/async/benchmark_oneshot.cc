@@ -38,8 +38,10 @@ void SendTxn(janusstore::Client *client, size_t *sent) {
 
 	janusstore::Transaction txn;
 	janusstore::Transaction* txn_ptr = &txn;
-	// TODO(andy): pass in txn to preaccept function after resolving segfault
-	client->PreAccept(NULL, 0, ccb);
+	txn_ptr->addReadSet("key1");
+	txn_ptr->addReadSet("key2");
+	txn_ptr->addWriteSet("key3", "val3");
+	client->PreAccept(txn_ptr, 0, ccb);
 	printf("preaccept done\r\n");
 }
 
