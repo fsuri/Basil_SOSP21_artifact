@@ -6,7 +6,7 @@ namespace janusstore {
 using namespace std;
 using namespace proto;
 
-Client::Client(const string configPath, int nShards, 
+Client::Client(const string configPath, int nShards,
 	int closestReplica, Transport *transport)
 	: nshards(nShards), transport(transport) {
 
@@ -45,19 +45,27 @@ Client::~Client() {
 	}
 }
 
+uint64_t Client::keyToShard(string key, uint64_t nshards) {
+  // default partition function from store/common/partitioner.cc
+  uint64_t hash = 5381;
+  const char* str = key.c_str();
+  for (unsigned int i = 0; i < key.length(); i++) {
+    hash = ((hash << 5) + hash) + (uint64_t)str[i];
+  }
+  return (hash % nshards);
+}
+
 void Client::setParticipants(Transaction *txn) {
 	participants.clear();
 	for (const auto &key : txn->read_set) {
-    // TODO(andy): where is key_to_shard?
-		int i = 0;//key_to_shard(key, nshards);
+		int i = this->keyToShard(key, nshards);
 		if (participants.find(i) == participants.end()) {
     		participants.insert(i);
   		}
 	}
 
 	for (const auto &pair : txn->write_set) {
-    // TODO(andy): where is key_to_shard?
-		int i = 0;//key_to_shard((pair.first), nshards);
+		int i = this->keyToShard(pair.first, nshards);
 		if (participants.find(i) == participants.end()) {
     		participants.insert(i);
   		}

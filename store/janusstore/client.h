@@ -23,8 +23,7 @@ typedef std::function<void(uint64_t)> output_commit_callback;
 
 class Client : public ::Client {
 public:
-    Client(const std::string configPath, int nShards, int closestReplica,
-        Transport *transport);
+    Client(const std::string configPath, int nShards, int closestReplica, Transport *transport);
     virtual ~Client();
 
     // begins PreAccept phase
@@ -70,6 +69,8 @@ private:
 
     // Buffering client for each shard.
     std::vector<ShardClient *> bclient;
+
+    uint64_t keyToShard(string key, uint64_t nshards);
 
     void setParticipants(Transaction *txn);
 
