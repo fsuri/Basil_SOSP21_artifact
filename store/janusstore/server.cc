@@ -8,7 +8,7 @@ namespace janusstore {
 using namespace std;
 using namespace proto;
 
-std::vector<uint64_t> _checkIfAllCommitting(std::unordered_map<uint64_t, Transaction> id_txn_map, std::vector<uint64_t> deps);
+vector<uint64_t> _checkIfAllCommitting(unordered_map<uint64_t, Transaction> id_txn_map, vector<uint64_t> deps);
 
 Server::Server() {
     store = new Store();
@@ -52,7 +52,7 @@ void Server::UnloggedUpcall(const string &str1, string &str2) {
             txn.addWriteSet(put.key(), put.value());
         }
 
-        std::vector<uint64_t> dep_list = HandlePreAccept(txn, ballot);
+        vector<uint64_t> dep_list = HandlePreAccept(txn, ballot);
 
         // TODO less hacky way
         if (!dep_list.empty() && dep_list.at(0) == -1) {
@@ -85,7 +85,7 @@ void Server::UnloggedUpcall(const string &str1, string &str2) {
         uint64_t txn_id = accept_msg.txnid();
 
         // reconstruct dep_list from message
-        std::vector<uint64_t> msg_dep_list;
+        vector<uint64_t> msg_dep_list;
         DependencyList received_dep = accept_msg.dep();
         for (int i = 0; i < received_dep.txnid_size(); i++) {
             msg_dep_list.push_back(received_dep.txnid(i));
@@ -114,30 +114,30 @@ void Server::UnloggedUpcall(const string &str1, string &str2) {
     }
 }
 
-std::vector<uint64_t> Server::HandlePreAccept(Transaction txn, uint64_t ballot) {
+vector<uint64_t> Server::HandlePreAccept(Transaction txn, uint64_t ballot) {
     uint64_t txn_id = txn.getTransactionId();
     if (accepted_ballots.find(txn_id) != accepted_ballots.end() &&
      ballot > accepted_ballots[txn_id]) {
         // TODO less hacky way
-        return std::vector<uint64_t>(-1);
+        return vector<uint64_t>(-1);
     }
     accepted_ballots[txn_id] = ballot;
 
-    txn.setTransactionStatus(PREACCEPT);
+    txn.setTransactionStatus(janusstore::proto::TransactionMessage::Status(0));
     id_txn_map[txn.getTransactionId()] = txn;
 
     // construct conflicts and read/write sets
-    std::vector<uint64_t> dep_list;
+    vector<uint64_t> dep_list;
     for (auto key : txn.getReadSet()) {
         if (read_key_txn_map.find(key) == read_key_txn_map.end()) {
-          read_key_txn_map[key] = std::vector<uint64_t>(txn_id);
+          read_key_txn_map[key] = vector<uint64_t>(txn_id);
         } else {
           read_key_txn_map[key].push_back(txn_id);
         }
 
         // append conflicts
         if (write_key_txn_map.find(key) != write_key_txn_map.end()) {
-            std::vector<uint64_t> other_txn_ids = write_key_txn_map[key];
+            vector<uint64_t> other_txn_ids = write_key_txn_map[key];
             dep_list.insert(dep_list.end(), other_txn_ids.begin(), other_txn_ids.end());
         }
     }
@@ -145,17 +145,17 @@ std::vector<uint64_t> Server::HandlePreAccept(Transaction txn, uint64_t ballot) 
     for (auto const& kv : txn.getWriteSet()) {
         string key = kv.first;
         if (write_key_txn_map.find(key) == write_key_txn_map.end()) {
-          write_key_txn_map[key] = std::vector<uint64_t>(txn_id);
+          write_key_txn_map[key] = vector<uint64_t>(txn_id);
         } else {
           // append conflicts
-          std::vector<uint64_t> other_txn_ids = write_key_txn_map[key];
+          vector<uint64_t> other_txn_ids = write_key_txn_map[key];
           dep_list.insert(dep_list.end(), other_txn_ids.begin(), other_txn_ids.end());
           write_key_txn_map[key].push_back(txn_id);
         }
 
         if (read_key_txn_map.find(key) != read_key_txn_map.end()) {
           // append conflicts
-          std::vector<uint64_t> other_txn_ids = read_key_txn_map[key];
+          vector<uint64_t> other_txn_ids = read_key_txn_map[key];
           dep_list.insert(dep_list.end(), other_txn_ids.begin(), other_txn_ids.end());
         }
     }
@@ -165,10 +165,10 @@ std::vector<uint64_t> Server::HandlePreAccept(Transaction txn, uint64_t ballot) 
     return dep_list;
 }
 
-uint64_t Server::HandleAccept(Transaction &txn, std::vector<std::uint64_t> msg_deps, uint64_t ballot) {
+uint64_t Server::HandleAccept(Transaction &txn, vector<uint64_t> msg_deps, uint64_t ballot) {
     uint64_t txn_id = txn.getTransactionId();
     uint64_t accepted_ballot = accepted_ballots[txn_id];
-    if (id_txn_map[txn_id].getTransactionStatus() == COMMIT || ballot < accepted_ballot) {
+    if (id_txn_map[txn_id].getTransactionStatus() == janusstore::proto::TransactionMessage::Status(2) || ballot < accepted_ballot) {
         return accepted_ballot;
     }
 
@@ -179,14 +179,14 @@ uint64_t Server::HandleAccept(Transaction &txn, std::vector<std::uint64_t> msg_d
     accepted_ballots[txn_id] = ballot;
 
     // update txn status to accept
-    txn.setTransactionStatus(ACCEPT);
+    txn.setTransactionStatus(janusstore::proto::TransactionMessage::Status(1));
     return -1;
 }
 
-void Server::HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
+void Server::HandleCommit(uint64_t txn_id, vector<uint64_t> deps) {
     Transaction txn = id_txn_map[txn_id];
     dep_map[txn_id] = deps;
-    txn.setTransactionStatus(COMMIT);
+    txn.setTransactionStatus(janusstore::proto::TransactionMessage::Status(2));
     // check if this unblocks others, and rerun HandleCommit for those
     if (blocking_ids.find(txn_id) != blocking_ids.end()) {
         for(uint64_t blocked_id : blocking_ids[txn_id]) {
@@ -195,7 +195,7 @@ void Server::HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
     }
 
     // wait and inquire
-    std::vector<uint64_t> not_committing_ids = _checkIfAllCommitting(id_txn_map, deps);
+    vector<uint64_t> not_committing_ids = _checkIfAllCommitting(id_txn_map, deps);
     if (not_committing_ids.size() != 0) {
         // TODO: if txn_id not involved on S, inquire S
 
@@ -206,7 +206,7 @@ void Server::HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
             // for every txn_id found on this server, add it to the list of blocking
             if (id_txn_map.find(txn_id) != id_txn_map.end()){
                 if (blocking_ids.find(blocking_txn_id) == blocking_ids.end()) {
-                    blocking_ids[blocking_txn_id] = std::vector<uint64_t>(txn_id);
+                    blocking_ids[blocking_txn_id] = vector<uint64_t>(txn_id);
                 } else {
                     blocking_ids[blocking_txn_id].push_back(txn_id);
                 }
@@ -227,9 +227,9 @@ void Server::HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
     _ExecutePhase(txn_id);
 }
 
-std::unordered_map<string, string> Server::Execute(Transaction txn) {
+unordered_map<string, string> Server::Execute(Transaction txn) {
     uint64_t txn_id = txn.getTransactionId();
-    std::unordered_map<string, string> result;
+    unordered_map<string, string> result;
 
     for (string key : txn.getReadSet()) {
         string val = string();
@@ -237,7 +237,7 @@ std::unordered_map<string, string> Server::Execute(Transaction txn) {
         result[key] = val;
     }
 
-    for (std::pair<std::string, string> write : txn.getWriteSet()) {
+    for (pair<string, string> write : txn.getWriteSet()) {
         store->Put(txn_id, write.first, write.second);
         result[write.first] = write.second;
     }
@@ -245,15 +245,15 @@ std::unordered_map<string, string> Server::Execute(Transaction txn) {
     return result;
 }
 
-std::unordered_map<string, string> Server::_ExecutePhase(uint64_t txn_id) {
-    std::unordered_map<string, string> result;
-    std::vector<uint64_t> deps = dep_map[txn_id];
+unordered_map<string, string> Server::_ExecutePhase(uint64_t txn_id) {
+    unordered_map<string, string> result;
+    vector<uint64_t> deps = dep_map[txn_id];
     while (!processed[txn_id]) {
         // TODO make choosing other_txn_id more efficient
-        for (std::pair<uint64_t, std::vector<uint64_t>> pair : dep_map) {
+        for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
             uint64_t other_txn_id = pair.first;
             if (_ReadyToProcess(id_txn_map[other_txn_id])) {
-                std::vector<uint64_t> scc = _StronglyConnectedComponent(txn_id);
+                vector<uint64_t> scc = _StronglyConnectedComponent(txn_id);
                 for (int scc_id : scc) {
                     // TODO check if scc_id is involved with S and not abandoned
                     if (scc_id == txn_id) {
@@ -269,10 +269,10 @@ std::unordered_map<string, string> Server::_ExecutePhase(uint64_t txn_id) {
     return result;
 }
 
-void _DFS(uint64_t txn_id, std::set<uint64_t> &visited, std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map, std::vector<uint64_t> &v, std::stack<uint64_t> &s) {
+void _DFS(uint64_t txn_id, set<uint64_t> &visited, unordered_map<uint64_t, vector<uint64_t>> dep_map, vector<uint64_t> &v, stack<uint64_t> &s) {
     visited.insert(txn_id);
     v.push_back(txn_id);
-    for (std::vector<uint64_t>::iterator i = dep_map[txn_id].begin(); i != dep_map[txn_id].end(); i++) {
+    for (vector<uint64_t>::iterator i = dep_map[txn_id].begin(); i != dep_map[txn_id].end(); i++) {
         if(visited.find(*i) != visited.end()) {
             _DFS(*i, visited, dep_map, v, s);
         }
@@ -281,11 +281,11 @@ void _DFS(uint64_t txn_id, std::set<uint64_t> &visited, std::unordered_map<uint6
 }
 
 // return transpose graph of dep_map
-std::unordered_map<uint64_t, std::vector<uint64_t>> _getTranspose(std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map) {
-    std::unordered_map<uint64_t, std::vector<uint64_t>> transpose;
-    for (std::pair<uint64_t, std::vector<uint64_t>> pair : dep_map) {
+unordered_map<uint64_t, vector<uint64_t>> _getTranspose(unordered_map<uint64_t, vector<uint64_t>> dep_map) {
+    unordered_map<uint64_t, vector<uint64_t>> transpose;
+    for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
         uint64_t txn_id = pair.first;
-        for(std::vector<uint64_t>::iterator i = dep_map[txn_id].begin(); i != dep_map[txn_id].end(); ++i)
+        for(vector<uint64_t>::iterator i = dep_map[txn_id].begin(); i != dep_map[txn_id].end(); ++i)
         {
             transpose[*i].push_back(txn_id);
         }
@@ -294,16 +294,16 @@ std::unordered_map<uint64_t, std::vector<uint64_t>> _getTranspose(std::unordered
 }
 
 // returns a strongly connected component that contains the given txn_id, if it exists using Kosaraju's
-std::vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
-    std::set<uint64_t> visited;
+vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
+    set<uint64_t> visited;
     // // create empty stack, do DFS traversal. push vertex to stack at each visit
-    std::stack<uint64_t> s;
-    std::vector<uint64_t> dummy_v; // TODO make this unnecessary
+    stack<uint64_t> s;
+    vector<uint64_t> dummy_v; // TODO make this unnecessary
     _DFS(txn_id, visited, dep_map, dummy_v, s);
 
     // obtain transpose graph
     // TODO also just create the transpose to begin with and build it as txns come in
-    std::unordered_map<uint64_t, std::vector<uint64_t>> transpose = _getTranspose(dep_map);
+    unordered_map<uint64_t, vector<uint64_t>> transpose = _getTranspose(dep_map);
 
     visited.clear();
     // guaranteed to return since stack will contain every txn_id in map
@@ -311,10 +311,10 @@ std::vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
         uint64_t popped_txn_id = s.top();
         s.pop();
 
-        std::stack<uint64_t> dummy_s; // TODO make this unnecessary
-        std::vector<uint64_t> scc;
+        stack<uint64_t> dummy_s; // TODO make this unnecessary
+        vector<uint64_t> scc;
         _DFS(popped_txn_id, visited, transpose, scc, dummy_s);
-        std::vector<uint64_t>::iterator it = std::find(scc.begin(), scc.end(), txn_id);
+        vector<uint64_t>::iterator it = find(scc.begin(), scc.end(), txn_id);
         if (it != scc.end()) return scc;
     }
 }
@@ -323,11 +323,11 @@ std::vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
 // checks if txn is ready to be executed
 bool Server::_ReadyToProcess(Transaction txn) {
     uint64_t txn_id = txn.getTransactionId();
-    if (processed[txn.getTransactionId()] || txn.getTransactionStatus() != COMMIT) return false;
-    std::vector<uint64_t> scc = _StronglyConnectedComponent(txn_id);
-    std::vector<uint64_t> deps = dep_map[txn.getTransactionId()];
+    if (processed[txn.getTransactionId()] || txn.getTransactionStatus() != janusstore::proto::TransactionMessage::Status(2)) return false;
+    vector<uint64_t> scc = _StronglyConnectedComponent(txn_id);
+    vector<uint64_t> deps = dep_map[txn.getTransactionId()];
     for (int other_txn_id : deps) {
-        std::vector<uint64_t>::iterator it = std::find(scc.begin(), scc.end(), other_txn_id);
+        vector<uint64_t>::iterator it = find(scc.begin(), scc.end(), other_txn_id);
         // check if other_txn_id is not in scc and is not ready, return false
         if (it == scc.end() && !processed[other_txn_id]) return false;
     }
@@ -339,19 +339,19 @@ void Server::Load(const string &key, const string &value, const Timestamp timest
 }
 
 // sort in ascending order
-void Server::ResolveContention(std::vector<uint64_t> scc) {
+void Server::ResolveContention(vector<uint64_t> scc) {
     sort(scc.begin(), scc.end());
 }
 
 // return list of ids that are not committing
-std::vector<uint64_t> _checkIfAllCommitting(
-    std::unordered_map<uint64_t, Transaction> id_txn_map,
-    std::vector<uint64_t> deps
+vector<uint64_t> _checkIfAllCommitting(
+    unordered_map<uint64_t, Transaction> id_txn_map,
+    vector<uint64_t> deps
     ) {
-        std::vector<uint64_t> not_committing_ids;
+        vector<uint64_t> not_committing_ids;
         for (int txn_id : deps) {
             Transaction txn = id_txn_map[txn_id];
-            if (txn.getTransactionStatus() != COMMIT) {
+            if (txn.getTransactionStatus() != janusstore::proto::TransactionMessage::Status(2)) {
                 not_committing_ids.push_back(txn_id);
             }
         }

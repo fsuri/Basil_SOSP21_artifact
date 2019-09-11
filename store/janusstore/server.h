@@ -88,6 +88,7 @@ private:
     // to be called during the Commit phase from HandleCommitJanusTxn()
     void ResolveContention(vector<uint64_t> scc);
 
+    // TODO (eric): wat the hek is this
     Stats stats;
 };
 } // namespace janusstore
