@@ -4,11 +4,8 @@ import "store/common/common-proto.proto";
 
 package janusstore.proto;
 
-// TODO lots of types of messages with repeated fields - worth refactoring
-// or keep seperate for clarity?
-
 message DependencyList {
-    repeated uint64 txnid = 1; // TODO is this a string or int
+    repeated uint64 txnid = 1;
 }
 
 message GetMessage {
@@ -25,7 +22,7 @@ message TransactionMessage {
       PREACCEPT = 0;
       ACCEPT = 1;
       COMMIT = 2;
-    } // TODO factor out to common class
+    }
     // TODO(eric): encode into int along with transaction.h if time
     required string serverid = 1;
     required uint64 txnid = 2;
@@ -38,11 +35,6 @@ message PreAcceptMessage {
     required TransactionMessage txn = 1;
     required uint64 ballot = 2;
 }
-
-// TODO: should acceptOK and preacceptNotOK still have a message
-// that contains the transaction ID?
-
-// if so, should we just factor out the txn ID into the Reply message?
 
 message PreAcceptOKMessage {
     required uint64 txnid = 1;
