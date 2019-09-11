@@ -24,11 +24,6 @@ namespace janusstore {
 
 using namespace std;
 
-enum TransactionStatus {
-    PREACCEPT,
-    ACCEPT,
-    COMMIT
-};
 /* Defines a transaction that is forwarded to a particular replica */
 class Transaction {
 private:
@@ -38,7 +33,7 @@ private:
     // the server ID this txn is associated with
     // TODO (eric) encode this into an int later
     string server_id;
-    TransactionStatus status;
+    janusstore::proto::TransactionMessage::Status status;
 
 public:
     Transaction() {};
@@ -53,9 +48,9 @@ public:
     unordered_map<string, string> write_set;
 
     void setTransactionId(uint64_t txn_id);
-    void setTransactionStatus(TransactionStatus status);
+    void setTransactionStatus(janusstore::proto::TransactionMessage::Status status);
     const uint64_t getTransactionId() const;
-    const TransactionStatus getTransactionStatus() const;
+    const janusstore::proto::TransactionMessage::Status getTransactionStatus() const;
     const unordered_set<string>& getReadSet() const;
     const unordered_map<string, string>& getWriteSet() const;
 

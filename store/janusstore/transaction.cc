@@ -17,14 +17,14 @@ Transaction::~Transaction() {}
 void Transaction::setTransactionId(uint64_t txn_id) {
 	this->txn_id = txn_id;
 }
-void Transaction::setTransactionStatus(TransactionStatus status) {
+void Transaction::setTransactionStatus(janusstore::proto::TransactionMessage::Status status) {
 	this->status = status;
 }
 const uint64_t Transaction::getTransactionId() const {
 	return txn_id;
 }
 
-const TransactionStatus Transaction::getTransactionStatus() const {
+const janusstore::proto::TransactionMessage::Status Transaction::getTransactionStatus() const {
 	return status;
 }
 const std::unordered_set<std::string>& Transaction::getReadSet() const {
