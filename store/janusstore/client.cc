@@ -12,7 +12,7 @@ namespace janusstore {
     while (client_id == 0) {
       random_device rd;
       mt19937_64 gen(rd());
-      uniform_int_distribution < uint64_t > dis;
+      uniform_int_distribution <uint64_t> dis;
       client_id = dis(gen);
     }
 
@@ -55,15 +55,15 @@ namespace janusstore {
 
   void Client::setParticipants(Transaction * txn) {
     participants.clear();
-    for (const auto & key: txn - > read_set) {
-      int i = this - > keyToShard(key, nshards);
+    for (const auto & key: txn->read_set) {
+      int i = this->keyToShard(key, nshards);
       if (participants.find(i) == participants.end()) {
         participants.insert(i);
       }
     }
 
-    for (const auto & pair: txn - > write_set) {
-      int i = this - > keyToShard(pair.first, nshards);
+    for (const auto & pair: txn->write_set) {
+      int i = this->keyToShard(pair.first, nshards);
       if (participants.find(i) == participants.end()) {
         participants.insert(i);
       }
@@ -76,48 +76,48 @@ namespace janusstore {
       ocb(0);
       return;
     } else {
-      for (const auto & key: txn - > read_set) {
+      for (const auto & key: txn->read_set) {
         printf("%s\n", key.c_str());
       }
-      for (const auto & pair: txn - > write_set) {
+      for (const auto & pair: txn->write_set) {
         printf("%s %s\n", pair.first.c_str(), pair.second.c_str());
       }
       ocb(0);
       return;
     }
-    txn - > setTransactionId(txn_id);
+    txn->setTransactionId(txn_id);
     txn_id++;
     setParticipants(txn);
 
     // TODO add the callback to map if needed
 
     for (auto p: participants) {
-      auto pcb = std::bind( & Client::PreAcceptCallback, this,
-        txn - > getTransactionId(), placeholders::_1, placeholders::_2);
+      auto pcb = std::bind(&Client::PreAcceptCallback, this,
+        txn->getTransactionId(), placeholders::_1, placeholders::_2);
 
-      bclient[p] - > PreAccept( * txn, ballot, pcb);
+      bclient[p]->PreAccept(*txn, ballot, pcb);
     }
   }
 
-  void Client::Accept(uint64_t txn_id, set < uint64_t > deps, uint64_t ballot) {
+  void Client::Accept(uint64_t txn_id, set <uint64_t> deps, uint64_t ballot) {
     for (auto p: participants) {
-      std::vector < uint64_t > vec_deps(deps.begin(), deps.end());
+      std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
       auto acb = std::bind( & Client::AcceptCallback, this, txn_id, placeholders::_1, placeholders::_2);
 
-      bclient[p] - > Accept(txn_id, vec_deps, ballot, acb);
+      bclient[p]->Accept(txn_id, vec_deps, ballot, acb);
     }
   }
 
-  void Client::Commit(uint64_t txn_id, set < uint64_t > deps) {
+  void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
     for (auto p: participants) {
-      std::vector < uint64_t > vec_deps(deps.begin(), deps.end());
+      std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
       auto ccb = std::bind( & Client::CommitCallback, this, txn_id, placeholders::_1, placeholders::_2);
 
-      bclient[p] - > Commit(txn_id, vec_deps, ccb);
+      bclient[p]->Commit(txn_id, vec_deps, ccb);
     }
   }
 
-  void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector < janusstore::proto::Reply > replies) {
+  void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
 
@@ -145,7 +145,7 @@ namespace janusstore {
     }
   }
 
-  void Client::AcceptCallback(uint64_t txn_id, int shard, std::vector < janusstore::proto::Reply > replies) {
+  void Client::AcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
 
@@ -163,7 +163,7 @@ namespace janusstore {
     }
     return;
   }
-  void Client::CommitCallback(uint64_t txn_id, int shard, std::vector < janusstore::proto::Reply > replies) {
+  void Client::CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
 
