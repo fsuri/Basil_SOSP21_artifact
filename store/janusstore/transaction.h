@@ -22,6 +22,8 @@
 
 namespace janusstore {
 
+using namespace std;
+
 enum TransactionStatus {
     PREACCEPT,
     ACCEPT,
@@ -32,32 +34,36 @@ class Transaction {
 private:
     // the unique transaction ID
     uint64_t txn_id;
+
+    // the server ID this txn is associated with
+    // TODO (eric) encode this into an int later
+    string server_id;
     TransactionStatus status;
-    
+
 public:
     Transaction() {};
-    Transaction(uint64_t txn_id);
-    Transaction(uint64_t txn_id, const TransactionMessage &msg);
+    Transaction(uint64_t txn_id, uint64_t server_id);
+    Transaction(uint64_t txn_id, uint64_t server_id, const TransactionMessage &msg);
     ~Transaction();
-    
+
     // set of keys to be read
-    std::unordered_set<std::string> read_set;
+    unordered_set<string> read_set;
 
     // map between key and value(s)
-    std::unordered_map<std::string, std::string> write_set;
+    unordered_map<string, string> write_set;
 
     void setTransactionId(uint64_t txn_id);
     void setTransactionStatus(TransactionStatus status);
     const uint64_t getTransactionId() const;
     const TransactionStatus getTransactionStatus() const;
-    const std::unordered_set<std::string>& getReadSet() const;
-    const std::unordered_map<std::string, std::string>& getWriteSet() const;
+    const unordered_set<string>& getReadSet() const;
+    const unordered_map<string, string>& getWriteSet() const;
 
     inline size_t GetNumRead() const { return read_set.size(); }
     inline size_t GetNumWritten() const { return write_set.size(); }
 
-    void addReadSet(const std::string &key);
-    void addWriteSet(const std::string &key, const std::string &value);
+    void addReadSet(const string &key);
+    void addWriteSet(const string &key, const string &value);
     void serialize(janusstore::proto::TransactionMessage *msg) const;
 };
 

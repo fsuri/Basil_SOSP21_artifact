@@ -14,6 +14,12 @@ Server::Server() {
     store = new Store();
 }
 
+Server::Server(transport::Configuration config, int replica_index) {
+    transport::ReplicaAddress ra = config.replica(replica_index);
+    server_id = ra.host + ra.port;
+    store = new Store();
+}
+
 Server::~Server() {
     delete store;
 }
@@ -31,10 +37,11 @@ void Server::UnloggedUpcall(const string &str1, string &str2) {
     {
         TransactionMessage txnMsg = request.preaccept().txn();
         uint64_t txn_id = txnMsg.txnid();
+        uint64_t server_id_txn = txnMsg.serverid();
         uint64_t ballot = request.preaccept().ballot();
 
         // construct the transaction object
-        Transaction txn = Transaction(txn_id);
+        Transaction txn = Transaction(txn_id, server_id_txn);
         for (int i = 0; i < txnMsg.gets_size(); i++) {
             string key = txnMsg.gets(i).key();
             txn.addReadSet(key);
@@ -350,5 +357,5 @@ std::vector<uint64_t> _checkIfAllCommitting(
         }
         return not_committing_ids;
     }
-
-} // namespace janusstore
+}
+// namespace janusstore

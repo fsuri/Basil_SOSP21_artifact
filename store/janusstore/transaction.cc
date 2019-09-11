@@ -2,12 +2,14 @@
 
 namespace janusstore {
 
-Transaction::Transaction(uint64_t txn_id) {
+Transaction::Transaction(uint64_t txn_id, uint64_t server_id) {
 	this->txn_id = txn_id;
+	this->server_id = server_id;
 }
 
-Transaction::Transaction(uint64_t txn_id, const TransactionMessage &msg) {
+Transaction::Transaction(uint64_t txn_id, uint64_t server_id, const TransactionMessage &msg) {
 	this->txn_id = txn_id;
+	this->server_id = server_id;
 }
 
 Transaction::~Transaction() {}

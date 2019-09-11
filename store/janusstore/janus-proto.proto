@@ -27,10 +27,11 @@ message TransactionMessage {
       ACCEPT = 3;
       COMMIT = 4;
     } // TODO factor out to common class
-    required uint64 txnid = 1;
-    required Status status = 2;
-    repeated GetMessage gets = 3;
-    repeated PutMessage puts = 4;
+    required uint64 serverid = 1;
+    required uint64 txnid = 2;
+    required Status status = 3;
+    repeated GetMessage gets = 4;
+    repeated PutMessage puts = 5;
 }
 
 message PreAcceptMessage {
@@ -45,7 +46,8 @@ message PreAcceptMessage {
 
 message PreAcceptOKMessage {
     required uint64 txnid = 1;
-    required DependencyList dep = 2;
+    required uint64 serverid = 2;
+    required DependencyList dep = 3;
 }
 
 message AcceptMessage {

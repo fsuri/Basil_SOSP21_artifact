@@ -13,9 +13,14 @@
 
 namespace janusstore {
 
+using namespace std;
+
 class Server : public replication::AppReplica, public ::Server {
 public:
+    // TODO (eric) encode this into an int later
+    string server_id;
     Server();
+    Server(transport::Configuration config, int replica_index);
     virtual ~Server();
 
     // Invoke callback on the leader, with the option to replicate on success
@@ -31,56 +36,59 @@ public:
     // TODO only need this if we are extending store/server.h, but i dont think
     // this is necessary
     void Load(const string &key, const string &value, const Timestamp timestamp);
+    inline Stats &GetStats() { return stats; }
 
 private:
     // simple key-value store
     Store *store;
 
     // highest ballot accepted per txn id
-    std::unordered_map<uint64_t, uint64_t> accepted_ballots;
+    unordered_map<uint64_t, uint64_t> accepted_ballots;
 
     // maps Transaction ids in the graph to ancestor Transaction ids
-    std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map;
+    unordered_map<uint64_t, vector<uint64_t>> dep_map;
 
     // maps Transaction ids to Transcation objects
-    std::unordered_map<uint64_t, Transaction> id_txn_map;
+    unordered_map<uint64_t, Transaction> id_txn_map;
 
     // maps Txn to locally processed status
-    std::unordered_map<uint64_t, bool> processed;
+    unordered_map<uint64_t, bool> processed;
 
     // maps keys to transaction ids that read it
     // TODO ensure that this map is cleared per transaction
-    std::unordered_map<string, std::vector<uint64_t>> read_key_txn_map;
+    unordered_map<string, vector<uint64_t>> read_key_txn_map;
 
     // maps keys to transaction ids that write to it
     // TODO ensure that this map is cleared per transaction
-    std::unordered_map<string, std::vector<uint64_t>> write_key_txn_map;
+    unordered_map<string, vector<uint64_t>> write_key_txn_map;
 
     // maps txn_id -> list[other_ids] being blocked by txn_id
-    std::unordered_map<uint64_t, std::vector<uint64_t>> blocking_ids;
+    unordered_map<uint64_t, vector<uint64_t>> blocking_ids;
 
     // functions to process shardclient requests
     // must take in a full Transaction object in order to correctly bookkeep and commit
 
     // returns the list of dependencies for given txn, NULL if PREACCEPT-NOT-OK
-    std::vector<uint64_t> HandlePreAccept(Transaction txn, uint64_t ballot);
+    vector<uint64_t> HandlePreAccept(Transaction txn, uint64_t ballot);
 
     // returns -1 if Accept-OK, the highest ballot for txn otherwise
-    uint64_t HandleAccept(Transaction &txn, std::vector<std::uint64_t> msg_deps, uint64_t ballot);
+    uint64_t HandleAccept(Transaction &txn, vector<uint64_t> msg_deps, uint64_t ballot);
 
     // TODO figure out what T.abandon and T.result are
-    void HandleCommit(uint64_t txn_id, std::vector<std::uint64_t> deps);
+    void HandleCommit(uint64_t txn_id, vector<uint64_t> deps);
 
-    std::unordered_map<string, string> WaitAndInquire(uint64_t txn_id);
-    std::unordered_map<string, string> _ExecutePhase(uint64_t txn_id);
-    std::vector<uint64_t> _StronglyConnectedComponent(uint64_t txn_id);
+    unordered_map<string, string> WaitAndInquire(uint64_t txn_id);
+    unordered_map<string, string> _ExecutePhase(uint64_t txn_id);
+    vector<uint64_t> _StronglyConnectedComponent(uint64_t txn_id);
     bool _ReadyToProcess(Transaction txn);
 
     // TODO determine the return type??
-    std::unordered_map<string, string> Execute(Transaction txn);
+    unordered_map<string, string> Execute(Transaction txn);
     // for cyclic dependency case, compute SCCs and execute in order
     // to be called during the Commit phase from HandleCommitJanusTxn()
-    void ResolveContention(std::vector<uint64_t> scc);
+    void ResolveContention(vector<uint64_t> scc);
+
+    Stats stats;
 };
 } // namespace janusstore
 
