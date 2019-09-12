@@ -26,25 +26,41 @@ Server::~Server() {
 void Server::ReceiveMessage(const TransportAddress &remote,
                         const std::string &type, const std::string &data) {
 
-    PreAcceptMessage pa_msg;
-    PreAcceptOKMessage pa_ok_msg;
-    PreAcceptNotOKMessage pa_not_ok_msg;
-    AcceptMessage a_msg;
-    AcceptNotOKMessage a_not_ok_msg;
-    CommitMessage c_msg;
-    CommitOKMessage c_ok_msg;
-    InquireMessage i_msg;
-    InquireOKMessage i_ok_msg;
+    Request request;
+    Reply reply;
 
-    if (type == pa_msg.GetTypeName()) {
-        pa_msg.ParseFromString(data);
-        HandlePreAccept(remote, pa_msg);
-    } else if (type == a_msg.GetTypeName()) {
-        a_msg.ParseFromString(data);
-        HandleAccept(remote, a_msg);
-    }
-    else {
-        Panic("Unrecognized request.");
+    if (type == request.GetTypeName()) {
+        request.ParseFromString(data);
+        switch(request.op()) {
+            case Request::PREACCEPT: {
+                HandlePreAccept(remote, request.preaccept());
+                break;
+            }
+            case Request::ACCEPT: {
+                HandleAccept(remote, request.accept());
+                break;
+            }
+            case Request::COMMIT: {
+                HandleCommit(remote, request.commit());
+                break;
+            }
+            case Request::INQUIRE: {
+                break;
+            }
+            default: {
+                Panic("Unrecognized request.");
+                break;
+            }
+        }
+    } else if (type == request.GetTypeName()) {
+        switch(request.op()) {
+            default: {
+                Panic("Unrecognized reply.");
+                break;
+            }
+        }
+    } else {
+        Panic("Unrecognized message.");
     }
 }
 
@@ -52,6 +68,8 @@ void
 Server::HandlePreAccept(const TransportAddress &remote,
                         const PreAcceptMessage &pa_msg)
 {
+    Reply reply;
+
     TransactionMessage txnMsg = pa_msg.txn();
     uint64_t txn_id = txnMsg.txnid();
     string server_id_txn = txnMsg.serverid();
@@ -75,7 +93,10 @@ Server::HandlePreAccept(const TransportAddress &remote,
     if (!dep_list.empty() && dep_list.at(0) == -1) {
         // return not ok
         PreAcceptNotOKMessage pa_not_ok_msg;
-        transport->SendMessage(this, remote, pa_not_ok_msg);
+
+        reply.set_op(Reply::PREACCEPT_NOT_OK);
+        reply.set_allocated_preaccept_not_ok(&pa_not_ok_msg);
+        transport->SendMessage(this, remote, reply);
         return;
     }
 
@@ -88,7 +109,10 @@ Server::HandlePreAccept(const TransportAddress &remote,
     preaccept_ok_msg.set_txnid(txn.getTransactionId());
     preaccept_ok_msg.set_allocated_dep(&dep);
 
-    transport->SendMessage(this, remote, preaccept_ok_msg);
+    reply.set_op(Reply::PREACCEPT_OK);
+    reply.set_allocated_preaccept_ok(&preaccept_ok_msg);
+
+    transport->SendMessage(this, remote, reply);
 }
 
 vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
@@ -100,7 +124,7 @@ vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
     }
     accepted_ballots[txn_id] = ballot;
 
-    txn.setTransactionStatus(janusstore::proto::TransactionMessage::Status(0));
+    txn.setTransactionStatus(TransactionMessage::PREACCEPT);
     id_txn_map[txn.getTransactionId()] = txn;
 
     // construct conflicts and read/write sets
@@ -145,6 +169,8 @@ vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
 void Server::HandleAccept(const TransportAddress &remote,
                           const proto::AcceptMessage &a_msg)
 {
+    Reply reply;
+
     uint64_t ballot = a_msg.ballot();
     uint64_t txn_id = a_msg.txnid();
     Transaction txn = id_txn_map[txn_id];
@@ -156,13 +182,14 @@ void Server::HandleAccept(const TransportAddress &remote,
         msg_deps.push_back(received_dep.txnid(i));
     }
     uint64_t accepted_ballot = accepted_ballots[txn_id];
-    if (id_txn_map[txn_id].getTransactionStatus() == janusstore::proto::TransactionMessage::Status(2) || ballot < accepted_ballot) {
+    if (id_txn_map[txn_id].getTransactionStatus() == TransactionMessage::COMMIT || ballot < accepted_ballot) {
         // send back txn id and highest ballot for that txn
         AcceptNotOKMessage accept_not_ok_msg;
         accept_not_ok_msg.set_txnid(txn_id);
         accept_not_ok_msg.set_highest_ballot(accepted_ballot);
 
-        transport->SendMessage(this, remote, accept_not_ok_msg);
+        reply.set_op(Reply::ACCEPT_NOT_OK);
+        reply.set_allocated_accept_not_ok(&accept_not_ok_msg);
     } else {
         // replace dep_map with the list from the message
         dep_map[txn_id] = msg_deps;
@@ -171,21 +198,36 @@ void Server::HandleAccept(const TransportAddress &remote,
         accepted_ballots[txn_id] = ballot;
 
         // update txn status to accept
-        txn.setTransactionStatus(janusstore::proto::TransactionMessage::Status(1));
+        txn.setTransactionStatus(TransactionMessage::ACCEPT);
 
         AcceptOKMessage accept_ok_msg;
-        transport->SendMessage(this, remote, accept_ok_msg);
+        reply.set_op(Reply::ACCEPT_OK);
+        reply.set_allocated_accept_ok(&accept_ok_msg);
+
     }
+    transport->SendMessage(this, remote, reply);
 }
 
-void Server::HandleCommit(uint64_t txn_id, vector<uint64_t> deps) {
+void Server::HandleCommit(const TransportAddress &remote,
+                          const proto::CommitMessage c_msg) {
+    uint64_t txn_id = c_msg.txnid();
+
+    vector<uint64_t> deps;
+    DependencyList received_dep = c_msg.dep();
+    for (int i = 0; i < received_dep.txnid_size(); i++) {
+        deps.push_back(received_dep.txnid(i));
+    }
+    _HandleCommit(txn_id,deps);
+}
+
+void Server::_HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
     Transaction txn = id_txn_map[txn_id];
     dep_map[txn_id] = deps;
-    txn.setTransactionStatus(janusstore::proto::TransactionMessage::Status(2));
+    txn.setTransactionStatus(TransactionMessage::COMMIT);
     // check if this unblocks others, and rerun HandleCommit for those
     if (blocking_ids.find(txn_id) != blocking_ids.end()) {
         for(uint64_t blocked_id : blocking_ids[txn_id]) {
-            Server::HandleCommit(blocked_id, dep_map[blocked_id]);
+            Server::_HandleCommit(blocked_id, dep_map[blocked_id]);
         }
     }
 
@@ -318,7 +360,7 @@ vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
 // checks if txn is ready to be executed
 bool Server::_ReadyToProcess(Transaction txn) {
     uint64_t txn_id = txn.getTransactionId();
-    if (processed[txn.getTransactionId()] || txn.getTransactionStatus() != janusstore::proto::TransactionMessage::Status(2)) return false;
+    if (processed[txn.getTransactionId()] || txn.getTransactionStatus() != TransactionMessage::COMMIT) return false;
     vector<uint64_t> scc = _StronglyConnectedComponent(txn_id);
     vector<uint64_t> deps = dep_map[txn.getTransactionId()];
     for (int other_txn_id : deps) {
@@ -346,7 +388,7 @@ vector<uint64_t> _checkIfAllCommitting(
         vector<uint64_t> not_committing_ids;
         for (int txn_id : deps) {
             Transaction txn = id_txn_map[txn_id];
-            if (txn.getTransactionStatus() != janusstore::proto::TransactionMessage::Status(2)) {
+            if (txn.getTransactionStatus() != TransactionMessage::COMMIT) {
                 not_committing_ids.push_back(txn_id);
             }
         }

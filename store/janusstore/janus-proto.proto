@@ -119,9 +119,11 @@ message Reply {
      required Operation op = 1;
      optional string value = 2; // TODO what is this for?
      optional PreAcceptOKMessage preaccept_ok = 3;
-     optional AcceptNotOKMessage accept_not_ok = 4;
-     optional CommitOKMessage commit_ok = 5;
-     optional InquireOKMessage inquire_ok = 6;
+     optional PreAcceptNotOKMessage preaccept_not_ok = 4;
+     optional AcceptOKMessage accept_ok = 5;
+     optional AcceptNotOKMessage accept_not_ok = 6;
+     optional CommitOKMessage commit_ok = 7;
+     optional InquireOKMessage inquire_ok = 8;
 
      // for failure recovery
      // optional PrepareOKMessage prepare_ok = 7;
