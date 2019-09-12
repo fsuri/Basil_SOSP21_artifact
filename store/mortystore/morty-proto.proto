@@ -5,6 +5,85 @@ import "store/common/common-proto.proto";
 
 package mortystore.proto;
 
+enum OperationType {
+  READ = 1;
+  WRITE = 2;
+}
+
+message Operation {
+  required OperationType type = 1;
+  required string key = 2;
+  required string val = 3;
+}
+
+message Transaction {
+  required uint64 id = 1;
+  repeated Operation ops = 2;
+}
+
+message Branch {
+  required Transaction txn = 1;
+  repeated Branch seq = 2;
+  repeated uint64 shards = 3;
+  repeated uint64 prepared_shards = 4;
+  repeated uint64 koed_shards = 5;
+  repeated PrepareKO koes = 6;
+}
+
+message PrepareKO {
+  required Branch branch = 1;
+  repeated Transaction prepared = 2;
+  repeated Transaction committed = 3;
+}
+
+message Read {
+  required Branch branch = 1;
+  required string key = 2;
+}
+
+message Write {
+  required Branch branch = 1;
+  required string key = 2;
+  required string value = 3;
+}
+
+message ReadReply {
+  required Branch branch = 1;
+  required string key = 2;
+  required string value = 3;
+}
+
+message WriteReply {
+  required Branch branch = 1;
+  required string key = 2;
+  required string value = 3;
+}
+
+message Prepare {
+  required Branch branch = 1;
+}
+
+message PrepareOK {
+  required Branch branch = 1;
+}
+
+message KO {
+  required Branch branch = 1;
+}
+
+message Commit {
+  required Branch branch = 1;
+}
+
+message CommitReply {
+  required Branch branch = 1;
+}
+
+message Abort {
+  required Branch branch = 1;
+}
+
+// old 
 message GetMessage {
   required string key = 1;
 }

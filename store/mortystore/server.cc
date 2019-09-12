@@ -1,14 +1,20 @@
-#include "store/mortystore/server.h"
+#include "store/mortystore/replica.h"
 
 namespace mortystore {
 
-Server::Server() {
+Replica::Replica(const transport::Configuration &config, int idx,
+    Transport *transport) : replication::Replica(config, idx, transport,
+      nullptr) {
 }
 
-Server::~Server() {
+Replica::~Replica() {
 }
 
-void Server::Load(const std::string &key, const std::string &value,
+void Replica::ReceiveMessage(const TransportAddress &remote,
+      const std::string &type, const std::string &data) {
+}
+
+void Replica::Load(const std::string &key, const std::string &value,
     const Timestamp timestamp) {
 }
 

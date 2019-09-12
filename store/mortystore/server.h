@@ -1,23 +1,32 @@
-#ifndef MORTY_SERVER_H
-#define MORTY_SERVER_H
+#ifndef MORTY_REPLICA_H
+#define MORTY_REPLICA_H
 
+#include "replication/common/replica.h"
+#include "store/mortystore/morty-proto.pb.h"
 #include "store/server.h"
 #include "store/common/backend/txnstore.h"
 
 namespace mortystore {
 
-class Server : public ::Server {
+class Replica : public TransportReceiver, public ::Server {
  public:
-  Server();
-  virtual ~Server();
+  Replica(const transport::Configuration &config, int idx,
+      Transport *transport);
+  virtual ~Replica();
+
+  virtual void ReceiveMessage(const TransportAddress &remote,
+      const std::string &type, const std::string &data) override;
 
   virtual void Load(const std::string &key, const std::string &value,
       const Timestamp timestamp) override;
 
  private:
-  TxnStore *store;
+  void HandleUnloggedRequest(const TransportAddress &remote,
+      const proto::UnloggedRequestMessage &msg);
+
 };
 
 } // namespace mortystore
 
-#endif /* MORTY_SERVER_H */
+#endif /* MORTY_REPLICA_H */
+
