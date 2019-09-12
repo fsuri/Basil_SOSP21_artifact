@@ -164,7 +164,7 @@ vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
     }
 
     // add to dependency graph
-    dep_map[txn.getTransactionId()] = dep_list;
+    dep_map[txn_id] = dep_list;
     return dep_list;
 }
 
