@@ -1,15 +1,19 @@
 #include "store/janusstore/transaction.h"
 
+using namespace std;
+
 namespace janusstore {
 
-Transaction::Transaction(uint64_t txn_id, string server_id) {
+Transaction::Transaction(uint64_t txn_id, string server_ip, uint64_t server_port) {
 	this->txn_id = txn_id;
-	this->server_id = server_id;
+	this->server_ip = server_ip;
+  this->server_port = server_port;
 }
 
-Transaction::Transaction(uint64_t txn_id, string server_id, const TransactionMessage &msg) {
+Transaction::Transaction(uint64_t txn_id, string server_ip, uint64_t server_port, const TransactionMessage &msg) {
 	this->txn_id = txn_id;
-	this->server_id = server_id;
+	this->server_ip = server_ip;
+  this->server_port = server_port;
 }
 
 Transaction::~Transaction() {}
@@ -42,7 +46,8 @@ void Transaction::addWriteSet(const std::string &key, const std::string &value){
 }
 void Transaction::serialize(janusstore::proto::TransactionMessage *msg) const {
 	msg->set_status(this->status);
-	msg->set_serverid(this->server_id);
+	msg->set_serverip(this->server_ip);
+  msg->set_serverport(this->server_port);
 	msg->set_txnid(this->txn_id);
 	for (const auto &key : this->read_set) {
       printf("serializing get %s\n", key.c_str());

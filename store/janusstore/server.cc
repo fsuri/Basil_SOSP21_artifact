@@ -14,7 +14,8 @@ Server::Server(transport::Configuration config, int myIdx, Transport *transport)
     : config(config), myIdx(myIdx), transport(transport)
 {
     transport::ReplicaAddress ra = config.replica(myIdx);
-    server_id = ra.host + ra.port;
+    server_ip = ra.host;
+    server_port = stoi(ra.port);
     store = new Store();
     transport->Register(this, config, myIdx);
 }
@@ -72,11 +73,12 @@ Server::HandlePreAccept(const TransportAddress &remote,
 
     TransactionMessage txnMsg = pa_msg.txn();
     uint64_t txn_id = txnMsg.txnid();
-    string server_id_txn = txnMsg.serverid();
+    string server_ip_txn = txnMsg.serverip();
+    uint64_t server_port_txn = txnMsg.serverport();
     uint64_t ballot = pa_msg.ballot();
 
     // construct the transaction object
-    Transaction txn = Transaction(txn_id, server_id_txn);
+    Transaction txn = Transaction(txn_id, server_ip_txn, server_port_txn);
     for (int i = 0; i < txnMsg.gets_size(); i++) {
         string key = txnMsg.gets(i).key();
         txn.addReadSet(key);
@@ -234,12 +236,9 @@ void Server::_HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
     // wait and inquire
     vector<uint64_t> not_committing_ids = _checkIfAllCommitting(id_txn_map, deps);
     if (not_committing_ids.size() != 0) {
-        // TODO: if txn_id not involved on S, inquire S
-
         // HACK: find a more elegant way to do this
         bool found_on_server = false;
         for (uint64_t blocking_txn_id : not_committing_ids) {
-
             // for every txn_id found on this server, add it to the list of blocking
             if (id_txn_map.find(txn_id) != id_txn_map.end()){
                 if (blocking_ids.find(blocking_txn_id) == blocking_ids.end()) {
@@ -247,6 +246,9 @@ void Server::_HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
                 } else {
                     blocking_ids[blocking_txn_id].push_back(txn_id);
                 }
+            } else {
+                // inquire about the status of this transaction
+                _SendInquiry(txn_id);
             }
             found_on_server = true;
         }
@@ -262,6 +264,18 @@ void Server::_HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
         processed[dep_id] = false;
     }
     _ExecutePhase(txn_id);
+}
+
+void Server::_SendInquiry(uint64_t txn_id) {
+    Transaction other_server_txn = id_txn_map[txn_id];
+    string other_server_ip = other_server_txn.server_ip;
+    uint64_t other_server_port = other_server_txn.server_port;
+    // TODO lmao how do i open a connect here lol
+    sockaddr_in other_server;
+
+    other_server.sin_family = AF_INET;
+    // other_server.sin_addr.s_addr = htonl(other_server_ip);
+    other_server.sin_port = htons(other_server_port);
 }
 
 unordered_map<string, string> Server::Execute(Transaction txn) {

@@ -22,7 +22,6 @@
 
 namespace janusstore {
 
-using namespace std;
 
 /* Defines a transaction that is forwarded to a particular replica */
 class Transaction {
@@ -30,35 +29,35 @@ private:
     // the unique transaction ID
     uint64_t txn_id;
 
-    // the server ID this txn is associated with
-    // TODO (eric) encode this into an int later
-    string server_id;
     janusstore::proto::TransactionMessage::Status status;
 
 public:
+    // the server this txn is associated with
+    std::string server_ip;
+    uint64_t server_port;
     Transaction() {};
-    Transaction(uint64_t txn_id, string server_id);
-    Transaction(uint64_t txn_id, string server_id, const TransactionMessage &msg);
+    Transaction(uint64_t txn_id, std::string server_ip, uint64_t server_port);
+    Transaction(uint64_t txn_id, std::string server_ip, uint64_t server_port, const TransactionMessage &msg);
     ~Transaction();
 
     // set of keys to be read
-    unordered_set<string> read_set;
+    std::unordered_set<std::string> read_set;
 
     // map between key and value(s)
-    unordered_map<string, string> write_set;
+    std::unordered_map<std::string, std::string> write_set;
 
     void setTransactionId(uint64_t txn_id);
     void setTransactionStatus(janusstore::proto::TransactionMessage::Status status);
     const uint64_t getTransactionId() const;
     const janusstore::proto::TransactionMessage::Status getTransactionStatus() const;
-    const unordered_set<string>& getReadSet() const;
-    const unordered_map<string, string>& getWriteSet() const;
+    const std::unordered_set<std::string>& getReadSet() const;
+    const std::unordered_map<std::string, std::string>& getWriteSet() const;
 
     inline size_t GetNumRead() const { return read_set.size(); }
     inline size_t GetNumWritten() const { return write_set.size(); }
 
-    void addReadSet(const string &key);
-    void addWriteSet(const string &key, const string &value);
+    void addReadSet(const std::string &key);
+    void addWriteSet(const std::string &key, const std::string &value);
     void serialize(janusstore::proto::TransactionMessage *msg) const;
 };
 

@@ -16,8 +16,8 @@ namespace janusstore {
 
 class Server : public TransportReceiver, public ::Server {
 public:
-    // TODO (eric) encode this into an int later
-    std::string server_id;
+    std::string server_ip;
+    uint64_t server_port;
     Server(transport::Configuration config, int myIdx, Transport *transport);
     virtual ~Server();
 
@@ -73,6 +73,8 @@ private:
 
     // TODO figure out what T.abandon and T.result are
     void _HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps);
+
+    void _SendInquiry(uint64_t txn_id);
 
     std::unordered_map<std::string, std::string> WaitAndInquire(uint64_t txn_id);
     std::unordered_map<std::string, std::string> _ExecutePhase(uint64_t txn_id);
