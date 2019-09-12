@@ -1,6 +1,6 @@
 // -*- mode: c++; c-file-style: "k&r"; c-basic-offset: 4 -*-
 #include "store/janusstore/server.h"
-#include "lib/tcptransport.h"
+#include "lib/udptransport.h"
 #include <stack>
 
 namespace janusstore {
@@ -10,111 +10,88 @@ using namespace proto;
 
 vector<uint64_t> _checkIfAllCommitting(unordered_map<uint64_t, Transaction> id_txn_map, vector<uint64_t> deps);
 
-Server::Server() {
-    store = new Store();
-}
-
-Server::Server(transport::Configuration config, int replica_index) {
-    transport::ReplicaAddress ra = config.replica(replica_index);
+Server::Server(transport::Configuration config, int myIdx, Transport *transport)
+    : config(config), myIdx(myIdx), transport(transport)
+{
+    transport::ReplicaAddress ra = config.replica(myIdx);
     server_id = ra.host + ra.port;
     store = new Store();
+    transport->Register(this, config, myIdx);
 }
 
 Server::~Server() {
     delete store;
 }
 
-void Server::UnloggedUpcall(const string &str1, string &str2) {
-    Debug("Received Unlogged Request: %s", str1.substr(0,10).c_str());
+void Server::ReceiveMessage(const TransportAddress &remote,
+                        const std::string &type, const std::string &data) {
 
-    Request request;
-    Reply reply;
+    PreAcceptMessage pa_msg;
+    PreAcceptOKMessage pa_ok_msg;
+    PreAcceptNotOKMessage pa_not_ok_msg;
+    AcceptMessage a_msg;
+    AcceptNotOKMessage a_not_ok_msg;
+    CommitMessage c_msg;
+    CommitOKMessage c_ok_msg;
+    InquireMessage i_msg;
+    InquireOKMessage i_ok_msg;
 
-    request.ParseFromString(str1);
-
-    switch (request.op()) {
-    case janusstore::proto::Request::PREACCEPT:
-    {
-        TransactionMessage txnMsg = request.preaccept().txn();
-        uint64_t txn_id = txnMsg.txnid();
-        uint64_t server_id_txn = txnMsg.serverid();
-        uint64_t ballot = request.preaccept().ballot();
-
-        // construct the transaction object
-        Transaction txn = Transaction(txn_id, server_id_txn);
-        for (int i = 0; i < txnMsg.gets_size(); i++) {
-            string key = txnMsg.gets(i).key();
-            txn.addReadSet(key);
-        }
-
-        for (int i = 0; i < txnMsg.puts_size(); i++) {
-            PutMessage put = txnMsg.puts(i);
-            txn.addWriteSet(put.key(), put.value());
-        }
-
-        vector<uint64_t> dep_list = HandlePreAccept(txn, ballot);
-
-        // TODO less hacky way
-        if (!dep_list.empty() && dep_list.at(0) == -1) {
-            reply.set_op(Reply::PREACCEPT_NOT_OK);
-            break;
-        }
-
-        // create dep list for reply
-        DependencyList dep;
-        for (int i = 0; i < dep_list.size(); i++) {
-            dep.add_txnid(dep_list[i]);
-        }
-        PreAcceptOKMessage preaccept_ok_msg;
-        preaccept_ok_msg.set_txnid(txn.getTransactionId());
-        preaccept_ok_msg.set_allocated_dep(&dep);
-
-        // return accept ok
-        // set this txn's status to pre-accepted (with this ballot? TODO)
-        reply.set_op(Reply::PREACCEPT_OK);
-        reply.set_allocated_preaccept_ok(&preaccept_ok_msg);
-
-        // TODO fix this, it's not correct
-        reply.SerializeToString(&str2);
-        break;
+    if (type == pa_msg.GetTypeName()) {
+        pa_msg.ParseFromString(data);
+        HandlePreAccept(remote, pa_msg);
+    } else if (type == a_msg.GetTypeName()) {
+        a_msg.ParseFromString(data);
+        HandleAccept(remote, a_msg);
     }
-    case janusstore::proto::Request::ACCEPT:
-    {
-        AcceptMessage accept_msg = request.accept();
-        uint64_t ballot = accept_msg.ballot();
-        uint64_t txn_id = accept_msg.txnid();
-
-        // reconstruct dep_list from message
-        vector<uint64_t> msg_dep_list;
-        DependencyList received_dep = accept_msg.dep();
-        for (int i = 0; i < received_dep.txnid_size(); i++) {
-            msg_dep_list.push_back(received_dep.txnid(i));
-        }
-        uint64_t highest_ballot = HandleAccept(id_txn_map[txn_id], msg_dep_list, ballot);
-
-        if (highest_ballot != -1) {
-            // send back txn id and highest ballot for that txn
-            AcceptNotOKMessage accept_not_ok;
-            accept_not_ok.set_txnid(txn_id);
-            accept_not_ok.set_highest_ballot(highest_ballot);
-            reply.set_op(Reply::PREACCEPT_NOT_OK);
-            reply.set_allocated_accept_not_ok(&accept_not_ok);
-            break;
-        }
-        reply.set_op(Reply::ACCEPT_OK);
-        reply.SerializeToString(&str2);
-        break;
-    }
-    case janusstore::proto::Request::COMMIT:
-        break;
-    case janusstore::proto::Request::INQUIRE:
-        break;
-    default:
-        Panic("Unrecognized Unlogged request.");
+    else {
+        Panic("Unrecognized request.");
     }
 }
 
-vector<uint64_t> Server::HandlePreAccept(Transaction txn, uint64_t ballot) {
+void
+Server::HandlePreAccept(const TransportAddress &remote,
+                        const PreAcceptMessage &pa_msg)
+{
+    TransactionMessage txnMsg = pa_msg.txn();
+    uint64_t txn_id = txnMsg.txnid();
+    uint64_t server_id_txn = txnMsg.serverid();
+    uint64_t ballot = pa_msg.ballot();
+
+    // construct the transaction object
+    Transaction txn = Transaction(txn_id, server_id_txn);
+    for (int i = 0; i < txnMsg.gets_size(); i++) {
+        string key = txnMsg.gets(i).key();
+        txn.addReadSet(key);
+    }
+
+    for (int i = 0; i < txnMsg.puts_size(); i++) {
+        PutMessage put = txnMsg.puts(i);
+        txn.addWriteSet(put.key(), put.value());
+    }
+
+    vector<uint64_t> dep_list = BuildDepList(txn, ballot);
+
+    // TODO less hacky way
+    if (!dep_list.empty() && dep_list.at(0) == -1) {
+        // return not ok
+        PreAcceptNotOKMessage pa_not_ok_msg;
+        transport->SendMessage(this, remote, pa_not_ok_msg);
+        return;
+    }
+
+    // create dep list for reply
+    DependencyList dep;
+    for (int i = 0; i < dep_list.size(); i++) {
+        dep.add_txnid(dep_list[i]);
+    }
+    PreAcceptOKMessage preaccept_ok_msg;
+    preaccept_ok_msg.set_txnid(txn.getTransactionId());
+    preaccept_ok_msg.set_allocated_dep(&dep);
+
+    transport->SendMessage(this, remote, preaccept_ok_msg);
+}
+
+vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
     uint64_t txn_id = txn.getTransactionId();
     if (accepted_ballots.find(txn_id) != accepted_ballots.end() &&
      ballot > accepted_ballots[txn_id]) {
@@ -165,22 +142,40 @@ vector<uint64_t> Server::HandlePreAccept(Transaction txn, uint64_t ballot) {
     return dep_list;
 }
 
-uint64_t Server::HandleAccept(Transaction &txn, vector<uint64_t> msg_deps, uint64_t ballot) {
-    uint64_t txn_id = txn.getTransactionId();
+void Server::HandleAccept(const TransportAddress &remote,
+                          const proto::AcceptMessage &a_msg)
+{
+    uint64_t ballot = a_msg.ballot();
+    uint64_t txn_id = a_msg.txnid();
+    Transaction txn = id_txn_map[txn_id];
+
+    // reconstruct dep_list from message
+    vector<uint64_t> msg_deps;
+    DependencyList received_dep = a_msg.dep();
+    for (int i = 0; i < received_dep.txnid_size(); i++) {
+        msg_deps.push_back(received_dep.txnid(i));
+    }
     uint64_t accepted_ballot = accepted_ballots[txn_id];
     if (id_txn_map[txn_id].getTransactionStatus() == janusstore::proto::TransactionMessage::Status(2) || ballot < accepted_ballot) {
-        return accepted_ballot;
+        // send back txn id and highest ballot for that txn
+        AcceptNotOKMessage accept_not_ok_msg;
+        accept_not_ok_msg.set_txnid(txn_id);
+        accept_not_ok_msg.set_highest_ballot(accepted_ballot);
+
+        transport->SendMessage(this, remote, accept_not_ok_msg);
+    } else {
+        // replace dep_map with the list from the message
+        dep_map[txn_id] = msg_deps;
+
+        // update highest ballot with passed in ballot
+        accepted_ballots[txn_id] = ballot;
+
+        // update txn status to accept
+        txn.setTransactionStatus(janusstore::proto::TransactionMessage::Status(1));
+
+        AcceptOKMessage accept_ok_msg;
+        transport->SendMessage(this, remote, accept_ok_msg);
     }
-
-    // replace dep_map with the list from the message
-    dep_map[txn_id] = msg_deps;
-
-    // update highest ballot with passed in ballot
-    accepted_ballots[txn_id] = ballot;
-
-    // update txn status to accept
-    txn.setTransactionStatus(janusstore::proto::TransactionMessage::Status(1));
-    return -1;
 }
 
 void Server::HandleCommit(uint64_t txn_id, vector<uint64_t> deps) {
