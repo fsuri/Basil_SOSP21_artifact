@@ -161,7 +161,7 @@ void ShardClient::AcceptCallback(uint64_t txn_id,
 	if (this->accept_replies.count(txn_id)) {
 		// key already exists, so append to list
 		// TODO may need to explicitly retrieve list, pushback, and set in map
-		this->accept_replies[txn_id].push_back(reply);
+		//this->accept_replies[txn_id].push_back(reply);
 	} else {
 		this->accept_replies[txn_id] = std::vector<janusstore::proto::Reply>({reply});
 	}
@@ -213,7 +213,7 @@ void ShardClient::AcceptContinuation(uint64_t txn_id, const string &request_str,
   	// get the acb
   	client_accept_callback acb = this->acb_map.at(txn_id);
   	// invoke the shardclient callback
-  	this->AcceptCallback(txn_id, reply, acb);
+  //this->AcceptCallback(txn_id, reply, acb);
 }
 
 void ShardClient::CommitContinuation(uint64_t txn_id, const string &request_str,
