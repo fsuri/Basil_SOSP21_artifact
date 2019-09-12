@@ -142,22 +142,30 @@ namespace janusstore {
           current_replica_deps.insert(dep_id);
         }
         if (has_replica_deps) {
-          // TODO check equality with current_replica_deps
+          // check equality with current_replica_deps
+          fast_quorum = fast_quorum && (current_replica_deps == replica_deps);
         } else {
           replica_deps = current_replica_deps;
           has_replica_deps = true;
         }
       } else {
-        // TODO if not okay, invoke Accept stage after all responses received
+        // meaning we will need to go to Accept phase
         fast_quorum = false;
       }
     }
 
+    this->has_fast_quorum[txn_id] = has_fast_quorum[txn_id] && fast_quorum;
     // if all shards have responded, move onto Commit stage; else Accept stage
     if (responded.size() == participants.size()) {
-      // TODO check whether we have a fast quorum before doing commit
+      // check whether we have a fast quorum before doing commit
       responded.clear();
-      Commit(txn_id, this->aggregated_deps[txn_id]);
+
+      if (fast_quorum) {
+        Commit(txn_id, this->aggregated_deps[txn_id]);
+      } else {
+        this->ballot++;
+        Accept(txn_id, this->aggregated_deps[txn_id], this->ballot);
+      }
     }
   }
 
@@ -187,9 +195,8 @@ namespace janusstore {
 
     if (responded.size() == participants.size()) {
       // return results to client
-      for (auto reply : replies) {
-        // TODO how to return results? may also need to update CommitOKMessage
-      }
+      // TODO how to return results? may also need to update CommitOKMessage
+      // for (auto reply : replies) {}
       // invoke output commit callback
       this->output_commits[txn_id](txn_id);
     }
