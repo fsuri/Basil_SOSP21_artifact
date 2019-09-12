@@ -234,7 +234,7 @@ int main(int argc, char **argv) {
       break;
     }
     case PROTO_JANUS: {
-      server = new janusstore::Server(config, FLAGS_replica_idx);
+      server = new janusstore::Server(config, FLAGS_replica_idx, &transport);
       break;
     }
     default: {
