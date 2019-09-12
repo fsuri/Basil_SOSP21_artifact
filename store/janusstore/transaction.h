@@ -37,8 +37,8 @@ private:
 
 public:
     Transaction() {};
-    Transaction(uint64_t txn_id, uint64_t server_id);
-    Transaction(uint64_t txn_id, uint64_t server_id, const TransactionMessage &msg);
+    Transaction(uint64_t txn_id, string server_id);
+    Transaction(uint64_t txn_id, string server_id, const TransactionMessage &msg);
     ~Transaction();
 
     // set of keys to be read

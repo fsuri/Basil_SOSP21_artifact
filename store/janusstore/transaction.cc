@@ -2,12 +2,12 @@
 
 namespace janusstore {
 
-Transaction::Transaction(uint64_t txn_id, uint64_t server_id) {
+Transaction::Transaction(uint64_t txn_id, string server_id) {
 	this->txn_id = txn_id;
 	this->server_id = server_id;
 }
 
-Transaction::Transaction(uint64_t txn_id, uint64_t server_id, const TransactionMessage &msg) {
+Transaction::Transaction(uint64_t txn_id, string server_id, const TransactionMessage &msg) {
 	this->txn_id = txn_id;
 	this->server_id = server_id;
 }
@@ -41,9 +41,18 @@ void Transaction::addWriteSet(const std::string &key, const std::string &value){
 	write_set[key] = value;
 }
 void Transaction::serialize(janusstore::proto::TransactionMessage *msg) const {
-	// TODO(andy): implement conversion from Transaction to TransactionMessage
-	// TODO(andy): replace with this->status when the type is updated
-	msg->set_status(janusstore::proto::TransactionMessage::Status(0));
+	msg->set_status(this->status);
+	msg->set_serverid(this->server_id);
+	msg->set_txnid(this->txn_id);
+	for (const auto &key : this->read_set) {
+      printf("serializing get %s\n", key.c_str());
+      msg->add_gets()->set_key(key);
+    }
+    for (const auto &pair : this->write_set) {
+      printf("serializing put %s %s\n", pair.first.c_str(), pair.second.c_str());
+      msg->add_puts()->set_key(pair.first);
+      msg->add_puts()->set_value(pair.second);
+    }
 }
 
 } // namespace janusstore
