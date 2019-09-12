@@ -54,7 +54,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
 {
     TransactionMessage txnMsg = pa_msg.txn();
     uint64_t txn_id = txnMsg.txnid();
-    uint64_t server_id_txn = txnMsg.serverid();
+    string server_id_txn = txnMsg.serverid();
     uint64_t ballot = pa_msg.ballot();
 
     // construct the transaction object
