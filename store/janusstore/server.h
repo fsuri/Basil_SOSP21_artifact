@@ -30,6 +30,9 @@ public:
     void HandleAccept(const TransportAddress &remote,
                       const proto::AcceptMessage &a_msg);
 
+    void HandleCommit(const TransportAddress &remote,
+                      const proto::CommitMessage c_msg);
+
 private:
     // simple key-value store
     Store *store;
@@ -69,7 +72,7 @@ private:
     std::vector<uint64_t> BuildDepList(Transaction txn, uint64_t ballot);
 
     // TODO figure out what T.abandon and T.result are
-    void HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps);
+    void _HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps);
 
     std::unordered_map<std::string, std::string> WaitAndInquire(uint64_t txn_id);
     std::unordered_map<std::string, std::string> _ExecutePhase(uint64_t txn_id);
