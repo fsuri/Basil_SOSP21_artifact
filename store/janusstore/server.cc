@@ -46,6 +46,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
                 break;
             }
             case Request::INQUIRE: {
+                HandleInquire(remote, request.inquire());
                 break;
             }
             default: {
@@ -53,8 +54,8 @@ void Server::ReceiveMessage(const TransportAddress &remote,
                 break;
             }
         }
-    } else if (type == request.GetTypeName()) {
-        switch(request.op()) {
+    } else if (type == reply.GetTypeName()) {
+        switch(reply.op()) {
             default: {
                 Panic("Unrecognized reply.");
                 break;
@@ -264,6 +265,32 @@ void Server::_HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
         processed[dep_id] = false;
     }
     _ExecutePhase(txn_id);
+}
+
+void Server::HandleInquire(const TransportAddress &remote,
+    const proto::InquireMessage i_msg ) {
+
+    uint64_t txn_id = i_msg.txnid();
+    Transaction txn = this->id_txn_map[txn_id];
+
+    // after txn_id is in the committing stage, return the deps list
+    if (txn.getTransactionStatus() == TransactionMessage::COMMIT) {
+        std::vector<uint64_t> deps = this->dep_map[txn_id];
+        Reply reply;
+        InquireOKMessage payload;
+        DependencyList dep_list;
+
+        reply.set_op(Reply::INQUIRE_OK);
+        reply.mutable_inquire_ok()->set_txnid(txn_id);
+
+        for (auto id : deps) {
+            reply.mutable_inquire_ok()->mutable_deps()->add_txnid(id);
+        }
+
+        transport->SendMessage(this, remote, reply);
+    } else {
+        // TODO add callback for when txn status is committing
+    }
 }
 
 void Server::_SendInquiry(uint64_t txn_id) {

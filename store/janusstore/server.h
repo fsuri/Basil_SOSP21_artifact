@@ -33,6 +33,9 @@ public:
     void HandleCommit(const TransportAddress &remote,
                       const proto::CommitMessage c_msg);
 
+    void HandleInquire(const TransportAddress &remote,
+                      const proto::InquireMessage i_msg);
+
 private:
     // simple key-value store
     Store *store;
@@ -48,7 +51,7 @@ private:
     // maps Transaction ids in the graph to ancestor Transaction ids
     std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map;
 
-    // maps Transaction ids to Transcation objects
+    // maps Transaction ids to Transaction objects
     std::unordered_map<uint64_t, Transaction> id_txn_map;
 
     // maps Txn to locally processed status

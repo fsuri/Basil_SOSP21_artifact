@@ -78,6 +78,7 @@ message InquireMessage {
 message InquireOKMessage {
     // InquireOK sent when the inquired txn status == committing
     required uint64 txnid = 1;
+    required DependencyList deps = 2;
 }
 
 // for failure recovery; implement if time and for now don't care
