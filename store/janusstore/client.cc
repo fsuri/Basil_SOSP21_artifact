@@ -72,6 +72,7 @@ namespace janusstore {
 
   void Client::PreAccept(Transaction * txn, uint64_t ballot, output_commit_callback ocb) {
     printf("preaccept here\r\n");
+    this->output_commits[txn_id] = ocb;
     if (!txn) {
       ocb(0);
       return;
