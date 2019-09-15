@@ -38,6 +38,7 @@ namespace janusstore {
   }
 
   Client::~Client() {
+    // TODO delete the maps too?
     for (auto b: bclient) {
       delete b;
     }
@@ -72,7 +73,11 @@ namespace janusstore {
 
   void Client::PreAccept(Transaction * txn, uint64_t ballot, output_commit_callback ocb) {
     printf("preaccept here\r\n");
+    uint64_t txn_id = txn->getTransactionId();
+    has_fast_quorum[txn_id] = false;
+    printf("here\n");
     this->output_commits[txn_id] = ocb;
+    /*
     if (!txn) {
       ocb(0);
       return;
@@ -86,16 +91,19 @@ namespace janusstore {
       ocb(0);
       return;
     }
+    */
+    printf("(here)\n");
     txn->setTransactionId(txn_id);
     txn_id++;
     setParticipants(txn);
+
 
     // add the callback to map for post-commit action
     this->output_commits[txn->getTransactionId()] = ocb;
 
     for (auto p: participants) {
       auto pcb = std::bind(&Client::PreAcceptCallback, this,
-        txn->getTransactionId(), placeholders::_1, placeholders::_2);
+        txn_id, placeholders::_1, placeholders::_2);
 
       bclient[p]->PreAccept(*txn, ballot, pcb);
     }

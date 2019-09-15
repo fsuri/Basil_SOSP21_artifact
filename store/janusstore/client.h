@@ -21,10 +21,10 @@ namespace janusstore {
 // callback for output commit
 typedef std::function<void(uint64_t)> output_commit_callback;
 
-class Client : public ::Client {
+class Client {
 public:
     Client(const std::string configPath, int nShards, int closestReplica, Transport *transport);
-    virtual ~Client();
+    ~Client();
 
     // begins PreAccept phase
     void PreAccept(Transaction *txn, uint64_t ballot, output_commit_callback ocb);
