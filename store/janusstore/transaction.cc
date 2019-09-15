@@ -50,11 +50,9 @@ void Transaction::serialize(janusstore::proto::TransactionMessage *msg) const {
   msg->set_serverport(this->server_port);
 	msg->set_txnid(this->txn_id);
 	for (const auto &key : this->read_set) {
-      printf("serializing get %s\n", key.c_str());
       msg->add_gets()->set_key(key);
     }
     for (const auto &pair : this->write_set) {
-      printf("serializing put %s %s\n", pair.first.c_str(), pair.second.c_str());
       msg->add_puts()->set_key(pair.first);
       msg->add_puts()->set_value(pair.second);
     }

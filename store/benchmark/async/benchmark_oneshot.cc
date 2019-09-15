@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
 	UDPTransport transport(0.0, 0.0, 0, false);
 	UDPTransport* transport_ptr = &transport;
 	size_t sent = 0;
-	janusstore::Client client("hello", 2, 1, transport_ptr);
+	janusstore::Client client("shard", 2, 1, transport_ptr);
 	janusstore::Client *client_ptr = &client;
 	transport.Timer(0, [client_ptr, &sent]() { SendTxn(client_ptr, &sent); });
 	transport.Run();

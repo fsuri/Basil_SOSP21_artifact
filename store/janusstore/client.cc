@@ -59,6 +59,7 @@ namespace janusstore {
     for (const auto & key: txn->read_set) {
       int i = this->keyToShard(key, nshards);
       if (participants.find(i) == participants.end()) {
+        printf("%s\n", ("txn -> shard " + to_string(i)).c_str());
         participants.insert(i);
       }
     }
@@ -66,37 +67,19 @@ namespace janusstore {
     for (const auto & pair: txn->write_set) {
       int i = this->keyToShard(pair.first, nshards);
       if (participants.find(i) == participants.end()) {
+        printf("%s\n", ("txn -> shard " + to_string(i)).c_str());
         participants.insert(i);
       }
     }
   }
 
   void Client::PreAccept(Transaction * txn, uint64_t ballot, output_commit_callback ocb) {
-    printf("preaccept here\r\n");
     uint64_t txn_id = txn->getTransactionId();
-    has_fast_quorum[txn_id] = false;
-    printf("here\n");
     this->output_commits[txn_id] = ocb;
-    /*
-    if (!txn) {
-      ocb(0);
-      return;
-    } else {
-      for (const auto &key: txn->read_set) {
-        printf("%s\n", key.c_str());
-      }
-      for (const auto &pair: txn->write_set) {
-        printf("%s %s\n", pair.first.c_str(), pair.second.c_str());
-      }
-      ocb(0);
-      return;
-    }
-    */
-    printf("(here)\n");
     txn->setTransactionId(txn_id);
     txn_id++;
+    printf("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
     setParticipants(txn);
-
 
     // add the callback to map for post-commit action
     this->output_commits[txn->getTransactionId()] = ocb;
@@ -110,6 +93,8 @@ namespace janusstore {
   }
 
   void Client::Accept(uint64_t txn_id, set <uint64_t> deps, uint64_t ballot) {
+    printf("%s\n", ("CLIENT - ACCEPT - txn " + to_string(txn_id)).c_str());
+
     for (auto p: participants) {
       std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
       auto acb = std::bind(&Client::AcceptCallback, this, txn_id, placeholders::_1, placeholders::_2);
@@ -119,6 +104,8 @@ namespace janusstore {
   }
 
   void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
+    printf("%s\n", ("CLIENT - COMMIT - txn " + to_string(txn_id)).c_str());
+
     for (auto p: participants) {
       std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
       auto ccb = std::bind(&Client::CommitCallback, this, txn_id, placeholders::_1, placeholders::_2);
@@ -130,6 +117,7 @@ namespace janusstore {
   void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
+    printf("%s\n", ("CLIENT - PREACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     // update responded shards
     responded.insert(shard);
@@ -181,6 +169,7 @@ namespace janusstore {
   void Client::AcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
+    printf("%s\n", ("CLIENT - ACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     responded.insert(shard);
     for (auto reply: replies) {
@@ -199,6 +188,7 @@ namespace janusstore {
   void Client::CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
+    printf("%s\n", ("CLIENT - COMMIT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     responded.insert(shard);
 
