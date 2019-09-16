@@ -1,6 +1,5 @@
 // -*- mode: c++; c-file-style: "k&r"; c-basic-offset: 4 -*-
 #include "store/janusstore/server.h"
-#include "lib/udptransport.h"
 #include <stack>
 
 namespace janusstore {
@@ -29,7 +28,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
 
     Request request;
     Reply reply;
-
+    printf("in receive message handler");
     if (type == request.GetTypeName()) {
         request.ParseFromString(data);
         switch(request.op()) {

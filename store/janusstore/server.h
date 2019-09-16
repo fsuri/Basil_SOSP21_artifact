@@ -2,7 +2,7 @@
 #ifndef _JANUS_SERVER_H_
 #define _JANUS_SERVER_H_
 
-#include "lib/udptransport.h"
+#include "lib/tcptransport.h"
 #include "replication/common/replica.h"
 
 #include "store/server.h"
@@ -36,6 +36,7 @@ public:
     void HandleInquire(const TransportAddress &remote,
                       const proto::InquireMessage i_msg);
 
+    Transport *transport;
 private:
     // simple key-value store
     Store *store;
@@ -43,7 +44,6 @@ private:
     transport::Configuration config;
     int myIdx;
     // Index of 'this' replica, and handle to transport layer.
-    Transport *transport;
 
     // highest ballot accepted per txn id
     std::unordered_map<uint64_t, uint64_t> accepted_ballots;

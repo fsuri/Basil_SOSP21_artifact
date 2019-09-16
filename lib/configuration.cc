@@ -33,6 +33,7 @@
 #include "lib/configuration.h"
 #include "lib/message.h"
 
+#include <iostream>
 #include <cstring>
 #include <stdexcept>
 #include <tuple>
@@ -91,8 +92,7 @@ Configuration::Configuration(std::ifstream &file)
     while (!file.eof()) {
         // Read a line
         string line;
-        getline(file, line);;
-
+        getline(file, line);
         // Ignore comments
         if ((line.size() == 0) || (line[0] == '#')) {
             continue;
