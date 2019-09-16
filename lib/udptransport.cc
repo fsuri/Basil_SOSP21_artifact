@@ -51,7 +51,7 @@
 #include <signal.h>
 
 const size_t MAX_UDP_MESSAGE_SIZE = 9000; // XXX
-const int SOCKET_BUF_SIZE = 10485760;
+const int SOCKET_BUF_SIZE = 6291456;
 
 using std::pair;
 

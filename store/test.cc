@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
   transport::Configuration config(configStream);
   printf("config generated\n");
   janusstore::Server *server = new janusstore::Server(config, 0, &transport);
-  janusstore::Server *server2 = new janusstore::Server(config, 1, &transport2);
+  janusstore::Server *server1 = new janusstore::Server(config, 1, &transport2);
   printf("servers started\n");
   Request request;
   PreAcceptMessage preaccept;
@@ -30,14 +30,12 @@ int main(int argc, char **argv) {
   request.set_op(Request::PREACCEPT);
   request.set_allocated_preaccept(&preaccept);
   printf("running\n");
-  transport::ReplicaAddress ra_addr = config.replica(0);
+  transport::ReplicaAddress ra_addr = config.replica(1);
   // std::cout << ra_addr.host << " " << ra_addr.port << "\n";
   TCPTransportAddress addr = transport.LookupAddress(ra_addr);
 
-  transport.Run();
-  transport2.Run();
-
-  std::cout << server2->transport->SendMessage(server2, addr, request);
+  // TODO why cant server0 find server1
+  std::cout << server->transport->SendMessageToReplica(server, 1, request);
 
   printf("ran\n");
   while (true) {}

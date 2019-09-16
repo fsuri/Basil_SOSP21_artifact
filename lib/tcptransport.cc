@@ -354,7 +354,8 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     printf("?????????\n");
     Debug("Sending %ld byte %s message to server over TCP",
           totalLen, type.c_str());
-    printf("HUHHHH\n");
+    printf("Sending %ld byte %s message to server over TCP\n",
+          totalLen, type.c_str());
     char buf[totalLen];
     char *ptr = buf;
 
@@ -382,6 +383,7 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     ptr += dataLen;
 
     if (bufferevent_write(ev, buf, totalLen) < 0) {
+        printf("Failed to write to TCP buffer\n");
         Warning("Failed to write to TCP buffer");
         return false;
     }

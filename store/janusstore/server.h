@@ -19,7 +19,7 @@ public:
     std::string server_ip;
     uint64_t server_port;
     Server(transport::Configuration config, int myIdx, Transport *transport);
-    virtual ~Server();
+    ~Server();
 
     void ReceiveMessage(const TransportAddress &remote,
                         const std::string &type, const std::string &data);
