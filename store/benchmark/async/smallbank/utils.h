@@ -1,7 +1,7 @@
 #ifndef SMALLBANK_UTILS_H
 #define SMALLBANK_UTILS_H
 
-#include "store/benchmark/async/smallbank/database.pb.h"
+#include "store/benchmark/async/smallbank/smallbank-proto.pb.h"
 
 namespace smallbank {
 

@@ -1,5 +1,5 @@
 #include "store/benchmark/async/smallbank/utils.h"
-#include "store/benchmark/async/smallbank/database.pb.h"
+#include "store/benchmark/async/smallbank/smallbank-proto.pb.h"
 
 namespace smallbank {
 
@@ -23,6 +23,4 @@ namespace smallbank {
         *reinterpret_cast<uint32_t *>(keyC + 1) = customer_id;
         return std::string(keyC, sizeof(keyC));
     }
-
-
 }

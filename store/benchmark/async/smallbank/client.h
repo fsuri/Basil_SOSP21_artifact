@@ -1,28 +1,41 @@
+#ifndef SMALLBANK_CLIENT_H
+#define SMALLBANK_CLIENT_H
+
+#include "store/benchmark/async/smallbank/smallbank-proto.pb.h"
 #include "store/common/frontend/client.h"
-#include "store/benchmark/async/smallbank/database.pb.h"
 
 namespace smallbank {
     class Benchmark {
     public:
-        Benchmark(Client &client);
+        Benchmark(Client *client);
+
+        void CreateAccount(const std::string &name, const uint32_t &customer_id);
+
+        uint32_t Bal(const std::string &name);
+
+        void DepositChecking(const std::string &name, const int32_t &value);
+
+        void TransactSaving(const std::string &name, const int32_t &value);
+
+        void Amalgamate(const std::string &name1, const std::string &name2);
+
+        void WriteCheck(const std::string &name, const int32_t &value);
 
     private:
-        Client &client_;
+        Client *client_;
 
-        AccountRow ReadAccountRow(const std::string &key);
+        void ReadAccountRow(const std::string &name, AccountRow &accountRow);
 
-        SavingRow ReadSavingRow(const std::string &key);
+        void ReadCheckingRow(const uint32_t &customer_id, CheckingRow &checkingRow);
 
-        CheckingRow ReadCheckingRow(const std::string &key);
+        void ReadSavingRow(const uint32_t &customer_id, SavingRow &savingRow);
 
-        void InsertAccountRow(const std::string &key, const std::string &name);
+        void InsertAccountRow(const std::string &name, const uint32_t &customer_id);
 
-        void InsertSavingRow(const std::string &key, const uint32_t &balance);
+        void InsertSavingRow(const uint32_t &customer_id, const uint32_t &balance);
 
-        void InsertCheckingRow(const std::string &key, const uint32_t &balance);
-
-        void UpdateSavingRow(const std::string &key, const uint32_t &balance);
-
-        void UpdateCheckingRow(const std::string &key, const uint32_t &balance);
+        void InsertCheckingRow(const uint32_t &customer_id, const uint32_t &balance);
     };
 }  // namespace smallbank
+
+#endif /* SMALLBANK_CLIENT_H */
