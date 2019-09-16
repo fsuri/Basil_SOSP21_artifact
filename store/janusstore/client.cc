@@ -12,7 +12,7 @@ namespace janusstore {
     while (client_id == 0) {
       random_device rd;
       mt19937_64 gen(rd());
-      uniform_int_distribution <uint64_t> dis;
+      uniform_int_distribution<uint64_t> dis;
       client_id = dis(gen);
     }
 
