@@ -2,12 +2,12 @@
 #define SMALLBANK_CLIENT_H
 
 #include "store/benchmark/async/smallbank/smallbank-proto.pb.h"
-#include "store/common/frontend/client.h"
+#include "store/common/frontend/sync_client.h"
 
 namespace smallbank {
     class Benchmark {
     public:
-        Benchmark(Client *client);
+        Benchmark(SyncClient *client);
 
         void CreateAccount(const std::string &name, const uint32_t &customer_id);
 
@@ -22,7 +22,7 @@ namespace smallbank {
         void WriteCheck(const std::string &name, const int32_t &value);
 
     private:
-        Client *client_;
+        SyncClient *client_;
 
         void ReadAccountRow(const std::string &name, AccountRow &accountRow);
 

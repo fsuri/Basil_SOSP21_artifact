@@ -10,7 +10,7 @@
 #include "store/benchmark/async/smallbank/utils.h"
 
 namespace smallbank {
-    Benchmark::Benchmark(Client *client) : client_(client) {}
+    Benchmark::Benchmark(SyncClient *client) : client_(client) {}
 
     void Benchmark::CreateAccount(const std::string &name, const uint32_t &customer_id) {
         client_->Begin();
