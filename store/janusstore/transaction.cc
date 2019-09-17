@@ -47,7 +47,7 @@ void Transaction::addWriteSet(const std::string &key, const std::string &value){
 void Transaction::serialize(janusstore::proto::TransactionMessage *msg) const {
 	msg->set_status(this->status);
 	msg->set_serverip(this->server_ip);
-  msg->set_serverport(this->server_port);
+	msg->set_serverport(this->server_port);
 	msg->set_txnid(this->txn_id);
 	for (const auto &key : this->read_set) {
       msg->add_gets()->set_key(key);

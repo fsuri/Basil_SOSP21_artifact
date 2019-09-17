@@ -47,7 +47,10 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	request.set_op(Request::PREACCEPT);
 
 	// serialize a Transaction into a TransactionMessage
-	txn.serialize(request.mutable_preaccept()->mutable_txn());
+	janusstore::proto::TransactionMessage *txn_msg;
+	txn.serialize(txn_msg);
+	request.mutable_preaccept()->set_allocated_txn(txn_msg);
+	// txn.serialize(request.mutable_preaccept()->mutable_txn());
 	request.mutable_preaccept()->set_ballot(ballot);
 
 	// now we can serialize the request and send it to replicas
