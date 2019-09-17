@@ -31,7 +31,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
 
     Request request;
     Reply reply;
-    printf("in receive message handler");
+    printf("in receive message handler\n");
     if (type == request.GetTypeName()) {
         request.ParseFromString(data);
         switch(request.op()) {

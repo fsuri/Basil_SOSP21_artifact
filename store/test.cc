@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
   transport::Configuration config(configStream);
   printf("config generated\n");
   janusstore::Server *server = new janusstore::Server(config, 0, &transport);
-  janusstore::Server *server1 = new janusstore::Server(config, 1, &transport2);
+  // janusstore::Server *server1 = new janusstore::Server(config, 1, &transport2);
   printf("servers started\n");
   Request request;
   PreAcceptMessage preaccept;
@@ -26,6 +26,8 @@ int main(int argc, char **argv) {
   txn.set_serverip("127.0.0.1");
   txn.set_serverport(10001);
   txn.set_txnid(0);
+  preaccept.set_allocated_txn(&txn);
+  preaccept.set_ballot(0);
   txn.set_status(janusstore::proto::TransactionMessage::PREACCEPT);
   request.set_op(Request::PREACCEPT);
   request.set_allocated_preaccept(&preaccept);
@@ -34,7 +36,11 @@ int main(int argc, char **argv) {
   // std::cout << ra_addr.host << " " << ra_addr.port << "\n";
   TCPTransportAddress addr = transport.LookupAddress(ra_addr);
 
+  sleep(1);
+
   // TODO why cant server0 find server1
+  std::cout << server->transport->SendMessageToReplica(server, 1, request);
+  sleep(2);
   std::cout << server->transport->SendMessageToReplica(server, 1, request);
 
   printf("ran\n");
