@@ -40,8 +40,7 @@ int main(int argc, char **argv) {
 
   // TODO why cant server0 find server1
   std::cout << server->transport->SendMessageToReplica(server, 1, request);
-  sleep(2);
-  std::cout << server->transport->SendMessageToReplica(server, 1, request);
+  transport.Run();
 
   printf("ran\n");
   while (true) {}

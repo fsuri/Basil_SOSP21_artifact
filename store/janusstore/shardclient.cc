@@ -9,7 +9,7 @@ using namespace proto;
 ShardClient::ShardClient(const string &configPath, Transport *transport,
 	uint64_t client_id, int shard, int closestReplica)
 	: client_id(client_id), transport(transport), shard(shard), responded(0) {
-  
+
   ifstream configStream(configPath);
   if (configStream.fail()) {
     Panic("Unable to read configuration file: %s\n", configPath.c_str());
@@ -62,7 +62,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	// the Client's callback function when all responses returned
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::PreAcceptContinuation, this,
-		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
+		txn_id, placeholders::_1, placeholders::_2), nullptr, 9999);
 		// no timeout case; TODO verify 0 is OK
 }
 
@@ -84,7 +84,7 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 	for (auto dep : deps) {
 		request.mutable_accept()->mutable_dep()->add_txnid(dep);
 	}
-	
+
 	request.SerializeToString(&request_str);
 
 	// store callback with txnid in a map for the preaccept cb
@@ -156,7 +156,7 @@ void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply re
 void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_accept_callback acb) {
 	// TODO who unwraps replica responses into the callback params?
 	responded++;
-	
+
 	// aggregate replies for this transaction
 	if (this->accept_replies.count(txn_id)) {
 		// key already exists, so append to list
@@ -178,7 +178,7 @@ void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply
 void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb) {
 	// TODO who unwraps replica responses into the callback params?
 	responded++;
-	
+
 	// aggregate replies for this transaction
 	if (this->commit_replies.count(txn_id)) {
 		// key already exists, so append to list
@@ -189,7 +189,7 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	} else {
 		this->commit_replies[txn_id] = std::vector<janusstore::proto::Reply>({reply});
 	}
-	
+
 	// TODO how do determine number of replicas?
 	if (responded) {
 		responded = 0;
