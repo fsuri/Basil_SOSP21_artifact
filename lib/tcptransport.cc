@@ -221,7 +221,7 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
                                BEV_OPT_CLOSE_ON_FREE);
     bufferevent_setcb(bev, TCPReadableCallback, NULL,
                       TCPOutgoingEventCallback, info);
-
+    printf("registed cb\n");
     if (bufferevent_socket_connect(bev,
                                    (struct sockaddr *)&(dst.addr),
                                    sizeof(dst.addr)) < 0) {
@@ -337,7 +337,7 @@ TCPTransport::Register(TransportReceiver *receiver,
     // Update mappings
     receivers[fd] = receiver;
     fds[receiver] = fd;
-    
+
     printf("Accepting connections on TCP port %hu\n", ntohs(sin.sin_port));
     Debug("Accepting connections on TCP port %hu", ntohs(sin.sin_port));
 }
@@ -361,7 +361,8 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     ASSERT(ev != NULL);
 
     // Serialize message
-    string data = m.SerializeAsString();
+    string data;
+    ASSERT(m.SerializeToString(&data));
     string type = m.GetTypeName();
     size_t typeLen = type.length();
     size_t dataLen = data.length();
@@ -370,6 +371,10 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
                        sizeof(totalLen) +
                        sizeof(uint32_t));
     printf("?????????\n");
+
+    ASSERT(!data.empty());
+    printf("Sending %lu %s message to server over TCP\n", data.length(), data.c_str());
+    printf("Proto string: %s \n", m.ShortDebugString().c_str());
     Debug("Sending %ld byte %s message to server over TCP",
           totalLen, type.c_str());
     printf("Sending %ld byte %s message to server over TCP\n",
@@ -405,7 +410,7 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
         Warning("Failed to write to TCP buffer");
         return false;
     }
-
+    printf("ayyy lmao\n");
     return true;
 }
 
@@ -578,21 +583,23 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
         }
 
         // Create a buffered event
+        printf("creating buffered event\n");
         bev = bufferevent_socket_new(transport->libeventBase, newfd,
                                      BEV_OPT_CLOSE_ON_FREE);
+        printf("bev\n");
         bufferevent_setcb(bev, TCPReadableCallback, NULL,
                           TCPIncomingEventCallback, info);
+        printf("WTLDFJ\n");
         if (bufferevent_enable(bev, EV_READ|EV_WRITE) < 0) {
             printf("Failed to enable bufferevent");
             Panic("Failed to enable bufferevent");
         }
-
     info->connectionEvents.push_back(bev);
 	TCPTransportAddress client = TCPTransportAddress(sin);
 	transport->tcpOutgoing[client] = bev;
 	transport->tcpAddresses.insert(pair<struct bufferevent*,
         TCPTransportAddress>(bev,client));
-    printf("Opened incoming TCP connection from %s:%d",
+    printf("Opened incoming TCP connection from %s:%d\n",
                inet_ntoa(sin.sin_addr), htons(sin.sin_port));
     Debug("Opened incoming TCP connection from %s:%d",
                inet_ntoa(sin.sin_addr), htons(sin.sin_port));
@@ -673,12 +680,12 @@ TCPTransport::TCPIncomingEventCallback(struct bufferevent *bev,
 {
     printf("TCPIncomingEventCallback\n");
     if (what & BEV_EVENT_ERROR) {
-        Warning("Error on incoming TCP connection: %s",
+        printf("Error on incoming TCP connection: %s\n",
                 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
         bufferevent_free(bev);
         return;
     } else if (what & BEV_EVENT_ERROR) {
-        Warning("EOF on incoming TCP connection");
+        printf("EOF on incoming TCP connection\n");
         bufferevent_free(bev);
         return;
     }
