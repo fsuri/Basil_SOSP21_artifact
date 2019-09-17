@@ -47,8 +47,8 @@ void SendTxn(janusstore::Client *client, size_t *sent) {
 
 int main(int argc, char **argv) {
 	// transport is used to send messages btwn replicas and schedule msgs
-	UDPTransport transport(0.0, 0.0, 0, false);
-	UDPTransport* transport_ptr = &transport;
+	TCPTransport transport(0.0, 0.0, 0, false);
+	TCPTransport* transport_ptr = &transport;
 	size_t sent = 0;
 	janusstore::Client client("shard", 2, 1, transport_ptr);
 	janusstore::Client *client_ptr = &client;
