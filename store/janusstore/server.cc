@@ -29,11 +29,15 @@ Server::~Server() {
 void Server::ReceiveMessage(const TransportAddress &remote,
                         const std::string &type, const std::string &data) {
 
+    replication::ir::proto::UnloggedRequestMessage unlogged_request;
+
     Request request;
     Reply reply;
     printf("in receive message handler\n");
-    if (type == request.GetTypeName()) {
-        request.ParseFromString(data);
+    if (type == unlogged_request.GetTypeName()) {
+        unlogged_request.ParseFromString(data);
+
+        request.ParseFromString(unlogged_request.req().op());
         switch(request.op()) {
             case Request::PREACCEPT: {
                 HandlePreAccept(remote, request.preaccept());

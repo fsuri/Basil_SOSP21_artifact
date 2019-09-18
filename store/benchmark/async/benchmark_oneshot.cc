@@ -54,9 +54,9 @@ int main(int argc, char **argv) {
 	size_t sent = 0;
 	janusstore::Client client("./store/janus", 1, 0, transport_ptr);
 	janusstore::Client *client_ptr = &client;
-	// transport.Timer(1, [client_ptr, &sent]() { SendTxn(client_ptr, &sent); });
+	transport.Timer(1, [client_ptr, &sent]() { SendTxn(client_ptr, &sent); });
     transport.Run();
-	SendTxn(client_ptr, &sent);
+//	SendTxn(client_ptr, &sent);
 
 	return 0;
 }

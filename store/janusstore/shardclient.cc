@@ -54,8 +54,10 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	// txn.serialize(request.mutable_preaccept()->mutable_txn());
 	request.mutable_preaccept()->set_ballot(ballot);
 
+
 	// now we can serialize the request and send it to replicas
 	request.SerializeToString(&request_str);
+	request.mutable_preaccept()->release_txn();
 
 	// store callback with txnid in a map for the preaccept cb
 	// because we can't pass it into a continuation function

@@ -4,6 +4,7 @@
 
 #include "lib/tcptransport.h"
 #include "replication/common/replica.h"
+#include "replication/ir/ir-proto.pb.h"
 
 #include "store/server.h"
 #include "store/janusstore/store.h"
