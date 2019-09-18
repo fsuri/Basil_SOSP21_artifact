@@ -26,13 +26,16 @@ public:
                         const std::string &type, const std::string &data);
 
     void HandlePreAccept(const TransportAddress &remote,
-                         const proto::PreAcceptMessage &pa_msg);
+                         const proto::PreAcceptMessage &pa_msg,
+                         proto::Reply *reply);
 
     void HandleAccept(const TransportAddress &remote,
-                      const proto::AcceptMessage &a_msg);
+                      const proto::AcceptMessage &a_msg,
+                      proto::Reply *reply);
 
     void HandleCommit(const TransportAddress &remote,
-                      const proto::CommitMessage c_msg);
+                      const proto::CommitMessage c_msg,
+                      proto::Reply *reply);
 
     void HandleInquire(const TransportAddress &remote,
                       const proto::InquireMessage i_msg);
