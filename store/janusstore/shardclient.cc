@@ -68,7 +68,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	// the Client's callback function when all responses returned
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::PreAcceptContinuation, this,
-		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
+		placeholders::_1, placeholders::_2), nullptr, 0);
 		// no timeout case; TODO verify 0 is OK
 }
 
@@ -102,7 +102,7 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 	// the Client's callback function when all responses returned
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::AcceptContinuation, this,
-		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
+		placeholders::_1, placeholders::_2), nullptr, 0);
 		// no timeout case; TODO verify 0 is OK
 }
 
@@ -134,7 +134,7 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 	// the Client's callback function when all responses returned
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::CommitContinuation, this,
-		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
+		placeholders::_1, placeholders::_2), nullptr, 0);
 		// no timeout case; TODO verify 0 is OK
 }
 
@@ -203,10 +203,19 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	}
 }
 
-void ShardClient::PreAcceptContinuation(uint64_t txn_id, const string &request_str, const string &reply_str) {
+void ShardClient::PreAcceptContinuation(const string &request_str, const string &reply_str) {
 
 	janusstore::proto::Reply reply;
 	reply.ParseFromString(reply_str);
+	uint64_t txn_id = NULL;
+
+	if (reply.op() == janusstore::proto::Reply::PREACCEPT_OK) {
+		txn_id = reply.preaccept_ok().txnid();
+	} else if (reply.op() == janusstore::proto::Reply::PREACCEPT_NOT_OK) {
+		txn_id = reply.preaccept_not_ok().txnid();
+	} else {
+		Panic("Not a preaccept reply");
+	}
 
 	// get the pcb
   	client_preaccept_callback pcb = this->pcb_map.at(txn_id);
@@ -214,24 +223,38 @@ void ShardClient::PreAcceptContinuation(uint64_t txn_id, const string &request_s
   	this->PreAcceptCallback(txn_id, reply, pcb);
 }
 
-void ShardClient::AcceptContinuation(uint64_t txn_id, const string &request_str,
+void ShardClient::AcceptContinuation(const string &request_str,
     const string &reply_str) {
 
 	janusstore::proto::Reply reply;
   	reply.ParseFromString(reply_str);
+	uint64_t txn_id = NULL;
 
+	if (reply.op() == janusstore::proto::Reply::ACCEPT_OK) {
+		txn_id = reply.accept_ok().txnid();
+	} else if (reply.op() == janusstore::proto::Reply::ACCEPT_NOT_OK) {
+		txn_id = reply.accept_not_ok().txnid();
+	} else {
+		Panic("Not an accept reply");
+	}
   	// get the acb
   	client_accept_callback acb = this->acb_map.at(txn_id);
   	// invoke the shardclient callback
   	this->AcceptCallback(txn_id, reply, acb);
 }
 
-void ShardClient::CommitContinuation(uint64_t txn_id, const string &request_str,
+void ShardClient::CommitContinuation(const string &request_str,
     const string &reply_str) {
 
 	janusstore::proto::Reply reply;
   	reply.ParseFromString(reply_str);
+	uint64_t txn_id = NULL;
 
+	if (reply.op() == janusstore::proto::Reply::COMMIT_OK) {
+		txn_id = reply.commit_ok().txnid();
+	} else {
+		Panic("Not a commit reply");
+	}
   	// get the ccb
   	client_commit_callback ccb = this->ccb_map.at(txn_id);
   	// invoke the shardclient callback

@@ -44,7 +44,9 @@ message PreAcceptOKMessage {
     required DependencyList dep = 4;
 }
 
-message PreAcceptNotOKMessage {}
+message PreAcceptNotOKMessage {
+    required uint64 txnid = 1;
+}
 
 message AcceptMessage {
     required uint64 txnid = 1;
@@ -52,7 +54,9 @@ message AcceptMessage {
     required uint64 ballot = 3;
 }
 
-message AcceptOKMessage {}
+message AcceptOKMessage {
+    required uint64 txnid = 1;
+}
 
 message AcceptNotOKMessage {
     // the highest ballot number seen for the requested transaction

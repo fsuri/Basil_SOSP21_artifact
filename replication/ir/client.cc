@@ -36,6 +36,7 @@
 #include "lib/transport.h"
 #include "replication/ir/client.h"
 #include "replication/ir/ir-proto.pb.h"
+#include "store/janusstore/janus-proto.pb.h"
 
 #include <math.h>
 
@@ -401,6 +402,8 @@ IRClient::ReceiveMessage(const TransportAddress &remote,
     proto::ReplyConsensusMessage replyConsensus;
     proto::ConfirmMessage confirm;
     proto::UnloggedReplyMessage unloggedReply;
+    // TODO import proto namespace
+    janusstore::proto::Reply janusReply;
 
     if (type == replyInconsistent.GetTypeName()) {
         replyInconsistent.ParseFromString(data);
@@ -414,6 +417,23 @@ IRClient::ReceiveMessage(const TransportAddress &remote,
     } else if (type == unloggedReply.GetTypeName()) {
         unloggedReply.ParseFromString(data);
         HandleUnloggedReply(remote, unloggedReply);
+    } else if (type ==janusReply.GetTypeName()) {
+        janusReply.ParseFromString(data);
+        uint64_t reqId = janusReply.clientreqid();
+        auto it = pendingReqs.find(reqId);
+        if (it == pendingReqs.end()) {
+            Debug("Received reply when no request was pending");
+            return;
+        }
+        Debug("Client received reply: %lu", reqId);
+
+        // TODO call it->second->continuation() with appropriate params
+        // and set it->second->continuationInvoked = true
+        switch (janusReply.get_op()) {
+            default:
+                Panic("Could not find op for reply!!");
+                break;
+        }
     } else {
         Client::ReceiveMessage(remote, type, data);
     }
