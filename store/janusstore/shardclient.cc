@@ -47,9 +47,10 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	request.set_op(Request::PREACCEPT);
 
 	// serialize a Transaction into a TransactionMessage
-	janusstore::proto::TransactionMessage *txn_msg;
-	txn.serialize(txn_msg);
-	request.mutable_preaccept()->set_allocated_txn(txn_msg);
+	janusstore::proto::TransactionMessage txn_msg;
+	txn.serialize(&txn_msg);
+	// printf("%s", txn_msg->DebugString().c_str());
+	request.mutable_preaccept()->set_allocated_txn(&txn_msg);
 	// txn.serialize(request.mutable_preaccept()->mutable_txn());
 	request.mutable_preaccept()->set_ballot(ballot);
 
@@ -65,7 +66,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	// the Client's callback function when all responses returned
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::PreAcceptContinuation, this,
-		txn_id, placeholders::_1, placeholders::_2), nullptr, 9999);
+		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
 		// no timeout case; TODO verify 0 is OK
 }
 

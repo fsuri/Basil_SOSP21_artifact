@@ -36,11 +36,13 @@ void SendTxn(janusstore::Client *client, size_t *sent) {
 		printf("output commit from txn %d \r\n", committed);
 	};
 
-	janusstore::Transaction txn;
+	janusstore::Transaction txn(1234, "asdf", 1);
 	janusstore::Transaction* txn_ptr = &txn;
 	txn_ptr->addReadSet("key1");
 	txn_ptr->addReadSet("key2");
 	txn_ptr->addWriteSet("key3", "val3");
+	txn_ptr->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
+
 	client->PreAccept(txn_ptr, 0, ccb);
 	printf("preaccept done\r\n");
 }
@@ -53,7 +55,8 @@ int main(int argc, char **argv) {
 	janusstore::Client client("./store/janus", 1, 0, transport_ptr);
 	janusstore::Client *client_ptr = &client;
 	// transport.Timer(1, [client_ptr, &sent]() { SendTxn(client_ptr, &sent); });
+    transport.Run();
 	SendTxn(client_ptr, &sent);
-	transport.Run();
+
 	return 0;
 }
