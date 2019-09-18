@@ -121,7 +121,11 @@ Server::HandlePreAccept(const TransportAddress &remote,
     reply.set_op(Reply::PREACCEPT_OK);
     reply.set_allocated_preaccept_ok(&preaccept_ok_msg);
 
+
     transport->SendMessage(this, remote, reply);
+
+    preaccept_ok_msg.release_dep();
+    reply.release_preaccept_ok();
 }
 
 vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
