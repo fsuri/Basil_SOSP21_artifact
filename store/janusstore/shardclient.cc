@@ -205,6 +205,7 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 
 void ShardClient::PreAcceptContinuation(const string &request_str, const string &reply_str) {
 
+	Debug("In preaccept continuation");
 	janusstore::proto::Reply reply;
 	reply.ParseFromString(reply_str);
 	uint64_t txn_id = NULL;
@@ -226,6 +227,7 @@ void ShardClient::PreAcceptContinuation(const string &request_str, const string 
 void ShardClient::AcceptContinuation(const string &request_str,
     const string &reply_str) {
 
+	Debug("In accept continuation");
 	janusstore::proto::Reply reply;
   	reply.ParseFromString(reply_str);
 	uint64_t txn_id = NULL;
@@ -246,6 +248,7 @@ void ShardClient::AcceptContinuation(const string &request_str,
 void ShardClient::CommitContinuation(const string &request_str,
     const string &reply_str) {
 
+	Debug("In commit continuation");
 	janusstore::proto::Reply reply;
   	reply.ParseFromString(reply_str);
 	uint64_t txn_id = NULL;
