@@ -68,7 +68,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	// the Client's callback function when all responses returned
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::PreAcceptContinuation, this,
-		placeholders::_1, placeholders::_2), nullptr, 0);
+		placeholders::_1, placeholders::_2), nullptr, 10000);
 		// no timeout case; TODO verify 0 is OK
 }
 
@@ -102,7 +102,7 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 	// the Client's callback function when all responses returned
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::AcceptContinuation, this,
-		placeholders::_1, placeholders::_2), nullptr, 0);
+		placeholders::_1, placeholders::_2), nullptr, 10000);
 		// no timeout case; TODO verify 0 is OK
 }
 
