@@ -6,7 +6,8 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 	- got client-single replica on single shard working
 	- verify that transactions commit and are strictly serializable for one replica
 	- scale to multiple replicas on a shard
-	- then try to change config to support cross-shard communication for Inquire
+	- end goal by next week: multiple clients running txns for 1 shard with multiple replicas
+	- then try to change config to support cross-shard communication for Inquire (later)
 
 - 9/11:
 	- reclass server under TransportReceiver as in weakstore
