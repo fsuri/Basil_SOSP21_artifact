@@ -27,15 +27,15 @@ public:
 
     void HandlePreAccept(const TransportAddress &remote,
                          const proto::PreAcceptMessage &pa_msg,
-                         proto::Reply *reply);
+                         replication::ir::proto::UnloggedReplyMessage *unlogged_reply);
 
     void HandleAccept(const TransportAddress &remote,
                       const proto::AcceptMessage &a_msg,
-                      proto::Reply *reply);
+                      replication::ir::proto::UnloggedReplyMessage *unlogged_reply);
 
     void HandleCommit(const TransportAddress &remote,
                       const proto::CommitMessage c_msg,
-                      proto::Reply *reply);
+                      replication::ir::proto::UnloggedReplyMessage *unlogged_reply);
 
     void HandleInquire(const TransportAddress &remote,
                       const proto::InquireMessage i_msg);

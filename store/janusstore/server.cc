@@ -30,26 +30,28 @@ void Server::ReceiveMessage(const TransportAddress &remote,
                         const std::string &type, const std::string &data) {
 
     replication::ir::proto::UnloggedRequestMessage unlogged_request;
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
 
     Request request;
     Reply reply;
     printf("in receive message handler\n");
     if (type == unlogged_request.GetTypeName()) {
         unlogged_request.ParseFromString(data);
+        uint64_t clientreqid = unlogged_request.req().clientreqid();
+        unlogged_reply.set_clientreqid(clientreqid);
 
-        reply.set_clientreqid(unlogged_request.req().clientreqid());
         request.ParseFromString(unlogged_request.req().op());
         switch(request.op()) {
             case Request::PREACCEPT: {
-                HandlePreAccept(remote, request.preaccept(), &reply);
+                HandlePreAccept(remote, request.preaccept(), &unlogged_reply);
                 break;
             }
             case Request::ACCEPT: {
-                HandleAccept(remote, request.accept(), &reply);
+                HandleAccept(remote, request.accept(), &unlogged_reply);
                 break;
             }
             case Request::COMMIT: {
-                HandleCommit(remote, request.commit(), &reply);
+                HandleCommit(remote, request.commit(), &unlogged_reply);
                 break;
             }
             case Request::INQUIRE: {
@@ -72,8 +74,9 @@ void Server::ReceiveMessage(const TransportAddress &remote,
 void
 Server::HandlePreAccept(const TransportAddress &remote,
                         const PreAcceptMessage &pa_msg,
-                        Reply *reply)
+                        replication::ir::proto::UnloggedReplyMessage *unlogged_reply)
 {
+    Reply reply;
     TransactionMessage txnMsg = pa_msg.txn();
     uint64_t txn_id = txnMsg.txnid();
     string server_ip_txn = txnMsg.serverip();
@@ -99,9 +102,10 @@ Server::HandlePreAccept(const TransportAddress &remote,
         // return not ok
         PreAcceptNotOKMessage pa_not_ok_msg;
 
-        reply->set_op(Reply::PREACCEPT_NOT_OK);
-        reply->set_allocated_preaccept_not_ok(&pa_not_ok_msg);
-        transport->SendMessage(this, remote, *reply);
+        reply.set_op(Reply::PREACCEPT_NOT_OK);
+        reply.set_allocated_preaccept_not_ok(&pa_not_ok_msg);
+        unlogged_reply->set_reply(reply.SerializeAsString());
+        transport->SendMessage(this, remote, *unlogged_reply);
         return;
     }
 
@@ -114,14 +118,14 @@ Server::HandlePreAccept(const TransportAddress &remote,
     preaccept_ok_msg.set_txnid(txn.getTransactionId());
     preaccept_ok_msg.set_allocated_dep(&dep);
 
-    reply->set_op(Reply::PREACCEPT_OK);
-    reply->set_allocated_preaccept_ok(&preaccept_ok_msg);
+    reply.set_op(Reply::PREACCEPT_OK);
+    reply.set_allocated_preaccept_ok(&preaccept_ok_msg);
 
-
-    transport->SendMessage(this, remote, *reply);
+    unlogged_reply->set_reply(reply.SerializeAsString());
+    transport->SendMessage(this, remote, *unlogged_reply);
 
     preaccept_ok_msg.release_dep();
-    reply->release_preaccept_ok();
+    reply.release_preaccept_ok();
 }
 
 vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
@@ -177,8 +181,9 @@ vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
 
 void Server::HandleAccept(const TransportAddress &remote,
                           const proto::AcceptMessage &a_msg,
-                          Reply *reply)
+                          replication::ir::proto::UnloggedReplyMessage *unlogged_reply)
 {
+    Reply reply;
     uint64_t ballot = a_msg.ballot();
     uint64_t txn_id = a_msg.txnid();
     Transaction txn = id_txn_map[txn_id];
@@ -196,8 +201,8 @@ void Server::HandleAccept(const TransportAddress &remote,
         accept_not_ok_msg.set_txnid(txn_id);
         accept_not_ok_msg.set_highest_ballot(accepted_ballot);
 
-        reply->set_op(Reply::ACCEPT_NOT_OK);
-        reply->set_allocated_accept_not_ok(&accept_not_ok_msg);
+        reply.set_op(Reply::ACCEPT_NOT_OK);
+        reply.set_allocated_accept_not_ok(&accept_not_ok_msg);
     } else {
         // replace dep_map with the list from the message
         dep_map[txn_id] = msg_deps;
@@ -209,16 +214,18 @@ void Server::HandleAccept(const TransportAddress &remote,
         txn.setTransactionStatus(TransactionMessage::ACCEPT);
 
         AcceptOKMessage accept_ok_msg;
-        reply->set_op(Reply::ACCEPT_OK);
-        reply->set_allocated_accept_ok(&accept_ok_msg);
+        reply.set_op(Reply::ACCEPT_OK);
+        reply.set_allocated_accept_ok(&accept_ok_msg);
 
     }
-    transport->SendMessage(this, remote, *reply);
+    unlogged_reply->set_reply(reply.SerializeAsString());
+    transport->SendMessage(this, remote, *unlogged_reply);
 }
 
 void Server::HandleCommit(const TransportAddress &remote,
                           const proto::CommitMessage c_msg,
-                          Reply *reply) {
+                          replication::ir::proto::UnloggedReplyMessage *unlogged_reply) {
+    Reply reply;
     uint64_t txn_id = c_msg.txnid();
 
     vector<uint64_t> deps;
