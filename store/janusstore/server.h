@@ -79,12 +79,20 @@ private:
     std::vector<uint64_t> BuildDepList(Transaction txn, uint64_t ballot);
 
     // TODO figure out what T.abandon and T.result are
-    void _HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps);
+    void _HandleCommit(uint64_t txn_id,
+                       std::vector<uint64_t> deps,
+                       const TransportAddress &remote,
+                       replication::ir::proto::UnloggedReplyMessage *unlogged_reply
+   );
 
     void _SendInquiry(uint64_t txn_id);
 
     std::unordered_map<std::string, std::string> WaitAndInquire(uint64_t txn_id);
-    std::unordered_map<std::string, std::string> _ExecutePhase(uint64_t txn_id);
+    std::unordered_map<std::string, std::string> _ExecutePhase(
+        uint64_t txn_id,
+        const TransportAddress &remote,
+        replication::ir::proto::UnloggedReplyMessage *unlogged_reply
+    );
     std::vector<uint64_t> _StronglyConnectedComponent(uint64_t txn_id);
     bool _ReadyToProcess(Transaction txn);
 

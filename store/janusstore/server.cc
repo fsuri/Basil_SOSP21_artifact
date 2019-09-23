@@ -51,6 +51,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
                 break;
             }
             case Request::COMMIT: {
+                Debug("[Server %i] Received COMMIT message", this->myIdx);
                 HandleCommit(remote, request.commit(), &unlogged_reply);
                 break;
             }
@@ -115,6 +116,8 @@ Server::HandlePreAccept(const TransportAddress &remote,
         dep.add_txnid(dep_list[i]);
     }
     PreAcceptOKMessage preaccept_ok_msg;
+    preaccept_ok_msg.set_serverip(server_ip);
+    preaccept_ok_msg.set_serverport(server_port);
     preaccept_ok_msg.set_txnid(txn.getTransactionId());
     preaccept_ok_msg.set_allocated_dep(&dep);
 
@@ -225,7 +228,6 @@ void Server::HandleAccept(const TransportAddress &remote,
 void Server::HandleCommit(const TransportAddress &remote,
                           const proto::CommitMessage c_msg,
                           replication::ir::proto::UnloggedReplyMessage *unlogged_reply) {
-    Reply reply;
     uint64_t txn_id = c_msg.txnid();
 
     vector<uint64_t> deps;
@@ -233,17 +235,20 @@ void Server::HandleCommit(const TransportAddress &remote,
     for (int i = 0; i < received_dep.txnid_size(); i++) {
         deps.push_back(received_dep.txnid(i));
     }
-    _HandleCommit(txn_id,deps);
+    _HandleCommit(txn_id, deps, remote, unlogged_reply);
 }
 
-void Server::_HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
+void Server::_HandleCommit(uint64_t txn_id,
+                           std::vector<uint64_t> deps,
+                           const TransportAddress &remote,
+                           replication::ir::proto::UnloggedReplyMessage *unlogged_reply) {
     Transaction txn = id_txn_map[txn_id];
     dep_map[txn_id] = deps;
     txn.setTransactionStatus(TransactionMessage::COMMIT);
     // check if this unblocks others, and rerun HandleCommit for those
     if (blocking_ids.find(txn_id) != blocking_ids.end()) {
         for(uint64_t blocked_id : blocking_ids[txn_id]) {
-            Server::_HandleCommit(blocked_id, dep_map[blocked_id]);
+            _HandleCommit(blocked_id, dep_map[blocked_id], remote, unlogged_reply);
         }
     }
 
@@ -277,7 +282,10 @@ void Server::_HandleCommit(uint64_t txn_id, std::vector<uint64_t> deps) {
     for (int dep_id : deps) {
         processed[dep_id] = false;
     }
-    _ExecutePhase(txn_id);
+
+    Debug("[Server %i] executing transaction %i", myIdx, txn_id);
+
+    _ExecutePhase(txn_id, remote, unlogged_reply);
 }
 
 void Server::HandleInquire(const TransportAddress &remote,
@@ -336,10 +344,14 @@ unordered_map<string, string> Server::Execute(Transaction txn) {
     return result;
 }
 
-unordered_map<string, string> Server::_ExecutePhase(uint64_t txn_id) {
+unordered_map<string, string> Server::_ExecutePhase(
+    uint64_t txn_id,
+    const TransportAddress &remote,
+    replication::ir::proto::UnloggedReplyMessage *unlogged_reply
+) {
     unordered_map<string, string> result;
     vector<uint64_t> deps = dep_map[txn_id];
-    while (!processed[txn_id]) {
+    while (!processed[txn_id] && deps.size() > 0) {
         // TODO make choosing other_txn_id more efficient
         for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
             uint64_t other_txn_id = pair.first;
@@ -357,6 +369,20 @@ unordered_map<string, string> Server::_ExecutePhase(uint64_t txn_id) {
             }
         }
     }
+
+    Reply reply;
+
+    CommitOKMessage commit_ok;
+    commit_ok.set_txnid(txn_id);
+
+    reply.set_allocated_commit_ok(&commit_ok);
+    reply.set_op(Reply::COMMIT_OK);
+
+    unlogged_reply->set_reply(reply.SerializeAsString());
+
+    transport->SendMessage(this, remote, *unlogged_reply);
+
+    reply.release_commit_ok();
     return result;
 }
 

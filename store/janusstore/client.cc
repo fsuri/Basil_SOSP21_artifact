@@ -109,7 +109,6 @@ namespace janusstore {
     for (auto p: participants) {
       std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
       auto ccb = std::bind(&Client::CommitCallback, this, txn_id, placeholders::_1, placeholders::_2);
-
       bclient[p]->Commit(txn_id, vec_deps, ccb);
     }
   }
@@ -191,7 +190,6 @@ namespace janusstore {
     printf("%s\n", ("CLIENT - COMMIT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     responded.insert(shard);
-
     if (responded.size() == participants.size()) {
       // return results to client
       // TODO how to return results? may also need to update CommitOKMessage

@@ -134,7 +134,7 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 	// the Client's callback function when all responses returned
 	client->InvokeUnlogged(replica, request_str,
 		std::bind(&ShardClient::CommitContinuation, this,
-		placeholders::_1, placeholders::_2), nullptr, 0);
+		placeholders::_1, placeholders::_2), nullptr, 10000);
 		// no timeout case; TODO verify 0 is OK
 }
 
@@ -163,6 +163,8 @@ void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	// TODO who unwraps replica responses into the callback params?
 	responded++;
 
+	Debug("In shardclient AcceptCallback");
+
 	// aggregate replies for this transaction
 	if (this->accept_replies.count(txn_id)) {
 		// key already exists, so append to list
@@ -184,6 +186,8 @@ void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply
 void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb) {
 	// TODO who unwraps replica responses into the callback params?
 	responded++;
+
+	Debug("In shardclient CommitCallback");
 
 	// aggregate replies for this transaction
 	if (this->commit_replies.count(txn_id)) {
