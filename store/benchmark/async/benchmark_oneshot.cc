@@ -27,12 +27,12 @@
 
 #define N 10
 void SendTxn(janusstore::Client *client, size_t *sent) {
-	commit_callback ccb = [client, sent] (uint64_t committed) {
-		if (*sent < N) {
-			// essentially repeatedly sends a transaction through preaccept
-			*sent += 1;
-			SendTxn(client, sent);
-		}
+	commit_callback ccb = [] (uint64_t committed) {
+		// if (*sent < N) {
+		// 	// essentially repeatedly sends a transaction through preaccept
+		// 	*sent += 1;
+		// 	SendTxn(client, sent);
+		// }
 		printf("output commit from txn %d \r\n", committed);
 	};
 

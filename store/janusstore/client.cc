@@ -77,8 +77,10 @@ namespace janusstore {
     uint64_t txn_id = txn->getTransactionId();
     this->output_commits[txn_id] = ocb;
     txn->setTransactionId(txn_id);
-    txn_id++;
+    // TODO make the client assign the txn ID in the future
+    this->txn_id++;
     printf("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
+    printf("CLIENT - PREACCEPT - ocb registered for txn %d\n", txn_id);
     setParticipants(txn);
 
     // add the callback to map for post-commit action
@@ -195,7 +197,11 @@ namespace janusstore {
       // TODO how to return results? may also need to update CommitOKMessage
       // for (auto reply : replies) {}
       // invoke output commit callback
-      this->output_commits[txn_id](txn_id);
+      if (this->output_commits.find(txn_id) == this->output_commits.end()) {
+        printf("could not find ocb for txn %d\n", txn_id);
+      } else {
+        this->output_commits[txn_id](txn_id);
+      }
     }
     responded.clear();
     return;
