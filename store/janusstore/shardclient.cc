@@ -139,7 +139,6 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 }
 
 void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_preaccept_callback pcb) {
-	// TODO who unwraps replica responses into the proto?
 	this->responded++;
 
 	// aggregate replies for this transaction
@@ -160,7 +159,6 @@ void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply re
 }
 
 void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_accept_callback acb) {
-	// TODO who unwraps replica responses into the callback params?
 	responded++;
 
 	Debug("In shardclient AcceptCallback");
@@ -184,7 +182,6 @@ void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply
 }
 
 void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb) {
-	// TODO who unwraps replica responses into the callback params?
 	responded++;
 
 	Debug("In shardclient CommitCallback");
