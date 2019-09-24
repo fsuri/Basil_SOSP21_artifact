@@ -80,7 +80,7 @@ public:
         auto kv = replicaAddresses[cfg].find(replicaIdx);
         ASSERT(kv != replicaAddresses[cfg].end());
 
-        printf("found replica addr for replica %d\n", replicaIdx);
+        // printf("found replica addr for replica %d\n", replicaIdx);
         
         return SendMessageInternal(src, kv->second, m, false);
     }
@@ -89,7 +89,6 @@ public:
     SendMessageToAll(TransportReceiver *src, const Message &m)
     {
         const transport::Configuration *cfg = configurations[src];
-        printf("sendmsgtoall meme\n");
         ASSERT(cfg != NULL);
 
         if (!replicaAddressesInitialized) {
@@ -182,12 +181,11 @@ protected:
         // them.
         for (auto &kv : canonicalConfigs) {
             transport::Configuration *cfg = kv.second;
-            printf("found config\n");
 
             for (int i = 0; i < cfg->n; i++) {
                 const ADDR addr = LookupAddress(*cfg, i);
                 replicaAddresses[cfg].insert(std::make_pair(i, addr));
-                printf("made replica addr for replica %d\n", i);
+                // printf("made replica addr for replica %d\n", i);
             }
 
             // And check if there's a multicast address

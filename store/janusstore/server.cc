@@ -34,7 +34,6 @@ void Server::ReceiveMessage(const TransportAddress &remote,
 
     Request request;
     Reply reply;
-    printf("in receive message handler\n");
     if (type == unlogged_request.GetTypeName()) {
         unlogged_request.ParseFromString(data);
         uint64_t clientreqid = unlogged_request.req().clientreqid();

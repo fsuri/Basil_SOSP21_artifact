@@ -46,6 +46,7 @@ private:
     Transport *transport; // Transport layer.
     transport::Configuration *config;
     int shard; // which shard this client accesses
+    int num_replicas;
     int replica; // which replica to use for reads
 
     replication::ir::IRClient *client; // Client proxy.

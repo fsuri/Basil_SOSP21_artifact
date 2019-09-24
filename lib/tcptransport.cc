@@ -189,13 +189,11 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
     // Create socket
     int fd;
     if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        printf("wtf1\n");
         PPanic("Failed to create socket for outgoing TCP connection");
     }
 
     // Put it in non-blocking mode
     if (fcntl(fd, F_SETFL, O_NONBLOCK, 1)) {
-        printf("wtf2\n");
         PWarning("Failed to set O_NONBLOCK on outgoing TCP socket");
     }
 
@@ -203,7 +201,6 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
     int n = 1;
     if (setsockopt(fd, IPPROTO_TCP,
                    TCP_NODELAY, (char *)&n, sizeof(n)) < 0) {
-        printf("wtf3\n");
         PWarning("Failed to set TCP_NODELAY on TCP listening socket");
     }
 
@@ -221,17 +218,14 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
                                BEV_OPT_CLOSE_ON_FREE);
     bufferevent_setcb(bev, TCPReadableCallback, NULL,
                       TCPOutgoingEventCallback, info);
-    printf("registed cb\n");
     if (bufferevent_socket_connect(bev,
                                    (struct sockaddr *)&(dst.addr),
                                    sizeof(dst.addr)) < 0) {
         bufferevent_free(bev);
-        printf("wtf4\n");
         Warning("Failed to connect to server via TCP");
         return;
     }
     if (bufferevent_enable(bev, EV_READ|EV_WRITE) < 0) {
-        printf("wtf5\n");
         Panic("Failed to enable bufferevent");
     }
 
@@ -239,7 +233,6 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
     struct sockaddr_in sin;
     socklen_t sinsize = sizeof(sin);
     if (getsockname(fd, (sockaddr *) &sin, &sinsize) < 0) {
-        printf("wtf6\n");
         PPanic("Failed to get socket name");
     }
     TCPTransportAddress *addr = new TCPTransportAddress(sin);
@@ -348,7 +341,6 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
                                   const Message &m,
                                   bool multicast)
 {
-    printf("WTF\n");
     auto kv = tcpOutgoing.find(dst);
     // See if we have a connection open
     if (kv == tcpOutgoing.end()) {
@@ -370,15 +362,13 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
                        dataLen + sizeof(dataLen) +
                        sizeof(totalLen) +
                        sizeof(uint32_t));
-    printf("?????????\n");
 
     ASSERT(!data.empty());
-    printf("Sending %lu %s message to server over TCP\n", data.length(), data.c_str());
-    printf("Proto string: %s \n", m.ShortDebugString().c_str());
+    // printf("Sending %lu %s message to server over TCP\n", data.length(), data.c_str());
+    // printf("Proto string: %s \n", m.ShortDebugString().c_str());
     Debug("Sending %ld byte %s message to server over TCP",
           totalLen, type.c_str());
-    printf("Sending %ld byte %s message to server over TCP\n",
-          totalLen, type.c_str());
+    // printf("Sending %ld byte %s message to server over TCP\n", totalLen, type.c_str());
     char buf[totalLen];
     char *ptr = buf;
 
@@ -410,7 +400,6 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
         Warning("Failed to write to TCP buffer");
         return false;
     }
-    printf("ayyy lmao\n");
     return true;
 }
 
@@ -554,7 +543,6 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
     TCPTransport *transport = info->transport;
 
     if (what & EV_READ) {
-        printf("in if clause\n");
         int newfd;
         struct sockaddr_in sin;
         socklen_t sinLength = sizeof(sin);
@@ -583,15 +571,11 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
         }
 
         // Create a buffered event
-        printf("creating buffered event\n");
         bev = bufferevent_socket_new(transport->libeventBase, newfd,
                                      BEV_OPT_CLOSE_ON_FREE);
-        printf("bev\n");
         bufferevent_setcb(bev, TCPReadableCallback, NULL,
                           TCPIncomingEventCallback, info);
-        printf("WTLDFJ\n");
         if (bufferevent_enable(bev, EV_READ|EV_WRITE) < 0) {
-            printf("Failed to enable bufferevent");
             Panic("Failed to enable bufferevent");
         }
     info->connectionEvents.push_back(bev);
