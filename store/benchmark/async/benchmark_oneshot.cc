@@ -29,33 +29,10 @@
 
 DEFINE_uint64(client_id, 0, "which client to run");
 
-void SendTxn(janusstore::Client *client, size_t *sent) {
+void SendTxn(janusstore::Client *client, janusstore::Transaction *txn_ptr) {
 	commit_callback ccb = [] (uint64_t committed) {
 		printf("output commit from txn %d \r\n", committed);
 	};
-
-	janusstore::Transaction txn(1234, "asdf", 1);
-	janusstore::Transaction* txn_ptr = &txn;
-	txn_ptr->addReadSet("key1");
-	txn_ptr->addReadSet("key2");
-	txn_ptr->addWriteSet("key3", "val3");
-	txn_ptr->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
-
-	client->PreAccept(txn_ptr, 0, ccb);
-	printf("preaccept done\r\n");
-}
-
-void SendTxn2(janusstore::Client *client, size_t *sent) {
-	commit_callback ccb = [] (uint64_t committed) {
-		printf("output commit from txn %d \r\n", committed);
-	};
-
-	janusstore::Transaction txn(4567, "asdf", 1);
-	janusstore::Transaction* txn_ptr = &txn;
-	txn_ptr->addReadSet("key3");
-	txn_ptr->addWriteSet("key1", "val1");
-	txn_ptr->addWriteSet("key2", "val2");
-	txn_ptr->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
 
 	client->PreAccept(txn_ptr, 0, ccb);
 	printf("preaccept done\r\n");
@@ -79,8 +56,25 @@ int main(int argc, char **argv) {
 	janusstore::Client client2("./store/janus", 1, 1, transport_ptr2);
 	janusstore::Client *client_ptr2 = &client2;
 
-	transport1.Timer(500, [client_ptr1, &sent]() { SendTxn(client_ptr1, &sent); });
-	transport2.Timer(500, [client_ptr2, &sent]() { SendTxn2(client_ptr2, &sent); });
+	// define some transactions
+	janusstore::Transaction txn1(1234, "asdf", 1);
+	janusstore::Transaction* txn_ptr1 = &txn1;
+	txn_ptr1->addReadSet("key1");
+	txn_ptr1->addReadSet("key2");
+	txn_ptr1->addWriteSet("key3", "val3");
+	txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
+
+	janusstore::Transaction txn2(4567, "asdf", 1);
+	janusstore::Transaction* txn_ptr2 = &txn2;
+	txn_ptr2->addReadSet("key3");
+	txn_ptr2->addWriteSet("key1", "val1");
+	txn_ptr2->addWriteSet("key2", "val2");
+	txn_ptr2->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
+
+	transport1.Timer(
+		1500, [client_ptr1, txn_ptr1]() { SendTxn(client_ptr1, txn_ptr1); });
+	transport2.Timer(
+		500, [client_ptr2, txn_ptr2]() { SendTxn(client_ptr2, txn_ptr2); });
 
 	printf("starting client %d\n", FLAGS_client_id);
 	if (FLAGS_client_id == 0) {
