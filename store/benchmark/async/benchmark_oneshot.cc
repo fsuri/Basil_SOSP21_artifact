@@ -62,6 +62,7 @@ void SendTxn2(janusstore::Client *client, size_t *sent) {
 }
 
 int main(int argc, char **argv) {
+	gflags::ParseCommandLineFlags(&argc, &argv, true);
 	// transport is used to send messages btwn replicas and schedule msgs
 	TCPTransport transport1(0.0, 0.0, 0, false);
 	TCPTransport* transport_ptr1 = &transport1;
