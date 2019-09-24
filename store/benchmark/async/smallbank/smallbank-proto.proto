@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-package smallbank;
+package smallbank.proto;
 
 enum Tables {
 	ACCOUNT = 0;

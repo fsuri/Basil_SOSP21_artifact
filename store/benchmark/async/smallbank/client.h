@@ -7,15 +7,15 @@
 namespace smallbank {
     class Benchmark {
     public:
-        Benchmark(SyncClient *client);
+        Benchmark(SyncClient *client, const uint32_t &timeout);
 
         void CreateAccount(const std::string &name, const uint32_t &customer_id);
 
         uint32_t Bal(const std::string &name);
 
-        void DepositChecking(const std::string &name, const int32_t &value);
+        bool DepositChecking(const std::string &name, const int32_t &value);
 
-        void TransactSaving(const std::string &name, const int32_t &value);
+        bool TransactSaving(const std::string &name, const int32_t &value);
 
         void Amalgamate(const std::string &name1, const std::string &name2);
 
@@ -24,11 +24,13 @@ namespace smallbank {
     private:
         SyncClient *client_;
 
-        void ReadAccountRow(const std::string &name, AccountRow &accountRow);
+        uint32_t timeout_;
 
-        void ReadCheckingRow(const uint32_t &customer_id, CheckingRow &checkingRow);
+        bool ReadAccountRow(const std::string &name, proto::AccountRow &accountRow);
 
-        void ReadSavingRow(const uint32_t &customer_id, SavingRow &savingRow);
+        bool ReadCheckingRow(const uint32_t &customer_id, proto::CheckingRow &checkingRow);
+
+        bool ReadSavingRow(const uint32_t &customer_id, proto::SavingRow &savingRow);
 
         void InsertAccountRow(const std::string &name, const uint32_t &customer_id);
 
