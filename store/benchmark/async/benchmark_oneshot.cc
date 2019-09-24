@@ -26,6 +26,9 @@
 #include <algorithm>
 
 #define N 10
+
+DEFINE_uint64(client_id, 0, "which client to run");
+
 void SendTxn(janusstore::Client *client, size_t *sent) {
 	commit_callback ccb = [] (uint64_t committed) {
 		printf("output commit from txn %d \r\n", committed);
@@ -72,14 +75,17 @@ int main(int argc, char **argv) {
 	janusstore::Client *client_ptr1 = &client1;
 
 	// init client2 with closest replica 1
-	janusstore::Client client2("./store/janus", 1, 1, transport_ptr1);
+	janusstore::Client client2("./store/janus", 1, 1, transport_ptr2);
 	janusstore::Client *client_ptr2 = &client2;
 
 	transport1.Timer(500, [client_ptr1, &sent]() { SendTxn(client_ptr1, &sent); });
-	transport1.Timer(500, [client_ptr2, &sent]() { SendTxn2(client_ptr2, &sent); });
-	// transport2.Timer(500, [client_ptr2, &sent]() { SendTxn2(client_ptr2, &sent); });
-    transport1.Run();
-//	SendTxn(client_ptr, &sent);
+	transport2.Timer(500, [client_ptr2, &sent]() { SendTxn2(client_ptr2, &sent); });
 
+	printf("starting client %d\n", FLAGS_client_id);
+	if (FLAGS_client_id == 0) {
+	    transport1.Run();
+	} else {
+		transport2.Run();
+	}
 	return 0;
 }
