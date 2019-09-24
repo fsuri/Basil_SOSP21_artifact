@@ -42,15 +42,43 @@ void SendTxn(janusstore::Client *client, size_t *sent) {
 	printf("preaccept done\r\n");
 }
 
+void SendTxn2(janusstore::Client *client, size_t *sent) {
+	commit_callback ccb = [] (uint64_t committed) {
+		printf("output commit from txn %d \r\n", committed);
+	};
+
+	janusstore::Transaction txn(4567, "asdf", 1);
+	janusstore::Transaction* txn_ptr = &txn;
+	txn_ptr->addReadSet("key3");
+	txn_ptr->addWriteSet("key1", "val1");
+	txn_ptr->addWriteSet("key2", "val2");
+	txn_ptr->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
+
+	client->PreAccept(txn_ptr, 0, ccb);
+	printf("preaccept done\r\n");
+}
+
 int main(int argc, char **argv) {
 	// transport is used to send messages btwn replicas and schedule msgs
-	TCPTransport transport(0.0, 0.0, 0, false);
-	TCPTransport* transport_ptr = &transport;
+	TCPTransport transport1(0.0, 0.0, 0, false);
+	TCPTransport* transport_ptr1 = &transport1;
+
+	TCPTransport transport2(0.0, 0.0, 0, false);
+	TCPTransport* transport_ptr2 = &transport2;
 	size_t sent = 0;
-	janusstore::Client client("./store/janus", 1, 0, transport_ptr);
-	janusstore::Client *client_ptr = &client;
-	transport.Timer(1, [client_ptr, &sent]() { SendTxn(client_ptr, &sent); });
-    transport.Run();
+
+	// init client1 with closest replica 0
+	janusstore::Client client1("./store/janus", 1, 0, transport_ptr1);
+	janusstore::Client *client_ptr1 = &client1;
+
+	// init client2 with closest replica 1
+	janusstore::Client client2("./store/janus", 1, 1, transport_ptr1);
+	janusstore::Client *client_ptr2 = &client2;
+
+	transport1.Timer(500, [client_ptr1, &sent]() { SendTxn(client_ptr1, &sent); });
+	transport1.Timer(500, [client_ptr2, &sent]() { SendTxn2(client_ptr2, &sent); });
+	// transport2.Timer(500, [client_ptr2, &sent]() { SendTxn2(client_ptr2, &sent); });
+    transport1.Run();
 //	SendTxn(client_ptr, &sent);
 
 	return 0;
