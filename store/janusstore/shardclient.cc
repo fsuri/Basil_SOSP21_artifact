@@ -68,7 +68,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
-	printf("shardclient%d can shardcast PREACCEPT to %d replicas\n", this->shard, this->num_replicas);
+	printf("shardclient%d shardcasting PREACCEPT to %d replicas\n", this->shard, this->num_replicas);
 	for (int i = 0; i < this->num_replicas; i++) {	
 		client->InvokeUnlogged(i, request_str,
 			std::bind(&ShardClient::PreAcceptContinuation, this,
@@ -104,7 +104,6 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
-	// broadcast to all replicas in the shard
 	for (int i = 0; i < this->num_replicas; i++) {	
 		client->InvokeUnlogged(i, request_str,
 			std::bind(&ShardClient::AcceptContinuation, this,
@@ -138,7 +137,6 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
-	// broadcast to all replicas in the shard
 	for (int i = 0; i < this->num_replicas; i++) {
 		client->InvokeUnlogged(i, request_str,
 			std::bind(&ShardClient::CommitContinuation, this,
