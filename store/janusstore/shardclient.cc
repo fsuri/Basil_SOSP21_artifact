@@ -35,7 +35,7 @@ ShardClient::~ShardClient() {
 }
 
 void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb) {
-	Debug("[shard %i] Sending PREACCEPT [%llu]", shard, client_id);
+	Debug("[shard %i] Sending PREACCEPT for txn_id %i [%llu]", shard, txn.getTransactionId(), client_id);
 
 	std::vector<janusstore::proto::Reply> replies;
 	uint64_t txn_id = txn.getTransactionId();
@@ -68,8 +68,9 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
-	printf("shardclient%d shardcasting PREACCEPT to %d replicas\n", this->shard, this->num_replicas);
-	for (int i = 0; i < this->num_replicas; i++) {	
+	Debug("shardclient%d shardcasting PREACCEPT to %d replicas\n for txn %i",
+		this->shard, this->num_replicas, txn_id);
+	for (int i = 0; i < this->num_replicas; i++) {
 		client->InvokeUnlogged(i, request_str,
 			std::bind(&ShardClient::PreAcceptContinuation, this,
 			placeholders::_1, placeholders::_2), nullptr, 10000);
@@ -104,7 +105,7 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
-	for (int i = 0; i < this->num_replicas; i++) {	
+	for (int i = 0; i < this->num_replicas; i++) {
 		client->InvokeUnlogged(i, request_str,
 			std::bind(&ShardClient::AcceptContinuation, this,
 			placeholders::_1, placeholders::_2), nullptr, 10000);
