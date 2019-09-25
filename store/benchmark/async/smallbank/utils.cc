@@ -10,14 +10,14 @@ namespace smallbank {
         return std::string(keyC, sizeof(keyC));
     }
 
-    std::string SavingRowKey(const uint32_t &customer_id) {
+    std::string SavingRowKey(const uint32_t customer_id) {
         char keyC[5];
         keyC[0] = static_cast<char>(proto::Tables::SAVING);
         *reinterpret_cast<uint32_t *>(keyC + 1) = customer_id;
         return std::string(keyC, sizeof(keyC));
     }
 
-    std::string CheckingRowKey(const uint32_t &customer_id) {
+    std::string CheckingRowKey(const uint32_t customer_id) {
         char keyC[5];
         keyC[0] = static_cast<char>(proto::Tables::CHECKING);
         *reinterpret_cast<uint32_t *>(keyC + 1) = customer_id;

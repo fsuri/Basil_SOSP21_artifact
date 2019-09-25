@@ -7,9 +7,9 @@ namespace smallbank {
 
     std::string AccountRowKey(const std::string &name);
 
-    std::string SavingRowKey(const uint32_t &customer_id);
+    std::string SavingRowKey(const uint32_t customer_id);
 
-    std::string CheckingRowKey(const uint32_t &customer_id);
+    std::string CheckingRowKey(const uint32_t customer_id);
 
 
 } // namespace smallbank
