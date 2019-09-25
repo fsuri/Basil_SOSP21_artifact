@@ -266,13 +266,11 @@ TCPTransport::Register(TransportReceiver *receiver,
     // Create socket
     int fd;
     if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        printf("Failed to create socket to accept TCP connections\n");
         PPanic("Failed to create socket to accept TCP connections");
     }
 
     // Put it in non-blocking mode
     if (fcntl(fd, F_SETFL, O_NONBLOCK, 1)) {
-        printf("Failed to set O_NONBLOCK\n");
         PWarning("Failed to set O_NONBLOCK");
     }
 
@@ -280,7 +278,6 @@ TCPTransport::Register(TransportReceiver *receiver,
     int n;
     if (setsockopt(fd, SOL_SOCKET,
                    SO_REUSEADDR, (char *)&n, sizeof(n)) < 0) {
-        printf("Failed to set SO_REUSEADDR on TCP listening socket\n");
         PWarning("Failed to set SO_REUSEADDR on TCP listening socket");
     }
 
@@ -288,7 +285,6 @@ TCPTransport::Register(TransportReceiver *receiver,
     n = 1;
     if (setsockopt(fd, IPPROTO_TCP,
                    TCP_NODELAY, (char *)&n, sizeof(n)) < 0) {
-        printf("Failed to set TCP_NODELAY on TCP listening socket\n");
         PWarning("Failed to set TCP_NODELAY on TCP listening socket");
     }
 
@@ -300,7 +296,6 @@ TCPTransport::Register(TransportReceiver *receiver,
 
     // Listen for connections
     if (listen(fd, 5) < 0) {
-        printf("Failed to listen for TCP connections\n");
         PPanic("Failed to listen for TCP connections");
     }
 
@@ -321,7 +316,6 @@ TCPTransport::Register(TransportReceiver *receiver,
     // Tell the receiver its address
     socklen_t sinsize = sizeof(sin);
     if (getsockname(fd, (sockaddr *) &sin, &sinsize) < 0) {
-        printf("Failed to get socket name\n");
         PPanic("Failed to get socket name");
     }
     TCPTransportAddress *addr = new TCPTransportAddress(sin);
@@ -331,7 +325,6 @@ TCPTransport::Register(TransportReceiver *receiver,
     receivers[fd] = receiver;
     fds[receiver] = fd;
 
-    printf("Accepting connections on TCP port %hu\n", ntohs(sin.sin_port));
     Debug("Accepting connections on TCP port %hu", ntohs(sin.sin_port));
 }
 
@@ -396,7 +389,6 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     ptr += dataLen;
 
     if (bufferevent_write(ev, buf, totalLen) < 0) {
-        printf("Failed to write to TCP buffer\n");
         Warning("Failed to write to TCP buffer");
         return false;
     }
@@ -551,14 +543,12 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
         // Accept a connection
         if ((newfd = accept(fd, (struct sockaddr *)&sin,
                             &sinLength)) < 0) {
-            printf("Failed to accept incoming TCP connection");
             PWarning("Failed to accept incoming TCP connection");
             return;
         }
 
         // Put it in non-blocking mode
         if (fcntl(newfd, F_SETFL, O_NONBLOCK, 1)) {
-            printf("Failed to set O_NONBLOCK");
             PWarning("Failed to set O_NONBLOCK");
         }
 
@@ -566,7 +556,6 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
         int n = 1;
         if (setsockopt(newfd, IPPROTO_TCP,
                        TCP_NODELAY, (char *)&n, sizeof(n)) < 0) {
-            printf("Failed to set TCP_NODELAY on TCP listening socket");
             PWarning("Failed to set TCP_NODELAY on TCP listening socket");
         }
 
@@ -583,8 +572,6 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
 	transport->tcpOutgoing[client] = bev;
 	transport->tcpAddresses.insert(pair<struct bufferevent*,
         TCPTransportAddress>(bev,client));
-    printf("Opened incoming TCP connection from %s:%d\n",
-               inet_ntoa(sin.sin_addr), htons(sin.sin_port));
     Debug("Opened incoming TCP connection from %s:%d",
                inet_ntoa(sin.sin_addr), htons(sin.sin_port));
     }
@@ -664,12 +651,12 @@ TCPTransport::TCPIncomingEventCallback(struct bufferevent *bev,
 {
     printf("TCPIncomingEventCallback\n");
     if (what & BEV_EVENT_ERROR) {
-        printf("Error on incoming TCP connection: %s\n",
+        Debug("Error on incoming TCP connection: %s\n",
                 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
         bufferevent_free(bev);
         return;
     } else if (what & BEV_EVENT_ERROR) {
-        printf("EOF on incoming TCP connection\n");
+        Debug("EOF on incoming TCP connection\n");
         bufferevent_free(bev);
         return;
     }
