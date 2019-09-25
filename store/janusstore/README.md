@@ -2,13 +2,16 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
+9/25:
+	- ok to use different transport per client
+	- (TODO) verify transactions commit and are strictly serializable
+	- (TODO) include key-val results in the commit OK message (and output commit callback)
+	- (TODO) try two shards with 1 replica each without need for Inquire
+	- (TODO) then try to change config to support cross-shard communication for Inquire (later)
 - 9/18:
 	- (DONE) got client-single replica on single shard working
 	- (DONE) scale to multiple replicas on a shard
-	- (TODO) verify that transactions commit and are strictly serializable for one replica
-	- (TODO) end goal by next week: multiple clients running txns for 1 shard with multiple replicas
-	- (TODO) then try to change config to support cross-shard communication for Inquire (later)
-
+	- (DONE) end goal by next week: multiple clients running txns for 1 shard with multiple replicas
 - 9/11:
 	- reclass server under TransportReceiver as in weakstore
 	- implement inquire function
@@ -16,53 +19,12 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 	- finish benchmark_oneshot
 		- currently, client can start up arbitrary transactions
 		- goal by next week: client sends txns to server and server commits and client executes post-commit callback
-- 6/10:
-	- client impl done except for some TODOs that might need clarification
-	- what's the progress/update on the shim layer?
-	- should try to run a transaction thru the client next
-- 5/10:
-	- client impl mostly done, need to get to compile and write the shim layer
-		- will probably need to sort out some bugs with client/shardclient state
-		- for now, dont need to write shim layer; can just have a main function that randomly generates a one-shot txn and tells the client to send it
-	- think what about janus makes it impossible to support general txns, aka interactive transactions
-		- look at [2] and [41] in janus paper for discussions on transaction classes
-- 4/10:
-	- client impl
-		- how do we return transaction results from the client?
-			- use the callback function given from wrapper of client in PreAccept
-		- type issues with callback functions; likely same for shardclient
-	- shardclient impl
-		- how does the shardclient receive responses from replicas?
-			- answer: continuation callbacks that do the wrapping
-		- is there a way to tell how many replicas there are in the shard?
-			- otherwise, how can we decide when to forward responses to the client?
-			- answer: this->config.n is the number of replicas;
-			- additionally, this means we need to loop and call InvokeUnlogged for replica IDs 0...n-1
-- 3/29:
-	- client partial impl
-	- server partial impl
-	- need config files to run
 
 - when we merge to master, may need to modify client API to fit evaluation framework
-
-- store/server.cc contains info about actually starting up the janus server
-- store/tapirstore/server.cc is just how we can match on the request op and call our handler logic
 
 - note any interesting observations while doing this thing
 	- potential typos/unexplained cases in the paper?
 	- what overhead does Janus incur for more complex transactions outside of one-shot transactions? how does this affect performance?
-
-<!-- questions: 
-	can we do this/other stuff for meng project? i know we're supposed to find an advisor for meng; would that be alvisi?
--->
-
-# Timeline and TODOs
-- 5/17 - get client to compile and proofread logic
-	- check notes from 4/10 because there are some client/shardclient implementation details we need to address
-- 5/28 - run a transaction via client to server (doesnt have to actually work)
-
-- 9/02 - janus impl done and runnable (and debuggable) with relative performance to tapir and morty (reproduce Zipf/throughput graphs in janus paper)
-- 9/19 - paper deadline (3 wks after classes start)
 
 # How to Run
 
