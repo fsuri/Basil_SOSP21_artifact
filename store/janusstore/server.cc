@@ -28,7 +28,7 @@ Server::~Server() {
 
 void Server::ReceiveMessage(const TransportAddress &remote,
                         const std::string &type, const std::string &data) {
-
+    Debug("[Server %i] Received message", this->myIdx);
     replication::ir::proto::UnloggedRequestMessage unlogged_request;
     replication::ir::proto::UnloggedReplyMessage unlogged_reply;
 
@@ -46,6 +46,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
                 break;
             }
             case Request::ACCEPT: {
+                Debug("[Server %i] Received ACCEPT message", this->myIdx);
                 HandleAccept(remote, request.accept(), &unlogged_reply);
                 break;
             }
@@ -83,6 +84,9 @@ Server::HandlePreAccept(const TransportAddress &remote,
     uint64_t server_port_txn = txnMsg.serverport();
     uint64_t ballot = pa_msg.ballot();
 
+    Debug("[Server %i] Received PREACCEPT message for txn %i with ballot %i",
+        this->myIdx, txn_id, ballot);
+
     // construct the transaction object
     Transaction txn = Transaction(txn_id, server_ip_txn, server_port_txn);
     for (int i = 0; i < txnMsg.gets_size(); i++) {
@@ -105,7 +109,10 @@ Server::HandlePreAccept(const TransportAddress &remote,
         reply.set_op(Reply::PREACCEPT_NOT_OK);
         reply.set_allocated_preaccept_not_ok(&pa_not_ok_msg);
         unlogged_reply->set_reply(reply.SerializeAsString());
+        Debug("[Server %i] sending PREACCEPT NOT-OK message for txn %i",
+        this->myIdx, txn_id);
         transport->SendMessage(this, remote, *unlogged_reply);
+        reply.release_preaccept_not_ok();
         return;
     }
 
@@ -124,6 +131,10 @@ Server::HandlePreAccept(const TransportAddress &remote,
     reply.set_allocated_preaccept_ok(&preaccept_ok_msg);
 
     unlogged_reply->set_reply(reply.SerializeAsString());
+
+    Debug("[Server %i] sending PREACCEPT-OK message for txn %i %s",
+        this->myIdx, txn_id,
+        reply.DebugString().c_str());
     transport->SendMessage(this, remote, *unlogged_reply);
 
     preaccept_ok_msg.release_dep();
@@ -135,6 +146,8 @@ vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
     if (accepted_ballots.find(txn_id) != accepted_ballots.end() &&
      ballot > accepted_ballots[txn_id]) {
         // TODO less hacky way
+        Debug("[Server %i] Sending PREACCEPT NOT-OK since %i > %i",
+            this->myIdx, ballot, accepted_ballots[txn_id]);
         return vector<uint64_t>(-1);
     }
     accepted_ballots[txn_id] = ballot;
@@ -143,42 +156,49 @@ vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
     id_txn_map[txn.getTransactionId()] = txn;
 
     // construct conflicts and read/write sets
-    vector<uint64_t> dep_list;
+    set<uint64_t> dep_set;
     for (auto key : txn.getReadSet()) {
         if (read_key_txn_map.find(key) == read_key_txn_map.end()) {
-          read_key_txn_map[key] = vector<uint64_t>(txn_id);
+          read_key_txn_map[key] = set<uint64_t>{txn_id};
         } else {
-          read_key_txn_map[key].push_back(txn_id);
+          read_key_txn_map[key].insert(txn_id);
         }
 
         // append conflicts
         if (write_key_txn_map.find(key) != write_key_txn_map.end()) {
-            vector<uint64_t> other_txn_ids = write_key_txn_map[key];
-            dep_list.insert(dep_list.end(), other_txn_ids.begin(), other_txn_ids.end());
+            set<uint64_t> other_txn_ids = write_key_txn_map[key];
+            dep_set.insert(other_txn_ids.begin(), other_txn_ids.end());
         }
     }
+
 
     for (auto const& kv : txn.getWriteSet()) {
         string key = kv.first;
         if (write_key_txn_map.find(key) == write_key_txn_map.end()) {
-          write_key_txn_map[key] = vector<uint64_t>(txn_id);
+          write_key_txn_map[key] = set<uint64_t>{txn_id};
         } else {
           // append conflicts
-          vector<uint64_t> other_txn_ids = write_key_txn_map[key];
-          dep_list.insert(dep_list.end(), other_txn_ids.begin(), other_txn_ids.end());
-          write_key_txn_map[key].push_back(txn_id);
+          set<uint64_t> other_txn_ids = write_key_txn_map[key];
+          dep_set.insert(other_txn_ids.begin(), other_txn_ids.end());
+          write_key_txn_map[key].insert(txn_id);
         }
 
         if (read_key_txn_map.find(key) != read_key_txn_map.end()) {
           // append conflicts
-          vector<uint64_t> other_txn_ids = read_key_txn_map[key];
-          dep_list.insert(dep_list.end(), other_txn_ids.begin(), other_txn_ids.end());
+          set<uint64_t> other_txn_ids = read_key_txn_map[key];
+          // TODO remove, but this is useful for debuggign
+          // Debug("other txn ids read in write confl %i", other_txn_ids.size());
+          // for (auto i = other_txn_ids.begin(); i != other_txn_ids.end(); ++i)
+          //   std::cout << *i << ' ';
+          dep_set.insert(other_txn_ids.begin(), other_txn_ids.end());
         }
     }
 
+    vector<uint64_t> dep_vec(dep_set.begin(), dep_set.end());
+
     // add to dependency graph
-    dep_map[txn_id] = dep_list;
-    return dep_list;
+    dep_map[txn_id] = dep_vec;
+    return dep_vec;
 }
 
 void Server::HandleAccept(const TransportAddress &remote,
@@ -260,7 +280,7 @@ void Server::_HandleCommit(uint64_t txn_id,
             // for every txn_id found on this server, add it to the list of blocking
             if (id_txn_map.find(txn_id) != id_txn_map.end()){
                 if (blocking_ids.find(blocking_txn_id) == blocking_ids.end()) {
-                    blocking_ids[blocking_txn_id] = vector<uint64_t>(txn_id);
+                    blocking_ids[blocking_txn_id] = vector<uint64_t>{txn_id};
                 } else {
                     blocking_ids[blocking_txn_id].push_back(txn_id);
                 }

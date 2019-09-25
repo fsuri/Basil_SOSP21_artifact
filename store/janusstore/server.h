@@ -63,11 +63,11 @@ private:
 
     // maps keys to transaction ids that read it
     // TODO ensure that this map is cleared per transaction
-    std::unordered_map<std::string, std::vector<uint64_t>> read_key_txn_map;
+    std::unordered_map<std::string, std::set<uint64_t>> read_key_txn_map;
 
     // maps keys to transaction ids that write to it
     // TODO ensure that this map is cleared per transaction
-    std::unordered_map<std::string, std::vector<uint64_t>> write_key_txn_map;
+    std::unordered_map<std::string, std::set<uint64_t>> write_key_txn_map;
 
     // maps txn_id -> list[other_ids] being blocked by txn_id
     std::unordered_map<uint64_t, std::vector<uint64_t>> blocking_ids;
