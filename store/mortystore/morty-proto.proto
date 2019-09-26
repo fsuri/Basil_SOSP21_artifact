@@ -22,12 +22,13 @@ message Transaction {
 }
 
 message Branch {
-  required Transaction txn = 1;
-  repeated Branch seq = 2;
-  repeated uint64 shards = 3;
-  repeated uint64 prepared_shards = 4;
-  repeated uint64 koed_shards = 5;
-  repeated PrepareKO koes = 6;
+  required uint64 id = 1;
+  required Transaction txn = 2;
+  repeated Branch seq = 3;
+  repeated uint64 shards = 4;
+  repeated uint64 prepared_shards = 5;
+  repeated uint64 koed_shards = 6;
+  repeated PrepareKO koes = 7;
 }
 
 message PrepareKO {
