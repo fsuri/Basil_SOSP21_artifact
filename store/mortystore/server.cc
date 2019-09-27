@@ -70,15 +70,77 @@ void Server::HandleWrite(const TransportAddress &remote, const proto::Write &msg
 }
 
 void Server::HandlePrepare(const TransportAddress &remote, const proto::Prepare &msg) {
+  CacheBranch(msg.branch());
+
+  if (!CheckBranch(remote, msg.branch().id())) {
+    waiting.insert(msg.branch().id());
+  }
 }
 
 void Server::HandleKO(const TransportAddress &remote, const proto::KO &msg) {
+  auto itr = std::find(prepared.begin(), prepared.end(), msg.branch().id());
+  if (itr != prepared.end()) {
+    prepared.erase(itr);
+    for (; itr != prepared.end(); ++itr) {
+      std::vector<uint64_t> prep(prepared.begin(), itr - 1);
+      if (!CommitCompatible(*itr, prep)) {
+        prepared.erase(itr);
+      }
+    }
+  }
 }
 
 void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &msg) {
+  committed.push_back(msg.branch().id());
+  for (auto itr =  pending_reads.begin(); itr != pending_reads.end(); ++itr) {
+    for (auto jtr = itr->second.begin(); jtr != itr->second.end(); ++jtr) {
+      if (branches[*jtr]->txn().id() == msg.branch().txn().id()) {
+        itr->second.erase(jtr);
+      }
+    }
+  }
+  for (auto itr =  pending_writes.begin(); itr != pending_writes.end(); ++itr) {
+    for (auto jtr = itr->second.begin(); jtr != itr->second.end(); ++jtr) {
+      if (branches[*jtr]->txn().id() == msg.branch().txn().id()) {
+        itr->second.erase(jtr);
+      }
+    }
+  }
+  
+  for (auto itr = waiting.begin(); itr != waiting.end(); ++itr) {
+    if (CheckBranch(*txn_coordinators[branches[*itr]->txn().id()],
+          *itr)) {
+      waiting.erase(itr);
+      for (auto shard : branches[*itr]->shards()) {
+        transport->SendMessage(this, *shards[shard], msg);
+      }
+    }
+  }
 }
 
 void Server::HandleAbort(const TransportAddress &remote, const proto::Abort &msg) {
+}
+
+bool Server::CheckBranch(const TransportAddress &addr, uint64_t branch) {
+  if (CommitCompatible(branch, prepared) && CommitCompatible(branch, committed)) {
+    prepared.push_back(branch);
+    proto::PrepareOK reply;
+    *reply.mutable_branch() = *branches[branch];
+    transport->SendMessage(this, addr, reply);
+    return true;
+  } else if (!WaitCompatible(branch, committed)) {
+    proto::PrepareKO reply;
+    *reply.mutable_branch() = *branches[branch];
+    transport->SendMessage(this, addr, reply);
+    return true;
+  } else if (!WaitCompatible(branch, prepared)) {
+    proto::PrepareKO reply;
+    *reply.mutable_branch() = *branches[branch];
+    transport->SendMessage(this, addr, reply);
+    return true;
+  } else {
+    return false;
+  }
 }
 
 void Server::CacheBranch(const proto::Branch &branch) {
@@ -194,30 +256,50 @@ void Server::GenerateBranchesPermutations(const std::unordered_set<uint64_t> &pe
   } while (std::next_permutation(txns_sorted.begin(), txns_sorted.end()));
 }
 
-bool Server::CommitCompatible(uint64_t branch,
-    const std::vector<uint64_t> &seq) {
+bool Server::WaitCompatible(uint64_t branch, const std::vector<uint64_t> &seq) {
+  std::vector<uint64_t> seq3;
   std::vector<uint64_t> seq4(seq);
   for (auto b : branches[branch]->seq()) {
     auto itr = std::find(seq4.begin(), seq4.end(), b.id());
     if (itr != seq4.end()) {
       seq4.erase(itr);
     }
+    auto itr2 = std::find(seq.begin(), seq.end(), b.id());
+    if (itr2 != seq.end()) {
+      seq3.push_back(b.id());
+    }
   }
-  return ValidSubsequence(*branches[branch], seq) &&
+  return ValidSubsequence(branches[branch]->txn(), seq3, seq) &&
       NoConflicts(branches[branch]->txn(), seq4);
 }
 
-bool Server::ValidSubsequence(const proto::Branch &branch,
-      const std::vector<uint64_t> &seq) {
+bool Server::CommitCompatible(uint64_t branch,
+    const std::vector<uint64_t> &seq) {
+  std::vector<uint64_t> seq3;
+  std::vector<uint64_t> seq4(seq);
+  for (auto b : branches[branch]->seq()) {
+    seq3.push_back(b.id());
+    auto itr = std::find(seq4.begin(), seq4.end(), b.id());
+    if (itr != seq4.end()) {
+      seq4.erase(itr);
+    }
+  }
+  return ValidSubsequence(branches[branch]->txn(), seq3, seq) &&
+      NoConflicts(branches[branch]->txn(), seq4);
+}
+
+bool Server::ValidSubsequence(const proto::Transaction &txn,
+      const std::vector<uint64_t> &seq1,
+      const std::vector<uint64_t> &seq2) {
   size_t k = 0;
-  for (int i = 0; i < branch.seq().size(); ++i) {
+  for (size_t i = 0; i < seq1.size(); ++i) {
     bool found = false;
-    for (size_t j =  k + 1; j < seq.size(); ++j) {
-      if (branch.seq()[i].txn().id() == branches[seq[j]]->txn().id()) {
-        proto::Transaction txn(branches[seq[j]]->txn());
-        google::protobuf::RepeatedPtrField<proto::Operation> ops(txn.ops());
-        for (int l = 0; l < branch.seq()[i].txn().ops().size(); ++l) {
-          const proto::Operation &op2 = branch.seq()[i].txn().ops()[l];
+    for (size_t j =  k + 1; j < seq2.size(); ++j) {
+      if (branches[seq1[i]]->txn().id() == branches[seq2[j]]->txn().id()) {
+        proto::Transaction txn1(branches[seq2[j]]->txn());
+        google::protobuf::RepeatedPtrField<proto::Operation> ops(txn1.ops());
+        for (int l = 0; l < branches[seq1[i]]->txn().ops().size(); ++l) {
+          const proto::Operation &op2 = branches[seq1[i]]->txn().ops()[l];
           auto itr = std::find_if(ops.begin(), ops.end(),
               [op2](const proto::Operation &op) {
                   return op.type() == op2.type() && op.key() == op2.key() &&
@@ -227,8 +309,8 @@ bool Server::ValidSubsequence(const proto::Branch &branch,
             ops.erase(itr);
           }
         }
-        *txn.mutable_ops() = ops;
-        if (TransactionsConflict(branch.txn(), txn)) {
+        *txn1.mutable_ops() = ops;
+        if (TransactionsConflict(txn, txn1)) {
           return false;
         } else {
           k = j;

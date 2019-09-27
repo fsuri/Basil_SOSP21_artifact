@@ -42,7 +42,9 @@ class Server : public TransportReceiver, public ::Server {
   void GenerateBranchesPermutations(const std::unordered_set<uint64_t> &pending_branches,
       const std::vector<uint64_t> &subset, std::vector<proto::Branch *> new_branches);
   bool CommitCompatible(uint64_t branch, const std::vector<uint64_t> &seq);
-  bool ValidSubsequence(const proto::Branch &branch,
+  bool WaitCompatible(uint64_t branch, const std::vector<uint64_t> &seq);
+  bool ValidSubsequence(const proto::Transaction &txn,
+      const std::vector<uint64_t> &seq1,
       const std::vector<uint64_t> &seq2);
   bool NoConflicts(const proto::Transaction &txn,
       const std::vector<uint64_t> &seq);
@@ -52,6 +54,7 @@ class Server : public TransportReceiver, public ::Server {
       std::string &val);
   bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
       std::string &val);
+  bool CheckBranch(const TransportAddress &addr, uint64_t branch);
 
   const transport::Configuration &config;
   int idx;
@@ -62,6 +65,8 @@ class Server : public TransportReceiver, public ::Server {
   std::vector<uint64_t> committed;
   std::vector<uint64_t> prepared;
   std::unordered_map<uint64_t, TransportAddress*> txn_coordinators;
+  std::unordered_set<uint64_t> waiting;
+  std::unordered_map<uint64_t, TransportAddress*> shards;
 
 };
 
