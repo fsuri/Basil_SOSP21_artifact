@@ -29,7 +29,7 @@ namespace smallbank {
         std::copy(all_keys, all_keys+0, all_keys_);
     }
 
-    void SmallBankClient::startBenchmark(const uint32_t duration) {
+    void SmallBankClient::startBenchmark(const uint32_t duration, const uint32_t rampup) {
         struct timeval t0, t1, t2;
         int nTransactions = 0; // Number of transactions attempted.
         int ttype; // Transaction type
@@ -72,12 +72,14 @@ namespace smallbank {
                 ttype = 5;
             }
             gettimeofday(&t2, NULL);
+            if (((t2.tv_sec - t0.tv_sec) * 1000000 + (t2.tv_usec - t0.tv_usec)) < rampup * 1000000) {
+                continue;
+            }
             long latency = (t2.tv_sec - t1.tv_sec) * 1000000 + (t2.tv_usec - t1.tv_usec);
             fprintf(stderr, "%d %ld.%06ld %ld.%06ld %ld %d %d", ++nTransactions, t1.tv_sec,
                     t1.tv_usec, t2.tv_sec, t2.tv_usec, latency, status?1:0, ttype);
             fprintf(stderr, "\n");
-
-            if (((t2.tv_sec - t0.tv_sec) * 1000000 + (t2.tv_usec - t0.tv_usec)) > duration * 1000000)
+            if (((t2.tv_sec - t0.tv_sec) * 1000000 + (t2.tv_usec - t0.tv_usec)) > (duration + rampup) * 1000000)
                 break;
         }
 
@@ -178,6 +180,8 @@ namespace smallbank {
  */
     DEFINE_uint32(duration,
     60, "seconds to run (smallbank)");
+    DEFINE_uint32(rampup,
+    30, "rampup period in seconds (smallbank)");
     DEFINE_uint32(balance_ratio,
     60, "percentage of balance transactions (smallbank)");
     DEFINE_uint32(deposit_checking_ratio,
