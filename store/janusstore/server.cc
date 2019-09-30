@@ -208,7 +208,7 @@ void Server::HandleAccept(const TransportAddress &remote,
     Reply reply;
     uint64_t ballot = a_msg.ballot();
     uint64_t txn_id = a_msg.txnid();
-    Transaction txn = id_txn_map[txn_id];
+    Transaction *txn = &id_txn_map[txn_id];
 
     // reconstruct dep_list from message
     vector<uint64_t> msg_deps;
@@ -233,7 +233,7 @@ void Server::HandleAccept(const TransportAddress &remote,
         accepted_ballots[txn_id] = ballot;
 
         // update txn status to accept
-        txn.setTransactionStatus(TransactionMessage::ACCEPT);
+        txn->setTransactionStatus(TransactionMessage::ACCEPT);
 
         AcceptOKMessage accept_ok_msg;
         reply.set_op(Reply::ACCEPT_OK);
@@ -261,9 +261,10 @@ void Server::_HandleCommit(uint64_t txn_id,
                            std::vector<uint64_t> deps,
                            const TransportAddress &remote,
                            replication::ir::proto::UnloggedReplyMessage *unlogged_reply) {
-    Transaction txn = id_txn_map[txn_id];
+    Transaction *txn = &id_txn_map[txn_id];
     dep_map[txn_id] = deps;
-    txn.setTransactionStatus(TransactionMessage::COMMIT);
+    txn->setTransactionStatus(TransactionMessage::COMMIT);
+    Debug("Set txn id %i to COMMIT", txn_id);
     // check if this unblocks others, and rerun HandleCommit for those
     if (blocking_ids.find(txn_id) != blocking_ids.end()) {
         for(uint64_t blocked_id : blocking_ids[txn_id]) {
@@ -301,8 +302,6 @@ void Server::_HandleCommit(uint64_t txn_id,
     for (int dep_id : deps) {
         processed[dep_id] = false;
     }
-
-    Debug("[Server %i] executing transaction %i", myIdx, txn_id);
 
     _ExecutePhase(txn_id, remote, unlogged_reply);
 }
@@ -346,6 +345,7 @@ void Server::_SendInquiry(uint64_t txn_id) {
 }
 
 unordered_map<string, string> Server::Execute(Transaction txn) {
+    printf("wat the FUK");
     uint64_t txn_id = txn.getTransactionId();
     unordered_map<string, string> result;
 
@@ -363,35 +363,50 @@ unordered_map<string, string> Server::Execute(Transaction txn) {
     return result;
 }
 
-unordered_map<string, string> Server::_ExecutePhase(
-    uint64_t txn_id,
-    const TransportAddress &remote,
-    replication::ir::proto::UnloggedReplyMessage *unlogged_reply
+void Server::_ExecutePhase(uint64_t txn_id,
+                           const TransportAddress &remote,
+                           replication::ir::proto::UnloggedReplyMessage *unlogged_reply
 ) {
     unordered_map<string, string> result;
     vector<uint64_t> deps = dep_map[txn_id];
-    while (!processed[txn_id] && deps.size() > 0) {
-        // TODO make choosing other_txn_id more efficient
+    Transaction txn = id_txn_map[txn_id];
+
+    while (!processed[txn_id]) {
+        if (!_ReadyToProcess(txn)) {
+            Debug("[Server %i] executing transaction %i", myIdx, txn_id);
+            result = Execute(txn);
+            processed[txn_id] = true;
+            break;
+        }
         for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
             uint64_t other_txn_id = pair.first;
             if (_ReadyToProcess(id_txn_map[other_txn_id])) {
-                vector<uint64_t> scc = _StronglyConnectedComponent(txn_id);
+                vector<uint64_t> scc = _StronglyConnectedComponent(other_txn_id);
                 for (int scc_id : scc) {
                     // TODO check if scc_id is involved with S and not abandoned
                     if (scc_id == txn_id) {
                         result = Execute(id_txn_map[scc_id]);
                     } else {
                         Execute(id_txn_map[scc_id]);
-                    }
+                    }Debug("[Server %i] executing transaction %i", myIdx, scc_id);
                     processed[scc_id] = true;
                 }
             }
         }
     }
 
-    Reply reply;
 
     CommitOKMessage commit_ok;
+    Reply reply;
+
+    // construct proto
+    for (auto res : result) {
+        Debug("Adding %s, %s", res.first.c_str(), res.second.c_str());
+        PutMessage *pair = commit_ok.add_pairs();
+        pair->set_key(res.first);
+        pair->set_value(res.second);
+    }
+
     commit_ok.set_txnid(txn_id);
 
     reply.set_allocated_commit_ok(&commit_ok);
@@ -399,10 +414,11 @@ unordered_map<string, string> Server::_ExecutePhase(
 
     unlogged_reply->set_reply(reply.SerializeAsString());
 
+    Debug("[Server %i] COMMIT, sending back %s", this->myIdx, reply.DebugString().c_str());
+
     transport->SendMessage(this, remote, *unlogged_reply);
 
     reply.release_commit_ok();
-    return result;
 }
 
 void _DFS(uint64_t txn_id, set<uint64_t> &visited, unordered_map<uint64_t, vector<uint64_t>> dep_map, vector<uint64_t> &v, stack<uint64_t> &s) {

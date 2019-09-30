@@ -72,7 +72,8 @@ message CommitMessage {
 message CommitOKMessage {
     optional uint64 txnid = 1;
     optional bool abandon = 2;
-    optional bool result = 3; // TODO may need to change this type for reads
+    // technically not a put, but we have to return key/value pairs
+    repeated PutMessage pairs = 3;
 }
 
 message InquireMessage {
