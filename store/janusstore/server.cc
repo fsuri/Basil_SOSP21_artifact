@@ -345,7 +345,6 @@ void Server::_SendInquiry(uint64_t txn_id) {
 }
 
 unordered_map<string, string> Server::Execute(Transaction txn) {
-    printf("wat the FUK");
     uint64_t txn_id = txn.getTransactionId();
     unordered_map<string, string> result;
 
@@ -372,12 +371,6 @@ void Server::_ExecutePhase(uint64_t txn_id,
     Transaction txn = id_txn_map[txn_id];
 
     while (!processed[txn_id]) {
-        if (!_ReadyToProcess(txn)) {
-            Debug("[Server %i] executing transaction %i", myIdx, txn_id);
-            result = Execute(txn);
-            processed[txn_id] = true;
-            break;
-        }
         for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
             uint64_t other_txn_id = pair.first;
             if (_ReadyToProcess(id_txn_map[other_txn_id])) {
@@ -385,10 +378,13 @@ void Server::_ExecutePhase(uint64_t txn_id,
                 for (int scc_id : scc) {
                     // TODO check if scc_id is involved with S and not abandoned
                     if (scc_id == txn_id) {
+                        // TODO: store it in txn result and remove if else
                         result = Execute(id_txn_map[scc_id]);
                     } else {
+                        // TODO: store it in txn result
                         Execute(id_txn_map[scc_id]);
-                    }Debug("[Server %i] executing transaction %i", myIdx, scc_id);
+                    }
+                    Debug("[Server %i] executing transaction %i", myIdx, scc_id);
                     processed[scc_id] = true;
                 }
             }

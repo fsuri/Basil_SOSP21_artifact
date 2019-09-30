@@ -53,8 +53,9 @@ void Transaction::serialize(janusstore::proto::TransactionMessage *msg) const {
       msg->add_gets()->set_key(key);
     }
     for (const auto &pair : this->write_set) {
-      msg->add_puts()->set_key(pair.first);
-      msg->add_puts()->set_value(pair.second);
+      janusstore::proto::PutMessage *put = msg->add_puts();
+      put->set_key(pair.first);
+      put->set_value(pair.second);
     }
 }
 
