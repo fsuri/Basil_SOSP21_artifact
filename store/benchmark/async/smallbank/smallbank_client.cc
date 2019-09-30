@@ -44,6 +44,8 @@ namespace smallbank {
             // Decide which type of smallbank transaction it is going to be.
             ttype = rand() % 100;
 
+            // Ranges for random params for transactions based on
+            // https://github.com/microsoft/CCF/blob/master/samples/apps/smallbank/clients/small_bank_client.cpp
             if (ttype < balance_ratio_) {
                 if (!transaction_.Bal(getCustomerKey()).second) {
                     status = false;
@@ -255,7 +257,7 @@ namespace smallbank {
                                                                     FLAGS_num_hotspots,
                                                                     num_customers_ - FLAGS_num_hotspots,
                                                                     allKeys);
-            bench->startBenchmark(FLAGS_duration);
+            bench->startBenchmark(FLAGS_duration, FLAGS_rampup);
         }
         return 0;
     }

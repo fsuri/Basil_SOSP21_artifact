@@ -18,7 +18,7 @@ namespace smallbank {
                         const uint32_t num_hotspot_keys,
                         const uint32_t num_non_hotspot_keys, string all_keys[num_customers_]);
 
-        void startBenchmark(const uint32_t duration);
+        void startBenchmark(const uint32_t duration, const uint32_t rampup);
 
     private:
         SmallBankTransaction transaction_;
