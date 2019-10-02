@@ -185,31 +185,27 @@ protected:
                           const transport::Configuration &config,
                           int groupIdx,
                           int replicaIdx) {
-        Debug("wtf huh??? %i", config.g);
         ASSERT(receiver != NULL);
-        Debug("assert passed");
         // Have we seen this configuration before? If so, get a
         // pointer to the canonical copy; if not, create one. This
         // allows us to use that pointer as a key in various
         // structures.
-        transport::Configuration *canonical;
-        if (canonicalConfigs.find(config) == canonicalConfigs.end()) {
+        transport::Configuration *canonical
+            = canonicalConfigs[config];
+        if (canonical == NULL) {
             canonical = new transport::Configuration(config);
             canonicalConfigs[config] = canonical;
-
-        } else {
-            canonical = canonicalConfigs[config];
         }
 
         // Record configuration
         configurations[receiver] = canonical;
-        Debug("wtf???");
+
         // If this is a replica, record the receiver
         if (replicaIdx != -1) {
             ASSERT(groupIdx != -1);
             g_replicaReceivers[canonical][groupIdx][replicaIdx] = receiver;
         }
-        Debug("record receiver");
+
         // Record which group this receiver belongs to
         replicaGroups[receiver] = groupIdx;
 
