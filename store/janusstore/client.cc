@@ -196,10 +196,7 @@ namespace janusstore {
 
     responded.insert(shard);
     if (responded.size() == participants.size()) {
-      // return results to client
-      // TODO how to return results? may also need to update CommitOKMessage
-      // for (auto reply : replies) {}
-      // invoke output commit callback
+      // return results to client by invoking output commit callback
       if (this->output_commits.find(txn_id) == this->output_commits.end()) {
         printf("could not find ocb for txn %d\n", txn_id);
       } else {
