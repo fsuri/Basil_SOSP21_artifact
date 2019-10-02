@@ -28,8 +28,9 @@ class Transaction {
 private:
     // the unique transaction ID
     uint64_t txn_id;
-
     janusstore::proto::TransactionMessage::Status status;
+    std::unordered_map<uint64_t, std::unordered_set<std::string>> sharded_readset;
+    std::unordered_map<uint64_t, std::unordered_map<std::string, std::string>> sharded_writeset;
 
 public:
     // the server this txn is associated with
@@ -58,7 +59,9 @@ public:
 
     void addReadSet(const std::string &key);
     void addWriteSet(const std::string &key, const std::string &value);
-    void serialize(janusstore::proto::TransactionMessage *msg) const;
+    void addShardedReadSet(const std::string &key, uint64_t shard);
+    void addShardedWriteSet(const std::string &key, const std::string &value,  uint64_t shard);
+    void serialize(janusstore::proto::TransactionMessage *msg, uint64_t shard) const;
 };
 
 } // namespace janusstore

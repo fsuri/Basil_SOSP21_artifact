@@ -50,7 +50,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 
 	// serialize a Transaction into a TransactionMessage
 	janusstore::proto::TransactionMessage txn_msg;
-	txn.serialize(&txn_msg);
+	txn.serialize(&txn_msg, this->shard);
 	// printf("%s", txn_msg->DebugString().c_str());
 	request.mutable_preaccept()->set_allocated_txn(&txn_msg);
 	// txn.serialize(request.mutable_preaccept()->mutable_txn());

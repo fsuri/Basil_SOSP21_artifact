@@ -27,7 +27,7 @@ namespace janusstore {
 
     /* Start a shardclient for each shard. */
     // TODO change this to a single config file lul
-    for (int i = 0; i < nShards; i++) {
+    for (int i = 0; i < this->nshards; i++) {
       string shardConfigPath = configPath + ".config";
       ShardClient * shardclient = new ShardClient(shardConfigPath,
         transport, client_id, i, closestReplica);
@@ -63,6 +63,7 @@ namespace janusstore {
         printf("%s\n", ("txn -> shard " + to_string(i)).c_str());
         participants.insert(i);
       }
+      txn->addShardedReadSet(key, i);
     }
 
     for (const auto & pair: txn->write_set) {
@@ -71,6 +72,7 @@ namespace janusstore {
         printf("%s\n", ("txn -> shard " + to_string(i)).c_str());
         participants.insert(i);
       }
+      txn->addShardedWriteSet(pair.first, pair.second, i);
     }
   }
 

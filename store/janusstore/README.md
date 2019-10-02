@@ -7,7 +7,7 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 	- (TODO) verify transactions commit and are strictly serializable
 	- (DONE) include key-val results in the commit OK message (and output commit callback)
 	- (DONE) try two shards with 1 replica each without need for Inquire
-	- (TODO) then try to change config to support cross-shard communication for Inquire (later)
+	- (WIP) then try to change config to support cross-shard communication for Inquire (later)
 - 9/18:
 	- (DONE) got client-single replica on single shard working
 	- (DONE) scale to multiple replicas on a shard
