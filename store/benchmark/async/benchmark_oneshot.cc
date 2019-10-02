@@ -60,8 +60,8 @@ int main(int argc, char **argv) {
 	janusstore::Transaction txn1(1234, "asdf", 1);
 	janusstore::Transaction* txn_ptr1 = &txn1;
 	txn_ptr1->addReadSet("key1");
-	// txn_ptr1->addReadSet("key2");
-	// txn_ptr1->addWriteSet("key3", "val3");
+	txn_ptr1->addReadSet("key2");
+	txn_ptr1->addWriteSet("key3", "val3");
 	txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
 
 	janusstore::Transaction txn2(4567, "asdf", 1);

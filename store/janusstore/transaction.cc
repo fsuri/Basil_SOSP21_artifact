@@ -55,19 +55,24 @@ void Transaction::serialize(janusstore::proto::TransactionMessage *msg, uint64_t
 	msg->set_serverip(this->server_ip);
 	msg->set_serverport(this->server_port);
 	msg->set_txnid(this->txn_id);
-	auto iter = sharded_readset.find(shard);
-	ASSERT(iter != sharded_readset.end());
-	for (auto &key : iter->second) {
-      msg->add_gets()->set_key(key);
-    }
 
+	// add readset for [shard]
+	auto iter = sharded_readset.find(shard);
+	if (iter != sharded_readset.end()) {
+		for (auto &key : iter->second) {
+	      msg->add_gets()->set_key(key);
+	    }
+	}
+
+	// add writeset for [shard]
 	auto iter2 = sharded_writeset.find(shard);
-	ASSERT(iter2 != sharded_writeset.end());
-    for (auto &pair : iter2->second) {
-      janusstore::proto::PutMessage *put = msg->add_puts();
-      put->set_key(pair.first);
-      put->set_value(pair.second);
-    }
+	if (iter2 != sharded_writeset.end()) {
+	    for (auto &pair : iter2->second) {
+	      janusstore::proto::PutMessage *put = msg->add_puts();
+	      put->set_key(pair.first);
+	      put->set_value(pair.second);
+	    }
+	}
 }
 
 } // namespace janusstore
