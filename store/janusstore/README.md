@@ -5,8 +5,8 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 9/25:
 	- ok to use different transport per client
 	- (TODO) verify transactions commit and are strictly serializable
-	- (TODO) include key-val results in the commit OK message (and output commit callback)
-	- (TODO) try two shards with 1 replica each without need for Inquire
+	- (DONE) include key-val results in the commit OK message (and output commit callback)
+	- (DONE) try two shards with 1 replica each without need for Inquire
 	- (TODO) then try to change config to support cross-shard communication for Inquire (later)
 - 9/18:
 	- (DONE) got client-single replica on single shard working
