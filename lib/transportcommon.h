@@ -67,6 +67,28 @@ public:
     }
 
     virtual bool
+    SendMessageToReplica(TransportReceiver *src,
+                         int groupIdx,
+                         int replicaIdx,
+                         const Message &m)
+    {
+        const transport::Configuration *cfg = configurations[src];
+        ASSERT(cfg != NULL);
+
+        if (!replicaAddressesInitialized) {
+            LookupAddresses();
+        }
+
+        auto kv = g_replicaAddresses[cfg][groupIdx].find(replicaIdx);
+        ASSERT(kv != g_replicaAddresses[cfg][groupIdx].end());
+
+        // printf("found replica addr for replica %d\n", replicaIdx);
+
+        return SendMessageInternal(src, kv->second, m, false);
+    }
+
+
+    virtual bool
     SendMessageToReplica(TransportReceiver *src, int replicaIdx,
                          const Message &m)
     {
@@ -219,6 +241,7 @@ protected:
     LookupAddresses()
     {
         // Clear any existing list of addresses
+        g_replicaAddresses.clear();
         replicaAddresses.clear();
         multicastAddresses.clear();
 
@@ -227,11 +250,22 @@ protected:
         for (auto &kv : canonicalConfigs) {
             transport::Configuration *cfg = kv.second;
 
-            for (int i = 0; i < cfg->n; i++) {
-                const ADDR addr = LookupAddress(*cfg, i);
-                replicaAddresses[cfg].insert(std::make_pair(i, addr));
-                // printf("made replica addr for replica %d\n", i);
+            if (cfg->g == 0) {
+                for (int i = 0; i < cfg->n; i++) {
+                    const ADDR addr = LookupAddress(*cfg, i);
+                    replicaAddresses[cfg].insert(std::make_pair(i, addr));
+                    // printf("made replica addr for replica %d\n", i);
+                }
+            } else if (cfg->g > 0) {
+                for (int j = 0; j < cfg->g; j++) {
+                    for (int i = 0; i < cfg->n; i++) {
+                        const ADDR addr = LookupAddress(*cfg, j, i);
+                        g_replicaAddresses[cfg][j].insert(std::make_pair(i, addr));
+                        // printf("made replica addr for replica %d\n", i);
+                    }
+                }
             }
+
 
             // And check if there's a multicast address
             if (cfg->multicast()) {
