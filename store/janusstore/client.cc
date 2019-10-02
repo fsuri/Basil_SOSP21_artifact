@@ -26,8 +26,9 @@ namespace janusstore {
     Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
 
     /* Start a client for each shard. */
-    for (int i = 0; i < nshards; i++) {
-      string shardConfigPath = configPath + to_string(i) + ".config";
+    // TODO change this to a single config file lul
+    for (int i = 0; i < 1; i++) {
+      string shardConfigPath = configPath + ".config";
       ShardClient * shardclient = new ShardClient(shardConfigPath,
         transport, client_id, i, closestReplica);
       // we use shardclients instead of bufferclients here
