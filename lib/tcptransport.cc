@@ -113,6 +113,16 @@ TCPTransport::LookupAddress(const transport::Configuration &config,
     return LookupAddress(addr);
 }
 
+TCPTransportAddress
+TCPTransport::LookupAddress(const transport::Configuration &config,
+                            int groupIdx,
+                            int replicaIdx)
+{
+    const transport::ReplicaAddress &addr = config.replica(groupIdx,
+                                                           replicaIdx);
+    return LookupAddress(addr);
+}
+
 static void
 BindToPort(int fd, const string &host, const string &port)
 {
@@ -327,6 +337,84 @@ TCPTransport::Register(TransportReceiver *receiver,
 
     Debug("Accepting connections on TCP port %hu", ntohs(sin.sin_port));
 }
+
+void
+TCPTransport::Register(TransportReceiver *receiver,
+                       const transport::Configuration &config,
+                       int groupIdx,
+                       int replicaIdx)
+{
+    ASSERT(replicaIdx < config.n);
+    struct sockaddr_in sin;
+    Debug("wtf??? %i", config.g);
+    RegisterConfiguration(receiver, config, groupIdx, replicaIdx);
+
+    // Create socket
+    int fd;
+    if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        PPanic("Failed to create socket to accept TCP connections");
+    }
+
+    // Put it in non-blocking mode
+    if (fcntl(fd, F_SETFL, O_NONBLOCK, 1)) {
+        PWarning("Failed to set O_NONBLOCK");
+    }
+
+    // Set SO_REUSEADDR
+    int n;
+    if (setsockopt(fd, SOL_SOCKET,
+                   SO_REUSEADDR, (char *)&n, sizeof(n)) < 0) {
+        PWarning("Failed to set SO_REUSEADDR on TCP listening socket");
+    }
+
+    // Set TCP_NODELAY
+    n = 1;
+    if (setsockopt(fd, IPPROTO_TCP,
+                   TCP_NODELAY, (char *)&n, sizeof(n)) < 0) {
+        PWarning("Failed to set TCP_NODELAY on TCP listening socket");
+    }
+
+    if (replicaIdx != -1) {
+        // Registering a replica. Bind socket to the designated
+        // host/port
+        const string &host = config.replica(groupIdx, replicaIdx).host;
+        const string &port = config.replica(groupIdx, replicaIdx).port;
+        BindToPort(fd, host, port);
+    } else {
+        // Registering a client. Bind to any available host/port
+        BindToPort(fd, "", "any");
+    }
+
+    // Create event to accept connections
+    TCPTransportTCPListener *info = new TCPTransportTCPListener();
+    info->transport = this;
+    info->acceptFd = fd;
+    info->receiver = receiver;
+    info->groupIdx = groupIdx;
+    info->replicaIdx = replicaIdx;
+    info->acceptEvent = event_new(libeventBase,
+                                  fd,
+                                  EV_READ | EV_PERSIST,
+                                  TCPAcceptCallback,
+                                  (void *)info);
+    event_add(info->acceptEvent, NULL);
+    tcpListeners.push_back(info);
+
+    // Tell the receiver its address
+    socklen_t sinsize = sizeof(sin);
+    if (getsockname(fd, (sockaddr *) &sin, &sinsize) < 0) {
+        PPanic("Failed to get socket name");
+    }
+    TCPTransportAddress *addr = new TCPTransportAddress(sin);
+    receiver->SetAddress(addr);
+
+    // Update mappings
+    receivers[fd] = receiver;
+    fds[receiver] = fd;
+
+    Notice("Listening on TCP port %hu", ntohs(sin.sin_port));
+}
+
 
 bool
 TCPTransport::SendMessageInternal(TransportReceiver *src,

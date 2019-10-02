@@ -178,12 +178,6 @@ int main(int argc, char **argv) {
     std::cerr << "Unable to read configuration file: " << FLAGS_config_path
               << std::endl;
   }
-  transport::Configuration config(configStream);
-
-  if (FLAGS_replica_idx >= static_cast<uint64_t>(config.n)) {
-    std::cerr << "Replica index " << FLAGS_replica_idx << " is out of bounds"
-                 "; only " << config.n << " replicas defined" << std::endl;
-  }
 
   // parse protocol and mode
   protocol_t proto = PROTO_UNKNOWN;
@@ -194,6 +188,15 @@ int main(int argc, char **argv) {
       break;
     }
   }
+
+  transport::Configuration config(configStream, proto == PROTO_JANUS);
+
+  if (FLAGS_replica_idx >= static_cast<uint64_t>(config.n)) {
+    std::cerr << "Replica index " << FLAGS_replica_idx << " is out of bounds"
+                 "; only " << config.n << " replicas defined" << std::endl;
+  }
+
+
 
   if (proto == PROTO_UNKNOWN) {
     std::cerr << "Unknown protocol." << std::endl;
@@ -234,7 +237,9 @@ int main(int argc, char **argv) {
       break;
     }
     case PROTO_JANUS: {
-      server = new janusstore::Server(config, FLAGS_replica_idx, &transport);
+      Debug("groups: %i", config.g);
+      server = new janusstore::Server(config, FLAGS_replica_idx, FLAGS_group_idx, &transport);
+      Debug("dksfalsdjflkasklf");
       break;
     }
     default: {

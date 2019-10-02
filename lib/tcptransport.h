@@ -73,6 +73,10 @@ public:
     void Register(TransportReceiver *receiver,
                   const transport::Configuration &config,
                   int replicaIdx);
+    void Register(TransportReceiver *receiver,
+                  const transport::Configuration &config,
+                  int groupIdx,
+                  int replicaIdx);
     void Run();
     void Stop();
     int Timer(uint64_t ms, timer_callback_t cb);
@@ -81,6 +85,11 @@ public:
 
     TCPTransportAddress
     LookupAddress(const transport::Configuration &cfg,
+                  int replicaIdx);
+
+    TCPTransportAddress
+    LookupAddress(const transport::Configuration &config,
+                  int groupIdx,
                   int replicaIdx);
 
     TCPTransportAddress
@@ -99,6 +108,7 @@ private:
         TCPTransport *transport;
         TransportReceiver *receiver;
         int acceptFd;
+        int groupIdx;
         int replicaIdx;
         event *acceptEvent;
         std::list<struct bufferevent *> connectionEvents;

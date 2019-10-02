@@ -202,6 +202,7 @@ Configuration::Configuration(std::ifstream &file)
 // HACK: add a bool kek
 Configuration::Configuration(std::ifstream &file, bool is_janus)
 {
+    Debug("JANUS CONFIGURATION DETECTED");
     f = -1;
     hasMulticast = false;
     multicastAddress = NULL;
@@ -213,11 +214,11 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
         // Read a line
         string line;
         getline(file, line);;
-
         // Ignore comments
         if ((line.size() == 0) || (line[0] == '#')) {
             continue;
         }
+        Debug("%s", line.c_str());
 
         // Get the command
         // This is pretty horrible, but C++ does promise that &line[0]
@@ -298,6 +299,7 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
     }
 
     g = g_replicas.size();
+
 
     if (g == 0) {
         Panic("Configuration did not specify any groups");

@@ -32,34 +32,25 @@ The clients and servers have to be provided a configuration file, one
 for each shard and a timestamp server (for OCC). For example a 3 shard
 configuration will have the following files:
 
-shard0.config
+You will need to create a configuration file with the following
+syntax:
+
 ```
-f 1  
-replica <server-address-1>:<port>
-replica <server-address-2>:<port>
-replica <server-address-3>:<port>
+f <number of failures tolerated>
+group
+replica <hostname>:<port>
+replica <hostname>:<port>
+...
+group
+replica <hostname>:<port>
+replica <hostname>:<port>
+...
+multicast <multicast addr>:<port>
 ```
-shard1.config
-```
-f 1
-replica <server-address-4>:<port>
-replica <server-address-5>:<port>
-replica <server-address-6>:<port>
-```
-shard2.config
-```
-f 1
-replica <server-address-7>:<port>
-replica <server-address-8>:<port>
-replica <server-address-9>:<port>
-```
-shard.tss.config
-```
-f 1
-replica <server-address-10>:<port>
-replica <server-address-11>:<port>
-replica <server-address-12>:<port>
-```
+
+Each group is a replicated shard, and should contain `2f+1` replicas. Multicast
+address is optional. However, the multi-sequenced groupcast implementation
+uses the multicast address as the groupcast address.
 
 ## Running Servers
 To start the replicas, run the following command with the `server`

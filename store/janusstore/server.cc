@@ -9,14 +9,11 @@ using namespace proto;
 
 vector<uint64_t> _checkIfAllCommitting(unordered_map<uint64_t, Transaction> id_txn_map, vector<uint64_t> deps);
 
-Server::Server(transport::Configuration config, int myIdx, Transport *transport)
-    : config(config)
+Server::Server(transport::Configuration &config, int groupIdx, int myIdx, Transport *transport)
+    : config(config), groupIdx(groupIdx), myIdx(myIdx), transport(transport)
 {
-    this->transport = transport;
-    this->myIdx = myIdx;
-    this->config = config;
-    transport->Register(this, config, myIdx);
-    transport::ReplicaAddress ra = config.replica(myIdx);
+    transport->Register(this, config, groupIdx, myIdx);
+    transport::ReplicaAddress ra = config.replica(groupIdx, myIdx);
     server_ip = ra.host;
     server_port = stoi(ra.port);
     store = new Store();

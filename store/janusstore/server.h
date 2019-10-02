@@ -19,7 +19,7 @@ class Server : public TransportReceiver, public ::Server {
 public:
     std::string server_ip;
     uint64_t server_port;
-    Server(transport::Configuration config, int myIdx, Transport *transport);
+    Server(transport::Configuration &config, int groupIdx, int myIdx, Transport *transport);
     ~Server();
 
     void ReceiveMessage(const TransportAddress &remote,
@@ -46,8 +46,8 @@ private:
     Store *store;
 
     transport::Configuration config;
+    int groupIdx;
     int myIdx;
-    // Index of 'this' replica, and handle to transport layer.
 
     // highest ballot accepted per txn id
     std::unordered_map<uint64_t, uint64_t> accepted_ballots;

@@ -206,6 +206,10 @@ public:
     void Register(TransportReceiver *receiver,
                   const transport::Configuration &config,
                   int replicaIdx) override;
+    void Register(TransportReceiver *receiver,
+                  const transport::Configuration &config,
+                  int groupIdx,
+                  int replicaIdx) override;
     int Timer(uint64_t ms, timer_callback_t cb) override;
     bool CancelTimer(int id) override;
     void CancelAllTimers() override;
@@ -226,6 +230,10 @@ protected:
     bool SendMessageInternal(TransportReceiver *src,
                              const ReplTransportAddress &dst, const Message &m,
                              bool multicast = false) override;
+    ReplTransportAddress
+    LookupAddress(const transport::Configuration &cfg,
+                  int groupIdx,
+                  int replicaIdx);
     ReplTransportAddress LookupAddress(const transport::Configuration &cfg,
                                        int replicaIdx) override;
     const ReplTransportAddress *LookupMulticastAddress(
