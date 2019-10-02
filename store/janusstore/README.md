@@ -2,12 +2,16 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
+10/2:
+	- (TODO) verify transactions commit and are strictly serializable for multiclient and multishard system
+	- (TODO) implement inquire
+	- (TODO) unit testing server and client logic
 9/25:
 	- ok to use different transport per client
 	- (TODO) verify transactions commit and are strictly serializable
 	- (DONE) include key-val results in the commit OK message (and output commit callback)
 	- (DONE) try two shards with 1 replica each without need for Inquire
-	- (WIP) then try to change config to support cross-shard communication for Inquire (later)
+	- (DONE) then try to change config to support cross-shard communication for Inquire (later)
 - 9/18:
 	- (DONE) got client-single replica on single shard working
 	- (DONE) scale to multiple replicas on a shard
