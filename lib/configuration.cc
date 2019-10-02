@@ -68,6 +68,20 @@ Configuration::Configuration(const Configuration &c)
     }
 }
 
+Configuration::Configuration(const Configuration &c, bool is_janus)
+    : g(c.g), n(c.n), f(c.f), g_replicas(c.g_replicas), hasMulticast(c.hasMulticast),
+      hasFC(c.hasFC), interfaces(c.interfaces)
+{
+    multicastAddress = NULL;
+    if (hasMulticast) {
+        multicastAddress = new ReplicaAddress(*c.multicastAddress);
+    }
+    fcAddress = NULL;
+    if (hasFC) {
+        fcAddress = new ReplicaAddress(*c.fcAddress);
+    }
+}
+
 Configuration::Configuration(int n, int f,
                              std::vector<ReplicaAddress> replicas,
                              ReplicaAddress *multicastAddress)
@@ -80,6 +94,32 @@ Configuration::Configuration(int n, int f,
     } else {
         hasMulticast = false;
         multicastAddress = NULL;
+    }
+}
+
+Configuration::Configuration(int g, int n, int f,
+                             std::map<int, std::vector<ReplicaAddress> > g_replicas,
+                             ReplicaAddress *multicastAddress,
+                             ReplicaAddress *fcAddress,
+                             std::map<int, std::vector<std::string> > interfaces)
+    : g(g), n(n), f(f), g_replicas(g_replicas), interfaces(interfaces)
+{
+    if (multicastAddress) {
+        hasMulticast = true;
+        this->multicastAddress =
+            new ReplicaAddress(*multicastAddress);
+    } else {
+        hasMulticast = false;
+        multicastAddress = NULL;
+    }
+
+    if (fcAddress) {
+        hasFC = true;
+        this->fcAddress =
+            new ReplicaAddress(*fcAddress);
+    } else {
+        hasFC = false;
+        fcAddress = NULL;
     }
 }
 
@@ -159,6 +199,128 @@ Configuration::Configuration(std::ifstream &file)
     }
 }
 
+// HACK: add a bool kek
+Configuration::Configuration(std::ifstream &file, bool is_janus)
+{
+    f = -1;
+    hasMulticast = false;
+    multicastAddress = NULL;
+    hasFC = false;
+    fcAddress = NULL;
+    int group = -1;
+
+    while (!file.eof()) {
+        // Read a line
+        string line;
+        getline(file, line);;
+
+        // Ignore comments
+        if ((line.size() == 0) || (line[0] == '#')) {
+            continue;
+        }
+
+        // Get the command
+        // This is pretty horrible, but C++ does promise that &line[0]
+        // is going to be a mutable contiguous buffer...
+        char *cmd = strtok(&line[0], " \t");
+
+        if (strcasecmp(cmd, "f") == 0) {
+            char *arg = strtok(NULL, " \t");
+            if (!arg) {
+                Panic ("'f' configuration line requires an argument");
+            }
+            char *strtolPtr;
+            f = strtoul(arg, &strtolPtr, 0);
+            if ((*arg == '\0') || (*strtolPtr != '\0')) {
+                Panic("Invalid argument to 'f' configuration line");
+            }
+        } else if (strcasecmp(cmd, "group") == 0) {
+            group++;
+        } else if (strcasecmp(cmd, "replica") == 0) {
+            if (group < 0) {
+                group = 0;
+            }
+
+            char *arg = strtok(NULL, " \t");
+            if (!arg) {
+                Panic ("'replica' configuration line requires an argument");
+            }
+
+            char *host = strtok(arg, ":");
+            char *port = strtok(NULL, ":");
+            char *interface = strtok(NULL, "");
+
+            if (!host || !port) {
+                Panic("Configuration line format: 'replica group host:port'");
+            }
+
+            g_replicas[group].push_back(ReplicaAddress(string(host), string(port)));
+            if (interface != nullptr) {
+                interfaces[group].push_back(string(interface));
+            } else {
+                interfaces[group].push_back(string());
+            }
+        } else if (strcasecmp(cmd, "multicast") == 0) {
+            char *arg = strtok(NULL, " \t");
+            if (!arg) {
+                Panic ("'multicast' configuration line requires an argument");
+            }
+
+            char *host = strtok(arg, ":");
+            char *port = strtok(NULL, "");
+
+            if (!host || !port) {
+                Panic("Configuration line format: 'multicast host:port'");
+            }
+
+            multicastAddress = new ReplicaAddress(string(host),
+                                                  string(port));
+            hasMulticast = true;
+        } else if (strcasecmp(cmd, "fc") == 0) {
+            char *arg = strtok(NULL, " \t");
+            if (!arg) {
+                Panic ("'fc' configuration line requires an argument");
+            }
+
+            char *host = strtok(arg, ":");
+            char *port = strtok(NULL, "");
+
+            if (!host || !port) {
+                Panic("Configuration line format: 'fc host:port'");
+            }
+
+            fcAddress = new ReplicaAddress(string(host),
+                                           string(port));
+            hasFC = true;
+        } else {
+            Panic("Unknown configuration directive: %s", cmd);
+        }
+    }
+
+    g = g_replicas.size();
+
+    if (g == 0) {
+        Panic("Configuration did not specify any groups");
+    }
+
+    n = g_replicas[0].size();
+
+    for (auto &kv : g_replicas) {
+        if (kv.second.size() != (size_t)n) {
+            Panic("All groups must contain the same number of replicas.");
+        }
+    }
+
+    if (n == 0) {
+        Panic("Configuration did not specify any replicas");
+    }
+
+    if (f == -1) {
+        Panic("Configuration did not specify a 'f' parameter");
+    }
+}
+
+
 Configuration::~Configuration()
 {
     if (hasMulticast) {
@@ -172,6 +334,12 @@ Configuration::replica(int idx) const
     return replicas[idx];
 }
 
+ReplicaAddress
+Configuration::replica(int group, int idx) const
+{
+    return g_replicas.at(group)[idx];
+}
+
 const ReplicaAddress *
 Configuration::multicast() const
 {
@@ -180,6 +348,22 @@ Configuration::multicast() const
     } else {
         return nullptr;
     }
+}
+
+const ReplicaAddress *
+Configuration::fc() const
+{
+    if (hasFC) {
+        return fcAddress;
+    } else {
+        return nullptr;
+    }
+}
+
+std::string
+Configuration::Interface(int group, int idx) const
+{
+    return this->interfaces.at(group)[idx];
 }
 
 int
