@@ -192,13 +192,15 @@ protected:
         // pointer to the canonical copy; if not, create one. This
         // allows us to use that pointer as a key in various
         // structures.
-        transport::Configuration *canonical
-            = canonicalConfigs[config];
-        Debug("segfault here??");
-        if (canonical == NULL) {
+        transport::Configuration *canonical;
+        if (canonicalConfigs.find(config) == canonicalConfigs.end()) {
             canonical = new transport::Configuration(config);
             canonicalConfigs[config] = canonical;
+
+        } else {
+            canonical = canonicalConfigs[config];
         }
+
         // Record configuration
         configurations[receiver] = canonical;
         Debug("wtf???");

@@ -70,7 +70,6 @@ class Configuration
 {
 public:
     Configuration(const Configuration &c);
-    Configuration(const Configuration &c, bool is_janus);
     Configuration(int n, int f, std::vector<ReplicaAddress> replicas,
                   ReplicaAddress *multicastAddress = nullptr);
     Configuration(int g, int n, int f,
