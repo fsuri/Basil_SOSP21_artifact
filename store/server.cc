@@ -189,14 +189,15 @@ int main(int argc, char **argv) {
     }
   }
 
-  transport::Configuration config(configStream, proto == PROTO_JANUS);
+  // LMAO THIS WORKS
+  transport::Configuration config = ((proto == PROTO_JANUS) ?
+      transport::Configuration(configStream, true) :
+      transport::Configuration(configStream));
 
   if (FLAGS_replica_idx >= static_cast<uint64_t>(config.n)) {
     std::cerr << "Replica index " << FLAGS_replica_idx << " is out of bounds"
                  "; only " << config.n << " replicas defined" << std::endl;
   }
-
-
 
   if (proto == PROTO_UNKNOWN) {
     std::cerr << "Unknown protocol." << std::endl;
@@ -237,9 +238,7 @@ int main(int argc, char **argv) {
       break;
     }
     case PROTO_JANUS: {
-      Debug("groups: %i", config.g);
       server = new janusstore::Server(config, FLAGS_replica_idx, FLAGS_group_idx, &transport);
-      Debug("dksfalsdjflkasklf");
       break;
     }
     default: {

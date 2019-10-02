@@ -60,18 +60,9 @@ ReplicaAddress::operator<(const ReplicaAddress &other) const {
 }
 
 Configuration::Configuration(const Configuration &c)
-    : n(c.n), f(c.f), replicas(c.replicas), hasMulticast(c.hasMulticast)
+    : g(c.g), n(c.n), f(c.f), replicas(c.replicas), g_replicas(c.g_replicas), hasMulticast(c.hasMulticast), hasFC(c.hasFC)
 {
-    multicastAddress = NULL;
-    if (hasMulticast) {
-        multicastAddress = new ReplicaAddress(*c.multicastAddress);
-    }
-}
-
-Configuration::Configuration(const Configuration &c, bool is_janus)
-    : g(c.g), n(c.n), f(c.f), g_replicas(c.g_replicas), hasMulticast(c.hasMulticast),
-      hasFC(c.hasFC), interfaces(c.interfaces)
-{
+    Debug("WTF");
     multicastAddress = NULL;
     if (hasMulticast) {
         multicastAddress = new ReplicaAddress(*c.multicastAddress);
@@ -218,12 +209,12 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
         if ((line.size() == 0) || (line[0] == '#')) {
             continue;
         }
-        Debug("%s", line.c_str());
 
         // Get the command
         // This is pretty horrible, but C++ does promise that &line[0]
         // is going to be a mutable contiguous buffer...
         char *cmd = strtok(&line[0], " \t");
+        Debug("%s", cmd);
 
         if (strcasecmp(cmd, "f") == 0) {
             char *arg = strtok(NULL, " \t");
@@ -243,6 +234,7 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
             }
 
             char *arg = strtok(NULL, " \t");
+            Debug("%s", arg);
             if (!arg) {
                 Panic ("'replica' configuration line requires an argument");
             }
@@ -254,7 +246,6 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
             if (!host || !port) {
                 Panic("Configuration line format: 'replica group host:port'");
             }
-
             g_replicas[group].push_back(ReplicaAddress(string(host), string(port)));
             if (interface != nullptr) {
                 interfaces[group].push_back(string(interface));
@@ -306,7 +297,6 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
     }
 
     n = g_replicas[0].size();
-
     for (auto &kv : g_replicas) {
         if (kv.second.size() != (size_t)n) {
             Panic("All groups must contain the same number of replicas.");
@@ -327,6 +317,9 @@ Configuration::~Configuration()
 {
     if (hasMulticast) {
         delete multicastAddress;
+    }
+    if (hasFC) {
+        delete fcAddress;
     }
 }
 
@@ -392,12 +385,19 @@ Configuration::operator==(const Configuration &other) const
     if ((n != other.n) ||
         (f != other.f) ||
         (replicas != other.replicas) ||
-        (hasMulticast != other.hasMulticast)) {
+        (hasMulticast != other.hasMulticast) ||
+        (hasFC != other.hasFC)) {
         return false;
     }
 
     if (hasMulticast) {
         if (*multicastAddress != *other.multicastAddress) {
+            return false;
+        }
+    }
+
+    if (hasFC) {
+        if (*fcAddress != *other.fcAddress) {
             return false;
         }
     }

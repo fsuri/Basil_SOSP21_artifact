@@ -70,7 +70,6 @@ class Configuration
 {
 public:
     Configuration(const Configuration &c);
-    Configuration(const Configuration &c, bool is_janus);
     Configuration(int n, int f, std::vector<ReplicaAddress> replicas,
                   ReplicaAddress *multicastAddress = nullptr);
     Configuration(int g, int n, int f,
@@ -140,9 +139,18 @@ template <> struct hash<transport::Configuration>
         {
             size_t out = 0;
             out = x.n * 37 + x.f;
-            for (int i = 0; i < x.n; i++) {
-                out *= 37;
-                out += hash<transport::ReplicaAddress>()(x.replica(i));
+            if (x.g == 0) {
+                for (int i = 0; i < x.n; i++) {
+                    out *= 37;
+                    out += hash<transport::ReplicaAddress>()(x.replica(i));
+                }
+            } else if (x.g > 0) {
+                for (int i = 0; i < x.g; i++ ) {
+                    for (int j = 0; j < x.n; j++) {
+                        out *= 37;
+                        out += hash<transport::ReplicaAddress>()(x.replica(i, j));
+                    }
+                }
             }
             return out;
         }

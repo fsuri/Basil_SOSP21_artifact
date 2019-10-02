@@ -15,7 +15,7 @@ ShardClient::ShardClient(const string &configPath, Transport *transport,
     Panic("Unable to read configuration file: %s\n", configPath.c_str());
   }
 
-  transport::Configuration config(configStream);
+  transport::Configuration config(configStream, true);
   this->config = &config;
   this->num_replicas = config.n;
   printf("shardclient%d has %d replicas\n", shard, this->num_replicas);
