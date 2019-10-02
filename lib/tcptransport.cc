@@ -374,15 +374,15 @@ TCPTransport::Register(TransportReceiver *receiver,
         PWarning("Failed to set TCP_NODELAY on TCP listening socket");
     }
 
-    if (replicaIdx != -1) {
-        // Registering a replica. Bind socket to the designated
-        // host/port
-        const string &host = config.replica(groupIdx, replicaIdx).host;
-        const string &port = config.replica(groupIdx, replicaIdx).port;
-        BindToPort(fd, host, port);
-    } else {
-        // Registering a client. Bind to any available host/port
-        BindToPort(fd, "", "any");
+    // Registering a replica. Bind socket to the designated
+    // host/port
+    const string &host = config.replica(groupIdx, replicaIdx).host;
+    const string &port = config.replica(groupIdx, replicaIdx).port;
+    BindToPort(fd, host, port);
+
+    // Listen for connections
+    if (listen(fd, 5) < 0) {
+        PPanic("Failed to listen for TCP connections");
     }
 
     // Create event to accept connections

@@ -106,7 +106,7 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
 	for (int i = 0; i < this->num_replicas; i++) {
-		client->InvokeUnlogged(i, request_str,
+		client->InvokeUnlogged(shard, i, request_str,
 			std::bind(&ShardClient::AcceptContinuation, this,
 			placeholders::_1, placeholders::_2), nullptr, 10000);
 	}
@@ -139,7 +139,7 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
 	for (int i = 0; i < this->num_replicas; i++) {
-		client->InvokeUnlogged(i, request_str,
+		client->InvokeUnlogged(shard, i, request_str,
 			std::bind(&ShardClient::CommitContinuation, this,
 			placeholders::_1, placeholders::_2), nullptr, 10000);
 	}
