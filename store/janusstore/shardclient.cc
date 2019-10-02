@@ -71,7 +71,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	Debug("shardclient%d shardcasting PREACCEPT to %d replicas\n for txn %i",
 		this->shard, this->num_replicas, txn_id);
 	for (int i = 0; i < this->num_replicas; i++) {
-		client->InvokeUnlogged(i, request_str,
+		client->InvokeUnlogged(shard, i, request_str,
 			std::bind(&ShardClient::PreAcceptContinuation, this,
 			placeholders::_1, placeholders::_2), nullptr, 10000);
 	}
