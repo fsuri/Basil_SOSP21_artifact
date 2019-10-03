@@ -6,6 +6,8 @@
 #include <utility>
 #include <numeric>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
 
 #include <gflags/gflags.h>
 
@@ -78,7 +80,7 @@ uint32_t RandomBalance(uint32_t base, uint32_t deviation, std::mt19937 &gen) {
     return std::uniform_int_distribution<uint32_t>(base - deviation, base + deviation)(gen);
 }
 
-void GenerateTables(Queue<std::pair<std::string, std::string>> &q, uint32_t num_customers) {
+void GenerateTables(Queue<std::pair<std::string, std::string>> &q, Queue<std::string> &names, uint32_t num_customers) {
     std::mt19937 gen;
     smallbank::proto::AccountRow accountRow;
     std::string accountRowOut;
@@ -87,7 +89,7 @@ void GenerateTables(Queue<std::pair<std::string, std::string>> &q, uint32_t num_
     smallbank::proto::CheckingRow checkingRow;
     std::string checkingRowOut;
 
-for (uint32_t cId = 1; cId <= num_customers; cId++) {
+    for (uint32_t cId = 1; cId <= num_customers; cId++) {
         std::string customerName = RandomName(8, 16, gen);
         accountRow.set_customer_id(cId);
         accountRow.set_name(customerName);
@@ -108,6 +110,7 @@ for (uint32_t cId = 1; cId <= num_customers; cId++) {
         q.Push(std::make_pair(accountRowKey, accountRowOut));
         q.Push(std::make_pair(savingRowKey, savingRowOut));
         q.Push(std::make_pair(checkingRowKey, checkingRowOut));
+        names.Push(customerName);
     }
 }
 
@@ -118,16 +121,38 @@ int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
     Queue<std::pair<std::string, std::string>> q(2e9);
-    uint32_t time = std::time(0);
+    Queue<std::string> names(2e9);
     std::cerr << "Generating " << FLAGS_num_customers << " customers." << std::endl;
-    GenerateTables(q, FLAGS_num_customers);
+    GenerateTables(q, names, FLAGS_num_customers);
     std::pair<std::string, std::string> out;
-    size_t count = 0;
-    while (!q.IsEmpty()) {
-        q.Pop(out);
-        count += WriteBytesToStream(&std::cout, out.first);
-        count += WriteBytesToStream(&std::cout, out.second);
+    std::string nameOut;
+
+    int count = 0;
+    std::ofstream f;
+    f.open("smallbank_data");
+    if (f.is_open())
+    {
+        while (!q.IsEmpty()) {
+            q.Pop(out);
+            WriteBytesToStream(&f, out.first);
+            WriteBytesToStream(&f, out.second);
+            count++;
+        }
+        f.close();
+        std::cout<< count;
     }
-    std::cerr << "Wrote " << count / 1024 / 1024 << "MB." << std::endl;
+    else std::cerr << "Unable to open file";
+
+    f.open("smallbank_names");
+    if (f.is_open())
+    {
+        while (!names.IsEmpty()) {
+            names.Pop(nameOut);
+            f << nameOut + ",";
+        }
+        f.close();
+    }
+    else std::cerr << "Unable to open file";
+
     return 0;
 }

@@ -130,7 +130,7 @@ namespace smallbank {
  * System settings.
  */
     DEFINE_string(config_prefix,
-    "", "prefix of path to shard configuration file");
+    "smallbank.config", "prefix of path to shard configuration file");
     DEFINE_uint64(num_shards,
     1, "number of shards in the system");
     DEFINE_uint64(num_groups,
@@ -195,13 +195,20 @@ namespace smallbank {
     DEFINE_uint32(write_check_ratio,
     10, "percentage of write check transactions (smallbank)");
     DEFINE_uint32(num_hotspots,
-    0, "# of hotspots (smallbank)");
+    1000, "# of hotspots (smallbank)");
 
     DEFINE_uint32(timeout,
-    0, "timeout in ms (smallbank)");
+    5000, "timeout in ms (smallbank)");
+    DEFINE_string(customer_name_file_path, "smallbank_names", "path to file containing names to be loaded");
 
-    void loadKeys(std::string keys[]) {
-        //TODO load generated file
+    void loadKeys(std::string keys[], std::string customer_name_file_path) {
+        std::string str;
+        std::ifstream file(customer_name_file_path);
+        int i=0;
+        while (getline(file, str, ',')) {
+            keys[i] = str;
+            i+=1;
+        }
     }
 
     int main(int argc, char **argv) {
@@ -250,7 +257,7 @@ namespace smallbank {
             }
 
             std::string allKeys[num_customers_];
-            loadKeys(allKeys);
+            loadKeys(allKeys, FLAGS_customer_name_file_path);
             SmallBankClient *bench = new smallbank::SmallBankClient(client, FLAGS_timeout, FLAGS_balance_ratio,
                                                                     FLAGS_deposit_checking_ratio,
                                                                     FLAGS_transact_saving_ratio, FLAGS_amalgamate_ratio,
