@@ -4,7 +4,6 @@
 namespace smallbank {
 
     std::string AccountRowKey(const std::string name) {
-
         char keyC[1];
         keyC[0] = static_cast<char>(proto::Tables::ACCOUNT);
         return std::string(keyC, sizeof(keyC)) + name;
