@@ -66,7 +66,7 @@ std::set<std::string, std::greater<std::string>> customerNames;
 
 std::string RandomName(size_t x, size_t y, std::mt19937 &gen) {
     std::string name = RandomAString(x, y, gen);
-    while (customerNames.find(name) == customerNames.end()) {
+    while (customerNames.find(name) != customerNames.end()) {
         name = RandomAString(x, y, gen);
     }
     customerNames.insert(name);
@@ -87,18 +87,21 @@ void GenerateTables(Queue<std::pair<std::string, std::string>> &q, uint32_t num_
     smallbank::proto::CheckingRow checkingRow;
     std::string checkingRowOut;
 
-    for (uint32_t cId = 1; cId <= num_customers; cId++) {
+for (uint32_t cId = 1; cId <= num_customers; cId++) {
         std::string customerName = RandomName(8, 16, gen);
         accountRow.set_customer_id(cId);
         accountRow.set_name(customerName);
+
         savingRow.set_customer_id(cId);
         savingRow.set_balance(RandomBalance(1000,50,gen));
+
         checkingRow.set_customer_id(cId);
         checkingRow.set_balance(RandomBalance(1000,50,gen));
 
         accountRow.SerializeToString(&accountRowOut);
         savingRow.SerializeToString(&savingRowOut);
         checkingRow.SerializeToString(&checkingRowOut);
+
         std::string accountRowKey = smallbank::AccountRowKey(customerName);
         std::string savingRowKey = smallbank::SavingRowKey(cId);
         std::string checkingRowKey = smallbank::CheckingRowKey(cId);

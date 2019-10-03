@@ -3,11 +3,11 @@
 
 namespace smallbank {
 
-    std::string AccountRowKey(const std::string &name) {
-        char keyC[5];
+    std::string AccountRowKey(const std::string name) {
+
+        char keyC[1];
         keyC[0] = static_cast<char>(proto::Tables::ACCOUNT);
-        *reinterpret_cast<std::string *>(keyC + 1) = name;
-        return std::string(keyC, sizeof(keyC));
+        return std::string(keyC, sizeof(keyC)) + name;
     }
 
     std::string SavingRowKey(const uint32_t customer_id) {

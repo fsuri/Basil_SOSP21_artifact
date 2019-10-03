@@ -1,6 +1,5 @@
 d := $(dir $(lastword $(MAKEFILE_LIST)))
 
-# TODO add all srcs
 SRCS += $(addprefix $(d), smallbank_transaction.cc utils.cc smallbank_client.cc smallbank_generator.cc)
 
 PROTOS += $(addprefix $(d), smallbank-proto.proto)

@@ -5,7 +5,7 @@
 
 namespace smallbank {
 
-    std::string AccountRowKey(const std::string &name);
+    std::string AccountRowKey(const std::string name);
 
     std::string SavingRowKey(const uint32_t customer_id);
 
