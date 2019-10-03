@@ -5,8 +5,19 @@
 #ifndef MORTY_TAPIR_SMALLBANK_CLIENT_H
 #define MORTY_TAPIR_SMALLBANK_CLIENT_H
 
-#include "store/common/frontend/sync_client.h"
+#include "lib/tcptransport.h"
+#include "lib/latency.h"
+#include "lib/timeval.h"
+#include "store/benchmark/async/bench_client.h"
+#include "store/benchmark/async/smallbank/smallbank_client.h"
 #include "store/benchmark/async/smallbank/smallbank_transaction.h"
+#include "store/common/frontend/sync_client.h"
+#include "store/common/truetime.h"
+#include "store/tapirstore/client.h"
+#include <gflags/gflags.h>
+
+#include <vector>
+#include <algorithm>
 
 namespace smallbank {
     constexpr int num_customers_ = 18000;
