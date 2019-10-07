@@ -6,9 +6,6 @@
 #include <utility>
 #include <numeric>
 #include <algorithm>
-#include <iostream>
-#include <fstream>
-
 #include <gflags/gflags.h>
 
 #include "lib/io_utils.h"
@@ -94,15 +91,21 @@ void GenerateTables(Queue<std::pair<std::string, std::string>> &q, Queue<std::st
         accountRow.set_customer_id(cId);
         accountRow.set_name(customerName);
 
+
+
         savingRow.set_customer_id(cId);
-        savingRow.set_balance(RandomBalance(1000,50,gen));
+        uint32_t savingBalance = RandomBalance(1000,50,gen);
+        savingRow.set_saving_balance(savingBalance);
 
         checkingRow.set_customer_id(cId);
-        checkingRow.set_balance(RandomBalance(1000,50,gen));
+        uint32_t checkingBalance = RandomBalance(1000,50,gen);
+        checkingRow.set_checking_balance(checkingBalance);
 
         accountRow.SerializeToString(&accountRowOut);
         savingRow.SerializeToString(&savingRowOut);
         checkingRow.SerializeToString(&checkingRowOut);
+
+
 
         std::string accountRowKey = smallbank::AccountRowKey(customerName);
         std::string savingRowKey = smallbank::SavingRowKey(cId);
@@ -110,6 +113,31 @@ void GenerateTables(Queue<std::pair<std::string, std::string>> &q, Queue<std::st
         q.Push(std::make_pair(accountRowKey, accountRowOut));
         q.Push(std::make_pair(savingRowKey, savingRowOut));
         q.Push(std::make_pair(checkingRowKey, checkingRowOut));
+ /* verification */
+//        std::cout<<cId<<std::endl;
+//        std::cout<<customerName<<std::endl;
+//        std::cout<<savingBalance<<std::endl;
+//        std::cout<<checkingBalance<<std::endl;
+//
+//        smallbank::proto::AccountRow a;
+//        a.ParseFromString(accountRowOut);
+//        smallbank::proto::CheckingRow c;
+//        c.ParseFromString(checkingRowOut);
+//        smallbank::proto::SavingRow s;
+//        s.ParseFromString(savingRowOut);
+//
+//        std::cout<<a.customer_id()<<std::endl;
+//        std::cout<<a.name()<<std::endl;
+//        std::cout<<s.saving_balance()<<std::endl;
+//        std::cout<<c.checking_balance()<<std::endl;
+//        std::cout<<"**"<<std::endl;
+
+
+/*std::cout<<accountRowKey<<std::endl;
+std::cout<<savingRowKey<<std::endl;
+std::cout<<checkingRowKey<<std::endl;
+*/
+
         names.Push(customerName);
     }
 }
@@ -127,32 +155,19 @@ int main(int argc, char *argv[]) {
     std::pair<std::string, std::string> out;
     std::string nameOut;
 
-    int count = 0;
-    std::ofstream f;
-    f.open("smallbank_data");
-    if (f.is_open())
-    {
-        while (!q.IsEmpty()) {
-            q.Pop(out);
-            WriteBytesToStream(&f, out.first);
-            WriteBytesToStream(&f, out.second);
-            count++;
-        }
-        f.close();
-        std::cout<< count;
+    size_t count = 0;
+    while (!q.IsEmpty()) {
+        q.Pop(out);
+        count += WriteBytesToStream(&std::cout, out.first);
+        count += WriteBytesToStream(&std::cout, out.second);
     }
-    else std::cerr << "Unable to open file";
+    std::cerr << "Wrote " << count / 1024 / 1024 << "MB." << std::endl;
 
-    f.open("smallbank_names");
-    if (f.is_open())
-    {
-        while (!names.IsEmpty()) {
-            names.Pop(nameOut);
-            f << nameOut + ",";
-        }
-        f.close();
-    }
-    else std::cerr << "Unable to open file";
-
+//    size_t nameCount = 0;
+//    while (!names.IsEmpty()) {
+//        names.Pop(nameOut);
+//        nameCount += WriteBytesToStream(&std::cout, nameOut);
+//    }
+//    std::cerr << "Wrote " << nameCount / 1024 / 1024 << "MB." << std::endl;
     return 0;
 }
