@@ -11,14 +11,13 @@
 #include "store/mortystore/morty-proto.pb.h"
 #include "store/common/frontend/client.h"
 #include "store/common/frontend/txnclient.h"
-#include "store/mortystore/replica_client.h"
 
 #include <map>
 #include <string>
 
 namespace mortystore {
 
-class ShardClient : public TxnClient {
+class ShardClient : public TransportReceiver, public TxnClient {
  public:
   /* Constructor needs path to shard config. */
   ShardClient(const std::string &configPath, Transport *transport,
@@ -113,8 +112,6 @@ class ShardClient : public TxnClient {
   transport::Configuration *config;
   int shard; // which shard this client accesses
   int replica; // which replica to use for gets/puts
-
-  ReplicaClient *client; // Client proxy.
 
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingGet *> pendingGets;

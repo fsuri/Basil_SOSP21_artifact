@@ -13,8 +13,6 @@ ShardClient::ShardClient(const string &configPath, Transport *transport,
   transport::Configuration config(configStream);
   this->config = &config;
 
-  client = new ReplicaClient(config, transport, client_id);
-
   if (closestReplica == -1) {
     // choose arbitrary replica as favored replica
     replica = client_id % config.n;
@@ -25,7 +23,6 @@ ShardClient::ShardClient(const string &configPath, Transport *transport,
 }
 
 ShardClient::~ShardClient() {
-    delete client;
 }
 
 void ShardClient::Begin(uint64_t id) {
@@ -36,12 +33,9 @@ void ShardClient::Get(uint64_t id, const std::string &key, get_callback gcb,
       get_timeout_callback gtcb, uint32_t timeout) {
   Debug("[shard %i] Sending GET [%lu : %s]", shard, id, key.c_str());
 
-  std::string request_str;
-  proto::Request request;
-  request.set_op(proto::Request::GET);
-  request.set_txnid(id);
-  request.mutable_get()->set_key(key);
-  request.SerializeToString(&request_str);
+  proto::Read msg;
+  *msg.mutable_branch() = branch;
+  msg.set_key(key);
 
   uint64_t reqId = lastReqId++;
   PendingGet *pendingGet = new PendingGet(reqId);
@@ -52,10 +46,7 @@ void ShardClient::Get(uint64_t id, const std::string &key, get_callback gcb,
 
   AddOutstanding(id, reqId);
 
-  client->InvokeUnlogged(replica, request_str, std::bind(
-        &ShardClient::GetCallback, this, pendingGet->reqId,
-        std::placeholders::_1, std::placeholders::_2),
-      std::bind(&ShardClient::GetTimeout, this, pendingGet->reqId), timeout);
+  transport->SendMessageToReplica(this, replica, msg);
 }
 
 void ShardClient::Get(uint64_t id, const std::string &key,
@@ -70,13 +61,10 @@ void ShardClient::Put(uint64_t id, const std::string &key,
   Debug("[shard %i] Sending PUT [%lu : %s : %s]", shard, id, key.c_str(),
       value.c_str());
   
-  std::string request_str;
-  proto::Request request;
-  request.set_op(proto::Request::PUT);
-  request.set_txnid(id);
-  request.mutable_put()->set_key(key);
-  request.mutable_put()->set_value(value);
-  request.SerializeToString(&request_str);
+  proto::Write msg;
+  *msg.mutable_branch() = branch;
+  msg.set_key(key);
+  msg.set_value(value);
 
   uint64_t reqId = lastReqId++;
   PendingPut *pendingPut = new PendingPut(reqId);
@@ -87,10 +75,7 @@ void ShardClient::Put(uint64_t id, const std::string &key,
 
   AddOutstanding(id, reqId);
 
-  client->InvokeUnlogged(replica, request_str, std::bind(
-        &ShardClient::PutCallback, this, pendingPut->reqId,
-        std::placeholders::_1, std::placeholders::_2),
-      std::bind(&ShardClient::PutTimeout, this, pendingPut->reqId), timeout);
+  transport->SendMessageToReplica(this, replica, msg);
 }
 
 void ShardClient::Prepare(uint64_t id, const Transaction &txn,
@@ -111,7 +96,6 @@ void ShardClient::Abort(uint64_t id, const Transaction &txn,
 }
 
 void ShardClient::MarkComplete(uint64_t tid) {
-  client->MarkComplete();
   auto itr = outstanding.find(tid);
   ASSERT(itr != outstanding.end());
   for (auto reqId : itr->second) {
