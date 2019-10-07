@@ -85,6 +85,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
         this->myIdx, txn_id, ballot);
 
     // construct the transaction object
+    // TODO might be able to optimize this process somehow
     Transaction txn = Transaction(txn_id, server_ip_txn, server_port_txn);
     for (int i = 0; i < txnMsg.gets_size(); i++) {
         string key = txnMsg.gets(i).key();
@@ -94,6 +95,10 @@ Server::HandlePreAccept(const TransportAddress &remote,
     for (int i = 0; i < txnMsg.puts_size(); i++) {
         PutMessage put = txnMsg.puts(i);
         txn.addWriteSet(put.key(), put.value());
+    }
+
+    for (int i = 0; i < txnMsg.group_size(); i++) {
+        txn.groups.insert(txnMsg.group(i));
     }
 
     vector<uint64_t> dep_list = BuildDepList(txn, ballot);
@@ -331,14 +336,22 @@ void Server::HandleInquire(const TransportAddress &remote,
 
 void Server::_SendInquiry(uint64_t txn_id) {
     Transaction other_server_txn = id_txn_map[txn_id];
-    string other_server_ip = other_server_txn.server_ip;
-    uint64_t other_server_port = other_server_txn.server_port;
-    // TODO lmao how do i open a connect here lol
-    sockaddr_in other_server;
+    // ask random participating shard+replica for deplist
+    uint64_t nearest_group;
+    uint64_t nearest_replica = 0;
+    for (auto group : other_server_txn.groups) {
+        if (group != this->groupIdx) {
+            nearest_group = group;
+            break;
+        }
+    }
 
-    other_server.sin_family = AF_INET;
-    // other_server.sin_addr.s_addr = htonl(other_server_ip);
-    other_server.sin_port = htons(other_server_port);
+    Request request;
+    request.set_op(Request::INQUIRE);
+    request.mutable_inquire()->set_txnid(txn_id);
+
+    transport->SendMessageToReplica(
+        this, nearest_group, nearest_replica, request);
 }
 
 unordered_map<string, string> Server::Execute(Transaction txn) {

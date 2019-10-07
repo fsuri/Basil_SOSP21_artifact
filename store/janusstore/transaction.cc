@@ -46,10 +46,13 @@ void Transaction::addWriteSet(const std::string &key, const std::string &value){
 }
 void Transaction::addShardedReadSet(const std::string &key, uint64_t shard) {
 	sharded_readset[shard].insert(key);
+	groups.insert(shard);
 }
 void Transaction::addShardedWriteSet(const std::string &key, const std::string &value, uint64_t shard) {
 	sharded_writeset[shard][key] = value;
+	groups.insert(shard);
 }
+
 void Transaction::serialize(janusstore::proto::TransactionMessage *msg, uint64_t shard) const {
 	msg->set_status(this->status);
 	msg->set_serverip(this->server_ip);
@@ -72,6 +75,11 @@ void Transaction::serialize(janusstore::proto::TransactionMessage *msg, uint64_t
 	      put->set_key(pair.first);
 	      put->set_value(pair.second);
 	    }
+	}
+
+	// add participating shards
+	for (auto shard : groups) {
+		msg->add_group(shard);
 	}
 }
 

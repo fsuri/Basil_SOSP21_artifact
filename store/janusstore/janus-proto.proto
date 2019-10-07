@@ -27,6 +27,7 @@ message TransactionMessage {
     optional string serverip = 1;
     optional uint64 serverport = 2;
     optional uint64 txnid = 3;
+    repeated uint64 group = 7;
     optional Status status = 4;
     repeated GetMessage gets = 5;
     repeated PutMessage puts = 6;

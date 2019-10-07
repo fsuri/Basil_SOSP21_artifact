@@ -34,8 +34,13 @@ private:
 
 public:
     // the server this txn is associated with
+    // TODO probably deprecate ip and port
     std::string server_ip;
     uint64_t server_port;
+
+    // the groups (shards) that this txn is associated with
+    std::unordered_set<uint64_t> groups;
+
     Transaction() {};
     Transaction(uint64_t txn_id, std::string server_ip, uint64_t server_port);
     Transaction(uint64_t txn_id, std::string server_ip, uint64_t server_port, const TransactionMessage &msg);

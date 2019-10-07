@@ -4,8 +4,10 @@ We implement the Janus protocol for fault-tolerant, replicated distributed trans
 # Notes
 10/2:
 	- (TODO) verify transactions commit and are strictly serializable for multiclient and multishard system
-	- (TODO) implement inquire
+	- (DONE) implement inquire
+	- (TODO) verify inquire works
 	- (TODO) unit testing server and client logic
+		- in particular, coordinator and server slow path
 9/25:
 	- ok to use different transport per client
 	- (TODO) verify transactions commit and are strictly serializable
