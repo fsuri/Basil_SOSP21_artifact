@@ -15,10 +15,10 @@ message AccountRow {
 
 message SavingRow {
 	required uint32 customer_id = 1;
-	required uint32 balance = 2;
+	required uint32 saving_balance = 2;
 }
 
 message CheckingRow {
 	required uint32 customer_id = 1;
-	required uint32 balance = 2;
+	required uint32 checking_balance = 2;
 }

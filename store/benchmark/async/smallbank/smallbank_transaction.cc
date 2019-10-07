@@ -35,7 +35,7 @@ namespace smallbank {
         }
         client_->Commit(timeout_);
 
-        return std::make_pair(savingRow.balance() + checkingRow.balance(), true);
+        return std::make_pair(savingRow.saving_balance() + checkingRow.checking_balance(), true);
     }
 
     bool SmallBankTransaction::DepositChecking(const std::string &name, const int32_t value) {
@@ -57,7 +57,7 @@ namespace smallbank {
             client_->Abort(timeout_);
             return false;
         }
-        InsertCheckingRow(customerId, checkingRow.balance() + value);
+        InsertCheckingRow(customerId, checkingRow.checking_balance() + value);
         client_->Commit(timeout_);
         return true;
     }
@@ -73,7 +73,7 @@ namespace smallbank {
         }
         const uint32_t customerId = accountRow.customer_id();
         ReadSavingRow(customerId, savingRow);
-        const uint32_t balance = savingRow.balance();
+        const uint32_t balance = savingRow.saving_balance();
         const uint32_t resultingBalance = balance + value;
         if (resultingBalance < 0) {
             client_->Abort(timeout_);
@@ -105,13 +105,13 @@ namespace smallbank {
             client_->Abort(timeout_);
             return false;
         }
-        const uint32_t balance2 = checkingRow2.balance();
+        const uint32_t balance2 = checkingRow2.checking_balance();
         if (!ReadCheckingRow(customerId1, checkingRow1) || !
                 ReadSavingRow(customerId1, savingRow1)) {
             client_->Abort(timeout_);
             return false;
         }
-        InsertCheckingRow(customerId2, balance2 + checkingRow1.balance() + savingRow1.balance());
+        InsertCheckingRow(customerId2, balance2 + checkingRow1.checking_balance() + savingRow1.saving_balance());
         InsertSavingRow(customerId1, 0);
         InsertCheckingRow(customerId1, 0);
         client_->Commit(timeout_);
@@ -134,7 +134,7 @@ namespace smallbank {
             client_->Abort(timeout_);
             return false;
         }
-        const uint32_t sum = checkingRow.balance() + savingRow.balance();
+        const uint32_t sum = checkingRow.checking_balance() + savingRow.saving_balance();
         if (sum < value) {
             InsertCheckingRow(customerId, sum - value - 1);
         } else {
@@ -157,7 +157,7 @@ namespace smallbank {
     void SmallBankTransaction::InsertSavingRow(const uint32_t customer_id, const uint32_t balance) {
         proto::SavingRow savingRow;
         savingRow.set_customer_id(customer_id);
-        savingRow.set_balance(balance);
+        savingRow.set_saving_balance(balance);
         std::string savingRowSerialized;
         savingRow.SerializeToString(&savingRowSerialized);
         std::string savingRowKey = SavingRowKey(customer_id);
@@ -167,7 +167,7 @@ namespace smallbank {
     void SmallBankTransaction::InsertCheckingRow(const uint32_t customer_id, const uint32_t balance) {
         proto::CheckingRow checkingRow;
         checkingRow.set_customer_id(customer_id);
-        checkingRow.set_balance(balance);
+        checkingRow.set_checking_balance(balance);
         std::string checkingRowSerialized;
         checkingRow.SerializeToString(&checkingRowSerialized);
         std::string checkingRowKey = CheckingRowKey(customer_id);
