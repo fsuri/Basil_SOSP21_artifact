@@ -37,6 +37,7 @@ public:
 
     void HandleInquire(const TransportAddress &remote,
                       const proto::InquireMessage i_msg);
+    void HandleInquireReply(const proto::InquireOKMessage i_ok_msg);
 
     Transport *transport;
 private:
@@ -69,6 +70,7 @@ private:
 
     // maps txn_id -> list[other_ids] being blocked by txn_id
     std::unordered_map<uint64_t, std::vector<uint64_t>> blocking_ids;
+    std::unordered_map<uint64_t, std::vector<std::pair<const TransportAddress*, proto::InquireMessage>>> inquired_ids;
 
     // functions to process shardclient requests
     // must take in a full Transaction object in order to correctly bookkeep and commit
