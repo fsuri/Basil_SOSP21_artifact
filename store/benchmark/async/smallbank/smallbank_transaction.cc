@@ -14,27 +14,33 @@ namespace smallbank {
     SmallBankTransaction::SmallBankTransaction(SyncClient *client, const uint32_t timeout) : client_(client), timeout_(timeout) {
     }
 
-    void SmallBankTransaction::CreateAccount(const std::string &name, const uint32_t customer_id) {
-        client_->Begin();
-        InsertAccountRow(name, customer_id);
-        InsertSavingRow(customer_id, 0);
-        InsertCheckingRow(customer_id, 0);
-        client_->Commit(timeout_);
-    }
+//    void SmallBankTransaction::CreateAccount(const std::string &name, const uint32_t customer_id) {
+//        client_->Begin();
+//        InsertAccountRow(name, customer_id);
+//        InsertSavingRow(customer_id, 0);
+//        InsertCheckingRow(customer_id, 0);
+//        client_->Commit(timeout_);
+//    }
 
     std::pair<uint32_t, bool> SmallBankTransaction::Bal(const std::string &name) {
         proto::AccountRow accountRow;
         proto::SavingRow savingRow;
         proto::CheckingRow checkingRow;
-
+        std::cout<<"in bal"<<std::endl;
         client_->Begin();
+        std::cout<<"begin for name "<< name <<std::endl;
         if (!ReadAccountRow(name, accountRow) || !ReadSavingRow(accountRow.customer_id(), savingRow) ||
             !ReadCheckingRow(accountRow.customer_id(), checkingRow)) {
+            std::cout<<"not ok"<<std::endl;
+
             client_->Abort(timeout_);
+            std::cout<<"aborted"<<std::endl;
             return std::make_pair(0, false);
         }
+        std::cout<<"attempt commit"<<std::endl;
         client_->Commit(timeout_);
-
+        std::cout<<"committed"<<std::endl;
+        std::cout<<"done with bal"<<std::endl;
         return std::make_pair(savingRow.saving_balance() + checkingRow.checking_balance(), true);
     }
 
@@ -176,8 +182,10 @@ namespace smallbank {
 
     bool SmallBankTransaction::ReadAccountRow(const std::string &name, proto::AccountRow &accountRow) {
         std::string accountRowKey = AccountRowKey(name);
+        std::cout<< accountRowKey<<std::endl;
         std::string accountRowSerialized;
         client_->Get(accountRowKey, accountRowSerialized, timeout_);
+        std::cout<< "get from client" << accountRowSerialized<<std::endl;
         return accountRow.ParseFromString(accountRowSerialized);
     }
 

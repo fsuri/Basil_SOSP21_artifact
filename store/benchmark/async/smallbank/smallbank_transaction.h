@@ -9,7 +9,7 @@ namespace smallbank {
     public:
         SmallBankTransaction(SyncClient *client, const uint32_t timeout);
 
-        void CreateAccount(const std::string &name, const uint32_t customer_id);
+//        void CreateAccount(const std::string &name, const uint32_t customer_id);
 
         std::pair<uint32_t, bool> Bal(const std::string &name);
 

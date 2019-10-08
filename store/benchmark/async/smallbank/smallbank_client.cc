@@ -29,7 +29,7 @@ namespace smallbank {
             transact_saving_ratio_(transact_saving_ratio), amalgamate_ratio_(amalgamate_ratio),
             num_hotspot_keys_(num_hotspot_keys), // first `num_hotpost_keys_` in `all_keys_` is the hotspot
             num_non_hotspot_keys_(num_non_hotspot_keys) {
-        std::copy(all_keys, all_keys+0, all_keys_);
+        std::copy(all_keys, all_keys+num_customers_, all_keys_);
     }
 
     void SmallBankClient::startBenchmark(const uint32_t duration, const uint32_t rampup) {
@@ -45,13 +45,16 @@ namespace smallbank {
             gettimeofday(&t1, NULL);
             status = true;
             // Decide which type of smallbank transaction it is going to be.
-            ttype = rand() % 100;
+//           TODO change ttype = rand() % 100;
+            ttype = 0;
 
             // Ranges for random params for transactions based on
             // https://github.com/microsoft/CCF/blob/master/samples/apps/smallbank/clients/small_bank_client.cpp
             if (ttype < balance_ratio_) {
+                std::cout<<"confirm ttype"<<std::endl;
                 if (!transaction_.Bal(getCustomerKey()).second) {
                     status = false;
+                    std::cout<<"balance is false"<<std::endl;
                 }
                 ttype = 1;
             } else if (ttype < balance_ratio_ + deposit_checking_ratio_) {
@@ -76,6 +79,7 @@ namespace smallbank {
                 }
                 ttype = 5;
             }
+            std::cout<<"past transaction"<<std::endl;
             gettimeofday(&t2, NULL);
             if (((t2.tv_sec - t0.tv_sec) * 1000000 + (t2.tv_usec - t0.tv_usec)) < rampup * 1000000) {
                 continue;
@@ -92,11 +96,14 @@ namespace smallbank {
     }
 
     std::string SmallBankClient::getCustomerKey() {
-        bool inHotspot = rand() % (num_hotspot_keys_ + num_non_hotspot_keys_) < num_hotspot_keys_;
+        bool inHotspot = (rand() % (num_hotspot_keys_ + num_non_hotspot_keys_)) < num_hotspot_keys_;
         if (inHotspot) {
-            return all_keys_[rand() % num_hotspot_keys_];
+            std::string key = all_keys_[rand() % num_hotspot_keys_];
+            return key;
         }
-        return all_keys_[rand() % num_non_hotspot_keys_ + num_hotspot_keys_];
+
+        std::string key2 = all_keys_[rand() % num_non_hotspot_keys_ + num_hotspot_keys_];
+        return key2;
     };
 
     std::pair <std::string, std::string> SmallBankClient::getCustomerKeyPair() {

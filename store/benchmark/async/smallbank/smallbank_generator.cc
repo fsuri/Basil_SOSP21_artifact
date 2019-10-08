@@ -6,6 +6,8 @@
 #include <utility>
 #include <numeric>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
 #include <gflags/gflags.h>
 
 #include "lib/io_utils.h"
@@ -155,19 +157,34 @@ int main(int argc, char *argv[]) {
     std::pair<std::string, std::string> out;
     std::string nameOut;
 
-    size_t count = 0;
-    while (!q.IsEmpty()) {
-        q.Pop(out);
-        count += WriteBytesToStream(&std::cout, out.first);
-        count += WriteBytesToStream(&std::cout, out.second);
+    int count = 0;
+    std::ofstream f;
+    f.open("smallbank_data");
+    if (f.is_open())
+    {
+        while (!q.IsEmpty()) {
+            q.Pop(out);
+            WriteBytesToStream(&f, out.first);
+            std::cout<<"KEY "<< out.first << std::endl;
+            WriteBytesToStream(&f, out.second);
+            std::cout<<"VAL "<< out.second << std::endl;
+            count++;
+        }
+        f.close();
+        std::cout<< count;
     }
-    std::cerr << "Wrote " << count / 1024 / 1024 << "MB." << std::endl;
+    else std::cerr << "Unable to open file";
 
-//    size_t nameCount = 0;
-//    while (!names.IsEmpty()) {
-//        names.Pop(nameOut);
-//        nameCount += WriteBytesToStream(&std::cout, nameOut);
-//    }
-//    std::cerr << "Wrote " << nameCount / 1024 / 1024 << "MB." << std::endl;
+    f.open("smallbank_names");
+    if (f.is_open())
+    {
+        while (!names.IsEmpty()) {
+            names.Pop(nameOut);
+            f << nameOut + ",";
+        }
+        f.close();
+    }
+    else std::cerr << "Unable to open file";
+
     return 0;
 }

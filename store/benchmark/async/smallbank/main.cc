@@ -107,9 +107,9 @@ DEFINE_uint32(num_hotspots,
 1000, "# of hotspots (smallbank)");
 DEFINE_uint32(num_customers,
 18000, "# of customers (smallbank)");
-
+//TODO change to 5000 or 10000
 DEFINE_uint32(timeout,
-5000, "timeout in ms (smallbank)");
+0, "timeout in ms (smallbank)");
 DEFINE_string(customer_name_file_path, "smallbank_names", "path to file containing names to be loaded");
 
 void loadKeys(std::string keys[], std::string customer_name_file_path) {
@@ -153,7 +153,9 @@ int main(int argc, char **argv) {
 
     partitioner part = default_partitioner;
 
+    std::cout<<"clients " << FLAGS_num_clients <<std::endl;
     for (size_t i = 0; i < FLAGS_num_clients; i++) {
+        std::cout<<"client " << i<<std::endl;
         SyncClient *client;
         switch (mode) {
             case PROTO_TAPIR: {
@@ -166,15 +168,18 @@ int main(int argc, char **argv) {
             default:
                 NOT_REACHABLE();
         }
-
+//        std::cout<<"loading all keys"<<std::endl;
         std::string allKeys[FLAGS_num_customers];
         loadKeys(allKeys, FLAGS_customer_name_file_path);
+//        std::cout<<"loaded all keys" <<std::endl;
+//        std::cout<<allKeys[0]<< " to  " << allKeys[FLAGS_num_customers-1] <<std::endl;
         smallbank::SmallBankClient *bench = new smallbank::SmallBankClient(client, FLAGS_timeout, FLAGS_balance_ratio,
                                                                            FLAGS_deposit_checking_ratio,
                                                                            FLAGS_transact_saving_ratio, FLAGS_amalgamate_ratio,
                                                                            FLAGS_num_hotspots,
                                                                            FLAGS_num_customers - FLAGS_num_hotspots,
                                                                            allKeys);
+        std::cout<<"created client " << i<<std::endl;
         bench->startBenchmark(FLAGS_duration, FLAGS_rampup);
     }
     return 0;
