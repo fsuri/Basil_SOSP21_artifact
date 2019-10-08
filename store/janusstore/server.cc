@@ -14,8 +14,6 @@ Server::Server(transport::Configuration &config, int groupIdx, int myIdx, Transp
 {
     transport->Register(this, config, groupIdx, myIdx);
     transport::ReplicaAddress ra = config.replica(groupIdx, myIdx);
-    server_ip = ra.host;
-    server_port = stoi(ra.port);
     store = new Store();
 }
 
@@ -77,29 +75,14 @@ Server::HandlePreAccept(const TransportAddress &remote,
     Reply reply;
     TransactionMessage txnMsg = pa_msg.txn();
     uint64_t txn_id = txnMsg.txnid();
-    string server_ip_txn = txnMsg.serverip();
-    uint64_t server_port_txn = txnMsg.serverport();
     uint64_t ballot = pa_msg.ballot();
 
-    Debug("[Server %i] Received PREACCEPT message for txn %i with ballot %i",
-        this->myIdx, txn_id, ballot);
+    Debug("[Server %i] Received PREACCEPT message for txn %s",
+        this->myIdx, txnMsg.DebugString().c_str());
 
     // construct the transaction object
     // TODO might be able to optimize this process somehow
-    Transaction txn = Transaction(txn_id, server_ip_txn, server_port_txn);
-    for (int i = 0; i < txnMsg.gets_size(); i++) {
-        string key = txnMsg.gets(i).key();
-        txn.addReadSet(key);
-    }
-
-    for (int i = 0; i < txnMsg.puts_size(); i++) {
-        PutMessage put = txnMsg.puts(i);
-        txn.addWriteSet(put.key(), put.value());
-    }
-
-    for (int i = 0; i < txnMsg.group_size(); i++) {
-        txn.groups.insert(txnMsg.group(i));
-    }
+    Transaction txn = Transaction(txn_id, txnMsg);
 
     vector<uint64_t> dep_list = BuildDepList(txn, ballot);
 
@@ -124,9 +107,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
         dep.add_txnid(dep_list[i]);
     }
     PreAcceptOKMessage preaccept_ok_msg;
-    preaccept_ok_msg.set_serverip(server_ip);
-    preaccept_ok_msg.set_serverport(server_port);
-    preaccept_ok_msg.set_txnid(txn.getTransactionId());
+    preaccept_ok_msg.set_txnid(txn_id);
     preaccept_ok_msg.set_allocated_dep(&dep);
 
     reply.set_op(Reply::PREACCEPT_OK);

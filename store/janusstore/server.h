@@ -17,8 +17,6 @@ namespace janusstore {
 
 class Server : public TransportReceiver, public ::Server {
 public:
-    std::string server_ip;
-    uint64_t server_port;
     Server(transport::Configuration &config, int groupIdx, int myIdx, Transport *transport);
     ~Server();
 

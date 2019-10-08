@@ -60,18 +60,20 @@ namespace janusstore {
     for (const auto & key: txn->read_set) {
       int i = this->keyToShard(key, nshards);
       if (participants.find(i) == participants.end()) {
-        printf("%s\n", ("txn -> shard " + to_string(i)).c_str());
+        Debug("txn -> shard %i, key %s", i, key.c_str());
         participants.insert(i);
       }
+      txn->groups.insert(i);
       txn->addShardedReadSet(key, i);
     }
 
     for (const auto & pair: txn->write_set) {
       int i = this->keyToShard(pair.first, nshards);
       if (participants.find(i) == participants.end()) {
-        printf("%s\n", ("txn -> shard " + to_string(i)).c_str());
+        Debug("txn -> shard %i, key %s", i, pair.first.c_str());
         participants.insert(i);
       }
+      txn->groups.insert(i);
       txn->addShardedWriteSet(pair.first, pair.second, i);
     }
   }
