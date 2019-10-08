@@ -57,14 +57,14 @@ int main(int argc, char **argv) {
 	janusstore::Client *client_ptr2 = &client2;
 
 	// define some transactions
-	janusstore::Transaction txn1(1234, "asdf", 1);
+	janusstore::Transaction txn1(1234);
 	janusstore::Transaction* txn_ptr1 = &txn1;
 	txn_ptr1->addReadSet("key1");
 	txn_ptr1->addReadSet("key2");
 	txn_ptr1->addWriteSet("key3", "val3");
 	txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
 
-	janusstore::Transaction txn2(4567, "asdf", 1);
+	janusstore::Transaction txn2(4567);
 	janusstore::Transaction* txn_ptr2 = &txn2;
 	txn_ptr2->addReadSet("key3");
 	txn_ptr2->addWriteSet("key1", "val1");
