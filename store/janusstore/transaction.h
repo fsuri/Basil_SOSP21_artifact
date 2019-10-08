@@ -33,17 +33,12 @@ private:
     std::unordered_map<uint64_t, std::unordered_map<std::string, std::string>> sharded_writeset;
 
 public:
-    // the server this txn is associated with
-    // TODO probably deprecate ip and port
-    std::string server_ip;
-    uint64_t server_port;
-
     // the groups (shards) that this txn is associated with
-    std::unordered_set<uint64_t> groups;
+    std::unordered_set<int> groups;
 
     Transaction() {};
-    Transaction(uint64_t txn_id, std::string server_ip, uint64_t server_port);
-    Transaction(uint64_t txn_id, std::string server_ip, uint64_t server_port, const TransactionMessage &msg);
+    Transaction(uint64_t txn_id);
+    Transaction(uint64_t txn_id, const janusstore::proto::TransactionMessage &msg);
     ~Transaction();
 
     // set of keys to be read
@@ -53,8 +48,8 @@ public:
     std::unordered_map<std::string, std::string> write_set;
 
     void setTransactionId(uint64_t txn_id);
-    void setTransactionStatus(janusstore::proto::TransactionMessage::Status status);
     const uint64_t getTransactionId() const;
+    void setTransactionStatus(janusstore::proto::TransactionMessage::Status status);
     const janusstore::proto::TransactionMessage::Status getTransactionStatus() const;
     const std::unordered_set<std::string>& getReadSet() const;
     const std::unordered_map<std::string, std::string>& getWriteSet() const;

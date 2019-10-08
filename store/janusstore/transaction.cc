@@ -4,16 +4,24 @@ using namespace std;
 
 namespace janusstore {
 
-Transaction::Transaction(uint64_t txn_id, string server_ip, uint64_t server_port) {
+Transaction::Transaction(uint64_t txn_id) {
 	this->txn_id = txn_id;
-	this->server_ip = server_ip;
-	this->server_port = server_port;
 }
 
-Transaction::Transaction(uint64_t txn_id, string server_ip, uint64_t server_port, const TransactionMessage &msg) {
+Transaction::Transaction(uint64_t txn_id, const janusstore::proto::TransactionMessage &msg) {
 	this->txn_id = txn_id;
-	this->server_ip = server_ip;
-	this->server_port = server_port;
+	for (int i = 0; i < msg.groups_size(); i++) {
+    this->groups.insert(msg.groups(i));
+  }
+
+  for (int i = 0; i < msg.gets_size(); i++) {
+    this->addReadSet(msg.gets(i).key());
+  }
+
+  for (int i = 0; i < msg.puts_size(); i++) {
+    proto::PutMessage put = msg.puts(i);
+    this->addWriteSet(put.key(), put.value());
+  }
 }
 
 Transaction::~Transaction() {}
@@ -55,8 +63,6 @@ void Transaction::addShardedWriteSet(const std::string &key, const std::string &
 
 void Transaction::serialize(janusstore::proto::TransactionMessage *msg, uint64_t shard) const {
 	msg->set_status(this->status);
-	msg->set_serverip(this->server_ip);
-	msg->set_serverport(this->server_port);
 	msg->set_txnid(this->txn_id);
 
 	// add readset for [shard]
@@ -79,7 +85,7 @@ void Transaction::serialize(janusstore::proto::TransactionMessage *msg, uint64_t
 
 	// add participating shards
 	for (auto shard : groups) {
-		msg->add_group(shard);
+		msg->add_groups(shard);
 	}
 }
 

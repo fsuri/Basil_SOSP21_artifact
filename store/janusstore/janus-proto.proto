@@ -23,14 +23,11 @@ message TransactionMessage {
       ACCEPT = 1;
       COMMIT = 2;
     }
-    // TODO(eric): encode into int along with transaction.h if time
-    optional string serverip = 1;
-    optional uint64 serverport = 2;
-    optional uint64 txnid = 3;
-    repeated uint64 group = 7;
-    optional Status status = 4;
-    repeated GetMessage gets = 5;
-    repeated PutMessage puts = 6;
+    optional uint64 txnid = 1;
+    repeated uint64 groups = 2;
+    optional Status status = 3;
+    repeated GetMessage gets = 4;
+    repeated PutMessage puts = 5;
 }
 
 message PreAcceptMessage {
@@ -40,8 +37,6 @@ message PreAcceptMessage {
 
 message PreAcceptOKMessage {
     optional uint64 txnid = 1;
-    optional string serverip = 2;
-    optional uint64 serverport = 3;
     optional DependencyList dep = 4;
 }
 
