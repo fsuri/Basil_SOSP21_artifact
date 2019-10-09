@@ -40,9 +40,9 @@ enum protomode_t {
  */
 DEFINE_string(config_prefix,
 "smallbank.config", "prefix of path to shard configuration file");
-DEFINE_uint64(num_shards,
+DEFINE_int64(num_shards,
 1, "number of shards in the system");
-DEFINE_uint64(num_groups,
+DEFINE_int64(num_groups,
 1, "number of replica groups in the system");
 DEFINE_bool(tapir_sync_commit,
 true, "wait until commit phase completes before"
@@ -77,7 +77,7 @@ DEFINE_validator(protocol_mode, &ValidateProtocolMode
 /**
  * Experiment settings.
  */
-DEFINE_uint64(num_clients,
+DEFINE_int64(num_clients,
 1, "number of clients to run in this process");
 DEFINE_int32(closest_replica,
 -1, "index of the replica closest to the client");
@@ -89,26 +89,26 @@ DEFINE_int32(clock_error,
 /**
  * Smallbank settings.
  */
-DEFINE_uint32(duration,
+DEFINE_int32(duration,
 60, "seconds to run (smallbank)");
-DEFINE_uint32(rampup,
+DEFINE_int32(rampup,
 30, "rampup period in seconds (smallbank)");
-DEFINE_uint32(balance_ratio,
+DEFINE_int32(balance_ratio,
 60, "percentage of balance transactions (smallbank)");
-DEFINE_uint32(deposit_checking_ratio,
+DEFINE_int32(deposit_checking_ratio,
 10, "percentage of deposit checking transactions (smallbank)");
-DEFINE_uint32(transact_saving_ratio,
+DEFINE_int32(transact_saving_ratio,
 10, "percentage of transact saving transactions (smallbank)");
-DEFINE_uint32(amalgamate_ratio,
+DEFINE_int32(amalgamate_ratio,
 10, "percentage of deposit checking transactions (smallbank)");
-DEFINE_uint32(write_check_ratio,
+DEFINE_int32(write_check_ratio,
 10, "percentage of write check transactions (smallbank)");
-DEFINE_uint32(num_hotspots,
+DEFINE_int32(num_hotspots,
 1000, "# of hotspots (smallbank)");
-DEFINE_uint32(num_customers,
+DEFINE_int32(num_customers,
 18000, "# of customers (smallbank)");
 //TODO change to 5000 or 10000
-DEFINE_uint32(timeout,
+DEFINE_int32(timeout,
 0, "timeout in ms (smallbank)");
 DEFINE_string(customer_name_file_path, "smallbank_names", "path to file containing names to be loaded");
 
