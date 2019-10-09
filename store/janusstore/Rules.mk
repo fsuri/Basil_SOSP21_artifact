@@ -12,3 +12,4 @@ LIB-janus-client := $(OBJS-ir-client)  $(LIB-udptransport) \
 	$(LIB-store-frontend) $(LIB-store-common) $(o)janus-proto.o \
 	$(o)shardclient.o $(o)client.o $(o)transaction.o
 
+include $(d)tests/Rules.mk

@@ -346,7 +346,6 @@ TCPTransport::Register(TransportReceiver *receiver,
 {
     ASSERT(replicaIdx < config.n);
     struct sockaddr_in sin;
-    Debug("wtf??? %i", config.g);
     RegisterConfiguration(receiver, config, groupIdx, replicaIdx);
 
     // Create socket

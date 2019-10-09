@@ -13,7 +13,6 @@ Server::Server(transport::Configuration &config, int groupIdx, int myIdx, Transp
     : config(config), groupIdx(groupIdx), myIdx(myIdx), transport(transport)
 {
     transport->Register(this, config, groupIdx, myIdx);
-    transport::ReplicaAddress ra = config.replica(groupIdx, myIdx);
     store = new Store();
 }
 

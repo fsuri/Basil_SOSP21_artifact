@@ -82,7 +82,6 @@ public:
         auto kv = g_replicaAddresses[cfg][groupIdx].find(replicaIdx);
         ASSERT(kv != g_replicaAddresses[cfg][groupIdx].end());
 
-        // printf("found replica addr for replica %d\n", replicaIdx);
 
         return SendMessageInternal(src, kv->second, m, false);
     }
@@ -102,7 +101,6 @@ public:
         auto kv = replicaAddresses[cfg].find(replicaIdx);
         ASSERT(kv != replicaAddresses[cfg].end());
 
-        // printf("found replica addr for replica %d\n", replicaIdx);
 
         return SendMessageInternal(src, kv->second, m, false);
     }
@@ -186,7 +184,6 @@ protected:
 
         // Record configuration
         configurations.insert(std::make_pair(receiver, canonical));
-        printf("made configuration for server %d\n", replicaIdx);
 
         // If this is a replica, record the receiver
         if (replicaIdx != -1) {
@@ -254,14 +251,12 @@ protected:
                 for (int i = 0; i < cfg->n; i++) {
                     const ADDR addr = LookupAddress(*cfg, i);
                     replicaAddresses[cfg].insert(std::make_pair(i, addr));
-                    // printf("made replica addr for replica %d\n", i);
                 }
             } else if (cfg->g > 0) {
                 for (int j = 0; j < cfg->g; j++) {
                     for (int i = 0; i < cfg->n; i++) {
                         const ADDR addr = LookupAddress(*cfg, j, i);
                         g_replicaAddresses[cfg][j].insert(std::make_pair(i, addr));
-                        // printf("made replica addr for replica %d\n", i);
                     }
                 }
             }

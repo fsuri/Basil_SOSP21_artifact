@@ -40,13 +40,13 @@ public:
     void HandleInquireReply(const proto::InquireOKMessage i_ok_msg);
 
     Transport *transport;
+    int groupIdx;
+    int myIdx;
 private:
     // simple key-value store
     Store *store;
 
     transport::Configuration config;
-    int groupIdx;
-    int myIdx;
 
     // highest ballot accepted per txn id
     std::unordered_map<uint64_t, uint64_t> accepted_ballots;
