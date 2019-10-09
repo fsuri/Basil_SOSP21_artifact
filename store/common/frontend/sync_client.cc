@@ -14,12 +14,12 @@ void SyncClient::Begin() {
 void SyncClient::Get(const std::string &key, std::string &value,
       uint32_t timeout) {
   Promise promise(timeout);
-
+std::cout<<"got here, asking for key " <<key << "with timeout "<< timeout <<std::endl;
   client->Get(key, std::bind(&SyncClient::GetCallback, this, &promise,
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
         std::placeholders::_4), std::bind(&SyncClient::GetTimeoutCallback, this,
         &promise, std::placeholders::_1, std::placeholders::_2), timeout);
-
+std::cout<<"done getting";
   value = promise.GetValue();
 }
 
