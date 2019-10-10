@@ -5,6 +5,8 @@
 #include "store/common/frontend/sync_client.h"
 #include "store/common/frontend/sync_transaction.h"
 
+#include <random>
+
 class SyncTransactionBenchClient : public BenchmarkClient {
  public:
   SyncTransactionBenchClient(SyncClient &client, Transport &transport,
