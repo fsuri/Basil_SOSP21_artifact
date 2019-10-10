@@ -89,37 +89,8 @@ DEFINE_int32(clock_error,
 /**
  * Smallbank settings.
  */
-DEFINE_int32(duration,
-60, "seconds to run (smallbank)");
-DEFINE_int32(rampup,
-30, "rampup period in seconds (smallbank)");
-DEFINE_int32(balance_ratio,
-60, "percentage of balance transactions (smallbank)");
-DEFINE_int32(deposit_checking_ratio,
-10, "percentage of deposit checking transactions (smallbank)");
-DEFINE_int32(transact_saving_ratio,
-10, "percentage of transact saving transactions (smallbank)");
-DEFINE_int32(amalgamate_ratio,
-10, "percentage of deposit checking transactions (smallbank)");
-DEFINE_int32(write_check_ratio,
-10, "percentage of write check transactions (smallbank)");
-DEFINE_int32(num_hotspots,
-1000, "# of hotspots (smallbank)");
-DEFINE_int32(num_customers,
-18000, "# of customers (smallbank)");
-//TODO change to 5000 or 10000
-DEFINE_int32(timeout,
-0, "timeout in ms (smallbank)");
-DEFINE_string(customer_name_file_path, "smallbank_names", "path to file containing names to be loaded");
 
 void loadKeys(std::string keys[], std::string customer_name_file_path) {
-    std::string str;
-    std::ifstream file(customer_name_file_path);
-    int i=0;
-    while (getline(file, str, ',')) {
-        keys[i] = str;
-        i+=1;
-    }
 }
 
 int main(int argc, char **argv) {
