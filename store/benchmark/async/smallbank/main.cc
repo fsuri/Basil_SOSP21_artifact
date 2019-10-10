@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
     partitioner part = default_partitioner;
 
     std::cout<<"clients " << FLAGS_num_clients <<std::endl;
-    for (size_t i = 0; i < FLAGS_num_clients; i++) {
+    for (size_t i = 0; i < 1; i++) {
         std::cout<<"client " << i<<std::endl;
         SyncClient *client;
         switch (mode) {
@@ -180,7 +180,14 @@ int main(int argc, char **argv) {
                                                                            FLAGS_num_customers - FLAGS_num_hotspots,
                                                                            allKeys);
         std::cout<<"created client " << i<<std::endl;
-        bench->startBenchmark(FLAGS_duration, FLAGS_rampup);
+        std::thread t([&]() { bench->startBenchmark(FLAGS_duration, FLAGS_rampup); });
+        Timeout checkTimeout(&transport, FLAGS_duration * 1000 + 100, [&]() {
+          transport.Stop();
+          exit(0);
+        });
+        checkTimeout.Start();
+        transport.Run();
+        t.join();
     }
     return 0;
 }
