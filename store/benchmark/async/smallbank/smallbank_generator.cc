@@ -88,6 +88,7 @@ void GenerateTables(Queue<std::pair<std::string, std::string>> &q, Queue<std::st
     smallbank::proto::CheckingRow checkingRow;
     std::string checkingRowOut;
 
+    // TODO test and ensure values are within bounds
     for (uint32_t cId = 1; cId <= num_customers; cId++) {
         std::string customerName = RandomName(8, 16, gen);
         accountRow.set_customer_id(cId);

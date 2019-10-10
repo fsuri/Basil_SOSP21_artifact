@@ -47,7 +47,7 @@ namespace smallbank {
             // Decide which type of smallbank transaction it is going to be.
 //           TODO change ttype = rand() % 100;
             ttype = 0;
-
+            // TODO modularize selection
             // Ranges for random params for transactions based on
             // https://github.com/microsoft/CCF/blob/master/samples/apps/smallbank/clients/small_bank_client.cpp
             if (ttype < balance_ratio_) {
