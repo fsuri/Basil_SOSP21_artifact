@@ -145,7 +145,8 @@ std::cout<<checkingRowKey<<std::endl;
     }
 }
 
-DEFINE_uint32(num_customers, 18000, "Number of customers");
+DEFINE_int32(num_customers, 18000, "Number of customers");
+
 int main(int argc, char *argv[]) {
     gflags::SetUsageMessage(
             "generates a file containing key-value pairs of Smallbank table data\n");

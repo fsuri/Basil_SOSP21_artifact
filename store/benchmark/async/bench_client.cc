@@ -42,10 +42,10 @@
 
 DEFINE_LATENCY(op);
 
-BenchmarkClient::BenchmarkClient(AsyncClient &client, Transport &transport,
+BenchmarkClient::BenchmarkClient(Transport &transport,
 		int numRequests, int expDuration, uint64_t delay, int warmupSec,
     int cooldownSec, int tputInterval, const std::string &latencyFilename) :
-    tputInterval(tputInterval), client(client), transport(transport),
+    tputInterval(tputInterval), transport(transport),
     numRequests(numRequests), expDuration(expDuration),	delay(delay),
     warmupSec(warmupSec), cooldownSec(cooldownSec),
     latencyFilename(latencyFilename) {
@@ -138,6 +138,22 @@ void BenchmarkClient::OnReply(int result) {
     return;
   }
 
+  IncrementSent();
+
+  if (delay == 0) {
+    Latency_Start(&latency);
+    SendNext();
+  } else {
+    uint64_t rdelay = rand() % delay*2;
+    transport.Timer(rdelay, std::bind(&BenchmarkClient::SendNext, this));
+  }
+}
+
+void BenchmarkClient::StartLatency() {
+  Latency_Start(&latency);
+}
+
+void BenchmarkClient::IncrementSent() {
   if ((started) && (!done) && (n != 0)) {
     uint64_t ns = Latency_End(&latency);
     std::cout << GetLastOp() << ',' << ns << std::endl;
@@ -147,7 +163,7 @@ void BenchmarkClient::OnReply(int result) {
       gettimeofday(&currTime, NULL);
 
       struct timeval diff = timeval_sub(currTime, startTime);
-      if (diff.tv_sec > expDuration) {
+      if (diff.tv_sec > expDuration - warmupSec - cooldownSec) {
         Finish();
       }
     } else { 
@@ -158,13 +174,6 @@ void BenchmarkClient::OnReply(int result) {
   }
 
   n++;
-  if (delay == 0) {
-    Latency_Start(&latency);
-    SendNext();
-  } else {
-    uint64_t rdelay = rand() % delay*2;
-    transport.Timer(rdelay, std::bind(&BenchmarkClient::SendNext, this));
-  }
 }
 
 void BenchmarkClient::Finish() {
