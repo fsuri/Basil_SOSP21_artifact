@@ -172,7 +172,6 @@ void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	// aggregate replies for this transaction
 	if (this->accept_replies.count(txn_id)) {
 		// key already exists, so append to list
-		// key already exists, so append to list
 		std::vector<janusstore::proto::Reply> list;
 		list = this->accept_replies.at(txn_id);
 		list.push_back(reply);
@@ -247,7 +246,7 @@ void ShardClient::AcceptContinuation(const string &request_str,
   	// get the acb
   	client_accept_callback acb = this->acb_map.at(txn_id);
   	// invoke the shardclient callback
-  	this->AcceptCallback(txn_id, reply, acb);
+  //this->AcceptCallback(txn_id, reply, acb);
 }
 
 void ShardClient::CommitContinuation(const string &request_str,

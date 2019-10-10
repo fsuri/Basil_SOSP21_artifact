@@ -12,6 +12,10 @@ store/server
 store/benchmark/async/benchmark
 store/benchmark/async/benchmark_oneshot
 store/benchmark/async/tpcc/tpcc_generator
+store/benchmark/async/smallbank/smallbank_generator
+store/benchmark/async/smallbank/smallbank_client
+store/benchmark/async/smallbank/smallbank_data
+store/benchmark/async/smallbank/smallbank_names
 timeserver/timeserver
 
 lib/tests/configuration-test

@@ -21,6 +21,7 @@ class AsyncTransactionBenchClient : public BenchmarkClient {
   void ExecuteCallback(int result,
       std::map<std::string, std::string> readValues);
 
+  AsyncClient &client;
  private:
   uint32_t abortBackoff;
   bool retryAborted;

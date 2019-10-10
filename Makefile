@@ -136,6 +136,7 @@ include store/janusstore/Rules.mk
 include store/Rules.mk
 include store/benchmark/async/common/Rules.mk
 include store/benchmark/async/retwis/Rules.mk
+include store/benchmark/async/smallbank/Rules.mk
 include store/benchmark/async/tpcc/Rules.mk
 include store/benchmark/async/Rules.mk
 include lockserver/Rules.mk

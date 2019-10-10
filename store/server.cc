@@ -293,10 +293,14 @@ int main(int argc, char **argv) {
       std::string key;
       std::string value;
       int i = ReadBytesFromStream(&in, key);
+        std::cout<< "KEY "<< key << std::endl;
       if (i == 0) {
         ReadBytesFromStream(&in, value);
         if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
           server->Load(key, value, Timestamp());
+
+            std::cout<< "VAL " << value << std::endl;
+            Debug("Loaded %lu key-value pairs", loaded);
         }
       }
       ++loaded;
