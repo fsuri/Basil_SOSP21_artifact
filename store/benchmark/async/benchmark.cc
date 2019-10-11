@@ -35,14 +35,16 @@ enum protomode_t {
 	PROTO_UNKNOWN,
 	PROTO_TAPIR,
 	PROTO_WEAK,
-	PROTO_STRONG
+	PROTO_STRONG,
+  PROTO_JANUS
 };
 
 enum benchmode_t {
   BENCH_UNKNOWN,
   BENCH_RETWIS,
   BENCH_TPCC,
-  BENCH_SMALLBANK_SYNC
+  BENCH_SMALLBANK_SYNC,
+  BENCH_RMW,
 };
 
 /**
@@ -62,7 +64,8 @@ const std::string protocol_args[] = {
   "occ",
   "lock",
   "span-occ",
-  "span-lock"
+  "span-lock",
+  "janus"
 };
 const protomode_t protomodes[] {
   PROTO_TAPIR,
@@ -71,7 +74,8 @@ const protomode_t protomodes[] {
   PROTO_STRONG,
   PROTO_STRONG,
   PROTO_STRONG,
-  PROTO_STRONG
+  PROTO_STRONG,
+  PROTO_JANUS
 };
 const strongstore::Mode strongmodes[] {
   strongstore::Mode::MODE_UNKNOWN,
@@ -80,7 +84,8 @@ const strongstore::Mode strongmodes[] {
   strongstore::Mode::MODE_OCC,
   strongstore::Mode::MODE_LOCK,
   strongstore::Mode::MODE_SPAN_OCC,
-  strongstore::Mode::MODE_SPAN_LOCK
+  strongstore::Mode::MODE_SPAN_LOCK,
+  strongstore::Mode::MODE_UNKNOWN
 };
 static bool ValidateProtocolMode(const char* flagname,
     const std::string &value) {
@@ -100,12 +105,14 @@ DEFINE_validator(protocol_mode, &ValidateProtocolMode);
 const std::string benchmark_args[] = {
 	"retwis",
   "tpcc",
-  "smallbank"
+  "smallbank",
+  "rmw"
 };
 const benchmode_t benchmodes[] {
   BENCH_RETWIS,
   BENCH_TPCC,
-  BENCH_SMALLBANK_SYNC
+  BENCH_SMALLBANK_SYNC,
+  BENCH_RMW
 };
 static bool ValidateBenchmark(const char* flagname, const std::string &value) {
   int n = sizeof(benchmark_args);
@@ -313,6 +320,7 @@ int main(int argc, char **argv) {
     SyncClient *syncClient = nullptr;
 	  switch (benchMode) {
       case BENCH_RETWIS:
+        asyncClient = new AsyncAdapterClient(client);
         bench = new retwis::RetwisClient(keySelector, *asyncClient, transport,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
