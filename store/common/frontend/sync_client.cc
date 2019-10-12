@@ -19,8 +19,8 @@ std::cout<<"got here, asking for key " <<key << "with timeout "<< timeout <<std:
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
         std::placeholders::_4), std::bind(&SyncClient::GetTimeoutCallback, this,
         &promise, std::placeholders::_1, std::placeholders::_2), timeout);
-std::cout<<"done getting";
   value = promise.GetValue();
+    std::cout<<"done getting value " <<promise.GetValue() << std::endl;
 }
 
 void SyncClient::Put(const std::string &key, const std::string &value,

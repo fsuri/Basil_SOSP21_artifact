@@ -18,14 +18,6 @@ SmallbankTransaction::SmallbankTransaction(SmallbankTransactionType type,
       cust1(cust1), cust2(cust2), timeout_(timeout) {
 }
 
-//    void SmallbankTransaction::CreateAccount(const std::string &name, const uint32_t customer_id) {
-//        client.Begin();
-//        InsertAccountRow(name, customer_id);
-//        InsertSavingRow(customer_id, 0);
-//        InsertCheckingRow(customer_id, 0);
-//        client.Commit(timeout_);
-//    }
-
 int SmallbankTransaction::Execute(SyncClient &client) {
   switch (type) {
     case BALANCE:
@@ -208,10 +200,9 @@ void SmallbankTransaction::InsertCheckingRow(SyncClient &client, const uint32_t 
 
 bool SmallbankTransaction::ReadAccountRow(SyncClient &client, const std::string &name, proto::AccountRow &accountRow) {
     std::string accountRowKey = AccountRowKey(name);
-    std::cout<< accountRowKey<<std::endl;
     std::string accountRowSerialized;
     client.Get(accountRowKey, accountRowSerialized, timeout_);
-    std::cout<< "get from client" << accountRowSerialized<<std::endl;
+    std::cout<< "get " << accountRowKey << "from client: " << accountRowSerialized << " serialized" <<std::endl;
     return accountRow.ParseFromString(accountRowSerialized);
 }
 

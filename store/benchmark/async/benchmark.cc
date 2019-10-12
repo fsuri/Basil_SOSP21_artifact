@@ -192,8 +192,7 @@ DEFINE_int32(write_check_ratio, 10, "percentage of write check transactions"
     " (for smallbank)");
 DEFINE_int32(num_hotspots, 1000, "# of hotspots (for smallbank)");
 DEFINE_int32(num_customers, 18000, "# of customers (for smallbank)");
-//TODO change to 5000 or 10000
-DEFINE_int32(timeout, 0, "timeout in ms (for smallbank)");
+DEFINE_int32(timeout, 5000, "timeout in ms (for smallbank)");
 DEFINE_string(customer_name_file_path, "smallbank_names", "path to file"
     " containing names to be loaded (for smallbank)");
 

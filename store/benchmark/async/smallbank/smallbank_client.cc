@@ -46,6 +46,7 @@ namespace smallbank {
 
     SyncTransaction *SmallbankClient::GetNextTransaction() {
         int ttype = rand() % 100;
+        //TODO Fix
 
         // Ranges for random params for transactions based on
         // https://github.com/microsoft/CCF/blob/master/samples/apps/smallbank/clients/small_bank_client.cpp
