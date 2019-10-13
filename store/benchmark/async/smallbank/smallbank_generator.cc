@@ -28,7 +28,6 @@ std::string SmallbankGenerator::RandomAString(size_t x, size_t y, std::mt19937 &
     }
     return s;
 }
-std::set<std::string, std::greater<std::string>> customerNames;
 
 std::string SmallbankGenerator::RandomName(size_t x, size_t y, std::mt19937 &gen) {
     std::string name = RandomAString(x, y, gen);
@@ -43,7 +42,7 @@ uint32_t SmallbankGenerator::RandomBalance(uint32_t base, uint32_t deviation, st
     return std::uniform_int_distribution<uint32_t>(base - deviation, base + deviation)(gen);
 }
 
-void SmallbankGenerator::GenerateTables(smallbank::Queue<std::pair<std::string, std::string>> &q, smallbank::Queue<std::string> &names, uint32_t num_customers) {
+void SmallbankGenerator::GenerateTables(smallbank::Queue<std::pair<std::string, std::string>> &q, smallbank::Queue<std::string> &names, uint32_t num_customers, uint32_t min_name_length, uint32_t max_name_length, uint32_t base_balance, uint32_t balance_deviation) {
     std::mt19937 gen;
     smallbank::proto::AccountRow accountRow;
     std::string accountRowOut;
@@ -54,16 +53,16 @@ void SmallbankGenerator::GenerateTables(smallbank::Queue<std::pair<std::string, 
 
     // TODO test and ensure values are within bounds
     for (uint32_t cId = 1; cId <= num_customers; cId++) {
-        std::string customerName = RandomName(8, 16, gen);
+        std::string customerName = RandomName(min_name_length, max_name_length, gen);
         accountRow.set_customer_id(cId);
         accountRow.set_name(customerName);
 
         savingRow.set_customer_id(cId);
-        uint32_t savingBalance = RandomBalance(1000,50,gen);
+        uint32_t savingBalance = RandomBalance(base_balance, balance_deviation, gen);
         savingRow.set_saving_balance(savingBalance);
 
         checkingRow.set_customer_id(cId);
-        uint32_t checkingBalance = RandomBalance(1000,50,gen);
+        uint32_t checkingBalance = RandomBalance(base_balance, balance_deviation, gen);
         checkingRow.set_checking_balance(checkingBalance);
 
         accountRow.SerializeToString(&accountRowOut);

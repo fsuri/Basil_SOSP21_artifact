@@ -60,7 +60,7 @@ class SmallbankGenerator {
 public:
     std::string RandomName(size_t x, size_t y, std::mt19937 &gen);
     uint32_t RandomBalance(uint32_t base, uint32_t deviation, std::mt19937 &gen);
-    void GenerateTables(Queue<std::pair<std::string, std::string>> &q, Queue<std::string> &names, uint32_t num_customers);
+    void GenerateTables(Queue<std::pair<std::string, std::string>> &q, Queue<std::string> &names, uint32_t num_customers, uint32_t min_name_length, uint32_t max_name_length, uint32_t base_balance, uint32_t balance_deviation);
 
 private:
     std::set<std::string, std::greater<std::string>> customerNames;

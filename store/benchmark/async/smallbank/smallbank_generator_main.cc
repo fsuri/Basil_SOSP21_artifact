@@ -1,6 +1,10 @@
 #include <gflags/gflags.h>
 #include "store/benchmark/async/smallbank/smallbank_generator.h"
 DEFINE_int32(num_customers, 18000, "Number of customers");
+DEFINE_int32(base_balance, 1000, "Base balance (checking, saving)");
+DEFINE_int32(balance_deviation, 50, "Balance deviation (checking, saving)");
+DEFINE_int32(min_name_length, 8, "Minimum name length");
+DEFINE_int32(max_name_length, 16, "Maximum name length");
 
 int main(int argc, char *argv[]) {
     gflags::SetUsageMessage(
@@ -11,7 +15,7 @@ int main(int argc, char *argv[]) {
     smallbank::Queue<std::string> names(2e9);
     std::cerr << "Generating " << FLAGS_num_customers << " customers." << std::endl;
     smallbank::SmallbankGenerator generator;
-    generator.GenerateTables(q, names, FLAGS_num_customers);
+    generator.GenerateTables(q, names, FLAGS_num_customers, FLAGS_min_name_length, FLAGS_max_name_length, FLAGS_base_balance, FLAGS_balance_deviation);
     std::pair<std::string, std::string> out;
     std::string nameOut;
 
@@ -27,7 +31,6 @@ int main(int argc, char *argv[]) {
             count++;
         }
         f.close();
-        std::cout<< count;
     }
     else std::cerr << "Unable to open file";
 
