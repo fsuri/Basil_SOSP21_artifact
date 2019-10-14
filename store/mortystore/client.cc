@@ -2,10 +2,9 @@
 
 namespace mortystore {
 
-
-Client::Client(const std::string configPath, int nShards, int closestReplica,
-    Transport *transport) : nshards(nShards), transport(transport),
-    lastReqId(0UL) {
+Client::Client(const std::string configPath, int nShards, int nGroups,
+    int closestReplica, Transport *transport, partitioner part) : nshards(nShards),
+    ngroups(nGroups), transport(transport), part(part), lastReqId(0UL) {
   // Initialize all state here;
   client_id = 0;
   while (client_id == 0) {
@@ -16,32 +15,59 @@ Client::Client(const std::string configPath, int nShards, int closestReplica,
   }
   t_id = (client_id / 10000) * 10000;
 
-  sclient.reserve(nshards);
-
   Debug("Initializing Morty client with id [%lu] %lu", client_id, nshards);
 
+  sclients.reserve(nshards);
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < nshards; i++) {
     std::string shardConfigPath = configPath + std::to_string(i) + ".config";
-    sclient[i] = new ShardClient(shardConfigPath, transport,
+    sclients[i] = new ShardClient(shardConfigPath, transport,
         client_id, i, closestReplica);
   }
 
-  Debug("Morty client [%lu] created! %lu %lu", client_id, nshards,
-      sclient.size());
+  Debug("Morty client [%lu] created! %lu", client_id, nshards);
 }
 
 Client::~Client() {
-  for (auto b : sclient) {
-    delete b;
+  for (auto sclient : sclients) {
+    delete sclient;
   }
 }
 
 void Client::Execute(AsyncTransaction *txn, execute_callback ecb) {
+  proto::Branch branch;
+  ExecuteNextOperation(txn, branch);
 }
 
-void Client::ExecuteNextOperation(AsyncTransaction *txn, Branch *branch) {
-Operation op = currTxn->GetNextOperation(branch->opCount, branch->readValues);
+void Client::ReceiveMessage(const TransportAddress &remote,
+      const std::string &type, const std::string &data) {
+  proto::ReadReply readReply;
+  proto::WriteReply writeReply;
+  proto::PrepareOK prepareOK;
+  proto::CommitReply commitReply;
+
+  if (type == readReply.GetTypeName()) {
+    readReply.ParseFromString(data);
+    HandleReadReply(remote, readReply);
+  } else if (type == writeReply.GetTypeName()) {
+    writeReply.ParseFromString(data);
+    HandleWriteReply(remote, writeReply);
+  } else if (type == prepareOK.GetTypeName()) {
+    prepareOK.ParseFromString(data);
+    HandlePrepareOK(remote, prepareOK);
+  } else if (type == commitReply.GetTypeName()) {
+    commitReply.ParseFromString(data);
+    HandleCommitReply(remote, commitReply);
+  } else {
+    Panic("Received unexpected message type: %s", type.c_str());
+  }
+}
+
+void Client::ExecuteNextOperation(AsyncTransaction *txn, proto::Branch &branch) {
+  ClientBranch* clientBranch = GetClientBranch(branch);
+  Operation op = currTxn->GetNextOperation(clientBranch->opCount,
+      clientBranch->readValues);
+  delete clientBranch;
   switch (op.type) {
     case GET: {
       Get(branch, op.key);
@@ -65,68 +91,128 @@ Operation op = currTxn->GetNextOperation(branch->opCount, branch->readValues);
   }
 }
 
-void Client::Get(Branch *branch, const std::string &key) {
-  Debug("GET [%lu : %lu : %s]", t_id, branch->id, key.c_str());
-
-  // Contact the appropriate shard to get the value.
-  int i = 0;//::Client::key_to_shard(key, nshards);
-  if (branch->participants.find(i) == branch->participants.end()) {
-    branch->participants.insert(i);
-    //sclient[i]->Begin(t_id);
+ClientBranch *Client::GetClientBranch(const proto::Branch &branch) {
+  ClientBranch *clientBranch = new ClientBranch();
+  clientBranch->opCount = branch.txn().ops_size();
+  for (auto op : branch.txn().ops()) {
+    if (op.type() == proto::OperationType::READ) {
+      std::string val;
+      ValueOnBranch(&branch, op.key(), val);
+      clientBranch->readValues.insert(std::make_pair(op.key(), val));
+    }
   }
-  
-  uint32_t timeout = 10000;
-  sclient[i]->Get(t_id, key, std::bind(&mortystore::Client::GetCallback, this,
-        branch, std::placeholders::_1, std::placeholders::_2,
-        std::placeholders::_3),
-      std::bind(&mortystore::Client::GetTimeout, this, branch,
-        std::placeholders::_1, std::placeholders::_2), timeout);
+  return clientBranch;
 }
 
-void Client::Put(Branch *branch, const std::string &key,
-    const std::string &value) {
-  Debug("GET [%lu : %lu : %s, %s]", t_id, branch->id, key.c_str(),
-      value.c_str());
-
-  // Contact the appropriate shard to get the value.
-  int i = 0;//::Client::key_to_shard(key, nshards);
-  if (branch->participants.find(i) == branch->participants.end()) {
-    branch->participants.insert(i);
-    //sclient[i]->Begin(t_id);
+void Client::ValueOnBranch(const proto::Branch *branch, const std::string &key,
+    std::string &val) {
+  if (ValueInTransaction(branch->txn(), key, val)) {
+    return;
   }
-  
-  uint32_t timeout = 10000;
-  sclient[i]->Put(t_id, key, value, std::bind(&mortystore::Client::PutCallback,
-        this, branch, std::placeholders::_1, std::placeholders::_2,
-        std::placeholders::_3),
-      std::bind(&mortystore::Client::PutTimeout, this, branch,
-        std::placeholders::_1, std::placeholders::_2,
-        std::placeholders::_3), timeout);
+  ValueOnBranch(&branch->seq()[branch->seq().size() - 1], key, val);
 }
 
-void Client::Commit(Branch *branch) {
-  Debug("COMMIT [%lu : %lu]", t_id, branch->id);
-  Panic("Not implemented.");
+bool Client::ValueInTransaction(const proto::Transaction &txn, const std::string &key,
+    std::string &val) {
+  for (auto itr = txn.ops().rbegin(); itr != txn.ops().rend(); ++itr) {
+    if (itr->type() == proto::OperationType::WRITE && itr->key() == key) {
+      val = itr->val();
+      return true;
+    }
+  }
+  return false;
 }
 
-void Client::Abort(Branch *branch) {
-  Debug("ABORT [%lu : %lu]", t_id, branch->id);
-  Panic("Not implemented.");
+
+void Client::HandleReadReply(const TransportAddress &remote,
+    const proto::ReadReply &msg) {
+  auto itr = pendingReqs.find(msg.branch().txn().id());
+  if (itr == pendingReqs.end()) {
+    return;
+  }
+
+  proto::Branch branch(msg.branch());
+  ExecuteNextOperation(itr->second->txn, branch);
 }
 
-void Client::GetCallback(Branch *branch, int status, const std::string &key,
-    const std::string &val) {
+void Client::HandleWriteReply(const TransportAddress &remote,
+    const proto::WriteReply &msg) {
+  auto itr = pendingReqs.find(msg.branch().txn().id());
+  if (itr == pendingReqs.end()) {
+    return;
+  }
+
+  proto::Branch branch(msg.branch());
+  ExecuteNextOperation(itr->second->txn, branch);
 }
 
-void Client::PutCallback(Branch *branch, int status, const std::string &key,
-    const std::string &val) {
+void Client::HandlePrepareOK(const TransportAddress &remote,
+    const proto::PrepareOK &msg) {
+  auto itr = pendingReqs.find(msg.branch().txn().id());
+  if (itr == pendingReqs.end()) {
+    return;
+  }
+
 }
 
-void Client::GetTimeout(Branch *branch, int status, const std::string &key) {
+void Client::HandleCommitReply(const TransportAddress &remote,
+    const proto::CommitReply &msg) {
 }
 
-void Client::PutTimeout(Branch *branch, int status, const std::string &key,
+void Client::Get(proto::Branch &branch, const std::string &key) {
+  // Contact the appropriate shard to get the value.
+  int i = part(key, nshards) % ngroups;
+  if (std::find(branch.shards().begin(), branch.shards().end(),
+        i) != branch.shards().end()) {
+    branch.mutable_shards()->Add(i);
+  }
+  proto::Operation *op = branch.mutable_txn()->add_ops();
+  op->set_type(proto::OperationType::READ);
+  op->set_key(key);
+
+  proto::Read msg;
+  *msg.mutable_branch() = branch;
+  msg.set_key(key);
+
+  sclients[i]->Read(msg, this);
+}
+
+void Client::Put(proto::Branch &branch, const std::string &key,
     const std::string &value) {
+  // Contact the appropriate shard to get the value.
+  int i = part(key, nshards) % ngroups;
+  if (std::find(branch.shards().begin(), branch.shards().end(),
+        i) != branch.shards().end()) {
+    branch.mutable_shards()->Add(i);
+  }
+  proto::Operation *op = branch.mutable_txn()->add_ops();
+  op->set_type(proto::OperationType::WRITE);
+  op->set_key(key);
+  op->set_val(value);
+
+
+  proto::Write msg;
+  *msg.mutable_branch() = branch;
+  msg.set_key(key);
+  msg.set_value(value);
+
+  sclients[i]->Write(msg, this);
+}
+
+void Client::Commit(const proto::Branch &branch) {
+  proto::Prepare prepare;
+  *prepare.mutable_branch() = branch;
+  for (auto shard : branch.shards()) {
+    sclients[shard]->Prepare(prepare, this);
+  }
+}
+
+void Client::Abort(const proto::Branch &branch) {
+  proto::Abort abort;
+  *abort.mutable_branch() = branch;
+  for (auto shard : branch.shards()) {
+    sclients[shard]->Abort(abort, this);
+  }
 }
 
 } // namespace mortystore

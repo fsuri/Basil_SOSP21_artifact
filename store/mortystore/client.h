@@ -10,29 +10,31 @@
 #include "store/common/truetime.h"
 #include "store/common/frontend/client.h"
 #include "store/common/frontend/bufferclient.h"
-#include "store/mortystore/shardclient.h"
 #include "store/mortystore/morty-proto.pb.h"
 #include "store/common/frontend/async_client.h"
+#include "store/mortystore/shardclient.h"
 
 #include <thread>
 #include <set>
 
 namespace mortystore {
 
-struct Branch {
-  uint64_t id;
-  std::set<int> participants;
+struct ClientBranch {
   size_t opCount;
   std::map<std::string, std::string> readValues;
 };
 
-class Client : public ::AsyncClient {
+class Client : public ::AsyncClient, public TransportReceiver {
  public:
-  Client(const std::string configPath, int nShards, int closestReplica,
-      Transport *transport);
+  Client(const std::string configPath, int nShards, int nGroups,
+      int closestReplica,
+      Transport *transport, partitioner part);
   virtual ~Client();
 
   virtual void Execute(AsyncTransaction *txn, execute_callback ecb);
+  
+  virtual void ReceiveMessage(const TransportAddress &remote,
+      const std::string &type, const std::string &data);
 
  private:
   struct PendingRequest {
@@ -59,21 +61,23 @@ class Client : public ::AsyncClient {
     bool callbackInvoked;
   };
 
-  void ExecuteNextOperation(AsyncTransaction *txn, Branch *branch);
+  void ExecuteNextOperation(AsyncTransaction *txn, proto::Branch &branch);
+  ClientBranch *GetClientBranch(const proto::Branch &branch);
+  void ValueOnBranch(const proto::Branch *branch, const std::string &key,
+      std::string &val);
+  bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
+      std::string &val);
 
-  void Get(Branch *branch, const std::string &key);
-  void Put(Branch *branch, const std::string &key, const std::string &value);
-  void Commit(Branch *branch);
-  void Abort(Branch *branch);
+  void HandleReadReply(const TransportAddress &remote, const proto::ReadReply &msg);
+  void HandleWriteReply(const TransportAddress &remote, const proto::WriteReply &msg);
+  void HandlePrepareOK(const TransportAddress &remote, const proto::PrepareOK &msg);
+  void HandleCommitReply(const TransportAddress &remote, const proto::CommitReply &msg);
 
-  void GetCallback(Branch *branch, int status, const std::string &key,
-      const std::string &val);
-  void PutCallback(Branch *branch, int status, const std::string &key,
-      const std::string &val);
-
-  void GetTimeout(Branch *branch, int status, const std::string &key);
-  void PutTimeout(Branch *branc, int status, const std::string &key,
+  void Get(proto::Branch &branch, const std::string &key);
+  void Put(proto::Branch &branch, const std::string &key,
       const std::string &value);
+  void Commit(const proto::Branch &branch);
+  void Abort(const proto::Branch &branch);
 
   // Unique ID for this client.
   uint64_t client_id;
@@ -83,17 +87,19 @@ class Client : public ::AsyncClient {
 
   // Number of shards.
   uint64_t nshards;
+  uint64_t ngroups;
 
   // Transport used by client proxies.
   Transport *transport;
-  
-  // ShardClient for each shard.
-  std::vector<ShardClient *> sclient;
 
+  partitioner part;
+  
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
   AsyncTransaction *currTxn;
   execute_callback currEcb;
+  std::vector<ShardClient *> sclients;
+
 };
 
 } // namespace mortystore
