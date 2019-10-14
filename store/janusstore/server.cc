@@ -86,11 +86,9 @@ Server::HandlePreAccept(const TransportAddress &remote,
     // construct the transaction object
     // TODO might be able to optimize this process somehow
     Transaction txn = Transaction(txn_id, txnMsg);
+    vector<uint64_t>* dep_list_ptr = BuildDepList(txn, ballot);
 
-    vector<uint64_t> dep_list = BuildDepList(txn, ballot);
-
-    // TODO less hacky way
-    if (!dep_list.empty() && dep_list.at(0) == -1) {
+    if (dep_list_ptr == NULL) {
         // return not ok
         PreAcceptNotOKMessage pa_not_ok_msg;
 
@@ -104,6 +102,8 @@ Server::HandlePreAccept(const TransportAddress &remote,
         return;
     }
 
+    vector<uint64_t> dep_list = *dep_list_ptr;
+    
     // create dep list for reply
     DependencyList dep;
     for (int i = 0; i < dep_list.size(); i++) {
@@ -127,14 +127,14 @@ Server::HandlePreAccept(const TransportAddress &remote,
     reply.release_preaccept_ok();
 }
 
-vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
+vector<uint64_t>* Server::BuildDepList(Transaction txn, uint64_t ballot) {
     uint64_t txn_id = txn.getTransactionId();
     if (accepted_ballots.find(txn_id) != accepted_ballots.end() &&
      ballot > accepted_ballots[txn_id]) {
         // TODO less hacky way
         Debug("[Server %i] Sending PREACCEPT NOT-OK since %i > %i",
             this->myIdx, ballot, accepted_ballots[txn_id]);
-        return vector<uint64_t>(-1);
+        return NULL;
     }
     accepted_ballots[txn_id] = ballot;
 
@@ -184,7 +184,8 @@ vector<uint64_t> Server::BuildDepList(Transaction txn, uint64_t ballot) {
 
     // add to dependency graph
     dep_map[txn_id] = dep_vec;
-    return dep_vec;
+    vector<uint64_t>* dep_vec_ptr = new std::vector<uint64_t>(dep_vec);
+    return dep_vec_ptr;
 }
 
 void Server::HandleAccept(const TransportAddress &remote,
@@ -305,6 +306,8 @@ void Server::HandleInquire(const TransportAddress &remote,
                            const proto::InquireMessage i_msg) {
 
     uint64_t txn_id = i_msg.txnid();
+
+    Debug("[Server %i] on shard %i received inquiry for transaction %i", myIdx, groupIdx, txn_id);
     Transaction txn = this->id_txn_map[txn_id];
 
     // after txn_id is in the committing stage, return the deps list
@@ -348,6 +351,8 @@ void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
 }
 
 void Server::_SendInquiry(uint64_t txn_id) {
+    Debug("[Server %i] on shard %i sending inquiry for transaction %i", myIdx, groupIdx, txn_id);
+
     Transaction other_server_txn = id_txn_map[txn_id];
     // ask random participating shard+replica for deplist
     uint64_t nearest_group;

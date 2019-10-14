@@ -196,16 +196,20 @@ namespace janusstore {
     /* shardclient invokes this when all replicas in a shard have responded */
     printf("%s\n", ("CLIENT - COMMIT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
-    responded.insert(shard);
-    if (responded.size() == participants.size()) {
+    this->responded.insert(shard);
+    printf("%s\n", ("CLIENT - COMMIT CB - added " + to_string(shard) + " to responded list").c_str());
+
+    if (this->responded.size() == participants.size()) {
       // return results to client by invoking output commit callback
       if (this->output_commits.find(txn_id) == this->output_commits.end()) {
         printf("could not find ocb for txn %d\n", txn_id);
       } else {
         this->output_commits[txn_id](txn_id);
       }
+      this->responded.clear();
+    } else {
+      printf("%s\n", ("CLIENT - COMMIT CB - " + to_string(responded.size()) + " shards responded out of " + to_string(participants.size())).c_str());
     }
-    responded.clear();
     return;
   }
 }

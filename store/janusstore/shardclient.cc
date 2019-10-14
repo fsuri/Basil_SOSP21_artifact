@@ -148,6 +148,8 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_preaccept_callback pcb) {
 	this->responded++;
 
+    printf("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - PREACCEPT CB - txn " + to_string(txn_id)).c_str());
+
 	// aggregate replies for this transaction
 	if (this->preaccept_replies.count(txn_id)) {
 		// key already exists, so append to list
@@ -159,6 +161,8 @@ void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply re
 	}
 
 	if (this->responded == this->num_replicas) {
+	    printf("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - REPLICAS RESPONDED FOR - txn " + to_string(txn_id)).c_str());
+
 		this->responded = 0;
 		pcb(shard, this->preaccept_replies[txn_id]);
 	}
@@ -167,7 +171,7 @@ void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply re
 void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_accept_callback acb) {
 	this->responded++;
 
-	Debug("In shardclient AcceptCallback");
+    printf("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - ACCEPT CB - txn " + to_string(txn_id)).c_str());
 
 	// aggregate replies for this transaction
 	if (this->accept_replies.count(txn_id)) {
@@ -188,7 +192,7 @@ void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply
 void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb) {
 	this->responded++;
 
-	Debug("In shardclient CommitCallback");
+    printf("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - COMMIT CB - txn " + to_string(txn_id)).c_str());
 
 	// aggregate replies for this transaction
 	if (this->commit_replies.count(txn_id)) {

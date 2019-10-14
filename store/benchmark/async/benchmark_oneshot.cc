@@ -29,12 +29,12 @@
 
 DEFINE_uint64(client_id, 0, "which client to run");
 
-void SendTxn(janusstore::Client *client, janusstore::Transaction *txn_ptr) {
+void SendTxn(janusstore::Client *client, janusstore::Transaction *txn_ptr, uint64_t ballot) {
 	commit_callback ccb = [] (uint64_t committed) {
 		printf("output commit from txn %d \r\n", committed);
 	};
 
-	client->PreAccept(txn_ptr, 0, ccb);
+	client->PreAccept(txn_ptr, ballot, ccb);
 	printf("preaccept done\r\n");
 }
 
@@ -72,16 +72,16 @@ int main(int argc, char **argv) {
 	txn_ptr2->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
 
 	transport1.Timer(
-		1500, [client_ptr1, txn_ptr1]() { SendTxn(client_ptr1, txn_ptr1); });
-	// transport1.Timer(
-	// 	1500, [client_ptr2, txn_ptr2]() { SendTxn(client_ptr2, txn_ptr2); });
+		1500, [client_ptr1, txn_ptr1]() { SendTxn(client_ptr1, txn_ptr1, 0); });
+	transport1.Timer(
+		1500, [client_ptr1, txn_ptr2]() { SendTxn(client_ptr1, txn_ptr2, 1); });
 
 	// printf("starting clients %d\n", FLAGS_client_id);
-	transport1.Run();
-	// if (FLAGS_client_id == 0) {
-	//     transport1.Run();
-	// } else {
-	// 	transport2.Run();
-	// }
-	// return 0;
+	// transport1.Run();
+	if (FLAGS_client_id == 0) {
+	    transport1.Run();
+	} else {
+		transport2.Run();
+	}
+	return 0;
 }

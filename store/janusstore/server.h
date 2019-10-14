@@ -76,7 +76,7 @@ private:
     // must take in a full Transaction object in order to correctly bookkeep and commit
 
     // returns the list of dependencies for given txn, NULL if PREACCEPT-NOT-OK
-    std::vector<uint64_t> BuildDepList(Transaction txn, uint64_t ballot);
+    std::vector<uint64_t>* BuildDepList(Transaction txn, uint64_t ballot);
 
     // TODO figure out what T.abandon and T.result are
     void _HandleCommit(uint64_t txn_id,
