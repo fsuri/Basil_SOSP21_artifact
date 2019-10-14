@@ -667,7 +667,7 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
 void
 TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
 {
-    printf("TCPReadableCallback\n");
+    // printf("TCPReadableCallback\n");
     TCPTransportTCPListener *info = (TCPTransportTCPListener *)arg;
     TCPTransport *transport = info->transport;
     struct evbuffer *evbuf = bufferevent_get_input(bev);
@@ -753,7 +753,7 @@ void
 TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
                                        short what, void *arg)
 {
-    printf("TCPOutgoingEventCallback\n");
+    // printf("TCPOutgoingEventCallback\n");
     TCPTransportTCPListener *info = (TCPTransportTCPListener *)arg;
     TCPTransport *transport = info->transport;
     auto it = transport->tcpAddresses.find(bev);
