@@ -71,17 +71,14 @@ int main(int argc, char **argv) {
 	txn_ptr2->addWriteSet("key2", "val2");
 	txn_ptr2->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
 
-	transport1.Timer(
-		1500, [client_ptr1, txn_ptr1]() { SendTxn(client_ptr1, txn_ptr1, 0); });
-	transport1.Timer(
-		1500, [client_ptr1, txn_ptr2]() { SendTxn(client_ptr1, txn_ptr2, 1); });
-
 	// printf("starting clients %d\n", FLAGS_client_id);
-	// transport1.Run();
 	if (FLAGS_client_id == 0) {
-	    transport1.Run();
+		transport1.Timer(
+			1500, [client_ptr1, txn_ptr1]() { SendTxn(client_ptr1, txn_ptr1, 0); });
 	} else {
-		transport2.Run();
+		transport1.Timer(
+			1500, [client_ptr1, txn_ptr2]() { SendTxn(client_ptr1, txn_ptr2, 1); });
 	}
+	transport1.Run();
 	return 0;
 }
