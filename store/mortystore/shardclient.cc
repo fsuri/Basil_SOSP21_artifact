@@ -9,18 +9,18 @@ using namespace std;
 using namespace proto;
 
 ShardClient::ShardClient(const string &configPath, Transport *transport,
-    uint64_t client_id, int shard, int closestReplica) : client_id(client_id),
+    uint64_t client_id, int shard, int closestReplica, TransportReceiver *receiver) : client_id(client_id),
       transport(transport), shard(shard) {
   ifstream configStream(configPath);
   if (configStream.fail()) {
     Panic("Unable to read configuration file: %s\n", configPath.c_str());
   }
 
-  transport::Configuration config(configStream);
-  this->config = &config;
+  this->config = new transport::Configuration(configStream);
+  transport->Register(receiver, *config, -1);
 
   if (closestReplica == -1) {
-    replica = client_id % config.n;
+    replica = client_id % config->n;
   } else {
     replica = closestReplica;
   }
@@ -28,6 +28,7 @@ ShardClient::ShardClient(const string &configPath, Transport *transport,
 }
 
 ShardClient::~ShardClient() {
+  delete config;
 }
 
 void ShardClient::Read(const proto::Read &read,

@@ -4,7 +4,7 @@
 
 namespace tpcc {
 
-TPCCTransaction::TPCCTransaction() : AsyncTransaction(0) {
+TPCCTransaction::TPCCTransaction() {
 }
 
 TPCCTransaction::~TPCCTransaction() {

@@ -22,6 +22,7 @@
 #include "store/benchmark/async/common/uniform_key_selector.h"
 #include "store/benchmark/async/retwis/retwis_client.h"
 #include "store/benchmark/async/tpcc/tpcc_client.h"
+#include "store/mortystore/client.h"
 
 #include <gflags/gflags.h>
 
@@ -32,7 +33,8 @@ enum protomode_t {
 	PROTO_UNKNOWN,
 	PROTO_TAPIR,
 	PROTO_WEAK,
-	PROTO_STRONG
+	PROTO_STRONG,
+  PROTO_MORTY
 };
 
 enum benchmode_t {
@@ -58,7 +60,8 @@ const std::string protocol_args[] = {
   "occ",
   "lock",
   "span-occ",
-  "span-lock"
+  "span-lock",
+  "morty"
 };
 const protomode_t protomodes[] {
   PROTO_TAPIR,
@@ -67,7 +70,8 @@ const protomode_t protomodes[] {
   PROTO_STRONG,
   PROTO_STRONG,
   PROTO_STRONG,
-  PROTO_STRONG
+  PROTO_STRONG,
+  PROTO_MORTY
 };
 const strongstore::Mode strongmodes[] {
   strongstore::Mode::MODE_UNKNOWN,
@@ -274,6 +278,11 @@ int main(int argc, char **argv) {
             closestReplica, TrueTime(skew, error));
         break;
       }*/
+      case PROTO_MORTY: {
+        client = new mortystore::Client(FLAGS_config_prefix, FLAGS_num_shards,
+            FLAGS_num_groups, FLAGS_closest_replica, &transport, part);
+        break;
+      }
       default:
         NOT_REACHABLE();
     }

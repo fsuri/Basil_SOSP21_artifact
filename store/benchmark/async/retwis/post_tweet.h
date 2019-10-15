@@ -9,7 +9,7 @@ namespace retwis {
 
 class PostTweet : public RetwisTransaction {
  public:
-  PostTweet(uint64_t tid, KeySelector *keySelector);
+  PostTweet(KeySelector *keySelector);
   virtual ~PostTweet();
 
  protected:

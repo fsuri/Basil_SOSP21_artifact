@@ -16,7 +16,7 @@ class ShardClient {
  public:
   /* Constructor needs path to shard config. */
   ShardClient(const std::string &configPath, Transport *transport,
-      uint64_t client_id, int shard, int closestReplica);
+      uint64_t client_id, int shard, int closestReplica, TransportReceiver *receiver);
   virtual ~ShardClient();
 
   void Read(const proto::Read &read, TransportReceiver *receiver);

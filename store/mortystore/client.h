@@ -27,8 +27,7 @@ struct ClientBranch {
 class Client : public ::AsyncClient, public TransportReceiver {
  public:
   Client(const std::string configPath, int nShards, int nGroups,
-      int closestReplica,
-      Transport *transport, partitioner part);
+      int closestReplica, Transport *transport, partitioner part);
   virtual ~Client();
 
   virtual void Execute(AsyncTransaction *txn, execute_callback ecb);
@@ -48,6 +47,7 @@ class Client : public ::AsyncClient, public TransportReceiver {
       }
     }
 
+    proto::Transaction protoTxn;
     AsyncTransaction *txn;
     execute_callback ecb;
     commit_callback ccb;
@@ -59,10 +59,12 @@ class Client : public ::AsyncClient, public TransportReceiver {
     int prepareStatus;
     Timestamp *prepareTimestamp;
     bool callbackInvoked;
+    std::unordered_map<uint64_t, uint64_t> prepareOKs; 
+    std::unordered_map<uint64_t, std::vector<proto::PrepareKO>> prepareKOes;
   };
 
-  void ExecuteNextOperation(AsyncTransaction *txn, proto::Branch &branch);
-  ClientBranch *GetClientBranch(const proto::Branch &branch);
+  void ExecuteNextOperation(PendingRequest *req, proto::Branch &branch);
+  ClientBranch GetClientBranch(const proto::Branch &branch);
   void ValueOnBranch(const proto::Branch *branch, const std::string &key,
       std::string &val);
   bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
@@ -72,6 +74,7 @@ class Client : public ::AsyncClient, public TransportReceiver {
   void HandleWriteReply(const TransportAddress &remote, const proto::WriteReply &msg);
   void HandlePrepareOK(const TransportAddress &remote, const proto::PrepareOK &msg);
   void HandleCommitReply(const TransportAddress &remote, const proto::CommitReply &msg);
+  void HandlePrepareKO(const TransportAddress &remote, const proto::PrepareKO &msg);
 
   void Get(proto::Branch &branch, const std::string &key);
   void Put(proto::Branch &branch, const std::string &key,
@@ -96,9 +99,8 @@ class Client : public ::AsyncClient, public TransportReceiver {
   
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
-  AsyncTransaction *currTxn;
-  execute_callback currEcb;
   std::vector<ShardClient *> sclients;
+  uint64_t prepareBranchIds;
 
 };
 

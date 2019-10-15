@@ -2,8 +2,8 @@
 
 namespace retwis {
 
-AddUser::AddUser(uint64_t tid, KeySelector *keySelector) :
-    RetwisTransaction(tid, keySelector, 4) {
+AddUser::AddUser(KeySelector *keySelector) :
+    RetwisTransaction(keySelector, 4) {
 }
 
 AddUser::~AddUser() {

@@ -28,7 +28,6 @@ class RetwisClient : public AsyncTransactionBenchClient {
  private:
   KeySelector *keySelector; 
   std::string lastOp;
-  uint64_t tid = 0;
 };
 
 } //namespace retwis

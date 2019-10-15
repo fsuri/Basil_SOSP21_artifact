@@ -6,6 +6,7 @@
 #include <functional>
 
 #define SUCCESS 0
+#define FAILED 1
 
 typedef std::function<void(int, std::map<std::string, std::string>)> execute_callback;
 

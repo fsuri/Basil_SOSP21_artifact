@@ -41,6 +41,7 @@
 #include "store/tapirstore/server.h"
 #include "store/weakstore/server.h"
 #include "store/janusstore/server.h"
+#include "store/mortystore/server.h"
 
 #include <gflags/gflags.h>
 
@@ -49,7 +50,8 @@ enum protocol_t {
 	PROTO_TAPIR,
 	PROTO_WEAK,
 	PROTO_STRONG,
-  PROTO_JANUS
+  PROTO_JANUS,
+  PROTO_MORTY
 };
 
 /**
@@ -65,13 +67,15 @@ const std::string protocol_args[] = {
 	"tapir",
   "weak",
   "strong",
-  "janus"
+  "janus",
+  "morty"
 };
 const protocol_t protos[] {
   PROTO_TAPIR,
   PROTO_WEAK,
   PROTO_STRONG,
-  PROTO_JANUS
+  PROTO_JANUS,
+  PROTO_MORTY
 };
 static bool ValidateProtocol(const char* flagname,
     const std::string &value) {
@@ -211,9 +215,7 @@ int main(int argc, char **argv) {
     }
   }
 
-
   TCPTransport transport(0.0, 0.0, 0);
-
 
   switch (proto) {
     case PROTO_TAPIR: {
@@ -236,6 +238,10 @@ int main(int argc, char **argv) {
     case PROTO_JANUS: {
       //server = new janusstore::Server();
       // TODO any more config?
+      break;
+    }
+    case PROTO_MORTY: {
+      server = new mortystore::Server(config, FLAGS_replica_idx, &transport);
       break;
     }
     default: {

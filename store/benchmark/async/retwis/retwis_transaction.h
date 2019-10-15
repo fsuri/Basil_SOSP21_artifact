@@ -11,7 +11,7 @@ namespace retwis {
 
 class RetwisTransaction : public AsyncTransaction {
  public:
-  RetwisTransaction(uint64_t tid, KeySelector *keySelector, int numKeys);
+  RetwisTransaction(KeySelector *keySelector, int numKeys);
   virtual ~RetwisTransaction();
 
  protected:

@@ -67,9 +67,9 @@ public:
         const std::map<opid_t, std::vector<RecordEntry>> &u,
         const std::map<opid_t, std::string> &majority_results_in_d) override;
 
-    void Load(const string &key, const string &value, const Timestamp timestamp);
+    virtual void Load(const string &key, const string &value, const Timestamp timestamp) override;
 
-    inline Stats &GetStats() { return store->GetStats(); }
+    virtual inline Stats &GetStats() override { return store->GetStats(); }
 
 private:
     TxnStore *store;

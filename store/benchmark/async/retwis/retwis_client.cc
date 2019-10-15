@@ -23,19 +23,18 @@ RetwisClient::~RetwisClient() {
 
 AsyncTransaction *RetwisClient::GetNextTransaction() {
   int ttype = std::rand() % 100;
-  tid++;
   if (ttype < 5) {
     lastOp = "add_user";
-    return new AddUser(tid, keySelector);
+    return new AddUser(keySelector);
   } else if (ttype < 20) {
     lastOp = "follow";
-    return new Follow(tid, keySelector);
+    return new Follow(keySelector);
   } else if (ttype < 50) {
     lastOp = "post_tweet";
-    return new PostTweet(tid, keySelector);
+    return new PostTweet(keySelector);
   } else {
     lastOp = "get_timeline";
-    return new GetTimeline(tid, keySelector);
+    return new GetTimeline(keySelector);
   }
 }
 

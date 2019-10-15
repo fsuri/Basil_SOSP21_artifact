@@ -10,14 +10,11 @@
 
 class AsyncTransaction {
  public:
-  AsyncTransaction(uint64_t tid) : tid(tid) { }
+  AsyncTransaction() { }
   virtual ~AsyncTransaction() { }
 
   virtual Operation GetNextOperation(size_t opCount,
       const std::map<std::string, std::string> readValues) = 0;
-
- private:
-  uint64_t tid;
 
 };
 

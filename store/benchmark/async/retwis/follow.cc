@@ -2,8 +2,8 @@
 
 namespace retwis {
 
-Follow::Follow(uint64_t tid, KeySelector *keySelector) :
-    RetwisTransaction(tid, keySelector, 2) {
+Follow::Follow(KeySelector *keySelector) :
+    RetwisTransaction(keySelector, 2) {
 }
 
 Follow::~Follow() {

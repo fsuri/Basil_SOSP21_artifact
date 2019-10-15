@@ -351,8 +351,8 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
                        sizeof(totalLen) +
                        sizeof(uint32_t));
 
-    Debug("Sending %ld byte %s message to server over TCP",
-          totalLen, type.c_str());
+    Debug("Sending %ld byte %s message over TCP to %s:%d",
+          totalLen, type.c_str(), inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
     
     char buf[totalLen];
     char *ptr = buf;
@@ -573,9 +573,6 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
     TCPTransportTCPListener *info = (TCPTransportTCPListener *)arg;
     TCPTransport *transport = info->transport;
     struct evbuffer *evbuf = bufferevent_get_input(bev);
-
-    Debug("Readable on bufferevent %p", bev);
-    
 
     while (evbuffer_get_length(evbuf) > 0) {
         uint32_t *magic;
