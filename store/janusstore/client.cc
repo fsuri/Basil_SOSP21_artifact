@@ -60,7 +60,7 @@ namespace janusstore {
     for (const auto & key: txn->read_set) {
       int i = this->keyToShard(key, nshards);
       if (participants.find(i) == participants.end()) {
-        Debug("txn -> shard %i, key %s", i, key.c_str());
+        Debug("txn %i -> shard %i, key %s", txn->getTransactionId(), i, key.c_str());
         participants.insert(i);
       }
       txn->groups.insert(i);
@@ -69,8 +69,9 @@ namespace janusstore {
 
     for (const auto & pair: txn->write_set) {
       int i = this->keyToShard(pair.first, nshards);
+      Debug("%i, %i", txn->getTransactionId(), i);
       if (participants.find(i) == participants.end()) {
-        Debug("txn -> shard %i, key %s", i, pair.first.c_str());
+        Debug("txn %i -> shard %i, key %s", txn->getTransactionId(), i, pair.first.c_str());
         participants.insert(i);
       }
       txn->groups.insert(i);
@@ -133,7 +134,11 @@ namespace janusstore {
     bool fast_quorum = true;
     bool has_replica_deps = false;
     std::unordered_set<uint64_t> replica_deps;
+
+    ASSERT(replies.size() != 0);
+
     for (auto reply: replies) {
+      Debug("processing PREACCEPT_OK %s", reply.DebugString().c_str());
       std::unordered_set<uint64_t> current_replica_deps;
       if (reply.op() == Reply::PREACCEPT_OK) {
         // parse message for deps

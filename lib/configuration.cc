@@ -62,7 +62,6 @@ ReplicaAddress::operator<(const ReplicaAddress &other) const {
 Configuration::Configuration(const Configuration &c)
     : g(c.g), n(c.n), f(c.f), replicas(c.replicas), g_replicas(c.g_replicas), hasMulticast(c.hasMulticast), hasFC(c.hasFC)
 {
-    Debug("WTF");
     multicastAddress = NULL;
     if (hasMulticast) {
         multicastAddress = new ReplicaAddress(*c.multicastAddress);
@@ -214,7 +213,6 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
         // This is pretty horrible, but C++ does promise that &line[0]
         // is going to be a mutable contiguous buffer...
         char *cmd = strtok(&line[0], " \t");
-        Debug("%s", cmd);
 
         if (strcasecmp(cmd, "f") == 0) {
             char *arg = strtok(NULL, " \t");
