@@ -35,9 +35,14 @@ class SmallbankClient : public SyncTransactionBenchClient {
       const uint32_t num_hotspot_keys, const uint32_t num_non_hotspot_keys,
       const std::string &customer_name_file_path,
       const std::string &latencyFilename = "");
-
+  virtual ~SmallbankClient();
   virtual SyncTransaction *GetNextTransaction();
   virtual std::string GetLastOp() const;
+  std::string GetCustomerKey(std::mt19937 &gen, std::vector<std::string> keys, uint32_t num_hotspot_keys, uint32_t num_non_hotspot_keys);
+  std::pair <string, string> GetCustomerKeyPair(std::mt19937 &gen, std::vector<std::string> keys, uint32_t num_hotspot_keys, uint32_t num_non_hotspot_keys);
+  void SetCustomerKeys(std::vector<std::string> keys);
+ protected:
+  
  private:
   uint32_t timeout_;
   uint32_t balance_ratio_;
@@ -46,9 +51,9 @@ class SmallbankClient : public SyncTransactionBenchClient {
   uint32_t amalgamate_ratio_;
   uint32_t num_hotspot_keys_;
   uint32_t num_non_hotspot_keys_;
+  std::mt19937 gen_;
   std::vector<std::string> all_keys_;
-  std::string getCustomerKey();
-  std::pair <string, string> getCustomerKeyPair();
+  
 };
 
 } //namespace smallbank
