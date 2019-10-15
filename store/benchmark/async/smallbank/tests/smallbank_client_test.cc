@@ -89,5 +89,215 @@ namespace smallbank {
 		EXPECT_GT(0.15 * nonHotspotKeyPairsFound, hotspotKeyPairsFound);
 		EXPECT_GT(hotspotKeyPairsFound, 0);
 	}
+
+	TEST(GetNextTransaction, EvenSplit) {
+		fakeit::Mock<SyncClient> syncClientMockWrapper;
+		SyncClient & syncClientMock = syncClientMockWrapper.get();
+		fakeit::Mock<Transport> transportMockWrapper;
+		Transport & transportMock = transportMockWrapper.get();
+		std::mt19937 generator(0);
+		int totalKeys = 18000;
+		int numHotspotKeys = 1000;
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,20,20,20,20,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		
+		std::vector<std::string> keys;
+		for (int i = 0; i < totalKeys; i++) {
+			keys.push_back(std::to_string(i));
+		}
+		client.SetCustomerKeys(keys);
+
+		int typeOccurrences[5]={0};
+		int totalOccurrences = 30000;
+		for (int i = 0; i < totalOccurrences; i++) {
+			typeOccurrences[((SmallbankTransaction* )client.GetNextTransaction())->GetTransactionType()] += 1;
+		}
+		// should be ~0.2 each
+		for (int i = 0; i < 5; i++) {
+			EXPECT_GT(typeOccurrences[i], 0.1*totalOccurrences);
+			EXPECT_LT(typeOccurrences[i], 0.3*totalOccurrences);
+		}
+	}
+
+	TEST(GetNextTransaction, AllBalance) {
+		fakeit::Mock<SyncClient> syncClientMockWrapper;
+		SyncClient & syncClientMock = syncClientMockWrapper.get();
+		fakeit::Mock<Transport> transportMockWrapper;
+		Transport & transportMock = transportMockWrapper.get();
+		std::mt19937 generator(0);
+		int totalKeys = 18000;
+		int numHotspotKeys = 1000;
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,100,0,0,0,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		
+		std::vector<std::string> keys;
+		for (int i = 0; i < totalKeys; i++) {
+			keys.push_back(std::to_string(i));
+		}
+		client.SetCustomerKeys(keys);
+
+		int typeOccurrences[5]={0};
+		int totalOccurrences = 30000;
+		for (int i = 0; i < totalOccurrences; i++) {
+			typeOccurrences[((SmallbankTransaction*)client.GetNextTransaction())->GetTransactionType()] += 1;
+		}
+		for (int j = 0; j < 5; j++) {
+			std::cout<<typeOccurrences[j]<<std::endl;
+		}
+		for (int i = 0; i < 5; i++) {
+			if (i == 0) {
+				EXPECT_EQ(typeOccurrences[i], totalOccurrences);
+			} else {
+				EXPECT_EQ(typeOccurrences[i], 0);
+			}
+		}
+	}
+	TEST(GetNextTransaction, AllDeposit) {
+		fakeit::Mock<SyncClient> syncClientMockWrapper;
+		SyncClient & syncClientMock = syncClientMockWrapper.get();
+		fakeit::Mock<Transport> transportMockWrapper;
+		Transport & transportMock = transportMockWrapper.get();
+		std::mt19937 generator(0);
+		int totalKeys = 18000;
+		int numHotspotKeys = 1000;
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,100,0,0,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		
+		std::vector<std::string> keys;
+		for (int i = 0; i < totalKeys; i++) {
+			keys.push_back(std::to_string(i));
+		}
+		client.SetCustomerKeys(keys);
+
+		int typeOccurrences[5]={0};
+		int totalOccurrences = 30000;
+		for (int i = 0; i < totalOccurrences; i++) {
+			typeOccurrences[((SmallbankTransaction* )client.GetNextTransaction())->GetTransactionType()] += 1;
+		}
+		for (int i = 0; i < 5; i++) {
+			if (i == 1) {
+				EXPECT_EQ(typeOccurrences[i], totalOccurrences);
+			} else {
+				EXPECT_EQ(typeOccurrences[i], 0);
+			}
+		}
+	}
+	TEST(GetNextTransaction, AllTransact) {
+		fakeit::Mock<SyncClient> syncClientMockWrapper;
+		SyncClient & syncClientMock = syncClientMockWrapper.get();
+		fakeit::Mock<Transport> transportMockWrapper;
+		Transport & transportMock = transportMockWrapper.get();
+		std::mt19937 generator(0);
+		int totalKeys = 18000;
+		int numHotspotKeys = 1000;
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,100,0,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		
+		std::vector<std::string> keys;
+		for (int i = 0; i < totalKeys; i++) {
+			keys.push_back(std::to_string(i));
+		}
+		client.SetCustomerKeys(keys);
+
+		int typeOccurrences[5]={0};
+		int totalOccurrences = 30000;
+		for (int i = 0; i < totalOccurrences; i++) {
+			typeOccurrences[((SmallbankTransaction* )client.GetNextTransaction())->GetTransactionType()] += 1;
+		}
+		for (int i = 0; i < 5; i++) {
+			if (i == 2) {
+				EXPECT_EQ(typeOccurrences[i], totalOccurrences);
+			} else {
+				EXPECT_EQ(typeOccurrences[i], 0);
+			}
+		}
+	}
+	TEST(GetNextTransaction, AllAmalgamate) {
+		fakeit::Mock<SyncClient> syncClientMockWrapper;
+		SyncClient & syncClientMock = syncClientMockWrapper.get();
+		fakeit::Mock<Transport> transportMockWrapper;
+		Transport & transportMock = transportMockWrapper.get();
+		std::mt19937 generator(0);
+		int totalKeys = 18000;
+		int numHotspotKeys = 1000;
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,0,100,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		
+		std::vector<std::string> keys;
+		for (int i = 0; i < totalKeys; i++) {
+			keys.push_back(std::to_string(i));
+		}
+		client.SetCustomerKeys(keys);
+
+		int typeOccurrences[5]={0};
+		int totalOccurrences = 30000;
+		for (int i = 0; i < totalOccurrences; i++) {
+			typeOccurrences[((SmallbankTransaction* )client.GetNextTransaction())->GetTransactionType()] += 1;
+		}
+		for (int i = 0; i < 5; i++) {
+			if (i == 3) {
+				EXPECT_EQ(typeOccurrences[i], totalOccurrences);
+			} else {
+				EXPECT_EQ(typeOccurrences[i], 0);
+			}
+		}
+	}
+
+	TEST(GetNextTransaction, AllWriteCheck) {
+		fakeit::Mock<SyncClient> syncClientMockWrapper;
+		SyncClient & syncClientMock = syncClientMockWrapper.get();
+		fakeit::Mock<Transport> transportMockWrapper;
+		Transport & transportMock = transportMockWrapper.get();
+		std::mt19937 generator(0);
+		int totalKeys = 18000;
+		int numHotspotKeys = 1000;
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,0,0,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		
+		std::vector<std::string> keys;
+		for (int i = 0; i < totalKeys; i++) {
+			keys.push_back(std::to_string(i));
+		}
+		client.SetCustomerKeys(keys);
+
+		int typeOccurrences[5]={0};
+		int totalOccurrences = 30000;
+		for (int i = 0; i < totalOccurrences; i++) {
+			typeOccurrences[((SmallbankTransaction* )client.GetNextTransaction())->GetTransactionType()] += 1;
+		}
+		for (int i = 0; i < 5; i++) {
+			if (i == 4) {
+				EXPECT_EQ(typeOccurrences[i], totalOccurrences);
+			} else {
+				EXPECT_EQ(typeOccurrences[i], 0);
+			}
+		}
+	}
+
+	TEST(GetNextTransaction, OnlyTwoTypes) {
+		fakeit::Mock<SyncClient> syncClientMockWrapper;
+		SyncClient & syncClientMock = syncClientMockWrapper.get();
+		fakeit::Mock<Transport> transportMockWrapper;
+		Transport & transportMock = transportMockWrapper.get();
+		std::mt19937 generator(0);
+		int totalKeys = 18000;
+		int numHotspotKeys = 1000;
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,50,0,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		
+		std::vector<std::string> keys;
+		for (int i = 0; i < totalKeys; i++) {
+			keys.push_back(std::to_string(i));
+		}
+		client.SetCustomerKeys(keys);
+
+		int typeOccurrences[5]={0};
+		int totalOccurrences = 30000;
+		for (int i = 0; i < totalOccurrences; i++) {
+			typeOccurrences[((SmallbankTransaction* )client.GetNextTransaction())->GetTransactionType()] += 1;
+		}
+		// should be ~0.5 for types 2, 4
+		for (int i = 0; i < 5; i++) {
+			if (i == 4 || i == 2) {
+				EXPECT_GT(typeOccurrences[i], 0.35*totalOccurrences);
+				EXPECT_LT(typeOccurrences[i], 0.65*totalOccurrences);
+			} else {
+				EXPECT_EQ(typeOccurrences[i], 0);
+			}
+		}
+	}
 	
 } // namespace smallbank

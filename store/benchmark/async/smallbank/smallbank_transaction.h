@@ -34,6 +34,8 @@ class SmallbankTransaction : public SyncTransaction {
 
   bool WriteCheck(SyncClient &client, const std::string &name, const int32_t value);
 
+  SmallbankTransactionType GetTransactionType();
+
  private:
   SmallbankTransactionType type;
   std::string cust1;

@@ -220,5 +220,8 @@ bool SmallbankTransaction::ReadCheckingRow(SyncClient &client, const uint32_t cu
     return checkingRow.ParseFromString(checkingRowSerialized);
 }
 
+SmallbankTransactionType SmallbankTransaction::GetTransactionType() {
+    return type;
+}
 }
 
