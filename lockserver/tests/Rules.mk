@@ -13,4 +13,4 @@ $(d)lockserver-test: $(o)lockserver-test.o \
    	$(LIB-store-common) \
 	$(GTEST_MAIN)
 
-TEST_BINS += $(d)lockserver-test
+# TEST_BINS += $(d)lockserver-test

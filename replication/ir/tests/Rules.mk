@@ -7,4 +7,4 @@ $(d)ir-test: $(o)ir-test.o \
 	$(LIB-simtransport) \
 	$(GTEST_MAIN)
 
-TEST_BINS += $(d)ir-test
+# TEST_BINS += $(d)ir-test
