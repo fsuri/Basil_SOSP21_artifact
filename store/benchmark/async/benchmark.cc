@@ -22,6 +22,7 @@
 #include "store/benchmark/async/common/key_selector.h"
 #include "store/benchmark/async/common/uniform_key_selector.h"
 #include "store/benchmark/async/retwis/retwis_client.h"
+#include "store/benchmark/async/rw/rw_client.h"
 #include "store/benchmark/async/tpcc/tpcc_client.h"
 #include "store/benchmark/async/smallbank/smallbank_client.h"
 #include "store/janusstore/client.h"
@@ -47,7 +48,7 @@ enum benchmode_t {
   BENCH_RETWIS,
   BENCH_TPCC,
   BENCH_SMALLBANK_SYNC,
-  BENCH_RMW,
+  BENCH_RW,
 };
 
 /**
@@ -109,13 +110,13 @@ const std::string benchmark_args[] = {
 	"retwis",
   "tpcc",
   "smallbank",
-  "rmw"
+  "rw"
 };
 const benchmode_t benchmodes[] {
   BENCH_RETWIS,
   BENCH_TPCC,
   BENCH_SMALLBANK_SYNC,
-  BENCH_RMW
+  BENCH_RW
 };
 static bool ValidateBenchmark(const char* flagname, const std::string &value) {
   int n = sizeof(benchmark_args);
@@ -158,6 +159,14 @@ DEFINE_bool(retry_aborted, true, "retry aborted transactions.");
 DEFINE_string(keys_path, "", "path to file containing keys in the system"
 		" (for retwis)");
 DEFINE_uint64(num_keys, 0, "number of keys to generate (for retwis");
+
+/**
+ * RW settings.
+ */
+DEFINE_uint64(num_keys_txn, 1, "number of keys to read/write in each txn" 
+    " (for rw)");
+// RW benchmark also uses same config parameters as Retwis.
+
 
 /**
  * TPCC settings.
@@ -332,6 +341,7 @@ int main(int argc, char **argv) {
     switch (benchMode) {
       case BENCH_RETWIS:
       case BENCH_TPCC:
+      case BENCH_RW:
         if (asyncClient == nullptr) {
           ASSERT(client != nullptr);
           asyncClient = new AsyncAdapterClient(client);
@@ -378,6 +388,14 @@ int main(int argc, char **argv) {
             FLAGS_transact_saving_ratio, FLAGS_amalgamate_ratio,
             FLAGS_num_hotspots, FLAGS_num_customers - FLAGS_num_hotspots,
             FLAGS_customer_name_file_path);
+        break;
+      case BENCH_RW:
+        ASSERT(asyncClient != nullptr);
+        bench = new rw::RWClient(keySelector, FLAGS_num_keys_txn,
+            *asyncClient, transport,
+            FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
+            FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
+            FLAGS_abort_backoff, FLAGS_retry_aborted);
         break;
       default:
         NOT_REACHABLE();
