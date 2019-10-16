@@ -44,21 +44,18 @@ std::pair<uint32_t, bool> SmallbankTransaction::Bal(SyncClient &client, const st
     proto::AccountRow accountRow;
     proto::SavingRow savingRow;
     proto::CheckingRow checkingRow;
-    std::cout<<"in bal"<<std::endl;
     client.Begin();
-    std::cout<<"begin for name "<< name <<std::endl;
+    std::cout<<"Balance for name "<< name <<std::endl;
     if (!ReadAccountRow(client, name, accountRow) || !ReadSavingRow(client, accountRow.customer_id(), savingRow) ||
         !ReadCheckingRow(client, accountRow.customer_id(), checkingRow)) {
         std::cout<<"not ok"<<std::endl;
 
         client.Abort(timeout_);
-        std::cout<<"aborted"<<std::endl;
+        std::cout<<"Aborted Balance"<<std::endl;
         return std::make_pair(0, false);
     }
-    std::cout<<"attempt commit"<<std::endl;
     client.Commit(timeout_);
-    std::cout<<"committed"<<std::endl;
-    std::cout<<"done with bal"<<std::endl;
+    std::cout<<"Balance "<< savingRow.saving_balance() + checkingRow.checking_balance()<<std::endl;
     return std::make_pair(savingRow.saving_balance() + checkingRow.checking_balance(), true);
 }
 
@@ -72,6 +69,7 @@ bool SmallbankTransaction::DepositChecking(SyncClient &client, const std::string
     proto::CheckingRow checkingRow;
 
     client.Begin();
+    std::cout<<"Client for name "<< name << " with value " << value<<std::endl;
     if (!ReadAccountRow(client, name, accountRow)) {
         client.Abort(timeout_);
         return false;
@@ -81,8 +79,10 @@ bool SmallbankTransaction::DepositChecking(SyncClient &client, const std::string
         client.Abort(timeout_);
         return false;
     }
+    std::cout<<"Old value" << checkingRow.checking_balance() << std::endl;
     InsertCheckingRow(client, customerId, checkingRow.checking_balance() + value);
     client.Commit(timeout_);
+    std::cout<<"Deposit " << checkingRow.checking_balance() + value << std::endl;
     return true;
 }
 

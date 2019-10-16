@@ -35,13 +35,7 @@ class SmallbankTransaction : public SyncTransaction {
   bool WriteCheck(SyncClient &client, const std::string &name, const int32_t value);
 
   SmallbankTransactionType GetTransactionType();
-
- private:
-  SmallbankTransactionType type;
-  std::string cust1;
-  std::string cust2;
-  uint32_t timeout_;
-
+  
   bool ReadAccountRow(SyncClient &client, const std::string &name, proto::AccountRow &accountRow);
 
   bool ReadCheckingRow(SyncClient &client, const uint32_t customer_id, proto::CheckingRow &checkingRow);
@@ -53,6 +47,14 @@ class SmallbankTransaction : public SyncTransaction {
   void InsertSavingRow(SyncClient &client, const uint32_t customer_id, const uint32_t balance);
 
   void InsertCheckingRow(SyncClient &client, const uint32_t customer_id, const uint32_t balance);
+ 
+ private:
+  SmallbankTransactionType type;
+  std::string cust1;
+  std::string cust2;
+  uint32_t timeout_;
+
+  
 };
 
 }  // namespace smallbank
