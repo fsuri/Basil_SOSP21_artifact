@@ -6,25 +6,46 @@
 
 using namespace transport;
 using std::vector;
+using std::map;
 
 class JanusServerTest : public  ::testing::Test
 {
+protected:
+    vector<ReplicaAddress> replicas;
+    std::unique_ptr<transport::Configuration> config;
+    SimulatedTransport *transport;
+    
+    janusstore::Server *server;
 
+    map<int, std::vector<ReplicaAddress>> *g_replicas;
+
+    JanusServerTest() {
+        replicas = { 
+            { "localhost", "12345" },
+            { "localhost", "12346" },
+            { "localhost", "12347" }
+        };
+
+        config = std::unique_ptr<transport::Configuration>(
+            new transport::Configuration(3, 1, replicas));
+
+        g_replicas = new std::map<int, std::vector<ReplicaAddress>>({{ 0, replicas }});
+
+        transport = new SimulatedTransport();
+        server = new janusstore::Server(*config, 0, 0, transport);
+    };
+
+    virtual int ServerGroup() {
+        return server->groupIdx;
+    }
+
+    virtual int ServerId() {
+        return server->myIdx;
+    }
 };
 
-TEST(Server, Basic)
+TEST_F(JanusServerTest, Basic)
 {
-    vector<ReplicaAddress> replicas = { { "localhost", "12345" },
-    { "localhost", "12346" },
-    { "localhost", "12347" } };
-    std::map<int, std::vector<ReplicaAddress>> g_replicas({
-        { 0, replicas }
-    });
-    Configuration c(3, 1, replicas);
-    SimulatedTransport *transport = new SimulatedTransport();
-
-    janusstore::Server *server = new janusstore::Server(c, 0, 0, transport);
-
-    EXPECT_EQ(server->groupIdx, 0);
-    EXPECT_EQ(server->myIdx, 0);
+    EXPECT_EQ(ServerGroup(), 0);
+    EXPECT_EQ(ServerId(), 0);
 }
