@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
 	janusstore::Client *client_ptr1 = &client1;
 
 	// init client2 with closest replica 1
-	janusstore::Client client2("./store/janus", 2, 1, transport_ptr1);
+	janusstore::Client client2("./store/janus", 2, 1, transport_ptr2);
 	janusstore::Client *client_ptr2 = &client2;
 
 	// define some transactions
@@ -75,12 +75,18 @@ int main(int argc, char **argv) {
 	txn_ptr2->addWriteSet("key2", "val2");
 	txn_ptr2->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
 
-	// printf("starting clients %d\n", FLAGS_client_id);
 
-	transport1.Timer(
-		0, [client_ptr1, txn_ptr1]() { SendTxn(client_ptr1, txn_ptr1, 0); });
-	transport1.Timer(
-		0, [client_ptr2, txn_ptr2]() { SendTxn(client_ptr2, txn_ptr2, 1); });
-	transport1.Run();
+	if (FLAGS_client_id == 0) {
+		transport1.Timer(
+			1500, [client_ptr1, txn_ptr1]() { SendTxn(client_ptr1, txn_ptr1, 0); });
+
+		// transport1.Timer(
+		// 	1500, [client_ptr2, txn_ptr2]() { SendTxn(client_ptr2, txn_ptr2, 1); });
+		transport1.Run();
+	} else {
+		transport2.Timer(
+			1500, [client_ptr2, txn_ptr2]() { SendTxn(client_ptr2, txn_ptr2, 1); });
+		transport2.Run();
+	}
 	return 0;
 }
