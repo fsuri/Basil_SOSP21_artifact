@@ -9,6 +9,8 @@
 #include "replication/ir/client.h"
 #include "store/common/frontend/client.h"
 #include "store/common/frontend/bufferclient.h"
+#include "store/common/frontend/async_client.h"
+#include "store/common/frontend/one_shot_client.h"
 
 #include "store/janusstore/transaction.h"
 #include "store/janusstore/shardclient.h"
@@ -21,13 +23,15 @@ namespace janusstore {
 // callback for output commit
 typedef std::function<void(uint64_t)> output_commit_callback;
 
-class Client {
+class Client : public OneShotClient {
 public:
     Client(const std::string configPath, int nShards, int closestReplica, Transport *transport);
     ~Client();
 
+    virtual void Execute(OneShotTransaction *txn, execute_callback ecb);
+
     // begins PreAccept phase
-    void PreAccept(Transaction *txn, uint64_t ballot, output_commit_callback ocb);
+    void PreAccept(Transaction *txn, uint64_t ballot, execute_callback ocb);
 
     // called from PreAcceptCallback when a fast quorum is not obtained
     void Accept(
@@ -61,7 +65,7 @@ private:
     // Map of txn_id to fast quorum status
     std::unordered_map<uint64_t, bool> has_fast_quorum;
     // Map of txn_id to callback for output commit; unsure if needed
-    std::unordered_map<uint64_t, output_commit_callback> output_commits;
+    std::unordered_map<uint64_t, execute_callback> output_commits;
 
     // List of participants in the ongoing transaction.
     std::set<int> participants;

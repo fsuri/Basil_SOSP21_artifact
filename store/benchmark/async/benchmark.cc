@@ -24,6 +24,9 @@
 #include "store/benchmark/async/retwis/retwis_client.h"
 #include "store/benchmark/async/tpcc/tpcc_client.h"
 #include "store/benchmark/async/smallbank/smallbank_client.h"
+#include "store/janusstore/client.h"
+#include "store/common/frontend/one_shot_client.h"
+#include "store/common/frontend/async_one_shot_adapter_client.h"
 
 #include <gflags/gflags.h>
 
@@ -278,6 +281,7 @@ int main(int argc, char **argv) {
   std::vector<::AsyncClient *> asyncClients;
   std::vector<::SyncClient *> syncClients;
   std::vector<::Client *> clients;
+  std::vector<::OneShotClient *> oneShotClients;
   std::vector<::BenchmarkClient *> benchClients;
   std::vector<std::thread *> threads;
   KeySelector *keySelector = new UniformKeySelector(keys);
@@ -293,13 +297,23 @@ int main(int argc, char **argv) {
   }
 
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
-    Client *client;
+    Client *client = nullptr;
+    AsyncClient *asyncClient = nullptr;
+    SyncClient *syncClient = nullptr;
+    OneShotClient *oneShotClient = nullptr;
+
     switch (mode) {
       case PROTO_TAPIR: {
         client = new tapirstore::Client(FLAGS_config_prefix, FLAGS_num_shards,
             FLAGS_num_groups, FLAGS_closest_replica, &transport, part,
             FLAGS_tapir_sync_commit, TrueTime(FLAGS_clock_skew,
               FLAGS_clock_error));
+        break;
+      }
+      case PROTO_JANUS: {
+        oneShotClient = new janusstore::Client(FLAGS_config_prefix,
+            FLAGS_num_shards, FLAGS_closest_replica, &transport);
+        asyncClient = new AsyncOneShotAdapterClient(oneShotClient);
         break;
       }
       /*case MODE_WEAK: {
@@ -315,19 +329,35 @@ int main(int argc, char **argv) {
         NOT_REACHABLE();
     }
 
+    switch (benchMode) {
+      case BENCH_RETWIS:
+      case BENCH_TPCC:
+        if (asyncClient == nullptr) {
+          ASSERT(client != nullptr);
+          asyncClient = new AsyncAdapterClient(client);
+        }
+        break;
+      case BENCH_SMALLBANK_SYNC:
+        if (syncClient == nullptr) {
+          ASSERT(client != nullptr);
+          syncClient = new SyncClient(client);
+        }
+        break;
+      default:
+        NOT_REACHABLE();
+    }
+
 	  BenchmarkClient *bench;
-    AsyncClient *asyncClient = nullptr;
-    SyncClient *syncClient = nullptr;
 	  switch (benchMode) {
       case BENCH_RETWIS:
-        asyncClient = new AsyncAdapterClient(client);
+        ASSERT(asyncClient != nullptr);
         bench = new retwis::RetwisClient(keySelector, *asyncClient, transport,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
             FLAGS_abort_backoff, FLAGS_retry_aborted);
         break;
       case BENCH_TPCC:
-        asyncClient = new AsyncAdapterClient(client);
+        ASSERT(asyncClient != nullptr);
         bench = new tpcc::TPCCClient(*asyncClient, transport,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
@@ -339,7 +369,7 @@ int main(int argc, char **argv) {
             FLAGS_retry_aborted);
         break;
       case BENCH_SMALLBANK_SYNC:
-        syncClient = new SyncClient(client);
+        ASSERT(syncClient != nullptr);
         bench = new smallbank::SmallbankClient(*syncClient, transport,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
@@ -379,7 +409,12 @@ int main(int argc, char **argv) {
     if (syncClient != nullptr) {
       syncClients.push_back(syncClient);
     }
-    clients.push_back(client);
+    if (client != nullptr) {
+      clients.push_back(client);
+    }
+    if (oneShotClient != nullptr) {
+      oneShotClients.push_back(oneShotClient);
+    }
     benchClients.push_back(bench);
   }
 
@@ -422,6 +457,9 @@ int main(int argc, char **argv) {
       delete i;
     }
     for (auto i : syncClients) {
+      delete i;
+    }
+    for (auto i : oneShotClients) {
       delete i;
     }
     for (auto i : asyncClients) {

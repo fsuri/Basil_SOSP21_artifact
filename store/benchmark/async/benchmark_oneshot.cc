@@ -32,8 +32,7 @@
 DEFINE_uint64(client_id, 0, "which client to run");
 
 void SendTxn(janusstore::Client *client, janusstore::Transaction *txn_ptr, uint64_t ballot) {
-
-	commit_callback ccb = [] (uint64_t committed) {
+	execute_callback ccb = [] (uint64_t committed, std::map<std::string, std::string> readValues) {
 		printf("output commit from txn %d \r\n", committed);
 		pthread_exit(NULL);
 	};
