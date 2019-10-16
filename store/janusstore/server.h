@@ -69,7 +69,7 @@ private:
     std::unordered_map<std::string, std::set<uint64_t>> write_key_txn_map;
 
     // maps txn_id -> list[other_ids] being blocked by txn_id
-    std::unordered_map<uint64_t, std::vector<uint64_t>> blocking_ids;
+    std::unordered_map<uint64_t, std::vector<std::pair<const TransportAddress*, uint64_t>>> blocking_ids;
     std::unordered_map<uint64_t, std::vector<std::pair<const TransportAddress*, proto::InquireMessage>>> inquired_ids;
 
     // functions to process shardclient requests

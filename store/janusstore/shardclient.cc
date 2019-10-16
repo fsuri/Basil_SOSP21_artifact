@@ -113,7 +113,7 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 }
 
 void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb) {
-	Debug("[shard %i] Sending COMMIT [%llu]", shard, client_id);
+	Debug("[shard %i] Sending COMMIT for txn %i", shard, txn_id);
 
 	std::vector<janusstore::proto::Reply> replies;
 	pair<uint64_t, std::vector<janusstore::proto::Reply>> entry (txn_id, replies);
@@ -130,11 +130,13 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 	}
 
 	request.SerializeToString(&request_str);
-	Debug("%s %i", request.DebugString().c_str(), deps.size());
+	// Debug("%s %i", request.DebugString().c_str(), deps.size());
 	// store callback with txnid in a map for the preaccept cb
 	// because we can't pass it into a continuation function
+	Debug("[shard %i] adding ccb for %i, %i, %llu", shard, txn_id, ccb_map.size(), client_id);
 	pair<uint64_t, client_commit_callback> callback_entry (txn_id, ccb);
-	this->ccb_map.insert(callback_entry);
+	ccb_map[txn_id] = ccb;
+	Debug("[shard %i] adding ccb for %i, %i, %llu", shard, txn_id, ccb_map.size(), client_id);
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
@@ -256,7 +258,6 @@ void ShardClient::AcceptContinuation(const string &request_str,
 void ShardClient::CommitContinuation(const string &request_str,
     const string &reply_str) {
 
-	Debug("In commit continuation");
 	janusstore::proto::Reply reply;
   	reply.ParseFromString(reply_str);
 	uint64_t txn_id = NULL;
@@ -266,9 +267,11 @@ void ShardClient::CommitContinuation(const string &request_str,
 	} else {
 		Panic("Not a commit reply");
 	}
-  	// get the ccb
-  	client_commit_callback ccb = this->ccb_map.at(txn_id);
-  	// invoke the shardclient callback
-  	this->CommitCallback(txn_id, reply, ccb);
+
+	Debug("[shard %i] In commit continuation for txn %i, %i", shard, txn_id, ccb_map.size());
+	// get the ccb
+	client_commit_callback ccb = ccb_map[txn_id];
+	// invoke the shardclient callback
+	this->CommitCallback(txn_id, reply, ccb);
 }
 }

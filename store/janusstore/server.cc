@@ -103,7 +103,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
     }
 
     vector<uint64_t> dep_list = *dep_list_ptr;
-    
+
     // create dep list for reply
     DependencyList dep;
     for (int i = 0; i < dep_list.size(); i++) {
@@ -241,6 +241,8 @@ void Server::HandleCommit(const TransportAddress &remote,
     for (int i = 0; i < received_dep.txnid_size(); i++) {
         deps.push_back(received_dep.txnid(i));
     }
+
+    Debug("gonna handle commit for %i, message: %s", txn_id, c_msg.DebugString().c_str());
     _HandleCommit(txn_id, deps, remote, unlogged_reply);
 }
 
@@ -254,8 +256,10 @@ void Server::_HandleCommit(uint64_t txn_id,
     Debug("Set txn id %i to COMMIT", txn_id);
     // check if this unblocks others, and rerun HandleCommit for those
     if (blocking_ids.find(txn_id) != blocking_ids.end()) {
-        for(uint64_t blocked_id : blocking_ids[txn_id]) {
-            _HandleCommit(blocked_id, dep_map[blocked_id], remote, unlogged_reply);
+        for(auto blocked_id_pair : blocking_ids[txn_id]) {
+            uint64_t blocked_id = blocked_id_pair.second;
+            Debug("Found blocked id %i for txn id %i", blocked_id, txn_id);
+            _HandleCommit(blocked_id, dep_map[blocked_id], *blocked_id_pair.first, unlogged_reply);
         }
         blocking_ids.erase(txn_id);
     }
@@ -277,9 +281,9 @@ void Server::_HandleCommit(uint64_t txn_id,
             // for every txn_id found on this server, add it to the list of blocking
             if (id_txn_map.find(txn_id) != id_txn_map.end()){
                 if (blocking_ids.find(blocking_txn_id) == blocking_ids.end()) {
-                    blocking_ids[blocking_txn_id] = vector<uint64_t>{txn_id};
+                    blocking_ids[blocking_txn_id] = vector<pair<const TransportAddress*, uint64_t>>{make_pair(&remote, txn_id)};
                 } else {
-                    blocking_ids[blocking_txn_id].push_back(txn_id);
+                    blocking_ids[blocking_txn_id].push_back(make_pair(&remote, txn_id));
                 }
             } else {
                 // inquire about the status of this transaction
@@ -291,12 +295,11 @@ void Server::_HandleCommit(uint64_t txn_id,
         if (found_on_server) return;
     }
 
-    // execute phase TODO make this a seperate helper fn
-
-    // init all locally processed status to false
-    processed[txn_id] = false;
+    // initialize unknown ids to false
     for (int dep_id : deps) {
-        processed[dep_id] = false;
+        if (processed.find(dep_id) == processed.end()) {
+            processed[dep_id] = false;
+        }
     }
 
     _ExecutePhase(txn_id, remote, unlogged_reply);
@@ -394,6 +397,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
                            const TransportAddress &remote,
                            replication::ir::proto::UnloggedReplyMessage *unlogged_reply
 ) {
+    Debug("In execute phase for %i", txn_id);
     unordered_map<string, string> result;
     vector<uint64_t> deps = dep_map[txn_id];
     Transaction txn = id_txn_map[txn_id];
@@ -526,6 +530,7 @@ vector<uint64_t> _checkIfAllCommitting(
     ) {
         vector<uint64_t> not_committing_ids;
         for (int txn_id : deps) {
+            Debug("Checking if %i is committing", txn_id);
             Transaction txn = id_txn_map[txn_id];
             if (txn.getTransactionStatus() != TransactionMessage::COMMIT) {
                 not_committing_ids.push_back(txn_id);
