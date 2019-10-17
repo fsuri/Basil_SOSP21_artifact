@@ -73,7 +73,8 @@ export LDFLAGS="-L/usr/local/opt/openssl/lib"
 export CPPFLAGS="-I/usr/local/opt/openssl/include"
 
 # For pkg-config to find openssl you may need to set:
-export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig"```
+export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig"
+```
 
 You'll also want to setup `googletest`. The project is known to compile with [version 1.7.0](https://github.com/google/googletest/releases/tag/release-1.7.0) with these steps. You will need to redo these steps whenever you `make clean`:
 1. Download `googletest` 1.7.0
