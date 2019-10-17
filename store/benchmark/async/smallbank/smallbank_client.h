@@ -53,6 +53,7 @@ class SmallbankClient : public SyncTransactionBenchClient {
   uint32_t num_non_hotspot_keys_;
   std::mt19937 gen_;
   std::vector<std::string> all_keys_;
+  std::string last_op_;
   
 };
 

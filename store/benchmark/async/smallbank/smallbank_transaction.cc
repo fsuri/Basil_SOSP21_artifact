@@ -21,20 +21,15 @@ SmallbankTransaction::SmallbankTransaction(SmallbankTransactionType type,
 int SmallbankTransaction::Execute(SyncClient &client) {
   switch (type) {
     case BALANCE:
-      Bal(client, cust1);
-      return 0;
+      return Bal(client, cust1).second ? 0 : -1;
     case DEPOSIT:
-      DepositChecking(client, cust1, rand() % 50 + 1);
-      return 0;
+      return DepositChecking(client, cust1, rand() % 50 + 1) ? 0 : -1;
     case TRANSACT:
-      TransactSaving(client, cust1, rand() % 101 - 50); 
-      return 0;
+      return TransactSaving(client, cust1, rand() % 101 - 50) ? 0 : -1; 
     case AMALGAMATE:
-      Amalgamate(client, cust1, cust2);
-      return 0;
+      return Amalgamate(client, cust1, cust2) ? 0 : -1;
     case WRITE_CHECK:
-      WriteCheck(client, cust1, rand() % 50);
-      return 0;
+      return WriteCheck(client, cust1, rand() % 50) ? 0 : -1;
     default:
       NOT_REACHABLE();
   }

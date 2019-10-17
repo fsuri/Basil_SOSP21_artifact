@@ -62,23 +62,28 @@ namespace smallbank {
         // Ranges for random params for transactions based on
         // https://github.com/microsoft/CCF/blob/master/samples/apps/smallbank/clients/small_bank_client.cpp
         if (ttype < balanceThreshold) {
+          last_op_ = "balance";
           return new SmallbankTransaction(BALANCE, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_), "", timeout_);
         } 
         if (ttype < depositThreshold) {
+          last_op_ = "deposit";
           return new SmallbankTransaction(DEPOSIT, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_), "", timeout_);
         } 
         if (ttype < transactThreshold) {
+          last_op_ = "transact";
           return new SmallbankTransaction(TRANSACT, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_), "", timeout_);
         }
         if (ttype < amalgamateThreshold) {
+          last_op_ = "amalgamate";
           std::pair <string, string> keyPair = GetCustomerKeyPair(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_);
           return new SmallbankTransaction(AMALGAMATE, keyPair.first, keyPair.second, timeout_);
         }
+        last_op_ = "write_check";
         return new SmallbankTransaction(WRITE_CHECK, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_), "", timeout_);
     }
 
     std::string SmallbankClient::GetLastOp() const {
-        return "";
+        return last_op_;
     }
 
 
