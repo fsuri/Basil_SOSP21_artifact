@@ -79,18 +79,29 @@ namespace janusstore {
     }
   }
 
-  void Client::PreAccept(Transaction * txn, uint64_t ballot, output_commit_callback ocb) {
-    uint64_t txn_id = txn->getTransactionId();
-    this->output_commits[txn_id] = ocb;
-    txn->setTransactionId(txn_id);
-    // TODO make the client assign the txn ID in the future
+  void Client::Execute(OneShotTransaction *txn, execute_callback ecb) {
+    Transaction t(txn_id); 
+    t.setTransactionStatus(proto::TransactionMessage::PREACCEPT);
+    for (auto key : txn->GetReadSet()) {
+      t.addReadSet(key);
+    }
+    for (auto kv : txn->GetWriteSet()) {
+      t.addWriteSet(kv.first, kv.second);
+    }
     this->txn_id++;
+    PreAccept(&t, 0UL, ecb);
+  }
+
+  void Client::PreAccept(Transaction * txn, uint64_t ballot, execute_callback ecb) {
+    uint64_t txn_id = txn->getTransactionId();
+    this->output_commits[txn_id] = ecb;
+    txn->setTransactionId(txn_id);
     printf("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
     printf("CLIENT - PREACCEPT - ocb registered for txn %d\n", txn_id);
     setParticipants(txn);
 
     // add the callback to map for post-commit action
-    this->output_commits[txn->getTransactionId()] = ocb;
+    this->output_commits[txn->getTransactionId()] = ecb;
 
     for (auto p: participants) {
       auto pcb = std::bind(&Client::PreAcceptCallback, this,
@@ -209,7 +220,7 @@ namespace janusstore {
       if (this->output_commits.find(txn_id) == this->output_commits.end()) {
         printf("could not find ocb for txn %d\n", txn_id);
       } else {
-        this->output_commits[txn_id](txn_id);
+        this->output_commits[txn_id](txn_id, std::map<std::string, std::string>());
       }
       this->responded.clear();
     } else {
