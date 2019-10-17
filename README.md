@@ -62,5 +62,31 @@ TAPIR depends on protobufs, libevent and openssl, so you will need the following
 - libgflags-dev
 - libgtest-dev
 
+### On Mac
+The known Mac equivalents for the above packages, available through `brew install` are:
+- libevent
+- protobuf
+- gflags
+- openssl
+```# For compilers to find openssl you may need to set:
+export LDFLAGS="-L/usr/local/opt/openssl/lib"
+export CPPFLAGS="-I/usr/local/opt/openssl/include"
+
+# For pkg-config to find openssl you may need to set:
+export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig"
+```
+
+You'll also want to setup `googletest`. The project is known to compile with [version 1.7.0](https://github.com/google/googletest/releases/tag/release-1.7.0) with these steps. You will need to redo these steps whenever you `make clean`:
+1. Download `googletest` 1.7.0
+2. Unzip and move the folder into `.obj` as `gtest`
+3. `cd gtest`
+4. `mkdir bld`
+5. `cd bld`
+6. `cmake ..`
+7. `make`
+8. Navigate to the `gtest` directory
+9. `g++ -isystem ./include -I . -pthread -c ./src/gtest-all.cc`
+10. `g++ -isystem ./include -I . -pthread -c ./src/gtest_main.cc`
+
 ## Contact and Questions
 Please email Irene at iyzhang@cs.washington.edu, Dan at drkp@cs.washington.edu and Naveen at naveenks@cs.washington.edu
