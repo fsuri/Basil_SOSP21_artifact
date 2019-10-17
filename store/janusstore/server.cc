@@ -409,6 +409,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
             if (_ReadyToProcess(id_txn_map[other_txn_id])) {
                 Debug("%i is ready to process!", other_txn_id);
                 vector<uint64_t> scc = _StronglyConnectedComponent(other_txn_id);
+                ResolveContention(scc);
                 Debug("%i has scc of size %i!", other_txn_id, scc.size());
                 for (int scc_id : scc) {
                     // TODO check if scc_id is involved with S and not abandoned
@@ -536,7 +537,7 @@ void Server::Load(const string &key, const string &value, const Timestamp timest
 }
 
 // sort in ascending order
-void Server::ResolveContention(vector<uint64_t> scc) {
+void Server::ResolveContention(vector<uint64_t> &scc) {
     sort(scc.begin(), scc.end());
 }
 
