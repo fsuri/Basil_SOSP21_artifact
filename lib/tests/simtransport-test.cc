@@ -59,7 +59,7 @@ void
 TestReceiver::ReceiveMessage(const TransportAddress &src,
                              const string &type, const string &data)
 {
-    ASSERT_EQ(type, lastMsg.GetTypeName());
+    UW_ASSERT_EQ(type, lastMsg.GetTypeName());
     lastMsg.ParseFromString(data);
     numReceived++;
 }

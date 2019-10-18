@@ -161,8 +161,8 @@ BindToPort(int fd, const string &host, const string &port)
             Panic("Failed to resolve host/port %s:%s: %s",
                   host.c_str(), port.c_str(), gai_strerror(res));
         }
-        ASSERT(ai->ai_family == AF_INET);
-        ASSERT(ai->ai_socktype == SOCK_DGRAM);
+        UW_ASSERT(ai->ai_family == AF_INET);
+        UW_ASSERT(ai->ai_socktype == SOCK_DGRAM);
         if (ai->ai_addr->sa_family != AF_INET) {
             Panic("getaddrinfo returned a non IPv4 address");        
         }
@@ -297,7 +297,7 @@ UDPTransport::Register(TransportReceiver *receiver,
                        const transport::Configuration &config,
                        int replicaIdx)
 {
-    ASSERT(replicaIdx < config.n);
+    UW_ASSERT(replicaIdx < config.n);
     struct sockaddr_in sin;
 
     const transport::Configuration *canonicalConfig =
@@ -397,14 +397,14 @@ SerializeMessage(const ::google::protobuf::Message &m,
     char *ptr = buf;
     *((size_t *) ptr) = typeLen;
     ptr += sizeof(size_t);
-    ASSERT(ptr-buf < totalLen);
-    ASSERT(ptr+typeLen-buf < totalLen);
+    UW_ASSERT(ptr-buf < totalLen);
+    UW_ASSERT(ptr+typeLen-buf < totalLen);
     memcpy(ptr, type.c_str(), typeLen);
     ptr += typeLen;
     *((size_t *) ptr) = dataLen;
     ptr += sizeof(size_t);
-    ASSERT(ptr-buf < totalLen);
-    ASSERT(ptr+dataLen-buf == totalLen);
+    UW_ASSERT(ptr-buf < totalLen);
+    UW_ASSERT(ptr+dataLen-buf == totalLen);
     memcpy(ptr, data.c_str(), dataLen);
     ptr += dataLen;
 
@@ -489,8 +489,8 @@ DecodePacket(const char *buf, size_t sz, string &type, string &msg)
     size_t typeLen = *((size_t *)ptr);
     ptr += sizeof(size_t);
 
-    ASSERT(ptr-buf < (int)sz);
-    ASSERT(ptr+typeLen-buf < (int)sz);
+    UW_ASSERT(ptr-buf < (int)sz);
+    UW_ASSERT(ptr+typeLen-buf < (int)sz);
 
     type = string(ptr, typeLen);
     ptr += typeLen;
@@ -498,8 +498,8 @@ DecodePacket(const char *buf, size_t sz, string &type, string &msg)
     size_t msgLen = *((size_t *)ptr);
     ptr += sizeof(size_t);
 
-    ASSERT(ptr-buf < (int)sz);
-    ASSERT(ptr+msgLen-buf <= (int)sz);
+    UW_ASSERT(ptr-buf < (int)sz);
+    UW_ASSERT(ptr+msgLen-buf <= (int)sz);
 
     msg = string(ptr, msgLen);
     ptr += msgLen;
@@ -532,7 +532,7 @@ UDPTransport::OnReadable(int fd)
 
         // Take a peek at the first field. If it's all zeros, this is
         // a fragment. Otherwise, we can decode it directly.
-        ASSERT(sizeof(size_t) - sz > 0);
+        UW_ASSERT(sizeof(size_t) - sz > 0);
         size_t typeLen = *((size_t *)buf);
         if (typeLen != 0) {
             // Not a fragment. Decode the packet
@@ -541,17 +541,17 @@ UDPTransport::OnReadable(int fd)
             // This is a fragment. Decode the header
             const char *ptr = buf;
             ptr += sizeof(size_t);
-            ASSERT(ptr-buf < sz);
+            UW_ASSERT(ptr-buf < sz);
             uint64_t msgId = *((uint64_t *)ptr);
             ptr += sizeof(uint64_t);
-            ASSERT(ptr-buf < sz);
+            UW_ASSERT(ptr-buf < sz);
             size_t fragStart = *((size_t *)ptr);
             ptr += sizeof(size_t);
-            ASSERT(ptr-buf < sz);
+            UW_ASSERT(ptr-buf < sz);
             size_t msgLen = *((size_t *)ptr);
             ptr += sizeof(size_t);
-            ASSERT(ptr-buf < sz);
-            ASSERT(buf+sz-ptr == (ssize_t) std::min(msgLen-fragStart,
+            UW_ASSERT(ptr-buf < sz);
+            UW_ASSERT(buf+sz-ptr == (ssize_t) std::min(msgLen-fragStart,
                                                     MAX_UDP_MESSAGE_SIZE));
             Debug("Received fragment of %zd byte packet %lx starting at %zd",
                    msgLen, msgId, fragStart);
@@ -561,7 +561,7 @@ UDPTransport::OnReadable(int fd)
                 info.data.clear();
             }
             if (info.msgId != msgId) {
-                ASSERT(msgId > info.msgId);
+                UW_ASSERT(msgId > info.msgId);
                 Warning("Failed to reconstruct packet %lx", info.msgId);
                 info.msgId = msgId;
                 info.data.clear();
@@ -601,7 +601,7 @@ UDPTransport::OnReadable(int fd)
             if (roll < reorderRate) {
                 Debug("Simulating reorder of message type %s",
                       msgType.c_str());
-                ASSERT(!reorderBuffer.valid);
+                UW_ASSERT(!reorderBuffer.valid);
                 reorderBuffer.valid = true;
                 reorderBuffer.addr = new UDPTransportAddress(senderAddr);
                 reorderBuffer.message = msg;
@@ -743,7 +743,7 @@ UDPTransport::TimerCallback(evutil_socket_t fd, short what, void *arg)
     UDPTransport::UDPTransportTimerInfo *info =
         (UDPTransport::UDPTransportTimerInfo *)arg;
 
-    ASSERT(what & EV_TIMEOUT);
+    UW_ASSERT(what & EV_TIMEOUT);
 
     info->transport->OnTimer(info);
 }

@@ -29,8 +29,8 @@ Operation StockLevel::GetNextOperation(size_t opCount,
     if (opCount == 1) {
       std::string d_key = DistrictRowKey(w_id, d_id);
       auto d_row_itr = readValues.find(d_key);
-      ASSERT(d_row_itr != readValues.end());
-      ASSERT(d_row.ParseFromString(d_row_itr->second));
+      UW_ASSERT(d_row_itr != readValues.end());
+      UW_ASSERT(d_row.ParseFromString(d_row_itr->second));
 
       next_o_id = d_row.next_o_id();
       Debug("Orders: %u-%u", next_o_id - 20, next_o_id - 1);
@@ -42,7 +42,7 @@ Operation StockLevel::GetNextOperation(size_t opCount,
         currOrderLineIdx - 1);
     auto prev_ol_value_itr = readValues.find(prev_ol_key);
     if (currOrderLineIdx != 0) {
-      ASSERT(prev_ol_value_itr != readValues.end());
+      UW_ASSERT(prev_ol_value_itr != readValues.end());
       if (prev_ol_value_itr->second.empty()) {
         // order_line was not found
         ++currOrderIdx;
@@ -50,7 +50,7 @@ Operation StockLevel::GetNextOperation(size_t opCount,
         currOrderLineIdx = 0;
       } else {
         OrderLineRow ol_row;
-        ASSERT(ol_row.ParseFromString(prev_ol_value_itr->second));
+        UW_ASSERT(ol_row.ParseFromString(prev_ol_value_itr->second));
         orderLines.push_back(ol_row);
         Debug("  Order Line %u", currOrderLineIdx);
         Debug("    Item: %u", ol_row.i_id());
@@ -65,7 +65,7 @@ Operation StockLevel::GetNextOperation(size_t opCount,
       readAllOrderLines = opCount;
     }
   }
-  ASSERT(readAllOrderLines > 0);
+  UW_ASSERT(readAllOrderLines > 0);
   uint32_t orderLineIdx = opCount - readAllOrderLines;
   if (orderLineIdx < orderLines.size()) {
     return Get(StockRowKey(w_id, orderLines[orderLineIdx].i_id()));

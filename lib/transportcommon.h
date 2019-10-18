@@ -71,14 +71,14 @@ public:
                          const Message &m)
     {
         const transport::Configuration *cfg = configurations[src];
-        ASSERT(cfg != NULL);
+        UW_ASSERT(cfg != NULL);
 
         if (!replicaAddressesInitialized) {
             LookupAddresses();
         }
         
         auto kv = replicaAddresses[cfg].find(replicaIdx);
-        ASSERT(kv != replicaAddresses[cfg].end());
+        UW_ASSERT(kv != replicaAddresses[cfg].end());
         
         return SendMessageInternal(src, kv->second, m, false);
     }
@@ -87,7 +87,7 @@ public:
     SendMessageToAll(TransportReceiver *src, const Message &m)
     {
         const transport::Configuration *cfg = configurations[src];
-        ASSERT(cfg != NULL);
+        UW_ASSERT(cfg != NULL);
 
         if (!replicaAddressesInitialized) {
             LookupAddresses();
@@ -138,7 +138,7 @@ protected:
                           const transport::Configuration &config,
                           int replicaIdx)
     {
-        ASSERT(receiver != NULL);
+        UW_ASSERT(receiver != NULL);
 
         // Have we seen this configuration before? If so, get a
         // pointer to the canonical copy; if not, create one. This

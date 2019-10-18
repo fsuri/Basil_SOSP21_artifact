@@ -108,7 +108,7 @@ void ReplTransport::Register(TransportReceiver *receiver,
 
 int ReplTransport::Timer(uint64_t ms, timer_callback_t cb) {
     timer_id_++;
-    ASSERT(timers_.count(timer_id_) == 0);
+    UW_ASSERT(timers_.count(timer_id_) == 0);
     timers_[timer_id_] = cb;
     return timer_id_;
 }
@@ -130,7 +130,7 @@ bool ReplTransport::DeliverMessage(const ReplTransportAddress &addr,
                                    int index) {
     history_.push_back("transport.DeliverMessage({\"" + addr.Host() + "\", \"" +
                        addr.Port() + "\"}, " + std::to_string(index) + ");");
-    ASSERT(receivers_.count(addr) != 0);
+    UW_ASSERT(receivers_.count(addr) != 0);
     TransportReceiverState &state = receivers_[addr];
 
     // If the recipient of this address hasn't yet been registered, then
@@ -150,7 +150,7 @@ bool ReplTransport::DeliverMessage(const ReplTransportAddress &addr,
 void ReplTransport::TriggerTimer(int timer_id) {
     history_.push_back("transport.TriggerTimer(" + std::to_string(timer_id) +
                        ");");
-    ASSERT(timers_.count(timer_id) != 0);
+    UW_ASSERT(timers_.count(timer_id) != 0);
     timers_[timer_id]();
 }
 
@@ -250,7 +250,7 @@ bool ReplTransport::SendMessageInternal(TransportReceiver *src,
                                         const Message &m,
                                         bool multicast) {
     // Multicast is not supported.
-    ASSERT(!multicast);
+    UW_ASSERT(!multicast);
 
     const ReplTransportAddress &repl_addr =
         dynamic_cast<const ReplTransportAddress &>(src->GetAddress());

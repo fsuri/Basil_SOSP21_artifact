@@ -7,4 +7,4 @@ $(d)vr-test: $(o)vr-test.o \
 	$(LIB-simtransport) \
 	$(GTEST_MAIN)
 
-TEST_BINS += $(d)vr-test
+# TEST_BINS += $(d)vr-test

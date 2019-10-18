@@ -40,7 +40,7 @@ Log::Dump(opnum_t from, T out)
          i <= LastOpnum(); i++) {
 
         const LogEntry *entry = Find(i);
-        ASSERT(entry != NULL);
+        UW_ASSERT(entry != NULL);
         
         auto elem = out->Add();
         elem->set_view(entry->viewstamp.view);
@@ -72,9 +72,9 @@ Log::Install(iter start, iter end)
         // should be identical. If the existing log is longer,
         // something is wrong.
 //            it--;
-//            ASSERT(it->opnum() == lastViewstamp.opnum);
-//            ASSERT(it->view() == lastViewstamp.view);
-//            ASSERT(Find(it->opnum()+1) == NULL);
+//            UW_ASSERT(it->opnum() == lastViewstamp.opnum);
+//            UW_ASSERT(it->view() == lastViewstamp.view);
+//            UW_ASSERT(Find(it->opnum()+1) == NULL);
     }
 
     // Install the new log entries

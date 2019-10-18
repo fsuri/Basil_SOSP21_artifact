@@ -37,13 +37,18 @@
 
 class BenchmarkClient {
  public:
-  BenchmarkClient(AsyncClient &client, Transport &transport, int numRequests,
+  BenchmarkClient(Transport &transport, int numRequests,
       int expDuration, uint64_t delay, int warmupSec, int cooldownSec,
       int tputInterval, const std::string &latencyFilename = "");
   virtual ~BenchmarkClient();
 
   void Start();
   void OnReply(int result);
+
+  void StartLatency();
+  virtual void SendNext() = 0;
+  void IncrementSent();
+  inline bool IsFullyDone() { return done && cooldownDone; }
 
   struct Latency_t latency;
   bool started;
@@ -54,10 +59,8 @@ class BenchmarkClient {
 
   inline const Stats &GetStats() const { return stats; }
  protected:
-  virtual void SendNext() = 0;
   virtual std::string GetLastOp() const = 0;
   
-  AsyncClient &client;
   Stats stats;
   Transport &transport;
  private:

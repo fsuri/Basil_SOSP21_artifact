@@ -1,0 +1,24 @@
+syntax = "proto2";
+
+package smallbank.proto;
+
+enum Tables {
+	ACCOUNT = 0;
+	SAVING = 1;
+	CHECKING = 2;
+}
+
+message AccountRow {
+	required string name = 1;
+	required uint32 customer_id = 2;
+}
+
+message SavingRow {
+	required uint32 customer_id = 1;
+	required uint32 saving_balance = 2;
+}
+
+message CheckingRow {
+	required uint32 customer_id = 1;
+	required uint32 checking_balance = 2;
+}

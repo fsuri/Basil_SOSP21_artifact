@@ -94,7 +94,7 @@ void
 LockStore::Commit(uint64_t id, uint64_t timestamp)
 {
     Debug("[%lu] COMMIT", id);
-    ASSERT(prepared.find(id) != prepared.end());
+    UW_ASSERT(prepared.find(id) != prepared.end());
 
     Transaction txn = prepared[id];
 

@@ -56,7 +56,7 @@ Record::Record(const proto::RecordProto &record_proto) {
 RecordEntry &
 Record::Add(const RecordEntry& entry) {
     // Make sure this isn't a duplicate
-    ASSERT(entries.count(entry.opid) == 0);
+    UW_ASSERT(entries.count(entry.opid) == 0);
     entries[entry.opid] = entry;
     return entries[entry.opid];
 }
@@ -87,7 +87,7 @@ Record::Find(opid_t opid)
     }
 
     RecordEntry *entry = &entries[opid];
-    ASSERT(entry->opid == opid);
+    UW_ASSERT(entry->opid == opid);
     return entry;
 }
 

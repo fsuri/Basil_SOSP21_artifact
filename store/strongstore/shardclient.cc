@@ -293,9 +293,9 @@ ShardClient::CommitCallback(const string &request_str, const string &reply_str)
     // COMMITs always succeed.
     Reply reply;
     reply.ParseFromString(reply_str);
-    ASSERT(reply.status() == REPLY_OK);
+    UW_ASSERT(reply.status() == REPLY_OK);
 
-    ASSERT(blockingBegin != NULL);
+    UW_ASSERT(blockingBegin != NULL);
     blockingBegin->Reply(0);
 
     if (waiting != NULL) {
@@ -313,9 +313,9 @@ ShardClient::AbortCallback(const string &request_str, const string &reply_str)
     // ABORTs always succeed.
     Reply reply;
     reply.ParseFromString(reply_str);
-    ASSERT(reply.status() == REPLY_OK);
+    UW_ASSERT(reply.status() == REPLY_OK);
 
-    ASSERT(blockingBegin != NULL);
+    UW_ASSERT(blockingBegin != NULL);
     blockingBegin->Reply(0);
 
     if (waiting != NULL) {

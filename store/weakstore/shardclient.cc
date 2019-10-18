@@ -75,7 +75,7 @@ ShardClient::Get(uint64_t id, const string &key, Promise *promise)
     msg.set_clientid(client_id);
     msg.set_key(key);
 
-    ASSERT(waiting == NULL);
+    UW_ASSERT(waiting == NULL);
 
     waiting = promise;
 
@@ -108,7 +108,7 @@ ShardClient::Put(uint64_t id,
     msg.set_key(key);
     msg.set_value(value);
 
-    ASSERT(waiting == NULL);
+    UW_ASSERT(waiting == NULL);
 
     waiting = promise;
     // clear the reply counter

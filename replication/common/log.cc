@@ -44,7 +44,7 @@ Log::Log(bool useHash, opnum_t start, string initialHash)
     this->initialHash = initialHash;
     this->start = start;
     if (start == 1) {
-        ASSERT(initialHash == EMPTY_HASH);
+        UW_ASSERT(initialHash == EMPTY_HASH);
     }
 }
 
@@ -53,9 +53,9 @@ LogEntry &
 Log::Append(viewstamp_t vs, const Request &req, LogEntryState state)
 {
     if (entries.empty()) {
-        ASSERT(vs.opnum == start);
+        UW_ASSERT(vs.opnum == start);
     } else {
-        ASSERT(vs.opnum == LastOpnum()+1);
+        UW_ASSERT(vs.opnum == LastOpnum()+1);
     }
     
     LogEntry entry;
@@ -87,7 +87,7 @@ Log::Find(opnum_t opnum)
     }
 
     LogEntry *entry = &entries[opnum-start];
-    ASSERT(entry->viewstamp.opnum == opnum);
+    UW_ASSERT(entry->viewstamp.opnum == opnum);
     return entry;
 }
 
@@ -126,7 +126,7 @@ Log::RemoveAfter(opnum_t op)
 #if PARANOID
     // We'd better not be removing any committed entries.
     for (opnum_t i = op; i <= LastOpnum(); i++) {
-        ASSERT(Find(i)->state != LOG_STATE_COMMITTED);
+        UW_ASSERT(Find(i)->state != LOG_STATE_COMMITTED);
     }
 #endif
 
@@ -136,10 +136,10 @@ Log::RemoveAfter(opnum_t op)
 
     Debug("Removing log entries after " FMT_OPNUM, op);
 
-    ASSERT(op-start < entries.size());
+    UW_ASSERT(op-start < entries.size());
     entries.resize(op-start);
 
-    ASSERT(LastOpnum() == op-1);
+    UW_ASSERT(LastOpnum() == op-1);
 }
 
 LogEntry *

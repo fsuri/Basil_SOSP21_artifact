@@ -157,7 +157,7 @@ protected:
             const std::string filename =
                 addr.host + ":" + addr.port + "_" + std::to_string(i) + ".bin";
             int success = std::remove(filename.c_str());
-            ASSERT(success == 0);
+            UW_ASSERT(success == 0);
         }
     }
 };

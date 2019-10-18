@@ -301,7 +301,7 @@ IRReplica::HandleDoViewChange(const TransportAddress &remote,
             return;
         }
     } else {
-        ASSERT(msg.new_view() > view);
+        UW_ASSERT(msg.new_view() > view);
 
         // Update and persist our view.
         view = msg.new_view();
@@ -325,7 +325,7 @@ IRReplica::HandleDoViewChange(const TransportAddress &remote,
         view_change_timeout->Reset();
     }
 
-    ASSERT(msg.new_view() == view);
+    UW_ASSERT(msg.new_view() == view);
 
     // If we're not the leader of this view change, then we have nothing to do.
     if (myIdx != config.GetLeaderIndex(view)) {
@@ -333,7 +333,7 @@ IRReplica::HandleDoViewChange(const TransportAddress &remote,
     }
 
     // Replicas should send their records to the leader.
-    ASSERT(msg.has_record());
+    UW_ASSERT(msg.has_record());
     const std::map<int, DoViewChangeMessage> *quorum =
         do_view_change_quorum.AddAndCheckForQuorum(msg.new_view(),
                                                    msg.replicaidx(), msg);
@@ -374,7 +374,7 @@ IRReplica::HandleStartView(const TransportAddress &remote,
           msg.new_view());
 
     // A leader should not be sending START-VIEW messages to themselves.
-    ASSERT(myIdx != config.GetLeaderIndex(msg.new_view()));
+    UW_ASSERT(myIdx != config.GetLeaderIndex(msg.new_view()));
 
     if (msg.new_view() < view) {
         Debug("Ignoring START-VIEW for view %" PRIu64 " < %" PRIu64 ". ",
@@ -391,7 +391,7 @@ IRReplica::HandleStartView(const TransportAddress &remote,
         return;
     }
 
-    ASSERT((msg.new_view() >= view) ||
+    UW_ASSERT((msg.new_view() >= view) ||
            (msg.new_view() == view && status != STATUS_NORMAL));
 
     // Throw away our record for the new master record and call sync.
@@ -439,7 +439,7 @@ void IRReplica::PersistViewInfo() {
     view_info.set_view(view);
     view_info.set_latest_normal_view(latest_normal_view);
     std::string output;
-    ASSERT(view_info.SerializeToString(&output));
+    UW_ASSERT(view_info.SerializeToString(&output));
     persistent_view_info.Write(output);
 }
 
@@ -510,7 +510,7 @@ IRReplica::IrMergeRecords(const std::map<int, DoViewChangeMessage>& records) {
     for (const std::pair<const int, DoViewChangeMessage>& p : records) {
         const DoViewChangeMessage& msg = p.second;
         if (msg.latest_normal_view() == max_latest_normal_view) {
-            ASSERT(msg.has_record());
+            UW_ASSERT(msg.has_record());
             latest_records.push_back(Record(msg.record()));
         }
     }
@@ -527,7 +527,7 @@ IRReplica::IrMergeRecords(const std::map<int, DoViewChangeMessage>& records) {
         for (const std::pair<const opid_t, RecordEntry> &p : r.Entries()) {
             const opid_t &opid = p.first;
             const RecordEntry &entry = p.second;
-            ASSERT(opid == entry.opid);
+            UW_ASSERT(opid == entry.opid);
 
             if (entry.type == RECORD_TYPE_INCONSISTENT) {
                 // TODO: Do we have to update the view here?
@@ -541,7 +541,7 @@ IRReplica::IrMergeRecords(const std::map<int, DoViewChangeMessage>& records) {
                 }
                 entries_by_opid.erase(opid);
             } else {
-                ASSERT(entry.type == RECORD_TYPE_CONSENSUS &&
+                UW_ASSERT(entry.type == RECORD_TYPE_CONSENSUS &&
                        entry.state == RECORD_STATE_TENTATIVE);
                 // If R already contains this operation, then we don't group
                 // it.
@@ -595,10 +595,10 @@ IRReplica::IrMergeRecords(const std::map<int, DoViewChangeMessage>& records) {
         app->Merge(d, u, majority_results_in_d);
 
     // Sanity check Merge results. Every opid should be present.
-    ASSERT(results_by_opid.size() == d.size() + u.size());
+    UW_ASSERT(results_by_opid.size() == d.size() + u.size());
     for (const std::pair<const opid_t, std::string> &p : results_by_opid) {
         const opid_t &opid = p.first;
-        ASSERT(d.count(opid) + u.count(opid) == 1);
+        UW_ASSERT(d.count(opid) + u.count(opid) == 1);
     }
 
     // Convert Merge results into a Record.
@@ -608,7 +608,7 @@ IRReplica::IrMergeRecords(const std::map<int, DoViewChangeMessage>& records) {
         std::string &result = p.second;
 
         const std::vector<RecordEntry> entries = entries_by_opid[opid];
-        ASSERT(records.size() > 0);
+        UW_ASSERT(records.size() > 0);
         const RecordEntry &entry = entries[0];
 
         // TODO: Is this view correct?

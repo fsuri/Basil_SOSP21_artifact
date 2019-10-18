@@ -98,14 +98,14 @@ static __attribute__((unused)) signed char _Message_FileDebugFlag = -1;
                 if (Message_DebugEnabled(__FILE__))     \
                         _Message_Hexdump(data, len);    \
         } while (0)
-#ifndef NASSERT
-#define Assert(pred)                                            \
+#ifndef NUW_ASSERT
+#define UW_Assert(pred)                                            \
         do {                                                    \
                 if (!(pred))                                    \
                         Panic("Assertion `%s' failed", #pred);  \
         } while (0)
 #else
-#define Assert(pred)
+#define UW_Assert(pred)
 #endif
 
 static inline bool

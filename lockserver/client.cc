@@ -53,7 +53,7 @@ LockClient::~LockClient() { }
 
 void
 LockClient::lock_async(const std::string &key) {
-    ASSERT(waiting == nullptr);
+    UW_ASSERT(waiting == nullptr);
     Debug("Sending LOCK");
 
     string request_str;
@@ -82,7 +82,7 @@ LockClient::lock_async(const std::string &key) {
 
 bool
 LockClient::lock_wait() {
-    ASSERT(waiting != nullptr);
+    UW_ASSERT(waiting != nullptr);
 
     int status = waiting->GetReply();
     delete waiting;
@@ -98,7 +98,7 @@ LockClient::lock_wait() {
 
 void
 LockClient::unlock_async(const std::string &key) {
-    ASSERT(waiting == nullptr);
+    UW_ASSERT(waiting == nullptr);
     Debug("Sending UNLOCK");
 
     string request_str;

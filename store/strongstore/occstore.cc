@@ -85,7 +85,7 @@ OCCStore::Prepare(uint64_t id, const Transaction &txn)
         pair<Timestamp, string> cur;
         bool ret = store.get(read.first, cur);
 
-	    // ASSERT(ret);
+	    // UW_ASSERT(ret);
         if (!ret)
             continue;
 
@@ -129,7 +129,7 @@ void
 OCCStore::Commit(uint64_t id, uint64_t timestamp)
 {
     Debug("[%lu] COMMIT", id);
-    ASSERT(prepared.find(id) != prepared.end());
+    UW_ASSERT(prepared.find(id) != prepared.end());
 
     Transaction txn = prepared[id];
 

@@ -70,7 +70,7 @@ TEST(Configuration, Multicast)
     EXPECT_EQ(c.replica(0).port, "12345");
     EXPECT_EQ(c.replica(1).port, "12346");
     EXPECT_EQ(c.replica(2).port, "12347");
-    ASSERT_NE(nullptr, c.multicast());
+    UW_ASSERT_NE(nullptr, c.multicast());
     EXPECT_EQ(c.multicast()->host, "localhost");
     EXPECT_EQ(c.multicast()->port, "12348");    
 }
@@ -179,7 +179,7 @@ TEST(Configuration, Equality)
 
     ReplicaAddress multicastA("multicast", "11111");
     ReplicaAddress multicastB("multicast", "22222");
-    ASSERT_NE(multicastA, multicastB);
+    UW_ASSERT_NE(multicastA, multicastB);
 
     Configuration d(3, 1, replicasA, &multicastA);
     Configuration e(3, 1, replicasA, &multicastB);

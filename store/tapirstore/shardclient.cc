@@ -351,7 +351,7 @@ void ShardClient::AbortCallback(uint64_t reqId,
     const string &request_str, const string &reply_str) {
   // ABORTs always succeed.
 
-  // ASSERT(blockingBegin != NULL);
+  // UW_ASSERT(blockingBegin != NULL);
   // blockingBegin->Reply(0);
 
   Debug("[shard %lu:%i] ABORT callback", client_id, shard);

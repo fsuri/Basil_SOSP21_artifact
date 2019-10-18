@@ -56,15 +56,15 @@ void ExampleTransaction::GetNextPutValue(std::string &value) {
   value = "";
 
   GetReadValue("a", rv, found);
-  ASSERT(found);
+  UW_ASSERT(found);
   value = value + rv;
   
   GetReadValue("b", rv, found);
-  ASSERT(found);
+  UW_ASSERT(found);
   value = value + rv;
 
   GetReadValue("c", rv, found);
-  ASSERT(found);
+  UW_ASSERT(found);
   value = value + rv;
 }
 

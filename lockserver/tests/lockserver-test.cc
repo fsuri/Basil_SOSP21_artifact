@@ -88,7 +88,7 @@ protected:
             std::ifstream f(filename);
             if (f.good()) {
                 int success = std::remove(filename.c_str());
-                ASSERT(success == 0);
+                UW_ASSERT(success == 0);
             }
         }
     }
@@ -195,8 +195,8 @@ TEST_F(LockServerTest, SuccessfulViewChange) {
 TEST_F(LockServerTest, SuccessfulViewChangeNonemptyRdu) {
     const std::size_t nclients = clients_.size();
     const std::size_t nreplicas = replica_addrs_.size();
-    ASSERT_GE(nclients, 3);
-    ASSERT_GE(nreplicas, 3);
+    UW_ASSERT_GE(nclients, 3);
+    UW_ASSERT_GE(nreplicas, 3);
 
     // Send client 0's lock request.
     transport_.TriggerTimer(1);

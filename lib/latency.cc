@@ -104,7 +104,7 @@ LatencyAddHist(Latency_t *l, char type, uint64_t val, uint32_t count)
         val >>= 1;
         ++bucket;
     }
-    Assert(bucket < LATENCY_NUM_BUCKETS);
+    UW_Assert(bucket < LATENCY_NUM_BUCKETS);
     d->buckets[bucket] += count;
 
     return d;
@@ -147,7 +147,7 @@ Latency_EndRecType(Latency_t *l, Latency_Frame_t *fr, char type)
 {
     Latency_Pause(l);
 
-    Assert(l->bottom == fr);
+    UW_Assert(l->bottom == fr);
     l->bottom = fr->parent;
 
     LatencyAdd(l, type, fr->accum);

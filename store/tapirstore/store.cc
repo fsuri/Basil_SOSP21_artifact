@@ -124,7 +124,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                 timestamp.getTimestamp(), range.first.getTimestamp(),
                 range.second.getTimestamp());
           }
-          //ASSERT(timestamp > range.first);
+          //UW_ASSERT(timestamp > range.first);
           Debug("[%lu] ABORT rw conflict: %lu > %lu", id,
               timestamp.getTimestamp(), range.second.getTimestamp());
           std::string s = std::to_string((uint32_t) read.first[0]); 
@@ -246,7 +246,7 @@ Store::Commit(uint64_t id, uint64_t timestamp)
     Debug("[%lu, %lu] COMMIT", id, timestamp);
     
     // Nope. might not find it
-    //ASSERT(prepared.find(id) != prepared.end());
+    //UW_ASSERT(prepared.find(id) != prepared.end());
 
     pair<Timestamp, Transaction> p = prepared[id];
 

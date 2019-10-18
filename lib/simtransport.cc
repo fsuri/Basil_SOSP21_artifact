@@ -98,7 +98,7 @@ SimulatedTransport::SendMessageInternal(TransportReceiver *src,
                                         const Message &m,
                                         bool multicast)
 {
-    ASSERT(!multicast);
+    UW_ASSERT(!multicast);
 
     int dst = dstAddr.addr;
 
@@ -184,7 +184,7 @@ SimulatedTransport::Run()
         // If there's a timer, deliver the earliest one only
         if (processTimers && !timers.empty()) {
             auto iter = timers.begin();
-            ASSERT(iter->second.when >= vtime);
+            UW_ASSERT(iter->second.when >= vtime);
             vtime = iter->second.when;
             timer_callback_t cb = iter->second.cb;
             timers.erase(iter);

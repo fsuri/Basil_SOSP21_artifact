@@ -133,8 +133,8 @@ BindToPort(int fd, const string &host, const string &port)
         Panic("Failed to resolve host/port %s:%s: %s",
               host.c_str(), port.c_str(), gai_strerror(res));
     }
-    ASSERT(ai->ai_family == AF_INET);
-    ASSERT(ai->ai_socktype == SOCK_STREAM);
+    UW_ASSERT(ai->ai_family == AF_INET);
+    UW_ASSERT(ai->ai_socktype == SOCK_STREAM);
     if (ai->ai_addr->sa_family != AF_INET) {
         Panic("getaddrinfo returned a non IPv4 address");        
     }
@@ -251,7 +251,7 @@ TCPTransport::Register(TransportReceiver *receiver,
                        const transport::Configuration &config,
                        int replicaIdx)
 {
-    ASSERT(replicaIdx < config.n);
+    UW_ASSERT(replicaIdx < config.n);
     struct sockaddr_in sin;
 
     //const transport::Configuration *canonicalConfig =
@@ -339,7 +339,7 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     }
     
     struct bufferevent *ev = kv->second;
-    ASSERT(ev != NULL);
+    UW_ASSERT(ev != NULL);
 
     // Serialize message
     string data = m.SerializeAsString();
@@ -359,24 +359,24 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
 
     *((uint32_t *) ptr) = MAGIC;
     ptr += sizeof(uint32_t);
-    ASSERT((size_t)(ptr-buf) < totalLen);
+    UW_ASSERT((size_t)(ptr-buf) < totalLen);
     
     *((size_t *) ptr) = totalLen;
     ptr += sizeof(size_t);
-    ASSERT((size_t)(ptr-buf) < totalLen);
+    UW_ASSERT((size_t)(ptr-buf) < totalLen);
 
     *((size_t *) ptr) = typeLen;
     ptr += sizeof(size_t);
-    ASSERT((size_t)(ptr-buf) < totalLen);
+    UW_ASSERT((size_t)(ptr-buf) < totalLen);
 
-    ASSERT((size_t)(ptr+typeLen-buf) < totalLen);
+    UW_ASSERT((size_t)(ptr+typeLen-buf) < totalLen);
     memcpy(ptr, type.c_str(), typeLen);
     ptr += typeLen;
     *((size_t *) ptr) = dataLen;
     ptr += sizeof(size_t);
 
-    ASSERT((size_t)(ptr-buf) < totalLen);
-    ASSERT((size_t)(ptr+dataLen-buf) == totalLen);
+    UW_ASSERT((size_t)(ptr-buf) < totalLen);
+    UW_ASSERT((size_t)(ptr+dataLen-buf) == totalLen);
     memcpy(ptr, data.c_str(), dataLen);
     ptr += dataLen;
 
@@ -475,7 +475,7 @@ TCPTransport::TimerCallback(evutil_socket_t fd, short what, void *arg)
     TCPTransport::TCPTransportTimerInfo *info =
         (TCPTransport::TCPTransportTimerInfo *)arg;
 
-    ASSERT(what & EV_TIMEOUT);
+    UW_ASSERT(what & EV_TIMEOUT);
 
     info->transport->OnTimer(info);
 }
@@ -580,7 +580,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         if (magic == NULL) {
             return;
         }
-        ASSERT(*magic == MAGIC);
+        UW_ASSERT(*magic == MAGIC);
     
         size_t *sz;
         unsigned char *x = evbuffer_pullup(evbuf, sizeof(*magic) + sizeof(*sz));
@@ -590,7 +590,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
             return;
         }
         size_t totalSize = *sz;
-        ASSERT(totalSize < 1073741826);
+        UW_ASSERT(totalSize < 1073741826);
         
         if (evbuffer_get_length(evbuf) < totalSize) {
             Debug("Don't have %ld bytes for a message yet, only %ld",
@@ -601,29 +601,29 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         
         char buf[totalSize];
         size_t copied = evbuffer_remove(evbuf, buf, totalSize);
-        ASSERT(copied == totalSize);
+        UW_ASSERT(copied == totalSize);
         
         // Parse message
         char *ptr = buf + sizeof(*sz) + sizeof(*magic);
         
         size_t typeLen = *((size_t *)ptr);
         ptr += sizeof(size_t);
-        ASSERT((size_t)(ptr-buf) < totalSize);
+        UW_ASSERT((size_t)(ptr-buf) < totalSize);
         
-        ASSERT((size_t)(ptr+typeLen-buf) < totalSize);
+        UW_ASSERT((size_t)(ptr+typeLen-buf) < totalSize);
         string msgType(ptr, typeLen);
         ptr += typeLen;
         
         size_t msgLen = *((size_t *)ptr);
         ptr += sizeof(size_t);
-        ASSERT((size_t)(ptr-buf) < totalSize);
+        UW_ASSERT((size_t)(ptr-buf) < totalSize);
         
-        ASSERT((size_t)(ptr+msgLen-buf) <= totalSize);
+        UW_ASSERT((size_t)(ptr+msgLen-buf) <= totalSize);
         string msg(ptr, msgLen);
         ptr += msgLen;
         
         auto addr = transport->tcpAddresses.find(bev);
-        ASSERT(addr != transport->tcpAddresses.end());
+        UW_ASSERT(addr != transport->tcpAddresses.end());
         
         // Dispatch
         info->receiver->ReceiveMessage(addr->second, msgType, msg);
@@ -654,7 +654,7 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
     TCPTransportTCPListener *info = (TCPTransportTCPListener *)arg;
     TCPTransport *transport = info->transport;
     auto it = transport->tcpAddresses.find(bev);    
-    ASSERT(it != transport->tcpAddresses.end());
+    UW_ASSERT(it != transport->tcpAddresses.end());
     TCPTransportAddress addr = it->second;
     
     if (what & BEV_EVENT_CONNECTED) {

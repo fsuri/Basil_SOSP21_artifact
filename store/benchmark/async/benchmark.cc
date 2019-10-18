@@ -12,6 +12,7 @@
 #include "store/common/truetime.h"
 #include "store/common/stats.h"
 #include "store/common/partitioner.h"
+#include "store/common/frontend/sync_client.h"
 #include "store/common/frontend/async_client.h"
 #include "store/common/frontend/async_adapter_client.h"
 #include "store/strongstore/client.h"
@@ -23,11 +24,13 @@
 #include "store/benchmark/async/retwis/retwis_client.h"
 #include "store/benchmark/async/tpcc/tpcc_client.h"
 #include "store/mortystore/client.h"
+#include "store/benchmark/async/smallbank/smallbank_client.h"
 
 #include <gflags/gflags.h>
 
-#include <vector>
 #include <algorithm>
+#include <thread>
+#include <vector>
 
 enum protomode_t {
 	PROTO_UNKNOWN,
@@ -40,7 +43,8 @@ enum protomode_t {
 enum benchmode_t {
   BENCH_UNKNOWN,
   BENCH_RETWIS,
-  BENCH_TPCC
+  BENCH_TPCC,
+  BENCH_SMALLBANK_SYNC
 };
 
 /**
@@ -99,11 +103,13 @@ DEFINE_validator(protocol_mode, &ValidateProtocolMode);
 
 const std::string benchmark_args[] = {
 	"retwis",
-  "tpcc"
+  "tpcc",
+  "smallbank"
 };
 const benchmode_t benchmodes[] {
   BENCH_RETWIS,
-  BENCH_TPCC
+  BENCH_TPCC,
+  BENCH_SMALLBANK_SYNC
 };
 static bool ValidateBenchmark(const char* flagname, const std::string &value) {
   int n = sizeof(benchmark_args);
@@ -173,6 +179,26 @@ DEFINE_int32(tpcc_payment_ratio, 43, "ratio of payment transactions to other"
 DEFINE_int32(tpcc_order_status_ratio, 4, "ratio of order_status transactions to other"
     " transaction types (for tpcc)");
 DEFINE_bool(static_w_id, false, "force clients to use same w_id for each treansaction");
+
+/**
+ * Smallbank settings.
+ */
+
+DEFINE_int32(balance_ratio, 60, "percentage of balance transactions"
+    " (for smallbank)");
+DEFINE_int32(deposit_checking_ratio, 10, "percentage of deposit checking"
+    " transactions (for smallbank)");
+DEFINE_int32(transact_saving_ratio, 10, "percentage of transact saving"
+    " transactions (for smallbank)");
+DEFINE_int32(amalgamate_ratio, 10, "percentage of deposit checking"
+    " transactions (for smallbank)");
+DEFINE_int32(write_check_ratio, 10, "percentage of write check transactions"
+    " (for smallbank)");
+DEFINE_int32(num_hotspots, 1000, "# of hotspots (for smallbank)");
+DEFINE_int32(num_customers, 18000, "# of customers (for smallbank)");
+DEFINE_int32(timeout, 5000, "timeout in ms (for smallbank)");
+DEFINE_string(customer_name_file_path, "smallbank_names", "path to file"
+    " containing names to be loaded (for smallbank)");
 
 DEFINE_LATENCY(op);
 
@@ -245,8 +271,11 @@ int main(int argc, char **argv) {
 
   TCPTransport transport(0.0, 0.0, 0, false);
 
-  std::vector<::AsyncClient *> clients;
+  std::vector<::AsyncClient *> asyncClients;
+  std::vector<::SyncClient *> syncClients;
+  std::vector<::Client *> clients;
   std::vector<::BenchmarkClient *> benchClients;
+  std::vector<std::thread *> threads;
   KeySelector *keySelector = new UniformKeySelector(keys);
 
   partitioner part;
@@ -260,13 +289,13 @@ int main(int argc, char **argv) {
   }
 
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
-    AsyncClient *client;
+    Client *client;
     switch (mode) {
       case PROTO_TAPIR: {
-        client = new AsyncAdapterClient(new tapirstore::Client(
-              FLAGS_config_prefix, FLAGS_num_shards, FLAGS_num_groups,
-              FLAGS_closest_replica, &transport, part, FLAGS_tapir_sync_commit,
-              TrueTime(FLAGS_clock_skew, FLAGS_clock_error)));
+        client = new tapirstore::Client(FLAGS_config_prefix, FLAGS_num_shards,
+            FLAGS_num_groups, FLAGS_closest_replica, &transport, part,
+            FLAGS_tapir_sync_commit, TrueTime(FLAGS_clock_skew,
+              FLAGS_clock_error));
         break;
       }
       /*case MODE_WEAK: {
@@ -288,28 +317,68 @@ int main(int argc, char **argv) {
     }
 
 	  BenchmarkClient *bench;
+    AsyncClient *asyncClient = nullptr;
+    SyncClient *syncClient = nullptr;
 	  switch (benchMode) {
       case BENCH_RETWIS:
-        bench = new retwis::RetwisClient(keySelector, *client, transport,
+        bench = new retwis::RetwisClient(keySelector, *asyncClient, transport,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
             FLAGS_abort_backoff, FLAGS_retry_aborted);
         break;
       case BENCH_TPCC:
-        bench = new tpcc::TPCCClient(*client, transport, FLAGS_num_requests,
-            FLAGS_exp_duration, FLAGS_delay, FLAGS_warmup_secs,
-            FLAGS_cooldown_secs, FLAGS_tput_interval, FLAGS_tpcc_num_warehouses,
-            FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id, FLAGS_tpcc_C_c_last,
-            FLAGS_tpcc_new_order_ratio, FLAGS_tpcc_delivery_ratio,
-            FLAGS_tpcc_payment_ratio, FLAGS_tpcc_order_status_ratio,
-            FLAGS_tpcc_stock_level_ratio, FLAGS_static_w_id,
-            (FLAGS_client_id << 4) | i, FLAGS_abort_backoff, FLAGS_retry_aborted);
+        asyncClient = new AsyncAdapterClient(client);
+        bench = new tpcc::TPCCClient(*asyncClient, transport,
+            FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
+            FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
+            FLAGS_tpcc_num_warehouses, FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id,
+            FLAGS_tpcc_C_c_last, FLAGS_tpcc_new_order_ratio,
+            FLAGS_tpcc_delivery_ratio, FLAGS_tpcc_payment_ratio,
+            FLAGS_tpcc_order_status_ratio, FLAGS_tpcc_stock_level_ratio,
+            FLAGS_static_w_id, (FLAGS_client_id << 4) | i, FLAGS_abort_backoff,
+            FLAGS_retry_aborted);
+        break;
+      case BENCH_SMALLBANK_SYNC:
+        syncClient = new SyncClient(client);
+        bench = new smallbank::SmallbankClient(*syncClient, transport,
+            FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
+            FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
+            FLAGS_abort_backoff, FLAGS_retry_aborted,
+            FLAGS_timeout, FLAGS_balance_ratio, FLAGS_deposit_checking_ratio,
+            FLAGS_transact_saving_ratio, FLAGS_amalgamate_ratio,
+            FLAGS_num_hotspots, FLAGS_num_customers - FLAGS_num_hotspots,
+            FLAGS_customer_name_file_path);
         break;
       default:
         NOT_REACHABLE();
     }
 
-	  transport.Timer(0, [bench]() { bench->Start(); });
+    switch (benchMode) {
+      case BENCH_RETWIS:
+      case BENCH_TPCC:
+        // async benchmarks
+	      transport.Timer(0, [bench]() { bench->Start(); });
+        break;
+      case BENCH_SMALLBANK_SYNC:
+        threads.push_back(new std::thread([&](){ 
+            bench->Start();
+            while (!bench->IsFullyDone()) {
+              bench->StartLatency();
+              bench->SendNext();
+              bench->IncrementSent();
+            }
+        }));
+        break;
+      default:
+        NOT_REACHABLE();
+    }
+
+    if (asyncClient != nullptr) {
+      asyncClients.push_back(asyncClient);
+    }
+    if (syncClient != nullptr) {
+      syncClients.push_back(syncClient);
+    }
     clients.push_back(client);
     benchClients.push_back(bench);
   }
@@ -343,6 +412,23 @@ int main(int argc, char **argv) {
 
     if (FLAGS_stats_file.size() > 0) {
       total.ExportJSON(FLAGS_stats_file);
+    }
+
+    for (auto i : threads) {
+      i->join();
+      delete i;
+    }
+    for (auto i : benchClients) {
+      delete i;
+    }
+    for (auto i : syncClients) {
+      delete i;
+    }
+    for (auto i : asyncClients) {
+      delete i;
+    }
+    for (auto i : clients) {
+      delete i;
     }
     exit(0);
   });
