@@ -338,7 +338,7 @@ int main(int argc, char **argv) {
         break;
       }*/
       case PROTO_MORTY: {
-        client = new mortystore::Client(FLAGS_config_prefix, FLAGS_num_shards,
+        asyncClient = new mortystore::Client(FLAGS_config_prefix, FLAGS_num_shards,
             FLAGS_num_groups, FLAGS_closest_replica, &transport, part);
         break;
       }
@@ -351,13 +351,13 @@ int main(int argc, char **argv) {
       case BENCH_TPCC:
       case BENCH_RW:
         if (asyncClient == nullptr) {
-          ASSERT(client != nullptr);
+          UW_ASSERT(client != nullptr);
           asyncClient = new AsyncAdapterClient(client);
         }
         break;
       case BENCH_SMALLBANK_SYNC:
         if (syncClient == nullptr) {
-          ASSERT(client != nullptr);
+          UW_ASSERT(client != nullptr);
           syncClient = new SyncClient(client);
         }
         break;
@@ -368,14 +368,14 @@ int main(int argc, char **argv) {
 	  BenchmarkClient *bench;
 	  switch (benchMode) {
       case BENCH_RETWIS:
-        ASSERT(asyncClient != nullptr);
+        UW_ASSERT(asyncClient != nullptr);
         bench = new retwis::RetwisClient(keySelector, *asyncClient, transport,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
             FLAGS_abort_backoff, FLAGS_retry_aborted);
         break;
       case BENCH_TPCC:
-        ASSERT(asyncClient != nullptr);
+        UW_ASSERT(asyncClient != nullptr);
         bench = new tpcc::TPCCClient(*asyncClient, transport,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
@@ -387,7 +387,7 @@ int main(int argc, char **argv) {
             FLAGS_retry_aborted);
         break;
       case BENCH_SMALLBANK_SYNC:
-        ASSERT(syncClient != nullptr);
+        UW_ASSERT(syncClient != nullptr);
         bench = new smallbank::SmallbankClient(*syncClient, transport,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
@@ -398,7 +398,7 @@ int main(int argc, char **argv) {
             FLAGS_customer_name_file_path);
         break;
       case BENCH_RW:
-        ASSERT(asyncClient != nullptr);
+        UW_ASSERT(asyncClient != nullptr);
         bench = new rw::RWClient(keySelector, FLAGS_num_keys_txn,
             *asyncClient, transport,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,

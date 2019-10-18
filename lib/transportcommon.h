@@ -73,14 +73,14 @@ public:
                          const Message &m)
     {
         const transport::Configuration *cfg = configurations[src];
-        ASSERT(cfg != NULL);
+        UW_ASSERT(cfg != NULL);
 
         if (!replicaAddressesInitialized) {
             LookupAddresses();
         }
 
         auto kv = g_replicaAddresses[cfg][groupIdx].find(replicaIdx);
-        ASSERT(kv != g_replicaAddresses[cfg][groupIdx].end());
+        UW_ASSERT(kv != g_replicaAddresses[cfg][groupIdx].end());
 
 
         return SendMessageInternal(src, kv->second, m, false);
@@ -203,7 +203,7 @@ protected:
                           const transport::Configuration &config,
                           int groupIdx,
                           int replicaIdx) {
-        ASSERT(receiver != NULL);
+        UW_ASSERT(receiver != NULL);
         // Have we seen this configuration before? If so, get a
         // pointer to the canonical copy; if not, create one. This
         // allows us to use that pointer as a key in various
@@ -220,7 +220,7 @@ protected:
 
         // If this is a replica, record the receiver
         if (replicaIdx != -1) {
-            ASSERT(groupIdx != -1);
+            UW_ASSERT(groupIdx != -1);
             g_replicaReceivers[canonical][groupIdx][replicaIdx] = receiver;
         }
 

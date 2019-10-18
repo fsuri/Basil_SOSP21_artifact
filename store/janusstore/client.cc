@@ -146,7 +146,7 @@ namespace janusstore {
     bool has_replica_deps = false;
     std::unordered_set<uint64_t> replica_deps;
 
-    ASSERT(replies.size() != 0);
+    UW_ASSERT(replies.size() != 0);
 
     for (auto reply: replies) {
       Debug("processing PREACCEPT_OK %s", reply.DebugString().c_str());

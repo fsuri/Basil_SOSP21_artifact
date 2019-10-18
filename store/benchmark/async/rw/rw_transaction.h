@@ -11,7 +11,7 @@ namespace rw {
 
 class RWTransaction : public AsyncTransaction {
  public:
-  RWTransaction(uint64_t tid, KeySelector *keySelector, int numKeys);
+  RWTransaction(KeySelector *keySelector, int numKeys);
   virtual ~RWTransaction();
 
   virtual Operation GetNextOperation(size_t opCount,

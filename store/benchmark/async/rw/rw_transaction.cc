@@ -2,8 +2,8 @@
 
 namespace rw {
 
-RWTransaction::RWTransaction(uint64_t tid, KeySelector *keySelector,
-    int numKeys) : AsyncTransaction(tid), keySelector(keySelector) {
+RWTransaction::RWTransaction(KeySelector *keySelector,
+    int numKeys) : keySelector(keySelector) {
   for (int i = 0; i < numKeys; ++i) {
     keyIdxs.push_back(keySelector->GetKey());
   }

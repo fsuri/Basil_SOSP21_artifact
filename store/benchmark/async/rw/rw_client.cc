@@ -1,10 +1,5 @@
 #include "store/benchmark/async/rw/rw_client.h"
 
-#include "store/benchmark/async/rw/add_user.h"
-#include "store/benchmark/async/rw/follow.h"
-#include "store/benchmark/async/rw/get_timeline.h"
-#include "store/benchmark/async/rw/post_tweet.h"
-
 #include <iostream>
 
 namespace rw {
@@ -23,8 +18,7 @@ RWClient::~RWClient() {
 }
 
 AsyncTransaction *RWClient::GetNextTransaction() {
-  tid++;
-  return new RWTransaction(tid, keySelector, numKeys);
+  return new RWTransaction(keySelector, numKeys);
 }
 
 std::string RWClient::GetLastOp() const {

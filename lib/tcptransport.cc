@@ -344,7 +344,7 @@ TCPTransport::Register(TransportReceiver *receiver,
                        int groupIdx,
                        int replicaIdx)
 {
-    ASSERT(replicaIdx < config.n);
+    UW_ASSERT(replicaIdx < config.n);
     struct sockaddr_in sin;
     RegisterConfiguration(receiver, config, groupIdx, replicaIdx);
 
@@ -434,7 +434,7 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
 
     // Serialize message
     string data;
-    ASSERT(m.SerializeToString(&data));
+    UW_ASSERT(m.SerializeToString(&data));
     string type = m.GetTypeName();
     size_t typeLen = type.length();
     size_t dataLen = data.length();
