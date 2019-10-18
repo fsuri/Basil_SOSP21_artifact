@@ -99,6 +99,7 @@ class Client : public ::AsyncClient {
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
   std::vector<ShardClient *> sclients;
   uint64_t prepareBranchIds;
+  transport::Configuration *config;
 
 };
 

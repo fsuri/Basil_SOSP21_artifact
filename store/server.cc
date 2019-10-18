@@ -194,9 +194,7 @@ int main(int argc, char **argv) {
   }
 
   // LMAO THIS WORKS
-  transport::Configuration config = ((proto == PROTO_JANUS) ?
-      transport::Configuration(configStream, true) :
-      transport::Configuration(configStream));
+  transport::Configuration config(configStream);
 
   if (FLAGS_replica_idx >= static_cast<uint64_t>(config.n)) {
     std::cerr << "Replica index " << FLAGS_replica_idx << " is out of bounds"
@@ -224,18 +222,18 @@ int main(int argc, char **argv) {
   switch (proto) {
     case PROTO_TAPIR: {
       server = new tapirstore::Server(FLAGS_linearizable);
-      replica = new replication::ir::IRReplica(config, FLAGS_replica_idx,
+      replica = new replication::ir::IRReplica(config, FLAGS_group_idx, FLAGS_replica_idx,
           &transport, dynamic_cast<replication::ir::IRAppReplica *>(server));
       break;
     }
     case PROTO_WEAK: {
-      server = new weakstore::Server(config, FLAGS_replica_idx, &transport);
+      server = new weakstore::Server(config, FLAGS_group_idx, FLAGS_replica_idx, &transport);
       break;
     }
     case PROTO_STRONG: {
       server = new strongstore::Server(strongMode, FLAGS_clock_skew,
           FLAGS_clock_error);
-      replica = new replication::vr::VRReplica(config, FLAGS_replica_idx,
+      replica = new replication::vr::VRReplica(config, FLAGS_group_idx, FLAGS_replica_idx,
           &transport, 1, dynamic_cast<replication::AppReplica *>(server));
       break;
     }
@@ -244,7 +242,8 @@ int main(int argc, char **argv) {
       break;
     }
     case PROTO_MORTY: {
-      server = new mortystore::Server(config, FLAGS_replica_idx, &transport);
+      server = new mortystore::Server(config, FLAGS_group_idx, FLAGS_replica_idx,
+          &transport);
       break;
     }
     default: {

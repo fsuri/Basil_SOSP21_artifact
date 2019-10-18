@@ -70,30 +70,32 @@ public:
     TCPTransport(double dropRate = 0.0, double reogrderRate = 0.0,
                     int dscp = 0, bool handleSignals = true);
     virtual ~TCPTransport();
-    void Register(TransportReceiver *receiver,
-                  const transport::Configuration &config,
-                  int replicaIdx);
-    void Register(TransportReceiver *receiver,
+    virtual void Register(TransportReceiver *receiver,
                   const transport::Configuration &config,
                   int groupIdx,
-                  int replicaIdx);
-    void Run();
-    void Stop();
-    int Timer(uint64_t ms, timer_callback_t cb);
-    bool CancelTimer(int id);
-    void CancelAllTimers();
+                  int replicaIdx) override;
+    virtual bool OrderedMulticast(TransportReceiver *src,
+        const std::vector<int> &groups, const Message &m) override;
+
+    virtual void Run() override;
+    virtual void Stop() override;
+    virtual int Timer(uint64_t ms, timer_callback_t cb) override;
+    virtual bool CancelTimer(int id) override;
+    virtual void CancelAllTimers() override;
 
     TCPTransportAddress
     LookupAddress(const transport::Configuration &cfg,
                   int replicaIdx);
 
-    TCPTransportAddress
+    virtual TCPTransportAddress
     LookupAddress(const transport::Configuration &config,
                   int groupIdx,
-                  int replicaIdx);
+                  int replicaIdx) override;
 
     TCPTransportAddress
     LookupAddress(const transport::ReplicaAddress &addr);
+
+
 private:
     std::mutex mtx;
     struct TCPTransportTimerInfo
@@ -124,11 +126,18 @@ private:
     std::map<TCPTransportAddress, struct bufferevent *> tcpOutgoing;
     std::map<struct bufferevent *, TCPTransportAddress> tcpAddresses;
 
-    bool SendMessageInternal(TransportReceiver *src,
+    virtual bool SendMessageInternal(TransportReceiver *src,
                              const TCPTransportAddress &dst,
-                             const Message &m, bool multicast = false);
-    const TCPTransportAddress *
-    LookupMulticastAddress(const transport::Configuration*config) { return NULL; };
+                             const Message &m) override;
+    virtual const TCPTransportAddress *
+    LookupMulticastAddress(const transport::Configuration*config) override {
+      return nullptr;
+    };
+
+    virtual const TCPTransportAddress *
+    LookupFCAddress(const transport::Configuration *cfg) override {
+      return nullptr;
+    }
 
     void ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst);
     void OnTimer(TCPTransportTimerInfo *info);

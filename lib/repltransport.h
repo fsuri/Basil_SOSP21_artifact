@@ -203,16 +203,13 @@ private:
 
 class ReplTransport : public TransportCommon<ReplTransportAddress> {
 public:
-    void Register(TransportReceiver *receiver,
-                  const transport::Configuration &config,
-                  int replicaIdx) override;
-    void Register(TransportReceiver *receiver,
+    virtual void Register(TransportReceiver *receiver,
                   const transport::Configuration &config,
                   int groupIdx,
                   int replicaIdx) override;
-    int Timer(uint64_t ms, timer_callback_t cb) override;
-    bool CancelTimer(int id) override;
-    void CancelAllTimers() override;
+    virtual int Timer(uint64_t ms, timer_callback_t cb) override;
+    virtual bool CancelTimer(int id) override;
+    virtual void CancelAllTimers() override;
 
     // DeliverMessage(addr, i) delivers the ith queued inbound message to the
     // receiver with address addr. It's possible to send a message to the
@@ -224,20 +221,23 @@ public:
     void TriggerTimer(int timer_id);
 
     // Launch the REPL.
-    void Run();
+    virtual void Run() override;
+    virtual void Stop() override;
 
 protected:
-    bool SendMessageInternal(TransportReceiver *src,
-                             const ReplTransportAddress &dst, const Message &m,
-                             bool multicast = false) override;
-    ReplTransportAddress
+    virtual bool SendMessageInternal(TransportReceiver *src,
+                             const ReplTransportAddress &dst, const Message &m) override;
+    virtual ReplTransportAddress
     LookupAddress(const transport::Configuration &cfg,
                   int groupIdx,
                   int replicaIdx);
-    ReplTransportAddress LookupAddress(const transport::Configuration &cfg,
-                                       int replicaIdx) override;
-    const ReplTransportAddress *LookupMulticastAddress(
+    virtual const ReplTransportAddress *LookupMulticastAddress(
         const transport::Configuration *cfg) override;
+    virtual const ReplTransportAddress *
+    LookupFCAddress(const transport::Configuration *cfg) override {
+      return nullptr;
+    }
+
 
 private:
     // Prompt the user for input and either (1) trigger a timer, (2) deliver a

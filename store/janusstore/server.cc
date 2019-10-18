@@ -21,7 +21,8 @@ Server::~Server() {
 }
 
 void Server::ReceiveMessage(const TransportAddress &remote,
-                        const string &type, const string &data) {
+                        const string &type, const string &data,
+                        void *meta_data) {
     Debug("[Server %i] Received message", this->myIdx);
     replication::ir::proto::UnloggedRequestMessage unlogged_request;
     replication::ir::proto::UnloggedReplyMessage unlogged_reply;

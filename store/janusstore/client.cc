@@ -6,7 +6,7 @@ namespace janusstore {
   using namespace std;
   using namespace proto;
 
-  Client::Client(const string configPath, int nShards, int closestReplica, Transport * transport): nshards(nShards), transport(transport) {
+  Client::Client(const string configPath, int nShards, int closestReplica, Transport * transport): nshards(nShards), transport(transport), config(nullptr) {
     // initialize a random client ID
     client_id = 0;
     while (client_id == 0) {
@@ -24,12 +24,17 @@ namespace janusstore {
 
     bclient.reserve(nshards);
     Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
+    
+    std::ifstream configStream(configPath);
+    if (configStream.fail()) {
+      Panic("Unable to read configuration file: %s\n", configPath.c_str());
+    }
+    config = new transport::Configuration(configStream);
 
     /* Start a shardclient for each shard. */
     // TODO change this to a single config file lul
     for (int i = 0; i < this->nshards; i++) {
-      string shardConfigPath = configPath + ".config";
-      ShardClient * shardclient = new ShardClient(shardConfigPath,
+      ShardClient * shardclient = new ShardClient(config,
         transport, client_id, i, closestReplica);
       // we use shardclients instead of bufferclients here
       bclient[i] = shardclient;
@@ -43,6 +48,7 @@ namespace janusstore {
     for (auto b: bclient) {
       delete b;
     }
+    delete config;
   }
 
   uint64_t Client::keyToShard(string key, uint64_t nshards) {

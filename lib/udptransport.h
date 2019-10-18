@@ -43,8 +43,9 @@
 #include <vector>
 #include <unordered_map>
 #include <random>
-#include <mutex>
 #include <netinet/in.h>
+#include <map>
+#include <mutex>
 
 class UDPTransportAddress : public TransportAddress
 {
@@ -66,23 +67,22 @@ class UDPTransport : public TransportCommon<UDPTransportAddress>
 {
 public:
     UDPTransport(double dropRate = 0.0, double reorderRate = 0.0,
-                    int dscp = 0, bool handleSignals = true);
+                 int dscp = 0, event_base *evbase = nullptr);
     virtual ~UDPTransport();
-    void Register(TransportReceiver *receiver,
-                  const transport::Configuration &config,
-                  int replicaIdx);
-    void Register(TransportReceiver *receiver,
-                  const transport::Configuration &config,
-                  int groupIdx,
-                  int replicaIdx);
-    void Run();
-    void Stop();
-    int Timer(uint64_t ms, timer_callback_t cb);
-    bool CancelTimer(int id);
-    void CancelAllTimers();
+    virtual void Register(TransportReceiver *receiver,
+                          const transport::Configuration &config,
+                          int groupIdx,
+                          int replicaIdx) override;
+    virtual bool OrderedMulticast(TransportReceiver *src,
+                                  const std::vector<int> &groups,
+                                  const Message &m) override;
+    void Run() override;
+    void Stop() override;
+    int Timer(uint64_t ms, timer_callback_t cb) override;
+    bool CancelTimer(int id) override;
+    void CancelAllTimers() override;
 
 private:
-    std::mutex mtx;
     struct UDPTransportTimerInfo
     {
         UDPTransport *transport;
@@ -112,8 +112,10 @@ private:
     std::map<TransportReceiver*, int> fds; // receiver -> fd
     std::map<const transport::Configuration *, int> multicastFds;
     std::map<int, const transport::Configuration *> multicastConfigs;
+    std::set<int> rawFds;
     int lastTimerId;
     std::map<int, UDPTransportTimerInfo *> timers;
+    std::mutex timersLock;
     uint64_t lastFragMsgId;
     struct UDPTransportFragInfo
     {
@@ -122,23 +124,32 @@ private:
     };
     std::map<UDPTransportAddress, UDPTransportFragInfo> fragInfo;
 
+    bool _SendMessageInternal(TransportReceiver *src,
+                              const UDPTransportAddress &dst,
+                              const Message &m,
+                              size_t meta_len,
+                              void *meta_data);
     bool SendMessageInternal(TransportReceiver *src,
                              const UDPTransportAddress &dst,
-                             const Message &m, bool multicast = false);
+                             const Message &m) override;
+
     UDPTransportAddress
     LookupAddress(const transport::ReplicaAddress &addr);
     UDPTransportAddress
     LookupAddress(const transport::Configuration &cfg,
-                  int replicaIdx);
-    UDPTransportAddress
-    LookupAddress(const transport::Configuration &cfg,
                   int groupIdx,
-                  int replicaIdx);
+                  int replicaIdx) override;
     const UDPTransportAddress *
-    LookupMulticastAddress(const transport::Configuration *cfg);
+    LookupMulticastAddress(const transport::Configuration *cfg) override;
+    const UDPTransportAddress *
+        LookupFCAddress(const transport::Configuration *cfg) override;
     void ListenOnMulticastPort(const transport::Configuration
-                               *canonicalConfig);
+                               *canonicalConfig,
+                               int groupIdx,
+                               int replicaIdx);
     void OnReadable(int fd);
+    void ProcessPacket(int fd, sockaddr_in sender, socklen_t senderSize,
+                     char *buf, ssize_t sz);
     void OnTimer(UDPTransportTimerInfo *info);
     static void SocketCallback(evutil_socket_t fd,
                                short what, void *arg);

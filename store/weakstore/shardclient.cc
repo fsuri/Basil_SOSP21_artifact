@@ -46,7 +46,7 @@ ShardClient::ShardClient(string configPath, Transport *transport,
                 configPath.c_str());
     }
     config = new transport::Configuration(configStream);
-    transport->Register(this, *config, -1);
+    transport->Register(this, *config, -1, -1);
     
     timeout = new Timeout(transport, 250, [this]() {
             RequestTimedOut();
@@ -150,7 +150,7 @@ ShardClient::RequestTimedOut()
 void
 ShardClient::ReceiveMessage(const TransportAddress &remote,
                          const string &type,
-                         const string &data)
+                         const string &data, void *meta_data)
 {
     GetReplyMessage getReply;
     PutReplyMessage putReply;

@@ -37,14 +37,25 @@
 
 typedef uint64_t view_t;
 typedef uint64_t opnum_t;
+typedef uint64_t sessnum_t;
+typedef uint64_t msgnum_t;
+typedef uint32_t shardnum_t;
 
 struct viewstamp_t
 {
     view_t view;
     opnum_t opnum;
+    sessnum_t sessnum;
+    msgnum_t msgnum;
+    shardnum_t shardnum;
 
-    viewstamp_t() : view(0), opnum(0) {}
-    viewstamp_t(view_t view, opnum_t opnum) : view(view), opnum(opnum) {}
+    viewstamp_t() : view(0), opnum(0), sessnum(0), msgnum(0), shardnum(0) {}
+    viewstamp_t(view_t view,
+                opnum_t opnum,
+                sessnum_t sessnum=0,
+                msgnum_t msgnum=0,
+                shardnum_t shardnum=0)
+        : view(view), opnum(opnum), sessnum(sessnum), msgnum(msgnum), shardnum(shardnum) {}
 };
 
 #define FMT_VIEW "%" PRIu64
@@ -60,6 +71,12 @@ Viewstamp_Compare(viewstamp_t a, viewstamp_t b)
     if (a.view > b.view) return 1;
     if (a.opnum < b.opnum) return -1;
     if (a.opnum > b.opnum) return 1;
+    if (a.sessnum < b.sessnum) return -1;
+    if (a.sessnum > b.sessnum) return 1;
+    if (a.msgnum < b.msgnum) return -1;
+    if (a.msgnum > b.msgnum) return 1;
+    if (a.shardnum < b.shardnum) return -1;
+    if (a.shardnum > b.shardnum) return 1;
     return 0;
 }
 

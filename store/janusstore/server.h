@@ -21,7 +21,8 @@ public:
     ~Server();
 
     void ReceiveMessage(const TransportAddress &remote,
-                        const std::string &type, const std::string &data);
+                        const std::string &type, const std::string &data,
+                        void *meta_data);
 
     void HandlePreAccept(const TransportAddress &remote,
                          const proto::PreAcceptMessage &pa_msg,

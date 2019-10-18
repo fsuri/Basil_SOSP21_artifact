@@ -18,19 +18,20 @@ namespace ir {
 using namespace std;
 using namespace proto;
 
-IRReplica::IRReplica(transport::Configuration config, int myIdx,
+IRReplica::IRReplica(transport::Configuration config, int groupIdx, int myIdx,
                      Transport *transport, IRAppReplica *app)
-    : config(std::move(config)), myIdx(myIdx), transport(transport), app(app),
+    : config(std::move(config)), groupIdx(groupIdx), myIdx(myIdx),
+    transport(transport), app(app),
       status(STATUS_NORMAL), view(0), latest_normal_view(0),
       // TODO: Take these filenames in via the command line?
-      persistent_view_info(config.replica(myIdx).host + ":" +
-                           config.replica(myIdx).port + "_" +
+      persistent_view_info(config.replica(groupIdx, myIdx).host + ":" +
+                           config.replica(groupIdx, myIdx).port + "_" +
                            std::to_string(myIdx) + ".bin"),
       // Note that a leader waits for DO-VIEW-CHANGE messages from f other
       // replicas (as opposed to f + 1) for a total of f + 1 replicas.
       do_view_change_quorum(config.f)
 {
-    transport->Register(this, config, myIdx);
+    transport->Register(this, config, groupIdx, myIdx);
 
     // If our view info was previously initialized, then we are being started
     // in recovery mode. If our view info has never been initialized, then this
@@ -66,7 +67,8 @@ IRReplica::~IRReplica() { }
 
 void
 IRReplica::ReceiveMessage(const TransportAddress &remote,
-                          const string &type, const string &data)
+                          const string &type, const string &data,
+                          void *meta_data)
 {
     HandleMessage(remote, type, data);
 }
