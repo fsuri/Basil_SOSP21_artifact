@@ -106,6 +106,12 @@ void ReplTransport::Register(TransportReceiver *receiver,
     RegisterConfiguration(receiver, config, replicaIdx);
 }
 
+void ReplTransport::Register(TransportReceiver *receiver,
+                             const transport::Configuration &config,
+                             int groupIdx,
+                             int replicaIdx) {
+    Panic("unimpl");
+}
 int ReplTransport::Timer(uint64_t ms, timer_callback_t cb) {
     timer_id_++;
     UW_ASSERT(timers_.count(timer_id_) == 0);
@@ -262,6 +268,12 @@ bool ReplTransport::SendMessageInternal(TransportReceiver *src,
 
 ReplTransportAddress ReplTransport::LookupAddress(
     const transport::Configuration &cfg, int replicaIdx) {
+    transport::ReplicaAddress addr = cfg.replica(replicaIdx);
+    return ReplTransportAddress(addr.host, addr.port);
+}
+
+ReplTransportAddress ReplTransport::LookupAddress(
+    const transport::Configuration &cfg, int groupIdx, int replicaIdx) {
     transport::ReplicaAddress addr = cfg.replica(replicaIdx);
     return ReplTransportAddress(addr.host, addr.port);
 }

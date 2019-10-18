@@ -22,33 +22,35 @@
 
 namespace janusstore {
 
-enum TransactionStatus {
-    PREACCEPT,
-    ACCEPT,
-    COMMIT
-};
+
 /* Defines a transaction that is forwarded to a particular replica */
 class Transaction {
 private:
     // the unique transaction ID
     uint64_t txn_id;
-    TransactionStatus status;
-    
+    janusstore::proto::TransactionMessage::Status status;
+    std::unordered_map<uint64_t, std::unordered_set<std::string>> sharded_readset;
+    std::unordered_map<uint64_t, std::unordered_map<std::string, std::string>> sharded_writeset;
+
 public:
+    // the groups (shards) that this txn is associated with
+    std::unordered_set<int> groups;
+
     Transaction() {};
     Transaction(uint64_t txn_id);
+    Transaction(uint64_t txn_id, const janusstore::proto::TransactionMessage &msg);
+    ~Transaction();
+
     // set of keys to be read
     std::unordered_set<std::string> read_set;
 
     // map between key and value(s)
     std::unordered_map<std::string, std::string> write_set;
-    Transaction(uint64_t txn_id, const TransactionMessage &msg);
-    ~Transaction();
 
     void setTransactionId(uint64_t txn_id);
-    void setTransactionStatus(TransactionStatus status);
     const uint64_t getTransactionId() const;
-    const TransactionStatus getTransactionStatus() const;
+    void setTransactionStatus(janusstore::proto::TransactionMessage::Status status);
+    const janusstore::proto::TransactionMessage::Status getTransactionStatus() const;
     const std::unordered_set<std::string>& getReadSet() const;
     const std::unordered_map<std::string, std::string>& getWriteSet() const;
 
@@ -57,7 +59,9 @@ public:
 
     void addReadSet(const std::string &key);
     void addWriteSet(const std::string &key, const std::string &value);
-    void serialize(janusstore::proto::TransactionMessage *msg) const;
+    void addShardedReadSet(const std::string &key, uint64_t shard);
+    void addShardedWriteSet(const std::string &key, const std::string &value,  uint64_t shard);
+    void serialize(janusstore::proto::TransactionMessage *msg, uint64_t shard) const;
 };
 
 } // namespace janusstore

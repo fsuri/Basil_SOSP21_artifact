@@ -9,6 +9,8 @@
 #include "replication/ir/client.h"
 #include "store/common/frontend/client.h"
 #include "store/common/frontend/bufferclient.h"
+#include "store/common/frontend/async_client.h"
+#include "store/common/frontend/one_shot_client.h"
 
 #include "store/janusstore/transaction.h"
 #include "store/janusstore/shardclient.h"
@@ -21,14 +23,15 @@ namespace janusstore {
 // callback for output commit
 typedef std::function<void(uint64_t)> output_commit_callback;
 
-class Client : public ::Client {
+class Client : public OneShotClient {
 public:
-    Client(const std::string configPath, int nShards, int closestReplica,
-        Transport *transport);
-    virtual ~Client();
+    Client(const std::string configPath, int nShards, int closestReplica, Transport *transport);
+    ~Client();
+
+    virtual void Execute(OneShotTransaction *txn, execute_callback ecb);
 
     // begins PreAccept phase
-    void PreAccept(Transaction *txn, uint64_t ballot, output_commit_callback ocb);
+    void PreAccept(Transaction *txn, uint64_t ballot, execute_callback ocb);
 
     // called from PreAcceptCallback when a fast quorum is not obtained
     void Accept(
@@ -50,17 +53,19 @@ private:
     Transport *transport;
 
     // Current highest ballot
-    // TODO should probably also pair this with client_id
     uint64_t ballot;
 
     // Ongoing transaction ID.
-    // TODO figure out best way to pair this with client_id for unique t_id
     uint64_t txn_id;
 
-    // Map of txn_id to aggregated list of txn_id dependencies
+    // Map of txn_id to aggregated list of txn_id dependencies over all shards
     std::unordered_map<uint64_t, std::set<uint64_t>> aggregated_deps;
+    // TODO might not be necessary: Map txn_id to (map shard to set of deps) for checking fast quorum
+    std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::set<uint64_t>>> per_shard_deps;
+    // Map of txn_id to fast quorum status
+    std::unordered_map<uint64_t, bool> has_fast_quorum;
     // Map of txn_id to callback for output commit; unsure if needed
-    std::unordered_map<uint64_t, output_commit_callback> output_commits;
+    std::unordered_map<uint64_t, execute_callback> output_commits;
 
     // List of participants in the ongoing transaction.
     std::set<int> participants;
@@ -70,6 +75,8 @@ private:
 
     // Buffering client for each shard.
     std::vector<ShardClient *> bclient;
+
+    uint64_t keyToShard(string key, uint64_t nshards);
 
     void setParticipants(Transaction *txn);
 

@@ -2,12 +2,7 @@
 #define ONE_SHOT_CLIENT_H
 
 #include "store/common/frontend/async_transaction.h"
-
-#include <functional>
-
-#define SUCCESS 0
-
-typedef std::function<void(int, std::map<std::string, std::string>)> execute_callback;
+#include "store/common/frontend/one_shot_transaction.h"
 
 class OneShotClient {
  public:

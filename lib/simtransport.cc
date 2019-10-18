@@ -92,6 +92,28 @@ SimulatedTransport::Register(TransportReceiver *receiver,
     replicaIdxs[addr] = replicaIdx;
 }
 
+void
+SimulatedTransport::Register(TransportReceiver *receiver,
+                             const transport::Configuration &config,
+                             int groupIdx,
+                             int replicaIdx)
+{
+    // Allocate an endpoint
+    ++lastAddr;
+    int addr = lastAddr;
+    endpoints[addr] = receiver;
+    // Tell the receiver its address
+    receiver->SetAddress(new SimulatedTransportAddress(addr));
+
+    // If this is registered as a replica, record the index
+    if (g_replicaIdxs.find(groupIdx) == g_replicaIdxs.end()) {
+        std::map<int, int> new_map({ {addr, replicaIdx} });
+        g_replicaIdxs[groupIdx] = new_map;
+    } else {
+        g_replicaIdxs[groupIdx][addr] = replicaIdx;
+    }
+}
+
 bool
 SimulatedTransport::SendMessageInternal(TransportReceiver *src,
                                         const SimulatedTransportAddress &dstAddr,
@@ -159,6 +181,24 @@ SimulatedTransport::LookupAddress(const transport::Configuration &cfg,
     }
 
     Panic("No replica %d was registered", idx);
+}
+
+SimulatedTransportAddress
+SimulatedTransport::LookupAddress(const transport::Configuration &cfg,
+                            int groupIdx,
+                            int idx)
+{
+    for (auto & kv : configurations) {
+        if (*(kv.second) == cfg) {
+            // Configuration matches. Does the index?
+            const SimulatedTransportAddress &addr =
+                dynamic_cast<const SimulatedTransportAddress&>(kv.first->GetAddress());
+            if (g_replicaIdxs[groupIdx][addr.addr] == idx) {
+                // Matches.
+                return addr;
+            }
+        }
+    }
 }
 
 const SimulatedTransportAddress *

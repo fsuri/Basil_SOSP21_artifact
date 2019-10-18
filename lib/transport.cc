@@ -79,13 +79,13 @@ uint64_t
 Timeout::Reset()
 {
     Stop();
-    
+
     timerId = transport->Timer(ms, [this]() {
             timerId = 0;
             Reset();
             cb();
         });
-    
+
     return ms;
 }
 

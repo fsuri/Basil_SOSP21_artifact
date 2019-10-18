@@ -26,6 +26,7 @@ replication/vr/tests/vr-test
 store/common/backend/tests/kvstore-test
 store/common/backend/tests/lockserver-test
 store/common/backend/tests/versionstore-test
+store/janusstore/tests/janus-server-test
 
 ################################################################################
 # vim

@@ -71,12 +71,16 @@ public:
     void Register(TransportReceiver *receiver,
                   const transport::Configuration &config,
                   int replicaIdx);
+    void Register(TransportReceiver *receiver,
+                  const transport::Configuration &config,
+                  int groupIdx,
+                  int replicaIdx);
     void Run();
     void Stop();
     int Timer(uint64_t ms, timer_callback_t cb);
     bool CancelTimer(int id);
     void CancelAllTimers();
-    
+
 private:
     std::mutex mtx;
     struct UDPTransportTimerInfo
@@ -125,6 +129,10 @@ private:
     LookupAddress(const transport::ReplicaAddress &addr);
     UDPTransportAddress
     LookupAddress(const transport::Configuration &cfg,
+                  int replicaIdx);
+    UDPTransportAddress
+    LookupAddress(const transport::Configuration &cfg,
+                  int groupIdx,
                   int replicaIdx);
     const UDPTransportAddress *
     LookupMulticastAddress(const transport::Configuration *cfg);

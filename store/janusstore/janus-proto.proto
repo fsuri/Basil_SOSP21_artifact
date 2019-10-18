@@ -4,80 +4,82 @@ import "store/common/common-proto.proto";
 
 package janusstore.proto;
 
-// TODO lots of types of messages with repeated fields - worth refactoring
-// or keep seperate for clarity?
-
 message DependencyList {
-    repeated uint64 txnid = 1; // TODO is this a string or int
+    repeated uint64 txnid = 1;
 }
 
 message GetMessage {
-    required string key = 1;
+    optional string key = 1;
 }
 
 message PutMessage {
-    required string key = 1;
-    required string value = 2;
+    optional string key = 1;
+    optional string value = 2;
 }
 
 message TransactionMessage {
     enum Status {
-      INIT = 1;
-      PREACCEPT = 2;
-      ACCEPT = 3;
-      COMMIT = 4;
-    } // TODO factor out to common class
-    required uint64 txnid = 1;
-    required Status status = 2;
-    repeated GetMessage gets = 3;
-    repeated PutMessage puts = 4;
+      PREACCEPT = 0;
+      ACCEPT = 1;
+      COMMIT = 2;
+    }
+    optional uint64 txnid = 1;
+    repeated uint64 groups = 2;
+    optional Status status = 3;
+    repeated GetMessage gets = 4;
+    repeated PutMessage puts = 5;
 }
 
 message PreAcceptMessage {
-    required TransactionMessage txn = 1;
-    required uint64 ballot = 2;
+    optional TransactionMessage txn = 1;
+    optional uint64 ballot = 2;
 }
 
-// TODO: should acceptOK and preacceptNotOK still have a message
-// that contains the transaction ID?
-
-// if so, should we just factor out the txn ID into the Reply message?
-
 message PreAcceptOKMessage {
-    required uint64 txnid = 1;
-    required DependencyList dep = 2;
+    optional uint64 txnid = 1;
+    optional DependencyList dep = 4;
+}
+
+message PreAcceptNotOKMessage {
+    optional uint64 txnid = 1;
 }
 
 message AcceptMessage {
-    required uint64 txnid = 1;
-    required DependencyList dep = 2;
-    required uint64 ballot = 3;
+    optional uint64 txnid = 1;
+    optional DependencyList dep = 2;
+    optional uint64 ballot = 3;
+}
+
+message AcceptOKMessage {
+    optional uint64 txnid = 1;
 }
 
 message AcceptNotOKMessage {
     // the highest ballot number seen for the requested transaction
-    required uint64 txnid = 1;
-    required uint64 highest_ballot = 2;
+    optional uint64 txnid = 1;
+    optional uint64 highest_ballot = 2;
 }
 
 message CommitMessage {
-    required uint64 txnid = 1;
-    required DependencyList dep = 2;
+    optional uint64 txnid = 1;
+    optional DependencyList dep = 2;
 }
 
 message CommitOKMessage {
-    required uint64 txnid = 1;
-    required bool abandon = 2;
-    required bool result = 3; // TODO may need to change this type for reads
+    optional uint64 txnid = 1;
+    optional bool abandon = 2;
+    // technically not a put, but we have to return key/value pairs
+    repeated PutMessage pairs = 3;
 }
 
 message InquireMessage {
-    required uint64 txnid = 1;
+    optional uint64 txnid = 1;
 }
 
 message InquireOKMessage {
     // InquireOK sent when the inquired txn status == committing
-    required uint64 txnid = 1;
+    optional uint64 txnid = 1;
+    optional DependencyList dep = 2;
 }
 
 // for failure recovery; implement if time and for now don't care
@@ -95,11 +97,11 @@ message Request {
           // for failure recovery
           PREPARE = 6;
      }
-     required Operation op = 1;
-     optional PreAcceptMessage preaccept = 2;
-     optional AcceptMessage accept = 3;
-     optional CommitMessage commit = 4;
-     optional InquireMessage inquire = 5;
+    optional Operation op = 1;
+    optional PreAcceptMessage preaccept = 2;
+    optional AcceptMessage accept = 3;
+    optional CommitMessage commit = 4;
+    optional InquireMessage inquire = 5;
 
      // for failure recovery
      // optional PrepareMessage prepare = 6;
@@ -118,12 +120,14 @@ message Reply {
           // for failure recovery
           PREPARE_OK = 8;
      }
-     required Operation op = 1;
-     optional string value = 2; // TODO what is this for?
-     optional PreAcceptOKMessage preaccept_ok = 3;
-     optional AcceptNotOKMessage accept_not_ok = 4;
-     optional CommitOKMessage commit_ok = 5;
-     optional InquireOKMessage inquire_ok = 6;
+    optional Operation op = 1;
+    optional string value = 2; // TODO what is this for?
+    optional PreAcceptOKMessage preaccept_ok = 3;
+    optional PreAcceptNotOKMessage preaccept_not_ok = 4;
+    optional AcceptOKMessage accept_ok = 5;
+    optional AcceptNotOKMessage accept_not_ok = 6;
+    optional CommitOKMessage commit_ok = 7;
+    optional InquireOKMessage inquire_ok = 8;
 
      // for failure recovery
      // optional PrepareOKMessage prepare_ok = 7;

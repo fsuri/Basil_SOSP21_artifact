@@ -190,6 +190,40 @@ IRClient::InvokeUnlogged(int replicaIdx,
 }
 
 void
+IRClient::InvokeUnlogged(int groupIdx,
+                         int replicaIdx,
+                         const string &request,
+                         continuation_t continuation,
+                         error_continuation_t error_continuation,
+                         uint32_t timeout)
+{
+    uint64_t reqId = ++lastReqId;
+    auto timer = std::unique_ptr<Timeout>(new Timeout(
+        transport, timeout,
+        [this, reqId]() { UnloggedRequestTimeoutCallback(reqId); }));
+
+    PendingUnloggedRequest *req =
+    new PendingUnloggedRequest(request,
+                   reqId,
+                   continuation,
+                   error_continuation,
+                   std::move(timer));
+
+    proto::UnloggedRequestMessage reqMsg;
+    reqMsg.mutable_req()->set_op(request);
+    reqMsg.mutable_req()->set_clientid(clientid);
+    reqMsg.mutable_req()->set_clientreqid(reqId);
+
+    if (transport->SendMessageToReplica(this, groupIdx, replicaIdx, reqMsg)) {
+    req->timer->Start();
+    pendingReqs[reqId] = req;
+    } else {
+        Warning("Could not send unlogged request to replica");
+    delete req;
+    }
+}
+
+void
 IRClient::ResendInconsistent(const uint64_t reqId)
 {
 

@@ -2,48 +2,53 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
-- 5/10:
-	- client impl mostly done, need to get to compile and write the shim layer
-		- will probably need to sort out some bugs with client/shardclient state
-		- for now, dont need to write shim layer; can just have a main function that randomly generates a one-shot txn and tells the client to send it
-	- think what about janus makes it impossible to support general txns, aka interactive transactions
-		- look at [2] and [41] in janus paper for discussions on transaction classes
-- 4/10:
-	- client impl
-		- how do we return transaction results from the client?
-			- use the callback function given from wrapper of client in PreAccept
-		- type issues with callback functions; likely same for shardclient
-	- shardclient impl
-		- how does the shardclient receive responses from replicas?
-			- answer: continuation callbacks that do the wrapping
-		- is there a way to tell how many replicas there are in the shard?
-			- otherwise, how can we decide when to forward responses to the client?
-			- answer: this->config.n is the number of replicas;
-			- additionally, this means we need to loop and call InvokeUnlogged for replica IDs 0...n-1
-- 3/29:
-	- client partial impl
-	- server partial impl
-	- need config files to run
+10/16:
+	- (TODO) debug with txn script
+	- (TODO) write unit tests to verify basic state behavior on client/server
+	- (TODO) try to get inquire to run for competing transactions
+		- verify inquire works
+	- (TODO) unit testing server and client logic
+		- in particular, coordinator and server slow path
+	- (TODO) verify transactions commit and are strictly serializable for multiclient and multishard system
+	- (TODO) implement benchmarking in a one-shot format so that benchmark.cc can run it
+
+10/9:
+	- (TODO) try to get inquire to run for competing transactions
+		- verify inquire works
+	- (TODO) unit testing server and client logic
+		- in particular, coordinator and server slow path
+	- (TODO) verify transactions commit and are strictly serializable for multiclient and multishard system
+	- (TODO) implement benchmarking in a one-shot format so that benchmark.cc can run it
+
+10/2:
+	- (TODO) verify transactions commit and are strictly serializable for multiclient and multishard system
+	- (DONE) implement inquire
+	- (TODO) verify inquire works
+	- (TODO) unit testing server and client logic
+		- in particular, coordinator and server slow path
+9/25:
+	- ok to use different transport per client
+	- (TODO) verify transactions commit and are strictly serializable
+	- (DONE) include key-val results in the commit OK message (and output commit callback)
+	- (DONE) try two shards with 1 replica each without need for Inquire
+	- (DONE) then try to change config to support cross-shard communication for Inquire (later)
+- 9/18:
+	- (DONE) got client-single replica on single shard working
+	- (DONE) scale to multiple replicas on a shard
+	- (DONE) end goal by next week: multiple clients running txns for 1 shard with multiple replicas
+- 9/11:
+	- reclass server under TransportReceiver as in weakstore
+	- implement inquire function
+	- implement fast quorum check and accept stage in preaccept callback for client.cc
+	- finish benchmark_oneshot
+		- currently, client can start up arbitrary transactions
+		- goal by next week: client sends txns to server and server commits and client executes post-commit callback
 
 - when we merge to master, may need to modify client API to fit evaluation framework
 
-- store/server.cc contains info about actually starting up the janus server
-- store/tapirstore/server.cc is just how we can match on the request op and call our handler logic
-
 - note any interesting observations while doing this thing
 	- potential typos/unexplained cases in the paper?
-
-<!-- questions: 
-	can we do this/other stuff for meng project? i know we're supposed to find an advisor for meng; would that be alvisi?
--->
-
-# Timeline and TODOs
-- 5/17 - get client to compile and proofread logic
-	- check notes from 4/10 because there are some client/shardclient implementation details we need to address
-- 5/28 - run a transaction via client to server (doesnt have to actually work)
-
-- 9/02 - janus impl done and runnable (and debuggable) with relative performance to tapir and morty (reproduce Zipf/throughput graphs in janus paper)
-- 9/19 - paper deadline (3 wks after classes start)
+	- what overhead does Janus incur for more complex transactions outside of one-shot transactions? how does this affect performance?
 
 # How to Run
 
@@ -51,34 +56,25 @@ The clients and servers have to be provided a configuration file, one
 for each shard and a timestamp server (for OCC). For example a 3 shard
 configuration will have the following files:
 
-shard0.config
+You will need to create a configuration file with the following
+syntax:
+
 ```
-f 1  
-replica <server-address-1>:<port>
-replica <server-address-2>:<port>
-replica <server-address-3>:<port>
+f <number of failures tolerated>
+group
+replica <hostname>:<port>
+replica <hostname>:<port>
+...
+group
+replica <hostname>:<port>
+replica <hostname>:<port>
+...
+multicast <multicast addr>:<port>
 ```
-shard1.config
-```
-f 1
-replica <server-address-4>:<port>
-replica <server-address-5>:<port>
-replica <server-address-6>:<port>
-```
-shard2.config
-```
-f 1
-replica <server-address-7>:<port>
-replica <server-address-8>:<port>
-replica <server-address-9>:<port>
-```
-shard.tss.config
-```
-f 1
-replica <server-address-10>:<port>
-replica <server-address-11>:<port>
-replica <server-address-12>:<port>
-```
+
+Each group is a replicated shard, and should contain `2f+1` replicas. Multicast
+address is optional. However, the multi-sequenced groupcast implementation
+uses the multicast address as the groupcast address.
 
 ## Running Servers
 To start the replicas, run the following command with the `server`

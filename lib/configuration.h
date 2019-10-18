@@ -38,6 +38,7 @@
 #include <stdbool.h>
 #include <string>
 #include <vector>
+#include <map>
 
 using std::string;
 
@@ -71,10 +72,19 @@ public:
     Configuration(const Configuration &c);
     Configuration(int n, int f, std::vector<ReplicaAddress> replicas,
                   ReplicaAddress *multicastAddress = nullptr);
+    Configuration(int g, int n, int f,
+                  std::map<int, std::vector<ReplicaAddress> > replicas,
+                  ReplicaAddress *multicastAddress = nullptr,
+                  ReplicaAddress *fcAddress = nullptr,
+                  std::map<int, std::vector<std::string> > interfaces = std::map<int, std::vector<std::string> >());
     Configuration(std::ifstream &file);
+    Configuration(std::ifstream &file, bool is_janus);
     virtual ~Configuration();
     ReplicaAddress replica(int idx) const;
+    ReplicaAddress replica(int group, int idx) const;
     const ReplicaAddress *multicast() const;
+    const ReplicaAddress *fc() const;
+    std::string Interface(int group, int idx) const;
     int GetLeaderIndex(view_t view) const;
     int QuorumSize() const;
     int FastQuorumSize() const;
@@ -94,12 +104,19 @@ public:
     }
 
 public:
+    int g;                      // number of groups
     int n;                      // number of replicas
     int f;                      // number of failures tolerated
 private:
+    std::map<int, std::vector<ReplicaAddress> > g_replicas;
     std::vector<ReplicaAddress> replicas;
     ReplicaAddress *multicastAddress;
     bool hasMulticast;
+
+    // dunno what these are for
+    ReplicaAddress *fcAddress;
+    bool hasFC;
+    std::map<int, std::vector<std::string>> interfaces;
 };
 
 }      // namespace transport
@@ -122,9 +139,18 @@ template <> struct hash<transport::Configuration>
         {
             size_t out = 0;
             out = x.n * 37 + x.f;
-            for (int i = 0; i < x.n; i++) {
-                out *= 37;
-                out += hash<transport::ReplicaAddress>()(x.replica(i));
+            if (x.g == 0) {
+                for (int i = 0; i < x.n; i++) {
+                    out *= 37;
+                    out += hash<transport::ReplicaAddress>()(x.replica(i));
+                }
+            } else if (x.g > 0) {
+                for (int i = 0; i < x.g; i++ ) {
+                    for (int j = 0; j < x.n; j++) {
+                        out *= 37;
+                        out += hash<transport::ReplicaAddress>()(x.replica(i, j));
+                    }
+                }
             }
             return out;
         }

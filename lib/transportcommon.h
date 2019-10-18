@@ -43,9 +43,9 @@
 template <typename ADDR>
 class TransportCommon : public Transport
 {
-    
+
 public:
-    TransportCommon() 
+    TransportCommon()
     {
         replicaAddressesInitialized = false;
     }
@@ -57,7 +57,7 @@ public:
             delete kv.second;
         }
     }
-    
+
     virtual bool
     SendMessage(TransportReceiver *src, const TransportAddress &dst,
                 const Message &m)
@@ -65,6 +65,27 @@ public:
         const ADDR &dstAddr = dynamic_cast<const ADDR &>(dst);
         return SendMessageInternal(src, dstAddr, m, false);
     }
+
+    virtual bool
+    SendMessageToReplica(TransportReceiver *src,
+                         int groupIdx,
+                         int replicaIdx,
+                         const Message &m)
+    {
+        const transport::Configuration *cfg = configurations[src];
+        ASSERT(cfg != NULL);
+
+        if (!replicaAddressesInitialized) {
+            LookupAddresses();
+        }
+
+        auto kv = g_replicaAddresses[cfg][groupIdx].find(replicaIdx);
+        ASSERT(kv != g_replicaAddresses[cfg][groupIdx].end());
+
+
+        return SendMessageInternal(src, kv->second, m, false);
+    }
+
 
     virtual bool
     SendMessageToReplica(TransportReceiver *src, int replicaIdx,
@@ -76,7 +97,7 @@ public:
         if (!replicaAddressesInitialized) {
             LookupAddresses();
         }
-        
+
         auto kv = replicaAddresses[cfg].find(replicaIdx);
         UW_ASSERT(kv != replicaAddresses[cfg].end());
         
@@ -111,13 +132,16 @@ public:
             return true;
         }
     }
-    
+
 protected:
     virtual bool SendMessageInternal(TransportReceiver *src,
                                      const ADDR &dst,
                                      const Message &m,
                                      bool multicast = false) = 0;
     virtual ADDR LookupAddress(const transport::Configuration &cfg,
+                               int replicaIdx) = 0;
+    virtual ADDR LookupAddress(const transport::Configuration &cfg,
+                               int groupIdx,
                                int replicaIdx) = 0;
     virtual const ADDR *
     LookupMulticastAddress(const transport::Configuration *cfg) = 0;
@@ -130,7 +154,13 @@ protected:
              std::map<int, ADDR> > replicaAddresses;
     std::map<const transport::Configuration *,
              std::map<int, TransportReceiver *> > replicaReceivers;
+    std::map<const transport::Configuration *,
+             std::map<int, std::map<int, ADDR> > > g_replicaAddresses; // config->groupid->replicaid->ADDR
+    std::map<const transport::Configuration *,
+             std::map<int, std::map<int, TransportReceiver *> > > g_replicaReceivers;
     std::map<const transport::Configuration *, ADDR> multicastAddresses;
+    std::map<const transport::Configuration *, ADDR> fcAddresses;
+    std::map<TransportReceiver *, int> replicaGroups;
     bool replicaAddressesInitialized;
 
     virtual transport::Configuration *
@@ -143,7 +173,7 @@ protected:
         // Have we seen this configuration before? If so, get a
         // pointer to the canonical copy; if not, create one. This
         // allows us to use that pointer as a key in various
-        // structures. 
+        // structures.
         transport::Configuration *canonical
             = canonicalConfigs[config];
         if (canonical == NULL) {
@@ -167,10 +197,47 @@ protected:
         return canonical;
     }
 
+    /* configs is a map of groupIdx to Configuration */
+    virtual transport::Configuration *
+    RegisterConfiguration(TransportReceiver *receiver,
+                          const transport::Configuration &config,
+                          int groupIdx,
+                          int replicaIdx) {
+        ASSERT(receiver != NULL);
+        // Have we seen this configuration before? If so, get a
+        // pointer to the canonical copy; if not, create one. This
+        // allows us to use that pointer as a key in various
+        // structures.
+        transport::Configuration *canonical
+            = canonicalConfigs[config];
+        if (canonical == NULL) {
+            canonical = new transport::Configuration(config);
+            canonicalConfigs[config] = canonical;
+        }
+
+        // Record configuration
+        configurations[receiver] = canonical;
+
+        // If this is a replica, record the receiver
+        if (replicaIdx != -1) {
+            ASSERT(groupIdx != -1);
+            g_replicaReceivers[canonical][groupIdx][replicaIdx] = receiver;
+        }
+
+        // Record which group this receiver belongs to
+        replicaGroups[receiver] = groupIdx;
+
+        // Mark replicaAddreses as uninitalized so we'll look up
+        // replica addresses again the next time we send a message.
+        replicaAddressesInitialized = false;
+        return canonical;
+    }
+
     virtual void
     LookupAddresses()
     {
         // Clear any existing list of addresses
+        g_replicaAddresses.clear();
         replicaAddresses.clear();
         multicastAddresses.clear();
 
@@ -179,10 +246,20 @@ protected:
         for (auto &kv : canonicalConfigs) {
             transport::Configuration *cfg = kv.second;
 
-            for (int i = 0; i < cfg->n; i++) {
-                const ADDR addr = LookupAddress(*cfg, i);
-                replicaAddresses[cfg].insert(std::make_pair(i, addr));
+            if (cfg->g == 0) {
+                for (int i = 0; i < cfg->n; i++) {
+                    const ADDR addr = LookupAddress(*cfg, i);
+                    replicaAddresses[cfg].insert(std::make_pair(i, addr));
+                }
+            } else if (cfg->g > 0) {
+                for (int j = 0; j < cfg->g; j++) {
+                    for (int i = 0; i < cfg->n; i++) {
+                        const ADDR addr = LookupAddress(*cfg, j, i);
+                        g_replicaAddresses[cfg][j].insert(std::make_pair(i, addr));
+                    }
+                }
             }
+
 
             // And check if there's a multicast address
             if (cfg->multicast()) {
@@ -193,7 +270,7 @@ protected:
                 }
             }
         }
-        
+
         replicaAddressesInitialized = true;
     }
 };

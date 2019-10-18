@@ -9,14 +9,16 @@ using namespace proto;
 ShardClient::ShardClient(const string &configPath, Transport *transport,
 	uint64_t client_id, int shard, int closestReplica)
 	: client_id(client_id), transport(transport), shard(shard), responded(0) {
-  
+
   ifstream configStream(configPath);
   if (configStream.fail()) {
     Panic("Unable to read configuration file: %s\n", configPath.c_str());
   }
 
-  transport::Configuration config(configStream);
+  transport::Configuration config(configStream, true);
   this->config = &config;
+  this->num_replicas = config.n;
+  printf("shardclient%d has %d replicas\n", shard, this->num_replicas);
 
   client = new replication::ir::IRClient(config, transport, client_id);
 
@@ -33,7 +35,7 @@ ShardClient::~ShardClient() {
 }
 
 void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb) {
-	Debug("[shard %i] Sending PREACCEPT [%llu]", shard, client_id);
+	Debug("[shard %i] Sending PREACCEPT for txn_id %i [%llu]", shard, txn.getTransactionId(), client_id);
 
 	std::vector<janusstore::proto::Reply> replies;
 	uint64_t txn_id = txn.getTransactionId();
@@ -47,11 +49,17 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	request.set_op(Request::PREACCEPT);
 
 	// serialize a Transaction into a TransactionMessage
-	txn.serialize(request.mutable_preaccept()->mutable_txn());
+	janusstore::proto::TransactionMessage txn_msg;
+	txn.serialize(&txn_msg, this->shard);
+	// printf("%s", txn_msg->DebugString().c_str());
+	request.mutable_preaccept()->set_allocated_txn(&txn_msg);
+	// txn.serialize(request.mutable_preaccept()->mutable_txn());
 	request.mutable_preaccept()->set_ballot(ballot);
+
 
 	// now we can serialize the request and send it to replicas
 	request.SerializeToString(&request_str);
+	request.mutable_preaccept()->release_txn();
 
 	// store callback with txnid in a map for the preaccept cb
 	// because we can't pass it into a continuation function
@@ -60,10 +68,13 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
-	client->InvokeUnlogged(replica, request_str,
-		std::bind(&ShardClient::PreAcceptContinuation, this,
-		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
-		// no timeout case; TODO verify 0 is OK
+	Debug("shardclient%d shardcasting PREACCEPT to %d replicas\n for txn %i",
+		this->shard, this->num_replicas, txn_id);
+	for (int i = 0; i < this->num_replicas; i++) {
+		client->InvokeUnlogged(shard, i, request_str,
+			std::bind(&ShardClient::PreAcceptContinuation, this,
+			placeholders::_1, placeholders::_2), nullptr, 10000);
+	}
 }
 
 void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t ballot, client_accept_callback acb) {
@@ -84,7 +95,7 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 	for (auto dep : deps) {
 		request.mutable_accept()->mutable_dep()->add_txnid(dep);
 	}
-	
+
 	request.SerializeToString(&request_str);
 
 	// store callback with txnid in a map for the preaccept cb
@@ -94,14 +105,15 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
-	client->InvokeUnlogged(replica, request_str,
-		std::bind(&ShardClient::AcceptContinuation, this,
-		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
-		// no timeout case; TODO verify 0 is OK
+	for (int i = 0; i < this->num_replicas; i++) {
+		client->InvokeUnlogged(shard, i, request_str,
+			std::bind(&ShardClient::AcceptContinuation, this,
+			placeholders::_1, placeholders::_2), nullptr, 10000);
+	}
 }
 
 void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb) {
-	Debug("[shard %i] Sending COMMIT [%llu]", shard, client_id);
+	Debug("[shard %i] Sending COMMIT for txn %i", shard, txn_id);
 
 	std::vector<janusstore::proto::Reply> replies;
 	pair<uint64_t, std::vector<janusstore::proto::Reply>> entry (txn_id, replies);
@@ -118,85 +130,103 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 	}
 
 	request.SerializeToString(&request_str);
-
+	// Debug("%s %i", request.DebugString().c_str(), deps.size());
 	// store callback with txnid in a map for the preaccept cb
 	// because we can't pass it into a continuation function
+	Debug("[shard %i] adding ccb for %i, %i, %llu", shard, txn_id, ccb_map.size(), client_id);
 	pair<uint64_t, client_commit_callback> callback_entry (txn_id, ccb);
-	this->ccb_map.insert(callback_entry);
+	ccb_map[txn_id] = ccb;
+	Debug("[shard %i] adding ccb for %i, %i, %llu", shard, txn_id, ccb_map.size(), client_id);
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
-	client->InvokeUnlogged(replica, request_str,
-		std::bind(&ShardClient::CommitContinuation, this,
-		txn_id, placeholders::_1, placeholders::_2), nullptr, 0);
-		// no timeout case; TODO verify 0 is OK
+	for (int i = 0; i < this->num_replicas; i++) {
+		client->InvokeUnlogged(shard, i, request_str,
+			std::bind(&ShardClient::CommitContinuation, this,
+			placeholders::_1, placeholders::_2), nullptr, 10000);
+	}
 }
 
 void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_preaccept_callback pcb) {
-	// TODO who unwraps replica responses into the proto?
 	this->responded++;
+
+    printf("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - PREACCEPT CB - txn " + to_string(txn_id)).c_str());
 
 	// aggregate replies for this transaction
 	if (this->preaccept_replies.count(txn_id)) {
 		// key already exists, so append to list
-		// TODO may need to explicitly retrieve list, pushback, and set in map
-		this->preaccept_replies[txn_id].push_back(reply);
+		std::vector<janusstore::proto::Reply> *list;
+		list = &this->preaccept_replies.at(txn_id);
+		list->push_back(reply);
 	} else {
 		this->preaccept_replies[txn_id] = std::vector<janusstore::proto::Reply>({reply});
 	}
 
-	// TODO how do determine number of replicas?
-	if (this->responded) {
+	if (this->responded == this->num_replicas) {
+	    printf("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - REPLICAS RESPONDED FOR - txn " + to_string(txn_id)).c_str());
+
 		this->responded = 0;
 		pcb(shard, this->preaccept_replies[txn_id]);
 	}
 }
 
-void ShardClient::AcceptCallback(uint64_t txn_id,
-    std::vector<janusstore::proto::Reply> reply, client_accept_callback acb) {
-	// TODO who unwraps replica responses into the callback params?
-	responded++;
-	
+void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_accept_callback acb) {
+	this->responded++;
+
+    printf("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - ACCEPT CB - txn " + to_string(txn_id)).c_str());
+
 	// aggregate replies for this transaction
 	if (this->accept_replies.count(txn_id)) {
 		// key already exists, so append to list
-		// TODO may need to explicitly retrieve list, pushback, and set in map
-		//this->accept_replies[txn_id].push_back(reply);
+		std::vector<janusstore::proto::Reply> *list;
+		list = &this->accept_replies.at(txn_id);
+		list->push_back(reply);
 	} else {
 		this->accept_replies[txn_id] = std::vector<janusstore::proto::Reply>({reply});
 	}
 
-	// TODO how do determine number of replicas?
-	if (responded) {
-		responded = 0;
+	if (this->responded == this->num_replicas) {
+		this->responded = 0;
 		acb(shard, this->accept_replies[txn_id]);
 	}
 }
 
 void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb) {
-	// TODO who unwraps replica responses into the callback params?
-	responded++;
-	
+	this->responded++;
+
+    printf("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - COMMIT CB - txn " + to_string(txn_id)).c_str());
+
 	// aggregate replies for this transaction
 	if (this->commit_replies.count(txn_id)) {
 		// key already exists, so append to list
-		// TODO may need to explicitly retrieve list, pushback, and set in map
-		this->commit_replies[txn_id].push_back(reply);
+		// key already exists, so append to list
+		std::vector<janusstore::proto::Reply> *list;
+		list = &this->commit_replies.at(txn_id);
+		list->push_back(reply);
 	} else {
 		this->commit_replies[txn_id] = std::vector<janusstore::proto::Reply>({reply});
 	}
-	
-	// TODO how do determine number of replicas?
-	if (responded) {
-		responded = 0;
+
+	if (this->responded == this->num_replicas) {
+		this->responded = 0;
 		ccb(shard, this->commit_replies[txn_id]);
 	}
 }
 
-void ShardClient::PreAcceptContinuation(uint64_t txn_id, const string &request_str, const string &reply_str) {
+void ShardClient::PreAcceptContinuation(const string &request_str, const string &reply_str) {
 
+	Debug("In preaccept continuation");
 	janusstore::proto::Reply reply;
 	reply.ParseFromString(reply_str);
+	uint64_t txn_id = NULL;
+
+	if (reply.op() == janusstore::proto::Reply::PREACCEPT_OK) {
+		txn_id = reply.preaccept_ok().txnid();
+	} else if (reply.op() == janusstore::proto::Reply::PREACCEPT_NOT_OK) {
+		txn_id = reply.preaccept_not_ok().txnid();
+	} else {
+		Panic("Not a preaccept reply");
+	}
 
 	// get the pcb
   	client_preaccept_callback pcb = this->pcb_map.at(txn_id);
@@ -204,27 +234,44 @@ void ShardClient::PreAcceptContinuation(uint64_t txn_id, const string &request_s
   	this->PreAcceptCallback(txn_id, reply, pcb);
 }
 
-void ShardClient::AcceptContinuation(uint64_t txn_id, const string &request_str,
+void ShardClient::AcceptContinuation(const string &request_str,
     const string &reply_str) {
 
+	Debug("In accept continuation");
 	janusstore::proto::Reply reply;
   	reply.ParseFromString(reply_str);
+	uint64_t txn_id = NULL;
 
+	if (reply.op() == janusstore::proto::Reply::ACCEPT_OK) {
+		txn_id = reply.accept_ok().txnid();
+	} else if (reply.op() == janusstore::proto::Reply::ACCEPT_NOT_OK) {
+		txn_id = reply.accept_not_ok().txnid();
+	} else {
+		Panic("Not an accept reply");
+	}
   	// get the acb
   	client_accept_callback acb = this->acb_map.at(txn_id);
   	// invoke the shardclient callback
   //this->AcceptCallback(txn_id, reply, acb);
 }
 
-void ShardClient::CommitContinuation(uint64_t txn_id, const string &request_str,
+void ShardClient::CommitContinuation(const string &request_str,
     const string &reply_str) {
 
 	janusstore::proto::Reply reply;
   	reply.ParseFromString(reply_str);
+	uint64_t txn_id = NULL;
 
-  	// get the ccb
-  	client_commit_callback ccb = this->ccb_map.at(txn_id);
-  	// invoke the shardclient callback
-  	this->CommitCallback(txn_id, reply, ccb);
+	if (reply.op() == janusstore::proto::Reply::COMMIT_OK) {
+		txn_id = reply.commit_ok().txnid();
+	} else {
+		Panic("Not a commit reply");
+	}
+
+	Debug("[shard %i] In commit continuation for txn %i, %i", shard, txn_id, ccb_map.size());
+	// get the ccb
+	client_commit_callback ccb = ccb_map[txn_id];
+	// invoke the shardclient callback
+	this->CommitCallback(txn_id, reply, ccb);
 }
 }

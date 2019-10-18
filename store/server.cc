@@ -182,12 +182,6 @@ int main(int argc, char **argv) {
     std::cerr << "Unable to read configuration file: " << FLAGS_config_path
               << std::endl;
   }
-  transport::Configuration config(configStream);
-
-  if (FLAGS_replica_idx >= static_cast<uint64_t>(config.n)) {
-    std::cerr << "Replica index " << FLAGS_replica_idx << " is out of bounds"
-                 "; only " << config.n << " replicas defined" << std::endl;
-  }
 
   // parse protocol and mode
   protocol_t proto = PROTO_UNKNOWN;
@@ -197,6 +191,16 @@ int main(int argc, char **argv) {
       proto = protos[i];
       break;
     }
+  }
+
+  // LMAO THIS WORKS
+  transport::Configuration config = ((proto == PROTO_JANUS) ?
+      transport::Configuration(configStream, true) :
+      transport::Configuration(configStream));
+
+  if (FLAGS_replica_idx >= static_cast<uint64_t>(config.n)) {
+    std::cerr << "Replica index " << FLAGS_replica_idx << " is out of bounds"
+                 "; only " << config.n << " replicas defined" << std::endl;
   }
 
   if (proto == PROTO_UNKNOWN) {
@@ -236,8 +240,7 @@ int main(int argc, char **argv) {
       break;
     }
     case PROTO_JANUS: {
-      //server = new janusstore::Server();
-      // TODO any more config?
+      server = new janusstore::Server(config, FLAGS_group_idx, FLAGS_replica_idx, &transport);
       break;
     }
     case PROTO_MORTY: {

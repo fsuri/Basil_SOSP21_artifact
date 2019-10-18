@@ -51,10 +51,10 @@ class TCPTransportAddress : public TransportAddress
 {
 public:
     TCPTransportAddress * clone() const;
+    sockaddr_in addr;
 private:
     TCPTransportAddress(const sockaddr_in &addr);
-    
-    sockaddr_in addr;
+
     friend class TCPTransport;
     friend bool operator==(const TCPTransportAddress &a,
                            const TCPTransportAddress &b);
@@ -73,12 +73,27 @@ public:
     void Register(TransportReceiver *receiver,
                   const transport::Configuration &config,
                   int replicaIdx);
+    void Register(TransportReceiver *receiver,
+                  const transport::Configuration &config,
+                  int groupIdx,
+                  int replicaIdx);
     void Run();
     void Stop();
     int Timer(uint64_t ms, timer_callback_t cb);
     bool CancelTimer(int id);
     void CancelAllTimers();
-    
+
+    TCPTransportAddress
+    LookupAddress(const transport::Configuration &cfg,
+                  int replicaIdx);
+
+    TCPTransportAddress
+    LookupAddress(const transport::Configuration &config,
+                  int groupIdx,
+                  int replicaIdx);
+
+    TCPTransportAddress
+    LookupAddress(const transport::ReplicaAddress &addr);
 private:
     std::mutex mtx;
     struct TCPTransportTimerInfo
@@ -93,6 +108,7 @@ private:
         TCPTransport *transport;
         TransportReceiver *receiver;
         int acceptFd;
+        int groupIdx;
         int replicaIdx;
         event *acceptEvent;
         std::list<struct bufferevent *> connectionEvents;
@@ -107,16 +123,10 @@ private:
     std::list<TCPTransportTCPListener *> tcpListeners;
     std::map<TCPTransportAddress, struct bufferevent *> tcpOutgoing;
     std::map<struct bufferevent *, TCPTransportAddress> tcpAddresses;
-    
+
     bool SendMessageInternal(TransportReceiver *src,
                              const TCPTransportAddress &dst,
                              const Message &m, bool multicast = false);
-
-    TCPTransportAddress
-    LookupAddress(const transport::ReplicaAddress &addr);
-    TCPTransportAddress
-    LookupAddress(const transport::Configuration &cfg,
-                  int replicaIdx);
     const TCPTransportAddress *
     LookupMulticastAddress(const transport::Configuration*config) { return NULL; };
 

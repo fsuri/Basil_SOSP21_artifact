@@ -48,11 +48,11 @@ public:
     bool operator==(const SimulatedTransportAddress &other) const;
     inline bool operator!=(const SimulatedTransportAddress &other) const
     {
-        return !(*this == other);            
+        return !(*this == other);
     }
 private:
     SimulatedTransportAddress(int addr);
-    
+
     int addr;
     friend class SimulatedTransport;
 };
@@ -69,6 +69,10 @@ public:
     void Register(TransportReceiver *receiver,
                   const transport::Configuration &config,
                   int replicaIdx);
+    void Register(TransportReceiver *receiver,
+                  const transport::Configuration &config,
+                  int groupIdx,
+                  int replicaIdx);
     void Run();
     void AddFilter(int id, filter_t filter);
     void RemoveFilter(int id);
@@ -81,12 +85,14 @@ protected:
                              const SimulatedTransportAddress &dstAddr,
                              const Message &m,
                              bool multicast);
-    
+
     SimulatedTransportAddress
     LookupAddress(const transport::Configuration &cfg, int idx);
+    SimulatedTransportAddress
+    LookupAddress(const transport::Configuration &cfg, int groupIdx, int idx);
     const SimulatedTransportAddress *
     LookupMulticastAddress(const transport::Configuration *cfg);
-    
+
 private:
     struct QueuedMessage {
         int dst;
@@ -108,6 +114,7 @@ private:
     int lastAddr;
 //    std::map<int,int> replicas;
     std::map<int,int> replicaIdxs;
+    std::map<int, std::map<int,int>> g_replicaIdxs;
     std::multimap<int,filter_t> filters;
     std::multimap<uint64_t, PendingTimer> timers;
     int lastTimerId;
