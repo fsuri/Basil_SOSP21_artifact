@@ -99,7 +99,7 @@ private:
     std::unordered_map<std::string, std::string> Execute(Transaction txn);
     // for cyclic dependency case, compute SCCs and execute in order
     // to be called during the Commit phase from HandleCommitJanusTxn()
-    void ResolveContention(std::vector<uint64_t> scc);
+    void ResolveContention(std::vector<uint64_t> &scc);
 
     Stats stats;
     void Load(const std::string &key, const std::string &value, Timestamp timestamp);
