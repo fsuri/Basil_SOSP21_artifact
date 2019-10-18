@@ -266,7 +266,7 @@ void Server::GenerateBranchesPermutations(const std::vector<proto::Branch> &pend
         std::cerr << "Potential: ";
         PrintBranch(branch);
         for (auto seq : new_seqs) {
-          if (CommitCompatible(branch, seq)) {
+          if (branch.seq().size() == 0 || CommitCompatible(branch, seq)) {
             proto::Branch new_branch(branch); 
             new_branch.clear_seq();
             for (auto b : seq) {
@@ -331,7 +331,7 @@ bool Server::CommitCompatible(const proto::Branch &branch,
 bool Server::ValidSubsequence(const proto::Transaction &txn,
       const std::vector<proto::Branch> &seq1,
       const std::vector<proto::Branch> &seq2) {
-  size_t k = 0;
+  int64_t k = -1;
   for (size_t i = 0; i < seq1.size(); ++i) {
     bool found = false;
     for (size_t j =  k + 1; j < seq2.size(); ++j) {
