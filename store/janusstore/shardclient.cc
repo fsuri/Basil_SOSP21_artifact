@@ -6,24 +6,18 @@ namespace janusstore {
 using namespace std;
 using namespace proto;
 
-ShardClient::ShardClient(const string &configPath, Transport *transport,
+ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
 	uint64_t client_id, int shard, int closestReplica)
-	: client_id(client_id), transport(transport), shard(shard), responded(0) {
+	: client_id(client_id), transport(transport), config(config), shard(shard),
+  responded(0) {
 
-  ifstream configStream(configPath);
-  if (configStream.fail()) {
-    Panic("Unable to read configuration file: %s\n", configPath.c_str());
-  }
-
-  transport::Configuration config(configStream, true);
-  this->config = &config;
-  this->num_replicas = config.n;
+  this->num_replicas = config->n;
   printf("shardclient%d has %d replicas\n", shard, this->num_replicas);
 
-  client = new replication::ir::IRClient(config, transport, client_id);
+  client = new replication::ir::IRClient(*config, transport, client_id);
 
   if (closestReplica == -1) {
-    replica = client_id % config.n;
+    replica = client_id % config->n;
   } else {
     replica = closestReplica;
   }
@@ -31,7 +25,6 @@ ShardClient::ShardClient(const string &configPath, Transport *transport,
 }
 
 ShardClient::~ShardClient() {
-    delete client;
 }
 
 void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb) {

@@ -40,7 +40,7 @@ Client::Client(const string configPath, int nShards, int nGroups,
                 bool syncCommit, TrueTime timeServer)
     : nshards(nShards), ngroups(nGroups), transport(transport), part(part),
     syncCommit(syncCommit), timeServer(timeServer),
-    lastReqId(0UL) {
+    lastReqId(0UL), config(nullptr) {
     // Initialize all state here;
     client_id = 0;
     while (client_id == 0) {
@@ -55,10 +55,16 @@ Client::Client(const string configPath, int nShards, int nGroups,
 
     Debug("Initializing Tapir client with id [%lu] %lu", client_id, nshards);
 
+
+    std::ifstream configStream(configPath);
+    if (configStream.fail()) {
+      Panic("Unable to read configuration file: %s\n", configPath.c_str());
+    }
+    config = new transport::Configuration(configStream);
+
     /* Start a client for each shard. */
     for (uint64_t i = 0; i < ngroups; i++) {
-        string shardConfigPath = configPath + to_string(i) + ".config";
-        ShardClient *shardclient = new ShardClient(shardConfigPath,
+        ShardClient *shardclient = new ShardClient(config,
                 transport, client_id, i, closestReplica);
         bclient[i] = new BufferClient(shardclient);
     }
@@ -71,6 +77,7 @@ Client::~Client()
     for (auto b : bclient) {
         delete b;
     }
+    delete config;
 }
 
 /* Begins a transaction. All subsequent operations before a commit() or

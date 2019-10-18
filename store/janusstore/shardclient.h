@@ -26,7 +26,7 @@ typedef std::function<void(int, std::vector<janusstore::proto::Reply>)> client_c
 class ShardClient {
 public:
     /* Constructor needs path to shard config. */
-    ShardClient(const std::string &configPath, Transport *transport,
+    ShardClient(transport::Configuration *config, Transport *transport,
         uint64_t client_id, int shard, int closestReplica);
     virtual ~ShardClient();
 

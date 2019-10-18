@@ -96,7 +96,7 @@ main(int argc, char **argv)
     UDPTransport transport(0.0, 0.0, 0);
 
     TimeStampServer server;
-    replication::vr::VRReplica replica(config, index, &transport, 1, &server);
+    replication::vr::VRReplica replica(config, 0, index, &transport, 1, &server);
 
     transport.Run();
 

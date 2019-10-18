@@ -77,6 +77,7 @@ void string_replace(std::string *str, const std::string &oldStr,
 
 void ReplTransport::Register(TransportReceiver *receiver,
                              const transport::Configuration &config,
+                             int groupIdx,
                              int replicaIdx) {
     // If replicaIdx is -1, then the registering receiver is a client.
     // Otherwise, replicaIdx is in the range [0, config.n), and the registering
@@ -94,7 +95,7 @@ void ReplTransport::Register(TransportReceiver *receiver,
         receivers_[*repl_addr].receiver = receiver;
     } else {
         // Set the receiver's address.
-        transport::ReplicaAddress addr = config.replica(replicaIdx);
+        transport::ReplicaAddress addr = config.replica(groupIdx, replicaIdx);
         auto repl_addr = new ReplTransportAddress(addr.host, addr.port);
         receiver->SetAddress(repl_addr);
 
@@ -103,15 +104,9 @@ void ReplTransport::Register(TransportReceiver *receiver,
     }
 
     // Register with superclass.
-    RegisterConfiguration(receiver, config, replicaIdx);
+    RegisterConfiguration(receiver, config, groupIdx, replicaIdx);
 }
 
-void ReplTransport::Register(TransportReceiver *receiver,
-                             const transport::Configuration &config,
-                             int groupIdx,
-                             int replicaIdx) {
-    Panic("unimpl");
-}
 int ReplTransport::Timer(uint64_t ms, timer_callback_t cb) {
     timer_id_++;
     UW_ASSERT(timers_.count(timer_id_) == 0);
@@ -149,7 +144,7 @@ bool ReplTransport::DeliverMessage(const ReplTransportAddress &addr,
     const QueuedMessage &m = state.msgs.at(index);
     string data;
     m.msg->SerializeToString(&data);
-    state.receiver->ReceiveMessage(m.src, m.msg->GetTypeName(), data);
+    state.receiver->ReceiveMessage(m.src, m.msg->GetTypeName(), data, nullptr);
     return true;
 }
 
@@ -251,13 +246,12 @@ void ReplTransport::Run() {
     }
 }
 
+void ReplTransport::Stop() {
+}
+
 bool ReplTransport::SendMessageInternal(TransportReceiver *src,
                                         const ReplTransportAddress &dst,
-                                        const Message &m,
-                                        bool multicast) {
-    // Multicast is not supported.
-    UW_ASSERT(!multicast);
-
+                                        const Message &m) {
     const ReplTransportAddress &repl_addr =
         dynamic_cast<const ReplTransportAddress &>(src->GetAddress());
     std::unique_ptr<Message> msg(m.New());
@@ -267,14 +261,8 @@ bool ReplTransport::SendMessageInternal(TransportReceiver *src,
 }
 
 ReplTransportAddress ReplTransport::LookupAddress(
-    const transport::Configuration &cfg, int replicaIdx) {
-    transport::ReplicaAddress addr = cfg.replica(replicaIdx);
-    return ReplTransportAddress(addr.host, addr.port);
-}
-
-ReplTransportAddress ReplTransport::LookupAddress(
     const transport::Configuration &cfg, int groupIdx, int replicaIdx) {
-    transport::ReplicaAddress addr = cfg.replica(replicaIdx);
+    transport::ReplicaAddress addr = cfg.replica(groupIdx, replicaIdx);
     return ReplTransportAddress(addr.host, addr.port);
 }
 

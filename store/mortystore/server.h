@@ -13,12 +13,12 @@ namespace mortystore {
 
 class Server : public TransportReceiver, public ::Server {
  public:
-  Server(const transport::Configuration &config, int idx,
+  Server(const transport::Configuration &config, int groupIdx, int idx,
       Transport *transport);
   virtual ~Server();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
-      const std::string &type, const std::string &data) override;
+      const std::string &type, const std::string &data, void *meta_data) override;
 
   virtual void Load(const std::string &key, const std::string &value,
       const Timestamp timestamp) override;

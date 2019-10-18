@@ -57,7 +57,7 @@ enum benchmode_t {
  * System settings.
  */
 DEFINE_uint64(client_id, 0, "unique identifier for client");
-DEFINE_string(config_prefix, "", "prefix of path to shard configuration file");
+DEFINE_string(config_path, "", "path to shard configuration file");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
 DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
 DEFINE_bool(tapir_sync_commit, true, "wait until commit phase completes before"
@@ -316,14 +316,14 @@ int main(int argc, char **argv) {
 
     switch (mode) {
       case PROTO_TAPIR: {
-        client = new tapirstore::Client(FLAGS_config_prefix, FLAGS_num_shards,
+        client = new tapirstore::Client(FLAGS_config_path, FLAGS_num_shards,
             FLAGS_num_groups, FLAGS_closest_replica, &transport, part,
             FLAGS_tapir_sync_commit, TrueTime(FLAGS_clock_skew,
               FLAGS_clock_error));
         break;
       }
       case PROTO_JANUS: {
-        oneShotClient = new janusstore::Client(FLAGS_config_prefix,
+        oneShotClient = new janusstore::Client(FLAGS_config_path,
             FLAGS_num_shards, FLAGS_closest_replica, &transport);
         asyncClient = new AsyncOneShotAdapterClient(oneShotClient);
         break;
@@ -338,7 +338,7 @@ int main(int argc, char **argv) {
         break;
       }*/
       case PROTO_MORTY: {
-        asyncClient = new mortystore::Client(FLAGS_config_prefix,
+        asyncClient = new mortystore::Client(FLAGS_config_path,
             (FLAGS_client_id << 3) | i, FLAGS_num_shards, FLAGS_num_groups,
             FLAGS_closest_replica, &transport, part);
         break;

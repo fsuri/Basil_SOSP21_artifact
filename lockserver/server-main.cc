@@ -54,7 +54,7 @@ main(int argc, char **argv)
     UDPTransport transport(0.0, 0.0, 0);
 
     lockserver::LockServer server;
-    replication::ir::IRReplica replica(config, index, &transport, &server);
+    replication::ir::IRReplica replica(config, 0, index, &transport, &server);
 
     transport.Run();
 

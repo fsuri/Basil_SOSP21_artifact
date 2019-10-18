@@ -68,7 +68,7 @@ public:
 class Replica : public TransportReceiver
 {
 public:
-    Replica(const transport::Configuration &config, int myIdx, Transport *transport, AppReplica *app);
+    Replica(const transport::Configuration &config, int groupIdx, int myIdx, Transport *transport, AppReplica *app);
     virtual ~Replica();
     
 protected:
@@ -83,6 +83,7 @@ protected:
     
 protected:
     transport::Configuration configuration;
+    int groupIdx;
     int myIdx;
     Transport *transport;
     AppReplica *app;

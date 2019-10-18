@@ -94,6 +94,7 @@ private:
 
     // TODO maybe change the type of [results]
     void CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies);
+  transport::Configuration *config;
 };
 
 } // namespace janusstore

@@ -39,21 +39,13 @@ namespace tapirstore {
 using namespace std;
 using namespace proto;
 
-ShardClient::ShardClient(const string &configPath, Transport *transport,
+ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int shard, int closestReplica) : client_id(client_id),
-      transport(transport), shard(shard) {
-  ifstream configStream(configPath);
-  if (configStream.fail()) {
-    Panic("Unable to read configuration file: %s\n", configPath.c_str());
-  }
-
-  transport::Configuration config(configStream);
-  this->config = &config;
-
-  client = new replication::ir::IRClient(config, transport, client_id);
+    transport(transport), config(config), shard(shard) {
+  client = new replication::ir::IRClient(*config, transport, client_id);
 
   if (closestReplica == -1) {
-    replica = client_id % config.n;
+    replica = client_id % config->n;
   } else {
     replica = closestReplica;
   }

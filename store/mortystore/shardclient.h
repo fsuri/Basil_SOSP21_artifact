@@ -17,12 +17,13 @@ class Client;
 class ShardClient : public TransportReceiver {
  public:
   /* Constructor needs path to shard config. */
-  ShardClient(const std::string &configPath, Transport *transport,
+  ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int shard, int closestReplica, Client *client);
   virtual ~ShardClient();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
-      const std::string &type, const std::string &data);
+      const std::string &type, const std::string &data,
+      void *meta_data) override;
 
   void Read(const proto::Read &read);
   void Write(const proto::Write &write);

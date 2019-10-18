@@ -57,7 +57,8 @@ public:
                                 error_continuation_t error_continuation = nullptr,
                                 uint32_t timeout = DEFAULT_UNLOGGED_OP_TIMEOUT);
     virtual void ReceiveMessage(const TransportAddress &remote,
-                                const string &type, const string &data);
+                                const string &type, const string &data,
+                                void *meta_data);
 
 protected:
     int view;

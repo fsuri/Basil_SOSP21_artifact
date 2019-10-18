@@ -6,16 +6,16 @@
 
 namespace mortystore {
 
-Server::Server(const transport::Configuration &config, int idx,
+Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     Transport *transport) : config(config), idx(idx), transport(transport) {
-  transport->Register(this, config, idx);
+  transport->Register(this, config, groupIdx, idx);
 }
 
 Server::~Server() {
 }
 
 void Server::ReceiveMessage(const TransportAddress &remote,
-      const std::string &type, const std::string &data) {
+      const std::string &type, const std::string &data, void *meta_data) {
   proto::Read read;
   proto::Write write;
   proto::Prepare prepare;

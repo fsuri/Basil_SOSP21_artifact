@@ -34,9 +34,9 @@
 #include "lib/message.h"
 
 #include <iostream>
-#include <cstring>
-#include <stdexcept>
-#include <tuple>
+#include <fstream>
+#include <string>
+#include <string.h>
 
 namespace transport {
 
@@ -52,15 +52,10 @@ ReplicaAddress::operator==(const ReplicaAddress &other) const {
             (port == other.port));
 }
 
-bool
-ReplicaAddress::operator<(const ReplicaAddress &other) const {
-    auto this_t = std::forward_as_tuple(host, port);
-    auto other_t = std::forward_as_tuple(other.host, other.port);
-    return this_t < other_t;
-}
 
 Configuration::Configuration(const Configuration &c)
-    : g(c.g), n(c.n), f(c.f), replicas(c.replicas), g_replicas(c.g_replicas), hasMulticast(c.hasMulticast), hasFC(c.hasFC)
+    : g(c.g), n(c.n), f(c.f), replicas(c.replicas), hasMulticast(c.hasMulticast),
+      hasFC(c.hasFC), interfaces(c.interfaces)
 {
     multicastAddress = NULL;
     if (hasMulticast) {
@@ -72,27 +67,12 @@ Configuration::Configuration(const Configuration &c)
     }
 }
 
-Configuration::Configuration(int n, int f,
-                             std::vector<ReplicaAddress> replicas,
-                             ReplicaAddress *multicastAddress)
-    : n(n), f(f), replicas(replicas)
-{
-    if (multicastAddress) {
-        hasMulticast = true;
-        this->multicastAddress =
-            new ReplicaAddress(*multicastAddress);
-    } else {
-        hasMulticast = false;
-        multicastAddress = NULL;
-    }
-}
-
 Configuration::Configuration(int g, int n, int f,
-                             std::map<int, std::vector<ReplicaAddress> > g_replicas,
+                             std::map<int, std::vector<ReplicaAddress> > replicas,
                              ReplicaAddress *multicastAddress,
                              ReplicaAddress *fcAddress,
                              std::map<int, std::vector<std::string> > interfaces)
-    : g(g), n(n), f(f), g_replicas(g_replicas), interfaces(interfaces)
+    : g(g), n(n), f(f), replicas(replicas), interfaces(interfaces)
 {
     if (multicastAddress) {
         hasMulticast = true;
@@ -118,84 +98,6 @@ Configuration::Configuration(std::ifstream &file)
     f = -1;
     hasMulticast = false;
     multicastAddress = NULL;
-
-    while (!file.eof()) {
-        // Read a line
-        string line;
-        getline(file, line);
-        // Ignore comments
-        if ((line.size() == 0) || (line[0] == '#')) {
-            continue;
-        }
-
-        // Get the command
-        unsigned int t1 = line.find_first_of(" \t");
-        string cmd = line.substr(0, t1);
-
-        if (strcasecmp(cmd.c_str(), "f") == 0) {
-            unsigned int t2 = line.find_first_not_of(" \t", t1);
-            if (t2 == string::npos) {
-                Panic ("'f' configuration line requires an argument");
-            }
-
-            try {
-                f = stoul(line.substr(t2, string::npos));
-            } catch (std::invalid_argument& ia) {
-                Panic("Invalid argument to 'f' configuration line");
-            }
-        } else if (strcasecmp(cmd.c_str(), "replica") == 0) {
-            unsigned int t2 = line.find_first_not_of(" \t", t1);
-            if (t2 == string::npos) {
-                Panic ("'replica' configuration line requires an argument");
-            }
-
-            unsigned int t3 = line.find_first_of(":", t2);
-            if (t3 == string::npos) {
-                Panic("Configuration line format: 'replica host:port'");
-            }
-
-            string host = line.substr(t2, t3-t2);
-            string port = line.substr(t3+1, string::npos);
-
-            replicas.push_back(ReplicaAddress(host, port));
-        } else if (strcasecmp(cmd.c_str(), "multicast") == 0) {
-            unsigned int t2 = line.find_first_not_of(" \t", t1);
-            if (t2 == string::npos) {
-                Panic ("'multicast' configuration line requires an argument");
-            }
-
-            unsigned int t3 = line.find_first_of(":", t2);
-            if (t3 == string::npos) {
-                Panic("Configuration line format: 'replica host:port'");
-            }
-
-            string host = line.substr(t2, t3-t2);
-            string port = line.substr(t3+1, string::npos);
-
-            multicastAddress = new ReplicaAddress(host, port);
-            hasMulticast = true;
-        } else {
-            Panic("Unknown configuration directive: %s", cmd.c_str());
-        }
-    }
-
-    n = replicas.size();
-    if (n == 0) {
-        Panic("Configuration did not specify any replicas");
-    }
-
-    if (f == -1) {
-        Panic("Configuration did not specify a 'f' parameter");
-    }
-}
-
-// HACK: add a bool kek
-Configuration::Configuration(std::ifstream &file, bool is_janus)
-{
-    Debug("JANUS CONFIGURATION DETECTED");
-    f = -1;
-    hasMulticast = false;
-    multicastAddress = NULL;
     hasFC = false;
     fcAddress = NULL;
     int group = -1;
@@ -204,6 +106,7 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
         // Read a line
         string line;
         getline(file, line);;
+
         // Ignore comments
         if ((line.size() == 0) || (line[0] == '#')) {
             continue;
@@ -232,7 +135,6 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
             }
 
             char *arg = strtok(NULL, " \t");
-            Debug("%s", arg);
             if (!arg) {
                 Panic ("'replica' configuration line requires an argument");
             }
@@ -244,7 +146,8 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
             if (!host || !port) {
                 Panic("Configuration line format: 'replica group host:port'");
             }
-            g_replicas[group].push_back(ReplicaAddress(string(host), string(port)));
+
+            replicas[group].push_back(ReplicaAddress(string(host), string(port)));
             if (interface != nullptr) {
                 interfaces[group].push_back(string(interface));
             } else {
@@ -287,15 +190,15 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
         }
     }
 
-    g = g_replicas.size();
-
+    g = replicas.size();
 
     if (g == 0) {
         Panic("Configuration did not specify any groups");
     }
 
-    n = g_replicas[0].size();
-    for (auto &kv : g_replicas) {
+    n = replicas[0].size();
+
+    for (auto &kv : replicas) {
         if (kv.second.size() != (size_t)n) {
             Panic("All groups must contain the same number of replicas.");
         }
@@ -310,7 +213,6 @@ Configuration::Configuration(std::ifstream &file, bool is_janus)
     }
 }
 
-
 Configuration::~Configuration()
 {
     if (hasMulticast) {
@@ -322,15 +224,9 @@ Configuration::~Configuration()
 }
 
 ReplicaAddress
-Configuration::replica(int idx) const
-{
-    return replicas[idx];
-}
-
-ReplicaAddress
 Configuration::replica(int group, int idx) const
 {
-    return g_replicas.at(group)[idx];
+    return replicas.at(group)[idx];
 }
 
 const ReplicaAddress *
@@ -357,12 +253,6 @@ std::string
 Configuration::Interface(int group, int idx) const
 {
     return this->interfaces.at(group)[idx];
-}
-
-int
-Configuration::GetLeaderIndex(view_t view) const
-{
-    return (view % this->n);
 }
 
 int
@@ -399,27 +289,7 @@ Configuration::operator==(const Configuration &other) const
             return false;
         }
     }
-
     return true;
-}
-
-bool
-Configuration::operator<(const Configuration &other) const {
-    auto this_t = std::forward_as_tuple(n, f, replicas, hasMulticast);
-    auto other_t = std::forward_as_tuple(other.n, other.f, other.replicas,
-                                         other.hasMulticast);
-    if (this_t < other_t) {
-        return true;
-    } else if (this_t == other_t) {
-        if (hasMulticast) {
-            return *multicastAddress < *other.multicastAddress;
-        } else {
-            return false;
-        }
-    } else {
-        // this_t > other_t
-        return false;
-    }
 }
 
 } // namespace transport
