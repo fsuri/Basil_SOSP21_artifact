@@ -30,8 +30,8 @@
  *
  **********************************************************************/
 
-#ifndef _LIB_ASSERT_H_
-#define _LIB_ASSERT_H_
+#ifndef _LIB_UW_ASSERT_H_
+#define _LIB_UW_ASSERT_H_
 
 /*
  * Assertion macros.
@@ -44,15 +44,15 @@
 #include <stdio.h>
 #include "lib/message.h"
 
-#define ASSERT(x) Assert(x)
+#define UW_ASSERT(x) UW_Assert(x)
 
 // XXX These should output the expected and actual values in addition
 // to failing.
-#define ASSERT_EQ(x, y) Assert(x == y)
-#define ASSERT_LT(x, y) Assert(x < y)
-#define ASSERT_GT(x, y) Assert(x > y)
-#define ASSERT_LE(x, y) Assert(x <= y)
-#define ASSERT_GE(x, y) Assert(x >= y)
+#define UW_ASSERT_EQ(x, y) UW_Assert(x == y)
+#define UW_ASSERT_LT(x, y) UW_Assert(x < y)
+#define UW_ASSERT_GT(x, y) UW_Assert(x > y)
+#define UW_ASSERT_LE(x, y) UW_Assert(x <= y)
+#define UW_ASSERT_GE(x, y) UW_Assert(x >= y)
 
 #define NOT_REACHABLE() do {                                            \
         fprintf(stderr, "NOT_REACHABLE point reached: %s, line %d\n",   \
@@ -67,4 +67,4 @@
 } while (0)
 
 
-#endif  /* _LIB_ASSERT_H */
+#endif  /* _LIB_UW_ASSERT_H */

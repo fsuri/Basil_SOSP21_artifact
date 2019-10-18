@@ -44,7 +44,7 @@ std::string ErrorCodeToString(ErrorCode err) {
         case ErrorCode::MISMATCHED_CONSENSUS_VIEWS:
             return "MISMATCHED_CONSENSUS_VIEWS";
         default:
-            Assert(false);
+            UW_Assert(false);
             return "";
     }
 }

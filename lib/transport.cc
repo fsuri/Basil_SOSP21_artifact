@@ -64,7 +64,7 @@ Timeout::~Timeout()
 void
 Timeout::SetTimeout(uint64_t ms)
 {
-    ASSERT(!Active());
+    UW_ASSERT(!Active());
     this->ms = ms;
 }
 

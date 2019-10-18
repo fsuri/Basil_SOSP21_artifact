@@ -175,7 +175,7 @@ VRReplica::SendPrepareOKs(opnum_t oldLastOp)
         if (!entry) {
             RPanic("Did not find operation " FMT_OPNUM " in log", i);
         }
-        ASSERT(entry->state == LOG_STATE_PREPARED);
+        UW_ASSERT(entry->state == LOG_STATE_PREPARED);
         UpdateClientTable(entry->request);
 
         PrepareOKMessage reply;
@@ -273,7 +273,7 @@ VRReplica::SendNullCommit()
     cm.set_view(this->view);
     cm.set_opnum(this->lastCommitted);
 
-    ASSERT(AmLeader());
+    UW_ASSERT(AmLeader());
 
     if (!(transport->SendMessageToAll(this, cm))) {
         RWarning("Failed to send null COMMIT message to all replicas");
@@ -285,7 +285,7 @@ VRReplica::UpdateClientTable(const Request &req)
 {
     ClientTableEntry &entry = clientTable[req.clientid()];
 
-    ASSERT(entry.lastReqId <= req.clientreqid());
+    UW_ASSERT(entry.lastReqId <= req.clientreqid());
 
     if (entry.lastReqId == req.clientreqid()) {
         return;
@@ -299,7 +299,7 @@ VRReplica::UpdateClientTable(const Request &req)
 void
 VRReplica::ResendPrepare()
 {
-    ASSERT(AmLeader());
+    UW_ASSERT(AmLeader());
     if (lastOp == lastCommitted) {
         return;
     }
@@ -312,8 +312,8 @@ VRReplica::ResendPrepare()
 void
 VRReplica::CloseBatch()
 {
-    ASSERT(AmLeader());
-    ASSERT(lastBatchEnd < lastOp);
+    UW_ASSERT(AmLeader());
+    UW_ASSERT(lastBatchEnd < lastOp);
 
     opnum_t batchStart = lastBatchEnd+1;
     
@@ -329,9 +329,9 @@ VRReplica::CloseBatch()
     for (opnum_t i = batchStart; i <= lastOp; i++) {
         Request *r = p.add_request();
         const LogEntry *entry = log.Find(i);
-        ASSERT(entry != NULL);
-        ASSERT(entry->viewstamp.view == view);
-        ASSERT(entry->viewstamp.opnum == i);
+        UW_ASSERT(entry != NULL);
+        UW_ASSERT(entry->viewstamp.view == view);
+        UW_ASSERT(entry->viewstamp.opnum == i);
         *r = entry->request;
     }
     lastPrepare = p;
@@ -546,8 +546,8 @@ VRReplica::HandlePrepare(const TransportAddress &remote,
         RPanic("Unexpected PREPARE: I'm the leader of this view");
     }
 
-    ASSERT(msg.batchstart() <= msg.opnum());
-    ASSERT_EQ(msg.opnum()-msg.batchstart()+1, (unsigned int)msg.request_size());
+    UW_ASSERT(msg.batchstart() <= msg.opnum());
+    UW_ASSERT_EQ(msg.opnum()-msg.batchstart()+1, (unsigned int)msg.request_size());
               
     viewChangeTimeout->Reset();
     
@@ -584,7 +584,7 @@ VRReplica::HandlePrepare(const TransportAddress &remote,
                    req, LOG_STATE_PREPARED);
         UpdateClientTable(req);
     }
-    ASSERT(op == msg.opnum());
+    UW_ASSERT(op == msg.opnum());
     
     /* Build reply and send it to the leader */
     PrepareOKMessage reply;
@@ -754,28 +754,28 @@ VRReplica::HandleStateTransfer(const TransportAddress &remote,
             // Already committed this operation; nothing to be done.
 #if PARANOID
             const LogEntry *entry = log.Find(newEntry.opnum());
-            ASSERT(entry->viewstamp.opnum == newEntry.opnum());
-            ASSERT(entry->viewstamp.view == newEntry.view());
-//          ASSERT(entry->request == newEntry.request());
+            UW_ASSERT(entry->viewstamp.opnum == newEntry.opnum());
+            UW_ASSERT(entry->viewstamp.view == newEntry.view());
+//          UW_ASSERT(entry->request == newEntry.request());
 #endif
         } else if (newEntry.opnum() <= lastOp) {
             // We already have an entry with this opnum, but maybe
             // it's from an older view?
             const LogEntry *entry = log.Find(newEntry.opnum());
-            ASSERT(entry->viewstamp.opnum == newEntry.opnum());
-            ASSERT(entry->viewstamp.view <= newEntry.view());
+            UW_ASSERT(entry->viewstamp.opnum == newEntry.opnum());
+            UW_ASSERT(entry->viewstamp.view <= newEntry.view());
             
             if (entry->viewstamp.view == newEntry.view()) {
                 // We already have this operation in our log.
-                ASSERT(entry->state == LOG_STATE_PREPARED);
+                UW_ASSERT(entry->state == LOG_STATE_PREPARED);
 #if PARANOID
-//              ASSERT(entry->request == newEntry.request());                
+//              UW_ASSERT(entry->request == newEntry.request());                
 #endif
             } else {
                 // Our operation was from an older view, so obviously
                 // it didn't survive a view change. Throw out any
                 // later log entries and replace with this one.
-                ASSERT(entry->state != LOG_STATE_COMMITTED);
+                UW_ASSERT(entry->state != LOG_STATE_COMMITTED);
                 log.RemoveAfter(newEntry.opnum());
                 lastOp = newEntry.opnum();
                 oldLastOp = lastOp;
@@ -785,7 +785,7 @@ VRReplica::HandleStateTransfer(const TransportAddress &remote,
             }
         } else {
             // This is a new operation to us. Add it to the log.
-            ASSERT(newEntry.opnum() == lastOp+1);
+            UW_ASSERT(newEntry.opnum() == lastOp+1);
             
             lastOp++;
             viewstamp_t vs = { newEntry.view(), newEntry.opnum() };
@@ -799,7 +799,7 @@ VRReplica::HandleStateTransfer(const TransportAddress &remote,
     }
 
     /* Execute committed operations */
-    ASSERT(msg.opnum() <= lastOp);
+    UW_ASSERT(msg.opnum() <= lastOp);
     CommitUpTo(msg.opnum());
     SendPrepareOKs(oldLastOp);
 
@@ -834,7 +834,7 @@ VRReplica::HandleStartViewChange(const TransportAddress &remote,
         StartViewChange(msg.view());
     }
 
-    ASSERT(msg.view() == view);
+    UW_ASSERT(msg.view() == view);
     
     if (auto msgs =
         startViewChangeQuorum.AddAndCheckForQuorum(msg.view(),
@@ -895,7 +895,7 @@ VRReplica::HandleDoViewChange(const TransportAddress &remote,
         StartViewChange(msg.view());
     }
 
-    ASSERT(configuration.GetLeaderIndex(msg.view()) == myIdx);
+    UW_ASSERT(configuration.GetLeaderIndex(msg.view()) == myIdx);
     
     auto msgs = doViewChangeQuorum.AddAndCheckForQuorum(msg.view(),
                                                         msg.replicaidx(),
@@ -928,8 +928,8 @@ VRReplica::HandleDoViewChange(const TransportAddress &remote,
                 // log. That should only happen in the corner case
                 // that everyone already had the entire log, maybe
                 // because it actually is empty.
-                ASSERT(lastCommitted == msg.lastcommitted());
-                ASSERT(msg.lastop() == msg.lastcommitted());
+                UW_ASSERT(lastCommitted == msg.lastcommitted());
+                UW_ASSERT(msg.lastop() == msg.lastcommitted());
             } else {
                 if (latestMsg->entries(0).opnum() > lastCommitted+1) {
                     RPanic("Received log that didn't include enough entries to install it");
@@ -968,7 +968,7 @@ VRReplica::HandleDoViewChange(const TransportAddress &remote,
 
         EnterView(msg.view());
 
-        ASSERT(AmLeader());
+        UW_ASSERT(AmLeader());
         
         lastOp = latestOp;
         if (latestMsg != NULL) {
@@ -1009,11 +1009,11 @@ VRReplica::HandleStartView(const TransportAddress &remote,
         return;
     }
 
-    ASSERT(configuration.GetLeaderIndex(msg.view()) != myIdx);
+    UW_ASSERT(configuration.GetLeaderIndex(msg.view()) != myIdx);
 
     if (msg.entries_size() == 0) {
-        ASSERT(msg.lastcommitted() == lastCommitted);
-        ASSERT(msg.lastop() == msg.lastcommitted());
+        UW_ASSERT(msg.lastcommitted() == lastCommitted);
+        UW_ASSERT(msg.lastop() == msg.lastcommitted());
     } else {
         if (msg.entries(0).opnum() > lastCommitted+1) {
             RPanic("Not enough entries in STARTVIEW message to install new log");
@@ -1030,7 +1030,7 @@ VRReplica::HandleStartView(const TransportAddress &remote,
     opnum_t oldLastOp = lastOp;
     lastOp = msg.lastop();
 
-    ASSERT(!AmLeader());
+    UW_ASSERT(!AmLeader());
 
     CommitUpTo(msg.lastcommitted());
     SendPrepareOKs(oldLastOp);

@@ -502,12 +502,12 @@ TEST_P(VRTest, ManyClients)
     transport->Run();
 
     for (int i = 0; i < config->n; i++) {
-        ASSERT_EQ(NUM_CLIENTS * MAX_REQS, ops[i].size());
+        UW_ASSERT_EQ(NUM_CLIENTS * MAX_REQS, ops[i].size());
     }
 
     for (int i = 0; i < NUM_CLIENTS*MAX_REQS; i++) {
         for (int j = 0; j < config->n; j++) {
-            ASSERT_EQ(ops[0][i], ops[j][i]);
+            UW_ASSERT_EQ(ops[0][i], ops[j][i]);
         }
     }
 
@@ -560,12 +560,12 @@ TEST_P(VRTest, Stress)
     transport->Run();
 
     for (int i = 0; i < config->n; i++) {
-        ASSERT_EQ(NUM_CLIENTS * MAX_REQS, ops[i].size());
+        UW_ASSERT_EQ(NUM_CLIENTS * MAX_REQS, ops[i].size());
     }
 
     for (int i = 0; i < NUM_CLIENTS*MAX_REQS; i++) {
         for (int j = 0; j < config->n; j++) {
-            ASSERT_EQ(ops[0][i], ops[j][i]);
+            UW_ASSERT_EQ(ops[0][i], ops[j][i]);
         }
     }
 

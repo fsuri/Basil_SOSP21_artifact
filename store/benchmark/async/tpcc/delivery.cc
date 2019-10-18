@@ -31,8 +31,8 @@ Operation Delivery::GetNextOperation(size_t opCount,
     case NEW_ORDER:
       std::string eno_key = EarliestNewOrderRowKey(w_id, d_id);
       auto eno_row_itr = readValues.find(eno_key);
-      ASSERT(eno_row_itr != readValues.end());
-      ASSERT(eno_row.ParseFromString(eno_row_itr->second));
+      UW_ASSERT(eno_row_itr != readValues.end());
+      UW_ASSERT(eno_row.ParseFromString(eno_row_itr->second));
 
       o_id = eno_row.o_id();
       state = ORDER;

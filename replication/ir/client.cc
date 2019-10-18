@@ -211,12 +211,12 @@ IRClient::TransitionToConsensusSlowPath(const uint64_t reqId)
     Debug("Client timeout; taking consensus slow path: reqId=%lu", reqId);
     PendingConsensusRequest *req =
         dynamic_cast<PendingConsensusRequest *>(pendingReqs[reqId]);
-    ASSERT(req != NULL);
+    UW_ASSERT(req != NULL);
     req->on_slow_path = true;
 
     // We've already transitioned into the slow path, so don't transition into
     // the slow-path again.
-    ASSERT(req->transition_to_slow_path_timer);
+    UW_ASSERT(req->transition_to_slow_path_timer);
     req->transition_to_slow_path_timer.reset();
 
     // It's possible that we already have a quorum of responses (but not a
@@ -234,7 +234,7 @@ void IRClient::HandleSlowPathConsensus(
     const bool finalized_result_found,
     PendingConsensusRequest *req)
 {
-    ASSERT(finalized_result_found || msgs.size() >= req->quorumSize);
+    UW_ASSERT(finalized_result_found || msgs.size() >= req->quorumSize);
     Debug("Handling slow path for request %lu.", reqid);
 
     // If a finalized result wasn't found, call decide to determine the
@@ -250,12 +250,12 @@ void IRClient::HandleSlowPathConsensus(
             if (view == 0) {
                 view = msg.view();
             }
-            ASSERT(msg.view() == view);
+            UW_ASSERT(msg.view() == view);
         }
 
         // Upcall into the application, and put the result in the request
         // to store for later retries.
-        ASSERT(req->decide != NULL);
+        UW_ASSERT(req->decide != NULL);
         req->decideResult = req->decide(results);
         req->reply_consensus_view = view;
     }
@@ -287,7 +287,7 @@ void IRClient::HandleFastPathConsensus(
     const std::map<int, proto::ReplyConsensusMessage> &msgs,
     PendingConsensusRequest *req)
 {
-    ASSERT(msgs.size() >= req->superQuorumSize);
+    UW_ASSERT(msgs.size() >= req->superQuorumSize);
     Debug("Handling fast path for request %lu.", reqid);
 
     // We've received a super quorum of responses. Now, we have to check to see
@@ -357,7 +357,7 @@ IRClient::ResendConfirmation(const uint64_t reqId, bool isConsensus)
 
     if (isConsensus) {
 	PendingConsensusRequest *req = static_cast<PendingConsensusRequest *>(pendingReqs[reqId]);
-	ASSERT(req != NULL);
+	UW_ASSERT(req != NULL);
 
         proto::FinalizeConsensusMessage response;
         response.mutable_opid()->set_clientid(clientid);
@@ -374,7 +374,7 @@ IRClient::ResendConfirmation(const uint64_t reqId, bool isConsensus)
         }
     } else {
 	PendingInconsistentRequest *req = static_cast<PendingInconsistentRequest *>(pendingReqs[reqId]);
-	ASSERT(req != NULL);
+	UW_ASSERT(req != NULL);
 
 	proto::FinalizeInconsistentMessage response;
         response.mutable_opid()->set_clientid(clientid);
@@ -433,7 +433,7 @@ IRClient::HandleInconsistentReply(const TransportAddress &remote,
     PendingInconsistentRequest *req =
         dynamic_cast<PendingInconsistentRequest *>(it->second);
     // Make sure the dynamic cast worked
-    ASSERT(req != NULL);
+    UW_ASSERT(req != NULL);
 
     Debug("Client received reply: %lu %i", reqId,
           req->inconsistentReplyQuorum.NumRequired());
@@ -490,7 +490,7 @@ IRClient::HandleConsensusReply(const TransportAddress &remote,
 
     PendingConsensusRequest *req =
         dynamic_cast<PendingConsensusRequest *>(it->second);
-    ASSERT(req != nullptr);
+    UW_ASSERT(req != nullptr);
 
     if (req->sent_confirms) {
         Debug(
@@ -553,7 +553,7 @@ IRClient::HandleConfirm(const TransportAddress &remote,
             // PendingConsensusRequest, so it's safe to cast it here.
             PendingConsensusRequest *r2 =
                 dynamic_cast<PendingConsensusRequest *>(req);
-            ASSERT(r2 != nullptr);
+            UW_ASSERT(r2 != nullptr);
             if (vs.view == r2->reply_consensus_view) {
                 r2->continuation(r2->request, r2->decideResult);
             } else {
@@ -603,7 +603,7 @@ IRClient::UnloggedRequestTimeoutCallback(const uint64_t reqId)
     }
 
     PendingUnloggedRequest *req = static_cast<PendingUnloggedRequest *>(it->second);
-    ASSERT(req != NULL);
+    UW_ASSERT(req != NULL);
 
     Warning("Unlogged request %lu timed out", reqId);
     //Panic("Unlogged request %lu timed out", reqId);

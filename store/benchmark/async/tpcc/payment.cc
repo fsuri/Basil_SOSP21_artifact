@@ -49,8 +49,8 @@ Operation Payment::GetNextOperation(size_t opCount,
   } else if (opCount == 1) {
     std::string w_key = WarehouseRowKey(w_id);
     auto w_row_itr = readValues.find(w_key);
-    ASSERT(w_row_itr != readValues.end());
-    ASSERT(w_row.ParseFromString(w_row_itr->second));
+    UW_ASSERT(w_row_itr != readValues.end());
+    UW_ASSERT(w_row.ParseFromString(w_row_itr->second));
 
     w_row.set_ytd(w_row.ytd() + h_amount);
     Debug("  YTD: %u", w_row.ytd());
@@ -64,8 +64,8 @@ Operation Payment::GetNextOperation(size_t opCount,
   } else if (opCount == 3) {
     std::string d_key = DistrictRowKey(d_w_id, d_id);
     auto d_row_itr = readValues.find(d_key);
-    ASSERT(d_row_itr != readValues.end());
-    ASSERT(d_row.ParseFromString(d_row_itr->second));
+    UW_ASSERT(d_row_itr != readValues.end());
+    UW_ASSERT(d_row.ParseFromString(d_row_itr->second));
 
     d_row.set_ytd(d_row.ytd() + h_amount);
     Debug("  YTD: %u", d_row.ytd());
@@ -87,8 +87,8 @@ Operation Payment::GetNextOperation(size_t opCount,
       if (opCount == 5) {
         std::string cbn_key = CustomerByNameRowKey(c_w_id, c_d_id, c_last);
         auto cbn_row_itr = readValues.find(cbn_key);
-        ASSERT(cbn_row_itr != readValues.end());
-        ASSERT(cbn_row.ParseFromString(cbn_row_itr->second));
+        UW_ASSERT(cbn_row_itr != readValues.end());
+        UW_ASSERT(cbn_row.ParseFromString(cbn_row_itr->second));
 
         int idx = (cbn_row.ids_size() + 1) / 2;
         if (idx == cbn_row.ids_size()) {
@@ -107,8 +107,8 @@ Operation Payment::GetNextOperation(size_t opCount,
     if (count == 5) {
       std::string c_key = CustomerRowKey(c_w_id, c_d_id, c_id);
       auto c_row_itr = readValues.find(c_key);
-      ASSERT(c_row_itr != readValues.end());
-      ASSERT(c_row.ParseFromString(c_row_itr->second));
+      UW_ASSERT(c_row_itr != readValues.end());
+      UW_ASSERT(c_row.ParseFromString(c_row_itr->second));
 
       c_row.set_balance(c_row.balance() - h_amount);
       c_row.set_ytd_payment(c_row.ytd_payment() + h_amount);

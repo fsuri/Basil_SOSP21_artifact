@@ -26,21 +26,21 @@ class SyncClient {
   virtual ~SyncClient();
 
   // Begin a transaction.
-  void Begin();
+  virtual void Begin();
 
   // Get the value corresponding to key.
-  void Get(const std::string &key, std::string &value,
+  virtual void Get(const std::string &key, std::string &value,
       uint32_t timeout);
 
   // Set the value for the given key.
-  void Put(const std::string &key, const std::string &value,
+  virtual void Put(const std::string &key, const std::string &value,
       uint32_t timeout);
 
   // Commit all Get(s) and Put(s) since Begin().
-  int Commit(uint32_t timeout);
+  virtual int Commit(uint32_t timeout);
   
   // Abort all Get(s) and Put(s) since Begin().
-  void Abort(uint32_t timeout);
+  virtual void Abort(uint32_t timeout);
 
   // Returns statistics (vector of integers) about most recent transaction.
   std::vector<int> Stats();

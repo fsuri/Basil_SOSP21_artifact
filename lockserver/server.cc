@@ -157,7 +157,7 @@ LockServer::Sync(const std::map<opid_t, RecordEntry>& record) {
                             std::begin(info.unlocked), std::end(info.unlocked),
                             std::inserter(diff, diff.begin()));
 
-        ASSERT(diff.size() == 0 || diff.size() == 1);
+        UW_ASSERT(diff.size() == 0 || diff.size() == 1);
         if (diff.size() == 1) {
             uint64_t client_id = *std::begin(diff);
             Debug("Assigning lock %lu: %s", client_id, key.c_str());
@@ -191,7 +191,7 @@ LockServer::Merge(const std::map<opid_t, std::vector<RecordEntry>> &d,
 
         Reply reply;
         auto iter = majority_results_in_d.find(opid);
-        ASSERT(iter != std::end(majority_results_in_d));
+        UW_ASSERT(iter != std::end(majority_results_in_d));
         reply.ParseFromString(iter->second);
 
         // Form the final result.

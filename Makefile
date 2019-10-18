@@ -7,7 +7,7 @@ CXX = g++
 LD = g++
 EXPAND = lib/tmpl/expand
 
-#CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNASSERT
+#CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNUW_ASSERT
 CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized 
 CXXFLAGS := -g -std=c++17
 LDFLAGS := -levent_pthreads
@@ -35,7 +35,10 @@ LDFLAGS += $(LIBSSL_LDFLAGS)
 
 
 # Google test framework. This doesn't use pkgconfig
-GTEST_DIR := /usr/src/gtest
+GTEST_DIR := /usr/src/gtest-1.10.0/googletest
+GMOCK_DIR := /usr/src/gtest-1.10.0/googlemock
+
+CFLAGS += -I$(GTEST_DIR)/include -I$(GMOCK_DIR)/include -isystem $(GTEST_DIR) -isystem $(GMOCK_DIR)
 
 # Additional flags
 PARANOID = 1
@@ -75,6 +78,8 @@ Q = @
 endif
 GTEST := .obj/gtest/gtest.a
 GTEST_MAIN := .obj/gtest/gtest_main.a
+GMOCK := .obj/gmock/gmock.a
+GMOCK_MAIN := .obj/gmock/gmock_main.a
 
 ##################################################################
 # Sub-directories
@@ -229,12 +234,25 @@ GTEST_INTERNAL_SRCS := $(wildcard $(GTEST_DIR)/src/*.cc)
 GTEST_OBJS := $(patsubst %.cc,.obj/gtest/%.o,$(notdir $(GTEST_INTERNAL_SRCS)))
 
 $(GTEST_OBJS): .obj/gtest/%.o: $(GTEST_DIR)/src/%.cc
-	$(call compilecxx,CC,-I$(GTEST_DIR) -Wno-missing-field-initializers)
+	$(call compilecxx,CC,-I$(GTEST_DIR)/include/ -I$(GTEST_DIR) -Wno-missing-field-initializers)
 
 $(GTEST) : .obj/gtest/gtest-all.o
 	$(call trace,AR,$@,$(AR) $(ARFLAGS) $@ $^)
 
 $(GTEST_MAIN) : .obj/gtest/gtest-all.o .obj/gtest/gtest_main.o
+	$(call trace,AR,$@,$(AR) $(ARFLAGS) $@ $^)
+
+
+GMOCK_INTERNAL_SRCS := $(wildcard $(GMOCK_DIR)/src/*.cc)
+GMOCK_OBJS := $(patsubst %.cc,.obj/gmock/%.o,$(notdir $(GMOCK_INTERNAL_SRCS)))
+
+$(GMOCK_OBJS): .obj/gmock/%.o: $(GMOCK_DIR)/src/%.cc
+	$(call compilecxx,CC,-I$(GMOCK_DIR)/include/ -I$(GMOCK_DIR) -isystem $(GTEST_DIR)/include/ -isystem $(GTEST_DIR) -Wno-missing-field-initializers)
+
+$(GMOCK) : .obj/gmock/gmock-all.o
+	$(call trace,AR,$@,$(AR) $(ARFLAGS) $@ $^)
+
+$(GMOCK_MAIN) : .obj/gmock/gmock-all.o .obj/gmock/gmock_main.o
 	$(call trace,AR,$@,$(AR) $(ARFLAGS) $@ $^)
 
 #

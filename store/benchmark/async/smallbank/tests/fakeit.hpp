@@ -771,7 +771,7 @@ namespace fakeit {
     };
 
 }
-#ifdef FAKEIT_ASSERT_ON_UNEXPECTED_METHOD_INVOCATION
+#ifdef FAKEIT_UW_ASSERT_ON_UNEXPECTED_METHOD_INVOCATION
 #include <cassert>
 #endif
 
@@ -784,7 +784,7 @@ namespace fakeit {
         void handle(const UnexpectedMethodCallEvent &e) override {
             fireEvent(e);
             auto &eh = getTestingFrameworkAdapter();
-            #ifdef FAKEIT_ASSERT_ON_UNEXPECTED_METHOD_INVOCATION
+            #ifdef FAKEIT_UW_ASSERT_ON_UNEXPECTED_METHOD_INVOCATION
             assert(!"Unexpected method invocation");
             #endif
             eh.handle(e);

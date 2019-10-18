@@ -55,8 +55,8 @@ Operation NewOrder::GetNextOperation(size_t opCount,
   } else if (opCount == 2) {
     std::string d_key = DistrictRowKey(w_id, d_id);
     auto d_row_itr = readValues.find(d_key);
-    ASSERT(d_row_itr != readValues.end());
-    ASSERT(d_row.ParseFromString(d_row_itr->second));
+    UW_ASSERT(d_row_itr != readValues.end());
+    UW_ASSERT(d_row.ParseFromString(d_row_itr->second));
 
     o_id = d_row.next_o_id();
     Debug("Order Number: %u", o_id);
@@ -104,9 +104,9 @@ Operation NewOrder::GetNextOperation(size_t opCount,
   } else if (static_cast<int32_t>(opCount) < 7 + 4 * ol_cnt) {
     int i = (opCount - 7) % 4;
     size_t ol_number = (opCount - 7) / 4;
-    ASSERT(o_ol_i_ids.size() > ol_number);
-    ASSERT(o_ol_supply_w_ids.size() > ol_number);
-    ASSERT(o_ol_quantities.size() > ol_number);
+    UW_ASSERT(o_ol_i_ids.size() > ol_number);
+    UW_ASSERT(o_ol_supply_w_ids.size() > ol_number);
+    UW_ASSERT(o_ol_quantities.size() > ol_number);
     if (i == 0) {
       Debug("  Order Line %lu", ol_number);
       Debug("    Item: %u", o_ol_i_ids[ol_number]);
@@ -114,7 +114,7 @@ Operation NewOrder::GetNextOperation(size_t opCount,
     } else if (i == 1) {
       std::string i_key = ItemRowKey(o_ol_i_ids[ol_number]);
       auto i_row_itr = readValues.find(i_key);
-      ASSERT(i_row_itr != readValues.end());
+      UW_ASSERT(i_row_itr != readValues.end());
 
       if(i_row_itr->second.empty()) {
         // i_id was invalid and returned empty string
@@ -130,8 +130,8 @@ Operation NewOrder::GetNextOperation(size_t opCount,
       std::string s_key = StockRowKey(o_ol_supply_w_ids[ol_number],
           o_ol_i_ids[ol_number]);
       auto s_row_itr = readValues.find(s_key);
-      ASSERT(s_row_itr != readValues.end());
-      ASSERT(s_row[ol_number].ParseFromString(s_row_itr->second));
+      UW_ASSERT(s_row_itr != readValues.end());
+      UW_ASSERT(s_row[ol_number].ParseFromString(s_row_itr->second));
 
       if (s_row[ol_number].quantity() - o_ol_quantities[ol_number] >= 10) {
         s_row[ol_number].set_quantity(s_row[ol_number].quantity() - o_ol_quantities[ol_number]);

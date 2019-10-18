@@ -24,7 +24,7 @@ LockServer::Waiter::checkTimeout(const struct timeval &now)
     if (now.tv_sec > waitTime.tv_sec) {
         return true;
     } else {
-        ASSERT(now.tv_usec > waitTime.tv_usec && now.tv_sec == waitTime.tv_sec);
+        UW_ASSERT(now.tv_usec > waitTime.tv_usec && now.tv_sec == waitTime.tv_sec);
         
         if (now.tv_usec - waitTime.tv_usec > LOCK_WAIT_TIMEOUT)
             return true;
@@ -69,14 +69,14 @@ LockServer::Lock::tryAcquireLock(uint64_t requester, bool write)
         }
 
         w = waitQ.front();
-        ASSERT(waiters.find(w) != waiters.end());
+        UW_ASSERT(waiters.find(w) != waiters.end());
     }
 
     if (waitQ.front() == requester) {
         // this lock is being reserved for the requester
         waitQ.pop();
-        ASSERT(waiters.find(requester) != waiters.end());
-        ASSERT(waiters[requester].write == write);
+        UW_ASSERT(waiters.find(requester) != waiters.end());
+        UW_ASSERT(waiters[requester].write == write);
         waiters.erase(requester);
         return true;
     } else {
@@ -106,10 +106,10 @@ LockServer::Lock::isWriteNext()
         }
 
         w = waitQ.front();
-        ASSERT(waiters.find(w) != waiters.end());
+        UW_ASSERT(waiters.find(w) != waiters.end());
     }
 
-    ASSERT(waiters.find(waitQ.front()) != waiters.end());
+    UW_ASSERT(waiters.find(waitQ.front()) != waiters.end());
     return waiters[waitQ.front()].write;
 }
 
@@ -126,7 +126,7 @@ LockServer::lockForRead(const string &lock, uint64_t requester)
         if (l.tryAcquireLock(requester, false)) {
             Debug("[%lu] I have acquired the read lock!", requester);
             l.state = LOCKED_FOR_READ;
-            ASSERT(l.holders.size() == 0);
+            UW_ASSERT(l.holders.size() == 0);
             l.holders.insert(requester);
             readers++;
             return true;
@@ -155,7 +155,7 @@ LockServer::lockForRead(const string &lock, uint64_t requester)
             readers++;
             return true;
         }
-        ASSERT(l.holders.size() == 1);
+        UW_ASSERT(l.holders.size() == 1);
         Debug("Locked for write, held by %lu", *(l.holders.begin())); 
         l.waitForLock(requester, false);
         return false;
@@ -178,7 +178,7 @@ LockServer::lockForWrite(const string &lock, uint64_t requester)
         if (l.tryAcquireLock(requester, true)) {
             Debug("[%lu] I have acquired the write lock!", requester);
             l.state = LOCKED_FOR_WRITE;
-            ASSERT(l.holders.size() == 0);
+            UW_ASSERT(l.holders.size() == 0);
             l.holders.insert(requester);
             writers++;
             return true;
@@ -198,7 +198,7 @@ LockServer::lockForWrite(const string &lock, uint64_t requester)
         return false;
     case LOCKED_FOR_WRITE:
     case LOCKED_FOR_READ_WRITE:
-        ASSERT(l.holders.size() == 1);
+        UW_ASSERT(l.holders.size() == 1);
         if (l.holders.count(requester) > 0) {
             return true;
         }
@@ -266,13 +266,13 @@ LockServer::releaseForWrite(const string &lock, uint64_t holder)
     case LOCKED_FOR_WRITE:
         writers--;
         l.holders.erase(holder);
-        ASSERT(l.holders.size() == 0);
+        UW_ASSERT(l.holders.size() == 0);
         l.state = UNLOCKED;
         return;
     case LOCKED_FOR_READ_WRITE:
         writers--;
         l.state = LOCKED_FOR_READ;
-        ASSERT(l.holders.size() == 1);
+        UW_ASSERT(l.holders.size() == 1);
         return;
     }
 }

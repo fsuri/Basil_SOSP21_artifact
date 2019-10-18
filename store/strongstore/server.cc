@@ -175,7 +175,7 @@ Server::UnloggedUpcall(const string &str1, string &str2)
     
     request.ParseFromString(str1);
 
-    ASSERT(request.op() == strongstore::proto::Request::GET);
+    UW_ASSERT(request.op() == strongstore::proto::Request::GET);
 
     if (request.get().has_timestamp()) {
         pair<Timestamp, string> val;

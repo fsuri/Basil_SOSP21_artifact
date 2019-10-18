@@ -113,7 +113,7 @@ void ShardClient::Abort(uint64_t id, const Transaction &txn,
 void ShardClient::MarkComplete(uint64_t tid) {
   client->MarkComplete();
   auto itr = outstanding.find(tid);
-  ASSERT(itr != outstanding.end());
+  UW_ASSERT(itr != outstanding.end());
   for (auto reqId : itr->second) {
     if (pendingGets.find(reqId) != pendingGets.end()) {
       auto jtr = pendingGets.find(reqId);

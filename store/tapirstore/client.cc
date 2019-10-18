@@ -139,7 +139,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
 
 void Client::Prepare(PendingRequest *req, uint32_t timeout) {
   Debug("PREPARE [%lu] at %lu", t_id, req->prepareTimestamp->getTimestamp());
-  ASSERT(participants.size() > 0);
+  UW_ASSERT(participants.size() > 0);
 
   for (auto p : participants) {
     bclient[p]->Prepare(*req->prepareTimestamp, std::bind(

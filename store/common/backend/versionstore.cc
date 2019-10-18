@@ -161,7 +161,7 @@ VersionedKVStore::getLastRead(const string &key, const Timestamp &t, Timestamp &
     if (inStore(key)) {
         set<VersionedValue>::iterator it;
         getValue(key, t, it);
-        ASSERT(it != store[key].end());
+        UW_ASSERT(it != store[key].end());
 
         // figure out if anyone has read this version before
         if (lastReads.find(key) != lastReads.end() &&
