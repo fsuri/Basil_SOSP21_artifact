@@ -4,9 +4,8 @@
  * transport-common.h:
  *   template support for implementing transports
  *
- * Copyright 2013-2015 Irene Zhang <iyzhang@cs.washington.edu>
- *                     Naveen Kr. Sharma <naveenks@cs.washington.edu>
- *                     Dan R. K. Ports  <drkp@cs.washington.edu>
+ * Copyright 2013 Dan R. K. Ports  <drkp@cs.washington.edu>
+ *                Jialin Li        <lijl@cs.washington.edu>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -60,17 +59,27 @@ public:
 
     virtual bool
     SendMessage(TransportReceiver *src, const TransportAddress &dst,
-                const Message &m)
+                const Message &m) override
     {
         const ADDR &dstAddr = dynamic_cast<const ADDR &>(dst);
-        return SendMessageInternal(src, dstAddr, m, false);
+        return SendMessageInternal(src, dstAddr, m);
+    }
+
+    virtual bool
+    SendMessageToReplica(TransportReceiver *src,
+                         int replicaIdx,
+                         const Message &m) override
+    {
+        UW_ASSERT(this->replicaGroups.find(src) != this->replicaGroups.end());
+        int groupIdx = this->replicaGroups[src] == -1 ? 0 : this->replicaGroups[src];
+        return SendMessageToReplica(src, groupIdx, replicaIdx, m);
     }
 
     virtual bool
     SendMessageToReplica(TransportReceiver *src,
                          int groupIdx,
                          int replicaIdx,
-                         const Message &m)
+                         const Message &m) override
     {
         const transport::Configuration *cfg = configurations[src];
         UW_ASSERT(cfg != NULL);
@@ -79,17 +88,13 @@ public:
             LookupAddresses();
         }
 
-        auto kv = g_replicaAddresses[cfg][groupIdx].find(replicaIdx);
-        UW_ASSERT(kv != g_replicaAddresses[cfg][groupIdx].end());
+        auto kv = replicaAddresses[cfg][groupIdx].find(replicaIdx);
+        UW_ASSERT(kv != replicaAddresses[cfg][groupIdx].end());
 
-
-        return SendMessageInternal(src, kv->second, m, false);
+        return SendMessageInternal(src, kv->second, m);
     }
 
-
-    virtual bool
-    SendMessageToReplica(TransportReceiver *src, int replicaIdx,
-                         const Message &m)
+    virtual bool SendMessageToFC(TransportReceiver *src, const Message &m) override
     {
         const transport::Configuration *cfg = configurations[src];
         UW_ASSERT(cfg != NULL);
@@ -98,14 +103,33 @@ public:
             LookupAddresses();
         }
 
-        auto kv = replicaAddresses[cfg].find(replicaIdx);
-        UW_ASSERT(kv != replicaAddresses[cfg].end());
-        
-        return SendMessageInternal(src, kv->second, m, false);
+        auto kv = fcAddresses.find(cfg);
+        if (kv == fcAddresses.end()) {
+            Panic("Configuration has no failure coordinator address");
+        }
+
+        return SendMessageInternal(src, kv->second, m);
     }
 
     virtual bool
-    SendMessageToAll(TransportReceiver *src, const Message &m)
+    SendMessageToAll(TransportReceiver *src,
+                     const Message &m)
+    {
+        UW_ASSERT(this->replicaGroups.find(src) != this->replicaGroups.end());
+        int groupIdx = this->replicaGroups[src] == -1 ? 0 : this->replicaGroups[src];
+        const transport::Configuration *cfg = configurations[src];
+        UW_ASSERT(cfg != NULL);
+
+        if (!replicaAddressesInitialized) {
+            LookupAddresses();
+        }
+
+        return SendMessageToGroup(src, groupIdx, m);
+    }
+
+    virtual bool
+    SendMessageToAllGroups(TransportReceiver *src,
+                           const Message &m)
     {
         const transport::Configuration *cfg = configurations[src];
         UW_ASSERT(cfg != NULL);
@@ -114,88 +138,94 @@ public:
             LookupAddresses();
         }
 
-        auto kv = multicastAddresses.find(cfg);
-        if (kv != multicastAddresses.end()) {
-            // Send by multicast if we can
-            return SendMessageInternal(src, kv->second, m, true);
-        } else {
-            // ...or by individual messages to every replica if not
-            const ADDR &srcAddr = dynamic_cast<const ADDR &>(src->GetAddress());
-            for (auto & kv2 : replicaAddresses[cfg]) {
+        const ADDR &srcAddr = dynamic_cast<const ADDR &>(src->GetAddress());
+        for (auto & kv : replicaAddresses[cfg]) {
+            for (auto & kv2 : kv.second) {
                 if (srcAddr == kv2.second) {
                     continue;
                 }
-                if (!SendMessageInternal(src, kv2.second, m, false)) {
+                if (!SendMessageInternal(src, kv2.second, m)) {
                     return false;
                 }
             }
-            return true;
         }
+        return true;
+    }
+
+    virtual bool
+    SendMessageToGroup(TransportReceiver *src,
+                       int groupIdx,
+                       const Message &m) override
+    {
+        return SendMessageToGroups(src, std::vector<int>{groupIdx}, m);
+    }
+
+    virtual bool
+    SendMessageToGroups(TransportReceiver *src,
+                        const std::vector<int> &groups,
+                        const Message &m) override
+    {
+        const transport::Configuration *cfg = configurations[src];
+        UW_ASSERT(cfg != NULL);
+
+        if (!replicaAddressesInitialized) {
+            LookupAddresses();
+        }
+
+        const ADDR &srcAddr = dynamic_cast<const ADDR &>(src->GetAddress());
+        for (int groupIdx : groups) {
+            for (auto & kv : replicaAddresses[cfg][groupIdx]) {
+                if (srcAddr == kv.second) {
+                    continue;
+                }
+                if (!SendMessageInternal(src, kv.second, m)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    virtual bool
+    OrderedMulticast(TransportReceiver *src,
+                     const std::vector<int> &groups,
+                     const Message &m) override
+    {
+        Panic("Transport implementation does not support OrderedMulticast");
+    }
+
+    virtual bool
+    OrderedMulticast(TransportReceiver *src,
+                     const Message &m) override
+    {
+        std::vector<int> groups = {0};
+        return OrderedMulticast(src, groups, m);
     }
 
 protected:
     virtual bool SendMessageInternal(TransportReceiver *src,
                                      const ADDR &dst,
-                                     const Message &m,
-                                     bool multicast = false) = 0;
-    virtual ADDR LookupAddress(const transport::Configuration &cfg,
-                               int replicaIdx) = 0;
+                                     const Message &m) = 0;
     virtual ADDR LookupAddress(const transport::Configuration &cfg,
                                int groupIdx,
                                int replicaIdx) = 0;
     virtual const ADDR *
     LookupMulticastAddress(const transport::Configuration *cfg) = 0;
+    virtual const ADDR *
+    LookupFCAddress(const transport::Configuration *cfg) = 0;
 
     std::unordered_map<transport::Configuration,
-                       transport::Configuration *> canonicalConfigs;
+        transport::Configuration *> canonicalConfigs;
     std::map<TransportReceiver *,
-             transport::Configuration *> configurations;
+        transport::Configuration *> configurations;
     std::map<const transport::Configuration *,
-             std::map<int, ADDR> > replicaAddresses;
+        std::map<int, std::map<int, ADDR> > > replicaAddresses; // config->groupid->replicaid->ADDR
     std::map<const transport::Configuration *,
-             std::map<int, TransportReceiver *> > replicaReceivers;
-    std::map<const transport::Configuration *,
-             std::map<int, std::map<int, ADDR> > > g_replicaAddresses; // config->groupid->replicaid->ADDR
-    std::map<const transport::Configuration *,
-             std::map<int, std::map<int, TransportReceiver *> > > g_replicaReceivers;
+        std::map<int, std::map<int, TransportReceiver *> > > replicaReceivers;
     std::map<const transport::Configuration *, ADDR> multicastAddresses;
     std::map<const transport::Configuration *, ADDR> fcAddresses;
     std::map<TransportReceiver *, int> replicaGroups;
     bool replicaAddressesInitialized;
-
-    virtual transport::Configuration *
-    RegisterConfiguration(TransportReceiver *receiver,
-                          const transport::Configuration &config,
-                          int replicaIdx)
-    {
-        UW_ASSERT(receiver != NULL);
-
-        // Have we seen this configuration before? If so, get a
-        // pointer to the canonical copy; if not, create one. This
-        // allows us to use that pointer as a key in various
-        // structures.
-        transport::Configuration *canonical
-            = canonicalConfigs[config];
-        if (canonical == NULL) {
-            canonical = new transport::Configuration(config);
-            canonicalConfigs[config] = canonical;
-        }
-
-        // Record configuration
-        configurations.insert(std::make_pair(receiver, canonical));
-
-        // If this is a replica, record the receiver
-        if (replicaIdx != -1) {
-            replicaReceivers[canonical].insert(std::make_pair(replicaIdx,
-                                                              receiver));
-        }
-
-        // Mark replicaAddreses as uninitalized so we'll look up
-        // replica addresses again the next time we send a message.
-        replicaAddressesInitialized = false;
-
-        return canonical;
-    }
 
     /* configs is a map of groupIdx to Configuration */
     virtual transport::Configuration *
@@ -204,6 +234,7 @@ protected:
                           int groupIdx,
                           int replicaIdx) {
         UW_ASSERT(receiver != NULL);
+
         // Have we seen this configuration before? If so, get a
         // pointer to the canonical copy; if not, create one. This
         // allows us to use that pointer as a key in various
@@ -214,14 +245,13 @@ protected:
             canonical = new transport::Configuration(config);
             canonicalConfigs[config] = canonical;
         }
-
         // Record configuration
         configurations[receiver] = canonical;
 
         // If this is a replica, record the receiver
         if (replicaIdx != -1) {
             UW_ASSERT(groupIdx != -1);
-            g_replicaReceivers[canonical][groupIdx][replicaIdx] = receiver;
+            replicaReceivers[canonical][groupIdx][replicaIdx] = receiver;
         }
 
         // Record which group this receiver belongs to
@@ -237,35 +267,35 @@ protected:
     LookupAddresses()
     {
         // Clear any existing list of addresses
-        g_replicaAddresses.clear();
         replicaAddresses.clear();
         multicastAddresses.clear();
+        fcAddresses.clear();
 
         // For every configuration, look up all addresses and cache
         // them.
         for (auto &kv : canonicalConfigs) {
             transport::Configuration *cfg = kv.second;
 
-            if (cfg->g == 0) {
-                for (int i = 0; i < cfg->n; i++) {
-                    const ADDR addr = LookupAddress(*cfg, i);
-                    replicaAddresses[cfg].insert(std::make_pair(i, addr));
-                }
-            } else if (cfg->g > 0) {
-                for (int j = 0; j < cfg->g; j++) {
-                    for (int i = 0; i < cfg->n; i++) {
-                        const ADDR addr = LookupAddress(*cfg, j, i);
-                        g_replicaAddresses[cfg][j].insert(std::make_pair(i, addr));
-                    }
+            for (int i = 0; i < cfg->g; i++) {
+                for (int j = 0; j < cfg->n; j++) {
+                    const ADDR addr = LookupAddress(*cfg, i, j);
+                    replicaAddresses[cfg][i].insert(std::make_pair(j, addr));
                 }
             }
-
 
             // And check if there's a multicast address
             if (cfg->multicast()) {
                 const ADDR *addr = LookupMulticastAddress(cfg);
                 if (addr) {
                     multicastAddresses.insert(std::make_pair(cfg, *addr));
+                    delete addr;
+                }
+            }
+            // Failure coordinator address
+            if (cfg->fc()) {
+                const ADDR *addr = LookupFCAddress(cfg);
+                if (addr) {
+                    fcAddresses.insert(std::make_pair(cfg, *addr));
                     delete addr;
                 }
             }

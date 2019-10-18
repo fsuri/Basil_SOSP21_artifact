@@ -37,13 +37,15 @@
 
 int main() {
     ReplTransport transport;
-    std::vector<transport::ReplicaAddress> replica_addrs = {
+    std::map<int, std::vector<transport::ReplicaAddress>> replica_addrs;
+    std::vector<transport::ReplicaAddress> replica_addr = {
         {"replica", "0"},
         {"replica", "1"},
         {"replica", "2"},
         {"replica", "3"},
         {"replica", "4"}};
-    transport::Configuration config(5 /* n */, 2 /* f */, replica_addrs);
+    replica_addrs[0] = replica_addr;
+    transport::Configuration config(1 /* g */, 5 /* n */, 2 /* f */, replica_addrs);
 
     // Clients.
     lockserver::LockClient client_a(&transport, config);
@@ -61,7 +63,7 @@ int main() {
             new lockserver::LockServer());
         servers.push_back(std::move(server));
         auto replica = std::unique_ptr<replication::ir::IRReplica>(
-            new replication::ir::IRReplica(config, i, &transport,
+            new replication::ir::IRReplica(config, 0, i, &transport,
                                            servers[i].get()));
         replicas.push_back(std::move(replica));
     }
@@ -71,7 +73,7 @@ int main() {
 
     // Remove persisted files.
     for (std::size_t i = 0; i < replica_addrs.size(); ++i) {
-        const transport::ReplicaAddress &addr = replica_addrs[i];
+        const transport::ReplicaAddress &addr = replica_addrs[0][i];
         const std::string filename =
             addr.host + ":" + addr.port + "_" + std::to_string(i) + ".bin";
         int success = std::remove(filename.c_str());

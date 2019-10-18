@@ -109,8 +109,7 @@ TCPTransportAddress
 TCPTransport::LookupAddress(const transport::Configuration &config,
                             int idx)
 {
-    const transport::ReplicaAddress &addr = config.replica(idx);
-    return LookupAddress(addr);
+  return LookupAddress(config, 0, idx);
 }
 
 TCPTransportAddress
@@ -260,93 +259,18 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
 void
 TCPTransport::Register(TransportReceiver *receiver,
                        const transport::Configuration &config,
-                       int replicaIdx)
+                       int groupIdx, int replicaIdx)
 {
     UW_ASSERT(replicaIdx < config.n);
     struct sockaddr_in sin;
 
     //const transport::Configuration *canonicalConfig =
-    RegisterConfiguration(receiver, config, replicaIdx);
+    RegisterConfiguration(receiver, config, groupIdx, replicaIdx);
 
     // Clients don't need to accept TCP connections
     if (replicaIdx == -1) {
 	return;
     }
-
-    // Create socket
-    int fd;
-    if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        PPanic("Failed to create socket to accept TCP connections");
-    }
-
-    // Put it in non-blocking mode
-    if (fcntl(fd, F_SETFL, O_NONBLOCK, 1)) {
-        PWarning("Failed to set O_NONBLOCK");
-    }
-
-    // Set SO_REUSEADDR
-    int n;
-    if (setsockopt(fd, SOL_SOCKET,
-                   SO_REUSEADDR, (char *)&n, sizeof(n)) < 0) {
-        PWarning("Failed to set SO_REUSEADDR on TCP listening socket");
-    }
-
-    // Set TCP_NODELAY
-    n = 1;
-    if (setsockopt(fd, IPPROTO_TCP,
-                   TCP_NODELAY, (char *)&n, sizeof(n)) < 0) {
-        PWarning("Failed to set TCP_NODELAY on TCP listening socket");
-    }
-
-    // Registering a replica. Bind socket to the designated
-    // host/port
-    const string &host = config.replica(replicaIdx).host;
-    const string &port = config.replica(replicaIdx).port;
-    BindToPort(fd, host, port);
-
-    // Listen for connections
-    if (listen(fd, 5) < 0) {
-        PPanic("Failed to listen for TCP connections");
-    }
-
-    // Create event to accept connections
-    TCPTransportTCPListener *info = new TCPTransportTCPListener();
-    info->transport = this;
-    info->acceptFd = fd;
-    info->receiver = receiver;
-    info->replicaIdx = replicaIdx;
-    info->acceptEvent = event_new(libeventBase,
-                                  fd,
-                                  EV_READ | EV_PERSIST,
-                                  TCPAcceptCallback,
-                                  (void *)info);
-    event_add(info->acceptEvent, NULL);
-    tcpListeners.push_back(info);
-
-    // Tell the receiver its address
-    socklen_t sinsize = sizeof(sin);
-    if (getsockname(fd, (sockaddr *) &sin, &sinsize) < 0) {
-        PPanic("Failed to get socket name");
-    }
-    TCPTransportAddress *addr = new TCPTransportAddress(sin);
-    receiver->SetAddress(addr);
-
-    // Update mappings
-    receivers[fd] = receiver;
-    fds[receiver] = fd;
-
-    Debug("Accepting connections on TCP port %hu", ntohs(sin.sin_port));
-}
-
-void
-TCPTransport::Register(TransportReceiver *receiver,
-                       const transport::Configuration &config,
-                       int groupIdx,
-                       int replicaIdx)
-{
-    UW_ASSERT(replicaIdx < config.n);
-    struct sockaddr_in sin;
-    RegisterConfiguration(receiver, config, groupIdx, replicaIdx);
 
     // Create socket
     int fd;
@@ -389,7 +313,6 @@ TCPTransport::Register(TransportReceiver *receiver,
     info->transport = this;
     info->acceptFd = fd;
     info->receiver = receiver;
-    info->groupIdx = groupIdx;
     info->replicaIdx = replicaIdx;
     info->acceptEvent = event_new(libeventBase,
                                   fd,
@@ -411,15 +334,21 @@ TCPTransport::Register(TransportReceiver *receiver,
     receivers[fd] = receiver;
     fds[receiver] = fd;
 
-    Notice("Listening on TCP port %hu", ntohs(sin.sin_port));
+    Debug("Accepting connections on TCP port %hu", ntohs(sin.sin_port));
 }
+
+
+bool TCPTransport::OrderedMulticast(TransportReceiver *src,
+    const std::vector<int> &groups, const Message &m) {
+  Panic("Not implemented :(.");
+}
+
 
 
 bool
 TCPTransport::SendMessageInternal(TransportReceiver *src,
                                   const TCPTransportAddress &dst,
-                                  const Message &m,
-                                  bool multicast)
+                                  const Message &m)
 {
     auto kv = tcpOutgoing.find(dst);
     // See if we have a connection open
@@ -721,7 +650,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         UW_ASSERT(addr != transport->tcpAddresses.end());
         
         // Dispatch
-        info->receiver->ReceiveMessage(addr->second, msgType, msg);
+        info->receiver->ReceiveMessage(addr->second, msgType, msg, nullptr);
         Debug("Done processing large %s message", msgType.c_str());
     }
 }

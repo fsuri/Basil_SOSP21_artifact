@@ -47,13 +47,14 @@ namespace vr {
 class VRReplica : public Replica
 {
 public:
-    VRReplica(transport::Configuration config, int myIdx,
+    VRReplica(transport::Configuration config, int groupIdx, int myIdx,
               Transport *transport, unsigned int batchSize,
               AppReplica *app);
     ~VRReplica();
     
     void ReceiveMessage(const TransportAddress &remote,
-                        const string &type, const string &data);
+                        const string &type, const string &data,
+                        void *meta_data);
 
 private:
     view_t view;

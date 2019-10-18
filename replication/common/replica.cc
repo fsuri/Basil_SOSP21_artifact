@@ -40,12 +40,12 @@
 
 namespace replication {
     
-Replica::Replica(const transport::Configuration &configuration, int myIdx,
-                 Transport *transport, AppReplica *app)
-    : configuration(configuration), myIdx(myIdx),
+Replica::Replica(const transport::Configuration &configuration, int groupIdx,
+    int myIdx, Transport *transport, AppReplica *app)
+    : configuration(configuration), groupIdx(groupIdx), myIdx(myIdx),
       transport(transport), app(app)
 {
-    transport->Register(this, configuration, myIdx);
+    transport->Register(this, configuration, groupIdx, myIdx);
 }
 
 Replica::~Replica()

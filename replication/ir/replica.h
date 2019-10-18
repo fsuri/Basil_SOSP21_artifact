@@ -53,13 +53,14 @@ public:
 class IRReplica : public TransportReceiver
 {
 public:
-    IRReplica(transport::Configuration config, int myIdx,
+    IRReplica(transport::Configuration config, int groupIdx, int myIdx,
               Transport *transport, IRAppReplica *app);
     ~IRReplica();
 
     // Message handlers.
     void ReceiveMessage(const TransportAddress &remote,
-                        const std::string &type, const std::string &data);
+                        const std::string &type, const std::string &data,
+                        void *meta_data);
     void HandleMessage(const TransportAddress &remote,
                        const std::string &type, const std::string &data);
     void HandleProposeInconsistent(const TransportAddress &remote,
@@ -98,6 +99,7 @@ private:
         const std::map<int, proto::DoViewChangeMessage> &records);
 
     transport::Configuration config;
+    int groupIdx;
     int myIdx; // Replica index into config.
     Transport *transport;
     IRAppReplica *app;

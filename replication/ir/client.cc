@@ -429,7 +429,7 @@ IRClient::ResendConfirmation(const uint64_t reqId, bool isConsensus)
 void
 IRClient::ReceiveMessage(const TransportAddress &remote,
                          const string &type,
-                         const string &data)
+                         const string &data, void *meta_data)
 {
     proto::ReplyInconsistentMessage replyInconsistent;
     proto::ReplyConsensusMessage replyConsensus;
@@ -449,7 +449,7 @@ IRClient::ReceiveMessage(const TransportAddress &remote,
         unloggedReply.ParseFromString(data);
         HandleUnloggedReply(remote, unloggedReply);
     } else {
-        Client::ReceiveMessage(remote, type, data);
+        Client::ReceiveMessage(remote, type, data, meta_data);
     }
 }
 

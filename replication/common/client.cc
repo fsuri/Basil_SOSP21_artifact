@@ -66,7 +66,7 @@ Client::Client(const transport::Configuration &config, Transport *transport,
         Debug("VRClient ID: %lu", this->clientid);
     }
 
-    transport->Register(this, config, -1);
+    transport->Register(this, config, -1, -1);
 }
 
 Client::~Client()
@@ -76,7 +76,7 @@ Client::~Client()
 
 void
 Client::ReceiveMessage(const TransportAddress &remote,
-                       const string &type, const string &data)
+                       const string &type, const string &data, void *meta_data)
 {
     Panic("Received unexpected message type: %s",
           type.c_str());

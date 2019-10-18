@@ -49,10 +49,10 @@ namespace vr {
 
 using namespace proto;
     
-VRReplica::VRReplica(transport::Configuration config, int myIdx,
+VRReplica::VRReplica(transport::Configuration config, int groupIdx, int myIdx,
                      Transport *transport, unsigned int batchSize,
                      AppReplica *app)
-    : Replica(config, myIdx, transport, app),
+    : Replica(config, groupIdx, myIdx, transport, app),
       batchSize(batchSize),
       log(false),
       prepareOKQuorum(config.QuorumSize()-1),
@@ -347,7 +347,8 @@ VRReplica::CloseBatch()
 
 void
 VRReplica::ReceiveMessage(const TransportAddress &remote,
-                          const string &type, const string &data)
+                          const string &type, const string &data,
+                          void *meta_data)
 {
     RequestMessage request;
     UnloggedRequestMessage unloggedRequest;

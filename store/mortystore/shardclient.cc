@@ -4,16 +4,10 @@
 
 namespace mortystore {
 
-ShardClient::ShardClient(const string &configPath, Transport *transport,
+ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int shard, int closestReplica, Client *client) : client_id(client_id), client(client),
-      transport(transport), shard(shard) {
-  std::ifstream configStream(configPath);
-  if (configStream.fail()) {
-    Panic("Unable to read configuration file: %s\n", configPath.c_str());
-  }
-
-  this->config = new transport::Configuration(configStream);
-  transport->Register(this, *config, -1);
+      transport(transport), config(config), shard(shard) {
+  transport->Register(this, *config, -1, -1);
 
   if (closestReplica == -1) {
     replica = client_id % config->n;
@@ -23,11 +17,10 @@ ShardClient::ShardClient(const string &configPath, Transport *transport,
 }
 
 ShardClient::~ShardClient() {
-  delete config;
 }
 
 void ShardClient::ReceiveMessage(const TransportAddress &remote,
-      const std::string &type, const std::string &data) {
+      const std::string &type, const std::string &data, void *meta_data) {
   proto::ReadReply readReply;
   proto::WriteReply writeReply;
   proto::PrepareOK prepareOK;

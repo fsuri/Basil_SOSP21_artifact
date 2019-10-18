@@ -35,10 +35,9 @@
 
 #include <google/protobuf/message.h>
 #include <functional>
-
-#define CLIENT_NETWORK_DELAY 0
-#define REPLICA_NETWORK_DELAY 0
-#define READ_AT_LEADER 1
+#include <list>
+#include <map>
+#include <unordered_map>
 
 class TransportAddress
 {
@@ -49,17 +48,18 @@ public:
 
 class TransportReceiver
 {
-public:
+protected:
     typedef ::google::protobuf::Message Message;
 
-
+public:
     virtual ~TransportReceiver();
     virtual void SetAddress(const TransportAddress *addr);
     virtual const TransportAddress& GetAddress();
 
     virtual void ReceiveMessage(const TransportAddress &remote,
-                                const string &type, const string &data) = 0;
-
+                                const string &type,
+                                const string &data,
+                                void * meta_data) = 0;
 
 protected:
     const TransportAddress *myAddress;
@@ -67,27 +67,68 @@ protected:
 
 typedef std::function<void (void)> timer_callback_t;
 
+// ordered multicast meta data
+typedef struct {
+    sessnum_t sessnum;
+    std::unordered_map<shardnum_t, msgnum_t> seqnums;
+} multistamp_t;
+
 class Transport
 {
 protected:
     typedef ::google::protobuf::Message Message;
 public:
     virtual ~Transport() {}
-    virtual void Register(TransportReceiver *receiver,
-                          const transport::Configuration &config,
-                          int replicaIdx) = 0;
+    /* -1 in replicaIdx and groupIdx indicates client */
     virtual void Register(TransportReceiver *receiver,
                           const transport::Configuration &config,
                           int groupIdx,
                           int replicaIdx) = 0;
-    virtual bool SendMessage(TransportReceiver *src, const TransportAddress &dst,
+
+    virtual bool SendMessage(TransportReceiver *src,
+                             const TransportAddress &dst,
                              const Message &m) = 0;
-    virtual bool SendMessageToReplica(TransportReceiver *src, int replicaIdx, const Message &m) = 0;
-    virtual bool SendMessageToReplica(TransportReceiver *src, int groupIdx, int replicaIdx, const Message &m) = 0;
-    virtual bool SendMessageToAll(TransportReceiver *src, const Message &m) = 0;
+    /* Send message to a replica in the local/default(0) group */
+    virtual bool SendMessageToReplica(TransportReceiver *src,
+                                      int replicaIdx,
+                                      const Message &m) = 0;
+    /* Send message to a replica in a specific group */
+    virtual bool SendMessageToReplica(TransportReceiver *src,
+                                      int groupIdx,
+                                      int replicaIdx,
+                                      const Message &m) = 0;
+    /* Send message to all replicas in the local/default(0) group */
+    virtual bool SendMessageToAll(TransportReceiver *src,
+                                  const Message &m) = 0;
+    /* Send message to all replicas in all groups in the configuration */
+    virtual bool SendMessageToAllGroups(TransportReceiver *src,
+                                        const Message &m) = 0;
+    /* Send message to all replicas in specific groups */
+    virtual bool SendMessageToGroups(TransportReceiver *src,
+                                     const std::vector<int> &groups,
+                                     const Message &m) = 0;
+    /* Send message to all replicas in a single group */
+    virtual bool SendMessageToGroup(TransportReceiver *src,
+                                    int groupIdx,
+                                    const Message &m) = 0;
+    /* Send multi-group message using ordered multicast.
+     * An implementation may decide not to implement this.
+     */
+    virtual bool OrderedMulticast(TransportReceiver *src,
+                                  const std::vector<int> &groups,
+                                  const Message &m) = 0;
+    /* Send ordered multicast to the default group */
+    virtual bool OrderedMulticast(TransportReceiver *src,
+                                  const Message &m) = 0;
+    /* Send message to failure coordinator
+     */
+    virtual bool SendMessageToFC(TransportReceiver *src,
+                                 const Message &m) = 0;
     virtual int Timer(uint64_t ms, timer_callback_t cb) = 0;
     virtual bool CancelTimer(int id) = 0;
     virtual void CancelAllTimers() = 0;
+    virtual void Run() = 0;
+    virtual void Stop() = 0;
 };
 
 class Timeout
