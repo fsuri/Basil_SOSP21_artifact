@@ -24,17 +24,14 @@ struct ClientBranch {
   std::map<std::string, std::string> readValues;
 };
 
-class Client : public ::AsyncClient, public TransportReceiver {
+class Client : public ::AsyncClient {
  public:
-  Client(const std::string configPath, int nShards, int nGroups,
+  Client(const std::string configPath, uint64_t client_id, int nShards, int nGroups,
       int closestReplica, Transport *transport, partitioner part);
   virtual ~Client();
 
   virtual void Execute(AsyncTransaction *txn, execute_callback ecb);
   
-  virtual void ReceiveMessage(const TransportAddress &remote,
-      const std::string &type, const std::string &data);
-
  private:
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), outstandingPrepares(0), commitTries(0),
@@ -70,11 +67,12 @@ class Client : public ::AsyncClient, public TransportReceiver {
   bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
       std::string &val);
 
-  void HandleReadReply(const TransportAddress &remote, const proto::ReadReply &msg);
-  void HandleWriteReply(const TransportAddress &remote, const proto::WriteReply &msg);
-  void HandlePrepareOK(const TransportAddress &remote, const proto::PrepareOK &msg);
-  void HandleCommitReply(const TransportAddress &remote, const proto::CommitReply &msg);
-  void HandlePrepareKO(const TransportAddress &remote, const proto::PrepareKO &msg);
+  friend class ShardClient;
+  void HandleReadReply(const TransportAddress &remote, const proto::ReadReply &msg, uint64_t shard);
+  void HandleWriteReply(const TransportAddress &remote, const proto::WriteReply &msg, uint64_t shard);
+  void HandlePrepareOK(const TransportAddress &remote, const proto::PrepareOK &msg, uint64_t shard);
+  void HandleCommitReply(const TransportAddress &remote, const proto::CommitReply &msg, uint64_t shard);
+  void HandlePrepareKO(const TransportAddress &remote, const proto::PrepareKO &msg, uint64_t shard);
 
   void Get(proto::Branch &branch, const std::string &key);
   void Put(proto::Branch &branch, const std::string &key,

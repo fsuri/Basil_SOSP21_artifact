@@ -12,21 +12,27 @@
 
 namespace mortystore {
 
-class ShardClient {
+class Client;
+
+class ShardClient : public TransportReceiver {
  public:
   /* Constructor needs path to shard config. */
   ShardClient(const std::string &configPath, Transport *transport,
-      uint64_t client_id, int shard, int closestReplica, TransportReceiver *receiver);
+      uint64_t client_id, int shard, int closestReplica, Client *client);
   virtual ~ShardClient();
 
-  void Read(const proto::Read &read, TransportReceiver *receiver);
-  void Write(const proto::Write &write, TransportReceiver *receiver);
-  void Prepare(const proto::Prepare &prepare, TransportReceiver *receiver);
-  void Commit(const proto::Commit &commit, TransportReceiver *receiver);
-  void Abort(const proto::Abort &abort, TransportReceiver *receiver);
+  virtual void ReceiveMessage(const TransportAddress &remote,
+      const std::string &type, const std::string &data);
+
+  void Read(const proto::Read &read);
+  void Write(const proto::Write &write);
+  void Prepare(const proto::Prepare &prepare);
+  void Commit(const proto::Commit &commit);
+  void Abort(const proto::Abort &abort);
 
  private:
   uint64_t client_id; // Unique ID for this client.
+  Client *client;
   Transport *transport; // Transport layer.
   transport::Configuration *config;
   int shard; // which shard this client accesses

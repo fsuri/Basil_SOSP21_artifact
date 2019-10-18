@@ -338,8 +338,9 @@ int main(int argc, char **argv) {
         break;
       }*/
       case PROTO_MORTY: {
-        asyncClient = new mortystore::Client(FLAGS_config_prefix, FLAGS_num_shards,
-            FLAGS_num_groups, FLAGS_closest_replica, &transport, part);
+        asyncClient = new mortystore::Client(FLAGS_config_prefix,
+            (FLAGS_client_id << 3) | i, FLAGS_num_shards, FLAGS_num_groups,
+            FLAGS_closest_replica, &transport, part);
         break;
       }
       default:

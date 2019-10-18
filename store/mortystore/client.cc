@@ -1,29 +1,22 @@
 #include "store/mortystore/client.h"
 
+#include "store/mortystore/common.h"
+
 namespace mortystore {
 
-Client::Client(const std::string configPath, int nShards, int nGroups,
-    int closestReplica, Transport *transport, partitioner part) : nshards(nShards),
+Client::Client(const std::string configPath, uint64_t client_id, int nShards, int nGroups,
+    int closestReplica, Transport *transport, partitioner part) : client_id(client_id), nshards(nShards),
     ngroups(nGroups), transport(transport), part(part), lastReqId(0UL),
     prepareBranchIds(0UL) {
-  // Initialize all state here;
-  client_id = 0;
-  while (client_id == 0) {
-    std::random_device rd;
-    std::mt19937_64 gen(rd());
-    std::uniform_int_distribution<uint64_t> dis;
-    client_id = dis(gen);
-  }
   t_id = (client_id / 10000) * 10000;
 
   Debug("Initializing Morty client with id [%lu] %lu", client_id, nshards);
 
-  sclients.reserve(nshards);
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < nshards; i++) {
     std::string shardConfigPath = configPath + std::to_string(i) + ".config";
-    sclients[i] = new ShardClient(shardConfigPath, transport,
-        client_id, i, closestReplica, this);
+    sclients.push_back(new ShardClient(shardConfigPath, transport,
+        client_id, i, closestReplica, this));
   }
 
   Debug("Morty client [%lu] created! %lu", client_id, nshards);
@@ -49,38 +42,14 @@ void Client::Execute(AsyncTransaction *txn, execute_callback ecb) {
   ExecuteNextOperation(req, branch);
 }
 
-void Client::ReceiveMessage(const TransportAddress &remote,
-      const std::string &type, const std::string &data) {
-  proto::ReadReply readReply;
-  proto::WriteReply writeReply;
-  proto::PrepareOK prepareOK;
-  proto::CommitReply commitReply;
-  proto::PrepareKO prepareKO;
-
-  if (type == readReply.GetTypeName()) {
-    readReply.ParseFromString(data);
-    HandleReadReply(remote, readReply);
-  } else if (type == writeReply.GetTypeName()) {
-    writeReply.ParseFromString(data);
-    HandleWriteReply(remote, writeReply);
-  } else if (type == prepareOK.GetTypeName()) {
-    prepareOK.ParseFromString(data);
-    HandlePrepareOK(remote, prepareOK);
-  } else if (type == commitReply.GetTypeName()) {
-    commitReply.ParseFromString(data);
-    HandleCommitReply(remote, commitReply);
-  } else if (type == prepareKO.GetTypeName()) {
-    prepareKO.ParseFromString(data);
-    HandlePrepareKO(remote, prepareKO);
-  } else {
-    Panic("Received unexpected message type: %s", type.c_str());
-  }
-}
 
 void Client::ExecuteNextOperation(PendingRequest *req, proto::Branch &branch) {
   ClientBranch clientBranch = GetClientBranch(branch);
   Operation op = req->txn->GetNextOperation(clientBranch.opCount,
       clientBranch.readValues);
+  std::cerr << "Executing next: ";
+  PrintBranch(branch);
+
   switch (op.type) {
     case GET: {
       Get(branch, op.key);
@@ -139,7 +108,7 @@ bool Client::ValueInTransaction(const proto::Transaction &txn, const std::string
 
 
 void Client::HandleReadReply(const TransportAddress &remote,
-    const proto::ReadReply &msg) {
+    const proto::ReadReply &msg, uint64_t shard) {
   auto itr = pendingReqs.find(msg.branch().txn().id());
   if (itr == pendingReqs.end()) {
     return;
@@ -150,7 +119,7 @@ void Client::HandleReadReply(const TransportAddress &remote,
 }
 
 void Client::HandleWriteReply(const TransportAddress &remote,
-    const proto::WriteReply &msg) {
+    const proto::WriteReply &msg, uint64_t shard) {
   auto itr = pendingReqs.find(msg.branch().txn().id());
   if (itr == pendingReqs.end()) {
     return;
@@ -161,7 +130,7 @@ void Client::HandleWriteReply(const TransportAddress &remote,
 }
 
 void Client::HandlePrepareOK(const TransportAddress &remote,
-    const proto::PrepareOK &msg) {
+    const proto::PrepareOK &msg, uint64_t shard) {
   auto itr = pendingReqs.find(msg.branch().txn().id());
   if (itr == pendingReqs.end()) {
     return;
@@ -172,7 +141,7 @@ void Client::HandlePrepareOK(const TransportAddress &remote,
     proto::Commit commit;
     *commit.mutable_branch() = msg.branch();
     for (auto shard : msg.branch().shards()) {
-      sclients[shard]->Commit(commit, this);
+      sclients[shard]->Commit(commit);
     }
     ClientBranch clientBranch = GetClientBranch(msg.branch());
     itr->second->ecb(SUCCESS, clientBranch.readValues);
@@ -184,11 +153,11 @@ void Client::HandlePrepareOK(const TransportAddress &remote,
 }
 
 void Client::HandleCommitReply(const TransportAddress &remote,
-    const proto::CommitReply &msg) {
+    const proto::CommitReply &msg, uint64_t shard) {
 }
 
 void Client::HandlePrepareKO(const TransportAddress &remote,
-    const proto::PrepareKO &msg) {
+    const proto::PrepareKO &msg, uint64_t shard) {
   auto itr = pendingReqs.find(msg.branch().txn().id());
   if (itr == pendingReqs.end()) {
     return;
@@ -219,7 +188,7 @@ void Client::Get(proto::Branch &branch, const std::string &key) {
   *msg.mutable_branch() = branch;
   msg.set_key(key);
 
-  sclients[i]->Read(msg, this);
+  sclients[i]->Read(msg);
 }
 
 void Client::Put(proto::Branch &branch, const std::string &key,
@@ -240,7 +209,7 @@ void Client::Put(proto::Branch &branch, const std::string &key,
   msg.set_key(key);
   msg.set_value(value);
 
-  sclients[i]->Write(msg, this);
+  sclients[i]->Write(msg);
 }
 
 void Client::Commit(const proto::Branch &branch) {
@@ -249,7 +218,7 @@ void Client::Commit(const proto::Branch &branch) {
   prepare.mutable_branch()->set_id(prepareBranchIds);
   prepareBranchIds++;
   for (auto shard : branch.shards()) {
-    sclients[shard]->Prepare(prepare, this);
+    sclients[shard]->Prepare(prepare);
   }
 }
 
@@ -257,7 +226,7 @@ void Client::Abort(const proto::Branch &branch) {
   proto::Abort abort;
   *abort.mutable_branch() = branch;
   for (auto shard : branch.shards()) {
-    sclients[shard]->Abort(abort, this);
+    sclients[shard]->Abort(abort);
   }
 }
 

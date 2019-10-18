@@ -1,5 +1,7 @@
 #include "store/mortystore/server.h"
 
+#include "store/mortystore/common.h"
+
 #include <google/protobuf/util/message_differencer.h>
 
 namespace mortystore {
@@ -49,36 +51,51 @@ void Server::Load(const std::string &key, const std::string &value,
 }
 
 void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) {
+  if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
+    // msg is for already committed txn
+    return;
+  }
+
   txn_coordinators[msg.branch().txn().id()] = &remote;
 
-  auto itr = pending_reads.find(msg.key());
-  if (itr == pending_reads.end()) {
-    pending_reads.insert(std::make_pair(msg.key(), std::vector<proto::Branch>()));
-  }
   pending_reads[msg.key()].push_back(msg.branch());
 
   SendBranchReplies(msg.branch(), proto::OperationType::READ, msg.key());
 }
 
 void Server::HandleWrite(const TransportAddress &remote, const proto::Write &msg) {
+  if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
+    // msg is for already committed txn
+    return;
+  }
+
+  std::cerr << "Received write: ";
+  PrintBranch(msg.branch());
+
   txn_coordinators[msg.branch().txn().id()] = &remote;
 
-  auto itr = pending_writes.find(msg.key());
-  if (itr == pending_writes.end()) {
-    pending_writes.insert(std::make_pair(msg.key(), std::vector<proto::Branch>()));
-  }
   pending_writes[msg.key()].push_back(msg.branch());
 
   SendBranchReplies(msg.branch(), proto::OperationType::WRITE, msg.key());
 }
 
 void Server::HandlePrepare(const TransportAddress &remote, const proto::Prepare &msg) {
+  if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
+    // msg is for already committed txn
+    return;
+  }
+
   if (!CheckBranch(remote, msg.branch())) {
     waiting.push_back(msg.branch());
   }
 }
 
 void Server::HandleKO(const TransportAddress &remote, const proto::KO &msg) {
+  if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
+    // msg is for already committed txn
+    return;
+  }
+
   auto itr = std::find_if(prepared.begin(), prepared.end(), [&](const proto::Branch &other) {
           return google::protobuf::util::MessageDifferencer::Equals(msg.branch(), other);
         });
@@ -94,16 +111,23 @@ void Server::HandleKO(const TransportAddress &remote, const proto::KO &msg) {
 }
 
 void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &msg) {
-  committed.push_back(msg.branch());
-  for (auto itr =  pending_reads.begin(); itr != pending_reads.end(); ++itr) {
-    std::remove_if(itr->second.begin(), itr->second.end(), [&](const proto::Branch &b) {
-        return b.txn().id() == msg.branch().txn().id();
-    });
+  if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
+    // msg is for already committed txn
+    return;
   }
-  for (auto itr =  pending_writes.begin(); itr != pending_writes.end(); ++itr) {
-    std::remove_if(itr->second.begin(), itr->second.end(), [&](const proto::Branch &b) {
+
+  committed.push_back(msg.branch());
+  committed_txn_ids.insert(msg.branch().txn().id());
+
+  for (auto itr = pending_reads.begin(); itr != pending_reads.end(); ++itr) {
+    itr->second.erase(std::remove_if(itr->second.begin(), itr->second.end(), [&](const proto::Branch &b) {
         return b.txn().id() == msg.branch().txn().id();
-    });
+    }), itr->second.end());
+  }
+  for (auto itr = pending_writes.begin(); itr != pending_writes.end(); ++itr) {
+    itr->second.erase(std::remove_if(itr->second.begin(), itr->second.end(), [&](const proto::Branch &b) {
+        return b.txn().id() == msg.branch().txn().id();
+    }), itr->second.end());
   }
   
   for (auto itr = waiting.begin(); itr != waiting.end(); ) {
@@ -148,6 +172,8 @@ void Server::SendBranchReplies(const proto::Branch &init,
     proto::OperationType type, const std::string &key) {
   std::vector<proto::Branch> generated_branches;
   GenerateBranches(init, type, key, generated_branches);
+  already_generated.insert(already_generated.end(), generated_branches.begin(),
+      generated_branches.end());
   for (auto branch : generated_branches) {
     const proto::Operation op = branch.txn().ops()[branch.txn().ops().size() - 1];
     if (op.type() == proto::OperationType::READ) {
@@ -182,9 +208,11 @@ void Server::GenerateBranches(const proto::Branch &init, proto::OperationType ty
     pending_branches.insert(pending_branches.end(), pending_writes[key].begin(),
         pending_writes[key].end());
   }
+  std::cerr << "Pending branches:" << std::endl;
   std::unordered_set<uint64_t> txns;
   for (auto branch : pending_branches) {
     txns.insert(branch.txn().id()); 
+    PrintBranch(branch);
   }
   std::vector<uint64_t> txns_list;
   txns_list.insert(txns_list.end(), txns.begin(), txns.end());
@@ -220,11 +248,14 @@ void Server::GenerateBranchesPermutations(const std::vector<proto::Branch> &pend
       std::vector<std::vector<proto::Branch>> new_seqs1;
       for (size_t j = 0; j < new_seqs.size(); ++j) {
         for (auto branch : pending_branches) {
-          if (branch.txn().id() == txns_sorted[i] &&
-              CommitCompatible(branch, new_seqs[j])) {
-            std::vector<proto::Branch> seq(new_seqs[j]);
-            seq.push_back(branch);
-            new_seqs1.push_back(seq);
+          if (branch.txn().id() == txns_sorted[i]) {
+            std::cerr << "Potential: ";
+            PrintBranch(branch);
+            if (CommitCompatible(branch, new_seqs[j])) {
+              std::vector<proto::Branch> seq(new_seqs[j]);
+              seq.push_back(branch);
+              new_seqs1.push_back(seq);
+            }
           }
         }
       }
@@ -232,6 +263,8 @@ void Server::GenerateBranchesPermutations(const std::vector<proto::Branch> &pend
     }
     for (auto branch : pending_branches) {
       if (branch.txn().id() == txns_sorted[txns_sorted.size() - 1]) {
+        std::cerr << "Potential: ";
+        PrintBranch(branch);
         for (auto seq : new_seqs) {
           if (CommitCompatible(branch, seq)) {
             proto::Branch new_branch(branch); 
@@ -240,7 +273,15 @@ void Server::GenerateBranchesPermutations(const std::vector<proto::Branch> &pend
               proto::Branch *bseq = new_branch.add_seq();
               *bseq = b;
             }
-            new_branches.push_back(new_branch);
+            std::cerr << "Generated branch: ";
+            PrintBranch(new_branch);
+            if (std::find_if(already_generated.begin(), already_generated.end(),
+                  [&](const proto::Branch &other) {
+                    return google::protobuf::util::MessageDifferencer::Equals(
+                        new_branch, other);
+                  }) == already_generated.end()) {
+              new_branches.push_back(new_branch);
+            }
           }
         }
       }

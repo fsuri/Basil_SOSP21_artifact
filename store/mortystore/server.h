@@ -69,6 +69,8 @@ class Server : public TransportReceiver, public ::Server {
   std::vector<proto::Branch> waiting;
   std::unordered_map<uint64_t, const TransportAddress *> shards;
   Stats stats;
+  std::vector<proto::Branch> already_generated;
+  std::set<uint64_t> committed_txn_ids;
 
 };
 
