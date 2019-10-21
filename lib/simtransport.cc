@@ -286,3 +286,28 @@ SimulatedTransport::CancelAllTimers()
     timers.clear();
     processTimers = false;
 }
+
+void
+SimulatedTransport::Stop() {
+    running = false;
+}
+
+
+const SimulatedTransportAddress *
+SimulatedTransport::LookupFCAddress(const transport::Configuration *cfg)
+{
+    if (fcAddress == -1) {
+        return NULL;
+    }
+    SimulatedTransportAddress *addr =
+        new SimulatedTransportAddress(fcAddress);
+    return addr;
+}
+
+bool
+SimulatedTransport::SendMessageInternal(TransportReceiver *src,
+                                        const SimulatedTransportAddress &dstAddr,
+                                        const Message &m)
+{
+    return true;
+}

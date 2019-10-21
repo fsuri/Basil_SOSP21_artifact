@@ -79,6 +79,7 @@ public:
     int Timer(uint64_t ms, timer_callback_t cb);
     bool CancelTimer(int id);
     void CancelAllTimers();
+    void Stop() override;
 
 protected:
     bool SendMessageInternal(TransportReceiver *src,
@@ -92,6 +93,11 @@ protected:
     LookupAddress(const transport::Configuration &cfg, int groupIdx, int idx);
     const SimulatedTransportAddress *
     LookupMulticastAddress(const transport::Configuration *cfg);
+    const SimulatedTransportAddress *
+    LookupFCAddress(const transport::Configuration *cfg) override;
+    bool SendMessageInternal(TransportReceiver *src,
+                             const SimulatedTransportAddress &dstAddr,
+                             const Message &m) override;
 
 private:
     struct QueuedMessage {
@@ -120,6 +126,13 @@ private:
     int lastTimerId;
     uint64_t vtime;
     bool processTimers;
+    int fcAddress;
+    bool running;
+
+    bool _SendMessageInternal(TransportReceiver *src,
+                              const SimulatedTransportAddress &dstAddr,
+                              const Message &m,
+                              const multistamp_t &stamp);
 };
 
 #endif  // _LIB_SIMTRANSPORT_H_
