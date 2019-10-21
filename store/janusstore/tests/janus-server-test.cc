@@ -1,4 +1,5 @@
 #include "store/janusstore/server.h"
+#include "store/janusstore/client.h"
 #include "store/common/stats.h"
 #include "lib/simtransport.h"
 
@@ -12,14 +13,12 @@ class JanusServerTest : public  ::testing::Test
 {
 protected:
     vector<ReplicaAddress> replicaAddrs;
+    map<int, std::vector<ReplicaAddress>> *g_replicas;
     std::unique_ptr<transport::Configuration> config;
     SimulatedTransport *transport;
-
-    // TODO what is this for?
-    map<int, std::vector<ReplicaAddress>> *g_replicas;
     
     janusstore::Server *server;
-    // std::unique_ptr<janusstore::Client> client;
+    janusstore::Client* client;
     std::vector<janusstore::Server*> replicas;
 
     int shards;
@@ -31,22 +30,27 @@ protected:
             { "localhost", "12346" },
             { "localhost", "12347" }
         };
+    }
+
+    virtual void SetUp() {
+        g_replicas = new std::map<int, std::vector<ReplicaAddress>>({{ 0, replicaAddrs }});
 
         config = std::unique_ptr<transport::Configuration>(
             new transport::Configuration(
-                replicas_per_shard, shards, replicaAddrs));
-
-        g_replicas = new std::map<int, std::vector<ReplicaAddress>>({{ 0, replicaAddrs }});
+                shards, replicas_per_shard, 1, *g_replicas));
 
         transport = new SimulatedTransport();
 
+        printf("bruh\n");
         for (int i = 0; i < replicas_per_shard; i++) {
             auto p = new janusstore::Server(*config, 0, i, transport);
+            printf("bruh2\n");
             replicas.push_back(std::move(p));
         }
+        printf("bruh3\n");
 
         server = replicas.front();
-        // client = std::unique_ptr<janusstore::Client>(new janusstore::Client());
+        // TODO init client
     };
 
     virtual int ServerGroup() {
@@ -55,6 +59,14 @@ protected:
 
     virtual int ServerId() {
         return server->myIdx;
+    }
+
+    virtual int Shards() {
+        return shards;
+    }
+
+    virtual int ReplicasPerShard() {
+        return replicas.size();
     }
 };
 
