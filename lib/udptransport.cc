@@ -704,8 +704,8 @@ DecodePacket(const char *buf, size_t sz,
 void
 UDPTransport::OnReadable(int fd) {
     const int BUFSIZE = 65536;
-    struct iphdr *iph;
-    size_t headerLen = sizeof(struct ether_header) + sizeof(struct iphdr) + sizeof(struct udphdr);
+    struct ip *iph;
+    size_t headerLen = sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr);
 
     do {
         ssize_t sz;
@@ -731,9 +731,9 @@ UDPTransport::OnReadable(int fd) {
             if ((size_t)sz < headerLen) {
                 continue;
             }
-            iph = (struct iphdr *)(buf + sizeof(struct ether_header));
+            iph = (struct ip *)(buf + sizeof(struct ether_header));
             sender.sin_family = AF_INET;
-            sender.sin_addr.s_addr = iph->saddr;
+            sender.sin_addr.s_addr = iph->ip_src.s_addr;
             senderSize = sizeof(sender);
             sz -= headerLen;
             msgbuf += headerLen;
