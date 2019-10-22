@@ -185,3 +185,55 @@ TEST_F(JanusServerTest, BuildDepListRejectBallot)
     std::vector<uint64_t> *result = server->BuildDepList(txn1, 1);
     EXPECT_EQ(result, nullptr);
 }
+
+TEST_F(JanusServerTest, SCCNoCycles)
+{
+    std::unordered_map<uint64_t, std::vector<uint64_t>> sample_dep_map {
+        { 1234, { 4567 }},
+        { 4567, { 7890 }},
+        { 7890, { 1111 }},
+        { 1111, {}}
+    };
+    server->dep_map = sample_dep_map;
+    vector<uint64_t> scc = server->_StronglyConnectedComponent(1234);
+    EXPECT_EQ(scc.size(), 1);
+    scc = server->_StronglyConnectedComponent(4567);
+    EXPECT_EQ(scc.size(), 1);
+    scc = server->_StronglyConnectedComponent(7890);
+    EXPECT_EQ(scc.size(), 1);
+}
+
+TEST_F(JanusServerTest, SCCSimpleCycle)
+{
+    std::unordered_map<uint64_t, std::vector<uint64_t>> sample_dep_map {
+        { 1234, { 4567 }},
+        { 4567, { 7890 }},
+        { 7890, { 1234 }}
+    };
+    server->dep_map = sample_dep_map;
+    vector<uint64_t> scc = server->_StronglyConnectedComponent(1234);
+    EXPECT_EQ(scc.size(), 3);
+    scc = server->_StronglyConnectedComponent(4567);
+    EXPECT_EQ(scc.size(), 3);
+    scc = server->_StronglyConnectedComponent(7890);
+    EXPECT_EQ(scc.size(), 3);
+}
+
+TEST_F(JanusServerTest, SCCPartialCycle)
+{
+    std::unordered_map<uint64_t, std::vector<uint64_t>> sample_dep_map {
+        { 1234, { 4567 }},
+        { 4567, { 7890 }},
+        { 7890, { 1111 }},
+        { 1111, { 9999, 2222 }},
+        { 9999, { 4567, 3333 }},
+        { 3333, { }},
+    };
+    server->dep_map = sample_dep_map;
+    vector<uint64_t> scc = server->_StronglyConnectedComponent(1234);
+    EXPECT_EQ(scc.size(), 1);
+    scc = server->_StronglyConnectedComponent(4567);
+    EXPECT_EQ(scc.size(), 5);
+    scc = server->_StronglyConnectedComponent(9999);
+    EXPECT_EQ(scc.size(), 1);
+}
