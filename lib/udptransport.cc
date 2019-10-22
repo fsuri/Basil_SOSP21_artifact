@@ -41,7 +41,6 @@
 #include <random>
 
 #include <arpa/inet.h>
-#include <netinet/in.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -49,12 +48,17 @@
 #include <netdb.h>
 #include <signal.h>
 #include <net/if.h>
+#include <sys/ioctl.h>
+
+#include <netinet/in.h>
+#include <netinet/if_ether.h>
+#include <netinet/ip.h>
+#include <netinet/udp.h>
+
+#ifdef __linux__
 #include <linux/filter.h>
 #include <linux/if_ether.h>
-#include <sys/ioctl.h>
-#include <netinet/if_ether.h>
-#include <linux/ip.h>
-#include <linux/udp.h>
+#endif /* __linux__ */
 
 const size_t MAX_UDP_MESSAGE_SIZE = 9000; // XXX
 const int SOCKET_BUF_SIZE = 10485760;
@@ -277,6 +281,7 @@ UDPTransport::ListenOnMulticastPort(const transport::Configuration
     // If configuration has an interface for multicast,
     // use raw socket with BPF
     if (canonicalConfig->Interface(groupIdx, replicaIdx).size() > 0) {
+        #ifdef __linux__
         char tcpdumpCommand [1024];
         uint16_t groupMask = 1 << groupIdx;
         sprintf(tcpdumpCommand, "tcpdump \"ip and udp and dst %s and (udp[0:2] & %u != 0)\" -ddd", canonicalConfig->multicast()->host.c_str(), groupMask);
@@ -336,6 +341,9 @@ UDPTransport::ListenOnMulticastPort(const transport::Configuration
             PWarning("Failed to set SO_SNDBUF on socket");
         }
         this->rawFds.insert(fd);
+        #else
+        PPanic("BPF not supported on non-linux platform.");
+        #endif /* __linux__ */
     } else {
         // Create socket
         if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -694,11 +702,10 @@ DecodePacket(const char *buf, size_t sz,
 }
 
 void
-UDPTransport::OnReadable(int fd)
-{
+UDPTransport::OnReadable(int fd) {
     const int BUFSIZE = 65536;
-    struct iphdr *iph;
-    size_t headerLen = sizeof(struct ether_header) + sizeof(struct iphdr) + sizeof(struct udphdr);
+    struct ip *iph;
+    size_t headerLen = sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr);
 
     do {
         ssize_t sz;
@@ -724,9 +731,9 @@ UDPTransport::OnReadable(int fd)
             if ((size_t)sz < headerLen) {
                 continue;
             }
-            iph = (struct iphdr *)(buf + sizeof(struct ether_header));
+            iph = (struct ip *)(buf + sizeof(struct ether_header));
             sender.sin_family = AF_INET;
-            sender.sin_addr.s_addr = iph->saddr;
+            sender.sin_addr.s_addr = iph->ip_src.s_addr;
             senderSize = sizeof(sender);
             sz -= headerLen;
             msgbuf += headerLen;

@@ -406,8 +406,12 @@ void Server::_ExecutePhase(uint64_t txn_id,
     while (!processed[txn_id]) {
         for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
             uint64_t other_txn_id = pair.first;
+            Debug("Checking if %i is ready to process!", other_txn_id);
             if (_ReadyToProcess(id_txn_map[other_txn_id])) {
+                Debug("%i is ready to process!", other_txn_id);
                 vector<uint64_t> scc = _StronglyConnectedComponent(other_txn_id);
+                ResolveContention(scc);
+                Debug("%i has scc of size %i!", other_txn_id, scc.size());
                 for (int scc_id : scc) {
                     // TODO check if scc_id is involved with S and not abandoned
                     if (scc_id == txn_id) {
@@ -450,12 +454,18 @@ void Server::_ExecutePhase(uint64_t txn_id,
     reply.release_commit_ok();
 }
 
-void _DFS(uint64_t txn_id, set<uint64_t> &visited, unordered_map<uint64_t, vector<uint64_t>> dep_map, vector<uint64_t> &v, stack<uint64_t> &s) {
-    visited.insert(txn_id);
+void _DFS(uint64_t txn_id,
+    set<uint64_t> &visited,
+    unordered_map<uint64_t,
+    vector<uint64_t>> dep_map,
+    vector<uint64_t> &v,
+    stack<uint64_t> &s)
+{
+    pair<set<uint64_t>::iterator,bool> ptr = visited.emplace(txn_id);
     v.push_back(txn_id);
-    for (vector<uint64_t>::iterator i = dep_map[txn_id].begin(); i != dep_map[txn_id].end(); i++) {
-        if(visited.find(*i) != visited.end()) {
-            _DFS(*i, visited, dep_map, v, s);
+    for (auto i : dep_map[txn_id]) {
+        if(visited.find(i) == visited.end()) {
+            _DFS(i, visited, dep_map, v, s);
         }
     }
     s.push(txn_id);
@@ -504,8 +514,16 @@ vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
 // checks if txn is ready to be executed
 bool Server::_ReadyToProcess(Transaction txn) {
     uint64_t txn_id = txn.getTransactionId();
+    if (processed[txn.getTransactionId()]) {
+        Debug("%i has been already processed....", txn_id);
+    }
+    if (txn.getTransactionStatus() != TransactionMessage::COMMIT) {
+        Debug("%i has not been set to COMMIT", txn_id);
+    }
     if (processed[txn.getTransactionId()] || txn.getTransactionStatus() != TransactionMessage::COMMIT) return false;
     vector<uint64_t> scc = _StronglyConnectedComponent(txn_id);
+
+    Debug("%i has SCC of size %i", txn_id, scc.size());
     vector<uint64_t> deps = dep_map[txn.getTransactionId()];
     for (int other_txn_id : deps) {
         vector<uint64_t>::iterator it = find(scc.begin(), scc.end(), other_txn_id);
@@ -520,7 +538,7 @@ void Server::Load(const string &key, const string &value, const Timestamp timest
 }
 
 // sort in ascending order
-void Server::ResolveContention(vector<uint64_t> scc) {
+void Server::ResolveContention(vector<uint64_t> &scc) {
     sort(scc.begin(), scc.end());
 }
 
