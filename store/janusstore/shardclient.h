@@ -41,7 +41,7 @@ public:
     // Initiate the Commit phase for this shard.
     virtual void Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb);
 
-private:
+// private: // made public for testing
     uint64_t client_id; // Unique ID for this client.
     Transport *transport; // Transport layer.
     transport::Configuration *config;
@@ -77,13 +77,6 @@ private:
     const string &reply_str);
     void CommitContinuation(const string &request_str,
     const string &reply_str);
-
-    // void PreAcceptContinuation(uint64_t txn_id, const string &request_str,
-    // const string &reply_str);
-    // void AcceptContinuation(uint64_t txn_id, const string &request_str,
-    // const string &reply_str);
-    // void CommitContinuation(uint64_t txn_id, const string &request_str,
-    // const string &reply_str);
 
     int responded;
     int txn_id;
