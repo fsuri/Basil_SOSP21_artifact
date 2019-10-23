@@ -12,5 +12,5 @@ $(d)janus-server-test: $(o)janus-server-test.o \
 	$(LIB-store-common) \
 	$(GTEST_MAIN)
 
-TEST_BINS += $(d)janus-server-test
+# TEST_BINS += $(d)janus-server-test
 
