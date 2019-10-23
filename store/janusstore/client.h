@@ -26,6 +26,7 @@ typedef std::function<void(uint64_t)> output_commit_callback;
 class Client : public OneShotClient {
 public:
     Client(const std::string configPath, int nShards, int closestReplica, Transport *transport);
+    Client(transport::Configuration *config, int nShards, int closestReplica, Transport *transport);
     ~Client();
 
     virtual void Execute(OneShotTransaction *txn, execute_callback ecb);
@@ -42,7 +43,21 @@ public:
     // different from the public Commit() function; this is a Janus commit
     void Commit(uint64_t txn_id, std::set<uint64_t> deps);
 
-private:
+    struct PendingRequest {
+        PendingRequest(uint64_t txn_id, execute_callback ccb)
+        : txn_id(txn_id), ccb(ccb), has_fast_quorum(false), output_committed(false) {}
+        ~PendingRequest() {}
+
+        execute_callback ccb;
+        uint64_t txn_id;
+        bool output_committed;
+        bool has_fast_quorum;
+        std::set<uint64_t> aggregated_deps;
+        std::set<uint64_t> participant_shards;
+        std::set<uint64_t> responded_shards;
+  };
+
+// private: // make all fields public for testing
     // Unique ID for this client.
     uint64_t client_id;
 
@@ -72,6 +87,9 @@ private:
 
     // List of replied shards for the current transaction
     std::set<int> responded;
+
+    // aggregated map to remove the above fields/maps up to aggregated_deps
+    std::unordered_map<uint64_t, PendingRequest*> pendingReqs;
 
     // Buffering client for each shard.
     std::vector<ShardClient *> bclient;

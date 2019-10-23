@@ -43,6 +43,37 @@ namespace janusstore {
     Debug("Janus client [%llu] created! %llu %lu", client_id, nshards, bclient.size());
   }
 
+  Client::Client(transport::Configuration *config, int nShards, int closestReplica, Transport * transport): nshards(nShards), transport(transport), config(config) {
+    // initialize a random client ID
+    client_id = 0;
+    while (client_id == 0) {
+      random_device rd;
+      mt19937_64 gen(rd());
+      uniform_int_distribution<uint64_t> dis;
+      client_id = dis(gen);
+    }
+
+    // for now, it does not seem like we need txn_id or ballot
+    // MSB = client_id, LSB = txn num
+    txn_id = (client_id / 10000) * 10000;
+    // MSB = client_id, LSB = ballot num
+    ballot = (client_id / 10000) * 10000;
+
+    bclient.reserve(nshards);
+    Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
+
+    /* Start a shardclient for each shard. */
+    // TODO change this to a single config file lul
+    for (int i = 0; i < this->nshards; i++) {
+      ShardClient * shardclient = new ShardClient(config,
+        transport, client_id, i, closestReplica);
+      // we use shardclients instead of bufferclients here
+      bclient[i] = shardclient;
+    }
+
+    Debug("Janus client [%llu] created! %llu %lu", client_id, nshards, bclient.size());
+  }
+
   Client::~Client() {
     // TODO delete the maps too?
     for (auto b: bclient) {
@@ -63,11 +94,15 @@ namespace janusstore {
 
   void Client::setParticipants(Transaction * txn) {
     participants.clear();
+    PendingRequest* req = this->pendingReqs[txn->getTransactionId()];
+    req->participant_shards.clear();
+
     for (const auto & key: txn->read_set) {
       int i = this->keyToShard(key, nshards);
       if (participants.find(i) == participants.end()) {
         Debug("txn %i -> shard %i, key %s", txn->getTransactionId(), i, key.c_str());
         participants.insert(i);
+        req->participant_shards.insert(i);
       }
       txn->groups.insert(i);
       txn->addShardedReadSet(key, i);
@@ -79,6 +114,7 @@ namespace janusstore {
       if (participants.find(i) == participants.end()) {
         Debug("txn %i -> shard %i, key %s", txn->getTransactionId(), i, pair.first.c_str());
         participants.insert(i);
+        req->participant_shards.insert(i);  
       }
       txn->groups.insert(i);
       txn->addShardedWriteSet(pair.first, pair.second, i);
@@ -99,9 +135,14 @@ namespace janusstore {
   }
 
   void Client::PreAccept(Transaction * txn, uint64_t ballot, execute_callback ecb) {
+
     uint64_t txn_id = txn->getTransactionId();
     this->output_commits[txn_id] = ecb;
     txn->setTransactionId(txn_id);
+    
+    PendingRequest *req = new PendingRequest(txn_id, ecb);
+    pendingReqs[txn_id] = req;
+    
     printf("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
     printf("CLIENT - PREACCEPT - ocb registered for txn %d\n", txn_id);
     setParticipants(txn);
