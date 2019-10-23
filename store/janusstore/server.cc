@@ -463,12 +463,12 @@ void _DFS(uint64_t txn_id,
 {
     pair<set<uint64_t>::iterator,bool> ptr = visited.emplace(txn_id);
     v.push_back(txn_id);
+    s.push(txn_id);
     for (auto i : dep_map[txn_id]) {
         if(visited.find(i) == visited.end()) {
             _DFS(i, visited, dep_map, v, s);
         }
     }
-    s.push(txn_id);
 }
 
 // return transpose graph of dep_map
@@ -476,7 +476,7 @@ unordered_map<uint64_t, vector<uint64_t>> _getTranspose(unordered_map<uint64_t, 
     unordered_map<uint64_t, vector<uint64_t>> transpose;
     for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
         uint64_t txn_id = pair.first;
-        for(vector<uint64_t>::iterator i = dep_map[txn_id].begin(); i != dep_map[txn_id].end(); ++i)
+        for(auto i = dep_map[txn_id].begin(); i != dep_map[txn_id].end(); ++i)
         {
             transpose[*i].push_back(txn_id);
         }
@@ -486,6 +486,7 @@ unordered_map<uint64_t, vector<uint64_t>> _getTranspose(unordered_map<uint64_t, 
 
 // returns a strongly connected component that contains the given txn_id, if it exists using Kosaraju's
 vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
+
     set<uint64_t> visited;
     // // create empty stack, do DFS traversal. push vertex to stack at each visit
     stack<uint64_t> s;
@@ -501,12 +502,13 @@ vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
     while (!s.empty()) {
         uint64_t popped_txn_id = s.top();
         s.pop();
-
-        stack<uint64_t> dummy_s; // TODO make this unnecessary
-        vector<uint64_t> scc;
-        _DFS(popped_txn_id, visited, transpose, scc, dummy_s);
-        vector<uint64_t>::iterator it = find(scc.begin(), scc.end(), txn_id);
-        if (it != scc.end()) return scc;
+        if(visited.find(popped_txn_id) != visited.end()) {
+            stack<uint64_t> dummy_s; // TODO make this unnecessary
+            vector<uint64_t> scc;
+            _DFS(popped_txn_id, visited, transpose, scc, dummy_s);
+            vector<uint64_t>::iterator it = find(scc.begin(), scc.end(), txn_id);
+            if (it != scc.end()) return scc;
+        }
     }
 }
 

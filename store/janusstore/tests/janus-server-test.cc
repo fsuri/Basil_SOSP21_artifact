@@ -224,6 +224,7 @@ TEST_F(JanusServerTest, SCCPartialCycle)
         { 1111, { 9999, 2222 }},
         { 9999, { 4567, 3333 }},
         { 3333, { }},
+        { 2222, { }}
     };
     server->dep_map = sample_dep_map;
     vector<uint64_t> scc = server->_StronglyConnectedComponent(1234);
