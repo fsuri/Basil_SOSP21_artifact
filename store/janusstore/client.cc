@@ -184,8 +184,20 @@ namespace janusstore {
     /* shardclient invokes this when all replicas in a shard have responded */
     printf("%s\n", ("CLIENT - PREACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
+    PendingRequest* req = this->pendingReqs[txn_id];
+
+    // if we have not heard from this shard, we assume a fast quorum
+    // until we process the replies
+    if (responded.find(shard) == responded.end()) {
+      this->has_fast_quorum[txn_id] = true;
+    }
+    if (req->responded_shards.find(shard) == req->responded_shards.end()) {
+      req->has_fast_quorum = true;
+    }
+
     // update responded shards
     responded.insert(shard);
+    this->pendingReqs[txn_id]->responded_shards.insert(shard);
 
     // check if each replica within shard has the same dependencies
     // then aggregate dependencies
@@ -205,6 +217,7 @@ namespace janusstore {
           uint64_t dep_id = msg.txnid(i);
           // add dep to aggregated set
           this->aggregated_deps[txn_id].insert(dep_id);
+          req->aggregated_deps.insert(dep_id);
           current_replica_deps.insert(dep_id);
         }
         if (has_replica_deps) {
@@ -221,6 +234,10 @@ namespace janusstore {
     }
 
     this->has_fast_quorum[txn_id] = has_fast_quorum[txn_id] && fast_quorum;
+
+    bool curr = req->has_fast_quorum;
+    req->has_fast_quorum = curr && fast_quorum;
+
     // if all shards have responded, move onto Commit stage; else Accept stage
     if (responded.size() == participants.size()) {
       // check whether we have a fast quorum before doing commit
@@ -231,6 +248,17 @@ namespace janusstore {
       } else {
         this->ballot++;
         Accept(txn_id, this->aggregated_deps[txn_id], this->ballot);
+      }
+      return;
+    }
+    if (req->responded_shards.size() == req->participant_shards.size()) {
+      req->responded_shards.clear();
+
+      if (fast_quorum) {
+        Commit(txn_id, req->aggregated_deps);
+      } else {
+        this->ballot++;
+        Accept(txn_id, req->aggregated_deps, this->ballot);
       }
     }
   }
