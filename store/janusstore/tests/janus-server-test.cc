@@ -68,14 +68,10 @@ protected:
 
         transport = new SimulatedTransport();
 
-        printf("bruh\n");
         for (int i = 0; i < replicas_per_shard; i++) {
             auto p = new janusstore::Server(*config, 0, i, transport);
-            printf("bruh2\n");
             replicas.push_back(std::move(p));
         }
-        printf("bruh3\n");
-
         server = replicas.front();
         // TODO init client
     };
