@@ -311,3 +311,10 @@ SimulatedTransport::SendMessageInternal(TransportReceiver *src,
 {
     return true;
 }
+
+bool SimulatedTransport::SendMessageToReplica(TransportReceiver *src,
+                             int groupIdx,
+                             int replicaIdx,
+                             const google::protobuf::Message &m) {
+    return true;
+}

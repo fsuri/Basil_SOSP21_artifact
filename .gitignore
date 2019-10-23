@@ -28,6 +28,7 @@ store/common/backend/tests/kvstore-test
 store/common/backend/tests/lockserver-test
 store/common/backend/tests/versionstore-test
 store/janusstore/tests/janus-server-test
+store/janusstore/tests/janus-client-test
 
 ################################################################################
 # vim

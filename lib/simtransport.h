@@ -87,6 +87,11 @@ protected:
                              const Message &m,
                              bool multicast);
 
+    bool SendMessageToReplica(TransportReceiver *src,
+                             int groupIdx,
+                             int replicaIdx,
+                             const Message &m) override;
+
     SimulatedTransportAddress
     LookupAddress(const transport::Configuration &cfg, int idx);
     SimulatedTransportAddress
