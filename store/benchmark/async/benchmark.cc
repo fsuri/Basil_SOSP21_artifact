@@ -417,7 +417,7 @@ int main(int argc, char **argv) {
 	      transport.Timer(0, [bench]() { bench->Start(); });
         break;
       case BENCH_SMALLBANK_SYNC:
-        threads.push_back(new std::thread([&](){ 
+        threads.push_back(new std::thread([bench](){ 
             bench->Start();
             while (!bench->IsFullyDone()) {
               bench->StartLatency();
