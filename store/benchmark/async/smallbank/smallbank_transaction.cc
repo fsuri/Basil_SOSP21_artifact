@@ -56,7 +56,6 @@ std::pair<uint32_t, bool> SmallbankTransaction::Bal(SyncClient &client, const st
 
 bool SmallbankTransaction::DepositChecking(SyncClient &client, const std::string &name, const int32_t value) {
     if (value < 0) {
-        Warning("Aborting deposit checking for %s due to negative amount %d", name.c_str(), value);
         client.Abort(timeout_);
         return false;
     }
@@ -91,13 +90,18 @@ bool SmallbankTransaction::TransactSaving(SyncClient &client, const std::string 
         return false;
     }
     const uint32_t customerId = accountRow.customer_id();
-    ReadSavingRow(client, customerId, savingRow);
-    const uint32_t balance = savingRow.saving_balance();
-    const uint32_t resultingBalance = balance + value;
+    if (!ReadSavingRow(client, customerId, savingRow)) {
+        client.Abort(timeout_);
+        return false;
+    }
+    const int32_t balance = savingRow.saving_balance();
+    std::cout<<value<< " value ************" << std::endl;
+    std::cout<<balance<< " balance ************" << std::endl;
+    const int resultingBalance = balance + value;
+    std::cout<<resultingBalance<< " resulting ************" << std::endl;
     if (resultingBalance < 0) {
         client.Abort(timeout_);
-        Warning("Aborting transact saving for %s due to resulting negative balance %d", name.c_str(),
-                resultingBalance);
+
         return false;
     }
     InsertSavingRow(client, customerId, resultingBalance);
@@ -124,7 +128,7 @@ bool SmallbankTransaction::Amalgamate(SyncClient &client, const std::string &nam
         client.Abort(timeout_);
         return false;
     }
-    const uint32_t balance2 = checkingRow2.checking_balance();
+    const int32_t balance2 = checkingRow2.checking_balance();
     if (!ReadCheckingRow(client, customerId1, checkingRow1) || !
             ReadSavingRow(client, customerId1, savingRow1)) {
         client.Abort(timeout_);
@@ -153,11 +157,11 @@ bool SmallbankTransaction::WriteCheck(SyncClient &client, const std::string &nam
         client.Abort(timeout_);
         return false;
     }
-    const uint32_t sum = checkingRow.checking_balance() + savingRow.saving_balance();
+    const int32_t sum = checkingRow.checking_balance() + savingRow.saving_balance();
     if (sum < value) {
-        InsertCheckingRow(client, customerId, sum - value - 1);
+        InsertCheckingRow(client, customerId, checkingRow.checking_balance() - value - 1);
     } else {
-        InsertCheckingRow(client, customerId, sum - value);
+        InsertCheckingRow(client, customerId, checkingRow.checking_balance() - value);
     }
     client.Commit(timeout_);
     return true;
@@ -197,7 +201,6 @@ bool SmallbankTransaction::ReadAccountRow(SyncClient &client, const std::string 
     std::string accountRowKey = AccountRowKey(name);
     std::string accountRowSerialized;
     client.Get(accountRowKey, accountRowSerialized, timeout_);
-    std::cout<< "get " << accountRowKey << "from client: " << accountRowSerialized << " serialized" <<std::endl;
     return accountRow.ParseFromString(accountRowSerialized);
 }
 
