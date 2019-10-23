@@ -250,8 +250,6 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
     tcpOutgoing[dst] = bev;
     tcpAddresses.insert(pair<struct bufferevent*, TCPTransportAddress>(bev,dst));
 
-    printf("Opened TCP connection to %s:%d\n",
-      inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
     Debug("Opened TCP connection to %s:%d",
 	  inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
 }
@@ -353,7 +351,6 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     auto kv = tcpOutgoing.find(dst);
     // See if we have a connection open
     if (kv == tcpOutgoing.end()) {
-        printf("establishing TCP connection first\n");
         ConnectTCP(src, dst);
         kv = tcpOutgoing.find(dst);
     }
@@ -527,14 +524,12 @@ TCPTransport::LogCallback(int severity, const char *msg)
 void
 TCPTransport::FatalCallback(int err)
 {
-    printf("FatalCallback\n");
     Panic("Fatal libevent error: %d", err);
 }
 
 void
 TCPTransport::SignalCallback(evutil_socket_t fd, short what, void *arg)
 {
-    printf("SignalCallback\n");
     Debug("Terminating on SIGTERM/SIGINT");
     TCPTransport *transport = (TCPTransport *)arg;
     event_base_loopbreak(transport->libeventBase);
@@ -543,7 +538,6 @@ TCPTransport::SignalCallback(evutil_socket_t fd, short what, void *arg)
 void
 TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
 {
-    printf("in TCPAcceptCallback\n");
     TCPTransportTCPListener *info = (TCPTransportTCPListener *)arg;
     TCPTransport *transport = info->transport;
 
@@ -593,7 +587,6 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
 void
 TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
 {
-    // printf("TCPReadableCallback\n");
     TCPTransportTCPListener *info = (TCPTransportTCPListener *)arg;
     TCPTransport *transport = info->transport;
     struct evbuffer *evbuf = bufferevent_get_input(bev);
@@ -617,8 +610,8 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         UW_ASSERT(totalSize < 1073741826);
         
         if (evbuffer_get_length(evbuf) < totalSize) {
-            Debug("Don't have %ld bytes for a message yet, only %ld",
-                  totalSize, evbuffer_get_length(evbuf));
+            //Debug("Don't have %ld bytes for a message yet, only %ld",
+            //      totalSize, evbuffer_get_length(evbuf));
             return;
         }
         Debug("Receiving %ld byte message", totalSize);
@@ -659,7 +652,6 @@ void
 TCPTransport::TCPIncomingEventCallback(struct bufferevent *bev,
                                        short what, void *arg)
 {
-    printf("TCPIncomingEventCallback\n");
     if (what & BEV_EVENT_ERROR) {
         Debug("Error on incoming TCP connection: %s\n",
                 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
@@ -676,7 +668,6 @@ void
 TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
                                        short what, void *arg)
 {
-    // printf("TCPOutgoingEventCallback\n");
     TCPTransportTCPListener *info = (TCPTransportTCPListener *)arg;
     TCPTransport *transport = info->transport;
     auto it = transport->tcpAddresses.find(bev);    

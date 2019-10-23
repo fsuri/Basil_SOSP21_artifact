@@ -6,6 +6,7 @@
 #include "store/server.h"
 #include "store/common/backend/txnstore.h"
 #include "store/common/stats.h"
+#include "store/mortystore/common.h"
 
 #include <unordered_map>
 
@@ -37,19 +38,19 @@ class Server : public TransportReceiver, public ::Server {
   void GenerateBranches(const proto::Branch &init,
       proto::OperationType type, const std::string &key,
       std::vector<proto::Branch> &new_branches);
-  void GenerateBranchesSubsets(const std::vector<proto::Branch> &pending_branches,
+  void GenerateBranchesSubsets(const std::unordered_set<proto::Branch, BranchHasher, BranchComparer> &pending_branches,
       const std::vector<uint64_t> &txns, std::vector<proto::Branch> &new_branches,
       std::vector<uint64_t> subset = std::vector<uint64_t>(),
       int64_t i = -1);
-  void GenerateBranchesPermutations(const std::vector<proto::Branch> &pending_branches,
+  void GenerateBranchesPermutations(const std::unordered_set<proto::Branch, BranchHasher, BranchComparer> &pending_branches,
       const std::vector<uint64_t> &subset, std::vector<proto::Branch> &new_branches);
-  bool CommitCompatible(const proto::Branch &branch, const std::vector<proto::Branch> &seq);
-  bool WaitCompatible(const proto::Branch &branch, const std::vector<proto::Branch> &seq);
+  bool CommitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq);
+  bool WaitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq);
   bool ValidSubsequence(const proto::Transaction &txn,
-      const std::vector<proto::Branch> &seq1,
-      const std::vector<proto::Branch> &seq2);
+      const std::vector<proto::Transaction> &seq1,
+      const std::vector<proto::Transaction> &seq2);
   bool NoConflicts(const proto::Transaction &txn,
-      const std::vector<proto::Branch> &seq);
+      const std::vector<proto::Transaction> &seq);
   bool TransactionsConflict(const proto::Transaction &txn1,
       const proto::Transaction &txn2);
   void ValueOnBranch(const proto::Branch &branch, const std::string &key,
@@ -63,8 +64,8 @@ class Server : public TransportReceiver, public ::Server {
   Transport *transport;
   std::unordered_map<std::string, std::vector<proto::Branch>> pending_reads;
   std::unordered_map<std::string, std::vector<proto::Branch>> pending_writes;
-  std::vector<proto::Branch> committed;
-  std::vector<proto::Branch> prepared;
+  std::vector<proto::Transaction> committed;
+  std::vector<proto::Transaction> prepared;
   std::unordered_map<uint64_t, const TransportAddress *> txn_coordinators;
   std::vector<proto::Branch> waiting;
   std::unordered_map<uint64_t, const TransportAddress *> shards;

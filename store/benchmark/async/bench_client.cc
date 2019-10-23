@@ -167,7 +167,7 @@ void BenchmarkClient::IncrementSent() {
         Finish();
       }
     } else { 
-      if (n > numRequests) {
+      if (n >= numRequests) {
         Finish();
       }
     }

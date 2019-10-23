@@ -8,7 +8,7 @@ Client::Client(const std::string configPath, uint64_t client_id, int nShards, in
     int closestReplica, Transport *transport, partitioner part) : client_id(client_id), nshards(nShards),
     ngroups(nGroups), transport(transport), part(part), lastReqId(0UL),
     prepareBranchIds(0UL), config(nullptr) {
-  t_id = (client_id / 10000) * 10000;
+  t_id = client_id << 20; 
 
   Debug("Initializing Morty client with id [%lu] %lu", client_id, nshards);
 
@@ -97,7 +97,11 @@ void Client::ValueOnBranch(const proto::Branch *branch, const std::string &key,
   if (ValueInTransaction(branch->txn(), key, val)) {
     return;
   } else if (branch->seq().size() > 0) {
-    ValueOnBranch(&branch->seq()[branch->seq().size() - 1], key, val);
+    for (auto itr = branch->seq().rbegin(); itr != branch->seq().rend(); ++itr) {
+      if (ValueInTransaction(*itr, key, val)) {
+        return;
+      }
+    }
   }
 }
 
