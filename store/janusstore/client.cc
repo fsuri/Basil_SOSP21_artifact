@@ -93,15 +93,13 @@ namespace janusstore {
   }
 
   void Client::setParticipants(Transaction * txn) {
-    participants.clear();
     PendingRequest* req = this->pendingReqs[txn->getTransactionId()];
     req->participant_shards.clear();
 
     for (const auto & key: txn->read_set) {
       int i = this->keyToShard(key, nshards);
-      if (participants.find(i) == participants.end()) {
+      if (req->participant_shards.find(i) == req->participant_shards.end()) {
         Debug("txn %i -> shard %i, key %s", txn->getTransactionId(), i, key.c_str());
-        participants.insert(i);
         req->participant_shards.insert(i);
       }
       txn->groups.insert(i);
@@ -111,9 +109,8 @@ namespace janusstore {
     for (const auto & pair: txn->write_set) {
       int i = this->keyToShard(pair.first, nshards);
       Debug("%i, %i", txn->getTransactionId(), i);
-      if (participants.find(i) == participants.end()) {
+      if (req->participant_shards.find(i) == req->participant_shards.end()) {
         Debug("txn %i -> shard %i, key %s", txn->getTransactionId(), i, pair.first.c_str());
-        participants.insert(i);
         req->participant_shards.insert(i);  
       }
       txn->groups.insert(i);
@@ -137,7 +134,6 @@ namespace janusstore {
   void Client::PreAccept(Transaction * txn, uint64_t ballot, execute_callback ecb) {
 
     uint64_t txn_id = txn->getTransactionId();
-    this->output_commits[txn_id] = ecb;
     txn->setTransactionId(txn_id);
     
     PendingRequest *req = new PendingRequest(txn_id, ecb);
@@ -147,10 +143,7 @@ namespace janusstore {
     printf("CLIENT - PREACCEPT - ocb registered for txn %d\n", txn_id);
     setParticipants(txn);
 
-    // add the callback to map for post-commit action
-    this->output_commits[txn->getTransactionId()] = ecb;
-
-    for (auto p: participants) {
+    for (auto p: req->participant_shards) {
       auto pcb = std::bind(&Client::PreAcceptCallback, this,
         txn_id, placeholders::_1, placeholders::_2);
 
@@ -159,9 +152,12 @@ namespace janusstore {
   }
 
   void Client::Accept(uint64_t txn_id, set <uint64_t> deps, uint64_t ballot) {
+
     printf("%s\n", ("CLIENT - ACCEPT - txn " + to_string(txn_id)).c_str());
 
-    for (auto p: participants) {
+    PendingRequest* req = this->pendingReqs[txn_id];
+
+    for (auto p : req->participant_shards) {
       std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
       auto acb = std::bind(&Client::AcceptCallback, this, txn_id, placeholders::_1, placeholders::_2);
 
@@ -172,7 +168,9 @@ namespace janusstore {
   void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
     printf("%s\n", ("CLIENT - COMMIT - txn " + to_string(txn_id)).c_str());
 
-    for (auto p: participants) {
+    PendingRequest* req = this->pendingReqs[txn_id];
+
+    for (auto p : req->participant_shards) {
       std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
       auto ccb = std::bind(&Client::CommitCallback, this, txn_id, placeholders::_1, placeholders::_2);
       bclient[p]->Commit(txn_id, vec_deps, ccb);
@@ -193,7 +191,6 @@ namespace janusstore {
     }
 
     // update responded shards
-    responded.insert(shard);
     req->responded_shards.insert(shard);
 
     // check if each replica within shard has the same dependencies
@@ -243,17 +240,20 @@ namespace janusstore {
     /* shardclient invokes this when all replicas in a shard have responded */
     printf("%s\n", ("CLIENT - ACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
-    responded.insert(shard);
+    PendingRequest* req = this->pendingReqs[txn_id];
+
+    req->responded_shards.insert(shard);
+
     for (auto reply: replies) {
       if (reply.op() == Reply::ACCEPT_NOT_OK) {
         // if majority not okay, then goto failure recovery (not supported)
       }
     }
 
-    if (responded.size() == participants.size()) {
+    if (req->responded_shards.size() == req->participant_shards.size()) {
       // no need to check for a quorum for every shard because we dont implement failure recovery
-      responded.clear();
-      Commit(txn_id, this->aggregated_deps[txn_id]);
+      req->responded_shards.clear();
+      Commit(txn_id, req->aggregated_deps);
     }
     return;
   }
@@ -262,19 +262,18 @@ namespace janusstore {
     /* shardclient invokes this when all replicas in a shard have responded */
     printf("%s\n", ("CLIENT - COMMIT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
-    this->responded.insert(shard);
+    PendingRequest* req = this->pendingReqs[txn_id];
+
+    req->responded_shards.insert(shard);
+
     printf("%s\n", ("CLIENT - COMMIT CB - added " + to_string(shard) + " to responded list").c_str());
 
-    if (this->responded.size() == participants.size()) {
+    if (req->responded_shards.size() == req->participant_shards.size()) {
       // return results to client by invoking output commit callback
-      if (this->output_commits.find(txn_id) == this->output_commits.end()) {
-        printf("could not find ocb for txn %d\n", txn_id);
-      } else {
-        this->output_commits[txn_id](txn_id, std::map<std::string, std::string>());
-      }
-      this->responded.clear();
+      req->ccb(txn_id, std::map<std::string, std::string>());
+      req->responded_shards.clear();
     } else {
-      printf("%s\n", ("CLIENT - COMMIT CB - " + to_string(responded.size()) + " shards responded out of " + to_string(participants.size())).c_str());
+      printf("%s\n", ("CLIENT - COMMIT CB - " + to_string(req->responded_shards.size()) + " shards responded out of " + to_string(req->participant_shards.size())).c_str());
     }
     return;
   }

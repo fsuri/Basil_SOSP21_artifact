@@ -73,21 +73,6 @@ public:
     // Ongoing transaction ID.
     uint64_t txn_id;
 
-    // Map of txn_id to aggregated list of txn_id dependencies over all shards
-    std::unordered_map<uint64_t, std::set<uint64_t>> aggregated_deps;
-    // TODO might not be necessary: Map txn_id to (map shard to set of deps) for checking fast quorum
-    std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::set<uint64_t>>> per_shard_deps;
-    // Map of txn_id to fast quorum status
-    std::unordered_map<uint64_t, bool> has_fast_quorum;
-    // Map of txn_id to callback for output commit; unsure if needed
-    std::unordered_map<uint64_t, execute_callback> output_commits;
-
-    // List of participants in the ongoing transaction.
-    std::set<int> participants;
-
-    // List of replied shards for the current transaction
-    std::set<int> responded;
-
     // aggregated map to remove the above fields/maps up to aggregated_deps
     std::unordered_map<uint64_t, PendingRequest*> pendingReqs;
 
