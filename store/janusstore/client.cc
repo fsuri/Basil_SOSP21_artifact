@@ -188,44 +188,35 @@ namespace janusstore {
 
     // if we have not heard from this shard, we assume a fast quorum
     // until we process the replies
-    if (responded.find(shard) == responded.end()) {
-      this->has_fast_quorum[txn_id] = true;
-    }
     if (req->responded_shards.find(shard) == req->responded_shards.end()) {
       req->has_fast_quorum = true;
     }
 
     // update responded shards
     responded.insert(shard);
-    this->pendingReqs[txn_id]->responded_shards.insert(shard);
+    req->responded_shards.insert(shard);
 
     // check if each replica within shard has the same dependencies
     // then aggregate dependencies
     bool fast_quorum = true;
-    bool has_replica_deps = false;
-    std::unordered_set<uint64_t> replica_deps;
+
+    // aggregated replica deps for this shard
+    std::set<uint64_t> shard_deps;
 
     UW_ASSERT(replies.size() != 0);
 
     for (auto reply: replies) {
       Debug("processing PREACCEPT_OK %s", reply.DebugString().c_str());
-      std::unordered_set<uint64_t> current_replica_deps;
       if (reply.op() == Reply::PREACCEPT_OK) {
         // parse message for deps
         DependencyList msg = reply.preaccept_ok().dep();
         for (int i = 0; i < msg.txnid_size(); i++) {
           uint64_t dep_id = msg.txnid(i);
+
           // add dep to aggregated set
-          this->aggregated_deps[txn_id].insert(dep_id);
           req->aggregated_deps.insert(dep_id);
-          current_replica_deps.insert(dep_id);
-        }
-        if (has_replica_deps) {
-          // check equality with current_replica_deps
-          fast_quorum = fast_quorum && (current_replica_deps == replica_deps);
-        } else {
-          replica_deps = current_replica_deps;
-          has_replica_deps = true;
+          // add to deplist for this shard
+          shard_deps.insert(dep_id);
         }
       } else {
         // meaning we will need to go to Accept phase
@@ -233,28 +224,12 @@ namespace janusstore {
       }
     }
 
-    this->has_fast_quorum[txn_id] = has_fast_quorum[txn_id] && fast_quorum;
+    fast_quorum = fast_quorum && (req->aggregated_deps == shard_deps);
+    req->has_fast_quorum = req->has_fast_quorum && fast_quorum;
 
-    bool curr = req->has_fast_quorum;
-    req->has_fast_quorum = curr && fast_quorum;
-
-    // if all shards have responded, move onto Commit stage; else Accept stage
-    if (responded.size() == participants.size()) {
-      // check whether we have a fast quorum before doing commit
-      responded.clear();
-
-      if (fast_quorum) {
-        Commit(txn_id, this->aggregated_deps[txn_id]);
-      } else {
-        this->ballot++;
-        Accept(txn_id, this->aggregated_deps[txn_id], this->ballot);
-      }
-      return;
-    }
     if (req->responded_shards.size() == req->participant_shards.size()) {
       req->responded_shards.clear();
-
-      if (fast_quorum) {
+      if (req->has_fast_quorum) {
         Commit(txn_id, req->aggregated_deps);
       } else {
         this->ballot++;
