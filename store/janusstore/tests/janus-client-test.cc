@@ -98,7 +98,7 @@ TEST_F(JanusClientTest, PreAccept) {
     EXPECT_EQ(Client()->bclient[0]->responded, 0);
 }
 
-TEST_F(JanusClientTest, PreAcceptReply) {
+TEST_F(JanusClientTest, PreAcceptCallbackNoDep) {
 
     auto ccb = [] (uint64_t committed, std::map<std::string, std::string> readValues) {
         printf("output commit from txn %d \r\n", committed);
@@ -126,6 +126,38 @@ TEST_F(JanusClientTest, PreAcceptReply) {
     EXPECT_EQ(req->responded_shards.find(0) != req->responded_shards.end(),true);
     EXPECT_EQ(req->has_fast_quorum,true);
     EXPECT_EQ(req->aggregated_deps.size(),0);
+}
 
-    // TODO test for when aggregated deps is not empty
+TEST_F(JanusClientTest, PreAcceptCallbackHasDep) {
+
+    auto ccb = [] (uint64_t committed, std::map<std::string, std::string> readValues) {
+        printf("output commit from txn %d \r\n", committed);
+    };
+
+    PreAcceptOKMessage preaccept_ok_msg;
+    DependencyList dep;
+    dep.add_txnid(4567);
+    preaccept_ok_msg.set_txnid(1234);
+    // note: dependency set for the preacceptok
+    preaccept_ok_msg.set_allocated_dep(&dep);
+
+    Reply reply;
+    reply.set_op(Reply::PREACCEPT_OK);
+    reply.set_allocated_preaccept_ok(&preaccept_ok_msg);
+
+    std::vector<Reply> replies = {reply};
+
+    Client()->PreAccept(Transaction(), Ballot(), ccb);
+    Client()->PreAcceptCallback(1234, 0, replies);
+
+    preaccept_ok_msg.release_dep();
+    reply.release_preaccept_ok();
+
+    // verify the correct metadata and behavior when a shardclient invokes the client's callback
+    janusstore::Client::PendingRequest* req = Client()->pendingReqs.at(1234);
+    EXPECT_EQ(req->responded_shards.size(),1);
+    EXPECT_EQ(req->responded_shards.find(0) != req->responded_shards.end(),true);
+    EXPECT_EQ(req->has_fast_quorum,true);
+    EXPECT_EQ(req->aggregated_deps.size(),1);
+    EXPECT_EQ(req->aggregated_deps.find(4567) != req->aggregated_deps.end(),true);
 }
