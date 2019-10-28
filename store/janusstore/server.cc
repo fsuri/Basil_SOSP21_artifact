@@ -455,20 +455,19 @@ void Server::_ExecutePhase(uint64_t txn_id,
 }
 
 void _DFS(uint64_t txn_id,
-    set<uint64_t> &visited,
-    unordered_map<uint64_t,
-    vector<uint64_t>> dep_map,
+    unordered_map<uint64_t, bool> &visited,
+    unordered_map<uint64_t, vector<uint64_t>> dep_map,
     vector<uint64_t> &v,
-    stack<uint64_t> &s)
+    std::stack<uint64_t> &s)
 {
-    pair<set<uint64_t>::iterator,bool> ptr = visited.emplace(txn_id);
+    visited[txn_id] = true;
     v.push_back(txn_id);
-    s.push(txn_id);
     for (auto i : dep_map[txn_id]) {
-        if(visited.find(i) == visited.end()) {
+        if(!visited[i]) {
             _DFS(i, visited, dep_map, v, s);
         }
     }
+    s.push(txn_id);
 }
 
 // return transpose graph of dep_map
@@ -487,23 +486,30 @@ unordered_map<uint64_t, vector<uint64_t>> _getTranspose(unordered_map<uint64_t, 
 // returns a strongly connected component that contains the given txn_id, if it exists using Kosaraju's
 vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
 
-    set<uint64_t> visited;
-    // // create empty stack, do DFS traversal. push vertex to stack at each visit
-    stack<uint64_t> s;
-    vector<uint64_t> dummy_v; // TODO make this unnecessary
-    _DFS(txn_id, visited, dep_map, dummy_v, s);
+    unordered_map<uint64_t, bool> visited;
+    // create empty stack, do DFS traversal. push vertex to stack at each visit
+    std::stack<uint64_t> s;
+    vector<uint64_t> dummy_v;
+    for (auto kv : dep_map) {
+        if(visited.find(kv.first) == visited.end()) {
+            visited[kv.first] = false;
+            _DFS(kv.first, visited, dep_map, dummy_v, s);
+        }
+    }
 
     // obtain transpose graph
     // TODO also just create the transpose to begin with and build it as txns come in
     unordered_map<uint64_t, vector<uint64_t>> transpose = _getTranspose(dep_map);
 
-    visited.clear();
+    for(auto kv : visited) {
+        visited[kv.first] = false;
+    }
     // guaranteed to return since stack will contain every txn_id in map
     while (!s.empty()) {
         uint64_t popped_txn_id = s.top();
         s.pop();
-        if(visited.find(popped_txn_id) != visited.end()) {
-            stack<uint64_t> dummy_s; // TODO make this unnecessary
+        if(!visited[popped_txn_id]) {
+            stack<uint64_t> dummy_s;
             vector<uint64_t> scc;
             _DFS(popped_txn_id, visited, transpose, scc, dummy_s);
             vector<uint64_t>::iterator it = find(scc.begin(), scc.end(), txn_id);

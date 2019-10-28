@@ -193,10 +193,13 @@ TEST_F(JanusServerTest, SCCNoCycles)
     server->dep_map = sample_dep_map;
     vector<uint64_t> scc = server->_StronglyConnectedComponent(1234);
     EXPECT_EQ(scc.size(), 1);
+    EXPECT_EQ(scc[0], 1234);
     scc = server->_StronglyConnectedComponent(4567);
     EXPECT_EQ(scc.size(), 1);
+    EXPECT_EQ(scc[0], 4567);
     scc = server->_StronglyConnectedComponent(7890);
     EXPECT_EQ(scc.size(), 1);
+    EXPECT_EQ(scc[0], 7890);
 }
 
 TEST_F(JanusServerTest, SCCSimpleCycle)
@@ -230,7 +233,41 @@ TEST_F(JanusServerTest, SCCPartialCycle)
     vector<uint64_t> scc = server->_StronglyConnectedComponent(1234);
     EXPECT_EQ(scc.size(), 1);
     scc = server->_StronglyConnectedComponent(4567);
-    EXPECT_EQ(scc.size(), 5);
+    for (auto id : scc) {
+        Debug("%i", id);
+    }
+    EXPECT_EQ(scc.size(), 4);
     scc = server->_StronglyConnectedComponent(9999);
+    for (auto id : scc) {
+        Debug("%id", id);
+    }
+    EXPECT_EQ(scc.size(), 4);
+    scc = server->_StronglyConnectedComponent(2222);
     EXPECT_EQ(scc.size(), 1);
+}
+
+TEST_F(JanusServerTest, SCCMultipleCycles)
+{
+    std::unordered_map<uint64_t, std::vector<uint64_t>> sample_dep_map {
+        { 1234, { 4567 }},
+        { 4567, { 7890 }},
+        { 7890, { 1111 }},
+        { 1111, { 9999, 2222 }},
+        { 9999, { 4567, 3333 }},
+        { 3333, { }},
+        { 2222, { 0000 }},
+        { 0000, { 4444 }},
+        { 4444, { 2222 }}
+    };
+    server->dep_map = sample_dep_map;
+    vector<uint64_t> scc = server->_StronglyConnectedComponent(1234);
+    EXPECT_EQ(scc.size(), 1);
+    scc = server->_StronglyConnectedComponent(4567);
+    EXPECT_EQ(scc.size(), 4);
+    scc = server->_StronglyConnectedComponent(9999);
+    EXPECT_EQ(scc.size(), 4);
+    scc = server->_StronglyConnectedComponent(2222);
+    EXPECT_EQ(scc.size(), 3);
+    scc = server->_StronglyConnectedComponent(0000);
+    EXPECT_EQ(scc.size(), 3);
 }
