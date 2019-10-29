@@ -226,12 +226,21 @@ void Server::HandleAccept(const TransportAddress &remote,
         txn->setTransactionStatus(TransactionMessage::ACCEPT);
 
         AcceptOKMessage accept_ok_msg;
+        accept_ok_msg.set_txnid(txn_id);
+
         reply.set_op(Reply::ACCEPT_OK);
         reply.set_allocated_accept_ok(&accept_ok_msg);
 
     }
+
+    Debug("[Server %i] sending ACCEPT-OK message for txn %i %s",
+        this->myIdx, txn_id,
+        reply.DebugString().c_str());
+
     unlogged_reply->set_reply(reply.SerializeAsString());
     transport->SendMessage(this, remote, *unlogged_reply);
+
+    reply.release_accept_ok();
 }
 
 void Server::HandleCommit(const TransportAddress &remote,

@@ -102,7 +102,7 @@ TEST_F(JanusServerTest, Init)
 }
 
 /*************************************************************************
-    _BuildDepList
+    BuildDepList
 *************************************************************************/
 
 
@@ -365,7 +365,6 @@ TEST_F(JanusServerTest, HandlePreAcceptWorks)
 
     janusstore::proto::PreAcceptMessage pa_msg;
     janusstore::proto::TransactionMessage txn_msg;
-    janusstore::proto::Reply reply;
     replication::ir::proto::UnloggedReplyMessage unlogged_reply;
     txn_ptr1->serialize(&txn_msg, 0);
 
@@ -377,6 +376,7 @@ TEST_F(JanusServerTest, HandlePreAcceptWorks)
     server->HandlePreAccept(*addr, pa_msg, &unlogged_reply);
 
     // check values of the reply
+    janusstore::proto::Reply reply;
     janusstore::proto::PreAcceptOKMessage preaccept_ok_msg;
 
     reply.ParseFromString(unlogged_reply.reply());
@@ -399,7 +399,6 @@ TEST_F(JanusServerTest, HandlePreAcceptSendsNotOK)
 
     janusstore::proto::PreAcceptMessage pa_msg;
     janusstore::proto::TransactionMessage txn_msg;
-    janusstore::proto::Reply reply;
     replication::ir::proto::UnloggedReplyMessage unlogged_reply;
     txn_ptr1->serialize(&txn_msg, 0);
 
@@ -415,15 +414,82 @@ TEST_F(JanusServerTest, HandlePreAcceptSendsNotOK)
     server->HandlePreAccept(*addr, pa_msg, &unlogged_reply);
 
     // check values of the reply
+    janusstore::proto::Reply reply;
     janusstore::proto::PreAcceptNotOKMessage preaccept_not_ok_msg;
 
     reply.ParseFromString(unlogged_reply.reply());
-
-    Debug(reply.DebugString().c_str());
-
     preaccept_not_ok_msg = reply.preaccept_not_ok();
 
     EXPECT_EQ(preaccept_not_ok_msg.txnid(), 1234);
 
     pa_msg.release_txn();
 }
+
+/*************************************************************************
+    HandleAccept
+*************************************************************************/
+TEST_F(JanusServerTest, HandleAcceptSendsOK)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
+    txn_ptr1->addReadSet("key1");
+    txn_ptr1->addWriteSet("key2", "val2");
+
+    janusstore::Transaction txn2(1235);
+    janusstore::Transaction* txn_ptr2 = &txn2;
+    txn_ptr2->addReadSet("key1");
+    txn_ptr2->addWriteSet("key2", "val3");
+
+    server->id_txn_map[1234] = txn1;
+    server->id_txn_map[1235] = txn2;
+
+    vector<uint64_t> *dep1 = server->BuildDepList(txn1, 0);
+    vector<uint64_t> *dep2 = server->BuildDepList(txn2, 0);
+
+    janusstore::proto::DependencyList dep;
+    for (auto i : *dep1) {
+        dep.add_txnid(i);
+    }
+    dep.add_txnid(1236);
+
+    janusstore::proto::AcceptMessage a_msg;
+    a_msg.set_txnid(1235);
+    a_msg.set_ballot(2);
+    a_msg.set_allocated_dep(&dep);
+
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
+    server->HandleAccept(*addr, a_msg, &unlogged_reply);
+
+    janusstore::proto::Reply reply;
+    janusstore::proto::AcceptOKMessage a_ok_msg;
+
+    reply.ParseFromString(unlogged_reply.reply());
+    a_ok_msg = reply.accept_ok();
+
+    EXPECT_EQ(a_ok_msg.txnid(), 1235);
+    EXPECT_EQ(server->accepted_ballots[1235], 2);
+    EXPECT_EQ(
+        server->id_txn_map[1235].getTransactionStatus(),
+        janusstore::proto::TransactionMessage::ACCEPT
+    );
+    //check to see if dep_map updated with 1236
+    vector<uint64_t> server_dep_map = server->dep_map[1235];
+    EXPECT_TRUE(
+        std::find(
+            server_dep_map.begin(),
+            server_dep_map.end(),
+            1236
+        ) != server_dep_map.end()
+    );
+
+    a_msg.release_dep();
+}
+/*************************************************************************
+    _HandleCommit
+*************************************************************************/
+
+/*************************************************************************
+    _ExecutePhase
+*************************************************************************/
