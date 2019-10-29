@@ -44,6 +44,7 @@ class SimulatedTransportAddress : public TransportAddress
 {
 public:
     SimulatedTransportAddress * clone() const;
+    SimulatedTransportAddress(int addr);
     int GetAddr() const;
     bool operator==(const SimulatedTransportAddress &other) const;
     inline bool operator!=(const SimulatedTransportAddress &other) const
@@ -51,7 +52,6 @@ public:
         return !(*this == other);
     }
 private:
-    SimulatedTransportAddress(int addr);
 
     int addr;
     friend class SimulatedTransport;

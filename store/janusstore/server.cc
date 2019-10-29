@@ -92,6 +92,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
     if (dep_list_ptr == NULL) {
         // return not ok
         PreAcceptNotOKMessage pa_not_ok_msg;
+        pa_not_ok_msg.set_txnid(txn_id);
 
         reply.set_op(Reply::PREACCEPT_NOT_OK);
         reply.set_allocated_preaccept_not_ok(&pa_not_ok_msg);
@@ -112,6 +113,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
     }
     PreAcceptOKMessage preaccept_ok_msg;
     preaccept_ok_msg.set_txnid(txn_id);
+
     preaccept_ok_msg.set_allocated_dep(&dep);
 
     reply.set_op(Reply::PREACCEPT_OK);
@@ -522,17 +524,10 @@ vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
 // checks if txn is ready to be executed
 bool Server::_ReadyToProcess(Transaction txn) {
     uint64_t txn_id = txn.getTransactionId();
-    if (processed[txn.getTransactionId()]) {
-        Debug("%i has been already processed....", txn_id);
-    }
-    if (txn.getTransactionStatus() != TransactionMessage::COMMIT) {
-        Debug("%i has not been set to COMMIT", txn_id);
-    }
     if (processed[txn.getTransactionId()] || txn.getTransactionStatus() != TransactionMessage::COMMIT) return false;
     vector<uint64_t> scc = _StronglyConnectedComponent(txn_id);
 
-    Debug("%i has SCC of size %i", txn_id, scc.size());
-    vector<uint64_t> deps = dep_map[txn.getTransactionId()];
+    vector<uint64_t> deps = dep_map[txn_id];
     for (int other_txn_id : deps) {
         vector<uint64_t>::iterator it = find(scc.begin(), scc.end(), other_txn_id);
         // check if other_txn_id is not in scc and is not ready, return false

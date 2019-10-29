@@ -1,40 +1,33 @@
 #include "store/janusstore/transaction.h"
 #include "store/janusstore/server.h"
 #include "store/janusstore/client.h"
+#include "store/janusstore/janus-proto.pb.h"
+
 #include "store/common/stats.h"
+
 #include "lib/simtransport.h"
 
 #include <gtest/gtest.h>
+
 #include <stdio.h>
 
 using namespace transport;
 using std::vector;
 using std::map;
 
-// class TestReceiver : public TransportReceiver
-// {
-// public:
-//     TestReceiver();
-//     void ReceiveMessage(const TransportAddress &src,
-//                         const string &type, const string &data);
+class TestReceiver : public TransportReceiver
+{
+public:
+    TestReceiver() {}
+    void ReceiveMessage(const TransportAddress &src,
+                        const string &type, const string &data, void * meta_data) {}
+};
 
-//     int numReceived;
-//     TestMessage lastMsg;
-// };
-
-// TestReceiver::TestReceiver()
-// {
-//     numReceived = 0;
-// }
+// TestReceiver::TestReceiver() {}
 
 // void
 // TestReceiver::ReceiveMessage(const TransportAddress &src,
-//                              const string &type, const string &data)
-// {
-//     UW_ASSERT_EQ(type, lastMsg.GetTypeName());
-//     lastMsg.ParseFromString(data);
-//     numReceived++;
-// }
+//                              const string &type, const string &data) {}
 
 class JanusServerTest : public  ::testing::Test
 {
@@ -47,6 +40,8 @@ protected:
     janusstore::Server *server;
     janusstore::Client* client;
     std::vector<janusstore::Server*> replicas;
+
+    TestReceiver *receiver0;
 
     int shards;
     int replicas_per_shard;
@@ -73,8 +68,15 @@ protected:
             replicas.push_back(std::move(p));
         }
         server = replicas.front();
-        // TODO init client
+
+        receiver0 = new TestReceiver();
+        transport->Register(receiver0, *config, 1);
     };
+
+    virtual void TearDown() {
+        delete server;
+        delete transport;
+    }
 
     virtual int ServerGroup() {
         return server->groupIdx;
@@ -98,6 +100,11 @@ TEST_F(JanusServerTest, Init)
     EXPECT_EQ(ServerGroup(), 0);
     EXPECT_EQ(ServerId(), 0);
 }
+
+/*************************************************************************
+    _BuildDepList
+*************************************************************************/
+
 
 TEST_F(JanusServerTest, BuildDepListNoDeps)
 {
@@ -181,6 +188,11 @@ TEST_F(JanusServerTest, BuildDepListRejectBallot)
     std::vector<uint64_t> *result = server->BuildDepList(txn1, 1);
     EXPECT_EQ(result, nullptr);
 }
+
+/*************************************************************************
+    _StronglyConnectedComponent
+*************************************************************************/
+
 
 TEST_F(JanusServerTest, SCCNoCycles)
 {
@@ -270,4 +282,148 @@ TEST_F(JanusServerTest, SCCMultipleCycles)
     EXPECT_EQ(scc.size(), 3);
     scc = server->_StronglyConnectedComponent(0000);
     EXPECT_EQ(scc.size(), 3);
+}
+
+/*************************************************************************
+    _ReadyToProcess
+*************************************************************************/
+
+TEST_F(JanusServerTest, ReadyToProcessNoDeps)
+{
+    std::unordered_map<uint64_t, std::vector<uint64_t>> sample_dep_map {
+        { 1234, {  }},
+    };
+    server->dep_map = sample_dep_map;
+
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
+    server->processed[1234] = false;
+    EXPECT_TRUE(server->_ReadyToProcess(txn1));
+}
+
+TEST_F(JanusServerTest, ReadyToProcessWithDeps)
+{
+    std::unordered_map<uint64_t, std::vector<uint64_t>> sample_dep_map {
+        { 1234, { 4567 }},
+        { 4567, { 7890 }},
+        { 7890, { 1234 }}
+    };
+    server->dep_map = sample_dep_map;
+
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
+    server->processed[4567] = true;
+    server->processed[7890] = true;
+    EXPECT_TRUE(server->_ReadyToProcess(txn1));
+}
+
+TEST_F(JanusServerTest, ReadyToProcessNotCommitting)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
+    EXPECT_FALSE(server->_ReadyToProcess(txn1));
+}
+
+TEST_F(JanusServerTest, ReadyToProcessAlreadyProcessed)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
+    server->processed[1234] = true;
+    EXPECT_FALSE(server->_ReadyToProcess(txn1));
+}
+
+TEST_F(JanusServerTest, ReadyToProcessDepNotReady)
+{
+    std::unordered_map<uint64_t, std::vector<uint64_t>> sample_dep_map {
+        { 1234, { 4567 }},
+        { 4567, {  }}
+    };
+    server->dep_map = sample_dep_map;
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
+    server->processed[1234] = false;
+    server->processed[4567] = false;
+    EXPECT_FALSE(server->_ReadyToProcess(txn1));
+}
+
+/*************************************************************************
+    HandlePreAccept
+*************************************************************************/
+
+TEST_F(JanusServerTest, HandlePreAcceptWorks)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
+    txn_ptr1->addReadSet("key1");
+    txn_ptr1->addWriteSet("key2", "val2");
+
+    janusstore::proto::PreAcceptMessage pa_msg;
+    janusstore::proto::TransactionMessage txn_msg;
+    janusstore::proto::Reply reply;
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
+    txn_ptr1->serialize(&txn_msg, 0);
+
+    pa_msg.set_ballot(0);
+    pa_msg.set_allocated_txn(&txn_msg);
+
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+
+    server->HandlePreAccept(*addr, pa_msg, &unlogged_reply);
+
+    // check values of the reply
+    janusstore::proto::PreAcceptOKMessage preaccept_ok_msg;
+
+    reply.ParseFromString(unlogged_reply.reply());
+
+    preaccept_ok_msg = reply.preaccept_ok();
+
+    EXPECT_EQ(preaccept_ok_msg.txnid(), 1234);
+    EXPECT_EQ(preaccept_ok_msg.dep().txnid_size(), 0);
+
+    pa_msg.release_txn();
+}
+
+TEST_F(JanusServerTest, HandlePreAcceptSendsNotOK)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
+    txn_ptr1->addReadSet("key1");
+    txn_ptr1->addWriteSet("key2", "val2");
+
+    janusstore::proto::PreAcceptMessage pa_msg;
+    janusstore::proto::TransactionMessage txn_msg;
+    janusstore::proto::Reply reply;
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
+    txn_ptr1->serialize(&txn_msg, 0);
+
+    pa_msg.set_ballot(0);
+    pa_msg.set_allocated_txn(&txn_msg);
+
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+
+    server->HandlePreAccept(*addr, pa_msg, &unlogged_reply);
+
+    // now send same txn id with higher ballot, this should get rejected
+    pa_msg.set_ballot(1);
+    server->HandlePreAccept(*addr, pa_msg, &unlogged_reply);
+
+    // check values of the reply
+    janusstore::proto::PreAcceptNotOKMessage preaccept_not_ok_msg;
+
+    reply.ParseFromString(unlogged_reply.reply());
+
+    Debug(reply.DebugString().c_str());
+
+    preaccept_not_ok_msg = reply.preaccept_not_ok();
+
+    EXPECT_EQ(preaccept_not_ok_msg.txnid(), 1234);
+
+    pa_msg.release_txn();
 }
