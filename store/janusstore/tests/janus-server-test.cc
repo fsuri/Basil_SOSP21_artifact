@@ -469,6 +469,7 @@ TEST_F(JanusServerTest, HandleAcceptSendsOK)
     a_ok_msg = reply.accept_ok();
 
     EXPECT_EQ(a_ok_msg.txnid(), 1235);
+    EXPECT_EQ(server->id_txn_map[1235].getTransactionStatus(), janusstore::proto::TransactionMessage::ACCEPT);
     EXPECT_EQ(server->accepted_ballots[1235], 2);
     EXPECT_EQ(
         server->id_txn_map[1235].getTransactionStatus(),
