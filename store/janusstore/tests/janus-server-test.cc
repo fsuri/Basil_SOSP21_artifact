@@ -444,11 +444,11 @@ TEST_F(JanusServerTest, HandleAcceptSendsOK)
     server->id_txn_map[1234] = txn1;
     server->id_txn_map[1235] = txn2;
 
-    vector<uint64_t> *dep1 = server->BuildDepList(txn1, 0);
+    server->BuildDepList(txn1, 0);
     vector<uint64_t> *dep2 = server->BuildDepList(txn2, 0);
 
     janusstore::proto::DependencyList dep;
-    for (auto i : *dep1) {
+    for (auto i : *dep2) {
         dep.add_txnid(i);
     }
     dep.add_txnid(1236);
@@ -483,6 +483,76 @@ TEST_F(JanusServerTest, HandleAcceptSendsOK)
             1236
         ) != server_dep_map.end()
     );
+
+    a_msg.release_dep();
+}
+
+TEST_F(JanusServerTest, HandleAcceptSendsNotOKBallot)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
+
+    server->id_txn_map[1234] = txn1;
+    vector<uint64_t> *dep1 = server->BuildDepList(txn1, 0);
+    server->accepted_ballots[1234] = 2;
+
+    janusstore::proto::DependencyList dep;
+    for (auto i : *dep1) {
+        dep.add_txnid(i);
+    }
+
+    janusstore::proto::AcceptMessage a_msg;
+    a_msg.set_txnid(1234);
+    a_msg.set_ballot(1); // 1 < 2 so this should be rejected
+    a_msg.set_allocated_dep(&dep);
+
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
+    server->HandleAccept(*addr, a_msg, &unlogged_reply);
+
+    janusstore::proto::Reply reply;
+    janusstore::proto::AcceptNotOKMessage a_not_ok_msg;
+
+    reply.ParseFromString(unlogged_reply.reply());
+    a_not_ok_msg = reply.accept_not_ok();
+
+    EXPECT_EQ(a_not_ok_msg.txnid(), 1234);
+    EXPECT_EQ(a_not_ok_msg.highest_ballot(), 2);
+
+    a_msg.release_dep();
+}
+
+TEST_F(JanusServerTest, HandleAcceptSendsNotCommit)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    vector<uint64_t> *dep1 = server->BuildDepList(*txn_ptr1, 0);
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
+    server->id_txn_map[1234] = *txn_ptr1;
+
+    janusstore::proto::DependencyList dep;
+    for (auto i : *dep1) {
+        dep.add_txnid(i);
+    }
+
+    janusstore::proto::AcceptMessage a_msg;
+    a_msg.set_txnid(1234);
+    a_msg.set_ballot(1); // 1 < 2 so this should be rejected
+    a_msg.set_allocated_dep(&dep);
+
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
+    server->HandleAccept(*addr, a_msg, &unlogged_reply);
+
+    janusstore::proto::Reply reply;
+    janusstore::proto::AcceptNotOKMessage a_not_ok_msg;
+
+    reply.ParseFromString(unlogged_reply.reply());
+    a_not_ok_msg = reply.accept_not_ok();
+
+    EXPECT_EQ(a_not_ok_msg.txnid(), 1234);
+    EXPECT_EQ(a_not_ok_msg.highest_ballot(), 0);
 
     a_msg.release_dep();
 }

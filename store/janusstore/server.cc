@@ -130,7 +130,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
     reply.release_preaccept_ok();
 }
 
-vector<uint64_t>* Server::BuildDepList(Transaction txn, uint64_t ballot) {
+vector<uint64_t>* Server::BuildDepList(Transaction &txn, uint64_t ballot) {
     uint64_t txn_id = txn.getTransactionId();
     if (accepted_ballots.find(txn_id) != accepted_ballots.end() &&
      ballot > accepted_ballots[txn_id]) {
@@ -207,7 +207,8 @@ void Server::HandleAccept(const TransportAddress &remote,
         msg_deps.push_back(received_dep.txnid(i));
     }
     uint64_t accepted_ballot = accepted_ballots[txn_id];
-    if (id_txn_map[txn_id].getTransactionStatus() == TransactionMessage::COMMIT || ballot < accepted_ballot) {
+
+    if (txn->getTransactionStatus() == TransactionMessage::COMMIT || ballot < accepted_ballot) {
         // send back txn id and highest ballot for that txn
         AcceptNotOKMessage accept_not_ok_msg;
         accept_not_ok_msg.set_txnid(txn_id);
@@ -215,6 +216,15 @@ void Server::HandleAccept(const TransportAddress &remote,
 
         reply.set_op(Reply::ACCEPT_NOT_OK);
         reply.set_allocated_accept_not_ok(&accept_not_ok_msg);
+
+        Debug("[Server %i] sending ACCEPT-NOT-OK message for txn %i %s",
+            this->myIdx, txn_id,
+            reply.DebugString().c_str());
+
+        unlogged_reply->set_reply(reply.SerializeAsString());
+        transport->SendMessage(this, remote, *unlogged_reply);
+
+        reply.release_accept_not_ok();
     } else {
         // replace dep_map with the list from the message
         dep_map[txn_id] = msg_deps;
@@ -231,16 +241,15 @@ void Server::HandleAccept(const TransportAddress &remote,
         reply.set_op(Reply::ACCEPT_OK);
         reply.set_allocated_accept_ok(&accept_ok_msg);
 
+        Debug("[Server %i] sending ACCEPT-OK message for txn %i %s",
+            this->myIdx, txn_id,
+            reply.DebugString().c_str());
+
+        unlogged_reply->set_reply(reply.SerializeAsString());
+        transport->SendMessage(this, remote, *unlogged_reply);
+
+        reply.release_accept_ok();
     }
-
-    Debug("[Server %i] sending ACCEPT-OK message for txn %i %s",
-        this->myIdx, txn_id,
-        reply.DebugString().c_str());
-
-    unlogged_reply->set_reply(reply.SerializeAsString());
-    transport->SendMessage(this, remote, *unlogged_reply);
-
-    reply.release_accept_ok();
 }
 
 void Server::HandleCommit(const TransportAddress &remote,
