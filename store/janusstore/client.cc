@@ -18,7 +18,7 @@ namespace janusstore {
 
     // for now, it does not seem like we need txn_id or ballot
     // MSB = client_id, LSB = txn num
-    txn_id = (client_id / 10000) * 10000;
+    next_txn_id = (client_id / 10000) * 10000;
     // MSB = client_id, LSB = ballot num
     ballot = (client_id / 10000) * 10000;
 
@@ -55,7 +55,7 @@ namespace janusstore {
 
     // for now, it does not seem like we need txn_id or ballot
     // MSB = client_id, LSB = txn num
-    txn_id = (client_id / 10000) * 10000;
+    next_txn_id = (client_id / 10000) * 10000;
     // MSB = client_id, LSB = ballot num
     ballot = (client_id / 10000) * 10000;
 
@@ -119,7 +119,7 @@ namespace janusstore {
   }
 
   void Client::Execute(OneShotTransaction *txn, execute_callback ecb) {
-    Transaction t(txn_id); 
+    Transaction t(this->next_txn_id); 
     t.setTransactionStatus(proto::TransactionMessage::PREACCEPT);
     for (auto key : txn->GetReadSet()) {
       t.addReadSet(key);
@@ -127,20 +127,18 @@ namespace janusstore {
     for (auto kv : txn->GetWriteSet()) {
       t.addWriteSet(kv.first, kv.second);
     }
-    this->txn_id++;
+    this->next_txn_id++;
     PreAccept(&t, 0UL, ecb);
   }
 
   void Client::PreAccept(Transaction * txn, uint64_t ballot, execute_callback ecb) {
 
     uint64_t txn_id = txn->getTransactionId();
-    txn->setTransactionId(txn_id);
     
     PendingRequest *req = new PendingRequest(txn_id, ecb);
     pendingReqs[txn_id] = req;
     
     printf("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
-    printf("CLIENT - PREACCEPT - ocb registered for txn %d\n", txn_id);
     setParticipants(txn);
 
     for (auto p: req->participant_shards) {
@@ -269,11 +267,12 @@ namespace janusstore {
     printf("%s\n", ("CLIENT - COMMIT CB - added " + to_string(shard) + " to responded list").c_str());
 
     if (req->responded_shards.size() == req->participant_shards.size()) {
-      // return results to client by invoking output commit callback
-      req->ccb(txn_id, std::map<std::string, std::string>());
+      // return results to async_transaction_bench_client by invoking output commit callback
+      Debug("Invoking execute callback");
+      req->ccb(0, std::map<std::string, std::string>());
       req->responded_shards.clear();
     } else {
-      printf("%s\n", ("CLIENT - COMMIT CB - " + to_string(req->responded_shards.size()) + " shards responded out of " + to_string(req->participant_shards.size())).c_str());
+      // printf("%s\n", ("CLIENT - COMMIT CB - " + to_string(req->responded_shards.size()) + " shards responded out of " + to_string(req->participant_shards.size())).c_str());
     }
     return;
   }
