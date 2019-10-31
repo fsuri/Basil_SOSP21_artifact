@@ -99,7 +99,7 @@ namespace janusstore {
     for (const auto & key: txn->read_set) {
       int i = this->keyToShard(key, nshards);
       if (req->participant_shards.find(i) == req->participant_shards.end()) {
-        Debug("txn %i -> shard %i, key %s", txn->getTransactionId(), i, key.c_str());
+        // Debug("txn %i -> shard %i, key %s", txn->getTransactionId(), i, key.c_str());
         req->participant_shards.insert(i);
       }
       txn->groups.insert(i);
@@ -108,9 +108,9 @@ namespace janusstore {
 
     for (const auto & pair: txn->write_set) {
       int i = this->keyToShard(pair.first, nshards);
-      Debug("%i, %i", txn->getTransactionId(), i);
+      // Debug("%i, %i", txn->getTransactionId(), i);
       if (req->participant_shards.find(i) == req->participant_shards.end()) {
-        Debug("txn %i -> shard %i, key %s", txn->getTransactionId(), i, pair.first.c_str());
+        // Debug("txn %llu -> shard %i, key %s", txn->getTransactionId(), i, pair.first.c_str());
         req->participant_shards.insert(i);  
       }
       txn->groups.insert(i);
@@ -268,7 +268,7 @@ namespace janusstore {
 
     if (req->responded_shards.size() == req->participant_shards.size()) {
       // return results to async_transaction_bench_client by invoking output commit callback
-      Debug("Invoking execute callback");
+      Debug("Invoking execute callback for txn %llu", txn_id);
       req->ccb(0, std::map<std::string, std::string>());
       req->responded_shards.clear();
     } else {

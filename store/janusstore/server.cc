@@ -181,7 +181,7 @@ vector<uint64_t>* Server::BuildDepList(Transaction &txn, uint64_t ballot) {
           // Debug("other txn ids read in write confl %i", other_txn_ids.size());
           // for (auto i = other_txn_ids.begin(); i != other_txn_ids.end(); ++i)
           //   cout << *i << ' ';
-          if (other_txn_ids.size() == 1 && other_txn_ids.find(txn_id) != other_txn_ids.end()) {
+          if (other_txn_ids.find(txn_id) != other_txn_ids.end()) {
             // do nothing
           } else {
             dep_set.insert(other_txn_ids.begin(), other_txn_ids.end());
