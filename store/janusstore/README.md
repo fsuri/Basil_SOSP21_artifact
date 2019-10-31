@@ -2,6 +2,9 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
+10/31:
+	- (TODO) run benchmark script and debug/verify strict serializability via client debug
+	- (TODO) unit test inquire
 10/23:
 	- (TODO) try running store/benchmark/async/benchmark script
 		- RWClient
