@@ -7,6 +7,7 @@
 #include "store/common/backend/txnstore.h"
 #include "store/common/stats.h"
 #include "store/mortystore/common.h"
+#include "store/mortystore/branch_generator.h"
 
 #include <unordered_map>
 
@@ -25,6 +26,7 @@ class Server : public TransportReceiver, public ::Server {
       const Timestamp timestamp) override;
 
   virtual inline Stats &GetStats() override { return stats; };
+
  private:
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandleWrite(const TransportAddress &remote, const proto::Write &msg);
@@ -35,43 +37,20 @@ class Server : public TransportReceiver, public ::Server {
 
   void SendBranchReplies(const proto::Branch &init, proto::OperationType type,
       const std::string &key);
-  void GenerateBranches(const proto::Branch &init,
-      proto::OperationType type, const std::string &key,
-      std::vector<proto::Branch> &new_branches);
-  void GenerateBranchesSubsets(const std::unordered_set<proto::Branch, BranchHasher, BranchComparer> &pending_branches,
-      const std::vector<uint64_t> &txns, std::vector<proto::Branch> &new_branches,
-      std::vector<uint64_t> subset = std::vector<uint64_t>(),
-      int64_t i = -1);
-  void GenerateBranchesPermutations(const std::unordered_set<proto::Branch, BranchHasher, BranchComparer> &pending_branches,
-      const std::vector<uint64_t> &subset, std::vector<proto::Branch> &new_branches);
-  bool CommitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq);
-  bool WaitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq);
-  bool ValidSubsequence(const proto::Transaction &txn,
-      const std::vector<proto::Transaction> &seq1,
-      const std::vector<proto::Transaction> &seq2);
-  bool NoConflicts(const proto::Transaction &txn,
-      const std::vector<proto::Transaction> &seq);
-  bool TransactionsConflict(const proto::Transaction &txn1,
-      const proto::Transaction &txn2);
-  void ValueOnBranch(const proto::Branch &branch, const std::string &key,
-      std::string &val);
-  bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
-      std::string &val);
   bool CheckBranch(const TransportAddress &addr, const proto::Branch &branch);
 
   const transport::Configuration &config;
   int idx;
   Transport *transport;
-  std::unordered_map<std::string, std::vector<proto::Branch>> pending_reads;
-  std::unordered_map<std::string, std::vector<proto::Branch>> pending_writes;
   std::vector<proto::Transaction> committed;
   std::vector<proto::Transaction> prepared;
   std::unordered_map<uint64_t, const TransportAddress *> txn_coordinators;
   std::vector<proto::Branch> waiting;
   std::unordered_map<uint64_t, const TransportAddress *> shards;
   Stats stats;
-  std::vector<proto::Branch> already_generated;
   std::set<uint64_t> committed_txn_ids;
+  std::set<uint64_t> prepared_txn_ids;
+  BranchGenerator generator;
 
 };
 

@@ -64,8 +64,9 @@ BenchmarkClient::BenchmarkClient(Transport &transport,
 BenchmarkClient::~BenchmarkClient() {
 }
 
-void BenchmarkClient::Start() {
+void BenchmarkClient::Start(bench_done_callback bdcb) {
 	n = 0;
+  curr_bdcb = bdcb;
   transport.Timer(warmupSec * 1000, std::bind(&BenchmarkClient::WarmupDone,
 			this));
   gettimeofday(&startTime, NULL);
@@ -131,6 +132,8 @@ void BenchmarkClient::CooldownDone() {
   ns = latencies[latencies.size()*99/100];
   LatencyFmtNS(ns, buf);
   Notice("99th percentile latency is %ld ns (%s)", ns, buf);
+
+  curr_bdcb();
 }
 
 void BenchmarkClient::OnReply(int result) {

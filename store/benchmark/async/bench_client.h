@@ -36,6 +36,8 @@
 #include "lib/transport.h"
 #include <random>
 
+typedef std::function<void()> bench_done_callback;
+
 class BenchmarkClient {
  public:
   BenchmarkClient(Transport &transport, int numRequests,
@@ -43,7 +45,7 @@ class BenchmarkClient {
       int tputInterval, const std::string &latencyFilename = "");
   virtual ~BenchmarkClient();
 
-  void Start();
+  void Start(bench_done_callback bdcb);
   void OnReply(int result);
 
   void StartLatency();
@@ -81,6 +83,7 @@ class BenchmarkClient {
   string latencyFilename;
   int msSinceStart;
   int opLastInterval;
+  bench_done_callback curr_bdcb;
 };
 
 #endif /* BENCHMARK_CLIENT_H */

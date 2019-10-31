@@ -154,7 +154,10 @@ void Client::HandlePrepareOK(const TransportAddress &remote,
       sclients[shard]->Commit(commit);
     }
     ClientBranch clientBranch = GetClientBranch(msg.branch());
-    itr->second->ecb(SUCCESS, clientBranch.readValues);
+    PendingRequest *req = itr->second;
+    pendingReqs.erase(msg.branch().txn().id());
+    req->ecb(SUCCESS, clientBranch.readValues);
+    delete req;
   } else if (itr->second->prepareOKs[msg.branch().id()] +
       itr->second->prepareKOes[msg.branch().id()].size() ==
       msg.branch().shards().size()) {
@@ -198,6 +201,10 @@ void Client::Get(proto::Branch &branch, const std::string &key) {
   *msg.mutable_branch() = branch;
   msg.set_key(key);
 
+  std::cerr << "Sending: ";
+  PrintBranch(branch);
+
+
   sclients[i]->Read(msg);
 }
 
@@ -218,6 +225,9 @@ void Client::Put(proto::Branch &branch, const std::string &key,
   *msg.mutable_branch() = branch;
   msg.set_key(key);
   msg.set_value(value);
+
+  std::cerr << "Sending: ";
+  PrintBranch(branch);
 
   sclients[i]->Write(msg);
 }

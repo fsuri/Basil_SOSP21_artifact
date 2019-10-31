@@ -177,6 +177,9 @@ TCPTransport::TCPTransport(double dropRate, double reorderRate,
                                             SignalCallback, this));
         signalEvents.push_back(evsignal_new(libeventBase, SIGINT,
                                             SignalCallback, this));
+        signalEvents.push_back(evsignal_new(libeventBase, SIGPIPE,
+                                            [](int fd, short what, void* arg){}, this));
+
         for (event *x : signalEvents) {
             event_add(x, NULL);
         }
@@ -186,6 +189,7 @@ TCPTransport::TCPTransport(double dropRate, double reorderRate,
 TCPTransport::~TCPTransport()
 {
     // XXX Shut down libevent?
+    event_base_free(libeventBase);
 
     // for (auto kv : timers) {
     //     delete kv.second;

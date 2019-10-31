@@ -33,6 +33,7 @@
 #include <gflags/gflags.h>
 
 #include <algorithm>
+#include <atomic>
 #include <thread>
 #include <vector>
 
@@ -308,6 +309,42 @@ int main(int argc, char **argv) {
       break;
   }
 
+	std::string latencyFile;
+  std::string latencyRawFile;
+  std::vector<uint64_t> latencies;
+  std::atomic<size_t> clientsDone(0UL);
+  bench_done_callback bdcb = [&]() {
+    ++clientsDone;
+    if (clientsDone == FLAGS_num_clients) {
+      Latency_t sum;
+      _Latency_Init(&sum, "total");
+      Stats total;
+      for (unsigned int i = 0; i < benchClients.size(); i++) {
+        Latency_Sum(&sum, &benchClients[i]->latency);
+        total.Merge(benchClients[i]->GetStats());
+      }
+      Latency_Dump(&sum);
+      if (latencyFile.size() > 0) {
+        Latency_FlushTo(latencyFile.c_str());
+      }
+
+      latencyRawFile = latencyFile+".raw";
+      std::ofstream rawFile(latencyRawFile.c_str(),
+          std::ios::out | std::ios::binary);
+      for (auto x : benchClients) {
+        rawFile.write((char *)&x->latencies[0],
+            (x->latencies.size()*sizeof(x->latencies[0])));
+        if (!rawFile) {
+          Warning("Failed to write raw latency output");
+        }
+      }
+
+      if (FLAGS_stats_file.size() > 0) {
+        total.ExportJSON(FLAGS_stats_file);
+      }
+      transport.Stop();
+    }
+  };
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
     Client *client = nullptr;
     AsyncClient *asyncClient = nullptr;
@@ -414,16 +451,17 @@ int main(int argc, char **argv) {
       case BENCH_RETWIS:
       case BENCH_TPCC:
         // async benchmarks
-	      transport.Timer(0, [bench]() { bench->Start(); });
+	      transport.Timer(0, [bench, bdcb]() { bench->Start(bdcb); });
         break;
       case BENCH_SMALLBANK_SYNC:
-        threads.push_back(new std::thread([bench](){ 
-            bench->Start();
+        threads.push_back(new std::thread([bench, bdcb](){ 
+            bench->Start([](){});
             while (!bench->IsFullyDone()) {
               bench->StartLatency();
               bench->SendNext();
               bench->IncrementSent();
             }
+            bdcb();
         }));
         break;
       default:
@@ -445,61 +483,26 @@ int main(int argc, char **argv) {
     benchClients.push_back(bench);
   }
 
-	std::string latencyFile;
-  std::string latencyRawFile;
-  std::vector<uint64_t> latencies;
-  Timeout checkTimeout(&transport, FLAGS_exp_duration * 1000 + 100, [&]() {
-    Latency_t sum;
-    _Latency_Init(&sum, "total");
-    Stats total;
-    for (unsigned int i = 0; i < benchClients.size(); i++) {
-      Latency_Sum(&sum, &benchClients[i]->latency);
-      total.Merge(benchClients[i]->GetStats());
-    }
-    Latency_Dump(&sum);
-    if (latencyFile.size() > 0) {
-      Latency_FlushTo(latencyFile.c_str());
-    }
-
-    latencyRawFile = latencyFile+".raw";
-    std::ofstream rawFile(latencyRawFile.c_str(),
-        std::ios::out | std::ios::binary);
-    for (auto x : benchClients) {
-      rawFile.write((char *)&x->latencies[0],
-          (x->latencies.size()*sizeof(x->latencies[0])));
-      if (!rawFile) {
-        Warning("Failed to write raw latency output");
-      }
-    }
-
-    if (FLAGS_stats_file.size() > 0) {
-      total.ExportJSON(FLAGS_stats_file);
-    }
-
-    for (auto i : threads) {
-      i->join();
-      delete i;
-    }
-    for (auto i : benchClients) {
-      delete i;
-    }
-    for (auto i : syncClients) {
-      delete i;
-    }
-    for (auto i : oneShotClients) {
-      delete i;
-    }
-    for (auto i : asyncClients) {
-      delete i;
-    }
-    for (auto i : clients) {
-      delete i;
-    }
-    exit(0);
-  });
-  checkTimeout.Start();
-
   transport.Run();
+  for (auto i : threads) {
+    i->join();
+    delete i;
+  }
+  for (auto i : syncClients) {
+    delete i;
+  }
+  for (auto i : oneShotClients) {
+    delete i;
+  }
+  for (auto i : asyncClients) {
+    delete i;
+  }
+  for (auto i : clients) {
+    delete i;
+  }
+  for (auto i : benchClients) {
+    delete i;
+  }
 	return 0;
 }
 
