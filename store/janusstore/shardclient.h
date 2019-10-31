@@ -49,7 +49,25 @@ public:
     int num_replicas;
     int replica; // which replica to use for reads
 
+    struct PendingRequest {
+        PendingRequest(uint64_t txn_id)
+        : txn_id(txn_id) {}
+        ~PendingRequest() {}
+
+        uint64_t txn_id;
+        client_preaccept_callback cpcb;
+        client_accept_callback cacb;
+        client_commit_callback cccb;
+        std::set<uint64_t> aggregated_deps;
+        std::vector<janusstore::proto::Reply> preaccept_replies;
+        std::vector<janusstore::proto::Reply> accept_replies;
+        std::vector<janusstore::proto::Reply> commit_replies;
+        uint64_t responded;
+    };
+
     replication::ir::IRClient *client; // Client proxy.
+
+    std::unordered_map<uint64_t, PendingRequest*> pendingReqs;
 
     // TODO will probably need to add fields for aggregating replica responses
     // Map of txn_id to aggregated list of txn_id dependencies for this shard
