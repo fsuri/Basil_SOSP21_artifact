@@ -70,8 +70,8 @@ public:
     // Current highest ballot
     uint64_t ballot;
 
-    // Ongoing transaction ID.
-    uint64_t txn_id;
+    // Next available transaction ID.
+    uint64_t next_txn_id;
 
     // aggregated map to remove the above fields/maps up to aggregated_deps
     std::unordered_map<uint64_t, PendingRequest*> pendingReqs;
