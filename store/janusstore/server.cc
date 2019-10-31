@@ -97,7 +97,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
         reply.set_op(Reply::PREACCEPT_NOT_OK);
         reply.set_allocated_preaccept_not_ok(&pa_not_ok_msg);
         unlogged_reply->set_reply(reply.SerializeAsString());
-        Debug("[Server %i] sending PREACCEPT NOT-OK message for txn %i",
+        Debug("[Server %i] sending PREACCEPT NOT-OK message for txn %llu",
         this->myIdx, txn_id);
         transport->SendMessage(this, remote, *unlogged_reply);
         reply.release_preaccept_not_ok();
@@ -121,7 +121,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
 
     unlogged_reply->set_reply(reply.SerializeAsString());
 
-    Debug("[Server %i] sending PREACCEPT-OK message for txn %i %s",
+    Debug("[Server %i] sending PREACCEPT-OK message for txn %llu %s",
         this->myIdx, txn_id,
         reply.DebugString().c_str());
     transport->SendMessage(this, remote, *unlogged_reply);
@@ -135,7 +135,7 @@ vector<uint64_t>* Server::BuildDepList(Transaction &txn, uint64_t ballot) {
     if (accepted_ballots.find(txn_id) != accepted_ballots.end() &&
      ballot > accepted_ballots[txn_id]) {
         // TODO less hacky way
-        Debug("[Server %i] Sending PREACCEPT NOT-OK since %i > %i",
+        Debug("[Server %i] Sending PREACCEPT NOT-OK since %llu > %llu",
             this->myIdx, ballot, accepted_ballots[txn_id]);
         return NULL;
     }
@@ -155,6 +155,7 @@ vector<uint64_t>* Server::BuildDepList(Transaction &txn, uint64_t ballot) {
 
         // append conflicts
         if (write_key_txn_map.find(key) != write_key_txn_map.end()) {
+            Debug("here and idk why");
             set<uint64_t> other_txn_ids = write_key_txn_map[key];
             dep_set.insert(other_txn_ids.begin(), other_txn_ids.end());
         }
@@ -173,13 +174,18 @@ vector<uint64_t>* Server::BuildDepList(Transaction &txn, uint64_t ballot) {
         }
 
         if (read_key_txn_map.find(key) != read_key_txn_map.end()) {
+          Debug("should be here and that might be a problem");
           // append conflicts
           set<uint64_t> other_txn_ids = read_key_txn_map[key];
           // TODO remove, but this is useful for debuggign
           // Debug("other txn ids read in write confl %i", other_txn_ids.size());
           // for (auto i = other_txn_ids.begin(); i != other_txn_ids.end(); ++i)
           //   cout << *i << ' ';
-          dep_set.insert(other_txn_ids.begin(), other_txn_ids.end());
+          if (other_txn_ids.size() == 1 && other_txn_ids.find(txn_id) != other_txn_ids.end()) {
+            // do nothing
+          } else {
+            dep_set.insert(other_txn_ids.begin(), other_txn_ids.end());
+          }
         }
     }
 
@@ -217,7 +223,7 @@ void Server::HandleAccept(const TransportAddress &remote,
         reply.set_op(Reply::ACCEPT_NOT_OK);
         reply.set_allocated_accept_not_ok(&accept_not_ok_msg);
 
-        Debug("[Server %i] sending ACCEPT-NOT-OK message for txn %i %s",
+        Debug("[Server %i] sending ACCEPT-NOT-OK message for txn %llu %s",
             this->myIdx, txn_id,
             reply.DebugString().c_str());
 
@@ -241,7 +247,7 @@ void Server::HandleAccept(const TransportAddress &remote,
         reply.set_op(Reply::ACCEPT_OK);
         reply.set_allocated_accept_ok(&accept_ok_msg);
 
-        Debug("[Server %i] sending ACCEPT-OK message for txn %i %s",
+        Debug("[Server %i] sending ACCEPT-OK message for txn %llu %s",
             this->myIdx, txn_id,
             reply.DebugString().c_str());
 
@@ -263,7 +269,7 @@ void Server::HandleCommit(const TransportAddress &remote,
         deps.push_back(received_dep.txnid(i));
     }
 
-    Debug("gonna handle commit for %i, message: %s", txn_id, c_msg.DebugString().c_str());
+    Debug("gonna handle commit for %llu, message: %s", txn_id, c_msg.DebugString().c_str());
     _HandleCommit(txn_id, deps, remote, unlogged_reply);
 }
 
@@ -274,12 +280,12 @@ void Server::_HandleCommit(uint64_t txn_id,
     Transaction *txn = &id_txn_map[txn_id];
     dep_map[txn_id] = deps;
     txn->setTransactionStatus(TransactionMessage::COMMIT);
-    Debug("Set txn id %i to COMMIT", txn_id);
+    Debug("Set txn id %llu to COMMIT", txn_id);
     // check if this unblocks others, and rerun HandleCommit for those
     if (blocking_ids.find(txn_id) != blocking_ids.end()) {
         for(auto blocked_id_pair : blocking_ids[txn_id]) {
             uint64_t blocked_id = blocked_id_pair.second;
-            Debug("Found blocked id %i for txn id %i", blocked_id, txn_id);
+            Debug("Found blocked id %llu for txn id %llu", blocked_id, txn_id);
             _HandleCommit(blocked_id, dep_map[blocked_id], *blocked_id_pair.first, unlogged_reply);
         }
         blocking_ids.erase(txn_id);
@@ -296,6 +302,7 @@ void Server::_HandleCommit(uint64_t txn_id,
     // wait and inquire
     vector<uint64_t> not_committing_ids = _checkIfAllCommitting(id_txn_map, deps);
     if (not_committing_ids.size() != 0) {
+        Debug("Need to block");
         // HACK: find a more elegant way to do this
         bool found_on_server = false;
         for (uint64_t blocking_txn_id : not_committing_ids) {
@@ -331,7 +338,7 @@ void Server::HandleInquire(const TransportAddress &remote,
 
     uint64_t txn_id = i_msg.txnid();
 
-    Debug("[Server %i] on shard %i received inquiry for transaction %i", myIdx, groupIdx, txn_id);
+    Debug("[Server %i] on shard %i received inquiry for transaction %llu", myIdx, groupIdx, txn_id);
     Transaction txn = this->id_txn_map[txn_id];
 
     // after txn_id is in the committing stage, return the deps list
@@ -375,7 +382,7 @@ void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
 }
 
 void Server::_SendInquiry(uint64_t txn_id) {
-    Debug("[Server %i] on shard %i sending inquiry for transaction %i", myIdx, groupIdx, txn_id);
+    Debug("[Server %i] on shard %i sending inquiry for transaction %llu", myIdx, groupIdx, txn_id);
 
     Transaction other_server_txn = id_txn_map[txn_id];
     // ask random participating shard+replica for deplist
@@ -418,7 +425,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
                            const TransportAddress &remote,
                            replication::ir::proto::UnloggedReplyMessage *unlogged_reply
 ) {
-    Debug("In execute phase for %i", txn_id);
+    Debug("In execute phase for %llu", txn_id);
     unordered_map<string, string> result;
     vector<uint64_t> deps = dep_map[txn_id];
     Transaction txn = id_txn_map[txn_id];
@@ -426,13 +433,13 @@ void Server::_ExecutePhase(uint64_t txn_id,
     while (!processed[txn_id]) {
         for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
             uint64_t other_txn_id = pair.first;
-            Debug("Checking if %i is ready to process!", other_txn_id);
+            Debug("Checking if %llu is ready to process!", other_txn_id);
             if (_ReadyToProcess(id_txn_map[other_txn_id])) {
-                Debug("%i is ready to process!", other_txn_id);
+                Debug("%llu is ready to process!", other_txn_id);
                 vector<uint64_t> scc = _StronglyConnectedComponent(other_txn_id);
                 ResolveContention(scc);
-                Debug("%i has scc of size %i!", other_txn_id, scc.size());
-                for (int scc_id : scc) {
+                Debug("%llu has scc of size %llu!", other_txn_id, scc.size());
+                for (uint64_t scc_id : scc) {
                     // TODO check if scc_id is involved with S and not abandoned
                     if (scc_id == txn_id) {
                         // TODO: store it in txn result and remove if else
@@ -441,14 +448,14 @@ void Server::_ExecutePhase(uint64_t txn_id,
                         // TODO: store it in txn result
                         Execute(id_txn_map[scc_id]);
                     }
-                    Debug("[Server %i] executing transaction %i", myIdx, scc_id);
+                    Debug("[Server %i] executing transaction %llu", myIdx, scc_id);
                     processed[scc_id] = true;
                 }
             }
         }
     }
 
-
+    Debug("Sending CommitOK");
     CommitOKMessage commit_ok;
     Reply reply;
 
@@ -569,13 +576,14 @@ vector<uint64_t> _checkIfAllCommitting(
     vector<uint64_t> deps
     ) {
         vector<uint64_t> not_committing_ids;
-        for (int txn_id : deps) {
-            Debug("Checking if %i is committing", txn_id);
+        for (uint64_t txn_id : deps) {
+            Debug("Checking if %llu is committing", txn_id);
             Transaction txn = id_txn_map[txn_id];
             if (txn.getTransactionStatus() != TransactionMessage::COMMIT) {
                 not_committing_ids.push_back(txn_id);
             }
         }
+        Debug("Returning uncommitted ids");
         return not_committing_ids;
     }
 }
