@@ -26,7 +26,7 @@ constexpr int num_customers_ = 18000;
 
 class SmallbankClient : public SyncTransactionBenchClient {
  public:
-  SmallbankClient(SyncClient &client, Transport &transport, int numRequests, int expDuration,
+  SmallbankClient(SyncClient &client, Transport &transport, uint32_t clientId, int numRequests, int expDuration,
       uint64_t delay, int warmupSec, int cooldownSec, int tputInterval,
       uint32_t abortBackoff, bool retryAborted, 
       const uint32_t timeout,

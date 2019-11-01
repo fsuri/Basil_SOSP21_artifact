@@ -42,10 +42,10 @@
 
 DEFINE_LATENCY(op);
 
-BenchmarkClient::BenchmarkClient(Transport &transport,
+BenchmarkClient::BenchmarkClient(Transport &transport, uint32_t clientId,
 		int numRequests, int expDuration, uint64_t delay, int warmupSec,
     int cooldownSec, int tputInterval, const std::string &latencyFilename) :
-    tputInterval(tputInterval), transport(transport),
+    rand(clientId), tputInterval(tputInterval), transport(transport),
     numRequests(numRequests), expDuration(expDuration),	delay(delay),
     warmupSec(warmupSec), cooldownSec(cooldownSec),
     latencyFilename(latencyFilename) {

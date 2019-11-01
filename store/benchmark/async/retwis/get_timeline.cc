@@ -1,11 +1,9 @@
 #include "store/benchmark/async/retwis/get_timeline.h"
 
-#include <cstdlib>
-
 namespace retwis {
 
-GetTimeline::GetTimeline(KeySelector *keySelector)
-    : RetwisTransaction(keySelector, 1 + std::rand() % 10) {
+GetTimeline::GetTimeline(KeySelector *keySelector, std::mt19937 &rand)
+    : RetwisTransaction(keySelector, 1 + rand() % 10, rand) {
 }
 
 GetTimeline::~GetTimeline() {

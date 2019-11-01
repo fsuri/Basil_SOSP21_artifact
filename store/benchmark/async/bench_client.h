@@ -40,7 +40,7 @@ typedef std::function<void()> bench_done_callback;
 
 class BenchmarkClient {
  public:
-  BenchmarkClient(Transport &transport, int numRequests,
+  BenchmarkClient(Transport &transport, uint32_t clientId, int numRequests,
       int expDuration, uint64_t delay, int warmupSec, int cooldownSec,
       int tputInterval, const std::string &latencyFilename = "");
   virtual ~BenchmarkClient();
@@ -63,6 +63,8 @@ class BenchmarkClient {
   inline const Stats &GetStats() const { return stats; }
  protected:
   virtual std::string GetLastOp() const = 0;
+
+  inline std::mt19937 &GetRand() { return rand; }
   
   Stats stats;
   Transport &transport;
@@ -72,6 +74,7 @@ class BenchmarkClient {
   void CooldownDone();
   void TimeInterval();
 
+  std::mt19937 rand;
   int numRequests;
   int expDuration;
   uint64_t delay;

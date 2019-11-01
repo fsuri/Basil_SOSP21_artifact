@@ -6,10 +6,10 @@
 #include <thread>
 
 SyncTransactionBenchClient::SyncTransactionBenchClient(SyncClient &client,
-    Transport &transport, int numRequests, int expDuration, uint64_t delay,
+    Transport &transport, uint32_t clientId, int numRequests, int expDuration, uint64_t delay,
     int warmupSec, int cooldownSec, int tputInterval, uint32_t abortBackoff,
     bool retryAborted, const std::string &latencyFilename)
-    : BenchmarkClient(transport, numRequests, expDuration, delay,
+    : BenchmarkClient(transport, clientId, numRequests, expDuration, delay,
         warmupSec, cooldownSec, tputInterval, latencyFilename), client(client),
     abortBackoff(abortBackoff), retryAborted(retryAborted),
     currTxn(nullptr), currTxnAttempts(0UL) {

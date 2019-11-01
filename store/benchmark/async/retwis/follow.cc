@@ -2,8 +2,8 @@
 
 namespace retwis {
 
-Follow::Follow(KeySelector *keySelector) :
-    RetwisTransaction(keySelector, 2) {
+Follow::Follow(KeySelector *keySelector, std::mt19937 &rand) :
+    RetwisTransaction(keySelector, 2, rand) {
 }
 
 Follow::~Follow() {

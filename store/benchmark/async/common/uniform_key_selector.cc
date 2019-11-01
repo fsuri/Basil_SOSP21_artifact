@@ -9,6 +9,6 @@ UniformKeySelector::UniformKeySelector(const std::vector<std::string> &keys)
 UniformKeySelector::~UniformKeySelector() {
 }
 
-int UniformKeySelector::GetKey() {
-  return std::rand() % GetNumKeys();
+int UniformKeySelector::GetKey(std::mt19937 &rand) {
+  return rand() % GetNumKeys();
 }

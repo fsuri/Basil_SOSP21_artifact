@@ -9,9 +9,9 @@
 class AsyncTransactionBenchClient : public BenchmarkClient {
 public:
     AsyncTransactionBenchClient(AsyncClient &client, Transport &transport,
-                                int numRequests, int expDuration, uint64_t delay, int warmupSec,
-                                int cooldownSec, int tputInterval, uint32_t abortBackoff,
-                                bool retryAborted, const std::string &latencyFilename = "");
+        uint32_t clientId, int numRequests, int expDuration, uint64_t delay,
+        int warmupSec, int cooldownSec, int tputInterval, uint32_t abortBackoff,
+        bool retryAborted, const std::string &latencyFilename = "");
 
     virtual ~AsyncTransactionBenchClient();
 

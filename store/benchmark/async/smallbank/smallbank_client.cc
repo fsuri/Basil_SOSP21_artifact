@@ -15,11 +15,13 @@
 
 #include <vector>
 #include <algorithm>
+#include <random>
 
 namespace smallbank {
 
-    SmallbankClient::SmallbankClient(SyncClient &client, Transport &transport, int numRequests, int expDuration,
-                                     uint64_t delay, int warmupSec, int cooldownSec, int tputInterval,
+    SmallbankClient::SmallbankClient(SyncClient &client, Transport &transport,
+        uint32_t clientId, int numRequests, int expDuration, uint64_t delay,
+        int warmupSec, int cooldownSec, int tputInterval,
                                      uint32_t abortBackoff, bool retryAborted,
                                      const uint32_t timeout,
                                      const uint32_t balance_ratio, const uint32_t deposit_checking_ratio,
@@ -27,7 +29,7 @@ namespace smallbank {
                                      const uint32_t num_hotspot_keys, const uint32_t num_non_hotspot_keys,
                                      const std::string &customer_name_file_path,
                                      const std::string &latencyFilename) : SyncTransactionBenchClient(client,
-                                                                                                      transport, numRequests, expDuration,
+                                                                                                      transport, clientId, numRequests, expDuration,
                                                                                                       delay, warmupSec, cooldownSec, tputInterval, abortBackoff,
                                                                                                       retryAborted, latencyFilename), timeout_(timeout),
                                                                            balance_ratio_(balance_ratio),
@@ -54,7 +56,8 @@ namespace smallbank {
     }
 
     SyncTransaction *SmallbankClient::GetNextTransaction() {
-        int ttype = rand() % 100;
+      std::uniform_int_distribution<int> dist(0, 99);
+        int ttype = dist(GetRand());
         int balanceThreshold = balance_ratio_;
         int depositThreshold = balanceThreshold + deposit_checking_ratio_;
         int transactThreshold = depositThreshold + transact_saving_ratio_;

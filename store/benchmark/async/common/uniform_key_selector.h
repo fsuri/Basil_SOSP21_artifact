@@ -8,7 +8,7 @@ class UniformKeySelector : public KeySelector {
   UniformKeySelector(const std::vector<std::string> &keys);
   virtual ~UniformKeySelector();
 
-  virtual int GetKey();
+  virtual int GetKey(std::mt19937 &rand) override;
 
 };
 

@@ -9,7 +9,7 @@ namespace retwis {
 
 class Follow : public RetwisTransaction {
  public:
-  Follow(KeySelector *keySelector);
+  Follow(KeySelector *keySelector, std::mt19937 &rand);
   virtual ~Follow();
 
  protected:

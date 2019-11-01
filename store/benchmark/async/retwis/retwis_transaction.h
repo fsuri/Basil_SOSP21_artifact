@@ -7,11 +7,13 @@
 #include "store/common/frontend/client.h"
 #include "store/benchmark/async/common/key_selector.h"
 
+#include <random>
+
 namespace retwis {
 
 class RetwisTransaction : public AsyncTransaction {
  public:
-  RetwisTransaction(KeySelector *keySelector, int numKeys);
+  RetwisTransaction(KeySelector *keySelector, int numKeys, std::mt19937 &rand);
   virtual ~RetwisTransaction();
 
  protected:

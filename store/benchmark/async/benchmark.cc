@@ -408,6 +408,7 @@ int main(int argc, char **argv) {
       case BENCH_RETWIS:
         UW_ASSERT(asyncClient != nullptr);
         bench = new retwis::RetwisClient(keySelector, *asyncClient, transport,
+            (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
             FLAGS_abort_backoff, FLAGS_retry_aborted);
@@ -415,6 +416,7 @@ int main(int argc, char **argv) {
       case BENCH_TPCC:
         UW_ASSERT(asyncClient != nullptr);
         bench = new tpcc::TPCCClient(*asyncClient, transport,
+            (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
             FLAGS_tpcc_num_warehouses, FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id,
@@ -427,6 +429,7 @@ int main(int argc, char **argv) {
       case BENCH_SMALLBANK_SYNC:
         UW_ASSERT(syncClient != nullptr);
         bench = new smallbank::SmallbankClient(*syncClient, transport,
+            (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
             FLAGS_abort_backoff, FLAGS_retry_aborted,
@@ -438,7 +441,7 @@ int main(int argc, char **argv) {
       case BENCH_RW:
         UW_ASSERT(asyncClient != nullptr);
         bench = new rw::RWClient(keySelector, FLAGS_num_keys_txn,
-            *asyncClient, transport,
+            *asyncClient, transport, (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
             FLAGS_abort_backoff, FLAGS_retry_aborted);
@@ -450,6 +453,7 @@ int main(int argc, char **argv) {
     switch (benchMode) {
       case BENCH_RETWIS:
       case BENCH_TPCC:
+      case BENCH_RW:
         // async benchmarks
 	      transport.Timer(0, [bench, bdcb]() { bench->Start(bdcb); });
         break;
