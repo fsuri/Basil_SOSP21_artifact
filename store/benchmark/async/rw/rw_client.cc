@@ -11,7 +11,7 @@ RWClient::RWClient(KeySelector *keySelector, uint64_t numKeys,
     bool retryAborted, const std::string &latencyFilename)
     : AsyncTransactionBenchClient(client, transport, clientId, numRequests, expDuration,
         delay, warmupSec, cooldownSec, tputInterval, abortBackoff,
-        retryAborted, latencyFilename), keySelector(keySelector) {
+        retryAborted, latencyFilename), keySelector(keySelector), numKeys(numKeys) {
 }
 
 RWClient::~RWClient() {

@@ -262,7 +262,7 @@ int main(int argc, char **argv) {
 
   // parse retwis settings
   std::vector<std::string> keys;
-  if (benchMode == BENCH_RETWIS) {
+  if (benchMode == BENCH_RETWIS || benchMode == BENCH_RW) {
     if (FLAGS_keys_path.empty()) {
       if (FLAGS_num_keys > 0) {
         for (size_t i = 0; i < FLAGS_num_keys; ++i) {

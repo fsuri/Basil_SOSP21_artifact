@@ -412,7 +412,8 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
 void
 TCPTransport::Run()
 {
-    event_base_dispatch(libeventBase);
+    int ret = event_base_dispatch(libeventBase);
+    Debug("event_base_dispatch returned %d.", ret);
 }
 
 void
