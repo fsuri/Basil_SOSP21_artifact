@@ -1,6 +1,8 @@
 #ifndef MORTY_COMMON_H
 #define MORTY_COMMON_H
 
+#include <iostream>
+
 #include "store/mortystore/morty-proto.pb.h"
 
 bool operator==(const mortystore::proto::Branch &b1,
@@ -19,7 +21,7 @@ struct BranchComparer {
   bool operator() (const proto::Branch &b1, const proto::Branch &b2) const;
 };
 
-void PrintBranch(const proto::Branch &branch);
+void PrintBranch(const proto::Branch &branch, std::ostream &os);
 
 bool CommitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq);
 

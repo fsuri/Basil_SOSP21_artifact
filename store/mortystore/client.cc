@@ -1,5 +1,7 @@
 #include "store/mortystore/client.h"
 
+#include <sstream>
+
 #include "store/mortystore/common.h"
 
 namespace mortystore {
@@ -53,8 +55,13 @@ void Client::ExecuteNextOperation(PendingRequest *req, proto::Branch &branch) {
   ClientBranch clientBranch = GetClientBranch(branch);
   Operation op = req->txn->GetNextOperation(clientBranch.opCount,
       clientBranch.readValues);
-  std::cerr << "Executing next: ";
-  PrintBranch(branch);
+
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Executing next: ";
+    PrintBranch(branch, ss);
+    Debug("%s", ss.str().c_str());
+  }
 
   switch (op.type) {
     case GET: {
@@ -201,9 +208,12 @@ void Client::Get(proto::Branch &branch, const std::string &key) {
   *msg.mutable_branch() = branch;
   msg.set_key(key);
 
-  std::cerr << "Sending: ";
-  PrintBranch(branch);
-
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Sending: ";
+    PrintBranch(branch, ss);
+    Debug("%s", ss.str().c_str());
+  }
 
   sclients[i]->Read(msg);
 }
@@ -226,8 +236,12 @@ void Client::Put(proto::Branch &branch, const std::string &key,
   msg.set_key(key);
   msg.set_value(value);
 
-  std::cerr << "Sending: ";
-  PrintBranch(branch);
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Sending: ";
+    PrintBranch(branch, ss);
+    Debug("%s", ss.str().c_str());
+  }
 
   sclients[i]->Write(msg);
 }

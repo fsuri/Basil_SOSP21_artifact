@@ -24,27 +24,27 @@ bool BranchComparer::operator() (const proto::Branch &b1, const proto::Branch &b
   return b1 == b2;
 }
 
-void PrintBranch(const proto::Branch &branch) {
+void PrintBranch(const proto::Branch &branch, std::ostream &os) {
   for (const proto::Transaction &b : branch.seq()) {
-    std::cerr << b.id() << "[";
+    os << b.id() << "[";
     for (const proto::Operation &o : b.ops()) {
       if (o.type() == proto::OperationType::READ) {
-        std::cerr << "r(" << o.key() << "),";
+        os << "r(" << o.key() << "),";
       } else {
-        std::cerr << "w(" << o.key() << "),";
+        os << "w(" << o.key() << "),";
       }
     }
-    std::cerr << "],";
+    os << "],";
   }
-  std::cerr << branch.txn().id() << "[";
+  os << branch.txn().id() << "[";
   for (const proto::Operation &o : branch.txn().ops()) {
     if (o.type() == proto::OperationType::READ) {
-      std::cerr << "r(" << o.key() << "),";
+      os << "r(" << o.key() << "),";
     } else {
-      std::cerr << "w(" << o.key() << "),";
+      os << "w(" << o.key() << "),";
     }
   }
-  std::cerr << "]" << std::endl;
+  os << "]" << std::endl;
 }
 
 bool CommitCompatible(const proto::Branch &branch,

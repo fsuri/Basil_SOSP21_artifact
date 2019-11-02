@@ -1,5 +1,8 @@
 #include "store/mortystore/branch_generator.h"
 
+#include <sstream>
+
+#include "lib/message.h"
 #include "store/mortystore/common.h"
 
 #include <google/protobuf/util/message_differencer.h>
@@ -60,20 +63,23 @@ void BranchGenerator::GenerateBranches(const proto::Branch &init,
    txns_list.push_back(kv.first); 
   }
 
-  std::cerr << "Committed: ";
-  for (const auto &t : committed) {
-    std::cerr << t.id() << "[";
-    for (const auto &o : t.ops()) {
-      if (o.type() == proto::OperationType::READ) {
-        std::cerr << "r";
-      } else {
-        std::cerr << "w";
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Committed: ";
+    for (const auto &t : committed) {
+      ss << t.id() << "[";
+      for (const auto &o : t.ops()) {
+        if (o.type() == proto::OperationType::READ) {
+          ss << "r";
+        } else {
+          ss << "w";
+        }
+        ss << "(" << o.key() << "),";
       }
-      std::cerr << "(" << o.key() << "),";
+      ss << "],";
     }
-    std::cerr << "],";
   }
-  std::cerr << std::endl;
+
   GenerateBranchesSubsets(pending_branches, txns_list, committed, new_branches);
 }
 
@@ -102,19 +108,22 @@ void BranchGenerator::GenerateBranchesPermutations(
   std::vector<uint64_t> txns_sorted(txns);
   std::sort(txns_sorted.begin(), txns_sorted.end());
   do {
-    std::cerr << "Permutation: [";
-    for (size_t i = 0; i < txns_sorted.size(); ++i) {
-      std::cerr << txns_sorted[i];
-      if (i < txns_sorted.size() - 1) {
-        std::cerr << ", ";
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Permutation: [";
+      for (size_t i = 0; i < txns_sorted.size(); ++i) {
+        ss << txns_sorted[i];
+        if (i < txns_sorted.size() - 1) {
+          ss << ", ";
+        }
       }
+      ss << "]" << std::endl;
     }
-    std::cerr << "]" << std::endl;
     std::vector<std::vector<proto::Transaction>> new_seqs;
     new_seqs.push_back(committed);
 
     for (size_t i = 0; i < txns_sorted.size() - 1; ++i) {
-      std::cerr << i << std::endl;
       std::vector<std::vector<proto::Transaction>> new_seqs1;
       for (size_t j = 0; j < new_seqs.size(); ++j) {
         auto itr = pending_branches.find(txns_sorted[i]);
@@ -130,12 +139,15 @@ void BranchGenerator::GenerateBranchesPermutations(
       }
       new_seqs.insert(new_seqs.end(), new_seqs1.begin(), new_seqs1.end());
     }
-    std::cerr << txns_sorted.size() - 1 << std::endl;
     auto itr = pending_branches.find(txns_sorted[txns_sorted.size() - 1]);
     if (itr != pending_branches.end()) {
       for (const proto::Branch &branch : itr->second) {
-        std::cerr << "Potential: ";
-        PrintBranch(branch);
+        if (Message_DebugEnabled(__FILE__)) {
+          std::stringstream ss;
+          ss << "Potential: ";
+          PrintBranch(branch, ss);
+          Debug("%s", ss.str().c_str());
+        }
         for (const std::vector<proto::Transaction> &seq : new_seqs) {
           if (branch.txn().ops().size() == 1 || CommitCompatible(branch, seq)) {
             proto::Branch new_branch(branch); 
@@ -144,8 +156,12 @@ void BranchGenerator::GenerateBranchesPermutations(
               proto::Transaction *tseq = new_branch.add_seq();
               *tseq = t;
             }
-            std::cerr << "Generated branch: ";
-            PrintBranch(new_branch);
+            if (Message_DebugEnabled(__FILE__)) {
+              std::stringstream ss;
+              ss << "Generated branch: ";
+              PrintBranch(new_branch, ss);
+              Debug("%s", ss.str().c_str());
+            }
             if (std::find_if(already_generated.begin(), already_generated.end(),
                   [&](const proto::Branch &other) {
                     return google::protobuf::util::MessageDifferencer::Equals(

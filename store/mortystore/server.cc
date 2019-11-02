@@ -1,5 +1,7 @@
 #include "store/mortystore/server.h"
 
+#include <sstream>
+
 #include "store/mortystore/common.h"
 
 #include <google/protobuf/util/message_differencer.h>
@@ -69,8 +71,12 @@ void Server::HandleWrite(const TransportAddress &remote, const proto::Write &msg
     return;
   }
 
-  std::cerr << "Received write: ";
-  PrintBranch(msg.branch());
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Received write: ";
+    PrintBranch(msg.branch(), ss);
+    Debug("%s", ss.str().c_str());
+  }
 
   txn_coordinators[msg.branch().txn().id()] = &remote;
 
