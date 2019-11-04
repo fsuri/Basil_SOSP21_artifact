@@ -73,7 +73,7 @@ void Client::ExecuteNextOperation(PendingRequest *req, proto::Branch &branch) {
       break;
     }
     case COMMIT: {
-      Commit(branch);
+      Commit(req, branch);
       break;
     }
     case ABORT: {
@@ -153,8 +153,8 @@ void Client::HandlePrepareOK(const TransportAddress &remote,
     return;
   }
 
-  itr->second->prepareOKs[msg.branch().id()]++;
-  if (itr->second->prepareOKs[msg.branch().id()] == msg.branch().shards().size()) {
+  itr->second->prepareOKs[msg.branch()]++;
+  if (itr->second->prepareOKs[msg.branch()] == msg.branch().shards().size()) {
     proto::Commit commit;
     *commit.mutable_branch() = msg.branch();
     for (auto shard : msg.branch().shards()) {
@@ -165,9 +165,13 @@ void Client::HandlePrepareOK(const TransportAddress &remote,
     pendingReqs.erase(msg.branch().txn().id());
     req->ecb(SUCCESS, clientBranch.readValues);
     delete req;
-  } else if (itr->second->prepareOKs[msg.branch().id()] +
-      itr->second->prepareKOes[msg.branch().id()].size() ==
+  } else if (itr->second->prepareOKs[msg.branch()] +
+      itr->second->prepareKOes[msg.branch()].size() ==
       msg.branch().shards().size()) {
+    itr->second->prepareResponses++;
+    if (itr->second->prepareResponses == itr->second->sentPrepares) {
+      Debug("Received responses for all outstanding prepares.");
+    }
   }
 
 }
@@ -183,11 +187,17 @@ void Client::HandlePrepareKO(const TransportAddress &remote,
     return;
   }
 
-  itr->second->prepareKOes[msg.branch().id()].push_back(msg);
-  if (itr->second->prepareOKs[msg.branch().id()] +
-      itr->second->prepareKOes[msg.branch().id()].size() ==
+  itr->second->prepareKOes[msg.branch()].push_back(msg);
+  if (itr->second->prepareOKs[msg.branch()] +
+      itr->second->prepareKOes[msg.branch()].size() ==
       msg.branch().shards().size()) {
-    // TODO deadlock resolution
+    itr->second->prepareResponses++;
+    if (itr->second->prepareResponses == itr->second->sentPrepares) {
+      Debug("Received responses for all outstanding prepares (%lu).", itr->second->sentPrepares);
+    } else {
+      Debug("Prepare failed. Waiting on %lu other prepare responses (out of %lu).",
+          itr->second->sentPrepares - itr->second->prepareResponses, itr->second->sentPrepares);
+    }
   }
 }
 
@@ -246,11 +256,12 @@ void Client::Put(proto::Branch &branch, const std::string &key,
   sclients[i]->Write(msg);
 }
 
-void Client::Commit(const proto::Branch &branch) {
+void Client::Commit(PendingRequest *req, const proto::Branch &branch) {
   proto::Prepare prepare;
   *prepare.mutable_branch() = branch;
   prepare.mutable_branch()->set_id(prepareBranchIds);
   prepareBranchIds++;
+  req->sentPrepares++;
   for (auto shard : branch.shards()) {
     sclients[shard]->Prepare(prepare);
   }

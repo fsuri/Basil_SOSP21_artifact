@@ -23,6 +23,8 @@ struct BranchComparer {
 
 void PrintBranch(const proto::Branch &branch, std::ostream &os);
 
+void PrintTransactionList(const std::vector<proto::Transaction> &txns, std::ostream &os);
+
 bool CommitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq);
 
 bool WaitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq);

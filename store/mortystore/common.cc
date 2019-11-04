@@ -24,6 +24,22 @@ bool BranchComparer::operator() (const proto::Branch &b1, const proto::Branch &b
   return b1 == b2;
 }
 
+void PrintTransactionList(const std::vector<proto::Transaction> &txns,
+    std::ostream &os) {
+  for (const auto &t : txns) {
+    os << t.id() << "[";
+    for (const auto &o : t.ops()) {
+      if (o.type() == proto::OperationType::READ) {
+        os << "r";
+      } else {
+        os << "w";
+      }
+      os << "(" << o.key() << "),";
+    }
+    os << "],";
+  }
+}
+
 void PrintBranch(const proto::Branch &branch, std::ostream &os) {
   for (const proto::Transaction &b : branch.seq()) {
     os << b.id() << "[";

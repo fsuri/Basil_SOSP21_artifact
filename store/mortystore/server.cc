@@ -150,6 +150,7 @@ void Server::HandleAbort(const TransportAddress &remote, const proto::Abort &msg
 bool Server::CheckBranch(const TransportAddress &addr, const proto::Branch &branch) {
   if (prepared_txn_ids.find(branch.txn().id()) != prepared_txn_ids.end()) {
     // cannot prepare more than one branch for the same txn
+    Debug("Transaction %lu already prepared on different branch.", branch.txn().id());
     proto::PrepareKO reply;
     *reply.mutable_branch() = branch;
     transport->SendMessage(this, addr, reply);
@@ -163,11 +164,30 @@ bool Server::CheckBranch(const TransportAddress &addr, const proto::Branch &bran
     transport->SendMessage(this, addr, reply);
     return true;
   } else if (!WaitCompatible(branch, committed)) {
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Branch not compatible with committed." << std::endl;
+      ss << "Branch: " << std::endl;
+      PrintBranch(branch, ss);
+      ss << std::endl << "Committed: " << std::endl;
+      PrintTransactionList(committed, ss);
+      Debug("%s", ss.str().c_str());
+    }
     proto::PrepareKO reply;
     *reply.mutable_branch() = branch;
     transport->SendMessage(this, addr, reply);
     return true;
   } else if (!WaitCompatible(branch, prepared)) {
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Branch not compatible with prepared." << std::endl;
+      ss << "Branch: " << std::endl;
+      PrintBranch(branch, ss);
+      ss << std::endl << "Prepared: " << std::endl;
+      PrintTransactionList(prepared, ss);
+      Debug("%s", ss.str().c_str());
+    }
+
     proto::PrepareKO reply;
     *reply.mutable_branch() = branch;
     transport->SendMessage(this, addr, reply);

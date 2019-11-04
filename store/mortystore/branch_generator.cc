@@ -66,18 +66,8 @@ void BranchGenerator::GenerateBranches(const proto::Branch &init,
   if (Message_DebugEnabled(__FILE__)) {
     std::stringstream ss;
     ss << "Committed: ";
-    for (const auto &t : committed) {
-      ss << t.id() << "[";
-      for (const auto &o : t.ops()) {
-        if (o.type() == proto::OperationType::READ) {
-          ss << "r";
-        } else {
-          ss << "w";
-        }
-        ss << "(" << o.key() << "),";
-      }
-      ss << "],";
-    }
+    PrintTransactionList(committed, ss);
+    Debug("%s", ss.str().c_str());
   }
 
   GenerateBranchesSubsets(pending_branches, txns_list, committed, new_branches);

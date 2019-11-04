@@ -13,6 +13,7 @@
 #include "store/mortystore/morty-proto.pb.h"
 #include "store/common/frontend/async_client.h"
 #include "store/mortystore/shardclient.h"
+#include "store/mortystore/common.h"
 
 #include <thread>
 #include <set>
@@ -34,8 +35,9 @@ class Client : public ::AsyncClient {
   
  private:
   struct PendingRequest {
-    PendingRequest(uint64_t id) : id(id), outstandingPrepares(0), commitTries(0),
-        maxRepliedTs(0UL), prepareStatus(REPLY_OK), prepareTimestamp(nullptr) {
+    PendingRequest(uint64_t id) : id(id), sentPrepares(0UL),
+        prepareResponses(0UL), commitTries(0), maxRepliedTs(0UL),
+        prepareStatus(REPLY_OK), prepareTimestamp(nullptr) {
     }
 
     ~PendingRequest() {
@@ -50,14 +52,15 @@ class Client : public ::AsyncClient {
     commit_callback ccb;
     commit_timeout_callback ctcb;
     uint64_t id;
-    int outstandingPrepares;
+    uint64_t sentPrepares;
+    uint64_t prepareResponses;
     int commitTries;
     uint64_t maxRepliedTs;
     int prepareStatus;
     Timestamp *prepareTimestamp;
     bool callbackInvoked;
-    std::unordered_map<uint64_t, uint64_t> prepareOKs; 
-    std::unordered_map<uint64_t, std::vector<proto::PrepareKO>> prepareKOes;
+    std::unordered_map<proto::Branch, uint64_t, BranchHasher, BranchComparer> prepareOKs; 
+    std::unordered_map<proto::Branch, std::vector<proto::PrepareKO>, BranchHasher, BranchComparer> prepareKOes;
   };
 
   void ExecuteNextOperation(PendingRequest *req, proto::Branch &branch);
@@ -77,7 +80,7 @@ class Client : public ::AsyncClient {
   void Get(proto::Branch &branch, const std::string &key);
   void Put(proto::Branch &branch, const std::string &key,
       const std::string &value);
-  void Commit(const proto::Branch &branch);
+  void Commit(PendingRequest *req, const proto::Branch &branch);
   void Abort(const proto::Branch &branch);
 
   // Unique ID for this client.
