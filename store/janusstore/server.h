@@ -80,9 +80,8 @@ public:
     std::vector<uint64_t>* BuildDepList(Transaction &txn, uint64_t ballot);
 
 
-    // TODO figure out what T.abandon and T.result are
+    // TODO figure out what T.abandon is
     void _HandleCommit(uint64_t txn_id,
-                       std::vector<uint64_t> deps,
                        const TransportAddress &remote,
                        replication::ir::proto::UnloggedReplyMessage *unlogged_reply
    );

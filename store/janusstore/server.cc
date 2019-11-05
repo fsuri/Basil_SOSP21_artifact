@@ -268,17 +268,18 @@ void Server::HandleCommit(const TransportAddress &remote,
     for (int i = 0; i < received_dep.txnid_size(); i++) {
         deps.push_back(received_dep.txnid(i));
     }
+    dep_map[txn_id] = deps;
 
     Debug("gonna handle commit for %llu, message: %s", txn_id, c_msg.DebugString().c_str());
-    _HandleCommit(txn_id, deps, remote, unlogged_reply);
+    _HandleCommit(txn_id, remote, unlogged_reply);
 }
 
 void Server::_HandleCommit(uint64_t txn_id,
-                           vector<uint64_t> deps,
                            const TransportAddress &remote,
                            replication::ir::proto::UnloggedReplyMessage *unlogged_reply) {
     Transaction *txn = &id_txn_map[txn_id];
-    dep_map[txn_id] = deps;
+    vector<uint64_t> deps = dep_map[txn_id];
+
     txn->setTransactionStatus(TransactionMessage::COMMIT);
     Debug("Set txn id %llu to COMMIT", txn_id);
     // check if this unblocks others, and rerun HandleCommit for those
@@ -286,7 +287,7 @@ void Server::_HandleCommit(uint64_t txn_id,
         for(auto blocked_id_pair : blocking_ids[txn_id]) {
             uint64_t blocked_id = blocked_id_pair.second;
             Debug("Found blocked id %llu for txn id %llu", blocked_id, txn_id);
-            _HandleCommit(blocked_id, dep_map[blocked_id], *blocked_id_pair.first, unlogged_reply);
+            _HandleCommit(blocked_id, *blocked_id_pair.first, unlogged_reply);
         }
         blocking_ids.erase(txn_id);
     }

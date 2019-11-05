@@ -693,7 +693,57 @@ TEST_F(JanusServerTest, HandleInquireBlockWhenNotCommit)
 /*************************************************************************
     _HandleCommit
 *************************************************************************/
+TEST_F(JanusServerTest, HandleCommitBlockedIds)
+{
 
+}
+
+TEST_F(JanusServerTest, HandleCommitInquireIds)
+{
+
+}
+
+TEST_F(JanusServerTest, HandleCommitUnblockIds)
+{
+
+}
+
+TEST_F(JanusServerTest, HandleCommitExecutes)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->addWriteSet("key2", "val2");
+    server->BuildDepList(txn1, 0);
+
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+
+    server->_HandleCommit(1234, *addr, &unlogged_reply);
+
+    janusstore::proto::Reply reply;
+    reply.ParseFromString(unlogged_reply.reply());
+
+    EXPECT_EQ(reply.op(), janusstore::proto::Reply::COMMIT_OK);
+    janusstore::proto::CommitOKMessage commit_ok = reply.commit_ok();
+
+    EXPECT_EQ(commit_ok.pairs(0).key(), "key2");
+    EXPECT_EQ(commit_ok.pairs(0).value(), "val2");
+
+}
 /*************************************************************************
     _ExecutePhase
 *************************************************************************/
+TEST_F(JanusServerTest, ExecutePhaseExecutesSingleTxn)
+{
+
+}
+
+TEST_F(JanusServerTest, ExecutePhaseExecutesMultTxn)
+{
+
+}
+
+TEST_F(JanusServerTest, ExecutePhaseExecutesCircularDep)
+{
+
+}
