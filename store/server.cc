@@ -165,7 +165,7 @@ DEFINE_string(keys_path, "", "path to file containing keys in the system");
 DEFINE_uint64(num_keys, 0, "number of keys to generate");
 DEFINE_string(data_file_path, "", "path to file containing key-value pairs to be loaded");
 
-::Server *server;
+::Server *server = nullptr;
 TransportReceiver *replica = nullptr;
 
 void Cleanup(int signal);

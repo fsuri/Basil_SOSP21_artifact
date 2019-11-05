@@ -2,6 +2,7 @@
 #define _MORTY_CLIENT_H_
 
 #include "lib/assert.h"
+#include "lib/latency.h"
 #include "lib/message.h"
 #include "lib/configuration.h"
 #include "lib/udptransport.h"
@@ -103,6 +104,7 @@ class Client : public ::AsyncClient {
   std::vector<ShardClient *> sclients;
   uint64_t prepareBranchIds;
   transport::Configuration *config;
+  Latency_t rwSendLatency;
 
 };
 

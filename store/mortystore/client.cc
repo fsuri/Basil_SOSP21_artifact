@@ -27,6 +27,8 @@ Client::Client(const std::string configPath, uint64_t client_id, int nShards, in
   }
 
   Debug("Morty client [%lu] created! %lu", client_id, nshards);
+
+  _Latency_Init(&rwSendLatency, "rw_send");
 }
 
 Client::~Client() {
@@ -34,6 +36,7 @@ Client::~Client() {
     delete sclient;
   }
   delete config;
+  Latency_Dump(&rwSendLatency);
 }
 
 void Client::Execute(AsyncTransaction *txn, execute_callback ecb) {
@@ -225,7 +228,9 @@ void Client::Get(proto::Branch &branch, const std::string &key) {
     Debug("%s", ss.str().c_str());
   }
 
+  Latency_Start(&rwSendLatency);
   sclients[i]->Read(msg);
+  Latency_End(&rwSendLatency);
 }
 
 void Client::Put(proto::Branch &branch, const std::string &key,
@@ -253,7 +258,9 @@ void Client::Put(proto::Branch &branch, const std::string &key,
     Debug("%s", ss.str().c_str());
   }
 
+  Latency_Start(&rwSendLatency);
   sclients[i]->Write(msg);
+  Latency_End(&rwSendLatency);
 }
 
 void Client::Commit(PendingRequest *req, const proto::Branch &branch) {

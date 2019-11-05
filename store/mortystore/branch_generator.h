@@ -1,6 +1,7 @@
 #ifndef BRANCH_GENERATOR_H
 #define BRANCH_GENERATOR_H
 
+#include "lib/latency.h"
 #include "store/mortystore/common.h"
 #include "store/mortystore/morty-proto.pb.h"
 
@@ -35,6 +36,7 @@ class BranchGenerator {
   std::unordered_map<std::string, std::vector<proto::Branch>> pending_reads;
   std::unordered_map<std::string, std::vector<proto::Branch>> pending_writes;
   std::vector<proto::Branch> already_generated;
+  Latency_t generateLatency;
 };
 
 } /* mortystore */

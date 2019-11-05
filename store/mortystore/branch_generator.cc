@@ -10,9 +10,11 @@
 namespace mortystore {
 
 BranchGenerator::BranchGenerator() {
+  _Latency_Init(&generateLatency, "branch_generation");
 }
 
 BranchGenerator::~BranchGenerator() {
+  Latency_Dump(&generateLatency);
 }
 
 void BranchGenerator::AddPendingWrite(const std::string &key,
@@ -42,6 +44,8 @@ void BranchGenerator::GenerateBranches(const proto::Branch &init,
     proto::OperationType type, const std::string &key,
     const std::vector<proto::Transaction> &committed,
     std::vector<proto::Branch> &new_branches) {
+  Latency_Start(&generateLatency);
+
   std::vector<proto::Branch> generated_branches;
   std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> pending_branches;
   pending_branches[init.txn().id()].insert(init);
@@ -71,6 +75,8 @@ void BranchGenerator::GenerateBranches(const proto::Branch &init,
   }
 
   GenerateBranchesSubsets(pending_branches, txns_list, committed, new_branches);
+  
+  Latency_End(&generateLatency);
 }
 
 void BranchGenerator::GenerateBranchesSubsets(
