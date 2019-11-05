@@ -37,7 +37,8 @@ public:
                       replication::ir::proto::UnloggedReplyMessage *unlogged_reply);
 
     void HandleInquire(const TransportAddress &remote,
-                      const proto::InquireMessage i_msg);
+                      const proto::InquireMessage i_msg,
+                      proto::Reply *reply);
     void HandleInquireReply(const proto::InquireOKMessage i_ok_msg);
 
     Transport *transport;

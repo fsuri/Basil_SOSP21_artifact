@@ -51,7 +51,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
                 break;
             }
             case Request::INQUIRE: {
-                HandleInquire(remote, request.inquire());
+                HandleInquire(remote, request.inquire(), &reply);
                 break;
             }
             default: {
@@ -294,7 +294,8 @@ void Server::_HandleCommit(uint64_t txn_id,
     // once txn becomes committing, see if you have to send inquire to any servers
     if (inquired_ids.find(txn_id) != inquired_ids.end()) {
         for(auto pair : inquired_ids[txn_id]) {
-            HandleInquire(*pair.first, pair.second);
+            Reply reply;
+            HandleInquire(*pair.first, pair.second, &reply);
         }
         inquired_ids.erase(txn_id);
     }
@@ -334,7 +335,8 @@ void Server::_HandleCommit(uint64_t txn_id,
 }
 
 void Server::HandleInquire(const TransportAddress &remote,
-                           const proto::InquireMessage i_msg) {
+                           const proto::InquireMessage i_msg,
+                           Reply *reply) {
 
     uint64_t txn_id = i_msg.txnid();
 
@@ -344,18 +346,19 @@ void Server::HandleInquire(const TransportAddress &remote,
     // after txn_id is in the committing stage, return the deps list
     if (txn.getTransactionStatus() == TransactionMessage::COMMIT) {
         vector<uint64_t> deps = this->dep_map[txn_id];
-        Reply reply;
         InquireOKMessage payload;
         DependencyList dep_list;
 
-        reply.set_op(Reply::INQUIRE_OK);
-        reply.mutable_inquire_ok()->set_txnid(txn_id);
+        reply->set_op(Reply::INQUIRE_OK);
+
+        Debug("%i", reply->op());
+        reply->mutable_inquire_ok()->set_txnid(txn_id);
 
         for (auto id : deps) {
-            reply.mutable_inquire_ok()->mutable_dep()->add_txnid(id);
+            reply->mutable_inquire_ok()->mutable_dep()->add_txnid(id);
         }
 
-        transport->SendMessage(this, remote, reply);
+        transport->SendMessage(this, remote, *reply);
     } else {
         if (inquired_ids.find(txn_id) != inquired_ids.end()) {
             inquired_ids[txn_id].push_back(make_pair(&remote, i_msg));
@@ -367,18 +370,20 @@ void Server::HandleInquire(const TransportAddress &remote,
 }
 
 void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
-    // TODO: handle redundant requests
-
     uint64_t txn_id = i_ok_msg.txnid();
-    vector<uint64_t> msg_deps;
-    DependencyList received_dep = i_ok_msg.dep();
-    for (int i = 0; i < received_dep.txnid_size(); i++) {
-        msg_deps.push_back(received_dep.txnid(i));
-    }
-    dep_map[txn_id] = msg_deps;
+    Transaction *txn = &id_txn_map[txn_id];
 
-    // set this txn id to committing because we received this reply
-    id_txn_map[txn_id].setTransactionStatus(TransactionMessage::COMMIT);
+    if (txn->getTransactionStatus() != TransactionMessage::COMMIT) {
+        vector<uint64_t> msg_deps;
+        DependencyList received_dep = i_ok_msg.dep();
+        for (int i = 0; i < received_dep.txnid_size(); i++) {
+            msg_deps.push_back(received_dep.txnid(i));
+        }
+        dep_map[txn_id] = msg_deps;
+
+        // set this txn id to committing because we received this reply
+        txn->setTransactionStatus(TransactionMessage::COMMIT);
+    }
 }
 
 void Server::_SendInquiry(uint64_t txn_id) {

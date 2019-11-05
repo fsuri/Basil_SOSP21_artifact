@@ -23,12 +23,6 @@ public:
                         const string &type, const string &data, void * meta_data) {}
 };
 
-// TestReceiver::TestReceiver() {}
-
-// void
-// TestReceiver::ReceiveMessage(const TransportAddress &src,
-//                              const string &type, const string &data) {}
-
 class JanusServerTest : public  ::testing::Test
 {
 protected:
@@ -557,6 +551,145 @@ TEST_F(JanusServerTest, HandleAcceptSendsNotCommit)
 
     a_msg.release_dep();
 }
+
+/*************************************************************************
+    HandleInquireReply
+*************************************************************************/
+
+TEST_F(JanusServerTest, HandleInquireReplyUpdates)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    vector<uint64_t> *dep1 = server->BuildDepList(*txn_ptr1, 0);
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
+    server->id_txn_map[1234] = *txn_ptr1;
+
+    janusstore::proto::InquireOKMessage i_ok_msg;
+    janusstore::proto::DependencyList dep;
+    for (auto i : *dep1) {
+        dep.add_txnid(i);
+    }
+    dep.add_txnid(1235);
+
+    i_ok_msg.set_txnid(1234);
+    i_ok_msg.set_allocated_dep(&dep);
+
+    server->HandleInquireReply(i_ok_msg);
+
+    EXPECT_EQ(
+        server->id_txn_map[1234].getTransactionStatus(),
+        janusstore::proto::TransactionMessage::COMMIT
+    );
+
+    EXPECT_EQ(
+        server->dep_map[1234].size(),
+        1
+    );
+
+    i_ok_msg.release_dep();
+}
+
+TEST_F(JanusServerTest, HandleInquireReplyIgnores)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    vector<uint64_t> *dep1 = server->BuildDepList(*txn_ptr1, 0);
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
+    server->id_txn_map[1234] = *txn_ptr1;
+
+    janusstore::proto::InquireOKMessage i_ok_msg;
+    janusstore::proto::DependencyList dep;
+    for (auto i : *dep1) {
+        dep.add_txnid(i);
+    }
+    dep.add_txnid(1235);
+
+    i_ok_msg.set_txnid(1234);
+    i_ok_msg.set_allocated_dep(&dep);
+
+    server->HandleInquireReply(i_ok_msg);
+
+    EXPECT_EQ(
+        server->id_txn_map[1234].getTransactionStatus(),
+        janusstore::proto::TransactionMessage::COMMIT
+    );
+
+    EXPECT_EQ(
+        server->dep_map[1234].size(),
+        0
+    );
+
+    i_ok_msg.release_dep();
+}
+
+/*************************************************************************
+    _HandleInquire
+*************************************************************************/
+TEST_F(JanusServerTest, HandleInquireWhenCommitting)
+{
+
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->addReadSet("key1");
+    txn_ptr1->addWriteSet("key2", "val2");
+
+    janusstore::Transaction txn2(1235);
+    janusstore::Transaction* txn_ptr2 = &txn2;
+    txn_ptr2->addReadSet("key1");
+    txn_ptr2->addWriteSet("key2", "val3");
+
+    server->id_txn_map[1234] = *txn_ptr1;
+    server->id_txn_map[1235] = *txn_ptr2;
+
+    server->BuildDepList(txn2, 0);
+    server->BuildDepList(txn1, 0); // so txn1 has 1235 as a dep
+    server->id_txn_map[1234].setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
+
+    janusstore::proto::Reply reply;
+    janusstore::proto::InquireMessage i_msg;
+    i_msg.set_txnid(1234);
+
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+    server->HandleInquire(*addr, i_msg, &reply);
+
+    EXPECT_EQ(reply.op(), janusstore::proto::Reply::INQUIRE_OK);
+
+    janusstore::proto::InquireOKMessage i_ok_msg = reply.inquire_ok();
+    EXPECT_EQ(i_ok_msg.txnid(), 1234);
+    EXPECT_EQ(i_ok_msg.dep().txnid_size(), 1);
+}
+
+TEST_F(JanusServerTest, HandleInquireBlockWhenNotCommit)
+{
+
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->addReadSet("key1");
+    txn_ptr1->addWriteSet("key2", "val2");
+
+    janusstore::Transaction txn2(1235);
+    janusstore::Transaction* txn_ptr2 = &txn2;
+    txn_ptr2->addReadSet("key1");
+    txn_ptr2->addWriteSet("key2", "val3");
+
+    server->id_txn_map[1234] = *txn_ptr1;
+    server->id_txn_map[1235] = *txn_ptr2;
+
+    server->BuildDepList(txn2, 0);
+    server->BuildDepList(txn1, 0); // so txn1 has 1235 as a dep
+
+    janusstore::proto::Reply reply;
+    janusstore::proto::InquireMessage i_msg;
+    i_msg.set_txnid(1234);
+
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+    server->HandleInquire(*addr, i_msg, &reply);
+
+    EXPECT_EQ(server->inquired_ids[1234].size(), 1);
+    EXPECT_EQ(server->inquired_ids[1234][0].first, addr);
+    EXPECT_EQ(server->inquired_ids[1234][0].second.txnid(), i_msg.txnid());
+}
+
 /*************************************************************************
     _HandleCommit
 *************************************************************************/
