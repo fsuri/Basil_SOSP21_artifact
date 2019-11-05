@@ -217,9 +217,9 @@ TEST(BranchGenerator, OneCommittedOneConcurrentNewBranch) {
   *generated3.mutable_txn() = branch1.txn();
   *generated4.mutable_txn() = branch2.txn();
 
-  PrintBranch(generated2);
-  PrintBranch(generated3);
-  PrintBranch(generated4);
+  PrintBranch(generated2, std::cerr);
+  PrintBranch(generated3, std::cerr);
+  PrintBranch(generated4, std::cerr);
   EXPECT_TRUE(std::find_if(new_branches.begin(), new_branches.end(),
       [&](const proto::Branch &b){
         return b == generated2;
@@ -309,8 +309,8 @@ TEST(BranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
   *generated2.mutable_txn() = branch1.txn();
   *generated3.mutable_txn() = branch2.txn();
 
-  PrintBranch(generated2);
-  PrintBranch(generated3);
+  PrintBranch(generated2, std::cerr);
+  PrintBranch(generated3, std::cerr);
   EXPECT_TRUE(std::find_if(new_branches.begin(), new_branches.end(),
       [&](const proto::Branch &b){
         return b == generated2;

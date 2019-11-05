@@ -69,10 +69,10 @@ bool CommitCompatible(const proto::Branch &branch,
   std::vector<proto::Transaction> seq4(seq);
   for (const proto::Transaction &b : branch.seq()) {
     seq3.push_back(b);
-    auto itr = std::find_if(seq4.begin(), seq4.end(), [&](const proto::Transaction &other) {
+    auto itr = std::find_if(seq4.begin(), seq4.end(),
+        [&](const proto::Transaction &other) {
           return google::protobuf::util::MessageDifferencer::Equals(b, other);
         });
-
     if (itr != seq4.end()) {
       seq4.erase(itr);
     }
@@ -81,17 +81,20 @@ bool CommitCompatible(const proto::Branch &branch,
       NoConflicts(branch.txn(), seq4);
 }
 
-bool WaitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq) {
+bool WaitCompatible(const proto::Branch &branch,
+    const std::vector<proto::Transaction> &seq) {
   std::vector<proto::Transaction> seq3;
   std::vector<proto::Transaction> seq4(seq);
   for (const proto::Transaction &b : branch.seq()) {
-    auto itr = std::find_if(seq4.begin(), seq4.end(), [&](const proto::Transaction &other) {
+    auto itr = std::find_if(seq4.begin(), seq4.end(),
+        [&](const proto::Transaction &other) {
           return google::protobuf::util::MessageDifferencer::Equals(b, other);
         });
     if (itr != seq4.end()) {
       seq4.erase(itr);
     }
-    auto itr2 = std::find_if(seq.begin(), seq.end(), [&](const proto::Transaction &other) {
+    auto itr2 = std::find_if(seq.begin(), seq.end(),
+        [&](const proto::Transaction &other) {
           return google::protobuf::util::MessageDifferencer::Equals(b, other);
         });
     if (itr2 != seq.end()) {
@@ -106,35 +109,41 @@ bool WaitCompatible(const proto::Branch &branch, const std::vector<proto::Transa
 bool ValidSubsequence(const proto::Transaction &txn,
       const std::vector<proto::Transaction> &seq1,
       const std::vector<proto::Transaction> &seq2) {
-  int64_t k = -1;
-  for (size_t i = 0; i < seq1.size(); ++i) {
-    bool found = false;
-    for (size_t j =  k + 1; j < seq2.size(); ++j) {
-      if (seq1[i].id() == seq2[j].id()) {
-        proto::Transaction txn1(seq2[j]);
-        google::protobuf::RepeatedPtrField<proto::Operation> ops(txn1.ops());
-        for (int l = 0; l < seq1[i].ops().size(); ++l) {
-          const proto::Operation &op2 = seq1[i].ops()[l];
-          auto itr = std::find_if(ops.begin(), ops.end(),
-              [op2](const proto::Operation &op) {
-                  return op.type() == op2.type() && op.key() == op2.key() &&
-                      op.val() == op2.val();
-                });
-          if (itr != ops.end()) {
-            ops.erase(itr);
+  for (size_t i1 = 0; i1 < seq1.size(); ++i1) {
+    for (size_t j1 = i1 + 1; j1 < seq1.size(); ++j1) {
+      if (TransactionsConflict(seq1[i1], seq1[j1])) {
+        bool found = false;
+        for (size_t i2 = 0; i2 < seq2.size(); ++i2) {
+          for (size_t j2 = i2 + 1; j2 < seq2.size(); ++j2) {
+            if (seq1[i1].id() == seq2[i2].id() && seq1[j1].id() == seq2[j2].id()) {
+              proto::Transaction txn1(seq2[i2]);
+              google::protobuf::RepeatedPtrField<proto::Operation> ops(txn1.ops());
+              for (int l = 0; l < seq1[i1].ops().size(); ++l) {
+                const proto::Operation &op2 = seq1[i1].ops()[l];
+                auto itr = std::find_if(ops.begin(), ops.end(),
+                    [op2](const proto::Operation &op) {
+                        return op.type() == op2.type() && op.key() == op2.key() &&
+                            op.val() == op2.val();
+                      });
+                if (itr != ops.end()) {
+                  ops.erase(itr);
+                }
+              }
+              *txn1.mutable_ops() = ops;
+              if (TransactionsConflict(txn, txn1)) {
+                return false;
+              } else {
+                found = true;
+                goto endloop;
+              }
+            }
           }
         }
-        *txn1.mutable_ops() = ops;
-        if (TransactionsConflict(txn, txn1)) {
+endloop:
+        if (!found) {
           return false;
-        } else {
-          k = j;
-          found = true;
         }
       }
-    }
-    if (!found) {
-      return false;
     }
   }
   return true;
