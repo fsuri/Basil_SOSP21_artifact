@@ -866,6 +866,7 @@ TEST_F(JanusServerTest, ExecutePhaseExecutesCircularDep)
     janusstore::Transaction txn2(1235);
     janusstore::Transaction* txn_ptr2 = &txn2;
     txn_ptr2->addWriteSet("key2", "val3");
+    txn_ptr2->addWriteSet("key1", "val1");
     txn_ptr2->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
 
     janusstore::Transaction txn3(1111);
@@ -875,6 +876,7 @@ TEST_F(JanusServerTest, ExecutePhaseExecutesCircularDep)
 
     janusstore::Transaction txn4(2222);
     janusstore::Transaction* txn_ptr4 = &txn4;
+    txn_ptr4->addReadSet("key1");
     txn_ptr4->addReadSet("key2");
     txn_ptr4->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
 
@@ -902,7 +904,9 @@ TEST_F(JanusServerTest, ExecutePhaseExecutesCircularDep)
     EXPECT_EQ(reply.op(), janusstore::proto::Reply::COMMIT_OK);
 
     janusstore::proto::CommitOKMessage commit_ok = reply.commit_ok();
-    EXPECT_EQ(commit_ok.pairs_size(), 1);
+    EXPECT_EQ(commit_ok.pairs_size(), 2);
     EXPECT_EQ(commit_ok.pairs(0).key(), "key2");
     EXPECT_EQ(commit_ok.pairs(0).value(), "val2");
+    EXPECT_EQ(commit_ok.pairs(1).key(), "key1");
+    EXPECT_EQ(commit_ok.pairs(1).value(), "val1");
 }
