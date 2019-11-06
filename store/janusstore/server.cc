@@ -23,7 +23,7 @@ Server::~Server() {
 void Server::ReceiveMessage(const TransportAddress &remote,
                         const string &type, const string &data,
                         void *meta_data) {
-    Debug("[Server %i] Received message", this->myIdx);
+    // Debug("[Server %i] Received message", this->myIdx);
     replication::ir::proto::UnloggedRequestMessage unlogged_request;
     replication::ir::proto::UnloggedReplyMessage unlogged_reply;
 
@@ -155,7 +155,7 @@ vector<uint64_t>* Server::BuildDepList(Transaction &txn, uint64_t ballot) {
 
         // append conflicts
         if (write_key_txn_map.find(key) != write_key_txn_map.end()) {
-            Debug("here and idk why");
+            // Debug("here and idk why");
             set<uint64_t> other_txn_ids = write_key_txn_map[key];
             dep_set.insert(other_txn_ids.begin(), other_txn_ids.end());
         }
@@ -174,7 +174,7 @@ vector<uint64_t>* Server::BuildDepList(Transaction &txn, uint64_t ballot) {
         }
 
         if (read_key_txn_map.find(key) != read_key_txn_map.end()) {
-          Debug("should be here and that might be a problem");
+          // Debug("should be here and that might be a problem");
           // append conflicts
           set<uint64_t> other_txn_ids = read_key_txn_map[key];
           // TODO remove, but this is useful for debuggign
@@ -270,7 +270,7 @@ void Server::HandleCommit(const TransportAddress &remote,
     }
     dep_map[txn_id] = deps;
 
-    Debug("gonna handle commit for %llu, message: %s", txn_id, c_msg.DebugString().c_str());
+    // Debug("gonna handle commit for %llu, message: %s", txn_id, c_msg.DebugString().c_str());
     _HandleCommit(txn_id, remote, unlogged_reply);
 }
 
@@ -313,7 +313,7 @@ void Server::_HandleCommit(uint64_t txn_id,
     // wait and inquire
     vector<uint64_t> not_committing_ids = _checkIfAllCommitting(id_txn_map, deps);
     if (not_committing_ids.size() != 0) {
-        Debug("Need to block %llu", txn_id);
+        // Debug("Need to block %llu", txn_id);
         txn->client_addrs.insert(&remote);
 
         // HACK: find a more elegant way to do this
@@ -454,12 +454,12 @@ void Server::_ExecutePhase(uint64_t txn_id,
     while (!processed[txn_id]) {
         for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
             uint64_t other_txn_id = pair.first;
-            Debug("Checking if %llu is ready to process!", other_txn_id);
+            // Debug("Checking if %llu is ready to process!", other_txn_id);
             if (_ReadyToProcess(id_txn_map[other_txn_id])) {
                 Debug("%llu is ready to process!", other_txn_id);
                 vector<uint64_t> scc = _StronglyConnectedComponent(other_txn_id);
                 ResolveContention(scc);
-                Debug("%llu has scc of size %llu!", other_txn_id, scc.size());
+                // Debug("%llu has scc of size %llu!", other_txn_id, scc.size());
                 for (uint64_t scc_id : scc) {
                     Transaction *scc_txn = &id_txn_map[scc_id];
                     scc_txn->setResult(Execute(id_txn_map[scc_id]));
@@ -478,7 +478,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
 
     // construct proto
     for (auto res : result) {
-        Debug("Adding %s, %s", res.first.c_str(), res.second.c_str());
+        // Debug("Adding %s, %s", res.first.c_str(), res.second.c_str());
         PutMessage *pair = commit_ok.add_pairs();
         pair->set_key(res.first);
         pair->set_value(res.second);
@@ -491,7 +491,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
 
     unlogged_reply->set_reply(reply.SerializeAsString());
 
-    Debug("[Server %i] COMMIT, sending back %s", this->myIdx, reply.DebugString().c_str());
+    // Debug("[Server %i] COMMIT, sending back %s", this->myIdx, reply.DebugString().c_str());
 
     transport->SendMessage(this, remote, *unlogged_reply);
 
@@ -594,7 +594,7 @@ vector<uint64_t> _checkIfAllCommitting(
     ) {
         vector<uint64_t> not_committing_ids;
         for (uint64_t txn_id : deps) {
-            Debug("Checking if %llu is committing", txn_id);
+            // Debug("Checking if %llu is committing", txn_id);
             Transaction txn = id_txn_map[txn_id];
             if (txn.getTransactionStatus() != TransactionMessage::COMMIT) {
                 not_committing_ids.push_back(txn_id);

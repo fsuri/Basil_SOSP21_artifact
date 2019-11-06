@@ -51,7 +51,7 @@ public:
 
     struct PendingRequest {
         PendingRequest(uint64_t txn_id)
-        : txn_id(txn_id) {}
+        : txn_id(txn_id), responded(0) {}
         ~PendingRequest() {}
 
         uint64_t txn_id;
