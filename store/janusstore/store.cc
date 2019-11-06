@@ -29,7 +29,7 @@ int Store::Get(uint64_t id, string key, string &value) {
 int Store::Put(uint64_t id, string key, string value) {
     Debug("[%llu] PUT <%s, %s>", id, key.c_str(), value.c_str());
 
-    kv_store.insert({{key, value}});
+    kv_store[key] = value;
     return REPLY_OK;
 }
 } // namespace janusstore

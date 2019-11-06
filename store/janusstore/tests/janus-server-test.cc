@@ -827,7 +827,7 @@ TEST_F(JanusServerTest, HandleCommitUnblockIds)
 
     server->BuildDepList(txn2, 0);
     server->BuildDepList(txn1, 0); // so txn1 has 1235 as a dep
-    server->BuildDepList(txn3, 0); // so txn3 has 1235 as a dep
+    server->BuildDepList(txn3, 0); // so txn3 has 1235 and 1234 as deps
 
     replication::ir::proto::UnloggedReplyMessage unlogged_reply;
     SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
@@ -850,17 +850,53 @@ TEST_F(JanusServerTest, HandleCommitUnblockIds)
 /*************************************************************************
     _ExecutePhase
 *************************************************************************/
-TEST_F(JanusServerTest, ExecutePhaseExecutesSingleTxn)
-{
-
-}
-
-TEST_F(JanusServerTest, ExecutePhaseExecutesMultTxn)
-{
-
-}
-
 TEST_F(JanusServerTest, ExecutePhaseExecutesCircularDep)
 {
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->addWriteSet("key2", "val2");
+    txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
 
+    janusstore::Transaction txn2(1235);
+    janusstore::Transaction* txn_ptr2 = &txn2;
+    txn_ptr2->addWriteSet("key2", "val3");
+    txn_ptr2->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
+
+    janusstore::Transaction txn3(1111);
+    janusstore::Transaction* txn_ptr3 = &txn3;
+    txn_ptr3->addWriteSet("key2", "val4");
+    txn_ptr3->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
+
+    janusstore::Transaction txn4(2222);
+    janusstore::Transaction* txn_ptr4 = &txn4;
+    txn_ptr4->addReadSet("key2");
+    txn_ptr4->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
+
+    server->id_txn_map[1234] = *txn_ptr1;
+    server->id_txn_map[1235] = *txn_ptr2;
+    server->id_txn_map[1111] = *txn_ptr3;
+    server->id_txn_map[2222] = *txn_ptr4;
+
+    std::unordered_map<uint64_t, std::vector<uint64_t>> cycle_dep_map {
+        { 1234, { 1235 }},
+        { 1235, { 1111 }},
+        { 1111, { 1234 }},
+        { 2222, {}}
+    };
+    server->dep_map = cycle_dep_map;
+
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+
+    server->_ExecutePhase(1234, *addr, &unlogged_reply);
+    server->_ExecutePhase(2222, *addr, &unlogged_reply); // should return val3
+
+    janusstore::proto::Reply reply;
+    reply.ParseFromString(unlogged_reply.reply());
+    EXPECT_EQ(reply.op(), janusstore::proto::Reply::COMMIT_OK);
+
+    janusstore::proto::CommitOKMessage commit_ok = reply.commit_ok();
+    EXPECT_EQ(commit_ok.pairs_size(), 1);
+    EXPECT_EQ(commit_ok.pairs(0).key(), "key2");
+    EXPECT_EQ(commit_ok.pairs(0).value(), "val3");
 }
