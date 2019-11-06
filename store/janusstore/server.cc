@@ -291,8 +291,9 @@ void Server::_HandleCommit(uint64_t txn_id,
             if (txn->blocked_by_list.empty()) {
                 Debug("Blocked id %llu commitable now", blocked_id);
                 for (auto *client_addr : txn->client_addrs){
-                    replication::ir::proto::UnloggedReplyMessage *blocked_unlogged_reply;
-                    _HandleCommit(blocked_id, *client_addr, blocked_unlogged_reply);
+                   replication::ir::proto::UnloggedReplyMessage blocked_unlogged_reply;
+                    _HandleCommit(blocked_id, *client_addr, &blocked_unlogged_reply);
+                    blocked_unlogged_reply.Clear();
                 }
                 txn->client_addrs.clear();
             }
@@ -446,7 +447,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
     Debug("In execute phase for %llu", txn_id);
     unordered_map<string, string> result;
     vector<uint64_t> deps = dep_map[txn_id];
-    Transaction txn = id_txn_map[txn_id];
+    Transaction *txn = &id_txn_map[txn_id];
 
     while (!processed[txn_id]) {
         for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
@@ -458,20 +459,16 @@ void Server::_ExecutePhase(uint64_t txn_id,
                 ResolveContention(scc);
                 Debug("%llu has scc of size %llu!", other_txn_id, scc.size());
                 for (uint64_t scc_id : scc) {
-                    // TODO check if scc_id is involved with S and not abandoned
-                    if (scc_id == txn_id) {
-                        // TODO: store it in txn result and remove if else
-                        result = Execute(id_txn_map[scc_id]);
-                    } else {
-                        // TODO: store it in txn result
-                        Execute(id_txn_map[scc_id]);
-                    }
+                    Transaction *scc_txn = &id_txn_map[scc_id];
+                    scc_txn->setResult(Execute(id_txn_map[scc_id]));
                     Debug("[Server %i] executing transaction %llu", myIdx, scc_id);
                     processed[scc_id] = true;
                 }
             }
         }
     }
+
+    result = txn->result;
 
     Debug("Sending CommitOK");
     CommitOKMessage commit_ok;
@@ -601,7 +598,7 @@ vector<uint64_t> _checkIfAllCommitting(
                 not_committing_ids.push_back(txn_id);
             }
         }
-        Debug("Returning uncommitted ids");
+        Debug("Returning %i uncommitted ids", not_committing_ids.size());
         return not_committing_ids;
     }
 }

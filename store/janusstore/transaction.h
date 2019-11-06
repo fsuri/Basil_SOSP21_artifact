@@ -51,6 +51,10 @@ public:
     // map between key and value(s)
     std::unordered_map<std::string, std::string> write_set;
 
+    // the result of ths transaction
+    std::unordered_map<std::string, std::string> result;
+    void setResult(std::unordered_map<std::string, std::string> result);
+
     void setTransactionId(uint64_t txn_id);
     const uint64_t getTransactionId() const;
     void setTransactionStatus(janusstore::proto::TransactionMessage::Status status);

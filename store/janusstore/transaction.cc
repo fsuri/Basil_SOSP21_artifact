@@ -26,6 +26,10 @@ Transaction::Transaction(uint64_t txn_id, const janusstore::proto::TransactionMe
 
 Transaction::~Transaction() {}
 
+void Transaction::setResult(std::unordered_map<std::string, std::string> result) {
+	this->result = result;
+}
+
 void Transaction::setTransactionId(uint64_t txn_id) {
 	this->txn_id = txn_id;
 }

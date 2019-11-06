@@ -720,11 +720,6 @@ TEST_F(JanusServerTest, HandleCommitInquireIds)
 
 }
 
-TEST_F(JanusServerTest, HandleCommitUnblockIds)
-{
-
-}
-
 TEST_F(JanusServerTest, HandleCommitBlockedIds)
 {
     janusstore::Transaction txn1(1234);
@@ -758,8 +753,48 @@ TEST_F(JanusServerTest, HandleCommitBlockedIds)
     server->_HandleCommit(1234, *addr, &unlogged_reply);
     EXPECT_EQ(server->blocking_ids[1235].size(), 2);
     EXPECT_TRUE(server->blocking_ids[1235].find(1234) != server->blocking_ids[1235].end());
-
 }
+
+TEST_F(JanusServerTest, HandleCommitUnblockIds)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->addWriteSet("key2", "val2");
+
+    janusstore::Transaction txn2(1235);
+    janusstore::Transaction* txn_ptr2 = &txn2;
+    txn_ptr2->addWriteSet("key2", "val3");
+
+    janusstore::Transaction txn3(1111);
+    janusstore::Transaction* txn_ptr3 = &txn3;
+    txn_ptr3->addWriteSet("key2", "val4");
+
+    server->id_txn_map[1234] = *txn_ptr1;
+    server->id_txn_map[1235] = *txn_ptr2;
+    server->id_txn_map[1111] = *txn_ptr3;
+
+    server->BuildDepList(txn2, 0);
+    server->BuildDepList(txn1, 0); // so txn1 has 1235 as a dep
+    server->BuildDepList(txn3, 0); // so txn3 has 1235 as a dep
+
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+
+    server->_HandleCommit(1111, *addr, &unlogged_reply);
+    server->_HandleCommit(1234, *addr, &unlogged_reply);
+    server->_HandleCommit(1235, *addr, &unlogged_reply); // should unblock 1111 and 1234
+
+    janusstore::proto::Reply reply;
+    reply.ParseFromString(unlogged_reply.reply());
+
+    EXPECT_EQ(reply.op(), janusstore::proto::Reply::COMMIT_OK);
+    janusstore::proto::CommitOKMessage commit_ok = reply.commit_ok();
+
+    EXPECT_EQ(commit_ok.pairs_size(), 1);
+    EXPECT_EQ(commit_ok.pairs(0).key(), "key2");
+    EXPECT_EQ(commit_ok.pairs(0).value(), "val3");
+}
+
 /*************************************************************************
     _ExecutePhase
 *************************************************************************/
