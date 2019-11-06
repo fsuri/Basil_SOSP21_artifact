@@ -460,11 +460,23 @@ void Server::_ExecutePhase(uint64_t txn_id,
     unordered_map<string, string> result;
     vector<uint64_t> deps = dep_map[txn_id];
     Transaction *txn = &id_txn_map[txn_id];
+    uint64_t num_deps = deps.size();
+    Debug("%s\n", ("num_deps is " + to_string(num_deps)).c_str());
+    uint64_t num_deps_processed = 0;
 
     while (!processed[txn_id]) {
         for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
             uint64_t other_txn_id = pair.first;
             // Debug("Checking if %llu is ready to process!", other_txn_id);
+            if (num_deps_processed == num_deps) {
+                processed[txn_id] = true;
+                break;
+            }
+            if (processed[other_txn_id]) {
+                // Debug("In here");
+                num_deps_processed++;
+                continue;
+            }
             if (_ReadyToProcess(id_txn_map[other_txn_id])) {
                 Debug("%llu is ready to process!", other_txn_id);
                 vector<uint64_t> scc = _StronglyConnectedComponent(other_txn_id);
@@ -476,9 +488,12 @@ void Server::_ExecutePhase(uint64_t txn_id,
                     Debug("[Server %i] executing transaction %llu", myIdx, scc_id);
                     processed[scc_id] = true;
                 }
+                num_deps_processed++;
             }
         }
     }
+
+    processed[txn_id] = true;
 
     result = txn->result;
 
