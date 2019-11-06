@@ -558,11 +558,19 @@ TEST_F(JanusServerTest, HandleAcceptSendsNotCommit)
 
 TEST_F(JanusServerTest, HandleInquireReplyUpdates)
 {
+    janusstore::Transaction txn2(1235);
+    janusstore::Transaction* txn_ptr2 = &txn2;
+    txn_ptr2->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
+    server->id_txn_map[1235] = *txn_ptr2;
+
     janusstore::Transaction txn1(1234);
     janusstore::Transaction* txn_ptr1 = &txn1;
-    vector<uint64_t> *dep1 = server->BuildDepList(*txn_ptr1, 0);
     txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
     server->id_txn_map[1234] = *txn_ptr1;
+
+    vector<uint64_t> *dep2 = server->BuildDepList(*txn_ptr2, 0);
+    vector<uint64_t> *dep1 = server->BuildDepList(*txn_ptr1, 0);
+    server->blocking_ids[1234] = std::set<uint64_t>{1235};
 
     janusstore::proto::InquireOKMessage i_ok_msg;
     janusstore::proto::DependencyList dep;
@@ -581,10 +589,8 @@ TEST_F(JanusServerTest, HandleInquireReplyUpdates)
         janusstore::proto::TransactionMessage::COMMIT
     );
 
-    EXPECT_EQ(
-        server->dep_map[1234].size(),
-        1
-    );
+    EXPECT_EQ(server->dep_map[1234].size(), 1);
+    EXPECT_EQ(server->blocking_ids.size(), 0);
 
     i_ok_msg.release_dep();
 }

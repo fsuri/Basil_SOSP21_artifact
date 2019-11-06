@@ -397,8 +397,18 @@ void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
         dep_map[txn_id] = msg_deps;
 
         // set this txn id to committing because we received this reply
-        // TODO should we try HandleCommit on every txn blocked by this id?
         txn->setTransactionStatus(TransactionMessage::COMMIT);
+        for (auto blocked_id : blocking_ids[txn_id]) {
+            Transaction *blocked_txn = &id_txn_map[blocked_id];
+            Debug("Blocked id %llu commitable now due to inquiry", blocked_id);
+            for (auto *client_addr : blocked_txn->client_addrs){
+               replication::ir::proto::UnloggedReplyMessage blocked_unlogged_reply;
+                _HandleCommit(blocked_id, *client_addr, &blocked_unlogged_reply);
+                blocked_unlogged_reply.Clear();
+            }
+            blocked_txn->client_addrs.clear();
+        }
+        blocking_ids.erase(txn_id);
     }
 }
 
