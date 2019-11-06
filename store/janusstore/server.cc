@@ -493,6 +493,8 @@ void Server::_ExecutePhase(uint64_t txn_id,
         }
     }
 
+    txn->setResult(Execute(id_txn_map[txn_id]));
+    Debug("[Server %i] executing transaction %llu", myIdx, txn_id);
     processed[txn_id] = true;
 
     result = txn->result;
