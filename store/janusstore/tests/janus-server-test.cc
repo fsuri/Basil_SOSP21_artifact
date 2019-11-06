@@ -715,9 +715,61 @@ TEST_F(JanusServerTest, HandleCommitExecutes)
     EXPECT_EQ(commit_ok.pairs(0).value(), "val2");
 }
 
+TEST_F(JanusServerTest, HandleCommitAddtoInquire)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->addWriteSet("key2", "val2");
+
+    server->id_txn_map[1234] = *txn_ptr1;
+
+    server->BuildDepList(txn1, 0);
+    server->dep_map[1234].push_back(1235); // 1234 won't be in the local id_txn_map
+
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+
+    server->_HandleCommit(1234, *addr, &unlogged_reply);
+
+    EXPECT_EQ(server->blocking_ids.size(), 1);
+    EXPECT_TRUE(server->blocking_ids[1235].find(1234) != server->blocking_ids[1235].end());
+}
+
 TEST_F(JanusServerTest, HandleCommitInquireIds)
 {
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->addWriteSet("key2", "val2");
 
+    server->id_txn_map[1234] = *txn_ptr1;
+    server->BuildDepList(txn1, 0);
+
+    janusstore::proto::InquireMessage i_msg;
+    i_msg.set_txnid(1234);
+    SimulatedTransportAddress *addr2 = new SimulatedTransportAddress(2);
+    std::vector<
+        std::pair<
+            const TransportAddress*,
+            janusstore::proto::InquireMessage
+        >
+    > pairs{std::make_pair(addr2, i_msg)};
+    server->inquired_ids[1234] = pairs;
+
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+
+    server->_HandleCommit(1234, *addr, &unlogged_reply);
+
+    janusstore::proto::Reply reply;
+    reply.ParseFromString(unlogged_reply.reply());
+
+    EXPECT_EQ(reply.op(), janusstore::proto::Reply::COMMIT_OK);
+    janusstore::proto::CommitOKMessage commit_ok = reply.commit_ok();
+
+    EXPECT_EQ(commit_ok.pairs_size(), 1);
+    EXPECT_EQ(commit_ok.pairs(0).key(), "key2");
+    EXPECT_EQ(commit_ok.pairs(0).value(), "val2");
+    EXPECT_EQ(server->inquired_ids.size(), 0);
 }
 
 TEST_F(JanusServerTest, HandleCommitBlockedIds)

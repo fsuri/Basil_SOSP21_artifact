@@ -321,18 +321,19 @@ void Server::_HandleCommit(uint64_t txn_id,
         for (uint64_t blocking_txn_id : not_committing_ids) {
             Debug("%llu blocked by %llu", txn_id, blocking_txn_id);
             txn->blocked_by_list.insert(blocking_txn_id);
-            // for every txn_id found on this server, add it to the list of blocking
+
             if (id_txn_map.find(txn_id) != id_txn_map.end()){
-                if (blocking_ids.find(blocking_txn_id) == blocking_ids.end()) {
-                    blocking_ids[blocking_txn_id] = set<uint64_t>{txn_id};
-                } else {
-                    blocking_ids[blocking_txn_id].insert(txn_id);
-                }
+                found_on_server = true;
             } else {
                 // inquire about the status of this transaction
                 _SendInquiry(txn_id);
             }
-            found_on_server = true;
+
+            if (blocking_ids.find(blocking_txn_id) == blocking_ids.end()) {
+                blocking_ids[blocking_txn_id] = set<uint64_t>{txn_id};
+            } else {
+                blocking_ids[blocking_txn_id].insert(txn_id);
+            }
         }
         // need to wait for local server to set transactions to committing
         if (found_on_server) return;
@@ -396,6 +397,7 @@ void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
         dep_map[txn_id] = msg_deps;
 
         // set this txn id to committing because we received this reply
+        // TODO should we try HandleCommit on every txn blocked by this id?
         txn->setTransactionStatus(TransactionMessage::COMMIT);
     }
 }
