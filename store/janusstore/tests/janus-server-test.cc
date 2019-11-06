@@ -904,5 +904,5 @@ TEST_F(JanusServerTest, ExecutePhaseExecutesCircularDep)
     janusstore::proto::CommitOKMessage commit_ok = reply.commit_ok();
     EXPECT_EQ(commit_ok.pairs_size(), 1);
     EXPECT_EQ(commit_ok.pairs(0).key(), "key2");
-    EXPECT_EQ(commit_ok.pairs(0).value(), "val3");
+    EXPECT_EQ(commit_ok.pairs(0).value(), "val2");
 }
