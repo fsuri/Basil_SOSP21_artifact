@@ -284,10 +284,18 @@ void Server::_HandleCommit(uint64_t txn_id,
     Debug("Set txn id %llu to COMMIT", txn_id);
     // check if this unblocks others, and rerun HandleCommit for those
     if (blocking_ids.find(txn_id) != blocking_ids.end()) {
-        for(auto blocked_id_pair : blocking_ids[txn_id]) {
-            uint64_t blocked_id = blocked_id_pair.second;
+        for(auto blocked_id : blocking_ids[txn_id]) {
             Debug("Found blocked id %llu for txn id %llu", blocked_id, txn_id);
-            _HandleCommit(blocked_id, *blocked_id_pair.first, unlogged_reply);
+            Transaction *txn = &id_txn_map[blocked_id];
+            txn->blocked_by_list.erase(txn_id);
+            if (txn->blocked_by_list.empty()) {
+                Debug("Blocked id %llu commitable now", blocked_id);
+                for (auto *client_addr : txn->client_addrs){
+                    replication::ir::proto::UnloggedReplyMessage *blocked_unlogged_reply;
+                    _HandleCommit(blocked_id, *client_addr, blocked_unlogged_reply);
+                }
+                txn->client_addrs.clear();
+            }
         }
         blocking_ids.erase(txn_id);
     }
@@ -304,16 +312,20 @@ void Server::_HandleCommit(uint64_t txn_id,
     // wait and inquire
     vector<uint64_t> not_committing_ids = _checkIfAllCommitting(id_txn_map, deps);
     if (not_committing_ids.size() != 0) {
-        Debug("Need to block");
+        Debug("Need to block %llu", txn_id);
+        txn->client_addrs.insert(&remote);
+
         // HACK: find a more elegant way to do this
         bool found_on_server = false;
         for (uint64_t blocking_txn_id : not_committing_ids) {
+            Debug("%llu blocked by %llu", txn_id, blocking_txn_id);
+            txn->blocked_by_list.insert(blocking_txn_id);
             // for every txn_id found on this server, add it to the list of blocking
             if (id_txn_map.find(txn_id) != id_txn_map.end()){
                 if (blocking_ids.find(blocking_txn_id) == blocking_ids.end()) {
-                    blocking_ids[blocking_txn_id] = vector<pair<const TransportAddress*, uint64_t>>{make_pair(&remote, txn_id)};
+                    blocking_ids[blocking_txn_id] = set<uint64_t>{txn_id};
                 } else {
-                    blocking_ids[blocking_txn_id].push_back(make_pair(&remote, txn_id));
+                    blocking_ids[blocking_txn_id].insert(txn_id);
                 }
             } else {
                 // inquire about the status of this transaction

@@ -693,21 +693,6 @@ TEST_F(JanusServerTest, HandleInquireBlockWhenNotCommit)
 /*************************************************************************
     _HandleCommit
 *************************************************************************/
-TEST_F(JanusServerTest, HandleCommitBlockedIds)
-{
-
-}
-
-TEST_F(JanusServerTest, HandleCommitInquireIds)
-{
-
-}
-
-TEST_F(JanusServerTest, HandleCommitUnblockIds)
-{
-
-}
-
 TEST_F(JanusServerTest, HandleCommitExecutes)
 {
     janusstore::Transaction txn1(1234);
@@ -728,6 +713,51 @@ TEST_F(JanusServerTest, HandleCommitExecutes)
 
     EXPECT_EQ(commit_ok.pairs(0).key(), "key2");
     EXPECT_EQ(commit_ok.pairs(0).value(), "val2");
+}
+
+TEST_F(JanusServerTest, HandleCommitInquireIds)
+{
+
+}
+
+TEST_F(JanusServerTest, HandleCommitUnblockIds)
+{
+
+}
+
+TEST_F(JanusServerTest, HandleCommitBlockedIds)
+{
+    janusstore::Transaction txn1(1234);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    txn_ptr1->addWriteSet("key2", "val2");
+
+    janusstore::Transaction txn2(1235);
+    janusstore::Transaction* txn_ptr2 = &txn2;
+    txn_ptr2->addWriteSet("key2", "val3");
+
+    janusstore::Transaction txn3(1111);
+    janusstore::Transaction* txn_ptr3 = &txn3;
+    txn_ptr3->addWriteSet("key2", "val4");
+
+    server->id_txn_map[1234] = *txn_ptr1;
+    server->id_txn_map[1235] = *txn_ptr2;
+    server->id_txn_map[1111] = *txn_ptr3;
+
+    server->BuildDepList(txn2, 0);
+    server->BuildDepList(txn1, 0); // so txn1 has 1235 as a dep
+    server->BuildDepList(txn3, 0); // so txn3 has 1235 as a dep
+
+    replication::ir::proto::UnloggedReplyMessage unlogged_reply;
+    SimulatedTransportAddress *addr = new SimulatedTransportAddress(1);
+
+    server->_HandleCommit(1111, *addr, &unlogged_reply);
+    EXPECT_EQ(server->blocking_ids.size(), 2);
+    EXPECT_EQ(server->blocking_ids[1235].size(), 1);
+    EXPECT_TRUE(server->blocking_ids[1235].find(1111) != server->blocking_ids[1235].end());
+
+    server->_HandleCommit(1234, *addr, &unlogged_reply);
+    EXPECT_EQ(server->blocking_ids[1235].size(), 2);
+    EXPECT_TRUE(server->blocking_ids[1235].find(1234) != server->blocking_ids[1235].end());
 
 }
 /*************************************************************************
