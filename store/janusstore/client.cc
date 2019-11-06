@@ -138,7 +138,7 @@ namespace janusstore {
     PendingRequest *req = new PendingRequest(txn_id, ecb);
     pendingReqs[txn_id] = req;
     
-    printf("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
+    Debug("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
     setParticipants(txn);
 
     for (auto p: req->participant_shards) {
@@ -151,7 +151,7 @@ namespace janusstore {
 
   void Client::Accept(uint64_t txn_id, set <uint64_t> deps, uint64_t ballot) {
 
-    printf("%s\n", ("CLIENT - ACCEPT - txn " + to_string(txn_id)).c_str());
+    Debug("%s\n", ("CLIENT - ACCEPT - txn " + to_string(txn_id)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
@@ -164,7 +164,7 @@ namespace janusstore {
   }
 
   void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
-    printf("%s\n", ("CLIENT - COMMIT - txn " + to_string(txn_id)).c_str());
+    Debug("%s\n", ("CLIENT - COMMIT - txn " + to_string(txn_id)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
@@ -178,7 +178,7 @@ namespace janusstore {
   void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
-    printf("%s\n", ("CLIENT - PREACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
+    Debug("%s\n", ("CLIENT - PREACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
@@ -201,7 +201,6 @@ namespace janusstore {
     UW_ASSERT(replies.size() != 0);
 
     for (auto reply: replies) {
-      Debug("processing PREACCEPT_OK %s", reply.DebugString().c_str());
       if (reply.op() == Reply::PREACCEPT_OK) {
         // parse message for deps
         DependencyList msg = reply.preaccept_ok().dep();
@@ -236,7 +235,7 @@ namespace janusstore {
   void Client::AcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
-    printf("%s\n", ("CLIENT - ACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
+    Debug("%s\n", ("CLIENT - ACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
@@ -258,13 +257,13 @@ namespace janusstore {
   void Client::CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
-    printf("%s\n", ("CLIENT - COMMIT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
+    Debug("%s\n", ("CLIENT - COMMIT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
     req->responded_shards.insert(shard);
 
-    printf("%s\n", ("CLIENT - COMMIT CB - added " + to_string(shard) + " to responded list").c_str());
+    // printf("%s\n", ("CLIENT - COMMIT CB - added " + to_string(shard) + " to responded list").c_str());
 
     if (req->responded_shards.size() == req->participant_shards.size()) {
       // return results to async_transaction_bench_client by invoking output commit callback

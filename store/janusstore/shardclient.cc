@@ -151,7 +151,7 @@ void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	PendingRequest* req = this->pendingReqs[txn_id];
 	req->responded++;
 
-    printf("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - ACCEPT CB - txn " + to_string(txn_id)).c_str());
+    Debug("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - ACCEPT CB - txn " + to_string(txn_id)).c_str());
 
 	// aggregate replies for this transaction
 	req->accept_replies.push_back(reply);
