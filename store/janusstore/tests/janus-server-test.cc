@@ -860,24 +860,26 @@ TEST_F(JanusServerTest, ExecutePhaseExecutesCircularDep)
 {
     janusstore::Transaction txn1(1234);
     janusstore::Transaction* txn_ptr1 = &txn1;
-    txn_ptr1->addWriteSet("key2", "val2");
+    txn_ptr1->addWriteSet("key2", "key2-val2");
     txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
 
     janusstore::Transaction txn2(1235);
     janusstore::Transaction* txn_ptr2 = &txn2;
-    txn_ptr2->addWriteSet("key2", "val3");
-    txn_ptr2->addWriteSet("key1", "val1");
+    txn_ptr2->addWriteSet("key2", "key2-val3");
+    txn_ptr2->addWriteSet("key1", "key1-val1");
     txn_ptr2->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
 
     janusstore::Transaction txn3(1111);
     janusstore::Transaction* txn_ptr3 = &txn3;
-    txn_ptr3->addWriteSet("key2", "val4");
+    txn_ptr3->addWriteSet("key2", "key2-val4");
+    txn_ptr3->addWriteSet("key3", "key3-val3");
     txn_ptr3->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
 
     janusstore::Transaction txn4(2222);
     janusstore::Transaction* txn_ptr4 = &txn4;
     txn_ptr4->addReadSet("key1");
     txn_ptr4->addReadSet("key2");
+    txn_ptr4->addReadSet("key3");
     txn_ptr4->setTransactionStatus(janusstore::proto::TransactionMessage::COMMIT);
 
     server->id_txn_map[1234] = *txn_ptr1;
@@ -904,9 +906,11 @@ TEST_F(JanusServerTest, ExecutePhaseExecutesCircularDep)
     EXPECT_EQ(reply.op(), janusstore::proto::Reply::COMMIT_OK);
 
     janusstore::proto::CommitOKMessage commit_ok = reply.commit_ok();
-    EXPECT_EQ(commit_ok.pairs_size(), 2);
+    EXPECT_EQ(commit_ok.pairs_size(), 3);
     EXPECT_EQ(commit_ok.pairs(0).key(), "key2");
-    EXPECT_EQ(commit_ok.pairs(0).value(), "val2");
+    EXPECT_EQ(commit_ok.pairs(0).value(), "key2-val2");
     EXPECT_EQ(commit_ok.pairs(1).key(), "key1");
-    EXPECT_EQ(commit_ok.pairs(1).value(), "val1");
+    EXPECT_EQ(commit_ok.pairs(1).value(), "key1-val1");
+    EXPECT_EQ(commit_ok.pairs(2).key(), "key3");
+    EXPECT_EQ(commit_ok.pairs(2).value(), "key3-val3");
 }
