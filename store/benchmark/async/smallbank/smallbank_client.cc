@@ -24,7 +24,7 @@ namespace smallbank {
                                      const uint32_t timeout,
                                      const uint32_t balance_ratio, const uint32_t deposit_checking_ratio,
                                      const uint32_t transact_saving_ratio, const uint32_t amalgamate_ratio,
-                                     const uint32_t num_hotspot_keys, const uint32_t num_non_hotspot_keys,
+                                     const uint32_t num_hotspot_keys, const uint32_t num_non_hotspot_keys, const double hotspot_probability,
                                      const std::string &customer_name_file_path,
                                      const std::string &latencyFilename) : SyncTransactionBenchClient(client,
                                                                                                       transport, numRequests, expDuration,
@@ -35,7 +35,7 @@ namespace smallbank {
                                                                            transact_saving_ratio_(transact_saving_ratio),
                                                                            amalgamate_ratio_(amalgamate_ratio),
                                                                            num_hotspot_keys_(num_hotspot_keys), // first `num_hotpost_keys_` in `all_keys_` is the hotspot
-                                                                           num_non_hotspot_keys_(num_non_hotspot_keys) {
+                                                                           num_non_hotspot_keys_(num_non_hotspot_keys), hotspot_probability_(hotspot_probability) {
         std::mt19937 gen;
         gen_ = gen;
         std::string str;
@@ -63,23 +63,23 @@ namespace smallbank {
         // https://github.com/microsoft/CCF/blob/master/samples/apps/smallbank/clients/small_bank_client.cpp
         if (ttype < balanceThreshold) {
           last_op_ = "balance";
-          return new SmallbankTransaction(BALANCE, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_), "", timeout_);
+          return new SmallbankTransaction(BALANCE, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_), "", timeout_);
         } 
         if (ttype < depositThreshold) {
           last_op_ = "deposit";
-          return new SmallbankTransaction(DEPOSIT, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_), "", timeout_);
+          return new SmallbankTransaction(DEPOSIT, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_), "", timeout_);
         } 
         if (ttype < transactThreshold) {
           last_op_ = "transact";
-          return new SmallbankTransaction(TRANSACT, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_), "", timeout_);
+          return new SmallbankTransaction(TRANSACT, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_), "", timeout_);
         }
         if (ttype < amalgamateThreshold) {
           last_op_ = "amalgamate";
-          std::pair <string, string> keyPair = GetCustomerKeyPair(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_);
+          std::pair <string, string> keyPair = GetCustomerKeyPair(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_);
           return new SmallbankTransaction(AMALGAMATE, keyPair.first, keyPair.second, timeout_);
         }
         last_op_ = "write_check";
-        return new SmallbankTransaction(WRITE_CHECK, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_), "", timeout_);
+        return new SmallbankTransaction(WRITE_CHECK, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_), "", timeout_);
     }
 
     std::string SmallbankClient::GetLastOp() const {
@@ -87,18 +87,18 @@ namespace smallbank {
     }
 
 
-    std::string SmallbankClient::GetCustomerKey(std::mt19937 &gen, std::vector<std::string> all_keys, uint32_t num_hotspot_keys, uint32_t num_non_hotspot_keys) {
+    std::string SmallbankClient::GetCustomerKey(std::mt19937 &gen, std::vector<std::string> all_keys, uint32_t num_hotspot_keys, uint32_t num_non_hotspot_keys, double hotspot_probability) {
         std::uniform_int_distribution<int> hotspotDistribution(0, num_hotspot_keys + num_non_hotspot_keys - 1);
-        bool inHotspot = hotspotDistribution(gen) < num_hotspot_keys;
+        bool inHotspot = hotspotDistribution(gen) < hotspot_probability * (num_hotspot_keys + num_non_hotspot_keys);
         int range = inHotspot ? num_hotspot_keys : num_non_hotspot_keys;
         std::uniform_int_distribution<int> relevantKeyDistribution(0, range - 1);
         int offset = inHotspot ? 0 : num_hotspot_keys;
         return all_keys[relevantKeyDistribution(gen) + offset];
     };
 
-    std::pair <std::string, std::string> SmallbankClient::GetCustomerKeyPair(std::mt19937 &gen, std::vector<std::string> all_keys, uint32_t num_hotspot_keys, uint32_t num_non_hotspot_keys) {
+    std::pair <std::string, std::string> SmallbankClient::GetCustomerKeyPair(std::mt19937 &gen, std::vector<std::string> all_keys, uint32_t num_hotspot_keys, uint32_t num_non_hotspot_keys, double hotspot_probability) {
         std::uniform_int_distribution<int> hotspotDistribution(0, num_hotspot_keys + num_non_hotspot_keys - 1);
-        bool inHotspot = hotspotDistribution(gen) < num_hotspot_keys;
+        bool inHotspot = hotspotDistribution(gen) < hotspot_probability * (num_hotspot_keys + num_non_hotspot_keys);
         int range = inHotspot ? num_hotspot_keys : num_non_hotspot_keys;
         std::uniform_int_distribution<int> relevantKey1Distribution(0, range - 1);
         int offset = inHotspot ? 0 : num_hotspot_keys;
