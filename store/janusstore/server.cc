@@ -481,6 +481,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
                 Debug("%llu is ready to process!", other_txn_id);
                 vector<uint64_t> scc = _StronglyConnectedComponent(other_txn_id);
                 ResolveContention(scc);
+                // TODO: txn_id is not present in scc when it should be
                 // Debug("%llu has scc of size %llu!", other_txn_id, scc.size());
                 for (uint64_t scc_id : scc) {
                     Transaction *scc_txn = &id_txn_map[scc_id];
