@@ -29,6 +29,7 @@
 #include "store/janusstore/client.h"
 #include "store/common/frontend/one_shot_client.h"
 #include "store/common/frontend/async_one_shot_adapter_client.h"
+#include "store/benchmark/async/common/zipf_key_selector.h"
 
 #include <gflags/gflags.h>
 
@@ -52,6 +53,12 @@ enum benchmode_t {
   BENCH_TPCC,
   BENCH_SMALLBANK_SYNC,
   BENCH_RW,
+};
+
+enum keysmode_t {
+  KEYS_UNKNOWN,
+  KEYS_UNIFORM,
+  KEYS_ZIPF
 };
 
 /**
@@ -165,6 +172,31 @@ DEFINE_string(keys_path, "", "path to file containing keys in the system"
 		" (for retwis)");
 DEFINE_uint64(num_keys, 0, "number of keys to generate (for retwis");
 
+const std::string keys_args[] = {
+	"uniform",
+  "zipf"
+};
+const keysmode_t keysmodes[] {
+  KEYS_UNIFORM,
+  KEYS_ZIPF
+};
+static bool ValidateKeys(const char* flagname, const std::string &value) {
+  int n = sizeof(keys_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == keys_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(key_selector, keys_args[0],	"the distribution from which to "
+    "select keys.");
+DEFINE_validator(key_selector, &ValidateKeys);
+
+DEFINE_double(zipf_coefficient, 0.5, "the coefficient of the zipf distribution "
+    "for key selection.");
+
 /**
  * RW settings.
  */
@@ -260,6 +292,20 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // parse key selector
+  keysmode_t keySelectionMode = KEYS_UNKNOWN;
+  int numKeySelectionModes = sizeof(keys_args);
+  for (int i = 0; i < numKeySelectionModes; ++i) {
+    if (FLAGS_key_selector == keys_args[i]) {
+      keySelectionMode = keysmodes[i];
+      break;
+    }
+  }
+  if (keySelectionMode == KEYS_UNKNOWN) {
+    std::cerr << "Unknown key selector." << std::endl;
+    return 1;
+  }
+
   // parse retwis settings
   std::vector<std::string> keys;
   if (benchMode == BENCH_RETWIS || benchMode == BENCH_RW) {
@@ -297,7 +343,18 @@ int main(int argc, char **argv) {
   std::vector<::OneShotClient *> oneShotClients;
   std::vector<::BenchmarkClient *> benchClients;
   std::vector<std::thread *> threads;
-  KeySelector *keySelector = new UniformKeySelector(keys);
+
+  KeySelector *keySelector;
+  switch (keySelectionMode) {
+    case KEYS_UNIFORM:
+      keySelector = new UniformKeySelector(keys);
+      break;
+    case KEYS_ZIPF:
+      keySelector = new ZipfKeySelector(keys, FLAGS_zipf_coefficient);
+      break;
+    default:
+      NOT_REACHABLE();
+  }
 
   partitioner part;
   switch (benchMode) {

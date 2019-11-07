@@ -3,7 +3,8 @@
 #include <cmath>
 
 ZipfKeySelector::ZipfKeySelector(const std::vector<std::string> &keys,
-    double alpha) : KeySelector(keys), alpha(alpha) {
+    double alpha) : KeySelector(keys), alpha(alpha),
+    dist(std::numeric_limits<double>::min(), 1.0) {
   zipf = new double[GetNumKeys()];
 
   double c = 0.0;
@@ -23,11 +24,8 @@ ZipfKeySelector::~ZipfKeySelector() {
   delete [] zipf;
 }
 
-int ZipfKeySelector::GetKey() {
-  double random = 0.0;
-  while (random == 0.0 || random == 1.0) {
-    random = (1.0 + std::rand()) / RAND_MAX;
-  }
+int ZipfKeySelector::GetKey(std::mt19937 &rand) {
+  double random = dist(rand);
 
   // binary search to find key;
   int l = 0, r = GetNumKeys(), mid;
