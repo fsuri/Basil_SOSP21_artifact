@@ -77,6 +77,10 @@ bool CommitCompatible(const proto::Branch &branch,
       seq4.erase(itr);
     }
   }
+  PrintTransactionList(seq3, std::cerr);
+  std::cerr << std::endl;
+  PrintTransactionList(seq4, std::cerr);
+  std::cerr << std::endl;
   return ValidSubsequence(branch.txn(), seq3, seq) &&
       NoConflicts(branch.txn(), seq4);
 }
@@ -109,6 +113,20 @@ bool WaitCompatible(const proto::Branch &branch,
 bool ValidSubsequence(const proto::Transaction &txn,
       const std::vector<proto::Transaction> &seq1,
       const std::vector<proto::Transaction> &seq2) {
+  // first check that all dependencies in seq1 are also in seq2
+  std::set<uint64_t> inseq2;
+  for (size_t i = 0; i < seq2.size(); ++i) {
+    inseq2.insert(seq2[i].id());
+  }
+  for (size_t i = 0; i < seq1.size(); ++i) {
+    if (TransactionsConflict(txn, seq1[i])) {
+      if (inseq2.find(seq1[i].id()) == inseq2.end()) {
+        return false;
+      }
+    }
+  }
+
+  // now check that all conflicting transactions are ordered the same
   for (size_t i1 = 0; i1 < seq1.size(); ++i1) {
     for (size_t j1 = i1 + 1; j1 < seq1.size(); ++j1) {
       if (TransactionsConflict(seq1[i1], seq1[j1])) {
