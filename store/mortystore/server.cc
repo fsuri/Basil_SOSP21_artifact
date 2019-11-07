@@ -145,6 +145,7 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
 }
 
 void Server::HandleAbort(const TransportAddress &remote, const proto::Abort &msg) {
+  generator.ClearPending(msg.branch().id());
 }
 
 bool Server::CheckBranch(const TransportAddress &addr, const proto::Branch &branch) {

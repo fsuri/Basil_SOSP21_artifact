@@ -271,6 +271,9 @@ void Client::ProcessPrepareKOs(PendingRequest *req, const proto::Branch &branch)
   req->prepareResponses++;
   if (req->prepareResponses == req->sentPrepares) {
     Debug("Received responses for all outstanding prepares (%lu).", req->sentPrepares);
+    
+    Abort(branch);
+
     req->ecb(FAILED, std::map<std::string, std::string>());
     pendingReqs.erase(pendingReqs.find(req->id));
     delete req;
