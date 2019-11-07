@@ -115,6 +115,7 @@ void BranchGenerator::GenerateBranchesPermutations(
         }
       }
       ss << "]" << std::endl;
+      Debug("%s", ss.str().c_str());
     }
     std::vector<std::vector<proto::Transaction>> new_seqs;
     new_seqs.push_back(committed);

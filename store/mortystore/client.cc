@@ -169,10 +169,7 @@ void Client::HandlePrepareOK(const TransportAddress &remote,
   } else if (itr->second->prepareOKs[msg.branch()] +
       itr->second->prepareKOes[msg.branch()].size() ==
       msg.branch().shards().size()) {
-    itr->second->prepareResponses++;
-    if (itr->second->prepareResponses == itr->second->sentPrepares) {
-      Debug("Received responses for all outstanding prepares.");
-    }
+    ProcessPrepareKOs(itr->second, msg.branch());
   }
 
 }
@@ -192,13 +189,7 @@ void Client::HandlePrepareKO(const TransportAddress &remote,
   if (itr->second->prepareOKs[msg.branch()] +
       itr->second->prepareKOes[msg.branch()].size() ==
       msg.branch().shards().size()) {
-    itr->second->prepareResponses++;
-    if (itr->second->prepareResponses == itr->second->sentPrepares) {
-      Debug("Received responses for all outstanding prepares (%lu).", itr->second->sentPrepares);
-    } else {
-      Debug("Prepare failed. Waiting on %lu other prepare responses (out of %lu).",
-          itr->second->sentPrepares - itr->second->prepareResponses, itr->second->sentPrepares);
-    }
+    ProcessPrepareKOs(itr->second, msg.branch());
   }
 }
 
@@ -273,6 +264,19 @@ void Client::Abort(const proto::Branch &branch) {
   *abort.mutable_branch() = branch;
   for (auto shard : branch.shards()) {
     sclients[shard]->Abort(abort);
+  }
+}
+
+void Client::ProcessPrepareKOs(PendingRequest *req, const proto::Branch &branch) {
+  req->prepareResponses++;
+  if (req->prepareResponses == req->sentPrepares) {
+    Debug("Received responses for all outstanding prepares (%lu).", req->sentPrepares);
+    req->ecb(FAILED, std::map<std::string, std::string>());
+    pendingReqs.erase(pendingReqs.find(req->id));
+    delete req;
+  } else {
+    Debug("Prepare failed. Waiting on %lu other prepare responses (out of %lu).",
+        req->sentPrepares - req->prepareResponses, req->sentPrepares);
   }
 }
 

@@ -49,8 +49,6 @@ class Client : public ::AsyncClient {
     proto::Transaction protoTxn;
     AsyncTransaction *txn;
     execute_callback ecb;
-    commit_callback ccb;
-    commit_timeout_callback ctcb;
     uint64_t id;
     uint64_t sentPrepares;
     uint64_t prepareResponses;
@@ -82,6 +80,8 @@ class Client : public ::AsyncClient {
       const std::string &value);
   void Commit(PendingRequest *req, const proto::Branch &branch);
   void Abort(const proto::Branch &branch);
+
+  void ProcessPrepareKOs(PendingRequest *req, const proto::Branch &branch);
 
   // Unique ID for this client.
   uint64_t client_id;
