@@ -49,3 +49,13 @@ TEST(LockServer, WriteLock)
     EXPECT_FALSE(s.lockForRead("x", 2));   
     EXPECT_FALSE(s.lockForWrite("x", 3));    
 }
+
+TEST(LockServer, WriteAfterReadLock)
+{
+    LockServer s;
+    
+    EXPECT_TRUE(s.lockForRead("x", 1));
+    EXPECT_TRUE(s.lockForRead("x", 2));   
+    EXPECT_FALSE(s.lockForWrite("x", 1));    
+    EXPECT_FALSE(s.lockForWrite("x", 2));
+}

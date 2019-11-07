@@ -10,12 +10,12 @@ GTEST_SRCS += $(addprefix $(d), \
 
 $(d)kvstore-test: $(o)kvstore-test.o $(LIB-transport) $(LIB-store-common) $(LIB-store-backend) $(GTEST_MAIN)
 
-# TEST_BINS += $(d)kvstore-test
+TEST_BINS += $(d)kvstore-test
 
 $(d)versionstore-test: $(o)versionstore-test.o $(LIB-transport) $(LIB-store-common) $(LIB-store-backend) $(GTEST_MAIN)
 
-# TEST_BINS += $(d)versionstore-test
+TEST_BINS += $(d)versionstore-test
 
 $(d)lockserver-test: $(o)lockserver-test.o $(LIB-transport) $(LIB-store-common) $(LIB-store-backend) $(GTEST_MAIN)
 
-# TEST_BINS += $(d)lockserver-test
+TEST_BINS += $(d)lockserver-test
