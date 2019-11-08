@@ -43,41 +43,42 @@ std::pair<uint32_t, bool> SmallbankTransaction::Bal(SyncClient &client, const st
     std::cout<<"Balance for name "<< name <<std::endl;
     if (!ReadAccountRow(client, name, accountRow) || !ReadSavingRow(client, accountRow.customer_id(), savingRow) ||
         !ReadCheckingRow(client, accountRow.customer_id(), checkingRow)) {
-        std::cout<<"not ok"<<std::endl;
 
         client.Abort(timeout_);
         std::cout<<"Aborted Balance"<<std::endl;
         return std::make_pair(0, false);
     }
     client.Commit(timeout_);
-    std::cout<<"Balance "<< savingRow.saving_balance() + checkingRow.checking_balance()<<std::endl;
+    std::cout<<"Committed Balance "<< savingRow.saving_balance() + checkingRow.checking_balance()<<std::endl;
     return std::make_pair(savingRow.saving_balance() + checkingRow.checking_balance(), true);
 }
 
 bool SmallbankTransaction::DepositChecking(SyncClient &client, const std::string &name, const int32_t value) {
+    std::cout<<"DepositChecking for name "<< name << " with val " << value<<std::endl;
     if (value < 0) {
-        Warning("Aborting deposit checking for %s due to negative amount %d", name.c_str(), value);
         client.Abort(timeout_);
+        std::cout<<"Aborted DepositChecking (- val)"<<std::endl;
         return false;
     }
     proto::AccountRow accountRow;
     proto::CheckingRow checkingRow;
 
     client.Begin();
-    std::cout<<"Client for name "<< name << " with value " << value<<std::endl;
     if (!ReadAccountRow(client, name, accountRow)) {
         client.Abort(timeout_);
+        std::cout<<"Aborted DepositChecking (AccountRow)"<<std::endl;
         return false;
     }
     const uint32_t customerId = accountRow.customer_id();
     if (!ReadCheckingRow(client, customerId, checkingRow)) {
         client.Abort(timeout_);
+        std::cout<<"Aborted DepositChecking (CheckingRow)"<<std::endl;
         return false;
     }
-    std::cout<<"Old value" << checkingRow.checking_balance() << std::endl;
+    std::cout<<"DepositChecking old value " << checkingRow.checking_balance() << std::endl;
     InsertCheckingRow(client, customerId, checkingRow.checking_balance() + value);
     client.Commit(timeout_);
-    std::cout<<"Deposit " << checkingRow.checking_balance() + value << std::endl;
+    std::cout<<"Committed DepositChecking " << checkingRow.checking_balance() + value << std::endl;
     return true;
 }
 
@@ -86,22 +87,30 @@ bool SmallbankTransaction::TransactSaving(SyncClient &client, const std::string 
     proto::AccountRow accountRow;
 
     client.Begin();
+    std::cout<<"TransactSaving for name "<< name << " with val " << value<<std::endl;
     if (!ReadAccountRow(client, name, accountRow)) {
         client.Abort(timeout_);
+        std::cout<<"Aborted TransactSaving (AccountRow)"<<std::endl;
         return false;
     }
     const uint32_t customerId = accountRow.customer_id();
-    ReadSavingRow(client, customerId, savingRow);
-    const uint32_t balance = savingRow.saving_balance();
-    const uint32_t resultingBalance = balance + value;
+    if (!ReadSavingRow(client, customerId, savingRow)) {
+        client.Abort(timeout_);
+        std::cout<<"Aborted TransactSaving (SavingRow)"<<std::endl;
+        return false;
+    }
+    const int32_t balance = savingRow.saving_balance();
+    std::cout<<"TransactSaving old value " << balance << std::endl;
+    const int resultingBalance = balance + value;
+    std::cout<<"TransactSaving resulting " << resultingBalance << std::endl;
     if (resultingBalance < 0) {
         client.Abort(timeout_);
-        Warning("Aborting transact saving for %s due to resulting negative balance %d", name.c_str(),
-                resultingBalance);
+        std::cout<<"Aborted TransactSaving (Negative Result)"<<std::endl;
         return false;
     }
     InsertSavingRow(client, customerId, resultingBalance);
     client.Commit(timeout_);
+    std::cout<<"Committed TransactSaving"<<std::endl;
     return true;
 }
 
@@ -114,26 +123,31 @@ bool SmallbankTransaction::Amalgamate(SyncClient &client, const std::string &nam
     proto::CheckingRow checkingRow2;
 
     client.Begin();
+    std::cout<<"Amalgamate for names "<< name1 << " " << name2 << std::endl;
     if (!ReadAccountRow(client, name1, accountRow1) || !ReadAccountRow(client, name2, accountRow2)) {
         client.Abort(timeout_);
+        std::cout<< "Aborted Amalgamate (AccountRow)" <<std::endl;
         return false;
     }
     const uint32_t customerId1 = accountRow1.customer_id();
     const uint32_t customerId2 = accountRow2.customer_id();
     if (!ReadCheckingRow(client, customerId2, checkingRow2)) {
         client.Abort(timeout_);
+        std::cout<< "Aborted Amalgamate (CheckingRow)" <<std::endl;
         return false;
     }
-    const uint32_t balance2 = checkingRow2.checking_balance();
+    const int32_t balance2 = checkingRow2.checking_balance();
     if (!ReadCheckingRow(client, customerId1, checkingRow1) || !
             ReadSavingRow(client, customerId1, savingRow1)) {
         client.Abort(timeout_);
+        std::cout<< "Aborted Amalgamate (2nd Balance)" <<std::endl;
         return false;
     }
     InsertCheckingRow(client, customerId2, balance2 + checkingRow1.checking_balance() + savingRow1.saving_balance());
     InsertSavingRow(client, customerId1, 0);
     InsertCheckingRow(client, customerId1, 0);
     client.Commit(timeout_);
+    std::cout<< "Committed Amalgamate" <<std::endl;
     return true;
 }
 
@@ -143,23 +157,28 @@ bool SmallbankTransaction::WriteCheck(SyncClient &client, const std::string &nam
     proto::SavingRow savingRow;
 
     client.Begin();
+    std::cout<<"WriteCheck for name "<< name<< " with value " << value << std::endl;
     if (!ReadAccountRow(client, name, accountRow)) {
         client.Abort(timeout_);
+        std::cout<<"Aborted WriteCheck (AccountRow)"<<std::endl;
         return false;
     }
     const uint32_t customerId = accountRow.customer_id();
     if (!ReadCheckingRow(client, customerId, checkingRow) || !
             ReadSavingRow(client, customerId, savingRow)) {
         client.Abort(timeout_);
+        std::cout<<"Aborted WriteCheck (Balance)"<<std::endl;
         return false;
     }
-    const uint32_t sum = checkingRow.checking_balance() + savingRow.saving_balance();
+    const int32_t sum = checkingRow.checking_balance() + savingRow.saving_balance();
+    std::cout<<"Sum for WriteCheck " << sum <<std::endl;
     if (sum < value) {
-        InsertCheckingRow(client, customerId, sum - value - 1);
+        InsertCheckingRow(client, customerId, checkingRow.checking_balance() - value - 1);
     } else {
-        InsertCheckingRow(client, customerId, sum - value);
+        InsertCheckingRow(client, customerId, checkingRow.checking_balance() - value);
     }
     client.Commit(timeout_);
+    std::cout<<"Committed WriteCheck (AccountRow)"<<std::endl;
     return true;
 }
 
@@ -197,7 +216,6 @@ bool SmallbankTransaction::ReadAccountRow(SyncClient &client, const std::string 
     std::string accountRowKey = AccountRowKey(name);
     std::string accountRowSerialized;
     client.Get(accountRowKey, accountRowSerialized, timeout_);
-    std::cout<< "get " << accountRowKey << "from client: " << accountRowSerialized << " serialized" <<std::endl;
     return accountRow.ParseFromString(accountRowSerialized);
 }
 

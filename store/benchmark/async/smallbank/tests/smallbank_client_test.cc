@@ -17,22 +17,22 @@ namespace smallbank {
 		fakeit::Mock<Transport> transportMockWrapper;
 		Transport & transportMock = transportMockWrapper.get();
 		std::mt19937 generator(0);
-		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,0,0,0,0,"","");
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,0,0,0,0,0,"","");
 		
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
+		double hotspotProbability = 0.9;
 		std::vector<std::string> keys;
 		for (int i = 0; i < totalKeys; i++) {
 			keys.push_back(std::to_string(i));
 		}
 		client.SetCustomerKeys(keys);
 
-		// expect many more non hotspot keys found (since only 1000 of 18000 are hotspot keys)
-		// and nonzero number of hotspot keys found
+		// expect ~90% keys to be hotspot
 		int hotspotKeysFound = 0;
 		int nonHotspotKeysFound = 0;
 		for (int i=0; i< 30000; i++) {
-			std::string key = client.GetCustomerKey(generator, keys, numHotspotKeys, totalKeys - numHotspotKeys);
+			std::string key = client.GetCustomerKey(generator, keys, numHotspotKeys, totalKeys - numHotspotKeys, hotspotProbability);
 			auto keysItr = std::find(keys.begin(), keys.end(), key); 
 			EXPECT_NE(keysItr, keys.end());
 			int keyIdx = keysItr - keys.begin();
@@ -42,8 +42,7 @@ namespace smallbank {
 				nonHotspotKeysFound += 1;
 			}
 		}
-		EXPECT_GT(0.15 * nonHotspotKeysFound, hotspotKeysFound);
-		EXPECT_GT(hotspotKeysFound, 0);
+		EXPECT_GT(hotspotKeysFound, 0.8 * (hotspotKeysFound+nonHotspotKeysFound));
 	}
 
 	TEST(GetCustomerKeyPair, Basic) {
@@ -52,7 +51,7 @@ namespace smallbank {
 		fakeit::Mock<Transport> transportMockWrapper;
 		Transport & transportMock = transportMockWrapper.get();
 		std::mt19937 generator(0);
-		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,0,0,0,0,"","");
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,0,0,0,0,0,"","");
 		
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
@@ -65,9 +64,10 @@ namespace smallbank {
 		// pairs: both in or both not in hotspot
 		int hotspotKeyPairsFound = 0;
 		int nonHotspotKeyPairsFound = 0;
+		double hotspotProbability = 0.9;
 		for (int i=0; i< 30000; i++) {
 			bool firstKeyInHotspot = false;
-			std::pair<std::string, std::string> keyPair = client.GetCustomerKeyPair(generator, keys, numHotspotKeys, totalKeys - numHotspotKeys);
+			std::pair<std::string, std::string> keyPair = client.GetCustomerKeyPair(generator, keys, numHotspotKeys, totalKeys - numHotspotKeys, hotspotProbability);
 			auto keysItr = std::find(keys.begin(), keys.end(), keyPair.first); 
 			EXPECT_NE(keysItr, keys.end());
 			if (keysItr - keys.begin() < numHotspotKeys) {
@@ -84,10 +84,8 @@ namespace smallbank {
 				nonHotspotKeyPairsFound += 1;
 			}
 		}
-		// expect many more non hotspot keys found (since only 1000 of 18000 are hotspot keys)
-		// and nonzero number of hotspot keys found
-		EXPECT_GT(0.15 * nonHotspotKeyPairsFound, hotspotKeyPairsFound);
-		EXPECT_GT(hotspotKeyPairsFound, 0);
+		// expect ~90% hotspot
+		EXPECT_GT(hotspotKeyPairsFound, 0.8 * (hotspotKeyPairsFound+nonHotspotKeyPairsFound));
 	}
 
 	TEST(GetNextTransaction, EvenSplit) {
@@ -98,7 +96,7 @@ namespace smallbank {
 		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
-		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,20,20,20,20,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,20,20,20,20,numHotspotKeys,totalKeys-numHotspotKeys,0.9, "","");
 		
 		std::vector<std::string> keys;
 		for (int i = 0; i < totalKeys; i++) {
@@ -126,7 +124,7 @@ namespace smallbank {
 		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
-		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,100,0,0,0,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,100,0,0,0,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
 		
 		std::vector<std::string> keys;
 		for (int i = 0; i < totalKeys; i++) {
@@ -158,7 +156,7 @@ namespace smallbank {
 		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
-		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,100,0,0,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,100,0,0,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
 		
 		std::vector<std::string> keys;
 		for (int i = 0; i < totalKeys; i++) {
@@ -187,7 +185,7 @@ namespace smallbank {
 		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
-		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,100,0,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,100,0,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
 		
 		std::vector<std::string> keys;
 		for (int i = 0; i < totalKeys; i++) {
@@ -216,7 +214,7 @@ namespace smallbank {
 		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
-		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,0,100,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,0,100,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
 		
 		std::vector<std::string> keys;
 		for (int i = 0; i < totalKeys; i++) {
@@ -246,7 +244,7 @@ namespace smallbank {
 		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
-		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,0,0,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,0,0,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
 		
 		std::vector<std::string> keys;
 		for (int i = 0; i < totalKeys; i++) {
@@ -276,7 +274,7 @@ namespace smallbank {
 		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
-		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,50,0,numHotspotKeys,totalKeys-numHotspotKeys,"","");
+		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,false,0,0,0,50,0,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
 		
 		std::vector<std::string> keys;
 		for (int i = 0; i < totalKeys; i++) {

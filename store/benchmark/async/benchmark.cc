@@ -248,6 +248,7 @@ DEFINE_int32(write_check_ratio, 10, "percentage of write check transactions"
     " (for smallbank)");
 DEFINE_int32(num_hotspots, 1000, "# of hotspots (for smallbank)");
 DEFINE_int32(num_customers, 18000, "# of customers (for smallbank)");
+DEFINE_double(hotspot_probability, 90, "probability of ending in hotspot");
 DEFINE_int32(timeout, 5000, "timeout in ms (for smallbank)");
 DEFINE_string(customer_name_file_path, "smallbank_names", "path to file"
     " containing names to be loaded (for smallbank)");
@@ -492,7 +493,7 @@ int main(int argc, char **argv) {
             FLAGS_abort_backoff, FLAGS_retry_aborted,
             FLAGS_timeout, FLAGS_balance_ratio, FLAGS_deposit_checking_ratio,
             FLAGS_transact_saving_ratio, FLAGS_amalgamate_ratio,
-            FLAGS_num_hotspots, FLAGS_num_customers - FLAGS_num_hotspots,
+            FLAGS_num_hotspots, FLAGS_num_customers - FLAGS_num_hotspots, FLAGS_hotspot_probability,
             FLAGS_customer_name_file_path);
         break;
       case BENCH_RW:
