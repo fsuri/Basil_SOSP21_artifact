@@ -148,10 +148,12 @@ void BranchGenerator::GenerateBranchesPermutations(
         for (const std::vector<proto::Transaction> &seq : new_seqs) {
           if (branch.txn().ops().size() == 1 || CommitCompatible(branch, seq)) {
             proto::Branch new_branch(branch); 
-            new_branch.clear_seq();
+            new_branch.clear_deps();
             for (const proto::Transaction &t : seq) {
-              proto::Transaction *tseq = new_branch.add_seq();
-              *tseq = t;
+              if (TransactionsConflict(t, new_branch.txn())) {
+                proto::Transaction *tseq = new_branch.add_deps();
+                *tseq = t;
+              }
             }
             if (Message_DebugEnabled(__FILE__)) {
               std::stringstream ss;

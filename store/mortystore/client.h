@@ -63,10 +63,6 @@ class Client : public ::AsyncClient {
 
   void ExecuteNextOperation(PendingRequest *req, proto::Branch &branch);
   ClientBranch GetClientBranch(const proto::Branch &branch);
-  void ValueOnBranch(const proto::Branch *branch, const std::string &key,
-      std::string &val);
-  bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
-      std::string &val);
 
   friend class ShardClient;
   void HandleReadReply(const TransportAddress &remote, const proto::ReadReply &msg, uint64_t shard);

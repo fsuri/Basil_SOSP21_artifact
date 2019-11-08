@@ -93,37 +93,12 @@ ClientBranch Client::GetClientBranch(const proto::Branch &branch) {
   for (auto op : branch.txn().ops()) {
     if (op.type() == proto::OperationType::READ) {
       std::string val;
-      ValueOnBranch(&branch, op.key(), val);
+      ValueOnBranch(branch, op.key(), val);
       clientBranch.readValues.insert(std::make_pair(op.key(), val));
     }
   }
   return clientBranch;
 }
-
-void Client::ValueOnBranch(const proto::Branch *branch, const std::string &key,
-    std::string &val) {
-  if (ValueInTransaction(branch->txn(), key, val)) {
-    return;
-  } else if (branch->seq().size() > 0) {
-    for (auto itr = branch->seq().rbegin(); itr != branch->seq().rend(); ++itr) {
-      if (ValueInTransaction(*itr, key, val)) {
-        return;
-      }
-    }
-  }
-}
-
-bool Client::ValueInTransaction(const proto::Transaction &txn, const std::string &key,
-    std::string &val) {
-  for (auto itr = txn.ops().rbegin(); itr != txn.ops().rend(); ++itr) {
-    if (itr->type() == proto::OperationType::WRITE && itr->key() == key) {
-      val = itr->val();
-      return true;
-    }
-  }
-  return false;
-}
-
 
 void Client::HandleReadReply(const TransportAddress &remote,
     const proto::ReadReply &msg, uint64_t shard) {

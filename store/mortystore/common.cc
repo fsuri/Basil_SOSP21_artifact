@@ -41,7 +41,7 @@ void PrintTransactionList(const std::vector<proto::Transaction> &txns,
 }
 
 void PrintBranch(const proto::Branch &branch, std::ostream &os) {
-  for (const proto::Transaction &b : branch.seq()) {
+  for (const proto::Transaction &b : branch.deps()) {
     os << b.id() << "[";
     for (const proto::Operation &o : b.ops()) {
       if (o.type() == proto::OperationType::READ) {
@@ -65,7 +65,7 @@ void PrintBranch(const proto::Branch &branch, std::ostream &os) {
 
 bool CommitCompatible(const proto::Branch &branch,
     const std::vector<proto::Transaction> &seq) {
-  std::vector<proto::Transaction> seq3;
+  /*std::vector<proto::Transaction> seq3;
   std::vector<proto::Transaction> seq4(seq);
   for (const proto::Transaction &b : branch.seq()) {
     seq3.push_back(b);
@@ -82,12 +82,13 @@ bool CommitCompatible(const proto::Branch &branch,
   PrintTransactionList(seq4, std::cerr);
   std::cerr << std::endl;
   return ValidSubsequence(branch.txn(), seq3, seq) &&
-      NoConflicts(branch.txn(), seq4);
+      NoConflicts(branch.txn(), seq4);*/
+  return false;
 }
 
 bool WaitCompatible(const proto::Branch &branch,
     const std::vector<proto::Transaction> &seq) {
-  std::vector<proto::Transaction> seq3;
+  /*std::vector<proto::Transaction> seq3;
   std::vector<proto::Transaction> seq4(seq);
   for (const proto::Transaction &b : branch.seq()) {
     auto itr = std::find_if(seq4.begin(), seq4.end(),
@@ -106,7 +107,8 @@ bool WaitCompatible(const proto::Branch &branch,
     }
   }
   return ValidSubsequence(branch.txn(), seq3, seq) &&
-      NoConflicts(branch.txn(), seq4);
+      NoConflicts(branch.txn(), seq4);*/
+  return false;
 }
 
 
@@ -223,8 +225,8 @@ void ValueOnBranch(const proto::Branch &branch, const std::string &key,
     std::string &val) {
   if (ValueInTransaction(branch.txn(), key, val)) {
     return;
-  } else if (branch.seq().size() > 0) {
-    for (auto itr = branch.seq().rbegin(); itr != branch.seq().rend(); ++itr) {
+  } else if (branch.deps().size() > 0) {
+    for (auto itr = branch.deps().rbegin(); itr != branch.deps().rend(); ++itr) {
       if (ValueInTransaction(*itr, key, val)) {
         return;
       }
