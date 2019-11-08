@@ -18,6 +18,8 @@ store/benchmark/async/smallbank/smallbank_client
 store/benchmark/async/smallbank/smallbank_data
 store/benchmark/async/smallbank/smallbank_names
 store/benchmark/async/smallbank/tests/smallbank_transaction_test
+store/benchmark/async/smallbank/tests/smallbank_client_test
+store/benchmark/async/smallbank/tests/smallbank_generator_test
 timeserver/timeserver
 
 lib/tests/configuration-test
