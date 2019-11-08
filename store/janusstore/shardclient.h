@@ -41,7 +41,7 @@ public:
     // Initiate the Commit phase for this shard.
     virtual void Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb);
 
-private:
+// private: // made public for testing
     uint64_t client_id; // Unique ID for this client.
     Transport *transport; // Transport layer.
     transport::Configuration *config;
@@ -49,20 +49,25 @@ private:
     int num_replicas;
     int replica; // which replica to use for reads
 
+    struct PendingRequest {
+        PendingRequest(uint64_t txn_id)
+        : txn_id(txn_id), responded(0) {}
+        ~PendingRequest() {}
+
+        uint64_t txn_id;
+        client_preaccept_callback cpcb;
+        client_accept_callback cacb;
+        client_commit_callback cccb;
+        std::set<uint64_t> aggregated_deps;
+        std::vector<janusstore::proto::Reply> preaccept_replies;
+        std::vector<janusstore::proto::Reply> accept_replies;
+        std::vector<janusstore::proto::Reply> commit_replies;
+        uint64_t responded;
+    };
+
     replication::ir::IRClient *client; // Client proxy.
 
-    // TODO will probably need to add fields for aggregating replica responses
-    // Map of txn_id to aggregated list of txn_id dependencies for this shard
-    std::unordered_map<uint64_t, std::set<uint64_t>> aggregated_deps;
-    
-    std::map<uint64_t, std::vector<janusstore::proto::Reply>> preaccept_replies;
-    std::map<uint64_t, std::vector<janusstore::proto::Reply>> accept_replies;
-    std::map<uint64_t, std::vector<janusstore::proto::Reply>> commit_replies;
-
-    std::map<uint64_t, client_preaccept_callback> pcb_map;
-    std::map<uint64_t, client_accept_callback> acb_map;
-    std::map<uint64_t, client_commit_callback> ccb_map;
-
+    std::unordered_map<uint64_t, PendingRequest*> pendingReqs;
 
     /* Callbacks for hearing back from a shard for a Janus phase. */
     void PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply,
@@ -77,13 +82,6 @@ private:
     const string &reply_str);
     void CommitContinuation(const string &request_str,
     const string &reply_str);
-
-    // void PreAcceptContinuation(uint64_t txn_id, const string &request_str,
-    // const string &reply_str);
-    // void AcceptContinuation(uint64_t txn_id, const string &request_str,
-    // const string &reply_str);
-    // void CommitContinuation(uint64_t txn_id, const string &request_str,
-    // const string &reply_str);
 
     int responded;
     int txn_id;

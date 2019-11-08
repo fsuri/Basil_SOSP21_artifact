@@ -6,6 +6,7 @@
 
 #include "lib/assert.h"
 #include "lib/message.h"
+#include "lib/tcptransport.h"
 #include "store/common/common-proto.pb.h"
 #include "store/janusstore/janus-proto.pb.h"
 
@@ -33,6 +34,9 @@ private:
     std::unordered_map<uint64_t, std::unordered_map<std::string, std::string>> sharded_writeset;
 
 public:
+    std::set<uint64_t> blocked_by_list;
+    std::set<const TransportAddress*> client_addrs;
+
     // the groups (shards) that this txn is associated with
     std::unordered_set<int> groups;
 
@@ -46,6 +50,10 @@ public:
 
     // map between key and value(s)
     std::unordered_map<std::string, std::string> write_set;
+
+    // the result of ths transaction
+    std::unordered_map<std::string, std::string> result;
+    void setResult(std::unordered_map<std::string, std::string> result);
 
     void setTransactionId(uint64_t txn_id);
     const uint64_t getTransactionId() const;

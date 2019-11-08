@@ -37,13 +37,14 @@ public:
                       replication::ir::proto::UnloggedReplyMessage *unlogged_reply);
 
     void HandleInquire(const TransportAddress &remote,
-                      const proto::InquireMessage i_msg);
+                      const proto::InquireMessage i_msg,
+                      proto::Reply *reply);
     void HandleInquireReply(const proto::InquireOKMessage i_ok_msg);
 
     Transport *transport;
     int groupIdx;
     int myIdx;
-private:
+
     // simple key-value store
     Store *store;
 
@@ -70,18 +71,17 @@ private:
     std::unordered_map<std::string, std::set<uint64_t>> write_key_txn_map;
 
     // maps txn_id -> list[other_ids] being blocked by txn_id
-    std::unordered_map<uint64_t, std::vector<std::pair<const TransportAddress*, uint64_t>>> blocking_ids;
+    std::unordered_map<uint64_t, std::set<uint64_t>> blocking_ids;
     std::unordered_map<uint64_t, std::vector<std::pair<const TransportAddress*, proto::InquireMessage>>> inquired_ids;
 
     // functions to process shardclient requests
     // must take in a full Transaction object in order to correctly bookkeep and commit
-
     // returns the list of dependencies for given txn, NULL if PREACCEPT-NOT-OK
-    std::vector<uint64_t>* BuildDepList(Transaction txn, uint64_t ballot);
+    std::vector<uint64_t>* BuildDepList(Transaction &txn, uint64_t ballot);
 
-    // TODO figure out what T.abandon and T.result are
+
+    // TODO figure out what T.abandon is
     void _HandleCommit(uint64_t txn_id,
-                       std::vector<uint64_t> deps,
                        const TransportAddress &remote,
                        replication::ir::proto::UnloggedReplyMessage *unlogged_reply
    );

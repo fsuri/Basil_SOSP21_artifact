@@ -2,6 +2,22 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
+11/6:
+	- (TODO) debug two problems seen from benchmark script:
+		- preaccept callbacks are processed on shardclient but commit/accept is not invoked
+		- server deplist loop
+	- (TODO) modify output commit callback to verify strict serializability
+	- (TODO) if everything works for benchmark, clean up code in the meantime
+10/31:
+	- (TODO) run benchmark script and debug/verify strict serializability via client debug
+	- (TODO) unit test inquire
+10/23:
+	- (TODO) try running store/benchmark/async/benchmark script
+		- RWClient
+	- (TODO) try to get inquire to run for competing transactions
+		- verify inquire works
+	- (TODO) unit testing server and client logic
+		- in particular, coordinator and server slow path
 10/16:
 	- (TODO) debug with txn script
 	- (TODO) write unit tests to verify basic state behavior on client/server

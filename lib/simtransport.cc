@@ -86,7 +86,7 @@ SimulatedTransport::Register(TransportReceiver *receiver,
     // Tell the receiver its address
     receiver->SetAddress(new SimulatedTransportAddress(addr));
 
-    RegisterConfiguration(receiver, config, replicaIdx);
+    // RegisterConfiguration(receiver, config, replicaIdx);
 
     // If this is registered as a replica, record the index
     replicaIdxs[addr] = replicaIdx;
@@ -104,6 +104,8 @@ SimulatedTransport::Register(TransportReceiver *receiver,
     endpoints[addr] = receiver;
     // Tell the receiver its address
     receiver->SetAddress(new SimulatedTransportAddress(addr));
+
+    RegisterConfiguration(receiver, config, groupIdx, replicaIdx);
 
     // If this is registered as a replica, record the index
     if (g_replicaIdxs.find(groupIdx) == g_replicaIdxs.end()) {
@@ -217,7 +219,7 @@ SimulatedTransport::Run()
         while (!queue.empty()) {
             QueuedMessage &q = queue.front();
             TransportReceiver *dst = endpoints[q.dst];
-            dst->ReceiveMessage(SimulatedTransportAddress(q.src), q.type, q.msg);
+            dst->ReceiveMessage(SimulatedTransportAddress(q.src), q.type, q.msg, nullptr);
             queue.pop_front();
         }
 
@@ -283,4 +285,36 @@ SimulatedTransport::CancelAllTimers()
 {
     timers.clear();
     processTimers = false;
+}
+
+void
+SimulatedTransport::Stop() {
+    running = false;
+}
+
+
+const SimulatedTransportAddress *
+SimulatedTransport::LookupFCAddress(const transport::Configuration *cfg)
+{
+    if (fcAddress == -1) {
+        return NULL;
+    }
+    SimulatedTransportAddress *addr =
+        new SimulatedTransportAddress(fcAddress);
+    return addr;
+}
+
+bool
+SimulatedTransport::SendMessageInternal(TransportReceiver *src,
+                                        const SimulatedTransportAddress &dstAddr,
+                                        const Message &m)
+{
+    return true;
+}
+
+bool SimulatedTransport::SendMessageToReplica(TransportReceiver *src,
+                             int groupIdx,
+                             int replicaIdx,
+                             const google::protobuf::Message &m) {
+    return true;
 }
