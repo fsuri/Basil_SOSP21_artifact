@@ -39,6 +39,9 @@ bool NoConflicts(const proto::Transaction &txn,
 bool TransactionsConflict(const proto::Transaction &txn1,
       const proto::Transaction &txn2);
 
+bool MostRecentConflict(const proto::Operation &op,
+    const std::vector<proto::Transaction> &seq, proto::Transaction &txn);
+
 void ValueOnBranch(const proto::Branch &branch, const std::string &key,
       std::string &val);
 
