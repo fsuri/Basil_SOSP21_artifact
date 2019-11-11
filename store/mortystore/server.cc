@@ -156,25 +156,10 @@ bool Server::CheckBranch(const TransportAddress &addr, const proto::Branch &bran
     *reply.mutable_branch() = branch;
     transport->SendMessage(this, addr, reply);
     return true;
-  } else if (CommitCompatible(branch, prepared) && CommitCompatible(branch,
-        committed)) {
+  } else if (CommitCompatible(branch, prepared, prepared_txn_ids)) {
     prepared.push_back(branch.txn());
     prepared_txn_ids.insert(branch.txn().id());
     proto::PrepareOK reply;
-    *reply.mutable_branch() = branch;
-    transport->SendMessage(this, addr, reply);
-    return true;
-  } else if (!WaitCompatible(branch, committed)) {
-    if (Message_DebugEnabled(__FILE__)) {
-      std::stringstream ss;
-      ss << "Branch not compatible with committed." << std::endl;
-      ss << "Branch: " << std::endl;
-      PrintBranch(branch, ss);
-      ss << std::endl << "Committed: " << std::endl;
-      PrintTransactionList(committed, ss);
-      Debug("%s", ss.str().c_str());
-    }
-    proto::PrepareKO reply;
     *reply.mutable_branch() = branch;
     transport->SendMessage(this, addr, reply);
     return true;

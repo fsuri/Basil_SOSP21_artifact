@@ -25,9 +25,12 @@ void PrintBranch(const proto::Branch &branch, std::ostream &os);
 
 void PrintTransactionList(const std::vector<proto::Transaction> &txns, std::ostream &os);
 
-bool CommitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq);
+bool CommitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq, const std::set<uint64_t> &prepared_txn_ids);
 
 bool WaitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq);
+
+bool DepsFinalized(const proto::Branch &branch,
+      const std::set<uint64_t> &prepared_txn_ids);
 
 bool ValidSubsequence(const proto::Transaction &txn,
       const std::vector<proto::Transaction> &seq1,
