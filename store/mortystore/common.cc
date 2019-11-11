@@ -60,14 +60,14 @@ void PrintBranch(const proto::Branch &branch, std::ostream &os) {
       os << "w(" << o.key() << "),";
     }
   }
-  os << "]" << std::endl;
+  os << "]";
 }
 
 bool CommitCompatible(const proto::Branch &branch,
     const std::vector<proto::Transaction> &seq) {
-  /*std::vector<proto::Transaction> seq3;
+  std::vector<proto::Transaction> seq3;
   std::vector<proto::Transaction> seq4(seq);
-  for (const proto::Transaction &b : branch.seq()) {
+  for (const proto::Transaction &b : branch.deps()) {
     seq3.push_back(b);
     auto itr = std::find_if(seq4.begin(), seq4.end(),
         [&](const proto::Transaction &other) {
@@ -77,20 +77,15 @@ bool CommitCompatible(const proto::Branch &branch,
       seq4.erase(itr);
     }
   }
-  PrintTransactionList(seq3, std::cerr);
-  std::cerr << std::endl;
-  PrintTransactionList(seq4, std::cerr);
-  std::cerr << std::endl;
   return ValidSubsequence(branch.txn(), seq3, seq) &&
-      NoConflicts(branch.txn(), seq4);*/
-  return false;
+      NoConflicts(branch.txn(), seq4);
 }
 
 bool WaitCompatible(const proto::Branch &branch,
     const std::vector<proto::Transaction> &seq) {
-  /*std::vector<proto::Transaction> seq3;
+  std::vector<proto::Transaction> seq3;
   std::vector<proto::Transaction> seq4(seq);
-  for (const proto::Transaction &b : branch.seq()) {
+  for (const proto::Transaction &b : branch.deps()) {
     auto itr = std::find_if(seq4.begin(), seq4.end(),
         [&](const proto::Transaction &other) {
           return google::protobuf::util::MessageDifferencer::Equals(b, other);
@@ -107,8 +102,7 @@ bool WaitCompatible(const proto::Branch &branch,
     }
   }
   return ValidSubsequence(branch.txn(), seq3, seq) &&
-      NoConflicts(branch.txn(), seq4);*/
-  return false;
+      NoConflicts(branch.txn(), seq4);
 }
 
 
@@ -129,40 +123,36 @@ bool ValidSubsequence(const proto::Transaction &txn,
   }
 
   // now check that all conflicting transactions are ordered the same
-  for (size_t i1 = 0; i1 < seq1.size(); ++i1) {
-    for (size_t j1 = i1 + 1; j1 < seq1.size(); ++j1) {
-      if (TransactionsConflict(seq1[i1], seq1[j1])) {
-        bool found = false;
-        for (size_t i2 = 0; i2 < seq2.size(); ++i2) {
-          for (size_t j2 = i2 + 1; j2 < seq2.size(); ++j2) {
-            if (seq1[i1].id() == seq2[i2].id() && seq1[j1].id() == seq2[j2].id()) {
-              proto::Transaction txn1(seq2[i2]);
-              google::protobuf::RepeatedPtrField<proto::Operation> ops(txn1.ops());
-              for (int l = 0; l < seq1[i1].ops().size(); ++l) {
-                const proto::Operation &op2 = seq1[i1].ops()[l];
-                auto itr = std::find_if(ops.begin(), ops.end(),
-                    [op2](const proto::Operation &op) {
-                        return op.type() == op2.type() && op.key() == op2.key() &&
-                            op.val() == op2.val();
-                      });
-                if (itr != ops.end()) {
-                  ops.erase(itr);
-                }
-              }
-              *txn1.mutable_ops() = ops;
-              if (TransactionsConflict(txn, txn1)) {
-                return false;
-              } else {
-                found = true;
-                goto endloop;
-              }
+  for (const proto::Operation &op : txn.ops()) {
+    proto::Transaction t;
+    if (MostRecentConflict(op, seq2, t)) {
+      bool found = false;
+      for (const proto::Transaction &dep : seq1) {
+        if (dep.id() == t.id()) {
+          proto::Transaction txn1(t);
+          google::protobuf::RepeatedPtrField<proto::Operation> ops(txn1.ops());
+          for (int l = 0; l < dep.ops().size(); ++l) {
+            const proto::Operation &op2 = dep.ops()[l];
+            auto itr = std::find_if(ops.begin(), ops.end(),
+                [op2](const proto::Operation &op) {
+                    return op.type() == op2.type() && op.key() == op2.key() &&
+                        op.val() == op2.val();
+                  });
+            if (itr != ops.end()) {
+              ops.erase(itr);
             }
           }
+          *txn1.mutable_ops() = ops;
+          if (TransactionsConflict(txn, txn1)) {
+            return false;
+          } else {
+            found = true;
+            break;
+          }
         }
-endloop:
-        if (!found) {
-          return false;
-        }
+      }
+      if (!found) {
+        return false;
       }
     }
   }
@@ -219,6 +209,21 @@ bool TransactionsConflict(const proto::Transaction &txn1,
   } else {
     return false;
   }
+}
+
+bool MostRecentConflict(const proto::Operation &op,
+    const std::vector<proto::Transaction> &seq, proto::Transaction &txn) {
+  for (auto itr = seq.rbegin(); itr != seq.rend(); ++itr) {
+    for (auto jtr = itr->ops().rbegin(); jtr != itr->ops().rend(); ++jtr) {
+      if ((op.type() != proto::OperationType::READ
+          || jtr->type() == proto::OperationType::WRITE) &&
+          op.key() == jtr->key()) {
+        txn = *itr;
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 void ValueOnBranch(const proto::Branch &branch, const std::string &key,
