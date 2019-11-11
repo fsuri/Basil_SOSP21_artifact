@@ -14,7 +14,7 @@ BranchGenerator::BranchGenerator() {
 }
 
 BranchGenerator::~BranchGenerator() {
-  Latency_Dump(&generateLatency);
+  //Latency_Dump(&generateLatency);
 }
 
 void BranchGenerator::AddPendingWrite(const std::string &key,
@@ -114,7 +114,7 @@ void BranchGenerator::GenerateBranchesPermutations(
           ss << ", ";
         }
       }
-      ss << "]" << std::endl;
+      ss << "]";
       Debug("%s", ss.str().c_str());
     }
     std::vector<std::vector<proto::Transaction>> new_seqs;
@@ -139,25 +139,46 @@ void BranchGenerator::GenerateBranchesPermutations(
     auto itr = pending_branches.find(txns_sorted[txns_sorted.size() - 1]);
     if (itr != pending_branches.end()) {
       for (const proto::Branch &branch : itr->second) {
+        proto::Branch prev(branch);
+        prev.mutable_txn()->mutable_ops()->RemoveLast();
         if (Message_DebugEnabled(__FILE__)) {
           std::stringstream ss;
-          ss << "Potential: ";
+          ss << "  Potential: ";
           PrintBranch(branch, ss);
+          Debug("%s", ss.str().c_str());
+
+          ss.str("");
+
+          ss << "  Prev: ";
+          PrintBranch(prev, ss);
           Debug("%s", ss.str().c_str());
         }
         for (const std::vector<proto::Transaction> &seq : new_seqs) {
-          if (branch.txn().ops().size() == 1 || CommitCompatible(branch, seq)) {
+          if (Message_DebugEnabled(__FILE__)) {
+            std::stringstream ss;
+            ss << "  Seq: ";
+            PrintTransactionList(seq, ss);
+            Debug("%s", ss.str().c_str());
+          }
+          if (CommitCompatible(prev, seq)) {
             proto::Branch new_branch(branch); 
             new_branch.clear_deps();
-            for (const proto::Transaction &t : seq) {
-              if (TransactionsConflict(t, new_branch.txn())) {
-                proto::Transaction *tseq = new_branch.add_deps();
-                *tseq = t;
+            for (const proto::Operation &op : new_branch.txn().ops()) {
+              proto::Transaction t;
+              if (MostRecentConflict(op, seq, t)) {
+                if (std::find_if(new_branch.deps().begin(), new_branch.deps().end(),
+                  [&](const proto::Transaction &other) {
+                    return google::protobuf::util::MessageDifferencer::Equals(
+                        t, other);
+                  }) == new_branch.deps().end()) {
+                    proto::Transaction *tseq = new_branch.add_deps();
+                    *tseq = t;
+                  }
               }
             }
             if (Message_DebugEnabled(__FILE__)) {
               std::stringstream ss;
-              ss << "Generated branch: ";
+              ss << "    Generated branch: ";
               PrintBranch(new_branch, ss);
               Debug("%s", ss.str().c_str());
             }
