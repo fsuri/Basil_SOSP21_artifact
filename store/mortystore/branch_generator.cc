@@ -126,7 +126,7 @@ void BranchGenerator::GenerateBranchesPermutations(
         auto itr = pending_branches.find(txns_sorted[i]);
         if (itr != pending_branches.end()) {
           for (const proto::Branch &branch : itr->second) {
-            if (branch.txn().ops().size() == 1 || CommitCompatible(branch, new_seqs[j])) {
+            if (branch.txn().ops().size() == 1 || WaitCompatible(branch, new_seqs[j])) {
               std::vector<proto::Transaction> seq(new_seqs[j]);
               seq.push_back(branch.txn());
               new_seqs1.push_back(seq);
@@ -160,7 +160,8 @@ void BranchGenerator::GenerateBranchesPermutations(
             PrintTransactionList(seq, ss);
             Debug("%s", ss.str().c_str());
           }
-          if (CommitCompatible(prev, seq)) {
+          if (WaitCompatible(prev, seq)) {
+            Debug("  Compatible");
             proto::Branch new_branch(branch); 
             new_branch.clear_deps();
             for (const proto::Operation &op : new_branch.txn().ops()) {

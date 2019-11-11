@@ -8,6 +8,33 @@
 
 namespace mortystore {
 
+proto::Transaction T(const std::vector<std::vector<std::string>> &txn) {
+  proto::Transaction t;
+  for (const auto &op : txn) {
+    UW_ASSERT(op.size() == 2);
+    proto::Operation *o = t.add_ops();
+    o->set_key(op[0]);
+    o->set_value(op[1]);
+    if (op[1].length() == 0) {
+      o->set_type(proto::OperationType::READ);
+    } else {
+      o->set_type(proto::OperationType::WRITE);
+    }
+  }
+  return t;
+}
+
+proto::Branch B(const std::vector<std::vector<std::vector<std::string>>> &branch) {
+  proto::Branch b;
+  UW_ASSERT(branch.size() > 0);
+  for (size_t i = 0; i < branch.size() - 1; ++i) {
+    proto::Transaction *t = b.add_deps();
+    *t = T(branch[i]);
+  }
+  *b.mutable_txn() = T(branch[branch.size() - 1]);
+  return b;
+}
+
 TEST(BranchGenerator, NoCommittedNoConcurrentNewBranch) {
   std::vector<proto::Transaction> committed;
 

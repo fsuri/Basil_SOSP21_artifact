@@ -64,64 +64,39 @@ void PrintBranch(const proto::Branch &branch, std::ostream &os) {
 }
 
 bool CommitCompatible(const proto::Branch &branch,
-    const std::vector<proto::Transaction> &seq) {
+    const std::vector<proto::Transaction> &seq,
+    const std::set<uint64_t> &prepared_txn_ids) {
   std::vector<proto::Transaction> seq3;
-  std::vector<proto::Transaction> seq4(seq);
   for (const proto::Transaction &b : branch.deps()) {
     seq3.push_back(b);
-    auto itr = std::find_if(seq4.begin(), seq4.end(),
-        [&](const proto::Transaction &other) {
-          return google::protobuf::util::MessageDifferencer::Equals(b, other);
-        });
-    if (itr != seq4.end()) {
-      seq4.erase(itr);
-    }
   }
-  return ValidSubsequence(branch.txn(), seq3, seq) &&
-      NoConflicts(branch.txn(), seq4);
+  return DepsFinalized(branch, prepared_txn_ids) &&
+    ValidSubsequence(branch.txn(), seq3, seq);
 }
 
 bool WaitCompatible(const proto::Branch &branch,
     const std::vector<proto::Transaction> &seq) {
   std::vector<proto::Transaction> seq3;
-  std::vector<proto::Transaction> seq4(seq);
   for (const proto::Transaction &b : branch.deps()) {
-    auto itr = std::find_if(seq4.begin(), seq4.end(),
-        [&](const proto::Transaction &other) {
-          return google::protobuf::util::MessageDifferencer::Equals(b, other);
-        });
-    if (itr != seq4.end()) {
-      seq4.erase(itr);
-    }
-    auto itr2 = std::find_if(seq.begin(), seq.end(),
-        [&](const proto::Transaction &other) {
-          return google::protobuf::util::MessageDifferencer::Equals(b, other);
-        });
-    if (itr2 != seq.end()) {
-      seq3.push_back(b);
-    }
+    seq3.push_back(b);
   }
-  return ValidSubsequence(branch.txn(), seq3, seq) &&
-      NoConflicts(branch.txn(), seq4);
+  return ValidSubsequence(branch.txn(), seq3, seq);
 }
 
+
+bool DepsFinalized(const proto::Branch &branch,
+    const std::set<uint64_t> &prepared_txn_ids) {
+  for (const auto &dep : branch.deps()) {
+    if (prepared_txn_ids.find(dep.id()) == prepared_txn_ids.end()) {
+      return false;
+    }
+  }
+  return true;
+}
 
 bool ValidSubsequence(const proto::Transaction &txn,
       const std::vector<proto::Transaction> &seq1,
       const std::vector<proto::Transaction> &seq2) {
-  // first check that all dependencies in seq1 are also in seq2
-  std::set<uint64_t> inseq2;
-  for (size_t i = 0; i < seq2.size(); ++i) {
-    inseq2.insert(seq2[i].id());
-  }
-  for (size_t i = 0; i < seq1.size(); ++i) {
-    if (TransactionsConflict(txn, seq1[i])) {
-      if (inseq2.find(seq1[i].id()) == inseq2.end()) {
-        return false;
-      }
-    }
-  }
-
   // now check that all conflicting transactions are ordered the same
   for (const proto::Operation &op : txn.ops()) {
     proto::Transaction t;
@@ -143,6 +118,8 @@ bool ValidSubsequence(const proto::Transaction &txn,
             }
           }
           *txn1.mutable_ops() = ops;
+          // if the dependency committed with conflicting operations that we are
+          //   not aware of, we cannot commit
           if (TransactionsConflict(txn, txn1)) {
             return false;
           } else {
@@ -154,16 +131,6 @@ bool ValidSubsequence(const proto::Transaction &txn,
       if (!found) {
         return false;
       }
-    }
-  }
-  return true;
-}
-
-bool NoConflicts(const proto::Transaction &txn,
-      const std::vector<proto::Transaction> &seq) {
-  for (size_t i = 0; i < seq.size(); ++i) {
-    if (TransactionsConflict(txn, seq[i])) {
-      return false;
     }
   }
   return true;
