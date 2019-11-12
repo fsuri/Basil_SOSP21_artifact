@@ -1,5 +1,7 @@
 #include "store/mortystore/common.h"
 
+#include "lib/assert.h"
+
 #include <google/protobuf/util/message_differencer.h>
 
 bool operator==(const mortystore::proto::Branch &b1,
@@ -217,5 +219,44 @@ bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
   return false;
 }
 
+proto::Transaction _testing_txn(const std::vector<std::vector<std::string>> &txn) {
+  proto::Transaction t;
+  UW_ASSERT(txn.size() > 1);
+  t.set_id(std::stoi(txn[0][0]));
+
+  for (size_t i = 1; i < txn.size(); ++i) {
+    UW_ASSERT(txn[i].size() == 2);
+    proto::Operation *o = t.add_ops();
+    o->set_key(txn[i][0]);
+    o->set_val(txn[i][1]);
+    if (txn[i][1].length() == 0) {
+      o->set_type(proto::OperationType::READ);
+    } else {
+      o->set_type(proto::OperationType::WRITE);
+    }
+  }
+  return t;
+}
+
+proto::Branch _testing_branch(const std::vector<std::vector<std::vector<std::string>>> &branch) {
+  proto::Branch b;
+  UW_ASSERT(branch.size() > 0);
+  for (size_t i = 0; i < branch.size() - 1; ++i) {
+    proto::Transaction *t = b.add_deps();
+    *t = _testing_txn(branch[i]);
+  }
+  *b.mutable_txn() = _testing_txn(branch[branch.size() - 1]);
+  return b;
+}
+
+std::vector<proto::Transaction> _testing_txns(
+    const std::vector<std::vector<std::vector<std::string>>> &txns) {
+  std::vector<proto::Transaction> v;
+  UW_ASSERT(txns.size() > 0);
+  for (size_t i = 0; i < txns.size(); ++i) {
+    v.push_back(_testing_txn(txns[i]));
+  }
+  return v;
+}
 
 } // namespace mortystore

@@ -53,6 +53,13 @@ void Server::Load(const std::string &key, const std::string &value,
 }
 
 void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) {
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Read: ";
+    PrintBranch(msg.branch(), ss);
+    Debug("%s", ss.str().c_str());
+  }
+
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
     return;
@@ -66,16 +73,16 @@ void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) 
 }
 
 void Server::HandleWrite(const TransportAddress &remote, const proto::Write &msg) {
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Write: ";
+    PrintBranch(msg.branch(), ss);
+    Debug("%s", ss.str().c_str());
+  }
+
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
     return;
-  }
-
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "Received write: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
   }
 
   txn_coordinators[msg.branch().txn().id()] = &remote;
@@ -86,6 +93,13 @@ void Server::HandleWrite(const TransportAddress &remote, const proto::Write &msg
 }
 
 void Server::HandlePrepare(const TransportAddress &remote, const proto::Prepare &msg) {
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Prepare: ";
+    PrintBranch(msg.branch(), ss);
+    Debug("%s", ss.str().c_str());
+  }
+
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
     return;
@@ -97,6 +111,13 @@ void Server::HandlePrepare(const TransportAddress &remote, const proto::Prepare 
 }
 
 void Server::HandleKO(const TransportAddress &remote, const proto::KO &msg) {
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "KO: ";
+    PrintBranch(msg.branch(), ss);
+    Debug("%s", ss.str().c_str());
+  }
+
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
     return;
@@ -121,6 +142,13 @@ void Server::HandleKO(const TransportAddress &remote, const proto::KO &msg) {
 }
 
 void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &msg) {
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Commit: ";
+    PrintBranch(msg.branch(), ss);
+    Debug("%s", ss.str().c_str());
+  }
+
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
     return;
@@ -129,7 +157,9 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
   committed.push_back(msg.branch().txn());
   committed_txn_ids.insert(msg.branch().txn().id());
   
-  generator.ClearPending(msg.branch().txn().id());
+  for (auto id : committed_txn_ids) {
+    generator.ClearPending(id);
+  }
 
   for (auto itr = waiting.begin(); itr != waiting.end(); ) {
     if (CheckBranch(*txn_coordinators[itr->txn().id()],
@@ -145,6 +175,13 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
 }
 
 void Server::HandleAbort(const TransportAddress &remote, const proto::Abort &msg) {
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Abort: ";
+    PrintBranch(msg.branch(), ss);
+    Debug("%s", ss.str().c_str());
+  }
+
   generator.ClearPending(msg.branch().id());
 }
 
