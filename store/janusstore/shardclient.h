@@ -21,6 +21,7 @@ namespace janusstore {
 typedef std::function<void(int, std::vector<janusstore::proto::Reply>)> client_preaccept_callback;
 typedef std::function<void(int, std::vector<janusstore::proto::Reply>)> client_accept_callback;
 typedef std::function<void(int, std::vector<janusstore::proto::Reply>)> client_commit_callback;
+typedef std::function<void(std::string, std::string)> client_read_callback;
 
 
 class ShardClient {
@@ -40,6 +41,8 @@ public:
 
     // Initiate the Commit phase for this shard.
     virtual void Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb);
+
+    virtual void Read(std::string key, client_read_callback pcb);
 
 // private: // made public for testing
     uint64_t client_id; // Unique ID for this client.
@@ -68,19 +71,23 @@ public:
     replication::ir::IRClient *client; // Client proxy.
 
     std::unordered_map<uint64_t, PendingRequest*> pendingReqs;
+    std::unordered_map<std::string, client_read_callback> pendingReads;
 
     /* Callbacks for hearing back from a shard for a Janus phase. */
     void PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply,
         client_preaccept_callback pcb);
-    // 
+    //
     void AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_accept_callback acb);
     void CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb);
+    void ReadCallback(string key, string value, client_read_callback rcb);
 
     void PreAcceptContinuation(const string &request_str,
     const string &reply_str);
     void AcceptContinuation(const string &request_str,
     const string &reply_str);
     void CommitContinuation(const string &request_str,
+    const string &reply_str);
+    void ReadContinuation(const string &request_str,
     const string &reply_str);
 
     int responded;

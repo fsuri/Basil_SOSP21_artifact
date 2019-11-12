@@ -12,7 +12,7 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
   responded(0) {
 
   this->num_replicas = config->n;
-  printf("shardclient%d has %d replicas\n", shard, this->num_replicas);
+  Debug("shardclient%d has %d replicas\n", shard, this->num_replicas);
 
   client = new replication::ir::IRClient(*config, transport, client_id);
 
@@ -21,7 +21,7 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
   } else {
     replica = closestReplica;
   }
-  Debug("Sending unlogged to replica %i", replica);
+  Debug("[ShardClient %i] Sending unlogged to replica %i", shard, replica);
 }
 
 ShardClient::~ShardClient() {
@@ -244,5 +244,39 @@ void ShardClient::CommitContinuation(const string &request_str,
 	client_commit_callback ccb = req->cccb;
 	// invoke the shardclient callback
 	this->CommitCallback(txn_id, reply, ccb);
+}
+
+void ShardClient::Read(string key, client_read_callback pcb) {
+	Debug("[shard %i] Sending READ for key %s", shard, key.c_str());
+
+	string request_str;
+
+	Request request;
+	request.set_op(Request::GET);
+	request.set_key(key);
+
+	request.SerializeToString(&request_str);
+	this->pendingReads[key] = pcb;
+	for (int i = 0; i < this->num_replicas; i++) {
+		client->InvokeUnlogged(shard, i, request_str,
+			std::bind(&ShardClient::ReadContinuation, this,
+			placeholders::_1, placeholders::_2), nullptr, 10000);
+	}
+}
+
+void ShardClient::ReadContinuation(const string &request_str, const string &reply_str) {
+	janusstore::proto::Reply reply;
+	reply.ParseFromString(reply_str);
+
+	string key = reply.key();
+	client_read_callback rcb = this->pendingReads[key];
+	Debug("In read continuation %s", reply.DebugString().c_str());
+
+	this->ReadCallback(reply.key(), reply.value(), rcb);
+}
+
+void ShardClient::ReadCallback(string key, string value, client_read_callback rcb) {
+	Debug("goodbye...");
+	rcb(key, value);
 }
 }

@@ -32,4 +32,11 @@ int Store::Put(uint64_t id, string key, string value) {
     kv_store[key] = value;
     return REPLY_OK;
 }
+
+string Store::Read(string key) {
+    if (kv_store.find(key) == kv_store.end()) {
+        return "NOT FOUND";
+    }
+    return kv_store[key];
+}
 } // namespace janusstore

@@ -31,6 +31,9 @@ public:
 
     virtual void Execute(OneShotTransaction *txn, execute_callback ecb);
 
+    // read
+    void Read(string key);
+
     // begins PreAccept phase
     void PreAccept(Transaction *txn, uint64_t ballot, execute_callback ocb);
 
@@ -84,10 +87,11 @@ public:
     void setParticipants(Transaction *txn);
 
 /* * coordinator role (co-located with client but not visible to client) * */
-
+    // read
+    void ReadCallback(string key, string value);
     // callback when all participants for a shard have replied
     // shardclient aggregates all replies before invoking the callback
-    // replies is a vector of all replies for this shard 
+    // replies is a vector of all replies for this shard
     // deps is a map from replica ID to its deps for T (a list of other t_ids)
     void PreAcceptCallback(
         uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies);

@@ -23,7 +23,6 @@ Server::~Server() {
 void Server::ReceiveMessage(const TransportAddress &remote,
                         const string &type, const string &data,
                         void *meta_data) {
-    // Debug("[Server %i] Received message", this->myIdx);
     replication::ir::proto::UnloggedRequestMessage unlogged_request;
     replication::ir::proto::UnloggedReplyMessage unlogged_reply;
 
@@ -52,6 +51,17 @@ void Server::ReceiveMessage(const TransportAddress &remote,
             }
             case Request::INQUIRE: {
                 HandleInquire(remote, request.inquire(), &reply);
+                break;
+            }
+            case Request::GET: {
+                Debug("got a GET request");
+                string key = request.key();
+                string value = store->Read(key);
+
+                reply.set_value(value);
+
+                unlogged_reply.set_reply(reply.SerializeAsString());
+                transport->SendMessage(this, remote, unlogged_reply);
                 break;
             }
             default: {

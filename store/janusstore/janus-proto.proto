@@ -1,7 +1,5 @@
 syntax = "proto2";
 
-import "store/common/common-proto.proto";
-
 package janusstore.proto;
 
 message DependencyList {
@@ -88,23 +86,18 @@ message InquireOKMessage {
 
 message Request {
      enum Operation {
-          GET = 1; // TODO what is this?
+          GET = 1;
           PREACCEPT = 2;
           ACCEPT = 3;
           COMMIT = 4;
           INQUIRE = 5;
-
-          // for failure recovery
-          PREPARE = 6;
      }
     optional Operation op = 1;
     optional PreAcceptMessage preaccept = 2;
     optional AcceptMessage accept = 3;
     optional CommitMessage commit = 4;
     optional InquireMessage inquire = 5;
-
-     // for failure recovery
-     // optional PrepareMessage prepare = 6;
+    optional string key = 6;
 }
 
 message Reply {
@@ -116,19 +109,16 @@ message Reply {
           ACCEPT_NOT_OK = 5;
           COMMIT_OK = 6;
           INQUIRE_OK = 7;
-
-          // for failure recovery
-          PREPARE_OK = 8;
      }
     optional Operation op = 1;
-    optional string value = 2; // TODO what is this for?
-    optional PreAcceptOKMessage preaccept_ok = 3;
-    optional PreAcceptNotOKMessage preaccept_not_ok = 4;
-    optional AcceptOKMessage accept_ok = 5;
-    optional AcceptNotOKMessage accept_not_ok = 6;
-    optional CommitOKMessage commit_ok = 7;
-    optional InquireOKMessage inquire_ok = 8;
+    optional PreAcceptOKMessage preaccept_ok = 2;
+    optional PreAcceptNotOKMessage preaccept_not_ok = 3;
+    optional AcceptOKMessage accept_ok = 4;
+    optional AcceptNotOKMessage accept_not_ok = 5;
+    optional CommitOKMessage commit_ok = 6;
+    optional InquireOKMessage inquire_ok = 7;
 
-     // for failure recovery
-     // optional PrepareOKMessage prepare_ok = 7;
+    // for GETs
+    optional string key = 8;
+    optional string value = 9;
 }

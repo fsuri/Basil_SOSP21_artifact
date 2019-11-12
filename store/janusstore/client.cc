@@ -24,7 +24,7 @@ namespace janusstore {
 
     bclient.reserve(nshards);
     Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
-    
+
     std::ifstream configStream(configPath);
     if (configStream.fail()) {
       Panic("Unable to read configuration file: %s\n", configPath.c_str());
@@ -34,6 +34,7 @@ namespace janusstore {
     /* Start a shardclient for each shard. */
     // TODO change this to a single config file lul
     for (int i = 0; i < this->nshards; i++) {
+      Debug("%i", i);
       ShardClient * shardclient = new ShardClient(config,
         transport, client_id, i, closestReplica);
       // we use shardclients instead of bufferclients here
@@ -99,7 +100,7 @@ namespace janusstore {
     for (const auto & key: txn->read_set) {
       int i = this->keyToShard(key, nshards);
       if (req->participant_shards.find(i) == req->participant_shards.end()) {
-        // Debug("txn %i -> shard %i, key %s", txn->getTransactionId(), i, key.c_str());
+        Debug("txn %llu -> shard %i, key %s", txn->getTransactionId(), i, key.c_str());
         req->participant_shards.insert(i);
       }
       txn->groups.insert(i);
@@ -110,8 +111,8 @@ namespace janusstore {
       int i = this->keyToShard(pair.first, nshards);
       // Debug("%i, %i", txn->getTransactionId(), i);
       if (req->participant_shards.find(i) == req->participant_shards.end()) {
-        // Debug("txn %llu -> shard %i, key %s", txn->getTransactionId(), i, pair.first.c_str());
-        req->participant_shards.insert(i);  
+        Debug("txn %llu -> shard %i, key %s", txn->getTransactionId(), i, pair.first.c_str());
+        req->participant_shards.insert(i);
       }
       txn->groups.insert(i);
       txn->addShardedWriteSet(pair.first, pair.second, i);
@@ -119,7 +120,7 @@ namespace janusstore {
   }
 
   void Client::Execute(OneShotTransaction *txn, execute_callback ecb) {
-    Transaction t(this->next_txn_id); 
+    Transaction t(this->next_txn_id);
     t.setTransactionStatus(proto::TransactionMessage::PREACCEPT);
     for (auto key : txn->GetReadSet()) {
       t.addReadSet(key);
@@ -134,10 +135,10 @@ namespace janusstore {
   void Client::PreAccept(Transaction * txn, uint64_t ballot, execute_callback ecb) {
 
     uint64_t txn_id = txn->getTransactionId();
-    
+
     PendingRequest *req = new PendingRequest(txn_id, ecb);
     pendingReqs[txn_id] = req;
-    
+
     Debug("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
     setParticipants(txn);
 
@@ -275,4 +276,20 @@ namespace janusstore {
     }
     return;
   }
+
+  void Client::Read(string key) {
+    Debug("%s\n", ("CLIENT - READ - key" + key).c_str());
+
+    int shard = this->keyToShard(key, nshards);
+
+    auto pcb = std::bind(&Client::ReadCallback, this,
+      placeholders::_1, placeholders::_2);
+
+    bclient[shard]->Read(key, pcb);
+  }
+
+  void Client::ReadCallback(string key, string value) {
+    Debug("hello");
+  }
+
 }
