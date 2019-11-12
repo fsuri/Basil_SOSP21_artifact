@@ -564,6 +564,9 @@ int main(int argc, char **argv) {
     benchClients.push_back(bench);
   }
 
+  if (threads.size() > 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  }
   transport.Run();
   for (auto i : threads) {
     i->join();
