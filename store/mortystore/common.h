@@ -51,5 +51,11 @@ void ValueOnBranch(const proto::Branch &branch, const std::string &key,
 bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
       std::string &val);
 
+proto::Transaction _testing_txn(const std::vector<std::vector<std::string>> &txn);
+proto::Branch _testing_branch(const std::vector<std::vector<std::vector<std::string>>> &branch);
+std::vector<proto::Transaction> _testing_txns(const std::vector<std::vector<std::vector<std::string>>> &txns);
+
+
+
 } // namespace mortystore
 #endif /* MORTY_COMMON_H */

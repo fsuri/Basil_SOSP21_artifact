@@ -14,7 +14,7 @@ proto::Transaction T(const std::vector<std::vector<std::string>> &txn) {
     UW_ASSERT(op.size() == 2);
     proto::Operation *o = t.add_ops();
     o->set_key(op[0]);
-    o->set_value(op[1]);
+    o->set_val(op[1]);
     if (op[1].length() == 0) {
       o->set_type(proto::OperationType::READ);
     } else {

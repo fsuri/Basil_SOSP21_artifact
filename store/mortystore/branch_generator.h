@@ -35,7 +35,7 @@ class BranchGenerator {
 
   std::unordered_map<std::string, std::vector<proto::Branch>> pending_reads;
   std::unordered_map<std::string, std::vector<proto::Branch>> pending_writes;
-  std::vector<proto::Branch> already_generated;
+  std::unordered_set<proto::Branch, BranchHasher, BranchComparer> already_generated;
   Latency_t generateLatency;
 };
 
