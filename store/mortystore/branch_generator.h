@@ -33,8 +33,8 @@ class BranchGenerator {
       const std::vector<proto::Transaction> &committed,
       std::vector<proto::Branch> &new_branches);
 
-  std::unordered_map<std::string, std::vector<proto::Branch>> pending_reads;
-  std::unordered_map<std::string, std::vector<proto::Branch>> pending_writes;
+  std::unordered_map<std::string, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> pending_reads;
+  std::unordered_map<std::string, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> pending_writes;
   std::unordered_set<proto::Branch, BranchHasher, BranchComparer> already_generated;
   Latency_t generateLatency;
 };

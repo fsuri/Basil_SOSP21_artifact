@@ -19,24 +19,32 @@ BranchGenerator::~BranchGenerator() {
 
 void BranchGenerator::AddPendingWrite(const std::string &key,
     const proto::Branch &branch) {
-  pending_writes[key].push_back(branch);
+  pending_writes[key].insert(branch);
 }
 
 void BranchGenerator::AddPendingRead(const std::string &key,
     const proto::Branch &branch) {
-  pending_reads[key].push_back(branch);
+  pending_reads[key].insert(branch);
 }
 
 void BranchGenerator::ClearPending(uint64_t txn_id) {
   for (auto itr = pending_reads.begin(); itr != pending_reads.end(); ++itr) {
-    itr->second.erase(std::remove_if(itr->second.begin(), itr->second.end(), [&](const proto::Branch &b) {
-        return b.txn().id() == txn_id;
-    }), itr->second.end());
+    for (auto jtr = itr->second.begin(); jtr != itr->second.end(); ) {
+      if (jtr->id() == txn_id) {
+        jtr = itr->second.erase(jtr);
+      } else {
+        ++jtr;
+      }
+    }
   }
   for (auto itr = pending_writes.begin(); itr != pending_writes.end(); ++itr) {
-    itr->second.erase(std::remove_if(itr->second.begin(), itr->second.end(), [&](const proto::Branch &b) {
-        return b.txn().id() == txn_id;
-    }), itr->second.end());
+    for (auto jtr = itr->second.begin(); jtr != itr->second.end(); ) {
+      if (jtr->id() == txn_id) {
+        jtr = itr->second.erase(jtr);
+      } else {
+        ++jtr;
+      }
+    }
   }
   for (auto itr = already_generated.begin(); itr != already_generated.end(); ) {
     if (itr->id() == txn_id) {
