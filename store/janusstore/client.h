@@ -22,7 +22,7 @@ namespace janusstore {
 
 // callback for output commit
 typedef std::function<void(uint64_t)> output_commit_callback;
-typedef std::function<void()> completion_callback;
+typedef std::function<void()> read_callback;
 
 class Client : public OneShotClient {
 public:
@@ -33,7 +33,7 @@ public:
     virtual void Execute(OneShotTransaction *txn, execute_callback ecb);
 
     // read
-    void Read(string key);
+    void Read(string key, read_callback rcb);
 
     // begins PreAccept phase
     void PreAccept(Transaction *txn, uint64_t ballot, execute_callback ocb);
@@ -88,7 +88,8 @@ public:
     void setParticipants(Transaction *txn);
 
 /* * coordinator role (co-located with client but not visible to client) * */
-    // read
+    std::unordered_map<string, read_callback> readReqs;
+    // read the key
     void ReadCallback(string key, string value);
     // callback when all participants for a shard have replied
     // shardclient aggregates all replies before invoking the callback

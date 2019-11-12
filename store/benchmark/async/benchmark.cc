@@ -371,18 +371,18 @@ int main(int argc, char **argv) {
   std::string latencyRawFile;
   std::vector<uint64_t> latencies;
   std::atomic<size_t> clientsDone(0UL);
+
+  int keysRead = 0;
+  std::function<void()> jrcb = [&]() {
+    keysRead++;
+    if (keysRead == FLAGS_num_keys) {
+      transport.Stop();
+    }
+  };
+
   bench_done_callback bdcb = [&]() {
     ++clientsDone;
-    if (FLAGS_protocol_mode == "janus") {
-      for (auto client : oneShotClients) {
-        janusstore::Client *janus_client = (janusstore::Client*) client;
-        for (auto key : keys) {
-          janus_client->Read(key);
-        }
-      }
-    }
     if (clientsDone == FLAGS_num_clients) {
-
       Latency_t sum;
       _Latency_Init(&sum, "total");
       Stats total;
@@ -409,7 +409,16 @@ int main(int argc, char **argv) {
       if (FLAGS_stats_file.size() > 0) {
         total.ExportJSON(FLAGS_stats_file);
       }
-      // transport.Stop();
+      if (FLAGS_protocol_mode == "janus") {
+        for (auto client : oneShotClients) {
+          janusstore::Client *janus_client = (janusstore::Client*) client;
+          for (auto key : keys) {
+            janus_client->Read(key, jrcb);
+          }
+        }
+      } else {
+        transport.Stop();
+      }
     }
   };
   for (size_t i = 0; i < FLAGS_num_clients; i++) {

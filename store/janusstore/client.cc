@@ -277,9 +277,10 @@ namespace janusstore {
     return;
   }
 
-  void Client::Read(string key) {
+  void Client::Read(string key, read_callback rcb) {
     Debug("%s\n", ("CLIENT - READ - key" + key).c_str());
 
+    this->readReqs[key] = rcb;
     int shard = this->keyToShard(key, nshards);
 
     auto pcb = std::bind(&Client::ReadCallback, this,
@@ -290,6 +291,7 @@ namespace janusstore {
 
   void Client::ReadCallback(string key, string value) {
     QNotice("GOT: <%s, %s>", key.c_str(), value.c_str());
+    this->readReqs[key]();
   }
 
 }
