@@ -38,6 +38,13 @@ void BranchGenerator::ClearPending(uint64_t txn_id) {
         return b.txn().id() == txn_id;
     }), itr->second.end());
   }
+  for (auto itr = already_generated.begin(); itr != already_generated.end(); ) {
+    if (itr->id() == txn_id) {
+      itr = already_generated.erase(itr);
+    } else {
+      ++itr;
+    }
+  }
 }
 
 void BranchGenerator::GenerateBranches(const proto::Branch &init,
@@ -169,8 +176,7 @@ void BranchGenerator::GenerateBranchesPermutations(
               if (MostRecentConflict(op, seq, t)) {
                 if (std::find_if(new_branch.deps().begin(), new_branch.deps().end(),
                   [&](const proto::Transaction &other) {
-                    return google::protobuf::util::MessageDifferencer::Equals(
-                        t, other);
+                    return t == other;
                   }) == new_branch.deps().end()) {
                     proto::Transaction *tseq = new_branch.add_deps();
                     *tseq = t;
@@ -183,13 +189,10 @@ void BranchGenerator::GenerateBranchesPermutations(
               PrintBranch(new_branch, ss);
               Debug("%s", ss.str().c_str());
             }
-            if (std::find_if(already_generated.begin(), already_generated.end(),
-                  [&](const proto::Branch &other) {
-                    return google::protobuf::util::MessageDifferencer::Equals(
-                        new_branch, other);
-                  }) == already_generated.end()) {
+            std::cerr << "ag length: " << already_generated.size() << std::endl;
+            if (already_generated.find(new_branch) == already_generated.end()) {
               new_branches.push_back(new_branch);
-              already_generated.push_back(new_branch);
+              already_generated.insert(new_branch);
             }
           }
         }

@@ -237,6 +237,7 @@ void Client::Commit(PendingRequest *req, const proto::Branch &branch) {
 void Client::Abort(const proto::Branch &branch) {
   proto::Abort abort;
   *abort.mutable_branch() = branch;
+  Debug("Aborting shards %d", branch.shards().size());
   for (auto shard : branch.shards()) {
     sclients[shard]->Abort(abort);
   }
