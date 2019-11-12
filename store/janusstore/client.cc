@@ -289,7 +289,7 @@ namespace janusstore {
   }
 
   void Client::ReadCallback(string key, string value) {
-    Debug("hello");
+    QNotice("GOT: <%s, %s>", key.c_str(), value.c_str());
   }
 
 }

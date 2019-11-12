@@ -270,13 +270,11 @@ void ShardClient::ReadContinuation(const string &request_str, const string &repl
 
 	string key = reply.key();
 	client_read_callback rcb = this->pendingReads[key];
-	Debug("In read continuation %s", reply.DebugString().c_str());
 
 	this->ReadCallback(reply.key(), reply.value(), rcb);
 }
 
 void ShardClient::ReadCallback(string key, string value, client_read_callback rcb) {
-	Debug("goodbye...");
 	rcb(key, value);
 }
 }

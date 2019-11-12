@@ -58,6 +58,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
                 string key = request.key();
                 string value = store->Read(key);
 
+                reply.set_key(key);
                 reply.set_value(value);
 
                 unlogged_reply.set_reply(reply.SerializeAsString());

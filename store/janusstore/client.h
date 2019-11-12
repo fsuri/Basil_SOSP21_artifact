@@ -22,6 +22,7 @@ namespace janusstore {
 
 // callback for output commit
 typedef std::function<void(uint64_t)> output_commit_callback;
+typedef std::function<void()> completion_callback;
 
 class Client : public OneShotClient {
 public:

@@ -200,7 +200,7 @@ DEFINE_double(zipf_coefficient, 0.5, "the coefficient of the zipf distribution "
 /**
  * RW settings.
  */
-DEFINE_uint64(num_keys_txn, 1, "number of keys to read/write in each txn" 
+DEFINE_uint64(num_keys_txn, 1, "number of keys to read/write in each txn"
     " (for rw)");
 // RW benchmark also uses same config parameters as Retwis.
 
@@ -373,7 +373,16 @@ int main(int argc, char **argv) {
   std::atomic<size_t> clientsDone(0UL);
   bench_done_callback bdcb = [&]() {
     ++clientsDone;
+    if (FLAGS_protocol_mode == "janus") {
+      for (auto client : oneShotClients) {
+        janusstore::Client *janus_client = (janusstore::Client*) client;
+        for (auto key : keys) {
+          janus_client->Read(key);
+        }
+      }
+    }
     if (clientsDone == FLAGS_num_clients) {
+
       Latency_t sum;
       _Latency_Init(&sum, "total");
       Stats total;
@@ -400,7 +409,7 @@ int main(int argc, char **argv) {
       if (FLAGS_stats_file.size() > 0) {
         total.ExportJSON(FLAGS_stats_file);
       }
-      transport.Stop();
+      // transport.Stop();
     }
   };
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
@@ -516,7 +525,7 @@ int main(int argc, char **argv) {
 	      transport.Timer(0, [bench, bdcb]() { bench->Start(bdcb); });
         break;
       case BENCH_SMALLBANK_SYNC:
-        threads.push_back(new std::thread([bench, bdcb](){ 
+        threads.push_back(new std::thread([bench, bdcb](){
             bench->Start([](){});
             while (!bench->IsFullyDone()) {
               bench->StartLatency();
