@@ -39,6 +39,8 @@ class Server : public TransportReceiver, public ::Server {
       const std::string &key);
   bool CheckBranch(const TransportAddress &addr, const proto::Branch &branch);
 
+  bool IsStaleMessage(uint64_t txn_id) const;
+
   const transport::Configuration &config;
   int idx;
   Transport *transport;
@@ -50,6 +52,7 @@ class Server : public TransportReceiver, public ::Server {
   Stats stats;
   std::set<uint64_t> committed_txn_ids;
   std::set<uint64_t> prepared_txn_ids;
+  std::set<uint64_t> aborted_txn_ids;
   BranchGenerator generator;
 
 };

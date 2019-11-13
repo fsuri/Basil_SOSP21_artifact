@@ -182,12 +182,12 @@ bool TransactionsConflict(const proto::Transaction &txn1,
 
 bool MostRecentConflict(const proto::Operation &op,
     const std::vector<proto::Transaction> &seq, proto::Transaction &txn) {
-  for (auto itr = seq.rbegin(); itr != seq.rend(); ++itr) {
-    for (auto jtr = itr->ops().rbegin(); jtr != itr->ops().rend(); ++jtr) {
+  for (int64_t i = seq.size() - 1; i >= 0; --i) {
+    for (int64_t j = seq[i].ops_size() - 1; j >= 0; --j) {
       if ((op.type() != proto::OperationType::READ
-          || jtr->type() == proto::OperationType::WRITE) &&
-          op.key() == jtr->key()) {
-        txn = *itr;
+          || seq[i].ops(j).type() == proto::OperationType::WRITE) &&
+          op.key() == seq[i].ops(j).key()) {
+        txn = seq[i];
         return true;
       }
     }
