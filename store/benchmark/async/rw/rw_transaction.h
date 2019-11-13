@@ -11,7 +11,7 @@ namespace rw {
 
 class RWTransaction : public AsyncTransaction {
  public:
-  RWTransaction(KeySelector *keySelector, int numKeys, std::mt19937 &rand);
+  RWTransaction(KeySelector *keySelector, int numOps, std::mt19937 &rand);
   virtual ~RWTransaction();
 
   virtual Operation GetNextOperation(size_t opCount,
@@ -21,11 +21,12 @@ class RWTransaction : public AsyncTransaction {
     return keySelector->GetKey(keyIdxs[i]);
   }
 
-  inline const size_t GetNumKeys() const { return keyIdxs.size(); } 
+  inline const size_t GetNumOps() const { return numOps; }
 
   KeySelector *keySelector;
 
  private:
+  const size_t numOps;
   std::vector<int> keyIdxs;
 
 };
