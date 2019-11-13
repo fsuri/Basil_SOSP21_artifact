@@ -30,12 +30,14 @@ void BranchGenerator::AddPendingRead(const std::string &key,
 void BranchGenerator::ClearPending(uint64_t txn_id) {
   pending_branches.erase(txn_id);
   for (auto itr = already_generated.begin(); itr != already_generated.end(); ) {
-    if (itr->id() == txn_id) {
+    if (itr->txn().id() == txn_id) {
       itr = already_generated.erase(itr);
     } else{
+      std::cerr << itr->txn().id() << ' ';
       ++itr;
     }
   }
+  std::cerr << std::endl;
 }
 
 void BranchGenerator::GenerateBranches(const proto::Branch &init,
@@ -98,18 +100,18 @@ void BranchGenerator::GenerateBranchesPermutations(
       ss << "]";
       Debug("%s", ss.str().c_str());
     }
-    std::vector<std::vector<proto::Transaction>> new_seqs;
-    new_seqs.push_back(committed);
+    std::vector<const std::vector<proto::Transaction> *> new_seqs;
+    new_seqs.push_back(&committed);
 
     for (size_t i = 0; i < txns_sorted.size() - 1; ++i) {
-      std::vector<std::vector<proto::Transaction>> new_seqs1;
+      std::vector<const std::vector<proto::Transaction> *> new_seqs1;
       for (size_t j = 0; j < new_seqs.size(); ++j) {
         auto itr = pending_branches.find(txns_sorted[i]);
         if (itr != pending_branches.end()) {
           for (const proto::Branch &branch : itr->second) {
-            if (branch.txn().ops().size() == 1 || WaitCompatible(branch, new_seqs[j])) {
-              std::vector<proto::Transaction> seq(new_seqs[j]);
-              seq.push_back(branch.txn());
+            if (branch.txn().ops().size() == 1 || WaitCompatible(branch, *new_seqs[j])) {
+              std::vector<proto::Transaction> *seq = new std::vector<proto::Transaction>(*new_seqs[j]);
+              seq->push_back(branch.txn());
               new_seqs1.push_back(seq);
             }
           }
@@ -135,20 +137,20 @@ void BranchGenerator::GenerateBranchesPermutations(
           PrintBranch(prev, ss);
           Debug("%s", ss.str().c_str());
         }
-        for (const std::vector<proto::Transaction> &seq : new_seqs) {
+        for (const std::vector<proto::Transaction> *seq : new_seqs) {
           if (Message_DebugEnabled(__FILE__)) {
             std::stringstream ss;
             ss << "  Seq: ";
-            PrintTransactionList(seq, ss);
+            PrintTransactionList(*seq, ss);
             Debug("%s", ss.str().c_str());
           }
-          if (WaitCompatible(prev, seq)) {
+          if (WaitCompatible(prev, *seq)) {
             Debug("  Compatible");
             proto::Branch new_branch(branch); 
             new_branch.clear_deps();
             for (const proto::Operation &op : new_branch.txn().ops()) {
               proto::Transaction t;
-              if (MostRecentConflict(op, seq, t)) {
+              if (MostRecentConflict(op, *seq, t)) {
                 if (std::find_if(new_branch.deps().begin(), new_branch.deps().end(),
                   [&](const proto::Transaction &other) {
                     return t == other;

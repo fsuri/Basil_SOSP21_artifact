@@ -62,6 +62,7 @@ void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) 
 
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
+    generator.ClearPending(msg.branch().txn().id());
     return;
   }
 
@@ -82,6 +83,7 @@ void Server::HandleWrite(const TransportAddress &remote, const proto::Write &msg
 
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
+    generator.ClearPending(msg.branch().txn().id());
     return;
   }
 
@@ -157,9 +159,7 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
   committed.push_back(msg.branch().txn());
   committed_txn_ids.insert(msg.branch().txn().id());
   
-  for (auto id : committed_txn_ids) {
-    generator.ClearPending(id);
-  }
+  generator.ClearPending(msg.branch().txn().id());
 
   for (auto itr = waiting.begin(); itr != waiting.end(); ) {
     if (CheckBranch(*txn_coordinators[itr->txn().id()],
@@ -182,7 +182,7 @@ void Server::HandleAbort(const TransportAddress &remote, const proto::Abort &msg
     Debug("%s", ss.str().c_str());
   }
 
-  generator.ClearPending(msg.branch().id());
+  generator.ClearPending(msg.branch().txn().id());
 }
 
 bool Server::CheckBranch(const TransportAddress &addr, const proto::Branch &branch) {
@@ -242,6 +242,11 @@ void Server::SendBranchReplies(const proto::Branch &init,
       transport->SendMessage(this, *txn_coordinators[branch.txn().id()], reply);
     }
   }
+}
+
+bool Server::IsStaleMessage(uint64_t txn_id) const {
+  return committed_txn_ids.find(txn_id) != committed_txn_ids.end() ||
+    aborted_txn_ids.find(txn_id) != aborted_txn_ids.end();
 }
 
 } // namespace mortystore
