@@ -200,7 +200,7 @@ DEFINE_double(zipf_coefficient, 0.5, "the coefficient of the zipf distribution "
 /**
  * RW settings.
  */
-DEFINE_uint64(num_keys_txn, 1, "number of keys to read/write in each txn" 
+DEFINE_uint64(num_ops_txn, 1, "number of ops in each txn" 
     " (for rw)");
 // RW benchmark also uses same config parameters as Retwis.
 
@@ -498,7 +498,7 @@ int main(int argc, char **argv) {
         break;
       case BENCH_RW:
         UW_ASSERT(asyncClient != nullptr);
-        bench = new rw::RWClient(keySelector, FLAGS_num_keys_txn,
+        bench = new rw::RWClient(keySelector, FLAGS_num_ops_txn,
             *asyncClient, transport, (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
