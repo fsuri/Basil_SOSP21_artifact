@@ -4,6 +4,7 @@
 #include "lib/latency.h"
 #include "store/mortystore/common.h"
 #include "store/mortystore/morty-proto.pb.h"
+#include "store/mortystore/specstore.h"
 
 #include <string>
 #include <vector>
@@ -16,7 +17,7 @@ class BranchGenerator {
   virtual ~BranchGenerator();
 
   void GenerateBranches(const proto::Branch &init, proto::OperationType type,
-      const std::string &key, const std::vector<proto::Transaction> &committed,
+      const std::string &key, const SpecStore &store,
       std::vector<proto::Branch> &new_branches);
 
   void AddPendingRead(const std::string &key, const proto::Branch &branch);
@@ -25,12 +26,12 @@ class BranchGenerator {
  private:
   void GenerateBranchesSubsets(
       const std::vector<uint64_t> &txns,
-      const std::vector<proto::Transaction> &committed,
+      const SpecStore &store,
       std::vector<proto::Branch> &new_branches,
       std::vector<uint64_t> subset = std::vector<uint64_t>(), int64_t i = -1);
   void GenerateBranchesPermutations(
       const std::vector<uint64_t> &subset,
-      const std::vector<proto::Transaction> &committed,
+      const SpecStore &store,
       std::vector<proto::Branch> &new_branches);
 
   std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> pending_branches;

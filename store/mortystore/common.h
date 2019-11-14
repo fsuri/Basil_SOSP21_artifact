@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "store/mortystore/morty-proto.pb.h"
+#include "store/mortystore/specstore.h"
 
 bool operator==(const mortystore::proto::Branch &b1,
     const mortystore::proto::Branch &b2);
@@ -25,14 +26,14 @@ void PrintBranch(const proto::Branch &branch, std::ostream &os);
 
 void PrintTransactionList(const std::vector<proto::Transaction> &txns, std::ostream &os);
 
-bool CommitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq, const std::set<uint64_t> &prepared_txn_ids);
+bool CommitCompatible(const proto::Branch &branch, const SpecStore &store, const std::vector<proto::Transaction> &seq, const std::set<uint64_t> &prepared_txn_ids);
 
-bool WaitCompatible(const proto::Branch &branch, const std::vector<proto::Transaction> &seq);
+bool WaitCompatible(const proto::Branch &branch, const SpecStore &store, const std::vector<proto::Transaction> &seq);
 
 bool DepsFinalized(const proto::Branch &branch,
       const std::set<uint64_t> &prepared_txn_ids);
 
-bool ValidSubsequence(const proto::Transaction &txn,
+bool ValidSubsequence(const proto::Transaction &txn, const SpecStore &store,
       const std::vector<proto::Transaction> &seq1,
       const std::vector<proto::Transaction> &seq2);
 
@@ -42,7 +43,7 @@ bool NoConflicts(const proto::Transaction &txn,
 bool TransactionsConflict(const proto::Transaction &txn1,
       const proto::Transaction &txn2);
 
-bool MostRecentConflict(const proto::Operation &op,
+bool MostRecentConflict(const proto::Operation &op, const SpecStore &store,
     const std::vector<proto::Transaction> &seq, proto::Transaction &txn);
 
 void ValueOnBranch(const proto::Branch &branch, const std::string &key,

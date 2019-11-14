@@ -8,6 +8,7 @@
 #include "store/common/stats.h"
 #include "store/mortystore/common.h"
 #include "store/mortystore/branch_generator.h"
+#include "store/mortystore/specstore.h"
 
 #include <unordered_map>
 
@@ -40,10 +41,12 @@ class Server : public TransportReceiver, public ::Server {
   bool CheckBranch(const TransportAddress &addr, const proto::Branch &branch);
 
   bool IsStaleMessage(uint64_t txn_id) const;
+  void ApplyTransaction(const proto::Transaction &txn);
 
   const transport::Configuration &config;
   int idx;
   Transport *transport;
+  SpecStore store;
   std::vector<proto::Transaction> committed;
   std::vector<proto::Transaction> prepared;
   std::unordered_map<uint64_t, const TransportAddress *> txn_coordinators;

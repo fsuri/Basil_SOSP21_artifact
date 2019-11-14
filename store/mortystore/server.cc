@@ -156,7 +156,12 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
     return;
   }
 
-  committed.push_back(msg.branch().txn());
+  //committed.push_back(msg.branch().txn());
+  ApplyTransaction(msg.branch().txn());
+  prepared.erase(std::remove_if(prepared.begin(), prepared.end(), [&](const proto::Transaction &txn) {
+        return txn.id() == msg.branch().txn().id();
+      }), prepared.end());
+
   committed_txn_ids.insert(msg.branch().txn().id());
   
   generator.ClearPending(msg.branch().txn().id());
@@ -193,14 +198,14 @@ bool Server::CheckBranch(const TransportAddress &addr, const proto::Branch &bran
     *reply.mutable_branch() = branch;
     transport->SendMessage(this, addr, reply);
     return true;
-  } else if (CommitCompatible(branch, prepared, prepared_txn_ids)) {
+  } else if (CommitCompatible(branch, store, prepared, prepared_txn_ids)) {
     prepared.push_back(branch.txn());
     prepared_txn_ids.insert(branch.txn().id());
     proto::PrepareOK reply;
     *reply.mutable_branch() = branch;
     transport->SendMessage(this, addr, reply);
     return true;
-  } else if (!WaitCompatible(branch, prepared)) {
+  } else if (!WaitCompatible(branch, store, prepared)) {
     if (Message_DebugEnabled(__FILE__)) {
       std::stringstream ss;
       ss << "Branch not compatible with prepared." << std::endl;
@@ -223,7 +228,7 @@ bool Server::CheckBranch(const TransportAddress &addr, const proto::Branch &bran
 void Server::SendBranchReplies(const proto::Branch &init,
     proto::OperationType type, const std::string &key) {
   std::vector<proto::Branch> generated_branches;
-  generator.GenerateBranches(init, type, key, committed, generated_branches);
+  generator.GenerateBranches(init, type, key, store, generated_branches);
   for (const proto::Branch &branch : generated_branches) {
     const proto::Operation &op = branch.txn().ops()[branch.txn().ops().size() - 1];
     if (op.type() == proto::OperationType::READ) {
@@ -247,6 +252,18 @@ void Server::SendBranchReplies(const proto::Branch &init,
 bool Server::IsStaleMessage(uint64_t txn_id) const {
   return committed_txn_ids.find(txn_id) != committed_txn_ids.end() ||
     aborted_txn_ids.find(txn_id) != aborted_txn_ids.end();
+}
+
+void Server::ApplyTransaction(const proto::Transaction &txn) {
+  std::string val;
+  for (int64_t i = 0; i < txn.ops_size(); ++i) {
+    const proto::Operation &op = txn.ops(i);
+    if (op.type() == proto::OperationType::READ) {
+      store.get(op.key(), txn, val);
+    } else {
+      store.put(op.key(), op.val(), txn);
+    }
+  }
 }
 
 } // namespace mortystore
