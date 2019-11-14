@@ -166,7 +166,7 @@ void BranchGenerator::GenerateBranchesPermutations(
               PrintBranch(new_branch, ss);
               Debug("%s", ss.str().c_str());
             }
-            std::cerr << "ag length: " << already_generated.size() << std::endl;
+            Debug("Already generated: %lu", already_generated.size());
             if (already_generated.find(new_branch) == already_generated.end()) {
               new_branches.push_back(new_branch);
               already_generated.insert(new_branch);
