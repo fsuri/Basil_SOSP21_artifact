@@ -23,7 +23,8 @@ message Transaction {
 message Branch {
   required uint64 id = 1;
   required Transaction txn = 2;
-  repeated Transaction deps = 3;
+  // this should be a map for fast lookup
+  map<uint64, Transaction> deps = 3;
   repeated uint64 shards = 4;
   repeated uint64 prepared_shards = 5;
   repeated uint64 koed_shards = 6;

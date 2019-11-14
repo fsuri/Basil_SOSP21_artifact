@@ -33,61 +33,64 @@ void BranchGenerator::ClearPending(uint64_t txn_id) {
     if (itr->txn().id() == txn_id) {
       itr = already_generated.erase(itr);
     } else{
-      std::cerr << itr->txn().id() << ' ';
       ++itr;
     }
   }
-  std::cerr << std::endl;
 }
 
 void BranchGenerator::GenerateBranches(const proto::Branch &init,
     proto::OperationType type, const std::string &key,
-    const std::vector<proto::Transaction> &committed,
+    const SpecStore &store,
     std::vector<proto::Branch> &new_branches) {
   Latency_Start(&generateLatency);
 
   std::vector<proto::Branch> generated_branches;
   std::vector<uint64_t> txns_list;
   for (const auto &kv : pending_branches) {
-   txns_list.push_back(kv.first); 
+    if (kv.first != init.txn().id()) {
+      // only generate subsets that include init
+      txns_list.push_back(kv.first); 
+    }
   }
 
-  if (Message_DebugEnabled(__FILE__)) {
+  Debug("Concurrent transactions: %lu", txns_list.size());
+  /*if (Message_DebugEnabled(__FILE__)) {
     std::stringstream ss;
     ss << "Committed: ";
     PrintTransactionList(committed, ss);
     Debug("%s", ss.str().c_str());
-  }
+  }*/
 
-  GenerateBranchesSubsets(txns_list, committed, new_branches);
+  std::vector<uint64_t> subset = {init.txn().id()};
+  GenerateBranchesSubsets(txns_list, store, new_branches, subset);
   
   Latency_End(&generateLatency);
 }
 
 void BranchGenerator::GenerateBranchesSubsets(
-    const std::vector<uint64_t> &txns, const std::vector<proto::Transaction> &committed,
+    const std::vector<uint64_t> &txns, const SpecStore &store,
     std::vector<proto::Branch> &new_branches, std::vector<uint64_t> subset,
     int64_t i) {
   if (subset.size() > 0) {
-    GenerateBranchesPermutations(subset, committed, new_branches);
+    GenerateBranchesPermutations(subset, store, new_branches);
   }
 
   for (size_t j = i + 1; j < txns.size(); ++j) {
     subset.push_back(txns[j]);
 
-    GenerateBranchesSubsets(txns, committed, new_branches, subset, j);
+    GenerateBranchesSubsets(txns, store, new_branches, subset, j);
 
     subset.pop_back();
   }
 }
 
 void BranchGenerator::GenerateBranchesPermutations(
-    const std::vector<uint64_t> &txns, const std::vector<proto::Transaction> &committed,
+    const std::vector<uint64_t> &txns,
+    const SpecStore &store,
     std::vector<proto::Branch> &new_branches) {
   std::vector<uint64_t> txns_sorted(txns);
   std::sort(txns_sorted.begin(), txns_sorted.end());
   do {
-
     if (Message_DebugEnabled(__FILE__)) {
       std::stringstream ss;
       ss << "Permutation: [";
@@ -101,7 +104,7 @@ void BranchGenerator::GenerateBranchesPermutations(
       Debug("%s", ss.str().c_str());
     }
     std::vector<const std::vector<proto::Transaction> *> new_seqs;
-    new_seqs.push_back(&committed);
+    new_seqs.push_back(new std::vector<proto::Transaction>());
 
     for (size_t i = 0; i < txns_sorted.size() - 1; ++i) {
       std::vector<const std::vector<proto::Transaction> *> new_seqs1;
@@ -109,8 +112,10 @@ void BranchGenerator::GenerateBranchesPermutations(
         auto itr = pending_branches.find(txns_sorted[i]);
         if (itr != pending_branches.end()) {
           for (const proto::Branch &branch : itr->second) {
-            if (branch.txn().ops().size() == 1 || WaitCompatible(branch, *new_seqs[j])) {
-              std::vector<proto::Transaction> *seq = new std::vector<proto::Transaction>(*new_seqs[j]);
+            if (branch.txn().ops().size() == 1 || WaitCompatible(branch, store,
+                  *new_seqs[j])) {
+              std::vector<proto::Transaction> *seq =
+                  new std::vector<proto::Transaction>(*new_seqs[j]);
               seq->push_back(branch.txn());
               new_seqs1.push_back(seq);
             }
@@ -121,7 +126,8 @@ void BranchGenerator::GenerateBranchesPermutations(
     }
     auto itr = pending_branches.find(txns_sorted[txns_sorted.size() - 1]);
     if (itr != pending_branches.end()) {
-      Debug("Pending branches for %lu: %lu", txns_sorted[txns_sorted.size() - 1], itr->second.size());
+      Debug("Pending branches for %lu: %lu",
+          txns_sorted[txns_sorted.size() - 1], itr->second.size());
       for (const proto::Branch &branch : itr->second) {
         proto::Branch prev(branch);
         prev.mutable_txn()->mutable_ops()->RemoveLast();
@@ -144,20 +150,14 @@ void BranchGenerator::GenerateBranchesPermutations(
             PrintTransactionList(*seq, ss);
             Debug("%s", ss.str().c_str());
           }
-          if (WaitCompatible(prev, *seq)) {
+          if (WaitCompatible(prev, store, *seq)) {
             Debug("  Compatible");
             proto::Branch new_branch(branch); 
             new_branch.clear_deps();
             for (const proto::Operation &op : new_branch.txn().ops()) {
               proto::Transaction t;
-              if (MostRecentConflict(op, *seq, t)) {
-                if (std::find_if(new_branch.deps().begin(), new_branch.deps().end(),
-                  [&](const proto::Transaction &other) {
-                    return t == other;
-                  }) == new_branch.deps().end()) {
-                    proto::Transaction *tseq = new_branch.add_deps();
-                    *tseq = t;
-                  }
+              if (MostRecentConflict(op, store, *seq, t)) {
+                (*new_branch.mutable_deps())[t.id()] = t;
               }
             }
             if (Message_DebugEnabled(__FILE__)) {
@@ -175,7 +175,10 @@ void BranchGenerator::GenerateBranchesPermutations(
         }
       }
     }
+    for (size_t i = 0; i < new_seqs.size(); ++i) {
+      delete new_seqs[i];
+    }
   } while (std::next_permutation(txns_sorted.begin(), txns_sorted.end()));
 }
 
-} /* mortystore */
+} // namespace mortystore
