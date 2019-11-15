@@ -71,7 +71,7 @@ class Client : public ::AsyncClient {
   void HandleCommitReply(const TransportAddress &remote, const proto::CommitReply &msg, uint64_t shard);
   void HandlePrepareKO(const TransportAddress &remote, const proto::PrepareKO &msg, uint64_t shard);
 
-  void Get(proto::Branch &branch, const std::string &key);
+  void Get(PendingRequest *req, proto::Branch &branch, const std::string &key);
   void Put(proto::Branch &branch, const std::string &key,
       const std::string &value);
   void Commit(PendingRequest *req, const proto::Branch &branch);

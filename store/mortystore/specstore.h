@@ -20,7 +20,7 @@ class SpecStore {
       const proto::Transaction &writer);
 
   bool MostRecentConflict(const proto::Operation &op,
-      proto::Transaction &txn) const;
+      const proto::Transaction *&txn) const;
  private:
   struct SpecValue {
     std::string value;

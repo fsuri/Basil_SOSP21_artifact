@@ -28,15 +28,15 @@ void SpecStore::put(const std::string &key, const std::string &val,
 }
 
 bool SpecStore::MostRecentConflict(const proto::Operation &op,
-      proto::Transaction &txn) const {
+      const proto::Transaction *&txn) const {
   auto itr = store.find(op.key());
   if (itr == store.end()) {
     return false;
   } else {
     if (op.type() == proto::OperationType::READ || itr->second.mrr.size() == 0) {
-      txn = itr->second.mrw;
+      txn = &itr->second.mrw;
     } else {
-      txn = itr->second.mrr[itr->second.mrr.size() - 1];
+      txn = &itr->second.mrr[itr->second.mrr.size() - 1];
     }
     return true;
   }
