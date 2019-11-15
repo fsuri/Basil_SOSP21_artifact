@@ -22,7 +22,7 @@ int Bal::Execute(SyncClient &client) {
                        timeout)) {
     client.Abort(timeout);
     Debug("Aborted Balance");
-    return std::make_pair(0, false).second ? 0 : -1;
+    return -1;
   }
   client.Commit(timeout);
   Debug("Committed Balance %d",
