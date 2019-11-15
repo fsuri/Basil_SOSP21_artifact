@@ -17,7 +17,12 @@ store/benchmark/async/smallbank/smallbank_generator
 store/benchmark/async/smallbank/smallbank_client
 store/benchmark/async/smallbank/smallbank_data
 store/benchmark/async/smallbank/smallbank_names
-store/benchmark/async/smallbank/tests/smallbank_transaction_test
+store/benchmark/async/smallbank/tests/amalgamate_test
+store/benchmark/async/smallbank/tests/bal_test
+store/benchmark/async/smallbank/tests/deposit_test
+store/benchmark/async/smallbank/tests/smallbank_utils_test
+store/benchmark/async/smallbank/tests/transact_test
+store/benchmark/async/smallbank/tests/write_check_test
 store/benchmark/async/smallbank/tests/smallbank_client_test
 store/benchmark/async/smallbank/tests/smallbank_generator_test
 timeserver/timeserver
