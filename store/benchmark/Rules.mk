@@ -1,15 +1,12 @@
 d := $(dir $(lastword $(MAKEFILE_LIST)))
 
-SRCS += $(addprefix $(d), retwisClient.cc bench_client.cc)
+SRCS += $(addprefix $(d), ping_server.cc ping_client.cc)
 
-OBJS-all-clients := $(OBJS-strong-client) $(OBJS-weak-client) $(OBJS-tapir-client) $(OBJS-morty-client)
+PROTOS += $(addprefix $(d), ping-proto.proto)
 
-$(d)benchClient: $(OBJS-all-clients)
+$(d)ping_client: $(o)ping_client.o $(LIB-tcptransport) $(o)ping-proto.o $(LIB-latency)
 
-$(d)retwisClient: $(OBJS-all-clients) $(LIB-retwis) $(o)bench_client.o
+$(d)ping_server: $(o)ping_server.o $(LIB-tcptransport) $(o)ping-proto.o
 
-$(d)terminalClient: $(OBJS-all-clients)
-
-# TODO: need to add back other clients (benchClient, terminalClient)
-BINS += 
+BINS += $(d)ping_server $(d)ping_client 
 

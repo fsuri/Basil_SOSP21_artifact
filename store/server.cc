@@ -193,7 +193,6 @@ int main(int argc, char **argv) {
     }
   }
 
-  // LMAO THIS WORKS
   transport::Configuration config(configStream);
 
   if (FLAGS_replica_idx >= static_cast<uint64_t>(config.n)) {
