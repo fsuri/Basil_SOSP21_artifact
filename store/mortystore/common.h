@@ -12,6 +12,12 @@ bool operator==(const mortystore::proto::Branch &b1,
 bool operator==(const mortystore::proto::Transaction &t1,
     const mortystore::proto::Transaction &t2);
 
+bool operator!=(const mortystore::proto::Transaction &t1,
+    const mortystore::proto::Transaction &t2);
+
+bool operator==(const mortystore::proto::Operation &o1,
+    const mortystore::proto::Operation &o2);
+
 namespace mortystore {
 
 struct BranchHasher {
@@ -33,20 +39,21 @@ bool WaitCompatible(const proto::Branch &branch, const SpecStore &store, const s
 bool DepsFinalized(const proto::Branch &branch,
       const std::set<uint64_t> &prepared_txn_ids);
 
-bool ValidSubsequence(const proto::Transaction &txn, const SpecStore &store,
-      const std::vector<proto::Transaction> &seq1,
+bool ValidSubsequence(const proto::Branch &branch, const SpecStore &store,
       const std::vector<proto::Transaction> &seq2);
 
 bool NoConflicts(const proto::Transaction &txn,
       const std::vector<proto::Transaction> &seq);
 
 bool TransactionsConflict(const proto::Transaction &txn1,
-      const proto::Transaction &txn2);
+      const proto::Transaction &txn2,
+      const std::vector<int> &ignore1 = std::vector<int>(),
+      const std::vector<int> &ignore2 = std::vector<int>());
 
 bool MostRecentConflict(const proto::Operation &op, const SpecStore &store,
-    const std::vector<proto::Transaction> &seq, proto::Transaction &txn);
+    const std::vector<proto::Transaction> &seq, const proto::Transaction *&txn);
 
-void ValueOnBranch(const proto::Branch &branch, const std::string &key,
+bool ValueOnBranch(const proto::Branch &branch, const std::string &key,
       std::string &val);
 
 bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,

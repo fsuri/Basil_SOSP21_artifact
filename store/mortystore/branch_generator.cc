@@ -90,6 +90,9 @@ void BranchGenerator::GenerateBranchesPermutations(
     std::vector<proto::Branch> &new_branches) {
   std::vector<uint64_t> txns_sorted(txns);
   std::sort(txns_sorted.begin(), txns_sorted.end());
+  const proto::Transaction *t1;
+  proto::Branch prev;
+  proto::Branch new_branch; 
   do {
     if (Message_DebugEnabled(__FILE__)) {
       std::stringstream ss;
@@ -129,7 +132,7 @@ void BranchGenerator::GenerateBranchesPermutations(
       Debug("Pending branches for %lu: %lu",
           txns_sorted[txns_sorted.size() - 1], itr->second.size());
       for (const proto::Branch &branch : itr->second) {
-        proto::Branch prev(branch);
+        prev = branch;
         prev.mutable_txn()->mutable_ops()->RemoveLast();
         if (Message_DebugEnabled(__FILE__)) {
           std::stringstream ss;
@@ -152,12 +155,11 @@ void BranchGenerator::GenerateBranchesPermutations(
           }
           if (WaitCompatible(prev, store, *seq)) {
             Debug("  Compatible");
-            proto::Branch new_branch(branch); 
+            new_branch = branch;
             new_branch.clear_deps();
             for (const proto::Operation &op : new_branch.txn().ops()) {
-              proto::Transaction t;
-              if (MostRecentConflict(op, store, *seq, t)) {
-                (*new_branch.mutable_deps())[t.id()] = t;
+              if (MostRecentConflict(op, store, *seq, t1)) {
+                (*new_branch.mutable_deps())[t1->id()] = *t1;
               }
             }
             if (Message_DebugEnabled(__FILE__)) {

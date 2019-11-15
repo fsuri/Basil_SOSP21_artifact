@@ -66,7 +66,7 @@ void Client::ExecuteNextOperation(PendingRequest *req, proto::Branch &branch) {
 
   switch (op.type) {
     case GET: {
-      Get(branch, op.key);
+      Get(req, branch, op.key);
       break;
     }
     case PUT: {
@@ -169,7 +169,8 @@ void Client::HandlePrepareKO(const TransportAddress &remote,
 }
 
 
-void Client::Get(proto::Branch &branch, const std::string &key) {
+void Client::Get(PendingRequest *req, proto::Branch &branch,
+    const std::string &key) {
   // Contact the appropriate shard to get the value.
   int i = part(key, nshards) % ngroups;
   if (std::find(branch.shards().begin(), branch.shards().end(),
@@ -192,7 +193,13 @@ void Client::Get(proto::Branch &branch, const std::string &key) {
     Debug("%s", ss.str().c_str());
   }
 
-  sclients[i]->Read(msg);
+  // Check if this branch already read this key
+  std::string val;
+  if (ValueOnBranch(branch, key, val)) {
+    ExecuteNextOperation(req, branch);
+  } else {
+    sclients[i]->Read(msg);
+  }
 }
 
 void Client::Put(proto::Branch &branch, const std::string &key,
