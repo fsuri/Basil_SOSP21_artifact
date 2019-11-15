@@ -22,10 +22,9 @@ class SmallbankTransaction : public SyncTransaction {
   virtual int Execute(SyncClient &client);
 
   SmallbankTransactionType GetTransactionType();
- 
+
  private:
   SmallbankTransactionType type;
-  
 };
 
 }  // namespace smallbank

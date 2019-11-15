@@ -7,17 +7,19 @@ namespace smallbank {
 
 class Amalgamate : public SmallbankTransaction {
  public:
-  Amalgamate(const std::string &cust1, const std::string &cust2, const uint32_t timeout);
+  Amalgamate(const std::string &cust1, const std::string &cust2,
+             const uint32_t timeout);
+
   virtual ~Amalgamate();
 
   int Execute(SyncClient &client);
+
  private:
   std::string cust1;
   std::string cust2;
   uint32_t timeout;
-
 };
 
-} // namespace smallbank
+}  // namespace smallbank
 
 #endif /* AMALGAMATE_H */

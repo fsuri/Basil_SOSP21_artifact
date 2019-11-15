@@ -7,17 +7,19 @@ namespace smallbank {
 
 class DepositChecking : public SmallbankTransaction {
  public:
-  DepositChecking(const std::string &cust, const int32_t value, const uint32_t timeout);
+  DepositChecking(const std::string &cust, const int32_t value,
+                  const uint32_t timeout);
+
   virtual ~DepositChecking();
 
   int Execute(SyncClient &client);
+
  private:
   std::string cust;
   int32_t value;
   uint32_t timeout;
-
 };
 
-} // namespace smallbank
+}  // namespace smallbank
 
 #endif /* DEPOSIT_H */
