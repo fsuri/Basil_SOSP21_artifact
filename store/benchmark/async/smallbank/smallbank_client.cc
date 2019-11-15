@@ -8,6 +8,11 @@
 #include "store/benchmark/async/bench_client.h"
 #include "store/benchmark/async/smallbank/smallbank_client.h"
 #include "store/benchmark/async/smallbank/smallbank_transaction.h"
+#include "store/benchmark/async/smallbank/bal.h"
+#include "store/benchmark/async/smallbank/write_check.h"
+#include "store/benchmark/async/smallbank/amalgamate.h"
+#include "store/benchmark/async/smallbank/transact.h"
+#include "store/benchmark/async/smallbank/deposit.h"
 #include "store/common/frontend/sync_client.h"
 #include "store/common/truetime.h"
 #include "store/tapirstore/client.h"
@@ -66,23 +71,23 @@ namespace smallbank {
         // https://github.com/microsoft/CCF/blob/master/samples/apps/smallbank/clients/small_bank_client.cpp
         if (ttype < balanceThreshold) {
           last_op_ = "balance";
-          return new SmallbankTransaction(BALANCE, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_), "", timeout_);
+          return new Bal(GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_),  timeout_);
         } 
         if (ttype < depositThreshold) {
           last_op_ = "deposit";
-          return new SmallbankTransaction(DEPOSIT, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_), "", timeout_);
+          return new DepositChecking(GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_), std::rand() % 50 + 1, timeout_);
         } 
         if (ttype < transactThreshold) {
           last_op_ = "transact";
-          return new SmallbankTransaction(TRANSACT, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_), "", timeout_);
+          return new TransactSaving(GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_), std::rand() % 101 - 50, timeout_);
         }
         if (ttype < amalgamateThreshold) {
           last_op_ = "amalgamate";
           std::pair <string, string> keyPair = GetCustomerKeyPair(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_);
-          return new SmallbankTransaction(AMALGAMATE, keyPair.first, keyPair.second, timeout_);
+          return new Amalgamate(keyPair.first, keyPair.second, timeout_);
         }
         last_op_ = "write_check";
-        return new SmallbankTransaction(WRITE_CHECK, GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_), "", timeout_);
+        return new WriteCheck(GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_, hotspot_probability_), std::rand() % 50, timeout_);
     }
 
     std::string SmallbankClient::GetLastOp() const {
