@@ -19,6 +19,7 @@ void AsyncOneShotAdapterClient::Execute(AsyncTransaction *txn,
     } else if (op.type == GET) {
       oneShotTxn.AddRead(op.key);
     } else if (op.type == PUT) {
+      Debug("wheeeee %s, %s", op.key.c_str(), op.value.c_str());
       oneShotTxn.AddWrite(op.key, op.value);
     }
   }
