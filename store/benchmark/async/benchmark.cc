@@ -202,6 +202,7 @@ DEFINE_double(zipf_coefficient, 0.5, "the coefficient of the zipf distribution "
  */
 DEFINE_uint64(num_keys_txn, 1, "number of keys to read/write in each txn"
     " (for rw)");
+DEFINE_uint64(num_ops_txn, 1, "not a clue");
 // RW benchmark also uses same config parameters as Retwis.
 
 
