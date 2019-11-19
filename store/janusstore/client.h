@@ -7,6 +7,7 @@
 #include "lib/configuration.h"
 #include "lib/udptransport.h"
 #include "replication/ir/client.h"
+#include "store/common/stats.h"
 #include "store/common/frontend/client.h"
 #include "store/common/frontend/bufferclient.h"
 #include "store/common/frontend/async_client.h"
@@ -104,6 +105,9 @@ public:
     // TODO maybe change the type of [results]
     void CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies);
   transport::Configuration *config;
+
+  Stats stats;
+  inline Stats &GetStats() { return stats; }
 };
 
 } // namespace janusstore

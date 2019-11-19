@@ -269,6 +269,7 @@ namespace janusstore {
     if (req->responded_shards.size() == req->participant_shards.size()) {
       // return results to async_transaction_bench_client by invoking output commit callback
       Debug("Invoking execute callback for txn %llu", txn_id);
+      stats.Increment("commits", 1);
       req->ccb(0, std::map<std::string, std::string>());
       req->responded_shards.clear();
     } else {
