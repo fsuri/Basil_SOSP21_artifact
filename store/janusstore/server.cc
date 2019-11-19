@@ -475,7 +475,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
     vector<uint64_t> deps = dep_map[txn_id];
     Transaction *txn = &id_txn_map[txn_id];
     uint64_t num_deps = deps.size();
-    Debug("%s\n", ("num_deps is " + to_string(num_deps)).c_str());
+    // Debug("%s\n", ("num_deps is " + to_string(num_deps)).c_str());
     uint64_t num_deps_processed = 0;
 
     while (!processed[txn_id]) {

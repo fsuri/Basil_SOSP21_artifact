@@ -23,7 +23,7 @@ namespace janusstore {
     ballot = (client_id / 10000) * 10000;
 
     bclient.reserve(nshards);
-    Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
+    // Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
 
     std::ifstream configStream(configPath);
     if (configStream.fail()) {
@@ -41,7 +41,7 @@ namespace janusstore {
       bclient[i] = shardclient;
     }
 
-    Debug("Janus client [%llu] created! %llu %lu", client_id, nshards, bclient.size());
+    // Debug("Janus client [%llu] created! %llu %lu", client_id, nshards, bclient.size());
   }
 
   Client::Client(transport::Configuration *config, int nShards, int closestReplica, Transport * transport): nshards(nShards), transport(transport), config(config) {
@@ -61,7 +61,7 @@ namespace janusstore {
     ballot = (client_id / 10000) * 10000;
 
     bclient.reserve(nshards);
-    Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
+    // Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
 
     /* Start a shardclient for each shard. */
     // TODO change this to a single config file lul
@@ -72,7 +72,7 @@ namespace janusstore {
       bclient[i] = shardclient;
     }
 
-    Debug("Janus client [%llu] created! %llu %lu", client_id, nshards, bclient.size());
+    // Debug("Janus client [%llu] created! %llu %lu", client_id, nshards, bclient.size());
   }
 
   Client::~Client() {
@@ -139,7 +139,7 @@ namespace janusstore {
     PendingRequest *req = new PendingRequest(txn_id, ecb);
     pendingReqs[txn_id] = req;
 
-    Debug("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
+    // Debug("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
     setParticipants(txn);
 
     for (auto p: req->participant_shards) {
@@ -165,7 +165,7 @@ namespace janusstore {
   }
 
   void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
-    Debug("%s\n", ("CLIENT - COMMIT - txn " + to_string(txn_id)).c_str());
+    // Debug("%s\n", ("CLIENT - COMMIT - txn " + to_string(txn_id)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
@@ -179,7 +179,7 @@ namespace janusstore {
   void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
-    Debug("%s\n", ("CLIENT - PREACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
+    // Debug("%s\n", ("CLIENT - PREACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
@@ -236,7 +236,7 @@ namespace janusstore {
   void Client::AcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
-    Debug("%s\n", ("CLIENT - ACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
+    // Debug("%s\n", ("CLIENT - ACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
@@ -258,7 +258,7 @@ namespace janusstore {
   void Client::CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
-    Debug("%s\n", ("CLIENT - COMMIT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
+    // Debug("%s\n", ("CLIENT - COMMIT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 

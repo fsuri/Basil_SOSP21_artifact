@@ -373,8 +373,8 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
                        sizeof(totalLen) +
                        sizeof(uint32_t));
 
-    Debug("Sending %ld byte %s message over TCP to %s:%d",
-          totalLen, type.c_str(), inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
+    // Debug("Sending %ld byte %s message over TCP to %s:%d",
+          // totalLen, type.c_str(), inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
     
     char buf[totalLen];
     char *ptr = buf;
@@ -619,7 +619,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
             //      totalSize, evbuffer_get_length(evbuf));
             return;
         }
-        Debug("Receiving %ld byte message", totalSize);
+        // Debug("Receiving %ld byte message", totalSize);
 
         char buf[totalSize];
         size_t copied = evbuffer_remove(evbuf, buf, totalSize);
@@ -649,7 +649,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         
         // Dispatch
         info->receiver->ReceiveMessage(addr->second, msgType, msg, nullptr);
-        Debug("Done processing large %s message", msgType.c_str());
+        // Debug("Done processing large %s message", msgType.c_str());
     }
 }
 

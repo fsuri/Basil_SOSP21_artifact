@@ -213,7 +213,7 @@ IRClient::InvokeUnlogged(int groupIdx,
     reqMsg.mutable_req()->set_op(request);
     reqMsg.mutable_req()->set_clientid(clientid);
     reqMsg.mutable_req()->set_clientreqid(reqId);
-    Debug("Sending to %i, %i with id %lu", groupIdx, replicaIdx, reqId);
+    // Debug("Sending to %i, %i with id %lu", groupIdx, replicaIdx, reqId);
     if (transport->SendMessageToReplica(this, groupIdx, replicaIdx, reqMsg)) {
     req->timer->Start();
     pendingReqs[reqId] = req;
