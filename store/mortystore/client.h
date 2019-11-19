@@ -14,6 +14,7 @@
 #include "store/common/frontend/async_client.h"
 #include "store/mortystore/shardclient.h"
 #include "store/mortystore/common.h"
+#include "lib/latency.h"
 
 #include <thread>
 #include <set>
@@ -99,6 +100,7 @@ class Client : public ::AsyncClient {
   std::vector<ShardClient *> sclients;
   uint64_t prepareBranchIds;
   transport::Configuration *config;
+  Latency_t opLat;
 
 };
 
