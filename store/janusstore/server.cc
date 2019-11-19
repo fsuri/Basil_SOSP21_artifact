@@ -10,7 +10,7 @@ using namespace proto;
 vector<uint64_t> _checkIfAllCommitting(unordered_map<uint64_t, Transaction> id_txn_map, vector<uint64_t> deps);
 
 Server::Server(transport::Configuration &config, int groupIdx, int myIdx, Transport *transport)
-    : config(config), groupIdx(groupIdx), myIdx(myIdx), transport(transport)
+    : transport(transport), groupIdx(groupIdx), myIdx(myIdx), config(config)
 {
     transport->Register(this, config, groupIdx, myIdx);
     store = new Store();
@@ -134,7 +134,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
 
     unlogged_reply->set_reply(reply.SerializeAsString());
 
-    Debug("[Server %i] sending PREACCEPT-OK message for txn %llu %s with request id %lu",
+    Debug("[Server %i] sending PREACCEPT-OK message for txn %llu %s with request id %llu",
         this->myIdx, txn_id,
         reply.DebugString().c_str(),
         unlogged_reply->clientreqid());
@@ -509,6 +509,9 @@ void Server::_ExecutePhase(uint64_t txn_id,
     }
 
     txn->setResult(Execute(id_txn_map[txn_id]));
+
+    stats.Increment("commits", 1);
+
     Debug("[Server %i] executing transaction %llu", myIdx, txn_id);
     processed[txn_id] = true;
 
@@ -602,6 +605,7 @@ vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
             if (it != scc.end()) return scc;
         }
     }
+    Panic("Should have returned!");
 }
 
 
@@ -642,7 +646,7 @@ vector<uint64_t> _checkIfAllCommitting(
                 not_committing_ids.push_back(txn_id);
             }
         }
-        Debug("Returning %i uncommitted ids", not_committing_ids.size());
+        Debug("Returning %lu uncommitted ids", not_committing_ids.size());
         return not_committing_ids;
     }
 }
