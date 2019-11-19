@@ -4,13 +4,14 @@
 
 #include "store/mortystore/common.h"
 
+#define TXN_ID_SHIFT 20
 namespace mortystore {
 
 Client::Client(const std::string configPath, uint64_t client_id, int nShards, int nGroups,
     int closestReplica, Transport *transport, partitioner part) : client_id(client_id), nshards(nShards),
     ngroups(nGroups), transport(transport), part(part), lastReqId(0UL),
     prepareBranchIds(0UL), config(nullptr) {
-  t_id = client_id << 20; 
+  t_id = client_id << TXN_ID_SHIFT; 
 
   Debug("Initializing Morty client with id [%lu] %lu", client_id, nshards);
 
@@ -54,6 +55,11 @@ void Client::Execute(AsyncTransaction *txn, execute_callback ecb) {
 
 void Client::ExecuteNextOperation(PendingRequest *req, proto::Branch &branch) {
   ClientBranch clientBranch = GetClientBranch(branch);
+  if (clientBranch.opCount > 0) {
+    uint64_t ns = Latency_End(&opLat);
+    stats.Add("op" + std::to_string(clientBranch.opCount), ns);
+  }
+  Latency_Start(&opLat);
   Operation op = req->txn->GetNextOperation(clientBranch.opCount,
       clientBranch.readValues);
 
@@ -131,6 +137,9 @@ void Client::HandlePrepareOK(const TransportAddress &remote,
 
   itr->second->prepareOKs[msg.branch()]++;
   if (itr->second->prepareOKs[msg.branch()] == msg.branch().shards().size()) {
+    uint64_t ns = Latency_End(&opLat);
+    stats.Add("commit", ns);
+
     proto::Commit commit;
     *commit.mutable_branch() = msg.branch();
     for (auto shard : msg.branch().shards()) {
@@ -231,6 +240,13 @@ void Client::Put(proto::Branch &branch, const std::string &key,
 }
 
 void Client::Commit(PendingRequest *req, const proto::Branch &branch) {
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Sending: ";
+    PrintBranch(branch, ss);
+    Debug("%s", ss.str().c_str());
+  }
+
   proto::Prepare prepare;
   *prepare.mutable_branch() = branch;
   prepare.mutable_branch()->set_id(prepareBranchIds);
@@ -253,6 +269,9 @@ void Client::Abort(const proto::Branch &branch) {
 void Client::ProcessPrepareKOs(PendingRequest *req, const proto::Branch &branch) {
   req->prepareResponses++;
   if (req->prepareResponses == req->sentPrepares) {
+    uint64_t ns = Latency_End(&opLat);
+    stats.Add("abort", ns);
+
     Debug("Received responses for all outstanding prepares (%lu).", req->sentPrepares);
     
     Abort(branch);

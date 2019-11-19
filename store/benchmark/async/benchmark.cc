@@ -391,6 +391,10 @@ int main(int argc, char **argv) {
         Latency_Sum(&sum, &benchClients[i]->latency);
         total.Merge(benchClients[i]->GetStats());
       }
+      for (unsigned int i = 0; i < asyncClients.size(); i++) {
+        total.Merge(asyncClients[i]->GetStats());
+      }
+
       Latency_Dump(&sum);
       if (latencyFile.size() > 0) {
         Latency_FlushTo(latencyFile.c_str());
