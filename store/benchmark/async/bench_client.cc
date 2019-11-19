@@ -54,7 +54,7 @@ BenchmarkClient::BenchmarkClient(Transport &transport, uint32_t clientId,
 	}
 	started = false;
 	done = false;
-	cooldownDone = false;
+  cooldownStarted = false;
 	_Latency_Init(&latency, "op");
   if (numRequests > 0) {
 	  latencies.reserve(numRequests);
@@ -104,8 +104,9 @@ void BenchmarkClient::WarmupDone() {
 }
 
 void BenchmarkClient::CooldownDone() {
+  done = true;
+
   char buf[1024];
-  cooldownDone = true;
   Notice("Finished cooldown period.");
   std::sort(latencies.begin(), latencies.end());
 
@@ -137,11 +138,11 @@ void BenchmarkClient::CooldownDone() {
 }
 
 void BenchmarkClient::OnReply(int result) {
-  if (cooldownDone) {
+  IncrementSent();
+
+  if (done) {
     return;
   }
-
-  IncrementSent();
 
   if (delay == 0) {
     Latency_Start(&latency);
@@ -157,22 +158,26 @@ void BenchmarkClient::StartLatency() {
 }
 
 void BenchmarkClient::IncrementSent() {
-  if ((started) && (!done) && (n != 0)) {
-    uint64_t ns = Latency_End(&latency);
-    std::cout << GetLastOp() << ',' << ns << std::endl;
-    latencies.push_back(ns);
+  if (started) {
+    // record latency
+    if (!cooldownStarted) {
+      uint64_t ns = Latency_End(&latency);
+      std::cout << GetLastOp() << ',' << ns << std::endl;
+      latencies.push_back(ns);
+    }
+
     if (numRequests == -1) {
       struct timeval currTime;
       gettimeofday(&currTime, NULL);
 
       struct timeval diff = timeval_sub(currTime, startTime);
-      if (diff.tv_sec > expDuration - warmupSec - cooldownSec) {
+      if (diff.tv_sec > expDuration - warmupSec - cooldownSec && !cooldownStarted) {
         Finish();
+      } else if (diff.tv_sec > expDuration - warmupSec) {
+        CooldownDone();
       }
-    } else { 
-      if (n >= numRequests) {
-        Finish();
-      }
+    } else if (n >= numRequests){ 
+      CooldownDone();  
     }
   }
 
@@ -184,14 +189,16 @@ void BenchmarkClient::Finish() {
 
   struct timeval diff = timeval_sub(endTime, startTime);
 
-  Notice("Completed %d requests in " FMT_TIMEVAL_DIFF " seconds", numRequests,
+  Notice("Completed %d requests in " FMT_TIMEVAL_DIFF " seconds", n,
       VA_TIMEVAL_DIFF(diff));
-  done = true;
-
-  transport.Timer(cooldownSec * 1000, std::bind(&BenchmarkClient::CooldownDone,
-      this));
 
   if (latencyFilename.size() > 0) {
       Latency_FlushTo(latencyFilename.c_str());
+  }
+
+  if (numRequests == -1) {
+    cooldownStarted = true;
+  } else {
+    CooldownDone();
   }
 }
