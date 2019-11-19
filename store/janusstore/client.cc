@@ -100,7 +100,7 @@ namespace janusstore {
     for (const auto & key: txn->read_set) {
       int i = this->keyToShard(key, nshards);
       if (req->participant_shards.find(i) == req->participant_shards.end()) {
-        Debug("txn %llu -> shard %i, key %s", txn->getTransactionId(), i, key.c_str());
+        // Debug("txn %llu -> shard %i, key %s", txn->getTransactionId(), i, key.c_str());
         req->participant_shards.insert(i);
       }
       txn->groups.insert(i);
@@ -111,7 +111,7 @@ namespace janusstore {
       int i = this->keyToShard(pair.first, nshards);
       // Debug("%i, %i", txn->getTransactionId(), i);
       if (req->participant_shards.find(i) == req->participant_shards.end()) {
-        Debug("txn %llu -> shard %i, key %s", txn->getTransactionId(), i, pair.first.c_str());
+        // Debug("txn %llu -> shard %i, key %s", txn->getTransactionId(), i, pair.first.c_str());
         req->participant_shards.insert(i);
       }
       txn->groups.insert(i);

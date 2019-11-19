@@ -375,7 +375,7 @@ int main(int argc, char **argv) {
   int keysRead = 0;
   std::function<void()> jrcb = [&]() {
     keysRead++;
-    if (keysRead == FLAGS_num_keys) {
+    if (clientsDone == FLAGS_num_clients && keysRead == FLAGS_num_keys) {
       transport.Stop();
     }
   };

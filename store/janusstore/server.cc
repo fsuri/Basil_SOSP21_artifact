@@ -31,6 +31,9 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     if (type == unlogged_request.GetTypeName()) {
         unlogged_request.ParseFromString(data);
         uint64_t clientreqid = unlogged_request.req().clientreqid();
+        if (clientreqid == 0) {
+            Warning("no clientreqid");
+        }
         unlogged_reply.set_clientreqid(clientreqid);
 
         request.ParseFromString(unlogged_request.req().op());
@@ -54,7 +57,6 @@ void Server::ReceiveMessage(const TransportAddress &remote,
                 break;
             }
             case Request::GET: {
-                Debug("got a GET request");
                 string key = request.key();
                 string value = store->Read(key);
 
@@ -132,9 +134,10 @@ Server::HandlePreAccept(const TransportAddress &remote,
 
     unlogged_reply->set_reply(reply.SerializeAsString());
 
-    Debug("[Server %i] sending PREACCEPT-OK message for txn %llu %s",
+    Debug("[Server %i] sending PREACCEPT-OK message for txn %llu %s with request id %lu",
         this->myIdx, txn_id,
-        reply.DebugString().c_str());
+        reply.DebugString().c_str(),
+        unlogged_reply->clientreqid());
     transport->SendMessage(this, remote, *unlogged_reply);
 
     preaccept_ok_msg.release_dep();
