@@ -19,7 +19,7 @@ TEST(WriteCheck, ReadAccountFailure) {
   EXPECT_CALL(mockSyncClient, Get(AccountRowKey("cust1"), testing::_, 0))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(0)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(WriteCheck, ReadCheckingFailure) {
@@ -41,7 +41,7 @@ TEST(WriteCheck, ReadCheckingFailure) {
               Get(CheckingRowKey(customerId), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 TEST(WriteCheck, ReadSavingFailure) {
   MockSyncClient mockSyncClient;
@@ -71,7 +71,7 @@ TEST(WriteCheck, ReadSavingFailure) {
               Get(SavingRowKey(customerId), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(WriteCheck, ExactlySufficientFunds) {

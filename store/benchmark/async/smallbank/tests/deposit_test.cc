@@ -14,7 +14,7 @@ TEST(DepositChecking, NegativeDeposit) {
   MockSyncClient mockSyncClient;
   DepositChecking smallbankTransaction("cust1", -18000, 0);
   EXPECT_CALL(mockSyncClient, Abort(0)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 2);
 }
 
 TEST(DepositChecking, ReadAccountFailure) {
@@ -24,7 +24,7 @@ TEST(DepositChecking, ReadAccountFailure) {
   EXPECT_CALL(mockSyncClient, Get(AccountRowKey("cust1"), testing::_, 0))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(0)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(DepositChecking, ReadCheckingFailure) {
@@ -46,7 +46,7 @@ TEST(DepositChecking, ReadCheckingFailure) {
               Get(CheckingRowKey(customerId), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(DepositChecking, Success) {

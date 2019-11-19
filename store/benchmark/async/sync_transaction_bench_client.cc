@@ -36,6 +36,13 @@ void SyncTransactionBenchClient::SendNext() {
       delete currTxn;
       currTxn = nullptr;
       break;
+    } else if (result == USER_ABORTED) {
+      if (retryAborted) {
+        stats.Add(GetLastOp() + "_attempts_list", currTxnAttempts);
+      }
+      delete currTxn;
+      currTxn = nullptr;
+      break;
     } else {
       stats.Increment(GetLastOp() + "_" + std::to_string(result), 1);
       stats.Increment(GetLastOp() + "_attempts", 1);

@@ -19,7 +19,7 @@ TEST(TransactSaving, ReadAccountFailure) {
   EXPECT_CALL(mockSyncClient, Get(AccountRowKey("cust1"), testing::_, 0))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(0)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(TransactSaving, ReadSavingFailure) {
@@ -41,7 +41,7 @@ TEST(TransactSaving, ReadSavingFailure) {
               Get(SavingRowKey(customerId), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(TransactSaving, ResultingBalanceNegative) {
@@ -69,7 +69,7 @@ TEST(TransactSaving, ResultingBalanceNegative) {
               Get(SavingRowKey(customerId), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(savingRowSerialized));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 2);
 }
 
 TEST(TransactSaving, Success) {

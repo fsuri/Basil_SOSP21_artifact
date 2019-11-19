@@ -21,7 +21,7 @@ TEST(Amalgamate, ReadAccount1Failure) {
   EXPECT_CALL(mockSyncClient, Get(AccountRowKey(cust1), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(0)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(Amalgamate, ReadAccount2Failure) {
@@ -43,7 +43,7 @@ TEST(Amalgamate, ReadAccount2Failure) {
   EXPECT_CALL(mockSyncClient, Get(AccountRowKey(cust2), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(0)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 TEST(Amalgamate, ReadChecking2Failure) {
   MockSyncClient mockSyncClient;
@@ -73,7 +73,7 @@ TEST(Amalgamate, ReadChecking2Failure) {
               Get(CheckingRowKey(customerId2), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(Amalgamate, ReadChecking1Failure) {
@@ -113,7 +113,7 @@ TEST(Amalgamate, ReadChecking1Failure) {
               Get(CheckingRowKey(customerId1), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(Amalgamate, ReadSaving1Failure) {
@@ -162,7 +162,7 @@ TEST(Amalgamate, ReadSaving1Failure) {
               Get(SavingRowKey(customerId1), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(Amalgamate, Success) {

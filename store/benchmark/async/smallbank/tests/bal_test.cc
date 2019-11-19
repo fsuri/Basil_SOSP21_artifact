@@ -20,7 +20,7 @@ TEST(Bal, ReadAccountFailure) {
   EXPECT_CALL(mockSyncClient, Get(AccountRowKey(cust), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(Bal, ReadSavingFailure) {
@@ -42,7 +42,7 @@ TEST(Bal, ReadSavingFailure) {
               Get(SavingRowKey(customerId), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(Bal, ReadCheckingFailure) {
@@ -73,7 +73,7 @@ TEST(Bal, ReadCheckingFailure) {
               Get(CheckingRowKey(customerId), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(""));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), -1);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 TEST(Bal, Success) {
   std::string cust = "cust1";
