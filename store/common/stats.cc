@@ -1,5 +1,7 @@
 #include "store/common/stats.h"
 
+#include "lib/assert.h"
+
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -39,6 +41,8 @@ void Stats::ExportJSON(std::ostream &os) {
     os << std::endl;
   }
   for (auto itr = statLists.begin(); itr != statLists.end(); ++itr) {
+    Debug("Writing stat list %s of length %lu.", itr->first.c_str(),
+        itr->second.size());
     os << "    \"" << itr->first << "\": [";
     for (auto jtr = itr->second.begin(); jtr != itr->second.end(); ++jtr) {
       os << *jtr;

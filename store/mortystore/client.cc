@@ -210,6 +210,8 @@ void Client::Get(PendingRequest *req, proto::Branch &branch,
       break;
     }
   }
+
+  RecordBranch(msg.branch());
   if (alreadyRead) {
     ExecuteNextOperation(req, branch);
   } else {
@@ -242,6 +244,7 @@ void Client::Put(proto::Branch &branch, const std::string &key,
     Debug("%s", ss.str().c_str());
   }
 
+  RecordBranch(msg.branch());
   sclients[i]->Write(msg);
 }
 
@@ -252,6 +255,7 @@ void Client::Commit(PendingRequest *req, const proto::Branch &branch) {
     PrintBranch(branch, ss);
     Debug("%s", ss.str().c_str());
   }
+
 
   proto::Prepare prepare;
   *prepare.mutable_branch() = branch;
@@ -289,6 +293,11 @@ void Client::ProcessPrepareKOs(PendingRequest *req, const proto::Branch &branch)
     Debug("Prepare failed. Waiting on %lu other prepare responses (out of %lu).",
         req->sentPrepares - req->prepareResponses, req->sentPrepares);
   }
+}
+
+void Client::RecordBranch(const proto::Branch &branch) {
+  UW_ASSERT(sent_branches.find(branch) == sent_branches.end());    
+  sent_branches.insert(branch);
 }
 
 } // namespace mortystore

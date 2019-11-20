@@ -80,6 +80,8 @@ class Client : public ::AsyncClient {
 
   void ProcessPrepareKOs(PendingRequest *req, const proto::Branch &branch);
 
+  void RecordBranch(const proto::Branch &branch);
+
   // Unique ID for this client.
   uint64_t client_id;
 
@@ -101,7 +103,7 @@ class Client : public ::AsyncClient {
   uint64_t prepareBranchIds;
   transport::Configuration *config;
   Latency_t opLat;
-
+  std::unordered_set<proto::Branch, BranchHasher, BranchComparer> sent_branches;
 };
 
 } // namespace mortystore
