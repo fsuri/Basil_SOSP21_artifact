@@ -2,6 +2,9 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
+11/20:
+	- (TODO) server now inquires when it's supposed to, but we dont know where to send the inquiry
+		- idea: add participant shards to the client's COMMIT message, because that's when the inquiry might happen, so that the replicas know where to inquire
 11/13:
 	- (TODO) verify strict serializability
 		- (TODO) modify async one shot adapter client to generate actual values for the writes.
