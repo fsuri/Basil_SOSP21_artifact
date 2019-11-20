@@ -73,73 +73,72 @@ SyncTransaction *SmallbankClient::GetNextTransaction() {
   // https://github.com/microsoft/CCF/blob/master/samples/apps/smallbank/clients/small_bank_client.cpp
   if (ttype < balanceThreshold) {
     last_op_ = "balance";
-    return new Bal(GetCustomerKey(gen_, all_keys_, num_hotspot_keys_,
+    return new Bal(GetCustomerKey(all_keys_, num_hotspot_keys_,
                                   num_non_hotspot_keys_, hotspot_probability_),
                    timeout_);
   }
   if (ttype < depositThreshold) {
     last_op_ = "deposit";
     return new DepositChecking(
-        GetCustomerKey(gen_, all_keys_, num_hotspot_keys_,
+        GetCustomerKey(all_keys_, num_hotspot_keys_,
                        num_non_hotspot_keys_, hotspot_probability_),
         GetRand()() % 50 + 1, timeout_);
   }
   if (ttype < transactThreshold) {
     last_op_ = "transact";
     return new TransactSaving(
-        GetCustomerKey(gen_, all_keys_, num_hotspot_keys_,
+        GetCustomerKey(all_keys_, num_hotspot_keys_,
                        num_non_hotspot_keys_, hotspot_probability_),
         GetRand()() % 101 - 50, timeout_);
   }
   if (ttype < amalgamateThreshold) {
     last_op_ = "amalgamate";
     std::pair<string, string> keyPair =
-        GetCustomerKeyPair(gen_, all_keys_, num_hotspot_keys_,
+        GetCustomerKeyPair(all_keys_, num_hotspot_keys_,
                            num_non_hotspot_keys_, hotspot_probability_);
     return new Amalgamate(keyPair.first, keyPair.second, timeout_);
   }
   last_op_ = "write_check";
   return new WriteCheck(
-      GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_,
+      GetCustomerKey(all_keys_, num_hotspot_keys_, num_non_hotspot_keys_,
                      hotspot_probability_),
       GetRand()() % 50, timeout_);
 }
 
 std::string SmallbankClient::GetLastOp() const { return last_op_; }
 
-std::string SmallbankClient::GetCustomerKey(std::mt19937 &gen,
-                                            std::vector<std::string> all_keys,
+std::string SmallbankClient::GetCustomerKey(std::vector<std::string> all_keys,
                                             uint32_t num_hotspot_keys,
                                             uint32_t num_non_hotspot_keys,
                                             double hotspot_probability) {
   std::uniform_int_distribution<int> hotspotDistribution(
       0, num_hotspot_keys + num_non_hotspot_keys - 1);
   bool inHotspot =
-      hotspotDistribution(gen) <
+      hotspotDistribution(GetRand()) <
       hotspot_probability * (num_hotspot_keys + num_non_hotspot_keys);
   int range = inHotspot ? num_hotspot_keys : num_non_hotspot_keys;
   std::uniform_int_distribution<int> relevantKeyDistribution(0, range - 1);
   int offset = inHotspot ? 0 : num_hotspot_keys;
-  return all_keys[relevantKeyDistribution(gen) + offset];
+  return all_keys[relevantKeyDistribution(GetRand()) + offset];
 };
 
 std::pair<std::string, std::string> SmallbankClient::GetCustomerKeyPair(
-    std::mt19937 &gen, std::vector<std::string> all_keys,
+    std::vector<std::string> all_keys,
     uint32_t num_hotspot_keys, uint32_t num_non_hotspot_keys,
     double hotspot_probability) {
   std::uniform_int_distribution<int> hotspotDistribution(
       0, num_hotspot_keys + num_non_hotspot_keys - 1);
   bool inHotspot =
-      hotspotDistribution(gen) <
+      hotspotDistribution(GetRand()) <
       hotspot_probability * (num_hotspot_keys + num_non_hotspot_keys);
   int range = inHotspot ? num_hotspot_keys : num_non_hotspot_keys;
   std::uniform_int_distribution<int> relevantKey1Distribution(0, range - 1);
   int offset = inHotspot ? 0 : num_hotspot_keys;
-  int key1Idx = relevantKey1Distribution(gen) + offset;
+  int key1Idx = relevantKey1Distribution(GetRand()) + offset;
   string key1 = all_keys[key1Idx];
   std::swap(all_keys[key1Idx], all_keys[range + offset - 1]);
   std::uniform_int_distribution<int> relevantKey2Distribution(0, range - 2);
-  string key2 = all_keys[relevantKey2Distribution(gen) + offset];
+  string key2 = all_keys[relevantKey2Distribution(GetRand()) + offset];
   return std::make_pair(key1, key2);
 };
 

@@ -43,12 +43,11 @@ class SmallbankClient : public SyncTransactionBenchClient {
   virtual ~SmallbankClient();
   virtual SyncTransaction *GetNextTransaction();
   virtual std::string GetLastOp() const;
-  std::string GetCustomerKey(std::mt19937 &gen, std::vector<std::string> keys,
+  std::string GetCustomerKey(std::vector<std::string> keys,
                              uint32_t num_hotspot_keys,
                              uint32_t num_non_hotspot_keys,
                              double hotspot_probability);
-  std::pair<string, string> GetCustomerKeyPair(std::mt19937 &gen,
-                                               std::vector<std::string> keys,
+  std::pair<string, string> GetCustomerKeyPair(std::vector<std::string> keys,
                                                uint32_t num_hotspot_keys,
                                                uint32_t num_non_hotspot_keys,
                                                double hotspot_probability);
