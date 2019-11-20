@@ -203,8 +203,14 @@ void Client::Get(PendingRequest *req, proto::Branch &branch,
   }
 
   // Check if this branch already read this key
-  std::string val;
-  if (ValueOnBranch(branch, key, val)) {
+  bool alreadyRead = false;
+  for (int64_t i = 0; i < branch.txn().ops_size() - 1; ++i) {
+    if (branch.txn().ops(i).key() == key) {
+      alreadyRead = true;
+      break;
+    }
+  }
+  if (alreadyRead) {
     ExecuteNextOperation(req, branch);
   } else {
     sclients[i]->Read(msg);
