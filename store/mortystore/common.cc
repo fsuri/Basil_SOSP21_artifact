@@ -200,6 +200,7 @@ bool ValidSubsequence(const proto::Branch &branch,
           // if the dependency committed with conflicting operations that we are
           //   not aware of, we cannot commit
           if (TransactionsConflict(branch.txn(), *t, std::vector<int>(), ignoret)) {
+            Debug("Found mrc %lu in deps, but has unknown ops.", t->id());
             return false;
           } else {
             found = true;
@@ -208,6 +209,7 @@ bool ValidSubsequence(const proto::Branch &branch,
         }
       }
       if (!found) {
+        Debug("Did not find mrc %lu in deps.", t->id());
         return false;
       }
     }
@@ -218,21 +220,22 @@ bool ValidSubsequence(const proto::Branch &branch,
 bool TransactionsConflict(const proto::Transaction &txn1,
       const proto::Transaction &txn2, const std::vector<int> &ignore1,
       const std::vector<int> &ignore2) {
-  int64_t i1 = 0;
+  size_t i1 = 0;
   for (int64_t i = 0; i < txn1.ops_size(); ++i) {
     if (i1 < ignore1.size() && i == ignore1[i1]) {
       ++i1;
       continue;
     }
-    int64_t j2 = 0;
+    size_t j2 = 0;
     for (int64_t j = 0; j < txn2.ops_size(); ++j) {
       if (j2 < ignore2.size() && j == ignore2[j2]) {
         ++j2;
         continue;
       }
-      if (txn1.ops(i).type() == proto::OperationType::WRITE ||
-          txn2.ops(j).type() == proto::OperationType::WRITE &&
+      if ((txn1.ops(i).type() == proto::OperationType::WRITE ||
+          txn2.ops(j).type() == proto::OperationType::WRITE) &&
           txn1.ops(i).key() == txn2.ops(j).key()) {
+        std::cerr << "op " << i << " and op " << j << " conflict" << std::endl;
         return true;
       }
     }
