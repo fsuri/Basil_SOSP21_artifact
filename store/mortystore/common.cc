@@ -18,14 +18,9 @@ bool operator==(const mortystore::proto::Branch &b1,
     return false;
   }
   for (const auto &kv1 : b1.deps()) {
-    bool found = false;
-    for (const auto &kv2 : b2.deps()) {
-      if (kv1.second == kv2.second) {
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
+    auto itr = b2.deps().find(kv1.first);
+    if (itr == b2.deps().end() || itr->second != kv1.second) {
+      Debug("Branch1 dep %lu not in branch2.", kv1.first);
       return false;
     }
   }
@@ -41,14 +36,7 @@ bool operator==(const mortystore::proto::Transaction &t1,
     return false;
   }
   for (int64_t i = 0; i < t1.ops_size(); ++i) {
-    bool found = false;
-    for (int64_t j = 0; j < t2.ops_size(); ++j) {
-      if (t1.ops(i) == t2.ops(j)) {
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
+    if (t1.ops(i) != t2.ops(i)) {
       return false;
     }
   }
@@ -64,6 +52,12 @@ bool operator==(const mortystore::proto::Operation &o1,
     const mortystore::proto::Operation &o2) {
   return o1.type() == o2.type() && o1.key() == o2.key() && o1.val() == o2.val();
 }
+
+bool operator!=(const mortystore::proto::Operation &o1,
+    const mortystore::proto::Operation &o2) {
+  return !(o1 == o2);
+}
+
 
 namespace mortystore {
 
@@ -88,7 +82,9 @@ void HashBranch(size_t &hash, const proto::Branch &branch) {
   hash_combine_impl(hash, std::hash<unsigned long long>{}(branch.id()));
   HashTransaction(hash, branch.txn());
   for (const auto &kv : branch.deps()) {
-    HashTransaction(hash, kv.second);
+    size_t thash = 0UL;
+    HashTransaction(thash, kv.second);
+    hash = hash ^ thash;
   }
 }
 
