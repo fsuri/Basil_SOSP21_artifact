@@ -22,9 +22,9 @@ Operation RWTransaction::GetNextOperation(size_t opCount,
     std::map<std::string, std::string> readValues) {
   if (opCount < GetNumOps()) {
     if (opCount % 2 == 0) {
-      return Get(GetKey(opCount / 2));
+      return Get(GetKey(opCount));
     } else {
-      return Put(GetKey(opCount / 2), std::to_string(opCount));
+      return Put(GetKey(opCount), std::to_string(opCount));
     }
   } else {
     return Commit();
