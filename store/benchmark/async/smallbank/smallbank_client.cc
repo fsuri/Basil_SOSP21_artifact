@@ -48,9 +48,7 @@ SmallbankClient::SmallbankClient(
       num_hotspot_keys_(num_hotspot_keys),  // first `num_hotpost_keys_` in
                                             // `all_keys_` is the hotspot
       num_non_hotspot_keys_(num_non_hotspot_keys),
-      hotspot_probability_(hotspot_probability) {
-  std::mt19937 gen;
-  gen_ = gen;
+      hotspot_probability_(hotspot_probability) { 
   std::string str;
   std::ifstream file(customer_name_file_path);
   while (getline(file, str, ',')) {
@@ -84,14 +82,14 @@ SyncTransaction *SmallbankClient::GetNextTransaction() {
     return new DepositChecking(
         GetCustomerKey(gen_, all_keys_, num_hotspot_keys_,
                        num_non_hotspot_keys_, hotspot_probability_),
-        std::rand() % 50 + 1, timeout_);
+        GetRand()() % 50 + 1, timeout_);
   }
   if (ttype < transactThreshold) {
     last_op_ = "transact";
     return new TransactSaving(
         GetCustomerKey(gen_, all_keys_, num_hotspot_keys_,
                        num_non_hotspot_keys_, hotspot_probability_),
-        std::rand() % 101 - 50, timeout_);
+        GetRand()() % 101 - 50, timeout_);
   }
   if (ttype < amalgamateThreshold) {
     last_op_ = "amalgamate";
@@ -104,7 +102,7 @@ SyncTransaction *SmallbankClient::GetNextTransaction() {
   return new WriteCheck(
       GetCustomerKey(gen_, all_keys_, num_hotspot_keys_, num_non_hotspot_keys_,
                      hotspot_probability_),
-      std::rand() % 50, timeout_);
+      GetRand()() % 50, timeout_);
 }
 
 std::string SmallbankClient::GetLastOp() const { return last_op_; }
