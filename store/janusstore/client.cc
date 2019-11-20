@@ -250,6 +250,7 @@ namespace janusstore {
 
     if (req->responded_shards.size() == req->participant_shards.size()) {
       // no need to check for a quorum for every shard because we dont implement failure recovery
+      Debug("CLIENT - AcceptCallback - proceeding to Commit phase");
       req->responded_shards.clear();
       Commit(txn_id, req->aggregated_deps);
     }
@@ -263,6 +264,7 @@ namespace janusstore {
     PendingRequest* req = this->pendingReqs[txn_id];
 
     req->responded_shards.insert(shard);
+    Debug("CLIENT - CommitCallback - received %llu out of %llu shard responses", req->responded_shards.size(), req->participant_shards.size());
 
     // printf("%s\n", ("CLIENT - COMMIT CB - added " + to_string(shard) + " to responded list").c_str());
 

@@ -335,11 +335,11 @@ void Server::_HandleCommit(uint64_t txn_id,
             txn->blocked_by_list.insert(blocking_txn_id);
             txn->request_id = unlogged_reply->clientreqid();
 
-            if (id_txn_map.find(txn_id) != id_txn_map.end()){
+            if (id_txn_map.find(blocking_txn_id) != id_txn_map.end()){
                 found_on_server = true;
             } else {
                 // inquire about the status of this transaction
-                _SendInquiry(txn_id);
+                _SendInquiry(blocking_txn_id);
             }
 
             if (blocking_ids.find(blocking_txn_id) == blocking_ids.end()) {

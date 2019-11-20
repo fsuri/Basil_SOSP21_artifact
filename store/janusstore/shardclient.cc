@@ -156,6 +156,7 @@ void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	req->accept_replies.push_back(reply);
 
 	if (req->responded == this->num_replicas) {
+		Debug("SHARDCLIENT - AcceptCallback - shard replies done");
 		req->responded = 0;
 		acb(shard, req->accept_replies);
 	}
@@ -172,6 +173,7 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	req->commit_replies.push_back(reply);
 
 	if (req->responded == this->num_replicas) {
+		Debug("SHARDCLIENT - CommitCallback - shard replies done");
 		req->responded = 0;
 		ccb(shard, req->commit_replies);
 	}
