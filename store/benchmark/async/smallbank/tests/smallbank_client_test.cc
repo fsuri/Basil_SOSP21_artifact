@@ -16,7 +16,6 @@ namespace smallbank {
 		SyncClient & syncClientMock = syncClientMockWrapper.get();
 		fakeit::Mock<Transport> transportMockWrapper;
 		Transport & transportMock = transportMockWrapper.get();
-		std::mt19937 generator(0);
 		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,0,false,0,0,0,0,0,0,0,0,"","");
 		
 		int totalKeys = 18000;
@@ -32,7 +31,7 @@ namespace smallbank {
 		int hotspotKeysFound = 0;
 		int nonHotspotKeysFound = 0;
 		for (int i=0; i< 30000; i++) {
-			std::string key = client.GetCustomerKey(generator, keys, numHotspotKeys, totalKeys - numHotspotKeys, hotspotProbability);
+			std::string key = client.GetCustomerKey(keys, numHotspotKeys, totalKeys - numHotspotKeys, hotspotProbability);
 			auto keysItr = std::find(keys.begin(), keys.end(), key); 
 			EXPECT_NE(keysItr, keys.end());
 			int keyIdx = keysItr - keys.begin();
@@ -50,7 +49,6 @@ namespace smallbank {
 		SyncClient & syncClientMock = syncClientMockWrapper.get();
 		fakeit::Mock<Transport> transportMockWrapper;
 		Transport & transportMock = transportMockWrapper.get();
-		std::mt19937 generator(0);
 		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,0,false,0,0,0,0,0,0,0,0,"","");
 		
 		int totalKeys = 18000;
@@ -67,7 +65,7 @@ namespace smallbank {
 		double hotspotProbability = 0.9;
 		for (int i=0; i< 30000; i++) {
 			bool firstKeyInHotspot = false;
-			std::pair<std::string, std::string> keyPair = client.GetCustomerKeyPair(generator, keys, numHotspotKeys, totalKeys - numHotspotKeys, hotspotProbability);
+			std::pair<std::string, std::string> keyPair = client.GetCustomerKeyPair(keys, numHotspotKeys, totalKeys - numHotspotKeys, hotspotProbability);
 			auto keysItr = std::find(keys.begin(), keys.end(), keyPair.first); 
 			EXPECT_NE(keysItr, keys.end());
 			if (keysItr - keys.begin() < numHotspotKeys) {
@@ -93,7 +91,6 @@ namespace smallbank {
 		SyncClient & syncClientMock = syncClientMockWrapper.get();
 		fakeit::Mock<Transport> transportMockWrapper;
 		Transport & transportMock = transportMockWrapper.get();
-		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
 		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,0,false,0,20,20,20,20,numHotspotKeys,totalKeys-numHotspotKeys,0.9, "","");
@@ -121,7 +118,6 @@ namespace smallbank {
 		SyncClient & syncClientMock = syncClientMockWrapper.get();
 		fakeit::Mock<Transport> transportMockWrapper;
 		Transport & transportMock = transportMockWrapper.get();
-		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
 		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,0,false,0,100,0,0,0,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
@@ -153,7 +149,6 @@ namespace smallbank {
 		SyncClient & syncClientMock = syncClientMockWrapper.get();
 		fakeit::Mock<Transport> transportMockWrapper;
 		Transport & transportMock = transportMockWrapper.get();
-		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
 		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,0,false,0,0,100,0,0,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
@@ -182,7 +177,6 @@ namespace smallbank {
 		SyncClient & syncClientMock = syncClientMockWrapper.get();
 		fakeit::Mock<Transport> transportMockWrapper;
 		Transport & transportMock = transportMockWrapper.get();
-		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
 		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,0,false,0,0,0,100,0,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
@@ -211,7 +205,6 @@ namespace smallbank {
 		SyncClient & syncClientMock = syncClientMockWrapper.get();
 		fakeit::Mock<Transport> transportMockWrapper;
 		Transport & transportMock = transportMockWrapper.get();
-		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
 		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,0,false,0,0,0,0,100,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
@@ -241,7 +234,6 @@ namespace smallbank {
 		SyncClient & syncClientMock = syncClientMockWrapper.get();
 		fakeit::Mock<Transport> transportMockWrapper;
 		Transport & transportMock = transportMockWrapper.get();
-		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
 		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,0,false,0,0,0,0,0,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
@@ -271,7 +263,6 @@ namespace smallbank {
 		SyncClient & syncClientMock = syncClientMockWrapper.get();
 		fakeit::Mock<Transport> transportMockWrapper;
 		Transport & transportMock = transportMockWrapper.get();
-		std::mt19937 generator(0);
 		int totalKeys = 18000;
 		int numHotspotKeys = 1000;
 		SmallbankClient client(syncClientMock, transportMock, 0,0,0,0,0,0,0,0,false,0,0,0,50,0,numHotspotKeys,totalKeys-numHotspotKeys,0.9,"","");
