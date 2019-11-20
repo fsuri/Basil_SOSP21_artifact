@@ -18,6 +18,9 @@ bool operator!=(const mortystore::proto::Transaction &t1,
 bool operator==(const mortystore::proto::Operation &o1,
     const mortystore::proto::Operation &o2);
 
+bool operator!=(const mortystore::proto::Operation &o1,
+    const mortystore::proto::Operation &o2);
+
 namespace mortystore {
 
 struct BranchHasher {

@@ -167,9 +167,17 @@ void BranchGenerator::GenerateBranchesPermutations(
               ss << "    Generated branch: ";
               PrintBranch(new_branch, ss);
               Debug("%s", ss.str().c_str());
+
+              ss.str("");
+              Debug("Already generated: %lu", already_generated.size());
+              for (const auto &ag : already_generated) {
+                ss << std::endl;
+                PrintBranch(ag, ss);
+              }
+              Debug("%s", ss.str().c_str());
             }
-            Debug("Already generated: %lu", already_generated.size());
             if (already_generated.find(new_branch) == already_generated.end()) {
+              Debug("    Not previously generated.");
               new_branches.push_back(new_branch);
               already_generated.insert(new_branch);
             }
