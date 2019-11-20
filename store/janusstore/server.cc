@@ -31,9 +31,6 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     if (type == unlogged_request.GetTypeName()) {
         unlogged_request.ParseFromString(data);
         uint64_t clientreqid = unlogged_request.req().clientreqid();
-        if (clientreqid == 0) {
-            Warning("no clientreqid");
-        }
         unlogged_reply.set_clientreqid(clientreqid);
 
         request.ParseFromString(unlogged_request.req().op());
@@ -134,10 +131,9 @@ Server::HandlePreAccept(const TransportAddress &remote,
 
     unlogged_reply->set_reply(reply.SerializeAsString());
 
-    Debug("[Server %i] sending PREACCEPT-OK message for txn %llu %s with request id %llu",
+    Debug("[Server %i] sending PREACCEPT-OK message for txn %llu %s",
         this->myIdx, txn_id,
-        reply.DebugString().c_str(),
-        unlogged_reply->clientreqid());
+        reply.DebugString().c_str());
     transport->SendMessage(this, remote, *unlogged_reply);
 
     preaccept_ok_msg.release_dep();
@@ -303,9 +299,11 @@ void Server::_HandleCommit(uint64_t txn_id,
             Transaction *txn = &id_txn_map[blocked_id];
             txn->blocked_by_list.erase(txn_id);
             if (txn->blocked_by_list.empty()) {
+                uint64_t request_id = txn->request_id;
                 Debug("Blocked id %llu commitable now", blocked_id);
                 for (auto *client_addr : txn->client_addrs){
-                   replication::ir::proto::UnloggedReplyMessage blocked_unlogged_reply;
+                    replication::ir::proto::UnloggedReplyMessage blocked_unlogged_reply;
+                    blocked_unlogged_reply.set_clientreqid(request_id);
                     _HandleCommit(blocked_id, *client_addr, &blocked_unlogged_reply);
                     blocked_unlogged_reply.Clear();
                 }
@@ -335,6 +333,7 @@ void Server::_HandleCommit(uint64_t txn_id,
         for (uint64_t blocking_txn_id : not_committing_ids) {
             Debug("%llu blocked by %llu", txn_id, blocking_txn_id);
             txn->blocked_by_list.insert(blocking_txn_id);
+            txn->request_id = unlogged_reply->clientreqid();
 
             if (id_txn_map.find(txn_id) != id_txn_map.end()){
                 found_on_server = true;
