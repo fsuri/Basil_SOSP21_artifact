@@ -16,7 +16,7 @@ class BranchGenerator {
   BranchGenerator();
   virtual ~BranchGenerator();
 
-  void GenerateBranches(const proto::Branch &init, proto::OperationType type,
+  uint64_t GenerateBranches(const proto::Branch &init, proto::OperationType type,
       const std::string &key, const SpecStore &store,
       std::vector<proto::Branch> &new_branches);
 

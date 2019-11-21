@@ -1,6 +1,7 @@
 #include "store/mortystore/server.h"
 
 #include <sstream>
+#include <sys/time.h>
 
 #include "store/mortystore/common.h"
 
@@ -11,6 +12,7 @@ namespace mortystore {
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     Transport *transport) : config(config), idx(idx), transport(transport) {
   transport->Register(this, config, groupIdx, idx);
+  _Latency_Init(&readWriteResp, "read_write_response");
 }
 
 Server::~Server() {
@@ -27,10 +29,28 @@ void Server::ReceiveMessage(const TransportAddress &remote,
 
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
+
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    uint64_t diff = now.tv_usec - read.ts();
+    stats.Add("recv_read_write" + std::to_string(read.branch().txn().id()), diff);
+
+    Latency_Start(&readWriteResp);
     HandleRead(remote, read);
+    uint64_t ns = Latency_End(&readWriteResp);
+    stats.Add("handle_read_write" + std::to_string(read.branch().txn().id()), ns);
   } else if (type == write.GetTypeName()) {
     write.ParseFromString(data);
+    
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    uint64_t diff = now.tv_usec - write.ts();
+    stats.Add("recv_read_write" + std::to_string(write.branch().txn().id()), diff);
+
+    Latency_Start(&readWriteResp);
     HandleWrite(remote, write);
+    uint64_t ns = Latency_End(&readWriteResp);
+    stats.Add("handle_read_write" + std::to_string(write.branch().txn().id()), ns);
   } else if (type == prepare.GetTypeName()) {
     prepare.ParseFromString(data);
     HandlePrepare(remote, prepare);
@@ -228,19 +248,30 @@ bool Server::CheckBranch(const TransportAddress &addr, const proto::Branch &bran
 void Server::SendBranchReplies(const proto::Branch &init,
     proto::OperationType type, const std::string &key) {
   std::vector<proto::Branch> generated_branches;
-  generator.GenerateBranches(init, type, key, store, generated_branches);
+  uint64_t ns = generator.GenerateBranches(init, type, key, store, generated_branches);
+  stats.Add("generate_branches" + std::to_string(init.txn().id()), ns);
   for (const proto::Branch &branch : generated_branches) {
     const proto::Operation &op = branch.txn().ops()[branch.txn().ops().size() - 1];
     if (op.type() == proto::OperationType::READ) {
       std::string val;
       ValueOnBranch(branch, op.key(), val);
       proto::ReadReply reply;
+
+      struct timeval now;
+      gettimeofday(&now, NULL);
+      reply.set_ts(now.tv_usec);
+
       *reply.mutable_branch() =  branch;
       reply.set_key(op.key());
       reply.set_value(val);
       transport->SendMessage(this, *txn_coordinators[branch.txn().id()], reply);
     } else {
       proto::WriteReply reply;
+      
+      struct timeval now;
+      gettimeofday(&now, NULL);
+      reply.set_ts(now.tv_usec);
+
       *reply.mutable_branch() = branch;
       reply.set_key(op.key());
       reply.set_value(op.val());

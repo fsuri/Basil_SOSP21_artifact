@@ -38,7 +38,7 @@ void BranchGenerator::ClearPending(uint64_t txn_id) {
   }
 }
 
-void BranchGenerator::GenerateBranches(const proto::Branch &init,
+uint64_t BranchGenerator::GenerateBranches(const proto::Branch &init,
     proto::OperationType type, const std::string &key,
     const SpecStore &store,
     std::vector<proto::Branch> &new_branches) {
@@ -64,7 +64,7 @@ void BranchGenerator::GenerateBranches(const proto::Branch &init,
   std::vector<uint64_t> subset = {init.txn().id()};
   GenerateBranchesSubsets(txns_list, store, new_branches, subset);
   
-  Latency_End(&generateLatency);
+  return Latency_End(&generateLatency);
 }
 
 void BranchGenerator::GenerateBranchesSubsets(
