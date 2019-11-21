@@ -37,6 +37,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
     pendingReqs[txn_id] = req;
     req->cpcb = pcb;
     req->preaccept_replies = {};
+    req->participant_shards = txn.groups;
 
 	// create PREACCEPT Request
 	string request_str;

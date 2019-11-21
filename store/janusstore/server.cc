@@ -118,11 +118,17 @@ Server::HandlePreAccept(const TransportAddress &remote,
 
     // create dep list for reply
     DependencyList dep;
-    for (int i = 0; i < dep_list.size(); i++) {
-        dep.add_txnid(dep_list[i]);
-    }
     PreAcceptOKMessage preaccept_ok_msg;
     preaccept_ok_msg.set_txnid(txn_id);
+
+    for (int i = 0; i < dep_list.size(); i++) {
+        dep.add_txnid(dep_list[i]);
+        DependencyMeta* depmeta = preaccept_ok_msg.add_depmeta();
+        depmeta->set_txnid(dep_list[i]);
+        for (int group : txn.groups) {
+            depmeta->add_group(group);
+        }
+    }
 
     preaccept_ok_msg.set_allocated_dep(&dep);
 
@@ -428,6 +434,7 @@ void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
 void Server::_SendInquiry(uint64_t txn_id) {
     Debug("[Server %i] on shard %i sending inquiry for transaction %llu", myIdx, groupIdx, txn_id);
 
+    /*
     Transaction other_server_txn = id_txn_map[txn_id];
     // ask random participating shard+replica for deplist
     uint64_t nearest_group;
@@ -445,6 +452,7 @@ void Server::_SendInquiry(uint64_t txn_id) {
 
     transport->SendMessageToReplica(
         this, nearest_group, nearest_replica, request);
+    */
 }
 
 unordered_map<string, string> Server::Execute(Transaction txn) {

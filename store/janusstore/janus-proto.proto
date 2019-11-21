@@ -6,6 +6,11 @@ message DependencyList {
     repeated uint64 txnid = 1;
 }
 
+message DependencyMeta {
+    optional uint64 txnid = 1;
+    repeated uint64 group = 2;
+}
+
 message GetMessage {
     optional string key = 1;
 }
@@ -35,7 +40,8 @@ message PreAcceptMessage {
 
 message PreAcceptOKMessage {
     optional uint64 txnid = 1;
-    optional DependencyList dep = 4;
+    optional DependencyList dep = 2;
+    repeated DependencyMeta depmeta = 3;
 }
 
 message PreAcceptNotOKMessage {
@@ -61,6 +67,7 @@ message AcceptNotOKMessage {
 message CommitMessage {
     optional uint64 txnid = 1;
     optional DependencyList dep = 2;
+    repeated DependencyMeta depmeta = 3;
 }
 
 message CommitOKMessage {

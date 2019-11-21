@@ -58,6 +58,7 @@ public:
         bool output_committed;
         bool has_fast_quorum;
         std::set<uint64_t> aggregated_deps;
+        std::map<uint64_t, std::set<int>> aggregated_depmeta;
         std::set<uint64_t> participant_shards;
         std::set<uint64_t> responded_shards;
   };

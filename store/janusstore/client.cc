@@ -169,6 +169,10 @@ namespace janusstore {
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
+    // TODO supply each shardclient with the aggregated_depmeta
+    // so that when committing, every replica knows which shards to talk to
+    // for any dependency
+
     for (auto p : req->participant_shards) {
       std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
       auto ccb = std::bind(&Client::CommitCallback, this, txn_id, placeholders::_1, placeholders::_2);
@@ -213,6 +217,23 @@ namespace janusstore {
           // add to deplist for this shard
           shard_deps.insert(dep_id);
         }
+
+        // parse message for depmeta; will eventually replace DependencyList
+        /*
+         * Note: each replica is telling us both the dependency txns and their 
+         * participating groups, which we will aggregate for all dependencies
+         * so that during COMMIT, each replica will know which shard to talk to
+         * if they need to inquire.
+         *
+         * god I wish the original Janus paper mentioned this.
+         */
+        for (int i = 0; i < reply.preaccept_ok().depmeta_size(); i++) {
+          DependencyMeta depmeta = reply.preaccept_ok().depmeta(i);
+          for (int j = 0; j < depmeta.group_size(); j++) {
+            req->aggregated_depmeta[depmeta.txnid()].insert(depmeta.group(j));
+          }
+        }
+
       } else {
         // meaning we will need to go to Accept phase
         fast_quorum = false;
