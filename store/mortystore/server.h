@@ -57,6 +57,7 @@ class Server : public TransportReceiver, public ::Server {
   std::set<uint64_t> prepared_txn_ids;
   std::set<uint64_t> aborted_txn_ids;
   BranchGenerator generator;
+  Latency_t readWriteResp;
 
 };
 

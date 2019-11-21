@@ -113,6 +113,13 @@ void Client::HandleReadReply(const TransportAddress &remote,
     return;
   }
 
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  uint64_t diff = now.tv_usec - msg.ts();
+
+  ClientBranch clientBranch = GetClientBranch(msg.branch());
+  stats.Add("recv_read_write_reply" + std::to_string(msg.branch().txn().id()), diff);
+
   proto::Branch branch(msg.branch());
   ExecuteNextOperation(itr->second, branch);
 }
@@ -123,6 +130,13 @@ void Client::HandleWriteReply(const TransportAddress &remote,
   if (itr == pendingReqs.end()) {
     return;
   }
+
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  uint64_t diff = now.tv_usec - msg.ts();
+
+  ClientBranch clientBranch = GetClientBranch(msg.branch());
+  stats.Add("recv_read_write_reply" + std::to_string(msg.branch().txn().id()), diff);
 
   proto::Branch branch(msg.branch());
   ExecuteNextOperation(itr->second, branch);
@@ -195,6 +209,10 @@ void Client::Get(PendingRequest *req, proto::Branch &branch,
   *msg.mutable_branch() = branch;
   msg.set_key(key);
 
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  msg.set_ts(now.tv_usec);
+
   if (Message_DebugEnabled(__FILE__)) {
     std::stringstream ss;
     ss << "Sending: ";
@@ -236,6 +254,10 @@ void Client::Put(proto::Branch &branch, const std::string &key,
   *msg.mutable_branch() = branch;
   msg.set_key(key);
   msg.set_value(value);
+
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  msg.set_ts(now.tv_usec);
 
   if (Message_DebugEnabled(__FILE__)) {
     std::stringstream ss;
