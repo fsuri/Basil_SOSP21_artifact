@@ -61,6 +61,12 @@ enum keysmode_t {
   KEYS_ZIPF
 };
 
+enum transmode_t {
+	TRANS_UNKNOWN,
+  TRANS_UDP,
+  TRANS_TCP,
+};
+
 /**
  * System settings.
  */
@@ -70,6 +76,30 @@ DEFINE_uint64(num_shards, 1, "number of shards in the system");
 DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
 DEFINE_bool(tapir_sync_commit, true, "wait until commit phase completes before"
     " sending additional transactions (for TAPIR)");
+
+const std::string trans_args[] = {
+	"tcp",
+  "udp"
+};
+
+const transmode_t transmodes[] {
+	TRANS_TCP,
+  TRANS_UDP
+};
+static bool ValidateTransMode(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(trans_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == trans_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(trans_protocol, trans_args[0], "transport protocol to use for"
+		" passing messages");
+DEFINE_validator(trans_protocol, &ValidateTransMode);
 
 const std::string protocol_args[] = {
 	"txn-l",
@@ -263,6 +293,20 @@ int main(int argc, char **argv) {
 "           processing systems.");
 	gflags::ParseCommandLineFlags(&argc, &argv, true);
 
+  // parse transport protocol
+  transmode_t trans = TRANS_UNKNOWN;
+  int numTransModes = sizeof(trans_args);
+  for (int i = 0; i < numTransModes; ++i) {
+    if (FLAGS_trans_protocol == trans_args[i]) {
+      trans = transmodes[i];
+      break;
+    }
+  }
+  if (trans == TRANS_UNKNOWN) {
+    std::cerr << "Unknown transport protocol." << std::endl;
+    return 1;
+  }
+
   // parse protocol and mode
   protomode_t mode = PROTO_UNKNOWN;
   strongstore::Mode strongmode = strongstore::Mode::MODE_UNKNOWN;
@@ -337,7 +381,17 @@ int main(int argc, char **argv) {
     }
   }
 
-  TCPTransport transport(0.0, 0.0, 0, false);
+  Transport *transport;
+  switch (trans) {
+    case TRANS_TCP:
+      transport = new TCPTransport(0.0, 0.0, 0, false);
+      break;
+    case TRANS_UDP:
+      transport = new UDPTransport(0.0, 0.0, 0, nullptr);
+      break;
+    default:
+      NOT_REACHABLE();
+  }
 
   std::vector<::AsyncClient *> asyncClients;
   std::vector<::SyncClient *> syncClients;
@@ -414,16 +468,7 @@ int main(int argc, char **argv) {
       if (FLAGS_stats_file.size() > 0) {
         total.ExportJSON(FLAGS_stats_file);
       }
-      if (FLAGS_protocol_mode == "janus") {
-        for (auto client : oneShotClients) {
-          janusstore::Client *janus_client = (janusstore::Client*) client;
-          for (auto key : keys) {
-            janus_client->Read(key, jrcb);
-          }
-        }
-      } else {
-        transport.Stop();
-      }
+      transport->Stop();
     }
   };
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
@@ -435,14 +480,14 @@ int main(int argc, char **argv) {
     switch (mode) {
       case PROTO_TAPIR: {
         client = new tapirstore::Client(FLAGS_config_path, FLAGS_num_shards,
-            FLAGS_num_groups, FLAGS_closest_replica, &transport, part,
+            FLAGS_num_groups, FLAGS_closest_replica, transport, part,
             FLAGS_tapir_sync_commit, TrueTime(FLAGS_clock_skew,
               FLAGS_clock_error));
         break;
       }
       case PROTO_JANUS: {
         oneShotClient = new janusstore::Client(FLAGS_config_path,
-            FLAGS_num_shards, FLAGS_closest_replica, &transport);
+            FLAGS_num_shards, FLAGS_closest_replica, transport);
         asyncClient = new AsyncOneShotAdapterClient(oneShotClient);
         break;
       }
@@ -458,7 +503,7 @@ int main(int argc, char **argv) {
       case PROTO_MORTY: {
         asyncClient = new mortystore::Client(FLAGS_config_path,
             (FLAGS_client_id << 3) | i, FLAGS_num_shards, FLAGS_num_groups,
-            FLAGS_closest_replica, &transport, part);
+            FLAGS_closest_replica, transport, part);
         break;
       }
       default:
@@ -488,7 +533,7 @@ int main(int argc, char **argv) {
 	  switch (benchMode) {
       case BENCH_RETWIS:
         UW_ASSERT(asyncClient != nullptr);
-        bench = new retwis::RetwisClient(keySelector, *asyncClient, transport,
+        bench = new retwis::RetwisClient(keySelector, *asyncClient, *transport,
             (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
@@ -496,7 +541,7 @@ int main(int argc, char **argv) {
         break;
       case BENCH_TPCC:
         UW_ASSERT(asyncClient != nullptr);
-        bench = new tpcc::TPCCClient(*asyncClient, transport,
+        bench = new tpcc::TPCCClient(*asyncClient, *transport,
             (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
@@ -509,7 +554,7 @@ int main(int argc, char **argv) {
         break;
       case BENCH_SMALLBANK_SYNC:
         UW_ASSERT(syncClient != nullptr);
-        bench = new smallbank::SmallbankClient(*syncClient, transport,
+        bench = new smallbank::SmallbankClient(*syncClient, *transport,
             (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
@@ -522,7 +567,7 @@ int main(int argc, char **argv) {
       case BENCH_RW:
         UW_ASSERT(asyncClient != nullptr);
         bench = new rw::RWClient(keySelector, FLAGS_num_ops_txn,
-            *asyncClient, transport, (FLAGS_client_id << 3) | i,
+            *asyncClient, *transport, (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
             FLAGS_abort_backoff, FLAGS_retry_aborted);
@@ -536,7 +581,7 @@ int main(int argc, char **argv) {
       case BENCH_TPCC:
       case BENCH_RW:
         // async benchmarks
-	      transport.Timer(0, [bench, bdcb]() { bench->Start(bdcb); });
+	      transport->Timer(0, [bench, bdcb]() { bench->Start(bdcb); });
         break;
       case BENCH_SMALLBANK_SYNC:
         threads.push_back(new std::thread([bench, bdcb](){
@@ -571,7 +616,8 @@ int main(int argc, char **argv) {
   if (threads.size() > 0) {
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
   }
-  transport.Run();
+  transport->Run();
+
   for (auto i : threads) {
     i->join();
     delete i;
@@ -591,6 +637,7 @@ int main(int argc, char **argv) {
   for (auto i : benchClients) {
     delete i;
   }
+  delete transport;
 	return 0;
 }
 
