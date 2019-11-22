@@ -35,6 +35,7 @@
 #include "lib/configuration.h"
 #include "lib/transport.h"
 #include "lib/transportcommon.h"
+#include "lib/latency.h"
 
 #include <event2/event.h>
 #include <event2/buffer.h>
@@ -125,6 +126,7 @@ private:
     std::list<TCPTransportTCPListener *> tcpListeners;
     std::map<TCPTransportAddress, struct bufferevent *> tcpOutgoing;
     std::map<struct bufferevent *, TCPTransportAddress> tcpAddresses;
+    Latency_t sockWriteLat;
 
     virtual bool SendMessageInternal(TransportReceiver *src,
                              const TCPTransportAddress &dst,
