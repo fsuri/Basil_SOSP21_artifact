@@ -36,6 +36,7 @@
 
 #include <google/protobuf/message.h>
 #include <event2/thread.h>
+#include <event2/bufferevent_struct.h>
 
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
@@ -184,6 +185,7 @@ TCPTransport::TCPTransport(double dropRate, double reorderRate,
             event_add(x, NULL);
         }
     }
+    _Latency_Init(&sockWriteLat, "sock_write");
 }
 
 TCPTransport::~TCPTransport()
@@ -194,6 +196,7 @@ TCPTransport::~TCPTransport()
     // for (auto kv : timers) {
     //     delete kv.second;
     // }
+    Latency_Dump(&sockWriteLat);
 }
 
 void
@@ -212,9 +215,8 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
 
     // Set TCP_NODELAY
     int n = 1;
-    if (setsockopt(fd, IPPROTO_TCP,
-                   TCP_NODELAY, (char *)&n, sizeof(n)) < 0) {
-        PWarning("Failed to set TCP_NODELAY on TCP listening socket");
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&n, sizeof(n)) < 0) {
+        PWarning("Failedt to set TCP_NODELAY on TCP listening socket");
     }
 
     TCPTransportTCPListener *info = new TCPTransportTCPListener();
@@ -402,10 +404,17 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     memcpy(ptr, data.c_str(), dataLen);
     ptr += dataLen;
 
-    if (bufferevent_write(ev, buf, totalLen) < 0) {
+    /*if (bufferevent_write(ev, buf, totalLen) < 0) {
         Warning("Failed to write to TCP buffer");
         return false;
+    }*/
+
+    Latency_Start(&sockWriteLat);
+    if (write(ev->ev_write.ev_fd, buf, totalLen) < 0) {
+      Warning("Failed to write to TCP buffer");
+      return false;
     }
+    Latency_End(&sockWriteLat);
     return true;
 }
 
