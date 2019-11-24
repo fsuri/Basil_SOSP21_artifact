@@ -40,7 +40,7 @@ public:
     virtual void Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t ballot, client_accept_callback acb);
 
     // Initiate the Commit phase for this shard.
-    virtual void Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb);
+    virtual void Commit(uint64_t txn_id, std::vector<uint64_t> deps, std::map<uint64_t, std::set<int>> aggregated_depmeta, client_commit_callback ccb);
 
     virtual void Read(std::string key, client_read_callback pcb);
 

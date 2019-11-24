@@ -98,7 +98,7 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 	}
 }
 
-void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb) {
+void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, std::map<uint64_t, std::set<int>> aggregated_depmeta, client_commit_callback ccb) {
 	// Debug("[shard %i] Sending COMMIT for txn %llu", shard, txn_id);
 
 	PendingRequest* req = this->pendingReqs[txn_id];
@@ -110,10 +110,20 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 	Request request;
 	request.set_op(Request::COMMIT);
 	// CommitMessage payload
+	CommitMessage* commit_msg = request.mutable_commit();
 	request.mutable_commit()->set_txnid(txn_id);
 	for (auto dep : deps) {
 		request.mutable_commit()->mutable_dep()->add_txnid(dep);
 	}
+
+	for (auto& pair : aggregated_depmeta) {
+        // dep.add_txnid(dep_list[i]);
+        DependencyMeta* depmeta = commit_msg->add_depmeta();
+        depmeta->set_txnid(pair.first);
+        for (auto dep : pair.second) {
+            depmeta->add_group(dep);
+        }
+    }
 
 	request.SerializeToString(&request_str);
 

@@ -176,7 +176,7 @@ namespace janusstore {
     for (auto p : req->participant_shards) {
       std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
       auto ccb = std::bind(&Client::CommitCallback, this, txn_id, placeholders::_1, placeholders::_2);
-      bclient[p]->Commit(txn_id, vec_deps, ccb);
+      bclient[p]->Commit(txn_id, vec_deps, req->aggregated_depmeta, ccb);
     }
   }
 
