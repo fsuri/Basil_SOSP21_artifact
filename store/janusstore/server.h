@@ -56,6 +56,9 @@ public:
     // maps Transaction ids in the graph to ancestor Transaction ids
     std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map;
 
+    // maps Transaction ids to another map from ancestor txn ids to their relevant shards
+    std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::set<int>>> depshards_map;
+
     // maps Transaction ids to Transaction objects
     std::unordered_map<uint64_t, Transaction> id_txn_map;
 
@@ -86,7 +89,7 @@ public:
                        replication::ir::proto::UnloggedReplyMessage *unlogged_reply
    );
 
-    void _SendInquiry(uint64_t txn_id);
+    void _SendInquiry(uint64_t txn_id, uint64_t blocking_txn_id);
 
     std::unordered_map<std::string, std::string> WaitAndInquire(uint64_t txn_id);
     void _ExecutePhase(uint64_t txn_id,

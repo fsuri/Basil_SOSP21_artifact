@@ -124,10 +124,18 @@ Server::HandlePreAccept(const TransportAddress &remote,
     for (int i = 0; i < dep_list.size(); i++) {
         dep.add_txnid(dep_list[i]);
         DependencyMeta* depmeta = preaccept_ok_msg.add_depmeta();
-        depmeta->set_txnid(dep_list[i]);
-        for (int group : txn.groups) {
-            depmeta->add_group(group);
-        }
+        
+        uint64_t dep_id = dep_list[i];
+        depmeta->set_txnid(dep_id);
+
+        // if we know what shards dep_id participates in
+        Transaction dep_txn = NULL;
+        if (id_txn_map.find(dep_id) != id_txn_map.end()) {
+            dep_txn = id_txn_map[dep_id];
+            for (int group : dep_txn.groups) {
+                depmeta->add_group(group);
+            }
+        }        
     }
 
     preaccept_ok_msg.set_allocated_dep(&dep);
@@ -285,6 +293,19 @@ void Server::HandleCommit(const TransportAddress &remote,
         deps.push_back(received_dep.txnid(i));
     }
     dep_map[txn_id] = deps;
+    
+    // for each dep, get its participant shards
+    unordered_map<uint64_t, set<int>> dep_shards;
+    for (int i = 0; i < c_msg.depmeta_size(); i++) {
+        DependencyMeta depmeta = c_msg.depmeta(i);
+        set<int> participant_shards;
+        for (int j = 0; j < depmeta.group_size(); j++) {
+            participant_shards.insert(depmeta.group(j));
+        }
+        dep_shards[depmeta.txnid()] = participant_shards;
+    }
+
+    depshards_map[txn_id] = dep_shards;
 
     // Debug("gonna handle commit for %llu, message: %s", txn_id, c_msg.DebugString().c_str());
     _HandleCommit(txn_id, remote, unlogged_reply);
@@ -345,7 +366,7 @@ void Server::_HandleCommit(uint64_t txn_id,
                 found_on_server = true;
             } else {
                 // inquire about the status of this transaction
-                _SendInquiry(blocking_txn_id);
+                _SendInquiry(txn_id, blocking_txn_id);
             }
 
             if (blocking_ids.find(blocking_txn_id) == blocking_ids.end()) {
@@ -431,8 +452,14 @@ void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
     }
 }
 
-void Server::_SendInquiry(uint64_t txn_id) {
-    Debug("[Server %i] on shard %i sending inquiry for transaction %llu", myIdx, groupIdx, txn_id);
+void Server::_SendInquiry(uint64_t txn_id, uint64_t blocking_txn_id) {
+    Debug("[Server %i] on shard %i sending inquiry for transaction %llu", myIdx, groupIdx, blocking_txn_id);
+
+    unordered_map<uint64_t, set<int>> dep_shards = this->depshards_map[txn_id];
+    set<int> relevant_groups = dep_shards[blocking_txn_id];
+    Debug("Found %llu groups processing the blocking txn %llu", relevant_groups.size(), blocking_txn_id);
+
+    // TODO pick a group in relevant_groups to ask...or pick all?
 
     /*
     Transaction other_server_txn = id_txn_map[txn_id];
