@@ -28,20 +28,18 @@ int DepositChecking::Execute(SyncClient &client) {
   if (!ReadAccountRow(client, cust, accountRow, timeout)) {
     client.Abort(timeout);
     Debug("Aborted DepositChecking (AccountRow)");
-    return 1;
+    return 2;
   }
   const uint32_t customerId = accountRow.customer_id();
   if (!ReadCheckingRow(client, customerId, checkingRow, timeout)) {
     client.Abort(timeout);
     Debug("Aborted DepositChecking (CheckingRow)");
-    return 1;
+    return 2;
   }
   Debug("DepositChecking old value %d", checkingRow.checking_balance());
   InsertCheckingRow(client, customerId, checkingRow.checking_balance() + value,
                     timeout);
-  client.Commit(timeout);
-  Debug("Committed DepositChecking %d", checkingRow.checking_balance());
-  return 0;
+  return client.Commit(timeout);
 }
 
 }  // namespace smallbank

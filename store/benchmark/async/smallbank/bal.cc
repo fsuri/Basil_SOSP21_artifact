@@ -22,14 +22,14 @@ int Bal::Execute(SyncClient &client) {
                        timeout)) {
     client.Abort(timeout);
     Debug("Aborted Balance");
-    return 1;
+    return 2;
   }
-  client.Commit(timeout);
+  int commitRes = client.Commit(timeout);
   Debug("Committed Balance %d",
         savingRow.saving_balance() + checkingRow.checking_balance());
   std::pair<uint32_t, bool> res = std::make_pair(
       savingRow.saving_balance() + checkingRow.checking_balance(), true);
-  return 0;
+  return commitRes;
 }
 
 }  // namespace smallbank
