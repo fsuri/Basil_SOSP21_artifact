@@ -57,7 +57,7 @@ public:
     std::unordered_map<uint64_t, std::vector<uint64_t>> dep_map;
 
     // maps Transaction ids to another map from ancestor txn ids to their relevant shards
-    std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::set<int>>> depshards_map;
+    std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::vector<int>>> depshards_map;
 
     // maps Transaction ids to Transaction objects
     std::unordered_map<uint64_t, Transaction> id_txn_map;

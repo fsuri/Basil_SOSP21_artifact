@@ -295,12 +295,12 @@ void Server::HandleCommit(const TransportAddress &remote,
     dep_map[txn_id] = deps;
     
     // for each dep, get its participant shards
-    unordered_map<uint64_t, set<int>> dep_shards;
+    unordered_map<uint64_t, vector<int>> dep_shards;
     for (int i = 0; i < c_msg.depmeta_size(); i++) {
         DependencyMeta depmeta = c_msg.depmeta(i);
-        set<int> participant_shards;
+        vector<int> participant_shards;
         for (int j = 0; j < depmeta.group_size(); j++) {
-            participant_shards.insert(depmeta.group(j));
+            participant_shards.push_back(depmeta.group(j));
         }
         dep_shards[depmeta.txnid()] = participant_shards;
     }
@@ -455,31 +455,27 @@ void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
 void Server::_SendInquiry(uint64_t txn_id, uint64_t blocking_txn_id) {
     Debug("[Server %i] on shard %i sending inquiry for transaction %llu", myIdx, groupIdx, blocking_txn_id);
 
-    unordered_map<uint64_t, set<int>> dep_shards = this->depshards_map[txn_id];
-    set<int> relevant_groups = dep_shards[blocking_txn_id];
-    Debug("Found %llu groups processing the blocking txn %llu", relevant_groups.size(), blocking_txn_id);
+    unordered_map<uint64_t, vector<int>> dep_shards = this->depshards_map[txn_id];
+    vector<int> relevant_groups = dep_shards[blocking_txn_id];
+    // Debug("Found %llu groups processing the blocking txn %llu", relevant_groups.size(), blocking_txn_id);
 
-    // TODO pick a group in relevant_groups to ask...or pick all?
-
-    /*
-    Transaction other_server_txn = id_txn_map[txn_id];
-    // ask random participating shard+replica for deplist
-    uint64_t nearest_group;
+    // TODO dont overload one group/replica
     uint64_t nearest_replica = 0;
-    for (auto group : other_server_txn.groups) {
+    int nearest_group;
+    for (auto group : relevant_groups) {
         if (group != this->groupIdx) {
             nearest_group = group;
             break;
         }
     }
-
     Request request;
     request.set_op(Request::INQUIRE);
-    request.mutable_inquire()->set_txnid(txn_id);
+    request.mutable_inquire()->set_txnid(blocking_txn_id);
+
+    Debug("Inquiring replica %llu at group %d for blocking txn %llu", nearest_replica, nearest_group, blocking_txn_id);
 
     transport->SendMessageToReplica(
         this, nearest_group, nearest_replica, request);
-    */
 }
 
 unordered_map<string, string> Server::Execute(Transaction txn) {
