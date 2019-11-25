@@ -28,14 +28,14 @@ void Server::ReceiveMessage(const TransportAddress &remote,
 
     Request request;
     Reply reply;
-    Debug("Got type %s", type.c_str());
+    // Debug("Got type %s", type.c_str());
     if (type == unlogged_request.GetTypeName()) {
         unlogged_request.ParseFromString(data);
         uint64_t clientreqid = unlogged_request.req().clientreqid();
         unlogged_reply.set_clientreqid(clientreqid);
 
         request.ParseFromString(unlogged_request.req().op());
-        Debug("Got, %s", request.DebugString().c_str());
+        // Debug("Got, %s", request.DebugString().c_str());
         switch(request.op()) {
             case Request::PREACCEPT: {
                 HandlePreAccept(remote, request.preaccept(), &unlogged_reply);
@@ -97,8 +97,8 @@ Server::HandlePreAccept(const TransportAddress &remote,
     uint64_t txn_id = txnMsg.txnid();
     uint64_t ballot = pa_msg.ballot();
 
-    Debug("[Server %i] Received PREACCEPT message for txn %s",
-        this->myIdx, txnMsg.DebugString().c_str());
+    // Debug("[Server %i] Received PREACCEPT message for txn %s",
+    //     this->myIdx, txnMsg.DebugString().c_str());
 
     // construct the transaction object
     // TODO might be able to optimize this process somehow
@@ -151,9 +151,9 @@ Server::HandlePreAccept(const TransportAddress &remote,
 
     unlogged_reply->set_reply(reply.SerializeAsString());
 
-    Debug("[Server %i] sending PREACCEPT-OK message for txn %llu %s",
-        this->myIdx, txn_id,
-        reply.DebugString().c_str());
+    // Debug("[Server %i] sending PREACCEPT-OK message for txn %llu %s",
+    //     this->myIdx, txn_id,
+    //     reply.DebugString().c_str());
     transport->SendMessage(this, remote, *unlogged_reply);
 
     preaccept_ok_msg.release_dep();

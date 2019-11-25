@@ -156,8 +156,8 @@ namespace janusstore {
     PendingRequest* req = this->pendingReqs[txn_id];
 
     for (auto p : req->participant_shards) {
-      // TODO send the per-shard aggregated deps, not the global aggregated
-      std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
+      // send the per-shard aggregated deps, not the global aggregated
+      std::vector<uint64_t> vec_deps(req->per_shard_aggregated_deps[p].begin(), req->per_shard_aggregated_deps[p].end());
       auto acb = std::bind(&Client::AcceptCallback, this, txn_id, placeholders::_1, placeholders::_2);
 
       bclient[p]->Accept(txn_id, vec_deps, ballot, acb);
@@ -217,7 +217,6 @@ namespace janusstore {
           uint64_t dep_id = msg.txnid(i);
 
           // add dep to aggregated set
-          // TODO remove this
           req->aggregated_deps.insert(dep_id);
           
           // add dep to aggregated per-shard set
@@ -231,10 +230,7 @@ namespace janusstore {
           }
         }
 
-        if (!has_set_base) {
-          has_set_base = true;
-        }
-
+        has_set_base = true;
         all_dep_i_equal = all_dep_i_equal && (base_deps == test_dep_i);
 
         // parse message for depmeta; will eventually replace DependencyList
