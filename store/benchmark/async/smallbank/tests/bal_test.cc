@@ -108,7 +108,7 @@ TEST(Bal, Success) {
   EXPECT_CALL(mockSyncClient,
               Get(CheckingRowKey(customerId), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(checkingRowSerialized));
-  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 0);
+  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1).WillOnce(testing::Return(1));
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 }  // namespace smallbank

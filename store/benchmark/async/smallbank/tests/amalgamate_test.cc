@@ -241,7 +241,7 @@ TEST(Amalgamate, Success) {
   EXPECT_CALL(mockSyncClient, Put(CheckingRowKey(customerId2),
                                   newChecking2RowSerialized, timeout))
       .Times(1);
-  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 0);
+  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1).WillOnce(testing::Return(1));
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 }  // namespace smallbank

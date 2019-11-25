@@ -69,7 +69,7 @@ TEST(TransactSaving, ResultingBalanceNegative) {
               Get(SavingRowKey(customerId), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(savingRowSerialized));
   EXPECT_CALL(mockSyncClient, Abort(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 2);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(TransactSaving, Success) {
@@ -105,7 +105,7 @@ TEST(TransactSaving, Success) {
   newSavingRow.SerializeToString(&newSavingRowSerialized);
   EXPECT_CALL(mockSyncClient,
               Put(SavingRowKey(customerId), newSavingRowSerialized, timeout))
-      .Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 0);
+      .Times(1).WillOnce(testing::Return(1));
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 }  // namespace smallbank

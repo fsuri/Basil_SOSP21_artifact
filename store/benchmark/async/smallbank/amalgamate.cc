@@ -28,21 +28,21 @@ int Amalgamate::Execute(SyncClient &client) {
       !ReadAccountRow(client, cust2, accountRow2, timeout)) {
     client.Abort(timeout);
     Debug("Aborted Amalgamate (AccountRow)");
-    return 2;
+    return 1;
   }
   const uint32_t customerId1 = accountRow1.customer_id();
   const uint32_t customerId2 = accountRow2.customer_id();
   if (!ReadCheckingRow(client, customerId2, checkingRow2, timeout)) {
     client.Abort(timeout);
     Debug("Aborted Amalgamate (CheckingRow)");
-    return 2;
+    return 1;
   }
   const int32_t balance2 = checkingRow2.checking_balance();
   if (!ReadCheckingRow(client, customerId1, checkingRow1, timeout) ||
       !ReadSavingRow(client, customerId1, savingRow1, timeout)) {
     client.Abort(timeout);
     Debug("Aborted Amalgamate (2nd Balance)");
-    return 2;
+    return 1;
   }
   InsertCheckingRow(
       client, customerId2,

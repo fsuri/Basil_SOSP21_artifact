@@ -19,7 +19,7 @@ int DepositChecking::Execute(SyncClient &client) {
   if (value < 0) {
     client.Abort(timeout);
     Debug("Aborted DepositChecking (- val)");
-    return 2;
+    return 1;
   }
   proto::AccountRow accountRow;
   proto::CheckingRow checkingRow;
@@ -28,13 +28,13 @@ int DepositChecking::Execute(SyncClient &client) {
   if (!ReadAccountRow(client, cust, accountRow, timeout)) {
     client.Abort(timeout);
     Debug("Aborted DepositChecking (AccountRow)");
-    return 2;
+    return 1;
   }
   const uint32_t customerId = accountRow.customer_id();
   if (!ReadCheckingRow(client, customerId, checkingRow, timeout)) {
     client.Abort(timeout);
     Debug("Aborted DepositChecking (CheckingRow)");
-    return 2;
+    return 1;
   }
   Debug("DepositChecking old value %d", checkingRow.checking_balance());
   InsertCheckingRow(client, customerId, checkingRow.checking_balance() + value,

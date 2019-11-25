@@ -16,13 +16,13 @@ int TransactSaving::Execute(SyncClient &client) {
     if (!ReadAccountRow(client, cust, accountRow, timeout)) {
         client.Abort(timeout);
         Debug("Aborted TransactSaving (AccountRow)");
-        return 2;
+        return 1;
     }
     const uint32_t customerId = accountRow.customer_id();
     if (!ReadSavingRow(client, customerId, savingRow, timeout)) {
         client.Abort(timeout);
         Debug("Aborted TransactSaving (SavingRow)");
-        return 2;
+        return 1;
     }
     const int32_t balance = savingRow.saving_balance();
     Debug("TransactSaving old value %d", balance);
@@ -31,7 +31,7 @@ int TransactSaving::Execute(SyncClient &client) {
     if (resultingBalance < 0) {
         client.Abort(timeout);
         Debug("Aborted TransactSaving (Negative Result)");
-        return 2;
+        return 1;
     }
     InsertSavingRow(client, customerId, resultingBalance, timeout);
     return client.Commit(timeout);

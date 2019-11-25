@@ -116,8 +116,8 @@ TEST(WriteCheck, ExactlySufficientFunds) {
   EXPECT_CALL(mockSyncClient, Put(CheckingRowKey(customerId),
                                   newCheckingRowSerialized, timeout))
       .Times(1);
-  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 0);
+  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1).WillOnce(testing::Return(1));
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(WriteCheck, InsufficientFunds) {
@@ -163,8 +163,8 @@ TEST(WriteCheck, InsufficientFunds) {
   EXPECT_CALL(mockSyncClient, Put(CheckingRowKey(customerId),
                                   newCheckingRowSerialized, timeout))
       .Times(1);
-  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 0);
+  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1).WillOnce(testing::Return(1));
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 }  // namespace smallbank

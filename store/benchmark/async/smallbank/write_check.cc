@@ -17,14 +17,14 @@ int WriteCheck::Execute(SyncClient &client) {
     if (!ReadAccountRow(client, cust, accountRow, timeout)) {
         client.Abort(timeout);
         Debug("Aborted WriteCheck (AccountRow)");
-        return 2;
+        return 1;
     }
     const uint32_t customerId = accountRow.customer_id();
     if (!ReadCheckingRow(client, customerId, checkingRow, timeout) || !
             ReadSavingRow(client, customerId, savingRow, timeout)) {
         client.Abort(timeout);
         Debug("Aborted WriteCheck (Balance)");
-        return 2;
+        return 1;
     }
     const int32_t sum = checkingRow.checking_balance() + savingRow.saving_balance();
     Debug("Sum for WriteCheck %d", sum);

@@ -14,7 +14,7 @@ TEST(DepositChecking, NegativeDeposit) {
   MockSyncClient mockSyncClient;
   DepositChecking smallbankTransaction("cust1", -18000, 0);
   EXPECT_CALL(mockSyncClient, Abort(0)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 2);
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 
 TEST(DepositChecking, ReadAccountFailure) {
@@ -81,7 +81,7 @@ TEST(DepositChecking, Success) {
   EXPECT_CALL(mockSyncClient, Put(CheckingRowKey(customerId),
                                   newCheckingRowSerialized, timeout))
       .Times(1);
-  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1);
-  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 0);
+  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1).WillOnce(testing::Return(1));
+  EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 }  // namespace smallbank

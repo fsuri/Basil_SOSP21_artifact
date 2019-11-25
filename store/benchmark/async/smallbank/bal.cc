@@ -22,7 +22,7 @@ int Bal::Execute(SyncClient &client) {
                        timeout)) {
     client.Abort(timeout);
     Debug("Aborted Balance");
-    return 2;
+    return 1;
   }
   int commitRes = client.Commit(timeout);
   Debug("Committed Balance %d",
