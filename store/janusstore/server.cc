@@ -420,6 +420,9 @@ void Server::HandleInquire(const TransportAddress &remote,
 void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
     uint64_t txn_id = i_ok_msg.txnid();
 
+    // a little suspicious since this is a very bare Txn obj... shouldn't need
+    // to add the other metadata as this doesn't actually execute on this server
+    // so read/writeset SHOULD be empty...
     Transaction *txn = new Transaction(txn_id);
     if (txn->getTransactionStatus() != TransactionMessage::COMMIT) {
         vector<uint64_t> msg_deps;
