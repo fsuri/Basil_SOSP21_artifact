@@ -34,7 +34,6 @@ namespace janusstore {
     /* Start a shardclient for each shard. */
     // TODO change this to a single config file lul
     for (int i = 0; i < this->nshards; i++) {
-      Debug("%i", i);
       ShardClient * shardclient = new ShardClient(config,
         transport, client_id, i, closestReplica);
       // we use shardclients instead of bufferclients here
@@ -240,7 +239,7 @@ namespace janusstore {
 
         // parse message for depmeta; will eventually replace DependencyList
         /*
-         * Note: each replica is telling us both the dependency txns and their 
+         * Note: each replica is telling us both the dependency txns and their
          * participating groups, which we will aggregate for all dependencies
          * so that during COMMIT, each replica will know which shard to talk to
          * if they need to inquire.
