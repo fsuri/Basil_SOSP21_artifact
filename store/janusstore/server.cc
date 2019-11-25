@@ -28,12 +28,14 @@ void Server::ReceiveMessage(const TransportAddress &remote,
 
     Request request;
     Reply reply;
+    Debug("Got type %s", type.c_str());
     if (type == unlogged_request.GetTypeName()) {
         unlogged_request.ParseFromString(data);
         uint64_t clientreqid = unlogged_request.req().clientreqid();
         unlogged_reply.set_clientreqid(clientreqid);
 
         request.ParseFromString(unlogged_request.req().op());
+        Debug("Got, %s", request.DebugString().c_str());
         switch(request.op()) {
             case Request::PREACCEPT: {
                 HandlePreAccept(remote, request.preaccept(), &unlogged_reply);
@@ -47,10 +49,6 @@ void Server::ReceiveMessage(const TransportAddress &remote,
             case Request::COMMIT: {
                 Debug("[Server %i] Received COMMIT message", this->myIdx);
                 HandleCommit(remote, request.commit(), &unlogged_reply);
-                break;
-            }
-            case Request::INQUIRE: {
-                HandleInquire(remote, request.inquire(), &reply);
                 break;
             }
             case Request::GET: {
@@ -75,6 +73,14 @@ void Server::ReceiveMessage(const TransportAddress &remote,
             HandleInquireReply(reply.inquire_ok());
         } else {
             Panic("Unrecognized reply message in server");
+        }
+    } else if (type == request.GetTypeName()) {
+        // handle inquiries
+        request.ParseFromString(data);
+        if (request.op() == Request::INQUIRE) {
+            HandleInquire(remote, request.inquire(), &reply);
+        } else {
+            Panic("Should only directly handle inquiries!");
         }
     } else {
         Panic("Unrecognized message.");
@@ -124,7 +130,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
     for (int i = 0; i < dep_list.size(); i++) {
         dep.add_txnid(dep_list[i]);
         DependencyMeta* depmeta = preaccept_ok_msg.add_depmeta();
-        
+
         uint64_t dep_id = dep_list[i];
         depmeta->set_txnid(dep_id);
 
@@ -135,7 +141,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
             for (int group : dep_txn.groups) {
                 depmeta->add_group(group);
             }
-        }        
+        }
     }
 
     preaccept_ok_msg.set_allocated_dep(&dep);
@@ -293,7 +299,7 @@ void Server::HandleCommit(const TransportAddress &remote,
         deps.push_back(received_dep.txnid(i));
     }
     dep_map[txn_id] = deps;
-    
+
     // for each dep, get its participant shards
     unordered_map<uint64_t, vector<int>> dep_shards;
     for (int i = 0; i < c_msg.depmeta_size(); i++) {
@@ -441,8 +447,10 @@ void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
         for (auto blocked_id : blocking_ids[txn_id]) {
             Transaction *blocked_txn = &id_txn_map[blocked_id];
             Debug("Blocked id %llu commitable now due to inquiry", blocked_id);
+            uint64_t request_id = txn->request_id;
             for (auto *client_addr : blocked_txn->client_addrs){
-               replication::ir::proto::UnloggedReplyMessage blocked_unlogged_reply;
+                replication::ir::proto::UnloggedReplyMessage blocked_unlogged_reply;
+                blocked_unlogged_reply.set_clientreqid(request_id);
                 _HandleCommit(blocked_id, *client_addr, &blocked_unlogged_reply);
                 blocked_unlogged_reply.Clear();
             }
