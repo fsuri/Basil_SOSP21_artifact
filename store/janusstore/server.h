@@ -97,9 +97,11 @@ public:
                        replication::ir::proto::UnloggedReplyMessage *unlogged_reply
     );
     std::vector<uint64_t> _StronglyConnectedComponent(uint64_t txn_id);
+
+    // unblocks txns that are potentially blocked by this txn_id
+    void _UnblockTxns(uint64_t txn_id);
     bool _ReadyToProcess(Transaction txn);
 
-    // TODO determine the return type??
     std::unordered_map<std::string, std::string> Execute(Transaction txn);
     // for cyclic dependency case, compute SCCs and execute in order
     // to be called during the Commit phase from HandleCommitJanusTxn()

@@ -327,23 +327,8 @@ void Server::_HandleCommit(uint64_t txn_id,
     Debug("Set txn id %llu to COMMIT", txn_id);
     // check if this unblocks others, and rerun HandleCommit for those
     if (blocking_ids.find(txn_id) != blocking_ids.end()) {
-        for(auto blocked_id : blocking_ids[txn_id]) {
-            Debug("Found blocked id %llu for txn id %llu", blocked_id, txn_id);
-            Transaction *txn = &id_txn_map[blocked_id];
-            txn->blocked_by_list.erase(txn_id);
-            if (txn->blocked_by_list.empty()) {
-                uint64_t request_id = txn->request_id;
-                Debug("Blocked id %llu commitable now", blocked_id);
-                for (auto *client_addr : txn->client_addrs){
-                    replication::ir::proto::UnloggedReplyMessage blocked_unlogged_reply;
-                    blocked_unlogged_reply.set_clientreqid(request_id);
-                    _HandleCommit(blocked_id, *client_addr, &blocked_unlogged_reply);
-                    blocked_unlogged_reply.Clear();
-                }
-                txn->client_addrs.clear();
-            }
-        }
-        blocking_ids.erase(txn_id);
+        Debug("Now unblocking txns blocked by %llu", txn_id);
+        _UnblockTxns(txn_id);
     }
 
     // once txn becomes committing, see if you have to send inquire to any servers
@@ -434,31 +419,22 @@ void Server::HandleInquire(const TransportAddress &remote,
 
 void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
     uint64_t txn_id = i_ok_msg.txnid();
-    Transaction *txn = &id_txn_map[txn_id];
 
+    Transaction *txn = new Transaction(txn_id);
     if (txn->getTransactionStatus() != TransactionMessage::COMMIT) {
         vector<uint64_t> msg_deps;
         DependencyList received_dep = i_ok_msg.dep();
         for (int i = 0; i < received_dep.txnid_size(); i++) {
             msg_deps.push_back(received_dep.txnid(i));
         }
-        dep_map[txn_id] = msg_deps;
 
-        // set this txn id to committing because we received this reply
+        dep_map[txn_id] = msg_deps;
         txn->setTransactionStatus(TransactionMessage::COMMIT);
-        for (auto blocked_id : blocking_ids[txn_id]) {
-            Transaction *blocked_txn = &id_txn_map[blocked_id];
-            Debug("Blocked id %llu commitable now due to inquiry", blocked_id);
-            uint64_t request_id = txn->request_id;
-            for (auto *client_addr : blocked_txn->client_addrs){
-                replication::ir::proto::UnloggedReplyMessage blocked_unlogged_reply;
-                blocked_unlogged_reply.set_clientreqid(request_id);
-                _HandleCommit(blocked_id, *client_addr, &blocked_unlogged_reply);
-                blocked_unlogged_reply.Clear();
-            }
-            blocked_txn->client_addrs.clear();
-        }
-        blocking_ids.erase(txn_id);
+
+        id_txn_map[txn_id] = *txn;
+
+        Debug("Now unblocking txns blocked by %llu via inquire", txn_id);
+        _UnblockTxns(txn_id);
     }
 }
 
@@ -519,7 +495,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
     uint64_t num_deps_processed = 0;
 
     while (!processed[txn_id]) {
-        for (pair<uint64_t, vector<uint64_t>> pair : dep_map) {
+        for (auto pair : dep_map) {
             uint64_t other_txn_id = pair.first;
             // Debug("Checking if %llu is ready to process!", other_txn_id);
             if (num_deps_processed == num_deps) {
@@ -645,9 +621,28 @@ vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
             if (it != scc.end()) return scc;
         }
     }
-    Panic("Should have returned!");
+    Panic("Should have returned for %llu!", txn_id);
 }
 
+void Server::_UnblockTxns(uint64_t txn_id) {
+    for(auto blocked_id : blocking_ids[txn_id]) {
+        Debug("Found blocked id %llu for txn id %llu", blocked_id, txn_id);
+        Transaction *txn = &id_txn_map[blocked_id];
+        txn->blocked_by_list.erase(txn_id);
+        if (txn->blocked_by_list.empty()) {
+            uint64_t request_id = txn->request_id;
+            Debug("Blocked id %llu commitable now", blocked_id);
+            for (auto *client_addr : txn->client_addrs){
+                replication::ir::proto::UnloggedReplyMessage blocked_unlogged_reply;
+                blocked_unlogged_reply.set_clientreqid(request_id);
+                _HandleCommit(blocked_id, *client_addr, &blocked_unlogged_reply);
+                blocked_unlogged_reply.Clear();
+            }
+            txn->client_addrs.clear();
+        }
+    }
+    blocking_ids.erase(txn_id);
+}
 
 // checks if txn is ready to be executed
 bool Server::_ReadyToProcess(Transaction txn) {
