@@ -363,6 +363,7 @@ void Server::_HandleCommit(uint64_t txn_id,
 
         // HACK: find a more elegant way to do this
         bool found_on_server = false;
+        bool sent_inquiry = false;
         for (uint64_t blocking_txn_id : not_committing_ids) {
             Debug("%llu blocked by %llu", txn_id, blocking_txn_id);
             txn->blocked_by_list.insert(blocking_txn_id);
@@ -373,6 +374,7 @@ void Server::_HandleCommit(uint64_t txn_id,
             } else {
                 // inquire about the status of this transaction
                 _SendInquiry(txn_id, blocking_txn_id);
+                sent_inquiry = true;
             }
 
             if (blocking_ids.find(blocking_txn_id) == blocking_ids.end()) {
@@ -382,7 +384,7 @@ void Server::_HandleCommit(uint64_t txn_id,
             }
         }
         // need to wait for local server to set transactions to committing
-        if (found_on_server) return;
+        if (found_on_server || sent_inquiry) return;
     }
 
     // initialize unknown ids to false
