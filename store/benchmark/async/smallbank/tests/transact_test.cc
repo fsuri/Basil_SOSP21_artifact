@@ -97,15 +97,15 @@ TEST(TransactSaving, Success) {
   EXPECT_CALL(mockSyncClient,
               Get(SavingRowKey(customerId), testing::_, timeout))
       .WillOnce(testing::SetArgReferee<1>(savingRowSerialized));
-  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1);
+  EXPECT_CALL(mockSyncClient, Commit(timeout)).Times(1).WillOnce(testing::Return(1));
   proto::SavingRow newSavingRow;
   newSavingRow.set_saving_balance(savingBalance + transact);
   newSavingRow.set_customer_id(customerId);
   std::string newSavingRowSerialized;
   newSavingRow.SerializeToString(&newSavingRowSerialized);
-  EXPECT_CALL(mockSyncClient,
+   EXPECT_CALL(mockSyncClient,
               Put(SavingRowKey(customerId), newSavingRowSerialized, timeout))
-      .Times(1).WillOnce(testing::Return(1));
+      .Times(1);
   EXPECT_EQ(smallbankTransaction.Execute(mockSyncClient), 1);
 }
 }  // namespace smallbank
