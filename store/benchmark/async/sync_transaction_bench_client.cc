@@ -36,10 +36,8 @@ void SyncTransactionBenchClient::SendNext() {
       delete currTxn;
       currTxn = nullptr;
       break;
-    } else if (result == USER_ABORTED) {
-      if (retryAborted) {
-        stats.Increment(GetLastOp() +  "_" + std::to_string(result), 1);
-      }
+    } else if (result == 1) { // RESULT_USER_ABORTED in morty-tapir/store/tapirstore/client.h
+      stats.Increment(GetLastOp() +  "_" + std::to_string(result), 1);
       delete currTxn;
       currTxn = nullptr;
       break;
