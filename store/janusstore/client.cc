@@ -157,6 +157,7 @@ namespace janusstore {
     PendingRequest* req = this->pendingReqs[txn_id];
 
     for (auto p : req->participant_shards) {
+      // TODO send the per-shard aggregated deps, not the global aggregated
       std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
       auto acb = std::bind(&Client::AcceptCallback, this, txn_id, placeholders::_1, placeholders::_2);
 
@@ -198,25 +199,44 @@ namespace janusstore {
 
     // check if each replica within shard has the same dependencies
     // then aggregate dependencies
-    bool fast_quorum = true;
+    // bool fast_quorum = true;
 
-    // aggregated replica deps for this shard
-    std::set<uint64_t> shard_deps;
+    // singular dep_i for this shard
+    std::set<uint64_t> base_deps;
+    bool has_set_base = false;
+    bool all_dep_i_equal = true;
 
     UW_ASSERT(replies.size() != 0);
 
     for (auto reply: replies) {
+      // parse the dep_i's and check if they are all equal to each other
       if (reply.op() == Reply::PREACCEPT_OK) {
-        // parse message for deps
+        // one replica deps for this shard
+        std::set<uint64_t> test_dep_i;
         DependencyList msg = reply.preaccept_ok().dep();
         for (int i = 0; i < msg.txnid_size(); i++) {
           uint64_t dep_id = msg.txnid(i);
 
           // add dep to aggregated set
+          // TODO remove this
           req->aggregated_deps.insert(dep_id);
+          
+          // add dep to aggregated per-shard set
+          req->per_shard_aggregated_deps[shard].insert(dep_id);
+
           // add to deplist for this shard
-          shard_deps.insert(dep_id);
+          test_dep_i.insert(dep_id);
+
+          if (!has_set_base) {
+            base_deps.insert(dep_id);
+          }
         }
+
+        if (!has_set_base) {
+          has_set_base = true;
+        }
+
+        all_dep_i_equal = all_dep_i_equal && (base_deps == test_dep_i);
 
         // parse message for depmeta; will eventually replace DependencyList
         /*
@@ -236,12 +256,13 @@ namespace janusstore {
 
       } else {
         // meaning we will need to go to Accept phase
-        fast_quorum = false;
+        // TODO verify this
+        all_dep_i_equal = false;
       }
     }
 
-    fast_quorum = fast_quorum && (req->aggregated_deps == shard_deps);
-    req->has_fast_quorum = req->has_fast_quorum && fast_quorum;
+    // fast_quorum = fast_quorum && (req->aggregated_deps == shard_deps);
+    req->has_fast_quorum = req->has_fast_quorum && all_dep_i_equal;
 
     if (req->responded_shards.size() == req->participant_shards.size()) {
       req->responded_shards.clear();

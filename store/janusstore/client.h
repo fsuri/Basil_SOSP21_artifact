@@ -61,6 +61,7 @@ public:
         std::map<uint64_t, std::set<int>> aggregated_depmeta;
         std::set<uint64_t> participant_shards;
         std::set<uint64_t> responded_shards;
+        std::map<int, std::set<uint64_t>> per_shard_aggregated_deps;
   };
 
 // private: // make all fields public for testing

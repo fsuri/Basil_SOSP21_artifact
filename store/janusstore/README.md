@@ -2,6 +2,10 @@
 We implement the Janus protocol for fault-tolerant, replicated distributed transaction processing. We leverage the existing networking infrastructure provided by the TAPIR repository.
 
 # Notes
+11/25: 
+	- (TODO) server now knows how to inquire and reply to inquiries
+		- dependency list for the inquired txn isnt being constructed correctly (SCC problem?)
+	- (TODO) rewrite client preacceptcallback to fit slow path spec (and rewrite unit tests to reflect this)
 11/20:
 	- (TODO) server now inquires when it's supposed to, but we dont know where to send the inquiry
 		- idea: add participant shards to the client's COMMIT message, because that's when the inquiry might happen, so that the replicas know where to inquire
