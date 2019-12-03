@@ -50,7 +50,7 @@
 
 const size_t MAX_TCP_SIZE = 100; // XXX
 const uint32_t MAGIC = 0x06121983;
-const int SOCKET_BUF_SIZE = 4096;
+const int SOCKET_BUF_SIZE = 1048576;
 
 using std::pair;
 
