@@ -50,6 +50,7 @@
 
 const size_t MAX_TCP_SIZE = 100; // XXX
 const uint32_t MAGIC = 0x06121983;
+const int SOCKET_BUF_SIZE = 4096;
 
 using std::pair;
 
@@ -216,8 +217,18 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
     // Set TCP_NODELAY
     int n = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&n, sizeof(n)) < 0) {
-        PWarning("Failedt to set TCP_NODELAY on TCP listening socket");
+      PWarning("Failedt to set TCP_NODELAY on TCP listening socket");
     }
+
+    n = SOCKET_BUF_SIZE;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char *)&n, sizeof(n)) < 0) {
+      PWarning("Failed to set SO_RCVBUF on socket");
+    }
+    
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char *)&n, sizeof(n)) < 0) {
+      PWarning("Failed to set SO_SNDBUF on socket");
+    }
+
 
     TCPTransportTCPListener *info = new TCPTransportTCPListener();
     info->transport = this;
@@ -300,6 +311,16 @@ TCPTransport::Register(TransportReceiver *receiver,
                    TCP_NODELAY, (char *)&n, sizeof(n)) < 0) {
         PWarning("Failed to set TCP_NODELAY on TCP listening socket");
     }
+
+    n = SOCKET_BUF_SIZE;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char *)&n, sizeof(n)) < 0) {
+      PWarning("Failed to set SO_RCVBUF on socket");
+    }
+    
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char *)&n, sizeof(n)) < 0) {
+      PWarning("Failed to set SO_SNDBUF on socket");
+    }
+
 
     // Registering a replica. Bind socket to the designated
     // host/port
