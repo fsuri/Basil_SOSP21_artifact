@@ -425,17 +425,17 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     memcpy(ptr, data.c_str(), dataLen);
     ptr += dataLen;
 
-    /*if (bufferevent_write(ev, buf, totalLen) < 0) {
+    if (bufferevent_write(ev, buf, totalLen) < 0) {
         Warning("Failed to write to TCP buffer");
         return false;
-    }*/
+    }
 
-    Latency_Start(&sockWriteLat);
+    /*Latency_Start(&sockWriteLat);
     if (write(ev->ev_write.ev_fd, buf, totalLen) < 0) {
       Warning("Failed to write to TCP buffer");
       return false;
     }
-    Latency_End(&sockWriteLat);
+    Latency_End(&sockWriteLat);*/
     return true;
 }
 
