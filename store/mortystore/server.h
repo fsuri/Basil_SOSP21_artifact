@@ -17,7 +17,7 @@ namespace mortystore {
 class Server : public TransportReceiver, public ::Server {
  public:
   Server(const transport::Configuration &config, int groupIdx, int idx,
-      Transport *transport);
+      Transport *transport, bool debugStats);
   virtual ~Server();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
@@ -46,6 +46,7 @@ class Server : public TransportReceiver, public ::Server {
   const transport::Configuration &config;
   int idx;
   Transport *transport;
+  bool debugStats;
   SpecStore store;
   std::vector<proto::Transaction> committed;
   std::vector<proto::Transaction> prepared;

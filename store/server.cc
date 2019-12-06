@@ -70,6 +70,7 @@ DEFINE_uint64(replica_idx, 0, "index of replica in shard configuration file");
 DEFINE_uint64(group_idx, 0, "index of the group to which this replica belongs");
 DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
+DEFINE_bool(debug_stats, false, "record stats related to debugging");
 
 const std::string protocol_args[] = {
 	"tapir",
@@ -298,7 +299,7 @@ int main(int argc, char **argv) {
     }
     case PROTO_MORTY: {
       server = new mortystore::Server(config, FLAGS_group_idx, FLAGS_replica_idx,
-          tport);
+          tport, FLAGS_debug_stats);
       break;
     }
     default: {
