@@ -231,7 +231,6 @@ bool TransactionsConflict(const proto::Transaction &txn1,
       if ((txn1.ops(i).type() == proto::OperationType::WRITE ||
           txn2.ops(j).type() == proto::OperationType::WRITE) &&
           txn1.ops(i).key() == txn2.ops(j).key()) {
-        std::cerr << "op " << i << " and op " << j << " conflict" << std::endl;
         return true;
       }
     }
