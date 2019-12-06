@@ -30,6 +30,9 @@ void SyncTransactionBenchClient::SendNext() {
       if (result == SUCCESS) {
         stats.Increment(GetLastOp() + "_committed", 1);
       }
+      if (result == 1) { // RESULT_USER_ABORTED in morty-tapir/store/tapirstore/client.h
+        stats.Increment(GetLastOp() +  "_" + std::to_string(result), 1);
+      }
       if (retryAborted) {
         stats.Add(GetLastOp() + "_attempts_list", currTxnAttempts);
       }
