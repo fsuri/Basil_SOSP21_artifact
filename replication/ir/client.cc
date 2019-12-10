@@ -213,7 +213,7 @@ IRClient::InvokeUnlogged(int groupIdx,
     reqMsg.mutable_req()->set_op(request);
     reqMsg.mutable_req()->set_clientid(clientid);
     reqMsg.mutable_req()->set_clientreqid(reqId);
-
+    // Debug("Sending to %i, %i with id %lu", groupIdx, replicaIdx, reqId);
     if (transport->SendMessageToReplica(this, groupIdx, replicaIdx, reqMsg)) {
     req->timer->Start();
     pendingReqs[reqId] = req;
@@ -613,7 +613,7 @@ IRClient::HandleUnloggedReply(const TransportAddress &remote,
     uint64_t reqId = msg.clientreqid();
     auto it = pendingReqs.find(reqId);
     if (it == pendingReqs.end()) {
-        Debug("Received reply when no request was pending");
+        Debug("Received reply when no request was pending %lu", reqId);
         return;
     }
 
@@ -639,7 +639,8 @@ IRClient::UnloggedRequestTimeoutCallback(const uint64_t reqId)
     PendingUnloggedRequest *req = static_cast<PendingUnloggedRequest *>(it->second);
     UW_ASSERT(req != NULL);
 
-    Warning("Unlogged request %lu timed out", reqId);
+    Warning("Unlogged request %lu timed out: %s",
+        clientid, reqId, req->request.c_str());
     //Panic("Unlogged request %lu timed out", reqId);
     // delete timer event
     req->timer->Stop();

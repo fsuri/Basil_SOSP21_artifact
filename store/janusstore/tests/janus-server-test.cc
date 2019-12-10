@@ -103,7 +103,6 @@ TEST_F(JanusServerTest, Init)
 TEST_F(JanusServerTest, BuildDepListNoDeps)
 {
     janusstore::Transaction txn1(1234);
-    janusstore::Transaction* txn_ptr1 = &txn1;
 
     std::vector<uint64_t> *result = server->BuildDepList(txn1, 0);
     EXPECT_EQ(result->size(), 0);
@@ -239,14 +238,8 @@ TEST_F(JanusServerTest, SCCPartialCycle)
     vector<uint64_t> scc = server->_StronglyConnectedComponent(1234);
     EXPECT_EQ(scc.size(), 1);
     scc = server->_StronglyConnectedComponent(4567);
-    for (auto id : scc) {
-        Debug("%i", id);
-    }
     EXPECT_EQ(scc.size(), 4);
     scc = server->_StronglyConnectedComponent(9999);
-    for (auto id : scc) {
-        Debug("%id", id);
-    }
     EXPECT_EQ(scc.size(), 4);
     scc = server->_StronglyConnectedComponent(2222);
     EXPECT_EQ(scc.size(), 1);
@@ -568,7 +561,7 @@ TEST_F(JanusServerTest, HandleInquireReplyUpdates)
     txn_ptr1->setTransactionStatus(janusstore::proto::TransactionMessage::PREACCEPT);
     server->id_txn_map[1234] = *txn_ptr1;
 
-    vector<uint64_t> *dep2 = server->BuildDepList(*txn_ptr2, 0);
+    server->BuildDepList(*txn_ptr2, 0);
     vector<uint64_t> *dep1 = server->BuildDepList(*txn_ptr1, 0);
     server->blocking_ids[1234] = std::set<uint64_t>{1235};
 
@@ -584,6 +577,11 @@ TEST_F(JanusServerTest, HandleInquireReplyUpdates)
 
     server->HandleInquireReply(i_ok_msg);
 
+    EXPECT_NE(
+        server->id_txn_map.find(1234),
+        server->id_txn_map.end()
+    );
+    EXPECT_EQ(server->id_txn_map[1234].getTransactionId(), 1234);
     EXPECT_EQ(
         server->id_txn_map[1234].getTransactionStatus(),
         janusstore::proto::TransactionMessage::COMMIT
@@ -622,7 +620,7 @@ TEST_F(JanusServerTest, HandleInquireReplyIgnores)
 
     EXPECT_EQ(
         server->dep_map[1234].size(),
-        0
+        1
     );
 
     i_ok_msg.release_dep();
@@ -853,6 +851,8 @@ TEST_F(JanusServerTest, HandleCommitUnblockIds)
     EXPECT_EQ(commit_ok.pairs(0).value(), "val3");
 }
 
+// TODO: add test to see if clientreqids are being populated
+
 /*************************************************************************
     _ExecutePhase
 *************************************************************************/
@@ -913,4 +913,40 @@ TEST_F(JanusServerTest, ExecutePhaseExecutesCircularDep)
     EXPECT_EQ(commit_ok.pairs(1).value(), "key1-val1");
     EXPECT_EQ(commit_ok.pairs(2).key(), "key3");
     EXPECT_EQ(commit_ok.pairs(2).value(), "key3-val3");
+}
+
+/*************************************************************************
+    _UnblockTxns
+*************************************************************************/
+
+TEST_F(JanusServerTest, UnblockTxns)
+{
+    janusstore::Transaction txn1(4321);
+    janusstore::Transaction* txn_ptr1 = &txn1;
+    std::set<uint64_t> blocked_list1{1234};
+    txn_ptr1->blocked_by_list = blocked_list1;
+
+    janusstore::Transaction txn2(1111);
+    janusstore::Transaction* txn_ptr2 = &txn2;
+    std::set<uint64_t> blocked_list2{1234, 2222};
+    txn_ptr2->blocked_by_list = blocked_list2;
+
+    server->id_txn_map[4321] = *txn_ptr1;
+    server->id_txn_map[1111] = *txn_ptr2;
+
+    std::unordered_map<uint64_t, std::set<uint64_t>> blocking_ids{
+        { 1234, {4321, 1111} },
+        { 2222, {1111} }
+    };
+    server->blocking_ids = blocking_ids;
+
+    server->_UnblockTxns(1234);
+
+    EXPECT_TRUE(server->id_txn_map[1234].blocked_by_list.empty());
+    EXPECT_EQ(server->id_txn_map[1111].blocked_by_list.size(), 1);
+    EXPECT_NE(
+        server->id_txn_map[1111].blocked_by_list.find(2222),
+        server->id_txn_map[1111].blocked_by_list.end()
+    );
+    EXPECT_EQ(server->blocking_ids.size(), 1);
 }

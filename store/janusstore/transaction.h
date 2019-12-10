@@ -34,6 +34,7 @@ private:
     std::unordered_map<uint64_t, std::unordered_map<std::string, std::string>> sharded_writeset;
 
 public:
+    uint64_t request_id;
     std::set<uint64_t> blocked_by_list;
     std::set<const TransportAddress*> client_addrs;
 
