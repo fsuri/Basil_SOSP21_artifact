@@ -12,7 +12,7 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
   responded(0) {
 
   this->num_replicas = config->n;
-  printf("shardclient%d has %d replicas\n", shard, this->num_replicas);
+  // Debug("shardclient%d has %d replicas\n", shard, this->num_replicas);
 
   client = new replication::ir::IRClient(*config, transport, client_id);
 
@@ -21,14 +21,14 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
   } else {
     replica = closestReplica;
   }
-  Debug("Sending unlogged to replica %i", replica);
+  // Debug("[ShardClient %i] Sending unlogged to replica %i", shard, replica);
 }
 
 ShardClient::~ShardClient() {
 }
 
 void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_preaccept_callback pcb) {
-	Debug("[shard %i] Sending PREACCEPT for txn_id %i [%llu]", shard, txn.getTransactionId(), client_id);
+	// Debug("[shard %i] Sending PREACCEPT for txn_id %i [%llu]", shard, txn.getTransactionId(), client_id);
 
 	std::vector<janusstore::proto::Reply> replies;
 	uint64_t txn_id = txn.getTransactionId();
@@ -37,6 +37,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
     pendingReqs[txn_id] = req;
     req->cpcb = pcb;
     req->preaccept_replies = {};
+    req->participant_shards = txn.groups;
 
 	// create PREACCEPT Request
 	string request_str;
@@ -59,8 +60,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
-	Debug("shardclient%d shardcasting PREACCEPT to %d replicas\n for txn %i",
-		this->shard, this->num_replicas, txn_id);
+	// Debug("shardclient%d shardcasting PREACCEPT to %d replicas\n for txn %i", this->shard, this->num_replicas, txn_id);
 	for (int i = 0; i < this->num_replicas; i++) {
 		client->InvokeUnlogged(shard, i, request_str,
 			std::bind(&ShardClient::PreAcceptContinuation, this,
@@ -69,7 +69,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 }
 
 void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t ballot, client_accept_callback acb) {
-	Debug("[shard %i] Sending ACCEPT [%llu]", shard, client_id);
+	// Debug("[shard %i] Sending ACCEPT [%llu]", shard, client_id);
 
 	PendingRequest* req = this->pendingReqs[txn_id];
 	req->accept_replies = {};
@@ -98,8 +98,8 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 	}
 }
 
-void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_commit_callback ccb) {
-	Debug("[shard %i] Sending COMMIT for txn %llu", shard, txn_id);
+void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, std::map<uint64_t, std::set<int>> aggregated_depmeta, client_commit_callback ccb) {
+	// Debug("[shard %i] Sending COMMIT for txn %llu", shard, txn_id);
 
 	PendingRequest* req = this->pendingReqs[txn_id];
 	req->commit_replies = {};
@@ -110,14 +110,24 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, client_com
 	Request request;
 	request.set_op(Request::COMMIT);
 	// CommitMessage payload
+	CommitMessage* commit_msg = request.mutable_commit();
 	request.mutable_commit()->set_txnid(txn_id);
 	for (auto dep : deps) {
 		request.mutable_commit()->mutable_dep()->add_txnid(dep);
 	}
 
+	for (auto& pair : aggregated_depmeta) {
+        // dep.add_txnid(dep_list[i]);
+        DependencyMeta* depmeta = commit_msg->add_depmeta();
+        depmeta->set_txnid(pair.first);
+        for (auto dep : pair.second) {
+            depmeta->add_group(dep);
+        }
+    }
+
 	request.SerializeToString(&request_str);
 
-	Debug("[shard %i] adding ccb for %llu, %llu", shard, txn_id, client_id);
+	// Debug("[shard %i] adding ccb for %llu, %llu", shard, txn_id, client_id);
 
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
@@ -133,13 +143,13 @@ void ShardClient::PreAcceptCallback(uint64_t txn_id, janusstore::proto::Reply re
 	PendingRequest* req = this->pendingReqs[txn_id];
 	req->responded++;
 
-    Debug("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - PREACCEPT CB - txn " + to_string(txn_id) + " - responded " + to_string(req->responded)).c_str());
+    // Debug("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - PREACCEPT CB - txn " + to_string(txn_id) + " - responded " + to_string(req->responded)).c_str());
 
 	// aggregate replies for this transaction
 	req->preaccept_replies.push_back(reply);
 
 	if (req->responded == this->num_replicas) {
-	    Debug("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - REPLICAS RESPONDED FOR - txn " + to_string(txn_id)).c_str());
+	    // Debug("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - REPLICAS RESPONDED FOR - txn " + to_string(txn_id)).c_str());
 
 	    req->responded = 0;
 		pcb(shard, req->preaccept_replies);
@@ -151,12 +161,13 @@ void ShardClient::AcceptCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	PendingRequest* req = this->pendingReqs[txn_id];
 	req->responded++;
 
-    Debug("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - ACCEPT CB - txn " + to_string(txn_id) + " - responded " + to_string(req->responded)).c_str());
+    // Debug("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - ACCEPT CB - txn " + to_string(txn_id) + " - responded " + to_string(req->responded)).c_str());
 
 	// aggregate replies for this transaction
 	req->accept_replies.push_back(reply);
 
 	if (req->responded == this->num_replicas) {
+		Debug("SHARDCLIENT - AcceptCallback - shard replies done");
 		req->responded = 0;
 		acb(shard, req->accept_replies);
 	}
@@ -167,12 +178,13 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	PendingRequest* req = this->pendingReqs[txn_id];
 	req->responded++;
 
-    Debug("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - COMMIT CB - txn " + to_string(txn_id) + " - responded " + to_string(req->responded)).c_str());
+    // Debug("%s\n", ("SHARDCLIENT" + to_string(this->shard) + " - COMMIT CB - txn " + to_string(txn_id) + " - responded " + to_string(req->responded)).c_str());
 
 	// aggregate replies for this transaction
 	req->commit_replies.push_back(reply);
 
 	if (req->responded == this->num_replicas) {
+		Debug("SHARDCLIENT - CommitCallback - shard replies done");
 		req->responded = 0;
 		ccb(shard, req->commit_replies);
 	}
@@ -180,7 +192,7 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 
 void ShardClient::PreAcceptContinuation(const string &request_str, const string &reply_str) {
 
-	Debug("In preaccept continuation");
+	// Debug("In preaccept continuation");
 	janusstore::proto::Reply reply;
 	reply.ParseFromString(reply_str);
 	uint64_t txn_id = NULL;
@@ -204,7 +216,7 @@ void ShardClient::PreAcceptContinuation(const string &request_str, const string 
 void ShardClient::AcceptContinuation(const string &request_str,
     const string &reply_str) {
 
-	Debug("In accept continuation");
+	// Debug("In accept continuation");
 	janusstore::proto::Reply reply;
   	reply.ParseFromString(reply_str);
 	uint64_t txn_id = NULL;
@@ -239,10 +251,42 @@ void ShardClient::CommitContinuation(const string &request_str,
 	}
 
 	PendingRequest* req = this->pendingReqs[txn_id];
-	Debug("[shard %i] In commit continuation for txn %llu", shard, txn_id);
+	// Debug("[shard %i] In commit continuation for txn %llu", shard, txn_id);
 	// get the ccb
 	client_commit_callback ccb = req->cccb;
 	// invoke the shardclient callback
 	this->CommitCallback(txn_id, reply, ccb);
+}
+
+void ShardClient::Read(string key, client_read_callback pcb) {
+	// Debug("[shard %i] Sending READ for key %s", shard, key.c_str());
+
+	string request_str;
+
+	Request request;
+	request.set_op(Request::GET);
+	request.set_key(key);
+
+	request.SerializeToString(&request_str);
+	this->pendingReads[key] = pcb;
+	for (int i = 0; i < this->num_replicas; i++) {
+		client->InvokeUnlogged(shard, i, request_str,
+			std::bind(&ShardClient::ReadContinuation, this,
+			placeholders::_1, placeholders::_2), nullptr, 10000);
+	}
+}
+
+void ShardClient::ReadContinuation(const string &request_str, const string &reply_str) {
+	janusstore::proto::Reply reply;
+	reply.ParseFromString(reply_str);
+
+	string key = reply.key();
+	client_read_callback rcb = this->pendingReads[key];
+
+	this->ReadCallback(reply.key(), reply.value(), rcb);
+}
+
+void ShardClient::ReadCallback(string key, string value, client_read_callback rcb) {
+	rcb(key, value);
 }
 }

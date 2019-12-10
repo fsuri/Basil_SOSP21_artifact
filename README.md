@@ -53,14 +53,15 @@ The repo is structured as follows:
 You can compile all of the TAPIR executables by running make in the root directory
 
 TAPIR depends on protobufs, libevent and openssl, so you will need the following development libraries:
-- libprotobuf-dev
 - libevent-openssl
 - libevent-pthreads
 - libevent-dev
 - libssl-dev
-- protobuf-compiler
 - libgflags-dev
-- libgtest-dev
+
+In addition, you need to install the following libraries from source:
+- [googletest-1.10](https://github.com/google/googletest/releases/tag/release-1.10.0)
+- [protobuf-3.5.1](https://github.com/protocolbuffers/protobuf/releases/tag/v3.5.1)
 
 ### On Mac
 The known Mac equivalents for the above packages, available through `brew install` are:

@@ -20,6 +20,7 @@ public:
 
     int Get(uint64_t id, std::string key, std::string &value);
     int Put(uint64_t id, std::string key, std::string value);
+    string Read(std::string key);
 
 private:
     // unversioned data store (for a particular shard, i would think)

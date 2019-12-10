@@ -23,8 +23,8 @@ namespace janusstore {
     ballot = (client_id / 10000) * 10000;
 
     bclient.reserve(nshards);
-    Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
-    
+    // Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
+
     std::ifstream configStream(configPath);
     if (configStream.fail()) {
       Panic("Unable to read configuration file: %s\n", configPath.c_str());
@@ -40,7 +40,7 @@ namespace janusstore {
       bclient[i] = shardclient;
     }
 
-    Debug("Janus client [%llu] created! %llu %lu", client_id, nshards, bclient.size());
+    // Debug("Janus client [%llu] created! %llu %lu", client_id, nshards, bclient.size());
   }
 
   Client::Client(transport::Configuration *config, int nShards, int closestReplica, Transport * transport): nshards(nShards), transport(transport), config(config) {
@@ -60,7 +60,7 @@ namespace janusstore {
     ballot = (client_id / 10000) * 10000;
 
     bclient.reserve(nshards);
-    Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
+    // Debug("Initializing Janus client with id [%llu] %llu [closestReplica: %i]", client_id, nshards, closestReplica);
 
     /* Start a shardclient for each shard. */
     // TODO change this to a single config file lul
@@ -71,7 +71,7 @@ namespace janusstore {
       bclient[i] = shardclient;
     }
 
-    Debug("Janus client [%llu] created! %llu %lu", client_id, nshards, bclient.size());
+    // Debug("Janus client [%llu] created! %llu %lu", client_id, nshards, bclient.size());
   }
 
   Client::~Client() {
@@ -99,7 +99,7 @@ namespace janusstore {
     for (const auto & key: txn->read_set) {
       int i = this->keyToShard(key, nshards);
       if (req->participant_shards.find(i) == req->participant_shards.end()) {
-        // Debug("txn %i -> shard %i, key %s", txn->getTransactionId(), i, key.c_str());
+        // Debug("txn %llu -> shard %i, key %s", txn->getTransactionId(), i, key.c_str());
         req->participant_shards.insert(i);
       }
       txn->groups.insert(i);
@@ -111,7 +111,7 @@ namespace janusstore {
       // Debug("%i, %i", txn->getTransactionId(), i);
       if (req->participant_shards.find(i) == req->participant_shards.end()) {
         // Debug("txn %llu -> shard %i, key %s", txn->getTransactionId(), i, pair.first.c_str());
-        req->participant_shards.insert(i);  
+        req->participant_shards.insert(i);
       }
       txn->groups.insert(i);
       txn->addShardedWriteSet(pair.first, pair.second, i);
@@ -119,7 +119,7 @@ namespace janusstore {
   }
 
   void Client::Execute(OneShotTransaction *txn, execute_callback ecb) {
-    Transaction t(this->next_txn_id); 
+    Transaction t(this->next_txn_id);
     t.setTransactionStatus(proto::TransactionMessage::PREACCEPT);
     for (auto key : txn->GetReadSet()) {
       t.addReadSet(key);
@@ -134,11 +134,11 @@ namespace janusstore {
   void Client::PreAccept(Transaction * txn, uint64_t ballot, execute_callback ecb) {
 
     uint64_t txn_id = txn->getTransactionId();
-    
+
     PendingRequest *req = new PendingRequest(txn_id, ecb);
     pendingReqs[txn_id] = req;
-    
-    Debug("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
+
+    // Debug("%s\n", ("CLIENT - PREACCEPT - txn " + to_string(txn_id)).c_str());
     setParticipants(txn);
 
     for (auto p: req->participant_shards) {
@@ -156,7 +156,8 @@ namespace janusstore {
     PendingRequest* req = this->pendingReqs[txn_id];
 
     for (auto p : req->participant_shards) {
-      std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
+      // send the per-shard aggregated deps, not the global aggregated
+      std::vector<uint64_t> vec_deps(req->per_shard_aggregated_deps[p].begin(), req->per_shard_aggregated_deps[p].end());
       auto acb = std::bind(&Client::AcceptCallback, this, txn_id, placeholders::_1, placeholders::_2);
 
       bclient[p]->Accept(txn_id, vec_deps, ballot, acb);
@@ -164,21 +165,25 @@ namespace janusstore {
   }
 
   void Client::Commit(uint64_t txn_id, set<uint64_t> deps) {
-    Debug("%s\n", ("CLIENT - COMMIT - txn " + to_string(txn_id)).c_str());
+    // Debug("%s\n", ("CLIENT - COMMIT - txn " + to_string(txn_id)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
+
+    // TODO supply each shardclient with the aggregated_depmeta
+    // so that when committing, every replica knows which shards to talk to
+    // for any dependency
 
     for (auto p : req->participant_shards) {
       std::vector<uint64_t> vec_deps(deps.begin(), deps.end());
       auto ccb = std::bind(&Client::CommitCallback, this, txn_id, placeholders::_1, placeholders::_2);
-      bclient[p]->Commit(txn_id, vec_deps, ccb);
+      bclient[p]->Commit(txn_id, vec_deps, req->aggregated_depmeta, ccb);
     }
   }
 
   void Client::PreAcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
-    Debug("%s\n", ("CLIENT - PREACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
+    // Debug("%s\n", ("CLIENT - PREACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
@@ -193,33 +198,66 @@ namespace janusstore {
 
     // check if each replica within shard has the same dependencies
     // then aggregate dependencies
-    bool fast_quorum = true;
+    // bool fast_quorum = true;
 
-    // aggregated replica deps for this shard
-    std::set<uint64_t> shard_deps;
+    // singular dep_i for this shard
+    std::set<uint64_t> base_deps;
+    bool has_set_base = false;
+    bool all_dep_i_equal = true;
 
     UW_ASSERT(replies.size() != 0);
 
     for (auto reply: replies) {
+      // parse the dep_i's and check if they are all equal to each other
       if (reply.op() == Reply::PREACCEPT_OK) {
-        // parse message for deps
+        // one replica deps for this shard
+        std::set<uint64_t> test_dep_i;
         DependencyList msg = reply.preaccept_ok().dep();
         for (int i = 0; i < msg.txnid_size(); i++) {
           uint64_t dep_id = msg.txnid(i);
 
           // add dep to aggregated set
           req->aggregated_deps.insert(dep_id);
+          
+          // add dep to aggregated per-shard set
+          req->per_shard_aggregated_deps[shard].insert(dep_id);
+
           // add to deplist for this shard
-          shard_deps.insert(dep_id);
+          test_dep_i.insert(dep_id);
+
+          if (!has_set_base) {
+            base_deps.insert(dep_id);
+          }
         }
+
+        has_set_base = true;
+        all_dep_i_equal = all_dep_i_equal && (base_deps == test_dep_i);
+
+        // parse message for depmeta; will eventually replace DependencyList
+        /*
+         * Note: each replica is telling us both the dependency txns and their
+         * participating groups, which we will aggregate for all dependencies
+         * so that during COMMIT, each replica will know which shard to talk to
+         * if they need to inquire.
+         *
+         * god I wish the original Janus paper mentioned this.
+         */
+        for (int i = 0; i < reply.preaccept_ok().depmeta_size(); i++) {
+          DependencyMeta depmeta = reply.preaccept_ok().depmeta(i);
+          for (int j = 0; j < depmeta.group_size(); j++) {
+            req->aggregated_depmeta[depmeta.txnid()].insert(depmeta.group(j));
+          }
+        }
+
       } else {
         // meaning we will need to go to Accept phase
-        fast_quorum = false;
+        // TODO verify this
+        all_dep_i_equal = false;
       }
     }
 
-    fast_quorum = fast_quorum && (req->aggregated_deps == shard_deps);
-    req->has_fast_quorum = req->has_fast_quorum && fast_quorum;
+    // fast_quorum = fast_quorum && (req->aggregated_deps == shard_deps);
+    req->has_fast_quorum = req->has_fast_quorum && all_dep_i_equal;
 
     if (req->responded_shards.size() == req->participant_shards.size()) {
       req->responded_shards.clear();
@@ -235,7 +273,7 @@ namespace janusstore {
   void Client::AcceptCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
-    Debug("%s\n", ("CLIENT - ACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
+    // Debug("%s\n", ("CLIENT - ACCEPT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
@@ -249,6 +287,7 @@ namespace janusstore {
 
     if (req->responded_shards.size() == req->participant_shards.size()) {
       // no need to check for a quorum for every shard because we dont implement failure recovery
+      Debug("CLIENT - AcceptCallback - proceeding to Commit phase");
       req->responded_shards.clear();
       Commit(txn_id, req->aggregated_deps);
     }
@@ -257,17 +296,19 @@ namespace janusstore {
   void Client::CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies) {
 
     /* shardclient invokes this when all replicas in a shard have responded */
-    Debug("%s\n", ("CLIENT - COMMIT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
+    // Debug("%s\n", ("CLIENT - COMMIT CB - txn " + to_string(txn_id) + " - shard - " + to_string(shard)).c_str());
 
     PendingRequest* req = this->pendingReqs[txn_id];
 
     req->responded_shards.insert(shard);
+    Debug("CLIENT - CommitCallback - received %llu out of %llu shard responses", req->responded_shards.size(), req->participant_shards.size());
 
     // printf("%s\n", ("CLIENT - COMMIT CB - added " + to_string(shard) + " to responded list").c_str());
 
     if (req->responded_shards.size() == req->participant_shards.size()) {
       // return results to async_transaction_bench_client by invoking output commit callback
       Debug("Invoking execute callback for txn %llu", txn_id);
+      stats.Increment("commits", 1);
       req->ccb(0, std::map<std::string, std::string>());
       req->responded_shards.clear();
     } else {
@@ -275,4 +316,22 @@ namespace janusstore {
     }
     return;
   }
+
+  void Client::Read(string key, read_callback rcb) {
+    Debug("%s\n", ("CLIENT - READ - key" + key).c_str());
+
+    this->readReqs[key] = rcb;
+    int shard = this->keyToShard(key, nshards);
+
+    auto pcb = std::bind(&Client::ReadCallback, this,
+      placeholders::_1, placeholders::_2);
+
+    bclient[shard]->Read(key, pcb);
+  }
+
+  void Client::ReadCallback(string key, string value) {
+    QNotice("GOT: <%s, %s>", key.c_str(), value.c_str());
+    this->readReqs[key]();
+  }
+
 }

@@ -232,6 +232,7 @@ DEFINE_double(zipf_coefficient, 0.5, "the coefficient of the zipf distribution "
  */
 DEFINE_uint64(num_ops_txn, 1, "number of ops in each txn" 
     " (for rw)");
+DEFINE_uint64(num_ops_txn, 1, "not a clue");
 // RW benchmark also uses same config parameters as Retwis.
 
 
@@ -425,6 +426,15 @@ int main(int argc, char **argv) {
   std::string latencyRawFile;
   std::vector<uint64_t> latencies;
   std::atomic<size_t> clientsDone(0UL);
+
+  int keysRead = 0;
+  std::function<void()> jrcb = [&]() {
+    keysRead++;
+    if (clientsDone == FLAGS_num_clients && keysRead == FLAGS_num_keys) {
+      transport.Stop();
+    }
+  };
+
   bench_done_callback bdcb = [&]() {
     ++clientsDone;
     if (clientsDone == FLAGS_num_clients) {
@@ -574,7 +584,7 @@ int main(int argc, char **argv) {
 	      transport->Timer(0, [bench, bdcb]() { bench->Start(bdcb); });
         break;
       case BENCH_SMALLBANK_SYNC:
-        threads.push_back(new std::thread([bench, bdcb](){ 
+        threads.push_back(new std::thread([bench, bdcb](){
             bench->Start([](){});
             while (!bench->IsFullyDone()) {
               bench->StartLatency();
@@ -606,7 +616,8 @@ int main(int argc, char **argv) {
   if (threads.size() > 0) {
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
   }
-  transport.Run();
+
+  transport->Run();
 
   for (auto i : threads) {
     i->join();
