@@ -14,6 +14,7 @@
 #include "store/common/frontend/async_client.h"
 #include "store/mortystore/shardclient.h"
 #include "store/mortystore/common.h"
+#include "lib/latency.h"
 
 #include <thread>
 #include <set>
@@ -71,13 +72,15 @@ class Client : public ::AsyncClient {
   void HandleCommitReply(const TransportAddress &remote, const proto::CommitReply &msg, uint64_t shard);
   void HandlePrepareKO(const TransportAddress &remote, const proto::PrepareKO &msg, uint64_t shard);
 
-  void Get(proto::Branch &branch, const std::string &key);
+  void Get(PendingRequest *req, proto::Branch &branch, const std::string &key);
   void Put(proto::Branch &branch, const std::string &key,
       const std::string &value);
   void Commit(PendingRequest *req, const proto::Branch &branch);
   void Abort(const proto::Branch &branch);
 
   void ProcessPrepareKOs(PendingRequest *req, const proto::Branch &branch);
+
+  void RecordBranch(const proto::Branch &branch);
 
   // Unique ID for this client.
   uint64_t client_id;
@@ -99,7 +102,8 @@ class Client : public ::AsyncClient {
   std::vector<ShardClient *> sclients;
   uint64_t prepareBranchIds;
   transport::Configuration *config;
-
+  Latency_t opLat;
+  std::unordered_set<proto::Branch, BranchHasher, BranchComparer> sent_branches;
 };
 
 } // namespace mortystore

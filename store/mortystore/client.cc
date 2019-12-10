@@ -4,13 +4,14 @@
 
 #include "store/mortystore/common.h"
 
+#define TXN_ID_SHIFT 20
 namespace mortystore {
 
 Client::Client(const std::string configPath, uint64_t client_id, int nShards, int nGroups,
     int closestReplica, Transport *transport, partitioner part) : client_id(client_id), nshards(nShards),
     ngroups(nGroups), transport(transport), part(part), lastReqId(0UL),
     prepareBranchIds(0UL), config(nullptr) {
-  t_id = client_id << 20; 
+  t_id = client_id << TXN_ID_SHIFT; 
 
   Debug("Initializing Morty client with id [%lu] %lu", client_id, nshards);
 
@@ -54,6 +55,11 @@ void Client::Execute(AsyncTransaction *txn, execute_callback ecb) {
 
 void Client::ExecuteNextOperation(PendingRequest *req, proto::Branch &branch) {
   ClientBranch clientBranch = GetClientBranch(branch);
+  if (clientBranch.opCount > 0) {
+    uint64_t ns = Latency_End(&opLat);
+    stats.Add("op" + std::to_string(clientBranch.opCount), ns);
+  }
+  Latency_Start(&opLat);
   Operation op = req->txn->GetNextOperation(clientBranch.opCount,
       clientBranch.readValues);
 
@@ -66,7 +72,7 @@ void Client::ExecuteNextOperation(PendingRequest *req, proto::Branch &branch) {
 
   switch (op.type) {
     case GET: {
-      Get(branch, op.key);
+      Get(req, branch, op.key);
       break;
     }
     case PUT: {
@@ -107,6 +113,13 @@ void Client::HandleReadReply(const TransportAddress &remote,
     return;
   }
 
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  uint64_t diff = now.tv_usec - msg.ts();
+
+  ClientBranch clientBranch = GetClientBranch(msg.branch());
+  stats.Add("recv_read_write_reply" + std::to_string(msg.branch().txn().id()), diff);
+
   proto::Branch branch(msg.branch());
   ExecuteNextOperation(itr->second, branch);
 }
@@ -117,6 +130,13 @@ void Client::HandleWriteReply(const TransportAddress &remote,
   if (itr == pendingReqs.end()) {
     return;
   }
+
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  uint64_t diff = now.tv_usec - msg.ts();
+
+  ClientBranch clientBranch = GetClientBranch(msg.branch());
+  stats.Add("recv_read_write_reply" + std::to_string(msg.branch().txn().id()), diff);
 
   proto::Branch branch(msg.branch());
   ExecuteNextOperation(itr->second, branch);
@@ -131,6 +151,9 @@ void Client::HandlePrepareOK(const TransportAddress &remote,
 
   itr->second->prepareOKs[msg.branch()]++;
   if (itr->second->prepareOKs[msg.branch()] == msg.branch().shards().size()) {
+    uint64_t ns = Latency_End(&opLat);
+    stats.Add("commit", ns);
+
     proto::Commit commit;
     *commit.mutable_branch() = msg.branch();
     for (auto shard : msg.branch().shards()) {
@@ -169,7 +192,8 @@ void Client::HandlePrepareKO(const TransportAddress &remote,
 }
 
 
-void Client::Get(proto::Branch &branch, const std::string &key) {
+void Client::Get(PendingRequest *req, proto::Branch &branch,
+    const std::string &key) {
   // Contact the appropriate shard to get the value.
   int i = part(key, nshards) % ngroups;
   if (std::find(branch.shards().begin(), branch.shards().end(),
@@ -185,6 +209,10 @@ void Client::Get(proto::Branch &branch, const std::string &key) {
   *msg.mutable_branch() = branch;
   msg.set_key(key);
 
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  msg.set_ts(now.tv_usec);
+
   if (Message_DebugEnabled(__FILE__)) {
     std::stringstream ss;
     ss << "Sending: ";
@@ -192,7 +220,21 @@ void Client::Get(proto::Branch &branch, const std::string &key) {
     Debug("%s", ss.str().c_str());
   }
 
-  sclients[i]->Read(msg);
+  // Check if this branch already read this key
+  bool alreadyRead = false;
+  for (int64_t i = 0; i < branch.txn().ops_size() - 1; ++i) {
+    if (branch.txn().ops(i).key() == key) {
+      alreadyRead = true;
+      break;
+    }
+  }
+
+  RecordBranch(msg.branch());
+  if (alreadyRead) {
+    ExecuteNextOperation(req, branch);
+  } else {
+    sclients[i]->Read(msg);
+  }
 }
 
 void Client::Put(proto::Branch &branch, const std::string &key,
@@ -213,6 +255,10 @@ void Client::Put(proto::Branch &branch, const std::string &key,
   msg.set_key(key);
   msg.set_value(value);
 
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  msg.set_ts(now.tv_usec);
+
   if (Message_DebugEnabled(__FILE__)) {
     std::stringstream ss;
     ss << "Sending: ";
@@ -220,10 +266,19 @@ void Client::Put(proto::Branch &branch, const std::string &key,
     Debug("%s", ss.str().c_str());
   }
 
+  RecordBranch(msg.branch());
   sclients[i]->Write(msg);
 }
 
 void Client::Commit(PendingRequest *req, const proto::Branch &branch) {
+  if (Message_DebugEnabled(__FILE__)) {
+    std::stringstream ss;
+    ss << "Sending: ";
+    PrintBranch(branch, ss);
+    Debug("%s", ss.str().c_str());
+  }
+
+
   proto::Prepare prepare;
   *prepare.mutable_branch() = branch;
   prepare.mutable_branch()->set_id(prepareBranchIds);
@@ -237,6 +292,7 @@ void Client::Commit(PendingRequest *req, const proto::Branch &branch) {
 void Client::Abort(const proto::Branch &branch) {
   proto::Abort abort;
   *abort.mutable_branch() = branch;
+  Debug("Aborting shards %d", branch.shards().size());
   for (auto shard : branch.shards()) {
     sclients[shard]->Abort(abort);
   }
@@ -245,6 +301,9 @@ void Client::Abort(const proto::Branch &branch) {
 void Client::ProcessPrepareKOs(PendingRequest *req, const proto::Branch &branch) {
   req->prepareResponses++;
   if (req->prepareResponses == req->sentPrepares) {
+    uint64_t ns = Latency_End(&opLat);
+    stats.Add("abort", ns);
+
     Debug("Received responses for all outstanding prepares (%lu).", req->sentPrepares);
     
     Abort(branch);
@@ -256,6 +315,11 @@ void Client::ProcessPrepareKOs(PendingRequest *req, const proto::Branch &branch)
     Debug("Prepare failed. Waiting on %lu other prepare responses (out of %lu).",
         req->sentPrepares - req->prepareResponses, req->sentPrepares);
   }
+}
+
+void Client::RecordBranch(const proto::Branch &branch) {
+  UW_ASSERT(sent_branches.find(branch) == sent_branches.end());    
+  sent_branches.insert(branch);
 }
 
 } // namespace mortystore

@@ -36,6 +36,7 @@
 
 #include <google/protobuf/message.h>
 #include <event2/thread.h>
+#include <event2/bufferevent_struct.h>
 
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
@@ -49,6 +50,7 @@
 
 const size_t MAX_TCP_SIZE = 100; // XXX
 const uint32_t MAGIC = 0x06121983;
+const int SOCKET_BUF_SIZE = 1048576;
 
 using std::pair;
 
@@ -184,6 +186,7 @@ TCPTransport::TCPTransport(double dropRate, double reorderRate,
             event_add(x, NULL);
         }
     }
+    _Latency_Init(&sockWriteLat, "sock_write");
 }
 
 TCPTransport::~TCPTransport()
@@ -194,6 +197,7 @@ TCPTransport::~TCPTransport()
     // for (auto kv : timers) {
     //     delete kv.second;
     // }
+    Latency_Dump(&sockWriteLat);
 }
 
 void
@@ -212,10 +216,19 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
 
     // Set TCP_NODELAY
     int n = 1;
-    if (setsockopt(fd, IPPROTO_TCP,
-                   TCP_NODELAY, (char *)&n, sizeof(n)) < 0) {
-        PWarning("Failed to set TCP_NODELAY on TCP listening socket");
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&n, sizeof(n)) < 0) {
+      PWarning("Failedt to set TCP_NODELAY on TCP listening socket");
     }
+
+    n = SOCKET_BUF_SIZE;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char *)&n, sizeof(n)) < 0) {
+      PWarning("Failed to set SO_RCVBUF on socket");
+    }
+    
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char *)&n, sizeof(n)) < 0) {
+      PWarning("Failed to set SO_SNDBUF on socket");
+    }
+
 
     TCPTransportTCPListener *info = new TCPTransportTCPListener();
     info->transport = this;
@@ -299,6 +312,16 @@ TCPTransport::Register(TransportReceiver *receiver,
         PWarning("Failed to set TCP_NODELAY on TCP listening socket");
     }
 
+    n = SOCKET_BUF_SIZE;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char *)&n, sizeof(n)) < 0) {
+      PWarning("Failed to set SO_RCVBUF on socket");
+    }
+    
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char *)&n, sizeof(n)) < 0) {
+      PWarning("Failed to set SO_SNDBUF on socket");
+    }
+
+
     // Registering a replica. Bind socket to the designated
     // host/port
     const string &host = config.replica(groupIdx, replicaIdx).host;
@@ -373,8 +396,8 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
                        sizeof(totalLen) +
                        sizeof(uint32_t));
 
-    Debug("Sending %ld byte %s message over TCP to %s:%d",
-          totalLen, type.c_str(), inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
+    // Debug("Sending %ld byte %s message over TCP to %s:%d",
+          // totalLen, type.c_str(), inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
     
     char buf[totalLen];
     char *ptr = buf;
@@ -406,6 +429,13 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
         Warning("Failed to write to TCP buffer");
         return false;
     }
+
+    /*Latency_Start(&sockWriteLat);
+    if (write(ev->ev_write.ev_fd, buf, totalLen) < 0) {
+      Warning("Failed to write to TCP buffer");
+      return false;
+    }
+    Latency_End(&sockWriteLat);*/
     return true;
 }
 
@@ -619,7 +649,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
             //      totalSize, evbuffer_get_length(evbuf));
             return;
         }
-        Debug("Receiving %ld byte message", totalSize);
+        // Debug("Receiving %ld byte message", totalSize);
 
         char buf[totalSize];
         size_t copied = evbuffer_remove(evbuf, buf, totalSize);
@@ -649,7 +679,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         
         // Dispatch
         info->receiver->ReceiveMessage(addr->second, msgType, msg, nullptr);
-        Debug("Done processing large %s message", msgType.c_str());
+        // Debug("Done processing large %s message", msgType.c_str());
     }
 }
 

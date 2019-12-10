@@ -51,12 +51,12 @@ class BenchmarkClient {
   void StartLatency();
   virtual void SendNext() = 0;
   void IncrementSent();
-  inline bool IsFullyDone() { return done && cooldownDone; }
+  inline bool IsFullyDone() { return done; }
 
   struct Latency_t latency;
   bool started;
   bool done;
-  bool cooldownDone;
+  bool cooldownStarted;
   int tputInterval;
   std::vector<uint64_t> latencies;
 

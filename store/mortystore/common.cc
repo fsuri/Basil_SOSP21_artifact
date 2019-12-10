@@ -1,23 +1,97 @@
 #include "store/mortystore/common.h"
 
+#include <functional>
+
+#include "lib/assert.h"
+
 #include <google/protobuf/util/message_differencer.h>
 
 bool operator==(const mortystore::proto::Branch &b1,
     const mortystore::proto::Branch &b2) {
-  return b1.txn().id() == b2.txn().id()
-    && google::protobuf::util::MessageDifferencer::Equals(b1, b2);
+  if (b1.id() != b2.id()) {
+    return false;
+  }
+  if (b1.txn() != b2.txn()) {
+    return false;
+  }
+  if (b1.deps_size() != b2.deps_size()) {
+    return false;
+  }
+  for (const auto &kv1 : b1.deps()) {
+    auto itr = b2.deps().find(kv1.first);
+    if (itr == b2.deps().end() || itr->second != kv1.second) {
+      Debug("Branch1 dep %lu not in branch2.", kv1.first);
+      return false;
+    }
+  }
+  return true;
 }
 
 bool operator==(const mortystore::proto::Transaction &t1,
     const mortystore::proto::Transaction &t2) {
-  return t1.id() == t2.id()
-    && google::protobuf::util::MessageDifferencer::Equals(t1, t2);
+  if (t1.id() != t2.id()) {
+    return false;
+  }
+  if (t1.ops_size() != t2.ops_size()) {
+    return false;
+  }
+  for (int64_t i = 0; i < t1.ops_size(); ++i) {
+    if (t1.ops(i) != t2.ops(i)) {
+      return false;
+    }
+  }
+  return true;
 }
+
+bool operator!=(const mortystore::proto::Transaction &t1,
+    const mortystore::proto::Transaction &t2) {
+  return !(t1 == t2);
+}
+
+bool operator==(const mortystore::proto::Operation &o1,
+    const mortystore::proto::Operation &o2) {
+  return o1.type() == o2.type() && o1.key() == o2.key() && o1.val() == o2.val();
+}
+
+bool operator!=(const mortystore::proto::Operation &o1,
+    const mortystore::proto::Operation &o2) {
+  return !(o1 == o2);
+}
+
 
 namespace mortystore {
 
+void hash_combine_impl(size_t& seed, size_t value) {
+  seed ^= value + 0x9e3779b9 + (seed<<6) + (seed>>2);
+}
+
+void HashOperation(size_t &hash, const proto::Operation &op) {
+  hash_combine_impl(hash, std::hash<int>{}(static_cast<int>(op.type())));
+  hash_combine_impl(hash, std::hash<std::string>{}(op.key()));
+  hash_combine_impl(hash, std::hash<std::string>{}(op.val()));
+}
+
+void HashTransaction(size_t &hash, const proto::Transaction &txn) {
+  hash_combine_impl(hash, std::hash<unsigned long long>{}(txn.id()));
+  for (int64_t i = 0; i < txn.ops_size(); ++i) {
+    HashOperation(hash, txn.ops(i));
+  }
+}
+
+void HashBranch(size_t &hash, const proto::Branch &branch) {
+  hash_combine_impl(hash, std::hash<unsigned long long>{}(branch.id()));
+  HashTransaction(hash, branch.txn());
+  for (const auto &kv : branch.deps()) {
+    size_t thash = 0UL;
+    HashTransaction(thash, kv.second);
+    hash = hash ^ thash;
+  }
+}
+
 size_t BranchHasher::operator() (const proto::Branch &b) const {
-  return b.txn().id();
+  size_t hash = 0UL;
+  HashBranch(hash, b);
+  return hash;
 }
 
 bool BranchComparer::operator() (const proto::Branch &b1, const proto::Branch &b2) const {
@@ -41,9 +115,9 @@ void PrintTransactionList(const std::vector<proto::Transaction> &txns,
 }
 
 void PrintBranch(const proto::Branch &branch, std::ostream &os) {
-  for (const proto::Transaction &b : branch.deps()) {
-    os << b.id() << "[";
-    for (const proto::Operation &o : b.ops()) {
+  for (const auto &b : branch.deps()) {
+    os << b.first << "[";
+    for (const proto::Operation &o : b.second.ops()) {
       if (o.type() == proto::OperationType::READ) {
         os << "r(" << o.key() << "),";
       } else {
@@ -60,178 +134,137 @@ void PrintBranch(const proto::Branch &branch, std::ostream &os) {
       os << "w(" << o.key() << "),";
     }
   }
-  os << "]" << std::endl;
+  os << "]";
 }
 
-bool CommitCompatible(const proto::Branch &branch,
+bool CommitCompatible(const proto::Branch &branch, const SpecStore &store,
+    const std::vector<proto::Transaction> &seq,
+    const std::set<uint64_t> &prepared_txn_ids) {
+  return DepsFinalized(branch, prepared_txn_ids) &&
+    ValidSubsequence(branch, store, seq);
+}
+
+bool WaitCompatible(const proto::Branch &branch, const SpecStore &store,
     const std::vector<proto::Transaction> &seq) {
-  /*std::vector<proto::Transaction> seq3;
-  std::vector<proto::Transaction> seq4(seq);
-  for (const proto::Transaction &b : branch.seq()) {
-    seq3.push_back(b);
-    auto itr = std::find_if(seq4.begin(), seq4.end(),
-        [&](const proto::Transaction &other) {
-          return google::protobuf::util::MessageDifferencer::Equals(b, other);
-        });
-    if (itr != seq4.end()) {
-      seq4.erase(itr);
-    }
-  }
-  PrintTransactionList(seq3, std::cerr);
-  std::cerr << std::endl;
-  PrintTransactionList(seq4, std::cerr);
-  std::cerr << std::endl;
-  return ValidSubsequence(branch.txn(), seq3, seq) &&
-      NoConflicts(branch.txn(), seq4);*/
-  return false;
-}
-
-bool WaitCompatible(const proto::Branch &branch,
-    const std::vector<proto::Transaction> &seq) {
-  /*std::vector<proto::Transaction> seq3;
-  std::vector<proto::Transaction> seq4(seq);
-  for (const proto::Transaction &b : branch.seq()) {
-    auto itr = std::find_if(seq4.begin(), seq4.end(),
-        [&](const proto::Transaction &other) {
-          return google::protobuf::util::MessageDifferencer::Equals(b, other);
-        });
-    if (itr != seq4.end()) {
-      seq4.erase(itr);
-    }
-    auto itr2 = std::find_if(seq.begin(), seq.end(),
-        [&](const proto::Transaction &other) {
-          return google::protobuf::util::MessageDifferencer::Equals(b, other);
-        });
-    if (itr2 != seq.end()) {
-      seq3.push_back(b);
-    }
-  }
-  return ValidSubsequence(branch.txn(), seq3, seq) &&
-      NoConflicts(branch.txn(), seq4);*/
-  return false;
+  return ValidSubsequence(branch, store, seq);
 }
 
 
-bool ValidSubsequence(const proto::Transaction &txn,
-      const std::vector<proto::Transaction> &seq1,
-      const std::vector<proto::Transaction> &seq2) {
-  // first check that all dependencies in seq1 are also in seq2
-  std::set<uint64_t> inseq2;
-  for (size_t i = 0; i < seq2.size(); ++i) {
-    inseq2.insert(seq2[i].id());
-  }
-  for (size_t i = 0; i < seq1.size(); ++i) {
-    if (TransactionsConflict(txn, seq1[i])) {
-      if (inseq2.find(seq1[i].id()) == inseq2.end()) {
-        return false;
-      }
-    }
-  }
-
-  // now check that all conflicting transactions are ordered the same
-  for (size_t i1 = 0; i1 < seq1.size(); ++i1) {
-    for (size_t j1 = i1 + 1; j1 < seq1.size(); ++j1) {
-      if (TransactionsConflict(seq1[i1], seq1[j1])) {
-        bool found = false;
-        for (size_t i2 = 0; i2 < seq2.size(); ++i2) {
-          for (size_t j2 = i2 + 1; j2 < seq2.size(); ++j2) {
-            if (seq1[i1].id() == seq2[i2].id() && seq1[j1].id() == seq2[j2].id()) {
-              proto::Transaction txn1(seq2[i2]);
-              google::protobuf::RepeatedPtrField<proto::Operation> ops(txn1.ops());
-              for (int l = 0; l < seq1[i1].ops().size(); ++l) {
-                const proto::Operation &op2 = seq1[i1].ops()[l];
-                auto itr = std::find_if(ops.begin(), ops.end(),
-                    [op2](const proto::Operation &op) {
-                        return op.type() == op2.type() && op.key() == op2.key() &&
-                            op.val() == op2.val();
-                      });
-                if (itr != ops.end()) {
-                  ops.erase(itr);
-                }
-              }
-              *txn1.mutable_ops() = ops;
-              if (TransactionsConflict(txn, txn1)) {
-                return false;
-              } else {
-                found = true;
-                goto endloop;
-              }
-            }
-          }
-        }
-endloop:
-        if (!found) {
-          return false;
-        }
-      }
-    }
-  }
-  return true;
-}
-
-bool NoConflicts(const proto::Transaction &txn,
-      const std::vector<proto::Transaction> &seq) {
-  for (size_t i = 0; i < seq.size(); ++i) {
-    if (TransactionsConflict(txn, seq[i])) {
+bool DepsFinalized(const proto::Branch &branch,
+    const std::set<uint64_t> &prepared_txn_ids) {
+  for (const auto &dep : branch.deps()) {
+    if (prepared_txn_ids.find(dep.first) == prepared_txn_ids.end()) {
       return false;
     }
   }
   return true;
 }
 
-bool TransactionsConflict(const proto::Transaction &txn1,
-      const proto::Transaction &txn2) {
-  std::set<std::string> rs1;
-  std::set<std::string> ws1;
-  for (const proto::Operation &op : txn1.ops()) {
-    if (op.type() == proto::OperationType::READ) {
-      rs1.insert(op.key());
-    } else {
-      ws1.insert(op.key());
-    }
-  }
-  std::set<std::string> rs2;
-  std::set<std::string> ws2;
-  for (const proto::Operation &op : txn2.ops()) {
-    if (op.type() == proto::OperationType::READ) {
-      rs2.insert(op.key());
-    } else {
-      ws2.insert(op.key());
-    }
-  }
-  std::vector<std::string> rs1ws2;
-  std::vector<std::string> rs2ws1;
-  std::vector<std::string> ws1ws2;
-  std::set_intersection(rs1.begin(), rs1.end(), ws2.begin(), ws2.end(),
-      std::back_inserter(rs1ws2));
-  if (rs1ws2.size() > 0) {
-    return true;
-  }
-  std::set_intersection(rs2.begin(), rs2.end(), ws1.begin(), ws1.end(),
-      std::back_inserter(rs2ws1));
-  if (rs2ws1.size() > 0) {
-    return true;
-  }
-  std::set_intersection(ws1.begin(), ws1.end(), ws2.begin(), ws2.end(),
-      std::back_inserter(ws1ws2));
-  if (ws1ws2.size() > 0) {
-    return true;
-  } else {
-    return false;
-  }
-}
-
-void ValueOnBranch(const proto::Branch &branch, const std::string &key,
-    std::string &val) {
-  if (ValueInTransaction(branch.txn(), key, val)) {
-    return;
-  } else if (branch.deps().size() > 0) {
-    for (auto itr = branch.deps().rbegin(); itr != branch.deps().rend(); ++itr) {
-      if (ValueInTransaction(*itr, key, val)) {
-        return;
+bool ValidSubsequence(const proto::Branch &branch,
+      const SpecStore &store,
+      const std::vector<proto::Transaction> &seq2) {
+  // now check that all conflicting transactions are ordered the same
+  const proto::Transaction *t;
+  std::vector<int> ignoret;
+  for (const proto::Operation &op : branch.txn().ops()) {
+    if (MostRecentConflict(op, store, seq2, t)) {
+      bool found = false;
+      for (const auto &kv : branch.deps()) {
+        const proto::Transaction &dep = kv.second;
+        if (dep.id() == t->id()) {
+          ignoret.clear();
+          for (int64_t k = 0; k < t->ops_size(); ++k) {
+            for (int64_t l = 0; l < dep.ops_size(); ++l) { 
+              // this is sort of assuming that each operation in a txn is unique
+              if (t->ops(k).type() == dep.ops(l).type()
+                  && t->ops(k).key() == dep.ops(l).key()
+                  && t->ops(k).val() == dep.ops(l).val()) {
+                bool found2 = false;
+                for (size_t m = 0; m < ignoret.size(); ++m) {
+                  if (ignoret[m] == l) {
+                    found2 = true;
+                    break;
+                  }
+                }
+                if (!found2) {
+                  ignoret.push_back(l);
+                  break;
+                }
+              }
+            }
+          }
+          // if the dependency committed with conflicting operations that we are
+          //   not aware of, we cannot commit
+          if (TransactionsConflict(branch.txn(), *t, std::vector<int>(), ignoret)) {
+            Debug("Found mrc %lu in deps, but has unknown ops.", t->id());
+            return false;
+          } else {
+            found = true;
+            break;
+          }
+        }
+      }
+      if (!found) {
+        Debug("Did not find mrc %lu in deps.", t->id());
+        return false;
       }
     }
   }
+  return true;
+}
+
+bool TransactionsConflict(const proto::Transaction &txn1,
+      const proto::Transaction &txn2, const std::vector<int> &ignore1,
+      const std::vector<int> &ignore2) {
+  size_t i1 = 0;
+  for (int64_t i = 0; i < txn1.ops_size(); ++i) {
+    if (i1 < ignore1.size() && i == ignore1[i1]) {
+      ++i1;
+      continue;
+    }
+    size_t j2 = 0;
+    for (int64_t j = 0; j < txn2.ops_size(); ++j) {
+      if (j2 < ignore2.size() && j == ignore2[j2]) {
+        ++j2;
+        continue;
+      }
+      if ((txn1.ops(i).type() == proto::OperationType::WRITE ||
+          txn2.ops(j).type() == proto::OperationType::WRITE) &&
+          txn1.ops(i).key() == txn2.ops(j).key()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool MostRecentConflict(const proto::Operation &op, const SpecStore &store,
+    const std::vector<proto::Transaction> &seq, const proto::Transaction *&txn) {
+  for (int64_t i = seq.size() - 1; i >= 0; --i) {
+    for (int64_t j = seq[i].ops_size() - 1; j >= 0; --j) {
+      if ((op.type() != proto::OperationType::READ
+          || seq[i].ops(j).type() == proto::OperationType::WRITE) &&
+          op.key() == seq[i].ops(j).key()) {
+        txn = &seq[i];
+        return true;
+      }
+    }
+  }
+  return store.MostRecentConflict(op, txn);
+}
+
+bool ValueOnBranch(const proto::Branch &branch, const std::string &key,
+    std::string &val) {
+  if (ValueInTransaction(branch.txn(), key, val)) {
+    return true;
+  } else if (branch.deps().size() > 0) {
+    for (auto itr = branch.deps().begin(); itr != branch.deps().end(); ++itr) {
+      if (ValueInTransaction(itr->second, key, val)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
@@ -245,5 +278,44 @@ bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
   return false;
 }
 
+proto::Transaction _testing_txn(const std::vector<std::vector<std::string>> &txn) {
+  proto::Transaction t;
+  UW_ASSERT(txn.size() > 1);
+  t.set_id(std::stoi(txn[0][0]));
+
+  for (size_t i = 1; i < txn.size(); ++i) {
+    UW_ASSERT(txn[i].size() == 2);
+    proto::Operation *o = t.add_ops();
+    o->set_key(txn[i][0]);
+    o->set_val(txn[i][1]);
+    if (txn[i][1].length() == 0) {
+      o->set_type(proto::OperationType::READ);
+    } else {
+      o->set_type(proto::OperationType::WRITE);
+    }
+  }
+  return t;
+}
+
+proto::Branch _testing_branch(const std::vector<std::vector<std::vector<std::string>>> &branch) {
+  proto::Branch b;
+  UW_ASSERT(branch.size() > 0);
+  for (size_t i = 0; i < branch.size() - 1; ++i) {
+    proto::Transaction t(_testing_txn(branch[i]));
+    (*b.mutable_deps())[t.id()] = t;
+  }
+  *b.mutable_txn() = _testing_txn(branch[branch.size() - 1]);
+  return b;
+}
+
+std::vector<proto::Transaction> _testing_txns(
+    const std::vector<std::vector<std::vector<std::string>>> &txns) {
+  std::vector<proto::Transaction> v;
+  UW_ASSERT(txns.size() > 0);
+  for (size_t i = 0; i < txns.size(); ++i) {
+    v.push_back(_testing_txn(txns[i]));
+  }
+  return v;
+}
 
 } // namespace mortystore

@@ -7,6 +7,7 @@
 #include "lib/configuration.h"
 #include "lib/udptransport.h"
 #include "replication/ir/client.h"
+#include "store/common/stats.h"
 #include "store/common/frontend/client.h"
 #include "store/common/frontend/bufferclient.h"
 #include "store/common/frontend/async_client.h"
@@ -22,6 +23,7 @@ namespace janusstore {
 
 // callback for output commit
 typedef std::function<void(uint64_t)> output_commit_callback;
+typedef std::function<void()> read_callback;
 
 class Client : public OneShotClient {
 public:
@@ -30,6 +32,9 @@ public:
     ~Client();
 
     virtual void Execute(OneShotTransaction *txn, execute_callback ecb);
+
+    // read
+    void Read(string key, read_callback rcb);
 
     // begins PreAccept phase
     void PreAccept(Transaction *txn, uint64_t ballot, execute_callback ocb);
@@ -53,8 +58,10 @@ public:
         bool output_committed;
         bool has_fast_quorum;
         std::set<uint64_t> aggregated_deps;
+        std::map<uint64_t, std::set<int>> aggregated_depmeta;
         std::set<uint64_t> participant_shards;
         std::set<uint64_t> responded_shards;
+        std::map<int, std::set<uint64_t>> per_shard_aggregated_deps;
   };
 
 // private: // make all fields public for testing
@@ -84,10 +91,12 @@ public:
     void setParticipants(Transaction *txn);
 
 /* * coordinator role (co-located with client but not visible to client) * */
-
+    std::unordered_map<string, read_callback> readReqs;
+    // read the key
+    void ReadCallback(string key, string value);
     // callback when all participants for a shard have replied
     // shardclient aggregates all replies before invoking the callback
-    // replies is a vector of all replies for this shard 
+    // replies is a vector of all replies for this shard
     // deps is a map from replica ID to its deps for T (a list of other t_ids)
     void PreAcceptCallback(
         uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies);
@@ -98,6 +107,9 @@ public:
     // TODO maybe change the type of [results]
     void CommitCallback(uint64_t txn_id, int shard, std::vector<janusstore::proto::Reply> replies);
   transport::Configuration *config;
+
+  Stats stats;
+  inline Stats &GetStats() { return stats; }
 };
 
 } // namespace janusstore

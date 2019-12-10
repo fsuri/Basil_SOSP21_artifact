@@ -2,6 +2,7 @@
 #define ASYNC_CLIENT_H
 
 #include "store/common/frontend/async_transaction.h"
+#include "store/common/stats.h"
 
 #include <functional>
 
@@ -17,6 +18,9 @@ class AsyncClient {
   // Begin a transaction.
   virtual void Execute(AsyncTransaction *txn, execute_callback ecb) = 0;
 
+  inline const Stats &GetStats() const { return stats; }
+ protected:
+  Stats stats;
 };
 
 #endif /* ASYNC_CLIENT_H */

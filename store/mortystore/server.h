@@ -8,6 +8,7 @@
 #include "store/common/stats.h"
 #include "store/mortystore/common.h"
 #include "store/mortystore/branch_generator.h"
+#include "store/mortystore/specstore.h"
 
 #include <unordered_map>
 
@@ -16,7 +17,7 @@ namespace mortystore {
 class Server : public TransportReceiver, public ::Server {
  public:
   Server(const transport::Configuration &config, int groupIdx, int idx,
-      Transport *transport);
+      Transport *transport, bool debugStats);
   virtual ~Server();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
@@ -39,9 +40,14 @@ class Server : public TransportReceiver, public ::Server {
       const std::string &key);
   bool CheckBranch(const TransportAddress &addr, const proto::Branch &branch);
 
+  bool IsStaleMessage(uint64_t txn_id) const;
+  void ApplyTransaction(const proto::Transaction &txn);
+
   const transport::Configuration &config;
   int idx;
   Transport *transport;
+  bool debugStats;
+  SpecStore store;
   std::vector<proto::Transaction> committed;
   std::vector<proto::Transaction> prepared;
   std::unordered_map<uint64_t, const TransportAddress *> txn_coordinators;
@@ -50,7 +56,9 @@ class Server : public TransportReceiver, public ::Server {
   Stats stats;
   std::set<uint64_t> committed_txn_ids;
   std::set<uint64_t> prepared_txn_ids;
+  std::set<uint64_t> aborted_txn_ids;
   BranchGenerator generator;
+  Latency_t readWriteResp;
 
 };
 

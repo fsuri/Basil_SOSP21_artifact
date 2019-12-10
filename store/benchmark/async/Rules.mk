@@ -12,6 +12,4 @@ OBJS-all-bench-clients := $(LIB-retwis) $(LIB-tpcc) $(LIB-smallbank) $(LIB-rw)
 
 $(d)benchmark: $(LIB-key-selector) $(LIB-bench-client) $(LIB-latency) $(LIB-tcptransport) $(LIB-udptransport) $(OBJS-all-store-clients) $(OBJS-all-bench-clients) $(LIB-bench-client) $(LIB-store-common) 
 
-$(d)benchmark_oneshot: $(LIB-janus-client) $(LIB-tcptransport) $(o)benchmark_oneshot.o
-
-BINS +=  $(d)benchmark $(d)benchmark_oneshot
+BINS +=  $(d)benchmark
