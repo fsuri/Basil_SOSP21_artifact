@@ -232,7 +232,6 @@ DEFINE_double(zipf_coefficient, 0.5, "the coefficient of the zipf distribution "
  */
 DEFINE_uint64(num_ops_txn, 1, "number of ops in each txn" 
     " (for rw)");
-DEFINE_uint64(num_ops_txn, 1, "not a clue");
 // RW benchmark also uses same config parameters as Retwis.
 
 
@@ -426,14 +425,6 @@ int main(int argc, char **argv) {
   std::string latencyRawFile;
   std::vector<uint64_t> latencies;
   std::atomic<size_t> clientsDone(0UL);
-
-  int keysRead = 0;
-  std::function<void()> jrcb = [&]() {
-    keysRead++;
-    if (clientsDone == FLAGS_num_clients && keysRead == FLAGS_num_keys) {
-      transport.Stop();
-    }
-  };
 
   bench_done_callback bdcb = [&]() {
     ++clientsDone;
