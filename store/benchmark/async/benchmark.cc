@@ -76,6 +76,7 @@ DEFINE_uint64(num_shards, 1, "number of shards in the system");
 DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
 DEFINE_bool(tapir_sync_commit, true, "wait until commit phase completes before"
     " sending additional transactions (for TAPIR)");
+DEFINE_bool(debug_stats, false, "record stats related to debugging");
 
 const std::string trans_args[] = {
 	"tcp",
@@ -494,7 +495,7 @@ int main(int argc, char **argv) {
       case PROTO_MORTY: {
         asyncClient = new mortystore::Client(FLAGS_config_path,
             (FLAGS_client_id << 3) | i, FLAGS_num_shards, FLAGS_num_groups,
-            FLAGS_closest_replica, transport, part);
+            FLAGS_closest_replica, transport, part, FLAGS_debug_stats);
         break;
       }
       default:

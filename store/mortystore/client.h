@@ -28,8 +28,9 @@ struct ClientBranch {
 
 class Client : public ::AsyncClient {
  public:
-  Client(const std::string configPath, uint64_t client_id, int nShards, int nGroups,
-      int closestReplica, Transport *transport, partitioner part);
+  Client(const std::string configPath, uint64_t client_id, int nShards,
+      int nGroups, int closestReplica, Transport *transport, partitioner part,
+      bool debugStats);
   virtual ~Client();
 
   virtual void Execute(AsyncTransaction *txn, execute_callback ecb);
@@ -96,6 +97,7 @@ class Client : public ::AsyncClient {
   Transport *transport;
 
   partitioner part;
+  const bool debugStats;
   
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
