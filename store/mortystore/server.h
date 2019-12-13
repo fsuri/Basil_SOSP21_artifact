@@ -41,7 +41,6 @@ class Server : public TransportReceiver, public ::Server {
   bool CheckBranch(const TransportAddress &addr, const proto::Branch &branch);
 
   bool IsStaleMessage(uint64_t txn_id) const;
-  void ApplyTransaction(const proto::Transaction &txn);
 
   const transport::Configuration &config;
   int idx;

@@ -27,11 +27,14 @@ TEST(BranchCompatible, CommitCompatibleNoConflicts) {
 
   std::vector<proto::Transaction> committed;
   committed.push_back(txn);
+  SpecStore ss;
+  ss.ApplyTransaction(txn);
 
   std::set<uint64_t> prepared_txn_ids;
   prepared_txn_ids.insert(txn.id());
+  std::vector<proto::Transaction> prepared(committed);
 
-  EXPECT_TRUE(CommitCompatible(branch, committed, prepared_txn_ids));
+  EXPECT_TRUE(CommitCompatible(branch, ss, prepared, prepared_txn_ids));
 }
 
 TEST(BranchCompatible, CommitCompatibleConflict) {
@@ -50,13 +53,17 @@ TEST(BranchCompatible, CommitCompatibleConflict) {
   op->set_key("0");
   op->set_val("val0");
 
+  SpecStore ss;
   std::vector<proto::Transaction> committed;
   committed.push_back(txn);
+  ss.ApplyTransaction(txn);
 
   std::set<uint64_t> prepared_txn_ids;
   prepared_txn_ids.insert(txn.id());
+  std::vector<proto::Transaction> prepared;
+  prepared.push_back(txn);
 
-  EXPECT_FALSE(CommitCompatible(branch, committed, prepared_txn_ids));
+  EXPECT_FALSE(CommitCompatible(branch, ss, prepared, prepared_txn_ids));
 }
 
 TEST(BranchCompatible, CommitCompatibleKnownConflict) {
@@ -75,16 +82,19 @@ TEST(BranchCompatible, CommitCompatibleKnownConflict) {
   op->set_key("0");
   op->set_val("val0");
 
-  proto::Transaction *txn1 = branch.add_deps();
-  *txn1 = txn;
+  (*branch.mutable_deps())[txn.id()] = txn;
 
+  SpecStore ss;
   std::vector<proto::Transaction> committed;
   committed.push_back(txn);
+  ss.ApplyTransaction(txn);
 
   std::set<uint64_t> prepared_txn_ids;
   prepared_txn_ids.insert(txn.id());
+  std::vector<proto::Transaction> prepared;
+  prepared.push_back(txn);
 
-  EXPECT_TRUE(CommitCompatible(branch, committed, prepared_txn_ids));
+  EXPECT_TRUE(CommitCompatible(branch, ss, prepared, prepared_txn_ids));
 }
 
 
@@ -109,13 +119,17 @@ TEST(BranchCompatible, CommitCompatibleUpdatedConflict) {
   op->set_key("1");
   op->set_val("val1");
 
+  SpecStore ss;
   std::vector<proto::Transaction> committed;
   committed.push_back(txn);
+  ss.ApplyTransaction(txn);
 
   std::set<uint64_t> prepared_txn_ids;
   prepared_txn_ids.insert(txn.id());
+  std::vector<proto::Transaction> prepared;
+  prepared.push_back(txn);
 
-  EXPECT_FALSE(CommitCompatible(branch, committed, prepared_txn_ids));
+  EXPECT_FALSE(CommitCompatible(branch, ss, prepared, prepared_txn_ids));
 }
 
 TEST(BranchCompatible, WaitCompatible) {
@@ -141,21 +155,21 @@ TEST(BranchCompatible, WaitCompatible) {
   op->set_key("1");
   op->set_val("val1");
 
-  proto::Transaction *txn2 = branch.add_deps();
-  *txn2 = txnn;
+  (*branch.mutable_deps())[txnn.id()] = txnn;
 
-  std::vector<proto::Transaction> committed;
-  committed.push_back(txn);
+  SpecStore ss;
+  ss.ApplyTransaction(txn);
 
+  std::vector<proto::Transaction> prepared;
   std::set<uint64_t> prepared_txn_ids;
   prepared_txn_ids.insert(txn.id());
+  prepared.push_back(txn);
 
   PrintBranch(branch, std::cerr);
-  PrintTransactionList(committed, std::cerr);
   std::cerr << std::endl;
 
-  EXPECT_FALSE(CommitCompatible(branch, committed, prepared_txn_ids));
-  EXPECT_TRUE(WaitCompatible(branch, committed));
+  EXPECT_FALSE(CommitCompatible(branch, ss, prepared, prepared_txn_ids));
+  EXPECT_TRUE(WaitCompatible(branch, ss, prepared));
 }
 
 TEST(BranchCompatible, CommitCompatible1) {
@@ -177,18 +191,18 @@ TEST(BranchCompatible, CommitCompatible1) {
           {"35", ""}, {"3", ""}, {"31", ""}, {"0", ""}},
       {{"3"}, {"0", ""}}
     });
-
   std::set<uint64_t> prepared_txn_ids;
+  std::vector<proto::Transaction> prepared(committed);
+  SpecStore ss;
   for (const auto &txn : committed) {
+    ss.ApplyTransaction(txn);
     prepared_txn_ids.insert(txn.id());
   }
 
   PrintBranch(branch, std::cerr);
   std::cerr << std::endl;
-  PrintTransactionList(committed, std::cerr);
-  std::cerr << std::endl;
 
-  EXPECT_TRUE(CommitCompatible(branch, committed, prepared_txn_ids));
+  EXPECT_TRUE(CommitCompatible(branch, ss, prepared, prepared_txn_ids));
 }
 
 

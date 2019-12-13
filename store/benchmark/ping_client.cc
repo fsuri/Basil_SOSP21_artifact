@@ -71,7 +71,7 @@ class PingClient : public TransportReceiver {
     uint64_t size = dist(gen);
     Debug("Message size: %lu.", size);
     for (uint64_t i = 0; i < size; ++i) {
-      *data += 'a' + (i % 26); 
+      *data += 'a' + (gen() % 26); 
     }
 
   }

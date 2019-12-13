@@ -193,7 +193,7 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
   }
 
   //committed.push_back(msg.branch().txn());
-  ApplyTransaction(msg.branch().txn());
+  store.ApplyTransaction(msg.branch().txn());
   prepared.erase(std::remove_if(prepared.begin(), prepared.end(), [&](const proto::Transaction &txn) {
         return txn.id() == msg.branch().txn().id();
       }), prepared.end());
@@ -302,18 +302,6 @@ void Server::SendBranchReplies(const proto::Branch &init,
 bool Server::IsStaleMessage(uint64_t txn_id) const {
   return committed_txn_ids.find(txn_id) != committed_txn_ids.end() ||
     aborted_txn_ids.find(txn_id) != aborted_txn_ids.end();
-}
-
-void Server::ApplyTransaction(const proto::Transaction &txn) {
-  std::string val;
-  for (int64_t i = 0; i < txn.ops_size(); ++i) {
-    const proto::Operation &op = txn.ops(i);
-    if (op.type() == proto::OperationType::READ) {
-      store.get(op.key(), txn, val);
-    } else {
-      store.put(op.key(), op.val(), txn);
-    }
-  }
 }
 
 } // namespace mortystore
