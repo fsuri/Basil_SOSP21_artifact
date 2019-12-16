@@ -39,7 +39,8 @@ class Client : public ::AsyncClient {
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), sentPrepares(0UL),
         prepareResponses(0UL), commitTries(0), maxRepliedTs(0UL),
-        prepareStatus(REPLY_OK), prepareTimestamp(nullptr) {
+        prepareStatus(REPLY_OK), prepareTimestamp(nullptr),
+        waitingToAbort(false) {
     }
 
     ~PendingRequest() {
@@ -61,6 +62,7 @@ class Client : public ::AsyncClient {
     bool callbackInvoked;
     std::unordered_map<proto::Branch, uint64_t, BranchHasher, BranchComparer> prepareOKs; 
     std::unordered_map<proto::Branch, std::vector<proto::PrepareKO>, BranchHasher, BranchComparer> prepareKOes;
+    bool waitingToAbort;
   };
 
   void ExecuteNextOperation(PendingRequest *req, proto::Branch &branch);

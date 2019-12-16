@@ -117,6 +117,8 @@ void Client::HandleReadReply(const TransportAddress &remote,
     return;
   }
 
+  itr->second->waitingToAbort = false;
+
   ClientBranch clientBranch = GetClientBranch(msg.branch());
 
   if (debugStats) {
@@ -137,6 +139,8 @@ void Client::HandleWriteReply(const TransportAddress &remote,
   if (itr == pendingReqs.end()) {
     return;
   }
+
+  itr->second->waitingToAbort = false;
 
   ClientBranch clientBranch = GetClientBranch(msg.branch());
 
@@ -310,21 +314,36 @@ void Client::Abort(const proto::Branch &branch) {
   }
 }
 
-void Client::ProcessPrepareKOs(PendingRequest *req, const proto::Branch &branch) {
+void Client::ProcessPrepareKOs(PendingRequest *req,
+    const proto::Branch &branch) {
   req->prepareResponses++;
   if (req->prepareResponses == req->sentPrepares) {
-    if (debugStats) {
-      uint64_t ns = Latency_End(&opLat);
-      stats.Add("abort", ns);
-    }
+    req->waitingToAbort = true;
+    uint64_t reqId = req->id;
+    transport->Timer(2000, [&,reqId](){
+      auto itr = pendingReqs.find(reqId);
+      if (itr == pendingReqs.end()) {
+        return;
+      }
 
-    Debug("Received responses for all outstanding prepares (%lu).", req->sentPrepares);
-    
-    Abort(branch);
+      if (!itr->second->waitingToAbort) {
+        return;
+      }
 
-    req->ecb(FAILED, std::map<std::string, std::string>());
-    pendingReqs.erase(pendingReqs.find(req->id));
-    delete req;
+      if (debugStats) {
+        uint64_t ns = Latency_End(&opLat);
+        stats.Add("abort", ns);
+      }
+
+      Debug("Received responses for all outstanding prepares (%lu).",
+          itr->second->sentPrepares);
+      
+      Abort(branch);
+
+      itr->second->ecb(FAILED, std::map<std::string, std::string>());
+      pendingReqs.erase(pendingReqs.find(itr->second->id));
+      delete itr->second;
+    });
   } else {
     Debug("Prepare failed. Waiting on %lu other prepare responses (out of %lu).",
         req->sentPrepares - req->prepareResponses, req->sentPrepares);
