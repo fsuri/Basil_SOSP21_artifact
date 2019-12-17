@@ -98,6 +98,27 @@ bool BranchComparer::operator() (const proto::Branch &b1, const proto::Branch &b
   return b1 == b2;
 }
 
+size_t TransactionVectorHasher::operator() (const std::vector<proto::Transaction> &v) const {
+  size_t hash = 0UL;
+  for (const proto::Transaction &t : v) {
+		HashTransaction(hash, t);
+  }
+  return hash;
+}
+
+bool TransactionVectorComparer::operator() (const std::vector<proto::Transaction> &v1,
+			const std::vector<proto::Transaction> &v2) const {
+  if (v1.size() != v2.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < v1.size(); ++i) {
+    if (v1[i] != v2[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 void PrintTransactionList(const std::vector<proto::Transaction> &txns,
     std::ostream &os) {
   for (const auto &t : txns) {

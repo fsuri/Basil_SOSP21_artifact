@@ -106,27 +106,28 @@ void BranchGenerator::GenerateBranchesPermutations(
       ss << "]";
       Debug("%s", ss.str().c_str());
     }
-    std::vector<const std::vector<proto::Transaction> *> new_seqs;
-    new_seqs.push_back(new std::vector<proto::Transaction>());
+    std::unordered_set<std::vector<proto::Transaction>, TransactionVectorHasher, TransactionVectorComparer> prev_seqs;
+    prev_seqs.insert(std::vector<proto::Transaction>());
 
     for (size_t i = 0; i < txns_sorted.size() - 1; ++i) {
-      std::vector<const std::vector<proto::Transaction> *> new_seqs1;
-      for (size_t j = 0; j < new_seqs.size(); ++j) {
+      std::unordered_set<std::vector<proto::Transaction>, TransactionVectorHasher, TransactionVectorComparer> next_seqs;
+      for (const std::vector<proto::Transaction> &prev_seqsj : prev_seqs) {
         auto itr = pending_branches.find(txns_sorted[i]);
         if (itr != pending_branches.end()) {
           for (const proto::Branch &branch : itr->second) {
             if (branch.txn().ops().size() == 1 || WaitCompatible(branch, store,
-                  *new_seqs[j])) {
-              std::vector<proto::Transaction> *seq =
-                  new std::vector<proto::Transaction>(*new_seqs[j]);
-              seq->push_back(branch.txn());
-              new_seqs1.push_back(seq);
+                  prev_seqsj)) {
+              std::vector<proto::Transaction> seq(prev_seqsj);
+              seq.push_back(branch.txn());
+              next_seqs.insert(seq);
             }
           }
         }
       }
-      new_seqs.insert(new_seqs.end(), new_seqs1.begin(), new_seqs1.end());
+      prev_seqs.clear();
+      prev_seqs.insert(next_seqs.begin(), next_seqs.end());
     }
+    Debug("Generated seq prefixes: %lu", prev_seqs.size());
     auto itr = pending_branches.find(txns_sorted[txns_sorted.size() - 1]);
     if (itr != pending_branches.end()) {
       Debug("Pending branches for %lu: %lu",
@@ -146,19 +147,19 @@ void BranchGenerator::GenerateBranchesPermutations(
           PrintBranch(prev, ss);
           Debug("%s", ss.str().c_str());
         }
-        for (const std::vector<proto::Transaction> *seq : new_seqs) {
+        for (const std::vector<proto::Transaction> &seq : prev_seqs) {
           if (Message_DebugEnabled(__FILE__)) {
             std::stringstream ss;
             ss << "  Seq: ";
-            PrintTransactionList(*seq, ss);
+            PrintTransactionList(seq, ss);
             Debug("%s", ss.str().c_str());
           }
-          if (WaitCompatible(prev, store, *seq)) {
+          if (WaitCompatible(prev, store, seq)) {
             Debug("  Compatible");
             new_branch = branch;
             new_branch.clear_deps();
             for (const proto::Operation &op : new_branch.txn().ops()) {
-              if (MostRecentConflict(op, store, *seq, t1)) {
+              if (MostRecentConflict(op, store, seq, t1)) {
                 (*new_branch.mutable_deps())[t1->id()] = *t1;
               }
             }
@@ -168,13 +169,13 @@ void BranchGenerator::GenerateBranchesPermutations(
               PrintBranch(new_branch, ss);
               Debug("%s", ss.str().c_str());
 
-              ss.str("");
+              /*ss.str("");
               Debug("Already generated: %lu", already_generated.size());
               for (const auto &ag : already_generated) {
                 ss << std::endl;
                 PrintBranch(ag, ss);
               }
-              Debug("%s", ss.str().c_str());
+              Debug("%s", ss.str().c_str());*/
             }
             if (already_generated.find(new_branch) == already_generated.end()) {
               Debug("    Not previously generated.");
@@ -184,9 +185,6 @@ void BranchGenerator::GenerateBranchesPermutations(
           }
         }
       }
-    }
-    for (size_t i = 0; i < new_seqs.size(); ++i) {
-      delete new_seqs[i];
     }
   } while (std::next_permutation(txns_sorted.begin(), txns_sorted.end()));
 }

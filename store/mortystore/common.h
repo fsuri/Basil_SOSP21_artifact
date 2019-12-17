@@ -2,6 +2,7 @@
 #define MORTY_COMMON_H
 
 #include <iostream>
+#include <vector>
 
 #include "store/mortystore/morty-proto.pb.h"
 #include "store/mortystore/specstore.h"
@@ -30,6 +31,16 @@ struct BranchHasher {
 struct BranchComparer {
   bool operator() (const proto::Branch &b1, const proto::Branch &b2) const;
 };
+
+struct TransactionVectorHasher {
+  size_t operator() (const std::vector<proto::Transaction> &v) const;
+};
+
+struct TransactionVectorComparer {
+  bool operator() (const std::vector<proto::Transaction> &v1,
+			const std::vector<proto::Transaction> &v2) const;
+};
+
 
 void PrintBranch(const proto::Branch &branch, std::ostream &os);
 

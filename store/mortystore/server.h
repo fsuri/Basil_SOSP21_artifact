@@ -43,6 +43,7 @@ class Server : public TransportReceiver, public ::Server {
   bool IsStaleMessage(uint64_t txn_id) const;
 
   const transport::Configuration &config;
+  int groupIdx;
   int idx;
   Transport *transport;
   bool debugStats;

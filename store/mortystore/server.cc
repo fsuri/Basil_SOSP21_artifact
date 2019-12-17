@@ -10,8 +10,8 @@
 namespace mortystore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
-    Transport *transport, bool debugStats) : config(config), idx(idx),
-    transport(transport), debugStats(debugStats) {
+    Transport *transport, bool debugStats) : config(config), groupIdx(groupIdx),
+    idx(idx), transport(transport), debugStats(debugStats) {
   transport->Register(this, config, groupIdx, idx);
   _Latency_Init(&readWriteResp, "read_write_response");
 }
@@ -102,7 +102,9 @@ void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) 
     return;
   }
 
-  txn_coordinators[msg.branch().txn().id()] = &remote;
+  if (txn_coordinators.find(msg.branch().txn().id()) == txn_coordinators.end()) {
+    txn_coordinators[msg.branch().txn().id()] = &remote;
+  }
 
   generator.AddPendingRead(msg.key(), msg.branch());
 
@@ -123,7 +125,10 @@ void Server::HandleWrite(const TransportAddress &remote, const proto::Write &msg
     return;
   }
 
-  txn_coordinators[msg.branch().txn().id()] = &remote;
+  if (txn_coordinators.find(msg.branch().txn().id()) == txn_coordinators.end()) {
+    txn_coordinators[msg.branch().txn().id()] = &remote;
+  }
+
 
   generator.AddPendingWrite(msg.key(), msg.branch());
 
@@ -202,12 +207,19 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
   
   generator.ClearPending(msg.branch().txn().id());
 
+  /*auto jtr = txn_coordinators.find(msg.branch().txn().id());
+  if (jtr != txn_coordinators.end()) {
+    txn_coordinators.erase(jtr);
+  }*/
+
   for (auto itr = waiting.begin(); itr != waiting.end(); ) {
     if (CheckBranch(*txn_coordinators[itr->txn().id()],
           *itr)) {
       waiting.erase(itr);
       for (auto shard : itr->shards()) {
-        transport->SendMessage(this, *shards[shard], msg);
+        if (shard != groupIdx) {
+          transport->SendMessage(this, *shards[shard], msg);
+        }
       }
     } else {
       ++itr;
