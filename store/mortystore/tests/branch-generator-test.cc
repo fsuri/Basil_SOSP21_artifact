@@ -52,7 +52,7 @@ TEST(BranchGenerator, NoCommittedNoConcurrentNewBranch) {
 
   std::vector<proto::Branch> new_branches;
   
-  generator.AddPendingRead(key, branch);
+  generator.AddPending(branch);
   generator.GenerateBranches(branch, type, key, ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -74,7 +74,7 @@ TEST(BranchGenerator, NoCommittedNoConcurrentUpdatedBranch) {
   op->set_key(key);;
   op->set_val("");
 
-  generator.AddPendingRead(key, branch);
+  generator.AddPending(branch);
   std::vector<proto::Branch> new_branches;
   generator.GenerateBranches(branch, type, key, ss, new_branches);
 
@@ -85,7 +85,7 @@ TEST(BranchGenerator, NoCommittedNoConcurrentUpdatedBranch) {
   op2->set_val("");
 
   new_branches.clear();
-  generator.AddPendingRead(key, branch);
+  generator.AddPending(branch);
   generator.GenerateBranches(branch, type, key, ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -116,7 +116,7 @@ TEST(BranchGenerator, OneCommittedNoConcurrentNewBranch) {
   op2->set_val("");
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPendingRead(op2->key(), branch);
+  generator.AddPending(branch);
   generator.GenerateBranches(branch, op2->type(), op2->key(), ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -151,7 +151,7 @@ TEST(BranchGenerator, OneCommittedConflictWW) {
   op2->set_val("");
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPendingWrite(op2->key(), branch);
+  generator.AddPending(branch);
   generator.GenerateBranches(branch, op2->type(), op2->key(), ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -185,7 +185,7 @@ TEST(BranchGenerator, OneCommittedConflictRW) {
   op2->set_val("");
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPendingRead(op2->key(), branch);
+  generator.AddPending(branch);
   generator.GenerateBranches(branch, op2->type(), op2->key(), ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -219,7 +219,7 @@ TEST(BranchGenerator, OneCommittedConflictRWUpdated) {
   op2->set_val("");
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPendingRead(op2->key(), branch);
+  generator.AddPending(branch);
   generator.GenerateBranches(branch, op2->type(), op2->key(), ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -235,7 +235,7 @@ TEST(BranchGenerator, OneCommittedConflictRWUpdated) {
   op3->set_val("");
 
   new_branches.clear();
-  generator.AddPendingRead(op3->key(), branch);
+  generator.AddPending(branch);
   generator.GenerateBranches(branch, op3->type(), op3->key(), ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -266,7 +266,7 @@ TEST(BranchGenerator, NoCommittedOneConcurrentNewBranch) {
   op1->set_val(val1);
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPendingWrite(key1, branch1);
+  generator.AddPending(branch1);
   generator.GenerateBranches(branch1, type1, key1, ss, new_branches);
   new_branches.clear();
 
@@ -281,7 +281,7 @@ TEST(BranchGenerator, NoCommittedOneConcurrentNewBranch) {
   op2->set_key(key2);
   op2->set_val(val2);
 
-  generator.AddPendingWrite(key2, branch2);
+  generator.AddPending(branch2);
   generator.GenerateBranches(branch2, type2, key2, ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 3UL);
@@ -328,7 +328,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentNewBranch) {
   op1->set_val(val1);
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPendingWrite(key1, branch1);
+  generator.AddPending(branch1);
   generator.GenerateBranches(branch1, type1, key1, ss, new_branches);
   new_branches.clear();
 
@@ -343,7 +343,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentNewBranch) {
   op2->set_key(key2);
   op2->set_val(val2);
 
-  generator.AddPendingWrite(key2, branch2);
+  generator.AddPending(branch2);
   generator.GenerateBranches(branch2, type2, key2, ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 3UL);
@@ -407,7 +407,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
   op1->set_val(val1);
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPendingWrite(key1, branch1);
+  generator.AddPending(branch1);
   generator.GenerateBranches(branch1, type1, key1, ss, new_branches);
   new_branches.clear();
 
@@ -422,7 +422,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
   op2->set_key(key2);
   op2->set_val(val2);
 
-  generator.AddPendingWrite(key2, branch2);
+  generator.AddPending(branch2);
   generator.GenerateBranches(branch2, type2, key2, ss, new_branches);
   new_branches.clear();
 
@@ -435,7 +435,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
   op3->set_val(val3);
   (*branch1.mutable_deps())[txn0.id()] = txn0;
 
-  generator.AddPendingWrite(key3, branch1);
+  generator.AddPending(branch1);
   std::cerr << "###################" << std::endl;
   generator.GenerateBranches(branch1, type3, key3, ss, new_branches);
   std::cerr << "###################" << std::endl;

@@ -106,7 +106,7 @@ void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) 
     txn_coordinators[msg.branch().txn().id()] = &remote;
   }
 
-  generator.AddPendingRead(msg.key(), msg.branch());
+  generator.AddPending(msg.branch());
 
   SendBranchReplies(msg.branch(), proto::OperationType::READ, msg.key());
 }
@@ -130,7 +130,7 @@ void Server::HandleWrite(const TransportAddress &remote, const proto::Write &msg
   }
 
 
-  generator.AddPendingWrite(msg.key(), msg.branch());
+  generator.AddPending(msg.branch());
 
   SendBranchReplies(msg.branch(), proto::OperationType::WRITE, msg.key());
 }

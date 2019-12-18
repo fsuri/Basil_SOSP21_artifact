@@ -17,18 +17,34 @@ BranchGenerator::~BranchGenerator() {
   //Latency_Dump(&generateLatency);
 }
 
+void BranchGenerator::AddPending(const proto::Branch &branch) {
+  for (size_t i = 0; i < branch.txn().ops_size(); ++i) {
+    const proto::Operation &op = branch.txn().ops(i);
+    if (op.type() == proto::OperationType::READ) {
+      AddPendingRead(op.key(), branch);
+    } else {
+      AddPendingWrite(op.key(), branch);
+    }
+  }
+}
+
 void BranchGenerator::AddPendingWrite(const std::string &key,
     const proto::Branch &branch) {
-  pending_branches[branch.txn().id()].insert(branch);
+  pending_writes[key][branch.txn().id()].insert(branch);
 }
 
 void BranchGenerator::AddPendingRead(const std::string &key,
     const proto::Branch &branch) {
-  pending_branches[branch.txn().id()].insert(branch);
+  pending_reads[key][branch.txn().id()].insert(branch);
 }
 
 void BranchGenerator::ClearPending(uint64_t txn_id) {
-  pending_branches.erase(txn_id);
+  for (auto &kv : pending_writes) {
+    kv.second.erase(txn_id);
+  }
+  for (auto &kv : pending_reads) {
+    kv.second.erase(txn_id);
+  }
   for (auto itr = already_generated.begin(); itr != already_generated.end(); ) {
     if (itr->txn().id() == txn_id) {
       itr = already_generated.erase(itr);
@@ -45,8 +61,20 @@ uint64_t BranchGenerator::GenerateBranches(const proto::Branch &init,
   Latency_Start(&generateLatency);
 
   std::vector<proto::Branch> generated_branches;
+
+  std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> p_branches;
+  p_branches[init.txn().id()].insert(init);
+  for (const auto &kv : pending_writes[key]) { 
+    p_branches[kv.first].insert(kv.second.begin(), kv.second.end());
+  }
+  if (type == proto::OperationType::WRITE) {
+    for (const auto &kv : pending_reads[key]) { 
+      p_branches[kv.first].insert(kv.second.begin(), kv.second.end());
+    }
+  }
+
   std::vector<uint64_t> txns_list;
-  for (const auto &kv : pending_branches) {
+  for (const auto &kv : p_branches) {
     if (kv.first != init.txn().id()) {
       // only generate subsets that include init
       txns_list.push_back(kv.first); 
@@ -62,23 +90,25 @@ uint64_t BranchGenerator::GenerateBranches(const proto::Branch &init,
   }*/
 
   std::vector<uint64_t> subset = {init.txn().id()};
-  GenerateBranchesSubsets(txns_list, store, new_branches, subset);
+  GenerateBranchesSubsets(txns_list, p_branches, store, new_branches, subset);
   
   return Latency_End(&generateLatency);
 }
 
 void BranchGenerator::GenerateBranchesSubsets(
-    const std::vector<uint64_t> &txns, const SpecStore &store,
+    const std::vector<uint64_t> &txns,
+    const std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> &p_branches,
+    const SpecStore &store,
     std::vector<proto::Branch> &new_branches, std::vector<uint64_t> subset,
     int64_t i) {
   if (subset.size() > 0) {
-    GenerateBranchesPermutations(subset, store, new_branches);
+    GenerateBranchesPermutations(subset, p_branches, store, new_branches);
   }
 
   for (size_t j = i + 1; j < txns.size(); ++j) {
     subset.push_back(txns[j]);
 
-    GenerateBranchesSubsets(txns, store, new_branches, subset, j);
+    GenerateBranchesSubsets(txns, p_branches, store, new_branches, subset, j);
 
     subset.pop_back();
   }
@@ -86,12 +116,12 @@ void BranchGenerator::GenerateBranchesSubsets(
 
 void BranchGenerator::GenerateBranchesPermutations(
     const std::vector<uint64_t> &txns,
+    const std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> &p_branches,
     const SpecStore &store,
     std::vector<proto::Branch> &new_branches) {
   std::vector<uint64_t> txns_sorted(txns);
   std::sort(txns_sorted.begin(), txns_sorted.end());
   const proto::Transaction *t1;
-  proto::Branch prev;
   proto::Branch new_branch; 
   do {
     if (Message_DebugEnabled(__FILE__)) {
@@ -112,8 +142,8 @@ void BranchGenerator::GenerateBranchesPermutations(
     for (size_t i = 0; i < txns_sorted.size() - 1; ++i) {
       std::unordered_set<std::vector<proto::Transaction>, TransactionVectorHasher, TransactionVectorComparer> next_seqs;
       for (const std::vector<proto::Transaction> &prev_seqsj : prev_seqs) {
-        auto itr = pending_branches.find(txns_sorted[i]);
-        if (itr != pending_branches.end()) {
+        auto itr = p_branches.find(txns_sorted[i]);
+        if (itr != p_branches.end()) {
           for (const proto::Branch &branch : itr->second) {
             if (branch.txn().ops().size() == 1 || WaitCompatible(branch, store,
                   prev_seqsj)) {
@@ -128,23 +158,15 @@ void BranchGenerator::GenerateBranchesPermutations(
       prev_seqs.insert(next_seqs.begin(), next_seqs.end());
     }
     Debug("Generated seq prefixes: %lu", prev_seqs.size());
-    auto itr = pending_branches.find(txns_sorted[txns_sorted.size() - 1]);
-    if (itr != pending_branches.end()) {
+    auto itr = p_branches.find(txns_sorted[txns_sorted.size() - 1]);
+    if (itr != p_branches.end()) {
       Debug("Pending branches for %lu: %lu",
           txns_sorted[txns_sorted.size() - 1], itr->second.size());
       for (const proto::Branch &branch : itr->second) {
-        prev = branch;
-        prev.mutable_txn()->mutable_ops()->RemoveLast();
         if (Message_DebugEnabled(__FILE__)) {
           std::stringstream ss;
           ss << "  Potential: ";
           PrintBranch(branch, ss);
-          Debug("%s", ss.str().c_str());
-
-          ss.str("");
-
-          ss << "  Prev: ";
-          PrintBranch(prev, ss);
           Debug("%s", ss.str().c_str());
         }
         for (const std::vector<proto::Transaction> &seq : prev_seqs) {
@@ -154,9 +176,11 @@ void BranchGenerator::GenerateBranchesPermutations(
             PrintTransactionList(seq, ss);
             Debug("%s", ss.str().c_str());
           }
-          if (WaitCompatible(prev, store, seq)) {
+          if (WaitCompatible(branch, store, seq, true)) {
             Debug("  Compatible");
-            new_branch = branch;
+            new_branch.set_id(branch.id());
+            *new_branch.mutable_txn() = branch.txn();
+            *new_branch.mutable_shards() = branch.shards();
             new_branch.clear_deps();
             for (const proto::Operation &op : new_branch.txn().ops()) {
               if (MostRecentConflict(op, store, seq, t1)) {

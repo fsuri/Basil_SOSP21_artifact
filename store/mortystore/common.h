@@ -48,13 +48,13 @@ void PrintTransactionList(const std::vector<proto::Transaction> &txns, std::ostr
 
 bool CommitCompatible(const proto::Branch &branch, const SpecStore &store, const std::vector<proto::Transaction> &seq, const std::set<uint64_t> &prepared_txn_ids);
 
-bool WaitCompatible(const proto::Branch &branch, const SpecStore &store, const std::vector<proto::Transaction> &seq);
+bool WaitCompatible(const proto::Branch &branch, const SpecStore &store, const std::vector<proto::Transaction> &seq, bool ignoreLastOp = false);
 
 bool DepsFinalized(const proto::Branch &branch,
       const std::set<uint64_t> &prepared_txn_ids);
 
 bool ValidSubsequence(const proto::Branch &branch, const SpecStore &store,
-      const std::vector<proto::Transaction> &seq2);
+      const std::vector<proto::Transaction> &seq2, bool ignoreLastOp = false);
 
 bool NoConflicts(const proto::Transaction &txn,
       const std::vector<proto::Transaction> &seq);

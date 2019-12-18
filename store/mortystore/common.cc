@@ -166,8 +166,8 @@ bool CommitCompatible(const proto::Branch &branch, const SpecStore &store,
 }
 
 bool WaitCompatible(const proto::Branch &branch, const SpecStore &store,
-    const std::vector<proto::Transaction> &seq) {
-  return ValidSubsequence(branch, store, seq);
+    const std::vector<proto::Transaction> &seq, bool ignoreLastOp) {
+  return ValidSubsequence(branch, store, seq, ignoreLastOp);
 }
 
 
@@ -183,11 +183,16 @@ bool DepsFinalized(const proto::Branch &branch,
 
 bool ValidSubsequence(const proto::Branch &branch,
       const SpecStore &store,
-      const std::vector<proto::Transaction> &seq2) {
+      const std::vector<proto::Transaction> &seq2,
+      bool ignoreLastOp) {
   // now check that all conflicting transactions are ordered the same
   const proto::Transaction *t;
   std::vector<int> ignoret;
-  for (const proto::Operation &op : branch.txn().ops()) {
+  for (size_t i = 0; i < branch.txn().ops_size(); ++i) {
+    if (ignoreLastOp && i == branch.txn().ops_size() - 1) {
+      continue;
+    }
+    const proto::Operation &op = branch.txn().ops(i);
     if (MostRecentConflict(op, store, seq2, t)) {
       bool found = false;
       for (const auto &kv : branch.deps()) {
