@@ -15,9 +15,10 @@ enum KeySelection {
 class RWClient : public AsyncTransactionBenchClient {
  public:
   RWClient(KeySelector *keySelector, uint64_t numKeys, AsyncClient &client,
-      Transport &transport, uint32_t clientId, int numRequests, int expDuration, uint64_t delay,
-      int warmupSec, int cooldownSec, int tputInterval, uint32_t abortBackoff,
-      bool retryAborted, const std::string &latencyFilename = "");
+      Transport &transport, uint32_t clientId, int numRequests, int expDuration,
+      uint64_t delay, int warmupSec, int cooldownSec, int tputInterval,
+      uint32_t abortBackoff, bool retryAborted, int32_t maxAttempts,
+      const std::string &latencyFilename = "");
 
   virtual ~RWClient();
 

@@ -195,6 +195,8 @@ DEFINE_int32(clock_error, 0, "maximum error for clock");
 DEFINE_string(stats_file, "", "path to output stats file.");
 DEFINE_int32(abort_backoff, 100, "sleep exponentially increasing amount after abort.");
 DEFINE_bool(retry_aborted, true, "retry aborted transactions.");
+DEFINE_int32(max_attempts, -1, "max number of attempts per transaction (or -1"
+    " for unlimited).");
 
 /**
  * Retwis settings.
@@ -536,7 +538,7 @@ int main(int argc, char **argv) {
             (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
-            FLAGS_abort_backoff, FLAGS_retry_aborted);
+            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_attempts);
         break;
       case BENCH_TPCC:
         UW_ASSERT(asyncClient != nullptr);
@@ -549,7 +551,7 @@ int main(int argc, char **argv) {
             FLAGS_tpcc_delivery_ratio, FLAGS_tpcc_payment_ratio,
             FLAGS_tpcc_order_status_ratio, FLAGS_tpcc_stock_level_ratio,
             FLAGS_static_w_id, (FLAGS_client_id << 4) | i, FLAGS_abort_backoff,
-            FLAGS_retry_aborted);
+            FLAGS_retry_aborted, FLAGS_max_attempts);
         break;
       case BENCH_SMALLBANK_SYNC:
         UW_ASSERT(syncClient != nullptr);
@@ -569,7 +571,8 @@ int main(int argc, char **argv) {
             *asyncClient, *transport, (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
-            FLAGS_abort_backoff, FLAGS_retry_aborted);
+            FLAGS_abort_backoff, FLAGS_retry_aborted,
+            FLAGS_max_attempts);
         break;
       default:
         NOT_REACHABLE();
