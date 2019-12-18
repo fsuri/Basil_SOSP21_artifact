@@ -320,7 +320,7 @@ void Client::ProcessPrepareKOs(PendingRequest *req,
   if (req->prepareResponses == req->sentPrepares) {
     req->waitingToAbort = true;
     uint64_t reqId = req->id;
-    transport->Timer(2000, [&,reqId](){
+    transport->Timer(10000, [&,reqId](){
       auto itr = pendingReqs.find(reqId);
       if (itr == pendingReqs.end()) {
         return;
