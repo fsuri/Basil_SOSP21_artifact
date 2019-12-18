@@ -286,6 +286,20 @@ DEFINE_string(customer_name_file_path, "smallbank_names", "path to file"
 
 DEFINE_LATENCY(op);
 
+void FlushStats(const std::vector<::BenchmarkClient *> &benchClients,
+  const std::vector<::AsyncClient *> &asyncClients) {
+  if (FLAGS_stats_file.size() > 0) {
+    Stats total;
+    for (unsigned int i = 0; i < benchClients.size(); i++) {
+      total.Merge(benchClients[i]->GetStats());
+    }
+    for (unsigned int i = 0; i < asyncClients.size(); i++) {
+      total.Merge(asyncClients[i]->GetStats());
+    }
+    total.ExportJSON(FLAGS_stats_file);
+  }
+}
+
 int main(int argc, char **argv) {
   gflags::SetUsageMessage(
            "executes transactions from various transactional workload\n"
@@ -432,13 +446,8 @@ int main(int argc, char **argv) {
     if (clientsDone == FLAGS_num_clients) {
       Latency_t sum;
       _Latency_Init(&sum, "total");
-      Stats total;
       for (unsigned int i = 0; i < benchClients.size(); i++) {
         Latency_Sum(&sum, &benchClients[i]->latency);
-        total.Merge(benchClients[i]->GetStats());
-      }
-      for (unsigned int i = 0; i < asyncClients.size(); i++) {
-        total.Merge(asyncClients[i]->GetStats());
       }
 
       Latency_Dump(&sum);
@@ -457,9 +466,7 @@ int main(int argc, char **argv) {
         }
       }
 
-      if (FLAGS_stats_file.size() > 0) {
-        total.ExportJSON(FLAGS_stats_file);
-      }
+      FlushStats(benchClients, asyncClients);
       transport->Stop();
     }
   };
@@ -609,6 +616,7 @@ int main(int argc, char **argv) {
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
   }
 
+  transport->Timer(4950, std::bind(FlushStats, benchClients, asyncClients));
   transport->Run();
 
   for (auto i : threads) {
