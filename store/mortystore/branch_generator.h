@@ -11,6 +11,10 @@
 
 namespace mortystore {
 
+typedef std::unordered_map<uint64_t,
+    std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> BranchMap;
+typedef std::unordered_set<proto::Branch, BranchHasher, BranchComparer> BranchSet; 
+
 class BranchGenerator {
  public:
   BranchGenerator();
@@ -27,21 +31,20 @@ class BranchGenerator {
   void AddPendingWrite(const std::string &key, const proto::Branch &branch);
   void GenerateBranchesSubsets(
       const std::vector<uint64_t> &txns,
-      const std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> &p_branches,
+      const BranchMap &p_branches,
       const SpecStore &store,
       std::vector<proto::Branch> &new_branches,
       std::vector<uint64_t> subset = std::vector<uint64_t>(), int64_t i = -1);
   void GenerateBranchesPermutations(
       const std::vector<uint64_t> &subset,
-      const std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> &p_branches,
+      const BranchMap &p_branches,
       const SpecStore &store,
       std::vector<proto::Branch> &new_branches);
 
-  std::unordered_map<std::string, std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>>> pending_writes;
-  std::unordered_map<std::string, std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>>> pending_reads;
+  std::unordered_map<std::string, BranchMap> pending_writes;
+  std::unordered_map<std::string, BranchMap> pending_reads;
 
-
-  std::unordered_set<proto::Branch, BranchHasher, BranchComparer> already_generated;
+  BranchSet already_generated;
   Latency_t generateLatency;
 };
 

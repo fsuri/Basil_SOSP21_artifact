@@ -62,7 +62,7 @@ uint64_t BranchGenerator::GenerateBranches(const proto::Branch &init,
 
   std::vector<proto::Branch> generated_branches;
 
-  std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> p_branches;
+  BranchMap p_branches;
   p_branches[init.txn().id()].insert(init);
   for (const auto &kv : pending_writes[key]) { 
     p_branches[kv.first].insert(kv.second.begin(), kv.second.end());
@@ -97,7 +97,7 @@ uint64_t BranchGenerator::GenerateBranches(const proto::Branch &init,
 
 void BranchGenerator::GenerateBranchesSubsets(
     const std::vector<uint64_t> &txns,
-    const std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> &p_branches,
+    const BranchMap &p_branches,
     const SpecStore &store,
     std::vector<proto::Branch> &new_branches, std::vector<uint64_t> subset,
     int64_t i) {
@@ -116,7 +116,7 @@ void BranchGenerator::GenerateBranchesSubsets(
 
 void BranchGenerator::GenerateBranchesPermutations(
     const std::vector<uint64_t> &txns,
-    const std::unordered_map<uint64_t, std::unordered_set<proto::Branch, BranchHasher, BranchComparer>> &p_branches,
+    const BranchMap &p_branches,
     const SpecStore &store,
     std::vector<proto::Branch> &new_branches) {
   std::vector<uint64_t> txns_sorted(txns);
