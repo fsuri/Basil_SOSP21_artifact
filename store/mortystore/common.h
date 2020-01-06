@@ -76,6 +76,7 @@ bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
 proto::Transaction _testing_txn(const std::vector<std::vector<std::string>> &txn);
 proto::Branch _testing_branch(const std::vector<std::vector<std::vector<std::string>>> &branch);
 std::vector<proto::Transaction> _testing_txns(const std::vector<std::vector<std::vector<std::string>>> &txns);
+proto::Operation _testing_op(const std::vector<std::string> &op);
 
 
 

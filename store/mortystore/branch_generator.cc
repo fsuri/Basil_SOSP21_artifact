@@ -64,12 +64,14 @@ uint64_t BranchGenerator::GenerateBranches(const proto::Branch &init,
 
   BranchMap p_branches;
   p_branches[init.txn().id()].insert(init);
-  for (const auto &kv : pending_writes[key]) { 
-    p_branches[kv.first].insert(kv.second.begin(), kv.second.end());
-  }
-  if (type == proto::OperationType::WRITE) {
-    for (const auto &kv : pending_reads[key]) { 
+  for (const auto &op : init.txn().ops()) {
+    for (const auto &kv : pending_writes[op.key()]) { 
       p_branches[kv.first].insert(kv.second.begin(), kv.second.end());
+    }
+    if (op.type() == proto::OperationType::WRITE) {
+      for (const auto &kv : pending_reads[op.key()]) { 
+        p_branches[kv.first].insert(kv.second.begin(), kv.second.end());
+      }
     }
   }
 

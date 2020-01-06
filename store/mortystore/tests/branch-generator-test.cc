@@ -470,6 +470,76 @@ TEST(BranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
       }) != new_branches.end());
 }
 
+TEST(BranchGenerator, GenerateCorrectBranchesOnUpdate) {
+  BranchGenerator generator;
+  SpecStore store;
+  std::vector<proto::Branch> generated_branches;
 
+  proto::Branch a1 = _testing_branch({{{"1"}, {"1", ""}}});
+
+  generator.AddPending(a1);
+  generator.GenerateBranches(a1, a1.txn().ops(0).type(), a1.txn().ops(0).key(),
+      store, generated_branches);
+
+  for (const auto &branch : generated_branches) {
+    PrintBranch(branch, std::cerr);
+    std::cerr << std::endl;
+  }
+  std::cerr << std::endl;
+
+  proto::Branch a2(a1);
+  *a2.mutable_txn()->add_ops() = _testing_op({"2", ""});
+
+  generator.AddPending(a2);
+  generated_branches.clear();
+  generator.GenerateBranches(a2, a2.txn().ops(1).type(), a2.txn().ops(1).key(),
+      store, generated_branches);
+
+  for (const auto &branch : generated_branches) {
+    PrintBranch(branch, std::cerr);
+    std::cerr << std::endl;
+  }
+  std::cerr << std::endl;
+
+  proto::Branch b1 = _testing_branch({{{"2"}, {"1", "val1"}}});
+  
+  generator.AddPending(b1);
+  generated_branches.clear();
+  generator.GenerateBranches(b1, b1.txn().ops(0).type(), b1.txn().ops(0).key(),
+      store, generated_branches);
+
+  for (const auto &branch : generated_branches) {
+    PrintBranch(branch, std::cerr);
+    std::cerr << std::endl;
+  }
+  std::cerr << std::endl;
+
+  proto::Branch a3 = _testing_branch({{{"2"}, {"1", "val1"}}, {{"1"}, {"1", ""}, {"2", ""}}});
+  
+  generator.AddPending(a3);
+  generated_branches.clear();
+  generator.GenerateBranches(a3, a3.txn().ops(1).type(), a3.txn().ops(1).key(),
+      store, generated_branches);
+
+  for (const auto &branch : generated_branches) {
+    PrintBranch(branch, std::cerr);
+    std::cerr << std::endl;
+  }
+  std::cerr << std::endl;
+
+
+  proto::Branch b2(b1);
+  *b2.mutable_txn()->add_ops() = _testing_op({"2", "val2"});
+  
+  generator.AddPending(b2);
+  generated_branches.clear();
+  generator.GenerateBranches(b2, b2.txn().ops(1).type(), b2.txn().ops(1).key(),
+      store, generated_branches);
+
+  for (const auto &branch : generated_branches) {
+    PrintBranch(branch, std::cerr);
+    std::cerr << std::endl;
+  }
+}
 
 }

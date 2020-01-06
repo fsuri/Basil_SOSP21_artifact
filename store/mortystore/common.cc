@@ -136,6 +136,15 @@ void PrintTransactionList(const std::vector<proto::Transaction> &txns,
 }
 
 void PrintBranch(const proto::Branch &branch, std::ostream &os) {
+  os << branch.txn().id() << "[";
+  for (const proto::Operation &o : branch.txn().ops()) {
+    if (o.type() == proto::OperationType::READ) {
+      os << "r(" << o.key() << "),";
+    } else {
+      os << "w(" << o.key() << "),";
+    }
+  }
+  os << "]{";
   for (const auto &b : branch.deps()) {
     os << b.first << "[";
     for (const proto::Operation &o : b.second.ops()) {
@@ -147,15 +156,7 @@ void PrintBranch(const proto::Branch &branch, std::ostream &os) {
     }
     os << "],";
   }
-  os << branch.txn().id() << "[";
-  for (const proto::Operation &o : branch.txn().ops()) {
-    if (o.type() == proto::OperationType::READ) {
-      os << "r(" << o.key() << "),";
-    } else {
-      os << "w(" << o.key() << "),";
-    }
-  }
-  os << "]";
+  os << "}";
 }
 
 bool CommitCompatible(const proto::Branch &branch, const SpecStore &store,
@@ -312,13 +313,7 @@ proto::Transaction _testing_txn(const std::vector<std::vector<std::string>> &txn
   for (size_t i = 1; i < txn.size(); ++i) {
     UW_ASSERT(txn[i].size() == 2);
     proto::Operation *o = t.add_ops();
-    o->set_key(txn[i][0]);
-    o->set_val(txn[i][1]);
-    if (txn[i][1].length() == 0) {
-      o->set_type(proto::OperationType::READ);
-    } else {
-      o->set_type(proto::OperationType::WRITE);
-    }
+    *o = _testing_op(txn[i]);
   }
   return t;
 }
@@ -342,6 +337,18 @@ std::vector<proto::Transaction> _testing_txns(
     v.push_back(_testing_txn(txns[i]));
   }
   return v;
+}
+
+proto::Operation _testing_op(const std::vector<std::string> &op) {
+  proto::Operation o;
+  o.set_key(op[0]);
+  o.set_val(op[1]);
+  if (op[1].length() == 0) {
+    o.set_type(proto::OperationType::READ);
+  } else {
+    o.set_type(proto::OperationType::WRITE);
+  }
+  return o;
 }
 
 } // namespace mortystore
