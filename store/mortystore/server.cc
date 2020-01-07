@@ -31,6 +31,13 @@ void Server::ReceiveMessage(const TransportAddress &remote,
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
 
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Read: ";
+      PrintBranch(read.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
+
     if (debugStats) {
       struct timeval now;
       gettimeofday(&now, NULL);
@@ -49,7 +56,14 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     }
   } else if (type == write.GetTypeName()) {
     write.ParseFromString(data);
-    
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Write: ";
+      PrintBranch(write.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
+
     if (debugStats) {
       struct timeval now;
       gettimeofday(&now, NULL);
@@ -69,15 +83,47 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     }
   } else if (type == prepare.GetTypeName()) {
     prepare.ParseFromString(data);
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Prepare: ";
+      PrintBranch(prepare.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
+
     HandlePrepare(remote, prepare);
   } else if (type == ko.GetTypeName()) {
     ko.ParseFromString(data);
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "KO: ";
+      PrintBranch(ko.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
+
     HandleKO(remote, ko);
   } else if (type == commit.GetTypeName()) {
     commit.ParseFromString(data);
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Commit: ";
+      PrintBranch(commit.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
+
     HandleCommit(remote, commit);
   } else if (type == abort.GetTypeName()) {
     abort.ParseFromString(data);
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Abort: ";
+      PrintBranch(abort.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
+
     HandleAbort(remote, abort);
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
@@ -88,40 +134,27 @@ void Server::Load(const std::string &key, const std::string &value,
     const Timestamp timestamp) {
 }
 
-void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "Read: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
+/** State Machine Transitions **/
 
+void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) {
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
-    generator.ClearPending(msg.branch().txn().id());
+    generator.ClearActive(msg.branch().txn().id());
     return;
   }
 
   if (txn_coordinators.find(msg.branch().txn().id()) == txn_coordinators.end()) {
     txn_coordinators[msg.branch().txn().id()] = &remote;
   }
-
-  generator.AddPending(msg.branch());
-
+    
+  generator.AddActive(msg.branch());
   SendBranchReplies(msg.branch(), proto::OperationType::READ, msg.key());
 }
 
 void Server::HandleWrite(const TransportAddress &remote, const proto::Write &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "Write: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
-
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
-    generator.ClearPending(msg.branch().txn().id());
+    generator.ClearActive(msg.branch().txn().id());
     return;
   }
 
@@ -129,20 +162,11 @@ void Server::HandleWrite(const TransportAddress &remote, const proto::Write &msg
     txn_coordinators[msg.branch().txn().id()] = &remote;
   }
 
-
-  generator.AddPending(msg.branch());
-
+  generator.AddActive(msg.branch());
   SendBranchReplies(msg.branch(), proto::OperationType::WRITE, msg.key());
 }
 
 void Server::HandlePrepare(const TransportAddress &remote, const proto::Prepare &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "Prepare: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
-
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
     return;
@@ -154,13 +178,6 @@ void Server::HandlePrepare(const TransportAddress &remote, const proto::Prepare 
 }
 
 void Server::HandleKO(const TransportAddress &remote, const proto::KO &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "KO: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
-
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
     return;
@@ -185,13 +202,6 @@ void Server::HandleKO(const TransportAddress &remote, const proto::KO &msg) {
 }
 
 void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "Commit: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
-
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
     return;
@@ -205,7 +215,7 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
 
   committed_txn_ids.insert(msg.branch().txn().id());
   
-  generator.ClearPending(msg.branch().txn().id());
+  generator.ClearActive(msg.branch().txn().id());
 
   /*auto jtr = txn_coordinators.find(msg.branch().txn().id());
   if (jtr != txn_coordinators.end()) {
@@ -228,15 +238,12 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
 }
 
 void Server::HandleAbort(const TransportAddress &remote, const proto::Abort &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "Abort: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
-
-  generator.ClearPending(msg.branch().txn().id());
+  generator.ClearActive(msg.branch().txn().id());
 }
+
+/** End State Machine Transitions **/
+
+/** State Machine Helper Functions **/
 
 bool Server::CheckBranch(const TransportAddress &addr, const proto::Branch &branch) {
   if (prepared_txn_ids.find(branch.txn().id()) != prepared_txn_ids.end()) {
@@ -315,5 +322,7 @@ bool Server::IsStaleMessage(uint64_t txn_id) const {
   return committed_txn_ids.find(txn_id) != committed_txn_ids.end() ||
     aborted_txn_ids.find(txn_id) != aborted_txn_ids.end();
 }
+
+/** End State Machine Helper Functions **/
 
 } // namespace mortystore

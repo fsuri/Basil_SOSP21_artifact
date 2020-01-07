@@ -35,10 +35,10 @@ proto::Branch B(const std::vector<std::vector<std::vector<std::string>>> &branch
   return b;
 }
 
-TEST(BranchGenerator, NoCommittedNoConcurrentNewBranch) {
+TEST(PermBranchGenerator, NoCommittedNoConcurrentNewBranch) {
   SpecStore ss;
 
-  BranchGenerator generator;
+  PermBranchGenerator generator;
 
   proto::Branch branch;
   branch.set_id(0UL);
@@ -52,17 +52,17 @@ TEST(BranchGenerator, NoCommittedNoConcurrentNewBranch) {
 
   std::vector<proto::Branch> new_branches;
   
-  generator.AddPending(branch);
+  generator.AddActive(branch);
   generator.GenerateBranches(branch, type, key, ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
   EXPECT_TRUE(new_branches[0] == branch);
 }
 
-TEST(BranchGenerator, NoCommittedNoConcurrentUpdatedBranch) {
+TEST(PermBranchGenerator, NoCommittedNoConcurrentUpdatedBranch) {
   SpecStore ss;
 
-  BranchGenerator generator;
+  PermBranchGenerator generator;
 
   proto::Branch branch;
   branch.set_id(0UL);
@@ -74,7 +74,7 @@ TEST(BranchGenerator, NoCommittedNoConcurrentUpdatedBranch) {
   op->set_key(key);;
   op->set_val("");
 
-  generator.AddPending(branch);
+  generator.AddActive(branch);
   std::vector<proto::Branch> new_branches;
   generator.GenerateBranches(branch, type, key, ss, new_branches);
 
@@ -85,17 +85,17 @@ TEST(BranchGenerator, NoCommittedNoConcurrentUpdatedBranch) {
   op2->set_val("");
 
   new_branches.clear();
-  generator.AddPending(branch);
+  generator.AddActive(branch);
   generator.GenerateBranches(branch, type, key, ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
   EXPECT_TRUE(new_branches[0] == branch);
 }
 
-TEST(BranchGenerator, OneCommittedNoConcurrentNewBranch) {
+TEST(PermBranchGenerator, OneCommittedNoConcurrentNewBranch) {
   SpecStore ss;
 
-  BranchGenerator generator;
+  PermBranchGenerator generator;
 
   proto::Transaction txn1;
   txn1.set_id(0UL);
@@ -116,7 +116,7 @@ TEST(BranchGenerator, OneCommittedNoConcurrentNewBranch) {
   op2->set_val("");
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPending(branch);
+  generator.AddActive(branch);
   generator.GenerateBranches(branch, op2->type(), op2->key(), ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -127,10 +127,10 @@ TEST(BranchGenerator, OneCommittedNoConcurrentNewBranch) {
   EXPECT_TRUE(new_branches[0] == generated);
 }
 
-TEST(BranchGenerator, OneCommittedConflictWW) {
+TEST(PermBranchGenerator, OneCommittedConflictWW) {
   SpecStore ss;
 
-  BranchGenerator generator;
+  PermBranchGenerator generator;
 
   proto::Transaction txn1;
   txn1.set_id(0UL);
@@ -151,7 +151,7 @@ TEST(BranchGenerator, OneCommittedConflictWW) {
   op2->set_val("");
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPending(branch);
+  generator.AddActive(branch);
   generator.GenerateBranches(branch, op2->type(), op2->key(), ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -163,10 +163,10 @@ TEST(BranchGenerator, OneCommittedConflictWW) {
   EXPECT_TRUE(new_branches[0] == generated);
 }
 
-TEST(BranchGenerator, OneCommittedConflictRW) {
+TEST(PermBranchGenerator, OneCommittedConflictRW) {
   SpecStore ss;
 
-  BranchGenerator generator;
+  PermBranchGenerator generator;
 
   proto::Transaction txn1;
   txn1.set_id(0UL);
@@ -185,7 +185,7 @@ TEST(BranchGenerator, OneCommittedConflictRW) {
   op2->set_val("");
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPending(branch);
+  generator.AddActive(branch);
   generator.GenerateBranches(branch, op2->type(), op2->key(), ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -197,10 +197,10 @@ TEST(BranchGenerator, OneCommittedConflictRW) {
   EXPECT_TRUE(new_branches[0] == generated);
 }
 
-TEST(BranchGenerator, OneCommittedConflictRWUpdated) {
+TEST(PermBranchGenerator, OneCommittedConflictRWUpdated) {
   SpecStore ss;
 
-  BranchGenerator generator;
+  PermBranchGenerator generator;
 
   proto::Transaction txn1;
   txn1.set_id(0UL);
@@ -219,7 +219,7 @@ TEST(BranchGenerator, OneCommittedConflictRWUpdated) {
   op2->set_val("");
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPending(branch);
+  generator.AddActive(branch);
   generator.GenerateBranches(branch, op2->type(), op2->key(), ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -235,7 +235,7 @@ TEST(BranchGenerator, OneCommittedConflictRWUpdated) {
   op3->set_val("");
 
   new_branches.clear();
-  generator.AddPending(branch);
+  generator.AddActive(branch);
   generator.GenerateBranches(branch, op3->type(), op3->key(), ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 1UL);
@@ -249,10 +249,10 @@ TEST(BranchGenerator, OneCommittedConflictRWUpdated) {
 
 
 
-TEST(BranchGenerator, NoCommittedOneConcurrentNewBranch) {
+TEST(PermBranchGenerator, NoCommittedOneConcurrentNewBranch) {
   SpecStore ss;
 
-  BranchGenerator generator;
+  PermBranchGenerator generator;
 
   proto::Branch branch1;
   branch1.set_id(0UL);
@@ -266,7 +266,7 @@ TEST(BranchGenerator, NoCommittedOneConcurrentNewBranch) {
   op1->set_val(val1);
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPending(branch1);
+  generator.AddActive(branch1);
   generator.GenerateBranches(branch1, type1, key1, ss, new_branches);
   new_branches.clear();
 
@@ -281,7 +281,7 @@ TEST(BranchGenerator, NoCommittedOneConcurrentNewBranch) {
   op2->set_key(key2);
   op2->set_val(val2);
 
-  generator.AddPending(branch2);
+  generator.AddActive(branch2);
   generator.GenerateBranches(branch2, type2, key2, ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 3UL);
@@ -302,7 +302,7 @@ TEST(BranchGenerator, NoCommittedOneConcurrentNewBranch) {
       }) != new_branches.end());
 }
 
-TEST(BranchGenerator, OneCommittedOneConcurrentNewBranch) {
+TEST(PermBranchGenerator, OneCommittedOneConcurrentNewBranch) {
   SpecStore ss;
   proto::Transaction txn0;
   txn0.set_id(0UL);
@@ -314,7 +314,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentNewBranch) {
   op0->set_val("val0");
   ss.ApplyTransaction(txn0);
 
-  BranchGenerator generator;
+  PermBranchGenerator generator;
 
   proto::Branch branch1;
   branch1.set_id(0UL);
@@ -328,7 +328,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentNewBranch) {
   op1->set_val(val1);
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPending(branch1);
+  generator.AddActive(branch1);
   generator.GenerateBranches(branch1, type1, key1, ss, new_branches);
   new_branches.clear();
 
@@ -343,7 +343,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentNewBranch) {
   op2->set_key(key2);
   op2->set_val(val2);
 
-  generator.AddPending(branch2);
+  generator.AddActive(branch2);
   generator.GenerateBranches(branch2, type2, key2, ss, new_branches);
 
   EXPECT_EQ(new_branches.size(), 3UL);
@@ -380,7 +380,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentNewBranch) {
       }) != new_branches.end());
 }
 
-TEST(BranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
+TEST(PermBranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
   SpecStore ss;
 
   proto::Transaction txn0;
@@ -393,7 +393,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
   op0->set_val("val0");
   ss.ApplyTransaction(txn0);
 
-  BranchGenerator generator;
+  PermBranchGenerator generator;
 
   proto::Branch branch1;
   branch1.set_id(0UL);
@@ -407,7 +407,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
   op1->set_val(val1);
 
   std::vector<proto::Branch> new_branches;
-  generator.AddPending(branch1);
+  generator.AddActive(branch1);
   generator.GenerateBranches(branch1, type1, key1, ss, new_branches);
   new_branches.clear();
 
@@ -422,7 +422,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
   op2->set_key(key2);
   op2->set_val(val2);
 
-  generator.AddPending(branch2);
+  generator.AddActive(branch2);
   generator.GenerateBranches(branch2, type2, key2, ss, new_branches);
   new_branches.clear();
 
@@ -435,7 +435,7 @@ TEST(BranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
   op3->set_val(val3);
   (*branch1.mutable_deps())[txn0.id()] = txn0;
 
-  generator.AddPending(branch1);
+  generator.AddActive(branch1);
   std::cerr << "###################" << std::endl;
   generator.GenerateBranches(branch1, type3, key3, ss, new_branches);
   std::cerr << "###################" << std::endl;
@@ -470,14 +470,14 @@ TEST(BranchGenerator, OneCommittedOneConcurrentUpdatedBranch) {
       }) != new_branches.end());
 }
 
-TEST(BranchGenerator, GenerateCorrectBranchesOnUpdate) {
-  BranchGenerator generator;
+TEST(PermBranchGenerator, GenerateCorrectBranchesOnUpdate) {
+  PermBranchGenerator generator;
   SpecStore store;
   std::vector<proto::Branch> generated_branches;
 
   proto::Branch a1 = _testing_branch({{{"1"}, {"1", ""}}});
 
-  generator.AddPending(a1);
+  generator.AddActive(a1);
   generator.GenerateBranches(a1, a1.txn().ops(0).type(), a1.txn().ops(0).key(),
       store, generated_branches);
 
@@ -490,7 +490,7 @@ TEST(BranchGenerator, GenerateCorrectBranchesOnUpdate) {
   proto::Branch a2(a1);
   *a2.mutable_txn()->add_ops() = _testing_op({"2", ""});
 
-  generator.AddPending(a2);
+  generator.AddActive(a2);
   generated_branches.clear();
   generator.GenerateBranches(a2, a2.txn().ops(1).type(), a2.txn().ops(1).key(),
       store, generated_branches);
@@ -503,7 +503,7 @@ TEST(BranchGenerator, GenerateCorrectBranchesOnUpdate) {
 
   proto::Branch b1 = _testing_branch({{{"2"}, {"1", "val1"}}});
   
-  generator.AddPending(b1);
+  generator.AddActive(b1);
   generated_branches.clear();
   generator.GenerateBranches(b1, b1.txn().ops(0).type(), b1.txn().ops(0).key(),
       store, generated_branches);
@@ -516,7 +516,7 @@ TEST(BranchGenerator, GenerateCorrectBranchesOnUpdate) {
 
   proto::Branch a3 = _testing_branch({{{"2"}, {"1", "val1"}}, {{"1"}, {"1", ""}, {"2", ""}}});
   
-  generator.AddPending(a3);
+  generator.AddActive(a3);
   generated_branches.clear();
   generator.GenerateBranches(a3, a3.txn().ops(1).type(), a3.txn().ops(1).key(),
       store, generated_branches);
@@ -531,7 +531,7 @@ TEST(BranchGenerator, GenerateCorrectBranchesOnUpdate) {
   proto::Branch b2(b1);
   *b2.mutable_txn()->add_ops() = _testing_op({"2", "val2"});
   
-  generator.AddPending(b2);
+  generator.AddActive(b2);
   generated_branches.clear();
   generator.GenerateBranches(b2, b2.txn().ops(1).type(), b2.txn().ops(1).key(),
       store, generated_branches);

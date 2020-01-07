@@ -20,32 +20,22 @@ class BranchGenerator {
   BranchGenerator();
   virtual ~BranchGenerator();
 
-  uint64_t GenerateBranches(const proto::Branch &init, proto::OperationType type,
+  virtual uint64_t GenerateBranches(const proto::Branch &init, proto::OperationType type,
       const std::string &key, const SpecStore &store,
-      std::vector<proto::Branch> &new_branches);
+      std::vector<proto::Branch> &new_branches) = 0;
 
-  void AddPending(const proto::Branch &branch);
-  void ClearPending(uint64_t txn_id);
+  void AddActive(const proto::Branch &branch);
+  void ClearActive(uint64_t txn_id);
+ protected:
+  inline const std::unordered_map<std::string, BranchMap> &GetActiveWrites() const { return active_writes; }
+  inline const std::unordered_map<std::string, BranchMap> &GetActiveReads() const { return active_reads; }
+
  private:
-  void AddPendingRead(const std::string &key, const proto::Branch &branch);
-  void AddPendingWrite(const std::string &key, const proto::Branch &branch);
-  void GenerateBranchesSubsets(
-      const std::vector<uint64_t> &txns,
-      const BranchMap &p_branches,
-      const SpecStore &store,
-      std::vector<proto::Branch> &new_branches,
-      std::vector<uint64_t> subset = std::vector<uint64_t>(), int64_t i = -1);
-  void GenerateBranchesPermutations(
-      const std::vector<uint64_t> &subset,
-      const BranchMap &p_branches,
-      const SpecStore &store,
-      std::vector<proto::Branch> &new_branches);
+  void AddActiveRead(const std::string &key, const proto::Branch &branch);
+  void AddActiveWrite(const std::string &key, const proto::Branch &branch);
 
-  std::unordered_map<std::string, BranchMap> pending_writes;
-  std::unordered_map<std::string, BranchMap> pending_reads;
-
-  BranchSet already_generated;
-  Latency_t generateLatency;
+  std::unordered_map<std::string, BranchMap> active_writes;
+  std::unordered_map<std::string, BranchMap> active_reads;
 };
 
 } /* mortystore */

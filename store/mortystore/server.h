@@ -7,7 +7,8 @@
 #include "store/common/backend/txnstore.h"
 #include "store/common/stats.h"
 #include "store/mortystore/common.h"
-#include "store/mortystore/branch_generator.h"
+#include "store/mortystore/perm_branch_generator.h"
+#include "store/mortystore/lw_branch_generator.h"
 #include "store/mortystore/specstore.h"
 
 #include <unordered_map>
@@ -29,36 +30,42 @@ class Server : public TransportReceiver, public ::Server {
   virtual inline Stats &GetStats() override { return stats; };
 
  private:
+  /** State Machine Transitions **/
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandleWrite(const TransportAddress &remote, const proto::Write &msg);
   void HandlePrepare(const TransportAddress &remote, const proto::Prepare &msg);
   void HandleKO(const TransportAddress &remote, const proto::KO &msg);
   void HandleCommit(const TransportAddress &remote, const proto::Commit &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
+  /** End State Machine Transitions **/
 
+  /** State Machine Helper Functions **/
   void SendBranchReplies(const proto::Branch &init, proto::OperationType type,
       const std::string &key);
   bool CheckBranch(const TransportAddress &addr, const proto::Branch &branch);
-
   bool IsStaleMessage(uint64_t txn_id) const;
+  /** End State Machine Helper Functions **/
 
   const transport::Configuration &config;
   int groupIdx;
   int idx;
   Transport *transport;
   bool debugStats;
+  Latency_t readWriteResp;
+  Stats stats;
+
+  /** State Machine State Variables **/
   SpecStore store;
   std::vector<proto::Transaction> committed;
   std::vector<proto::Transaction> prepared;
   std::unordered_map<uint64_t, const TransportAddress *> txn_coordinators;
   std::vector<proto::Branch> waiting;
   std::unordered_map<uint64_t, const TransportAddress *> shards;
-  Stats stats;
   std::set<uint64_t> committed_txn_ids;
   std::set<uint64_t> prepared_txn_ids;
   std::set<uint64_t> aborted_txn_ids;
-  BranchGenerator generator;
-  Latency_t readWriteResp;
+  LWBranchGenerator generator;
+  /** End State Machine State Variables **/
 
 };
 
