@@ -29,11 +29,13 @@ class BranchGenerator {
  protected:
   inline const std::unordered_map<std::string, BranchMap> &GetActiveWrites() const { return active_writes; }
   inline const std::unordered_map<std::string, BranchMap> &GetActiveReads() const { return active_reads; }
+  inline const std::set<uint64_t> GetActiveTids() const { return active_tids; }
 
  private:
   void AddActiveRead(const std::string &key, const proto::Branch &branch);
   void AddActiveWrite(const std::string &key, const proto::Branch &branch);
 
+  std::set<uint64_t> active_tids;
   std::unordered_map<std::string, BranchMap> active_writes;
   std::unordered_map<std::string, BranchMap> active_reads;
 };

@@ -5,6 +5,7 @@
 #include "store/mortystore/common.h"
 
 #define TXN_ID_SHIFT 20
+
 namespace mortystore {
 
 Client::Client(const std::string configPath, uint64_t client_id, int nShards,
@@ -56,6 +57,7 @@ void Client::Execute(AsyncTransaction *txn, execute_callback ecb) {
 
 void Client::ExecuteNextOperation(PendingRequest *req, proto::Branch &branch) {
   ClientBranch clientBranch = GetClientBranch(branch);
+
   if (debugStats) {
     if (clientBranch.opCount > 0) {
       uint64_t ns = Latency_End(&opLat);
@@ -320,7 +322,7 @@ void Client::ProcessPrepareKOs(PendingRequest *req,
   if (req->prepareResponses == req->sentPrepares) {
     req->waitingToAbort = true;
     uint64_t reqId = req->id;
-    transport->Timer(10000, [&,reqId](){
+    //transport->Timer(10000, [&,reqId](){
       auto itr = pendingReqs.find(reqId);
       if (itr == pendingReqs.end()) {
         return;
@@ -343,7 +345,7 @@ void Client::ProcessPrepareKOs(PendingRequest *req,
       itr->second->ecb(FAILED, std::map<std::string, std::string>());
       pendingReqs.erase(pendingReqs.find(itr->second->id));
       delete itr->second;
-    });
+    //});
   } else {
     Debug("Prepare failed. Waiting on %lu other prepare responses (out of %lu).",
         req->sentPrepares - req->prepareResponses, req->sentPrepares);

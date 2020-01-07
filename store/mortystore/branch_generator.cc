@@ -16,6 +16,7 @@ BranchGenerator::~BranchGenerator() {
 }
 
 void BranchGenerator::AddActive(const proto::Branch &branch) {
+  active_tids.insert(branch.txn().id());
   for (size_t i = 0; i < branch.txn().ops_size(); ++i) {
     const proto::Operation &op = branch.txn().ops(i);
     if (op.type() == proto::OperationType::READ) {
@@ -37,6 +38,7 @@ void BranchGenerator::AddActiveRead(const std::string &key,
 }
 
 void BranchGenerator::ClearActive(uint64_t txn_id) {
+  active_tids.erase(txn_id);
   for (auto &kv : active_writes) {
     kv.second.erase(txn_id);
   }
