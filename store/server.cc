@@ -185,6 +185,12 @@ DEFINE_string(strongmode, strongmode_args[0],	"the protocol to use during this"
 DEFINE_validator(strongmode, &ValidateStrongMode);
 
 /**
+ * Morty settings.
+ */
+DEFINE_uint64(prepare_batch_period, 0, "length of batches for deterministic prepare message"
+    " processing.");
+
+/**
  * Experiment settings.
  */
 DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
@@ -299,7 +305,7 @@ int main(int argc, char **argv) {
     }
     case PROTO_MORTY: {
       server = new mortystore::Server(config, FLAGS_group_idx, FLAGS_replica_idx,
-          tport, FLAGS_debug_stats);
+          tport, FLAGS_debug_stats, FLAGS_prepare_batch_period);
       break;
     }
     default: {

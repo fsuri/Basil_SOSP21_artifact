@@ -15,10 +15,12 @@
 
 namespace mortystore {
 
+typedef std::pair<const TransportAddress *, proto::Prepare> PrepareBatchItem;
+
 class Server : public TransportReceiver, public ::Server {
  public:
   Server(const transport::Configuration &config, int groupIdx, int idx,
-      Transport *transport, bool debugStats);
+      Transport *transport, bool debugStats, uint64_t prepareBatchPeriod);
   virtual ~Server();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
@@ -37,6 +39,7 @@ class Server : public TransportReceiver, public ::Server {
   void HandleKO(const TransportAddress &remote, const proto::KO &msg);
   void HandleCommit(const TransportAddress &remote, const proto::Commit &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
+  void PrepareBatchTrigger();
   /** End State Machine Transitions **/
 
   /** State Machine Helper Functions **/
@@ -54,9 +57,12 @@ class Server : public TransportReceiver, public ::Server {
   Latency_t readWriteResp;
   Stats stats;
 
+  /** State Machine Configuration **/
+  uint64_t prepareBatchPeriod;
+  /** End State Machine Configuration **/
+
   /** State Machine State Variables **/
   SpecStore store;
-  std::vector<proto::Transaction> committed;
   std::vector<proto::Transaction> prepared;
   std::unordered_map<uint64_t, const TransportAddress *> txn_coordinators;
   std::vector<proto::Branch> waiting;
@@ -65,6 +71,7 @@ class Server : public TransportReceiver, public ::Server {
   std::set<uint64_t> prepared_txn_ids;
   std::set<uint64_t> aborted_txn_ids;
   LWBranchGenerator generator;
+  std::vector<PrepareBatchItem> prepareBatch;
   /** End State Machine State Variables **/
 
 };

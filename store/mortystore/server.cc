@@ -10,9 +10,13 @@
 namespace mortystore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
-    Transport *transport, bool debugStats) : config(config), groupIdx(groupIdx),
-    idx(idx), transport(transport), debugStats(debugStats) {
+    Transport *transport, bool debugStats, uint64_t prepareBatchPeriod) : config(config),
+    groupIdx(groupIdx), idx(idx), transport(transport), debugStats(debugStats),
+    prepareBatchPeriod(prepareBatchPeriod) {
   transport->Register(this, config, groupIdx, idx);
+  if (prepareBatchPeriod > 0) {
+    transport->Timer(prepareBatchPeriod, std::bind(&Server::PrepareBatchTrigger, this));
+  }
   _Latency_Init(&readWriteResp, "read_write_response");
 }
 
@@ -91,7 +95,11 @@ void Server::ReceiveMessage(const TransportAddress &remote,
       Debug("%s", ss.str().c_str());
     }
 
-    HandlePrepare(remote, prepare);
+    if (prepareBatchPeriod > 0 ){
+      prepareBatch.push_back(std::make_pair(&remote, prepare));
+    } else {
+      HandlePrepare(remote, prepare);
+    }
   } else if (type == ko.GetTypeName()) {
     ko.ParseFromString(data);
 
@@ -239,6 +247,18 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
 
 void Server::HandleAbort(const TransportAddress &remote, const proto::Abort &msg) {
   generator.ClearActive(msg.branch().txn().id());
+}
+
+void Server::PrepareBatchTrigger() {
+  std::sort(prepareBatch.begin(), prepareBatch.end(), [](const PrepareBatchItem &a,
+      const PrepareBatchItem &b) {
+    return a.second.branch().txn().id() < b.second.branch().txn().id();
+  });
+  for (const auto &pbi : prepareBatch) {
+    HandlePrepare(*(pbi.first), pbi.second);
+  }
+  prepareBatch.clear();
+  transport->Timer(prepareBatchPeriod, std::bind(&Server::PrepareBatchTrigger, this));
 }
 
 /** End State Machine Transitions **/
