@@ -1,0 +1,8 @@
+\begin{thebibliography}{1}
+
+\bibitem{kotla2007zyzzyva}
+Ramakrishna Kotla, Lorenzo Alvisi, Mike Dahlin, Allen Clement, and Edmund Wong.
+\newblock Zyzzyva: speculative byzantine fault tolerance.
+\newblock {\em ACM SIGOPS Operating Systems Review}, 41(6):45--58, 2007.
+
+\end{thebibliography}
