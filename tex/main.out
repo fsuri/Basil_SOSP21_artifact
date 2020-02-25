@@ -2,12 +2,16 @@
 \BOOKMARK [1][-]{section.2}{Indicus}{}% 2
 \BOOKMARK [2][-]{subsection.2.1}{Architecture}{section.2}% 3
 \BOOKMARK [2][-]{subsection.2.2}{Model and Definitions}{section.2}% 4
-\BOOKMARK [2][-]{subsection.2.3}{Life cycle}{section.2}% 5
-\BOOKMARK [2][-]{subsection.2.4}{Consistent Logging}{section.2}% 6
-\BOOKMARK [2][-]{subsection.2.5}{Concurrency Control}{section.2}% 7
-\BOOKMARK [2][-]{subsection.2.6}{Writeback and Multi-shard 2pc}{section.2}% 8
-\BOOKMARK [2][-]{subsection.2.7}{Failures}{section.2}% 9
-\BOOKMARK [1][-]{section.3}{Implementation and Evaluation}{}% 10
-\BOOKMARK [1][-]{section.4}{Limitations}{}% 11
-\BOOKMARK [1][-]{section.5}{Related Work/Comparison}{}% 12
-\BOOKMARK [1][-]{section.6}{Conclusion}{}% 13
+\BOOKMARK [3][-]{subsubsection.2.2.1}{System Model}{subsection.2.2}% 5
+\BOOKMARK [3][-]{subsubsection.2.2.2}{System properties}{subsection.2.2}% 6
+\BOOKMARK [2][-]{subsection.2.3}{Execution}{section.2}% 7
+\BOOKMARK [2][-]{subsection.2.4}{Validation}{section.2}% 8
+\BOOKMARK [2][-]{subsection.2.5}{Concurrency Control}{section.2}% 9
+\BOOKMARK [2][-]{subsection.2.6}{Consistent logging.}{section.2}% 10
+\BOOKMARK [2][-]{subsection.2.7}{Writeback and Multi-shard 2pc}{section.2}% 11
+\BOOKMARK [2][-]{subsection.2.8}{Failures}{section.2}% 12
+\BOOKMARK [2][-]{subsection.2.9}{Low Cost mode}{section.2}% 13
+\BOOKMARK [1][-]{section.3}{Implementation and Evaluation}{}% 14
+\BOOKMARK [1][-]{section.4}{Limitations}{}% 15
+\BOOKMARK [1][-]{section.5}{Related Work/Comparison}{}% 16
+\BOOKMARK [1][-]{section.6}{Conclusion}{}% 17

@@ -130,22 +130,51 @@ In the following we outline the Architecture and Protocols of Indicus, the first
 %-------------------------------------------------------------------------------
 \subsection{Architecture}
 %-------------------------------------------------------------------------------
+Indicus follows a traditional optimistic concurrency control architecture as shown in Figure ~\ref{fig:Figure1}. Clients speculatively execute their Transactions, issuing remote reads when necessary and buffering writes locally. As Clients execute their own Transactions they need not declare their read/write keys or values preemtively, but rather may conduct interactive Transactions, the most general Transaction model. Since execution is speculative and Clients are unaware of potential concurrency, they must validate their Transactions for Isolation correctness in order to be able to Commit. Intuitively, if there are no conflicting concurrent Transactions and a Client observed a consistent snapshot of the distributed Database state then it may commit, and otherwise it must abort or retry. Lastly, since Transactions may span multiple shards, the Commit/Abort decisions of each shard must be aggregated in a Two Phase Commit manner, finalizing the result. Most notably, in Indicus not just exeuction is Client driven but the entire Transaction life cycle, maximizing scalability, fairness and putting each Client in charge of its own liveness.
+In the following we describe our Fault Model and define corresponding Transactional guarantees. We then outline the protocols for Execution, Validation and Writeback respectively.
 
 \begin{figure*}
 \begin{center}
 \includegraphics[width= \textwidth]{./figures/Architecture.png}
 \end{center}
 \caption{Transaction Lifecycle}
+\label{fig:Figure1}
 \end{figure*}
 
 %-------------------------------------------------------------------------------
 \subsection{Model and Definitions}
 %-------------------------------------------------------------------------------
+
+\subsubsection{System Model}
+We assume a partitioned Database where data objects are spread uniformly across shards (randomly or based on locality). For fault tolerance we assume that each Shard contains 5f+1 replicas where f is the number of (static) faulty or compromised replicas. A faulty replica may behave in Byzantine fashion, i.e. in addition to crashing or omitting messages it may send arbitrary messages and deviate from prescribed protocols in any way.
+We denote any participant (replica or client) that follows the protocol as \textit{honest}, while faulty participants are dubbed \textit{byzantine}. We assume there may exist a finite but unbounded number of byzantine Clients that may deviate from the protocol arbitrarily. 
+ We further assume a strong, but static adversary that can coordinate the faulty participants 
+ We do, however, assume the existance of sufficiently hard cryptographic primitives that allow for private/public key signatures and collision-resistant hashes that cannot be compromised by byzantine participants. We denote a signed message $m$, signed by principal $p$ as $\langle m \rangle_{\sigma p}$.
+ 
+We make no assumption on network synchrony in order to maintain safety, but in some cases may provide liveness  only when the network is synchronous and messages are delayed by no more than a fixed but potentially unknown window. Unlike traditional State Machine Replication protocols in which the liveness of all Clients is correlated with the fate of the system (or often more specifically a leader), our system guarantees liveness not on a system basis, but on a per client basis. Concretely, we only guarantee liveness to clients that follow the protocol and conversely an honest client only loses liveness (even in an asynchronous setting) when it intertwines its fate with byzantine clients.
+
+Application services may restrict the influence of Byzantine Clients on the Database state by authentication and enforcing access control. Beyond these measures, byzantine Clients that follow the protocol are indistinguishable from honest clients and may read and write at their leisure. While potential damage to the Database state cannot be avoided, it can be re-traced by auditing the Transaction logs.
+ 
+\subsubsection{System properties}
+We offer Clients an interactive Transaction interface that implements ACID transactions. While all ACID guarantees may be violated by individual byzantine Replicas, the system maintains the illusion of an ACID compliant state to all honest Clients.
+Moreover, we guarantee to Clients that the Database is \textit{byzantine Serializable} as defined below. Intuitively this Isolation level guarantees that all honest Clients experience the Database as if there serializable. In order to formally capture this we lay some ground work:
+
+- history
+- projection
+-
+
+This definition captures the requirements for any byzantine tolerant protocol that strives to maintain Isolation level I.
+
+We further define some progress properties to limit the influence Byzantine Clients have on system throughput. These will be motiviating factors that we will return to in order to justify our choice of 5f+1 replicas as well as the use of an Optimistic Concurrency Control over a Locking based schema. We later outline an alternative design using 3f+1 replicas that does not maintain this property. 
+
+
+
+
 %-------------------------------------------------------------------------------
-\subsection{Life cycle}
+\subsection{Execution}
 %-------------------------------------------------------------------------------
 %-------------------------------------------------------------------------------
-\subsection{Consistent Logging}
+\subsection{Validation}
 %-------------------------------------------------------------------------------
 
 %-------------------------------------------------------------------------------
@@ -153,7 +182,9 @@ In the following we outline the Architecture and Protocols of Indicus, the first
 %-------------------------------------------------------------------------------
  - Optimization: retries
  - Dependency resolution
-
+%-------------------------------------------------------------------------------
+\subsection{Consistent logging.}
+%-------------------------------------------------------------------------------
 
 
 
@@ -165,6 +196,14 @@ In the following we outline the Architecture and Protocols of Indicus, the first
 %-------------------------------------------------------------------------------
 \subsection{Failures}
 %-------------------------------------------------------------------------------
+- Fallback: election, resolution, subtelties with mvtso, necessity even without dependencies.
+
+%-------------------------------------------------------------------------------
+\subsection{Low Cost mode}
+%-------------------------------------------------------------------------------
+3f+1 if not defending against byz colluders
+OCC if not worried about reads aborting
+
 
 %-------------------------------------------------------------------------------
 \section{Implementation and Evaluation}
