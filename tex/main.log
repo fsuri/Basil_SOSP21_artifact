@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  25 FEB 2020 15:34
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  25 FEB 2020 15:40
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1161,15 +1161,11 @@ Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 301.
 Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 301.
 Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: DAFFDB2B321369EF6AF415C458ABA7D6;1038.
-
-
-LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
-
  ) 
 Here is how much of TeX's memory you used:
  18767 strings out of 492982
  343429 string characters out of 6134895
- 460357 words of memory out of 5000000
+ 459357 words of memory out of 5000000
  21771 multiletter control sequences out of 15000+600000
  68237 words of font info for 208 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
@@ -1181,7 +1177,7 @@ fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/
 type1/urw/symbol/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/
 utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (5 pages, 188928 bytes).
+Output written on main.pdf (5 pages, 188942 bytes).
 PDF statistics:
  148 PDF objects out of 1000 (max. 8388607)
  130 compressed objects within 2 object streams
