@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  25 FEB 2020 15:42
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  25 FEB 2020 15:44
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1125,51 +1125,58 @@ LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <6> not available
 
 
 ]
+LaTeX Font Info:    Font shape `OMS/ptm/m/n' in size <10> not available
+(Font)              Font shape `OMS/pzccm/m/n' tried instead on input line 136.
+
+
 [2]
 <./figures/LC.png, id=89, 1749.53625pt x 432.61626pt>
 File: ./figures/LC.png Graphic file (type png)
 <use ./figures/LC.png>
-Package pdftex.def Info: ./figures/LC.png  used on input line 163.
+Package pdftex.def Info: ./figures/LC.png  used on input line 166.
 (pdftex.def)             Requested size: 505.89pt x 125.09244pt.
 LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <10> not available
-(Font)              Font shape `T1/ptm/b/n' tried instead on input line 173.
+(Font)              Font shape `T1/ptm/b/n' tried instead on input line 176.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <8> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 185.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 188.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <5> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 185.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 188.
 
-Underfull \hbox (badness 1527) in paragraph at lines 189--190
+Underfull \hbox (badness 1527) in paragraph at lines 192--193
 []\T1/ptm/b/n/10 History H. \T1/ptm/m/n/10 (+20) In-for-mally, a \T1/ptm/m/it/1
 0 (+20) H \T1/ptm/m/n/10 (+20) con-tains the op-er-a-tions
  []
 
 [3] [4 <./figures/LC.png>]
-Underfull \vbox (badness 10000) has occurred while \output is active []
+Underfull \vbox (badness 3271) has occurred while \output is active []
 
+ (./main.bbl
+Underfull \vbox (badness 1521) has occurred while \output is active []
 
-(./main.bbl)
+ [5])
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 305.
 - LAST -
-Extra skip:0.44525pt
-Left:610.0pt/2.16492pt
-Right:609.92975pt/1.78992pt
-Output:610.96487pt
- [5]
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 302.
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 302.
+Extra skip:22.72498pt
+Left:44.34998pt/2.16492pt
+Right:22.0pt/1.78992pt
+Output:34.17499pt
+
+[6]
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 305.
  (./main.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 302.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 302.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 305.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 305.
 Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: DAFFDB2B321369EF6AF415C458ABA7D6;1038.
  ) 
 Here is how much of TeX's memory you used:
- 18767 strings out of 492982
- 343429 string characters out of 6134895
- 450314 words of memory out of 5000000
- 21771 multiletter control sequences out of 15000+600000
+ 18771 strings out of 492982
+ 343485 string characters out of 6134895
+ 448314 words of memory out of 5000000
+ 21774 multiletter control sequences out of 15000+600000
  68237 words of font info for 208 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 64i,9n,58p,1345b,359s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 55i,9n,54p,1345b,441s stack positions out of 5000i,500n,10000p,200000b,80000s
 {/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texliv
 e/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texm
 f-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/
@@ -1177,10 +1184,10 @@ fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/
 type1/urw/symbol/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/
 utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (5 pages, 189126 bytes).
+Output written on main.pdf (6 pages, 189692 bytes).
 PDF statistics:
- 148 PDF objects out of 1000 (max. 8388607)
- 130 compressed objects within 2 object streams
- 29 named destinations out of 1000 (max. 500000)
+ 152 PDF objects out of 1000 (max. 8388607)
+ 133 compressed objects within 2 object streams
+ 30 named destinations out of 1000 (max. 500000)
  42138 words of extra memory for PDF output out of 42996 (max. 10000000)
 
