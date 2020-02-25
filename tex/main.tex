@@ -127,7 +127,8 @@ Rather than trying to make a traditional BFT system more scalable we ask the que
 However, in a byzantine setting, giving up the comfort of a bounded and accountable set of replicas opens up the system to a wider set undesirable phenomena. Yet, this is exactly what we will do: Concretely, in this paper we will show how to design a BFT system that is almost entirely client driven, and all the while both safe and live. 
 
 
-// Unlike SMR that achieves agreement on a result by imposing a total order to evaluate the question, we just evaluate the result directly. Instead of operating multi consensus, I.e. a ledger where reaching consensus implies reaching consensus on every prior decision (like a blockchain), we just do binary consensus for each transaction in a seperate slot. Transactions are still able to be totally ordered according to a serializable execution they correspond to by assigning a Timestamp and evaluation Isolation according to it.
+// Unlike SMR that achieves agreement on a result by imposing a total order to evaluate the question, we just evaluate the result directly. Instead of operating multi consensus, I.e. a ledger where reaching consensus implies reaching consensus on every prior decision (like a blockchain), we just do binary consensus for each transaction in a seperate slot. Because its unecessary to reach agreement on this total order, we only need to respect an order to the set of conflicting transactions, a (implicit) partial order suffices.
+ Transactions are still able to be totally ordered according to a serializable execution they correspond to by assigning a Timestamp and evaluation Isolation according to it.
 
 Doing so has the following positive outcomes:
 - Indicus is robust to censorship and frontrunning as there exist no central authority (in SMR traditionally a leader) that decides what Transactions enter the system and decides on the ordering of Transactions
