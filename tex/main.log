@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  27 FEB 2020 09:33
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  27 FEB 2020 09:49
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1130,7 +1130,7 @@ LaTeX Font Info:    Font shape `OMS/ptm/m/n' in size <10> not available
 (Font)              Font shape `OMS/pzccm/m/n' tried instead on input line 12.
 ) (./sections/Indicus/Preamble.tex)
 (./sections/Indicus/Architecture.tex [2]
-<./figures/LC.png, id=89, 1749.53625pt x 432.61626pt>
+<./figures/LC.png, id=93, 1749.53625pt x 432.61626pt>
 File: ./figures/LC.png Graphic file (type png)
 <use ./figures/LC.png>
 Package pdftex.def Info: ./figures/LC.png  used on input line 11.
@@ -1150,45 +1150,56 @@ Underfull \hbox (badness 1527) in paragraph at lines 7--8
 0 (+20) H \T1/ptm/m/n/10 (+20) con-tains the op-er-a-tions
  []
 
-[3]) (./sections/Limitations.tex [4 <./figures/LC.png>])
-(./sections/RelatedWork.tex
+[3]) (./sections/Indicus/Protocol/Protocol.tex) (./sections/Implementation.tex)
+(./sections/Limitations.tex [4 <./figures/LC.png>]) (./sections/RelatedWork.tex
+
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
  [5])
 (./sections/Conclusion.tex) (./main.bbl)
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 221.
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 175.
 - LAST -
 Extra skip:56.62506pt
 Left:242.44989pt/2.16492pt
 Right:186.19983pt/1.78992pt
 Output:242.32486pt
  [6]
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 221.
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 175.
  (./main.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 221.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 221.
-Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: DAFFDB2B321369EF6AF415C458ABA7D6;1038.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 175.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 175.
+
+
+Package rerunfilecheck Warning: File `main.out' has changed.
+(rerunfilecheck)                Rerun to get outlines right
+(rerunfilecheck)                or use package `bookmark'.
+
+Package rerunfilecheck Info: Checksums for `main.out':
+(rerunfilecheck)             Before: 28741DEAD806CCA7B286F69A6BC88C85;1099
+(rerunfilecheck)             After:  DAFFDB2B321369EF6AF415C458ABA7D6;1038.
  ) 
 Here is how much of TeX's memory you used:
- 18797 strings out of 492982
- 344036 string characters out of 6134895
+ 18806 strings out of 492982
+ 344250 string characters out of 6134895
  445314 words of memory out of 5000000
- 21774 multiletter control sequences out of 15000+600000
+ 21775 multiletter control sequences out of 15000+600000
  68237 words of font info for 208 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  55i,9n,54p,1379b,369s stack positions out of 5000i,500n,10000p,200000b,80000s
-{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texliv
-e/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texm
-f-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/
-fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/
-type1/urw/symbol/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/
-utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></us
-r/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (6 pages, 191574 bytes).
+pdfTeX warning (dest): name{subsection.2.10} has been referenced but does not
+ exist, replaced by a fixed one
+
+{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texlive/
+texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-
+dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fo
+nts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/ty
+pe1/urw/symbol/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/ut
+mb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/
+share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
+Output written on main.pdf (6 pages, 191812 bytes).
 PDF statistics:
- 152 PDF objects out of 1000 (max. 8388607)
- 133 compressed objects within 2 object streams
- 30 named destinations out of 1000 (max. 500000)
- 42138 words of extra memory for PDF output out of 42996 (max. 10000000)
+ 157 PDF objects out of 1000 (max. 8388607)
+ 138 compressed objects within 2 object streams
+ 31 named destinations out of 1000 (max. 500000)
+ 42146 words of extra memory for PDF output out of 42996 (max. 10000000)
 

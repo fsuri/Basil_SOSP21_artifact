@@ -1,0 +1,6 @@
+%-------------------------------------------------------------------------------
+\subsection{Execution}
+%-------------------------------------------------------------------------------
+- Read proofs required for honest client correctness. Alternatively one can read from f+1 only, but that can result in failed/older reads
+- Do not need to include read proofs in the prepare. According to Isolation definition byzantine Clients can read whatever they want. Moreover, Reads only have very limited external effect. The value does not matter for the CC check. The version has bounded effect: If it goes towards 0, then it is just a check between timestamps as normally. If it goes towards the TS, then it will never abort.
+- Fallback not just useful for dependency cleanup, but also "unclaimable" dependencies that need to finish.
