@@ -121,92 +121,19 @@ Not more than 200 words, if possible, and preferably closer to 150.
 
 \input{NC_old_intro.tex}
 
-
-Looking beyond treating transactions as black box requests and leveraging existing commutativity is not a new idea. However, while copious efforts exist to design and build more decentralized systems in order to exploit transaction knowledge for the Crash Failure model, few, if any attempts have been made for the Byzantine Fault Model. This naturally begs the question why so? One explanation is that for BFT systems centralization is in fact highly desirable as it simplifies the problem by pin-pointing a single point of accountability. Since historically, BFT systems have taken a rather niche role for applications that require "additional" safety, the principal design concern has always been maintaining consistency with efficiency and scalability being secondary concerns. Replication was traditionally done by a single authority and thus it is reasonable to assume a primary backup scheme, since neither fairness, nor total ordering were major concerns. As Byzantine Fault Tolerance moves into the mainstream with the popularity ascent of Blockchains these considerations are being revistited. For example, when operating a database as a consortium of mutually distrustful parties it is no longer desirable to grant priviledges to a leader and impose centralization for the sake of simplicity.
-Rather than trying to make a traditional BFT system more scalable we ask the question whether we can take the scalability lessons from Crash Failure settings and improve upon their robustness. While this is an attractive avenue, it is far from being straightforward. A natural way to scale a system is to move state and responsabilites to the clients.  
-However, in a byzantine setting, giving up the comfort of a bounded and accountable set of replicas opens up the system to a wider set undesirable phenomena. Yet, this is exactly what we will do: Concretely, in this paper we will show how to design a BFT system that is almost entirely client driven, and all the while both safe and live. 
-
-
-// Unlike SMR that achieves agreement on a result by imposing a total order to evaluate the question, we just evaluate the result directly. Instead of operating multi consensus, I.e. a ledger where reaching consensus implies reaching consensus on every prior decision (like a blockchain), we just do binary consensus for each transaction in a seperate slot. Because its unecessary to reach agreement on this total order, we only need to respect an order to the set of conflicting transactions, a (implicit) partial order suffices.
- Transactions are still able to be totally ordered according to a serializable execution they correspond to by assigning a Timestamp and evaluation Isolation according to it.
-
-Doing so has the following positive outcomes:
-\begin{itemize}
-
-\item Indicus is robust to censorship and frontrunning as there exist no central authority (in SMR traditionally a leader) that decides what Transactions enter the system and decides on the ordering of Transactions
-\item Indicus allows commutative/non-conflicting Transactions to both be executed and validated out of order, thus maximizing parallelism. (This should increase throughput and reduce latency, because clients arent waiting for all previously sequenced tx to finish. Consequently the tail latency does not dominate throughput as much.)
-\item Indicus minimizes the state, communication and computation load on replicas, as Clients serve as both execution hub and broadcast channel for their own Transactions. This avoids quadratic communication communication complexity in the normal case. (Theoretically always, but we keep some for practicality in the fallback)
-\item As any Quorum system, Indicus is inherently load-balanced as there exists no leader bottleneck and all replicas have equal responsibility
-\item In Indicus liveness is a client local property. Unlike SMR, where the entire system halts during view changes, Byzantine participants may stall system progress only for the objects their transactions touch. Hence, the system appears live to any non-conflicting Transaction
-\end{itemize}
-
-Since we do not sequence Transaction execution we require a concurrency control mechanism in order to maintain Isolation between Transactions.
-For this purpose, we design and implement a byzantine replicated MVTSO scheme, an aggressive version of Optimistic Concurrency control that empowers Read Transactions in the hope of reducing abort rates. Specifically, we allow to read old version, we allow to read uncommitted writes and we acquire read leases.
-
-Additionally, we propose definitions for what it means to enforce an Isolation level in a transactional system with byzantine participants. These are general purpose formalizations and can serve as guideline for future byzantine Database systems.
-
-In section X, we discuss Limitations of this approach. 
-
+\input{sections/Introduction.tex}
 
 
 %-------------------------------------------------------------------------------
 \section{Indicus}
 %-------------------------------------------------------------------------------
-In the following we outline the Architecture and Protocols of Indicus, the first highly scalable (hopefully) database that tolerates both byzantine clients and replicas.
-%-------------------------------------------------------------------------------
-\subsection{Architecture}
-%-------------------------------------------------------------------------------
-In Indicus, Clients are more than external participants who propose Transactions to be executed. Instead, Clients are first class citizens that rejoice in the fair treatment of democracy and take part in everyday system activities. Of course, such priviledge comes at the cost of responsibilities, concretely, Indicus does not provide a continuously and mysteriously operating black box Transaction machine, but rather offers Clients the tools to operate the system itself. One the one hand, the simple paradigm of letting clients work for themselves is more scalable as replicas need to do less work and can service more clients. On the other hand, it naturally incentivises clients to be industrious, as they hold the keys to their own liveness. Clients that do not meet a certain standard for productivity may be excluded by the system; The joys of being permissioned.
+\input{sections/Indicus/Preamble.tex}
 
-Indicus follows a traditional optimistic concurrency control architecture as shown in Figure ~\ref{fig:Figure1}. Clients speculatively execute their Transactions, issuing remote reads when necessary and buffering writes locally. As Clients execute their own Transactions they need not declare their read/write keys or values preemtively, but rather may conduct interactive Transactions, the most general Transaction model. Since execution is speculative and Clients are unaware of potential concurrency, they must validate their Transactions for Isolation correctness in order to be able to Commit. Intuitively, if there are no conflicting concurrent Transactions and a Client observed a consistent snapshot of the distributed Database state then it may commit, and otherwise it must abort or retry. Lastly, Transactions may span multiple shards, and hence the Commit/Abort decisions of each shard must be aggregated in a Two Phase Commit manner in order to finalize a safety appropriate result. Most notably, in Indicus not just exeuction is Client driven but the entire Transaction life cycle, thus maximizing scalability and fairness while putting each Client in charge of its own liveness.
-In the following we describe our Fault Model and define corresponding Transactional guarantees. We then outline the protocols for Execution, Validation and Writeback respectively.
+\input{sections/Indicus/Architecture.tex}
 
-\begin{figure*}
-\begin{center}
-\includegraphics[width= \textwidth]{./figures/LC.png}
-\end{center}
-\caption{Transaction Lifecycle}
-\label{fig:Figure1}
-\end{figure*}
 
-%-------------------------------------------------------------------------------
-\subsection{Model and Definitions}
-%-------------------------------------------------------------------------------
-
-\subsubsection{System Model}
-We assume a partitioned Database where data objects are spread uniformly across shards (randomly or based on locality). For fault tolerance we assume that each Shard contains 5f+1 replicas where f is the number of (static) faulty or compromised replicas. A faulty replica may behave in Byzantine fashion, i.e. in addition to crashing or omitting messages it may send arbitrary messages and deviate from prescribed protocols in any way.
-We denote any participant (replica or client) that follows the protocol as \textit{honest}, while faulty participants are dubbed \textit{byzantine}. We assume there may exist a finite but unbounded number of byzantine Clients that may deviate from the protocol arbitrarily. 
- We further assume a strong, but static adversary that can coordinate the faulty participants 
- We do, however, assume the existance of sufficiently hard cryptographic primitives that allow for private/public key signatures and collision-resistant hashes that cannot be compromised by byzantine participants. We denote a signed message $m$, signed by principal $p$ as $\langle m \rangle_{\sigma p}$.
- 
-We make no assumption on network synchrony in order to maintain safety, but in some cases may provide liveness  only when the network is synchronous and messages are delayed by no more than a fixed but potentially unknown window. Unlike traditional State Machine Replication protocols in which the liveness of all Clients is correlated with the fate of the system (or often more specifically a leader), our system guarantees liveness not on a system basis, but on a per client basis. Concretely, we only guarantee liveness to clients that follow the protocol and conversely an honest client only loses liveness (even in an asynchronous setting) when it intertwines its fate with byzantine clients.
-
-Application services may restrict the influence of Byzantine Clients on the Database state by authentication and enforcing access control. Beyond these measures, byzantine Clients that follow the protocol are indistinguishable from honest clients and may read and write at their leisure. While potential damage to the Database state cannot be avoided, it can be re-traced by auditing the Transaction logs.
- 
-\subsubsection{System properties}
-We offer Clients an interactive Transaction interface that implements ACID transactions. While all ACID guarantees may be violated by individual byzantine Replicas, the system maintains the illusion of an ACID compliant state to all honest Clients.
-Moreover, we guarantee to Clients that the Database is \textit{byzantine Serializable} as defined below. Intuitively this Isolation level guarantees that all honest Clients experience the Database as if there serializable. In order to formally capture this we lay some ground work: \footnote{Defs for commands etc in accordance with BFT DUr. cite}
-
-Let $Op =  \{r, w\} \times K \times V $ and $Dec = \{Commit, \,Abort\}$ be the sets of possible operations and decisions respectively, where $K$ is the set of existing data items (keys) and $V$ the range of possible values. A \textit{request} $req \in (Op \cup Dec) \times C$ maps any such operation or decision to the issuing Client from set $C$. We denote with $Hon \subseteq C$ the subset of honest Clients. 
-
-\textbf{History H.} Informally, a \textit{H} contains the operations (read/write) and decisions (commit/abort) of every transaction issued in the system. Formally, we define a \textit{history H} as a finite sequence of requests.
-
-We define a projection $H|_c$ as the subsequence of requests in $H$ that were issued by Client $c$. A sequence of requests $s = req_i \dots req_{i+t}$ in $H|_c$ form a \textit{Transaction} if $req_i$ is the first request by Client $c$ or $req_{i-1} \in Dec \times c$, and if $req_{i+t} \in Dec \times c$.
-
-We further define:
-
-\textbf{Honest History H(P).} Given protocol P, A \textit{history H} is \textit{honest} if it was generated by participants who all follow P. I.e. concretely, $H(P) \equiv H = H|_{Hon}$.
-and
-
-\textbf{Honest-View Equivalent.} A \textit{history H} is honest-view equivalent to a $history H'$ if the Operations and Decisions of all honest Clients are the same and if the final writes are the same.
-
-\textbf{Byz-I} Given a protocol $P$ and an isolation level $I$:
-A history H is \textit{byzantine-I} if there exists an honest history \textit{H'} such that H is honest-view equivalent to H' and H' satisfies I. 
-
-Thus, informally a byzantine Isolation level states that the state that honest Clients experience must be explicable by an execution in which all participants were honest.
-This definition captures the requirements for any byzantine tolerant protocol that strives to maintain Isolation level I.
-
-We further define some progress properties to limit the influence Byzantine Clients have on system throughput. These will be motiviating factors that we will return to in order to justify our choice of 5f+1 replicas as well as the use of an Optimistic Concurrency Control over a Locking based schema. We later outline an alternative design using 3f+1 replicas that does not maintain this property. 
+\input{sections/Indicus/Model.tex}
+\input{sections/Indicus/Properties.tex}
 
 
 
@@ -262,33 +189,11 @@ OCC if not worried about reads aborting
 %-------------------------------------------------------------------------------
 
 
-%-------------------------------------------------------------------------------
-\section{Limitations}
-%-------------------------------------------------------------------------------
-As is inherent to any Optimistic Execution and Concurrency Control, Indicus is vulnerable to highly congested workloads. When contention on select objects is high, concurrent execution of Transactions must yield the abort of some Transactions during Validation in order to maintain the Database Isolation guarantees. Note however, that when clients are in charge of execution, a pessimistic concurrency control solution such as two-phase-locking would incur an equal amount of deadlocks which would require resolution. The observation to make is that any system that conducts execution at the client application side speculates on concurrency. This however we stipulate, is unavoidable when trying to scale a system to the number of users rather than replica processing power. The traditonal ways to avoid the abort rate conundrum is to either restrict the transaction model, which in turn weakens the general applicability of the protocol, or to delegate execution to replicas and utilize State Machine Replication to serialize Transactions. SMR protocols with a single leader do not inquire any congestion based aborts as a single sequencer naturally eliminates concurrency.
-Indicus does not make these concessions in order to offer interactive Transactions and remain scalable. A workload that exhibits low commutativity and high contention should therefore refrain from adopting our system.
+\input{sections/Limitations.tex}
 
-Similarly, as is the case in any transaction protocol, Indicus is vulnerable to ddos attacks by byzantine participants. A byzantine clients only opportunity at subverting progress for honest users is to artificially increase congestion. When such a client has unrestricted access control it may do so strategically iff it has control over the network. If it does not, it cannot reliably gain knowledge about concurrent transactions before they pass the validation step and must resort to flooding based attacks. Defense against such attacks is out of scope in our work, but is disincentivised as participants can be held accountable for their actions in a closed membership setting.
+\input{sections/RelatedWork.tex}
 
-
-%-------------------------------------------------------------------------------
-\section{Related Work/Comparison}  mention Hotstuff?
-%-------------------------------------------------------------------------------
-A lot of recent effort has gone into designing high throughput and low latency databases that leverage synergies between transaction and replication layer to squeeze out any last performance. The recently proposed TAPIR transaction protocol leverages redundancy between transaction ordering and replication ordering to reduce total roundtrips, thus reducing latency in wide area networks. TAPIR shares several similarities with our system, most notably the absence of a leader and the resulting unordered validation structure. TAPIR too, leverages optimistic concurrency control to allow for concurrency among commutative transactions. When congestion is high however, throughput and tail latency worsen as abort rate grows. Janus avoids transaction aborts by dynamically re-ordering conflicting transactions. This however, is made possible by assuming one-shot transactions, i.e. fixed read/write keys, and thus reduces the application generality. Another DB, Carousel similarly assumes a restricted Transaction model in order to parallelize execution and validation. While all of these databases offer low latency replication, they are fundamentally limited to tolerating crash-failures. This strong failure assumption makes them less secure and not suitable for storing mission-critical, financial or highly sensitive data. 
-With the surge in Blockchain interest Byzantine Fault Tolerant (BFT) protocols are experiencing a second Spring. While originally developed to tolerate arbitrary bugs, these protocols find increasing importance in settings where participants are untrusted or malicious. Permissioned Blockchains, organized by a consortium of registered participants can use traditional BFT State Machine Replication (SMR) protocols in order to achieve agreement. Starting with PBFT, there have been numerous adaptations such as FaB or Generalized byzantine Paxos, and most notably Zyzzyva which leverages speculative execution and a semi-client driven protocol to reduce latency. SBFT modifies PBFT to scale to large replication degrees by utilizing collectors, threshold signatures and a fast path akin to Zyzzyva. Aardvark states the importance of robustness against byzantine failures and takes measures to increase the rate of leader rotation. Tendermint pushes this idea to the extreme by rotating leaders continuously, at the cost of assuming a synchronous network.
-Nevertheless, all protocols derived from the PBFT family suffer from the leader bottleneck as well as enforcing a total order even on commutative operations. BFT-Mir claims the leader proposing speed as the practical bottleneck in most implementations and improves upon this by allowing all replicas to act as proposers.
-Biblos achieves leaderless SMR by leveraging a non-skipping timestamp protocol. It furthermore allows for commutative Transactions to be executed in parallel at the cost of requiring read/write key sets to be known in advance. In order to preserve liveness however Bilbos falls back to a PBFT resolution. Q/U too, offers leaderless agreement via Qurorums for a limited read/write interface, but fails to terminate under contention. H/Q improves upon Q/U by adding PBFT fallback path under contention. Liskov et Al further explore byzantine Quorum protocols for a Read/Write interface, giving special attention to bounding the effects of byzantine clients. 
-While the literature on BFT state machine replication is extensive, the efforts to offer a transactional interface for BFT is scarce. SMR itself can be utilized as a straw-man system to implement pre-defined Transactions (one-shot or stored procedures) by enforcing a common total order  in which replicas will execute the transactions. 
-HRDB offers a dedicated BFT Database, but assumes a trusted shepheard layer, thus not being truly BF resilient
-Byantium offers Snapshot Isolation for Transactions by re-purposing PBFT as atomic broadcast. It executes requests only at a primary and uses replicas to validate results in the total order defined by the SMR protocol. Augustus implements mini-transactions, a limited TX model that declares all operations before execution. It offers scalability via partitioning and achieves consistency within partitions by utilizing atomic broadcast. Whiile Augustus assumes an optimistic execution model that allows for aborts under concurrency, its follow up work Callinicos implements a locking scheme in order to avoid Transaction aborts. To do so efficiently it resorts to a limited transaction model that requires knowledge of read/write sets and otherwise locks an entire partition in order to guarantee mutual exclusion, thus voiding any concurrency. BFT Deferred update replication adopts an interactive OCC transaction model comparable to ours, allowing execution to be speculative at clients. However, it uses PBFT atomic broadcast to enforce SMR on validation, thus resorting to a leader, and totally ordering all requests. It moreover does not extend to multiple shards.
-Chainspace and Omniledger implement blockchain sharding by layering 2PC and atomic broadcast (within shards) for UTXO transactions. Rapidchain offers efficient sharding for a permissionless system. 
-
-\cite{kotla2007zyzzyva}
-
-%-------------------------------------------------------------------------------
-\section{Conclusion}
-%-------------------------------------------------------------------------------
-
+\input{sections/Conclusion.tex}
 
 %-------------------------------------------------------------------------------
 \section*{Acknowledgments}
