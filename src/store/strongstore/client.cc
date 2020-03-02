@@ -298,7 +298,7 @@ Client::Stats()
 }
 
 /* Callback from a tss replica upon any request. */
-void
+bool
 Client::tssCallback(const string &request, const string &reply)
 {
     lock_guard<mutex> lock(cv_m);
@@ -309,6 +309,7 @@ Client::tssCallback(const string &request, const string &reply)
     
     // Wake up thread waiting for the reply.
     cv.notify_all();
+    return true;
 }
 
 } // namespace strongstore

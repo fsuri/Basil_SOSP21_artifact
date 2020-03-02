@@ -281,7 +281,7 @@ void ShardClient::GetTimeout(uint64_t reqId) {
 }
 
 /* Callback from a shard replica on get operation completion. */
-void ShardClient::GetCallback(uint64_t reqId, const string &request_str,
+bool ShardClient::GetCallback(uint64_t reqId, const string &request_str,
     const string &reply_str) {
   /* Replies back from a shard. */
   Reply reply;
@@ -300,10 +300,11 @@ void ShardClient::GetCallback(uint64_t reqId, const string &request_str,
       gcb(reply.status(), key, reply.value(), Timestamp());
     }
   }
+  return true;
 }
 
 /* Callback from a shard replica on prepare operation completion. */
-void ShardClient::PrepareCallback(uint64_t reqId,
+bool ShardClient::PrepareCallback(uint64_t reqId,
     const string &request_str, const string &reply_str) {
   Reply reply;
   reply.ParseFromString(reply_str);
@@ -321,10 +322,11 @@ void ShardClient::PrepareCallback(uint64_t reqId,
       pcb(reply.status(), Timestamp());
     }
   }
+  return true;
 }
 
 /* Callback from a shard replica on commit operation completion. */
-void ShardClient::CommitCallback(uint64_t reqId,
+bool ShardClient::CommitCallback(uint64_t reqId,
     const string &request_str, const string &reply_str) {
   // COMMITs always succeed.
   Debug("[shard %lu:%i] COMMIT callback", client_id, shard);
@@ -336,10 +338,11 @@ void ShardClient::CommitCallback(uint64_t reqId,
     delete itr->second;
     ccb(true);
   }
+  return true;
 }
 
 /* Callback from a shard replica on abort operation completion. */
-void ShardClient::AbortCallback(uint64_t reqId,
+bool ShardClient::AbortCallback(uint64_t reqId,
     const string &request_str, const string &reply_str) {
   // ABORTs always succeed.
 
@@ -355,7 +358,7 @@ void ShardClient::AbortCallback(uint64_t reqId,
     delete itr->second;
     acb();
   }
-
+  return true;
 }
 
 } // namespace tapir

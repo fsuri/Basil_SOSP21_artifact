@@ -190,7 +190,7 @@ void ShardClient::CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply
 	}
 }
 
-void ShardClient::PreAcceptContinuation(const string &request_str, const string &reply_str) {
+bool ShardClient::PreAcceptContinuation(const string &request_str, const string &reply_str) {
 
 	// Debug("In preaccept continuation");
 	janusstore::proto::Reply reply;
@@ -213,7 +213,7 @@ void ShardClient::PreAcceptContinuation(const string &request_str, const string 
   	this->PreAcceptCallback(txn_id, reply, pcb);
 }
 
-void ShardClient::AcceptContinuation(const string &request_str,
+bool ShardClient::AcceptContinuation(const string &request_str,
     const string &reply_str) {
 
 	// Debug("In accept continuation");
@@ -237,7 +237,7 @@ void ShardClient::AcceptContinuation(const string &request_str,
   	this->AcceptCallback(txn_id, reply, acb);
 }
 
-void ShardClient::CommitContinuation(const string &request_str,
+bool ShardClient::CommitContinuation(const string &request_str,
     const string &reply_str) {
 
 	janusstore::proto::Reply reply;
@@ -276,7 +276,7 @@ void ShardClient::Read(string key, client_read_callback pcb) {
 	}
 }
 
-void ShardClient::ReadContinuation(const string &request_str, const string &reply_str) {
+bool ShardClient::ReadContinuation(const string &request_str, const string &reply_str) {
 	janusstore::proto::Reply reply;
 	reply.ParseFromString(reply_str);
 
@@ -284,6 +284,7 @@ void ShardClient::ReadContinuation(const string &request_str, const string &repl
 	client_read_callback rcb = this->pendingReads[key];
 
 	this->ReadCallback(reply.key(), reply.value(), rcb);
+  return true;
 }
 
 void ShardClient::ReadCallback(string key, string value, client_read_callback rcb) {

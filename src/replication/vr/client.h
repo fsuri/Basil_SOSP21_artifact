@@ -56,6 +56,11 @@ public:
                                 continuation_t continuation,
                                 error_continuation_t error_continuation = nullptr,
                                 uint32_t timeout = DEFAULT_UNLOGGED_OP_TIMEOUT);
+    virtual void InvokeUnloggedAll(const string &request,
+        continuation_t continuation,
+        error_continuation_t error_continuation = nullptr,
+        uint32_t timeout = DEFAULT_UNLOGGED_OP_TIMEOUT) override;
+
     virtual void ReceiveMessage(const TransportAddress &remote,
                                 const string &type, const string &data,
                                 void *meta_data);

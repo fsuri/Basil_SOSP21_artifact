@@ -247,7 +247,7 @@ ShardClient::GetTimeout()
 }
 
 /* Callback from a shard replica on get operation completion. */
-void
+bool
 ShardClient::GetCallback(const string &request_str, const string &reply_str)
 {
     /* Replies back from a shard. */
@@ -264,10 +264,11 @@ ShardClient::GetCallback(const string &request_str, const string &reply_str)
             w->Reply(reply.status(), reply.value());
         }
     }
+    return true;
 }
 
 /* Callback from a shard replica on prepare operation completion. */
-void
+bool
 ShardClient::PrepareCallback(const string &request_str, const string &reply_str)
 {
     Reply reply;
@@ -284,10 +285,11 @@ ShardClient::PrepareCallback(const string &request_str, const string &reply_str)
             w->Reply(reply.status(), Timestamp());
         }
     }
+    return true;
 }
 
 /* Callback from a shard replica on commit operation completion. */
-void
+bool
 ShardClient::CommitCallback(const string &request_str, const string &reply_str)
 {
     // COMMITs always succeed.
@@ -304,10 +306,11 @@ ShardClient::CommitCallback(const string &request_str, const string &reply_str)
         w->Reply(reply.status());
     }
     Debug("[shard %i] Received COMMIT callback [%d]", shard, reply.status());
+    return true;
 }
 
 /* Callback from a shard replica on abort operation completion. */
-void
+bool
 ShardClient::AbortCallback(const string &request_str, const string &reply_str)
 {
     // ABORTs always succeed.
@@ -324,6 +327,7 @@ ShardClient::AbortCallback(const string &request_str, const string &reply_str)
         w->Reply(reply.status());
     }
     Debug("[shard %i] Received ABORT callback [%d]", shard, reply.status());
+    return true;
 }
 
 } // namespace strongstore

@@ -67,6 +67,11 @@ public:
         continuation_t continuation,
         error_continuation_t error_continuation = nullptr,
         uint32_t timeout = DEFAULT_UNLOGGED_OP_TIMEOUT) override;
+    virtual void InvokeUnloggedAll(
+        const string &request,
+        continuation_t continuation,
+        error_continuation_t error_continuation = nullptr,
+        uint32_t timeout = DEFAULT_UNLOGGED_OP_TIMEOUT) override;
     virtual void InvokeUnlogged(
         int groupIdx,
         int replicaIdx,

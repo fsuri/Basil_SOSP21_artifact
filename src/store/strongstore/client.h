@@ -66,7 +66,7 @@ private:
     void run_client(); // Runs the transport event loop.
 
     // timestamp server call back
-    void tssCallback(const string &request, const string &reply);
+    bool tssCallback(const string &request, const string &reply);
 
     // local Prepare function
     int Prepare(uint64_t &ts);

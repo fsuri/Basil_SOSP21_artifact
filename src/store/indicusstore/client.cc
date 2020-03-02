@@ -37,7 +37,7 @@ using namespace std;
 
 Client::Client(const string configPath, int nShards, int nGroups,
                 int closestReplica, Transport *transport, partitioner part,
-                bool syncCommit, TrueTime timeServer)
+                bool syncCommit, uint64_t readQuorumSize, TrueTime timeServer)
     : nshards(nShards), ngroups(nGroups), transport(transport), part(part),
     syncCommit(syncCommit), timeServer(timeServer),
     lastReqId(0UL), config(nullptr) {
@@ -65,7 +65,7 @@ Client::Client(const string configPath, int nShards, int nGroups,
     /* Start a client for each shard. */
     for (uint64_t i = 0; i < ngroups; i++) {
         ShardClient *shardclient = new ShardClient(config,
-                transport, client_id, i, closestReplica);
+                transport, client_id, i, closestReplica, readQuorumSize);
         bclient[i] = new BufferClient(shardclient);
     }
 

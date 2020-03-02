@@ -51,7 +51,8 @@ class ShardClient : public TxnClient {
  public:
   /* Constructor needs path to shard config. */
   ShardClient(transport::Configuration *config, Transport *transport,
-      uint64_t client_id, int shard, int closestReplica);
+      uint64_t client_id, int shard, int closestReplica,
+      uint64_t readQuorumSize);
   virtual ~ShardClient();
 
   // Begin a transaction.
@@ -85,6 +86,16 @@ class ShardClient : public TxnClient {
       prepare_timeout_callback ptcb, uint32_t timeout) override;
 
  private:
+  struct PendingQuorumGet : public TxnClient::PendingGet {
+    PendingQuorumGet(uint64_t reqId) : TxnClient::PendingGet(reqId),
+        numReplies(0UL), numOKReplies(0UL) { }
+    ~PendingQuorumGet() { }
+    Timestamp maxTs;
+    std::string maxValue;
+    uint64_t numReplies;
+    uint64_t numOKReplies;
+  };
+
   struct PendingPrepare : public TxnClient::PendingPrepare {
     PendingPrepare(uint64_t reqId) : TxnClient::PendingPrepare(reqId),
         requestTimeout(nullptr) { }
@@ -126,10 +137,11 @@ class ShardClient : public TxnClient {
   transport::Configuration *config;
   int shard; // which shard this client accesses
   int replica; // which replica to use for reads
+  uint64_t readQuorumSize;
 
   replication::ir::IRClient *client; // Client proxy.
 
-  std::unordered_map<uint64_t, PendingGet *> pendingGets;
+  std::unordered_map<uint64_t, PendingQuorumGet *> pendingGets;
   std::unordered_map<uint64_t, PendingPrepare *> pendingPrepares;
   std::unordered_map<uint64_t, PendingCommit *> pendingCommits;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
@@ -141,13 +153,13 @@ class ShardClient : public TxnClient {
   void GetTimeout(uint64_t reqId);
 
   /* Callbacks for hearing back from a shard for an operation. */
-  void GetCallback(uint64_t reqId, const std::string &,
+  bool GetCallback(uint64_t reqId, const std::string &,
       const std::string &);
-  void PrepareCallback(uint64_t reqId, const std::string &,
+  bool PrepareCallback(uint64_t reqId, const std::string &,
       const std::string &);
-  void CommitCallback(uint64_t reqId, const std::string &,
+  bool CommitCallback(uint64_t reqId, const std::string &,
       const std::string &);
-  void AbortCallback(uint64_t reqId, const std::string &,
+  bool AbortCallback(uint64_t reqId, const std::string &,
       const std::string &);
 
   /* Helper Functions for starting and finishing requests */

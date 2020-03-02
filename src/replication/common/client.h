@@ -61,7 +61,7 @@ class Client : public TransportReceiver
 {
 public:
     using continuation_t =
-        std::function<void(const string &request, const string &reply)>;
+        std::function<bool(const string &request, const string &reply)>;
     using error_continuation_t =
         std::function<void(const string &request, ErrorCode err)>;
 
@@ -77,6 +77,11 @@ public:
         error_continuation_t error_continuation = nullptr) = 0;
     virtual void InvokeUnlogged(
         int replicaIdx,
+        const string &request,
+        continuation_t continuation,
+        error_continuation_t error_continuation = nullptr,
+        uint32_t timeout = DEFAULT_UNLOGGED_OP_TIMEOUT) = 0;
+    virtual void InvokeUnloggedAll(
         const string &request,
         continuation_t continuation,
         error_continuation_t error_continuation = nullptr,

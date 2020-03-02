@@ -170,7 +170,7 @@ LockClient::Decide(const map<string, std::size_t> &results)
     return final_reply_str;
 }
 
-void
+bool
 LockClient::LockCallback(const std::string &request_str, const std::string &reply_str)
 {
     Debug("Lock Callback: %s %s", request_str.c_str(), reply_str.c_str());
@@ -182,7 +182,7 @@ LockClient::LockCallback(const std::string &request_str, const std::string &repl
     w->Reply(reply.status());
 }
 
-void
+bool
 LockClient::UnlockCallback(const std::string &request_str, const std::string &reply_str)
 {
     Debug("Lock Callback: %s %s", request_str.c_str(), reply_str.c_str());
@@ -192,7 +192,7 @@ LockClient::UnlockCallback(const std::string &request_str, const std::string &re
     w->Reply(0);
 }
 
-void
+bool
 LockClient::ErrorCallback(const std::string &request_str,
                           replication::ErrorCode err)
 {

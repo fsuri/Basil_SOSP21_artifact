@@ -89,9 +89,9 @@ private:
     Promise *waiting = nullptr;
 
     /* Callbacks for hearing back for an operation. */
-    void LockCallback(const std::string &, const std::string &);
-    void UnlockCallback(const std::string &, const std::string &);
-    void ErrorCallback(const std::string &, replication::ErrorCode);
+    bool LockCallback(const std::string &, const std::string &);
+    bool UnlockCallback(const std::string &, const std::string &);
+    bool ErrorCallback(const std::string &, replication::ErrorCode);
 };
 
 } // namespace lockserver

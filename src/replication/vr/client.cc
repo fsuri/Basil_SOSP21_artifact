@@ -104,6 +104,13 @@ VRClient::InvokeUnlogged(int replicaIdx,
     }
 }
 
+void VRClient::InvokeUnloggedAll(const string &request,
+    continuation_t continuation, error_continuation_t error_continuation,
+    uint32_t timeout) {
+  Panic("Unimplemented.");
+  return;
+}
+
 void
 VRClient::SendRequest(const PendingRequest *req)
 {

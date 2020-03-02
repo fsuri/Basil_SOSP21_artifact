@@ -40,8 +40,10 @@ using namespace std;
 using namespace proto;
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
-    uint64_t client_id, int shard, int closestReplica) : client_id(client_id),
-    transport(transport), config(config), shard(shard) {
+    uint64_t client_id, int shard, int closestReplica,
+    uint64_t readQuorumSize) : client_id(client_id),
+    transport(transport), config(config), shard(shard),
+    readQuorumSize(readQuorumSize) {
   client = new replication::ir::IRClient(*config, transport, client_id);
 
   if (closestReplica == -1) {
@@ -73,7 +75,7 @@ void ShardClient::Get(uint64_t id, const std::string &key, get_callback gcb,
   request.SerializeToString(&request_str);
 
   uint64_t reqId = lastReqId++;
-  PendingGet *pendingGet = new PendingGet(reqId);
+  PendingQuorumGet *pendingGet = new PendingQuorumGet(reqId);
   pendingGets[reqId] = pendingGet;
   pendingGet->key = key;
   pendingGet->gcb = gcb;
@@ -103,13 +105,13 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   request.SerializeToString(&request_str);
 
   uint64_t reqId = lastReqId++;
-  PendingGet *pendingGet = new PendingGet(reqId);
+  PendingQuorumGet *pendingGet = new PendingQuorumGet(reqId);
   pendingGets[reqId] = pendingGet;
   pendingGet->key = key;
   pendingGet->gcb = gcb;
   pendingGet->gtcb = gtcb;
 
-  client->InvokeUnlogged(replica, request_str, bind(&ShardClient::GetCallback,
+  client->InvokeUnloggedAll(request_str, bind(&ShardClient::GetCallback,
       this, pendingGet->reqId, placeholders::_1, placeholders::_2),
       bind(&ShardClient::GetTimeout, this, pendingGet->reqId), timeout);
 }
@@ -281,29 +283,48 @@ void ShardClient::GetTimeout(uint64_t reqId) {
 }
 
 /* Callback from a shard replica on get operation completion. */
-void ShardClient::GetCallback(uint64_t reqId, const string &request_str,
+bool ShardClient::GetCallback(uint64_t reqId, const string &request_str,
     const string &reply_str) {
+  auto itr = this->pendingGets.find(reqId);
+  if (itr == this->pendingGets.end()) {
+    return true; // this is a stale request
+  }
+
   /* Replies back from a shard. */
   Reply reply;
   reply.ParseFromString(reply_str);
 
-  auto itr = this->pendingGets.find(reqId);
-  if (itr != this->pendingGets.end()) {
-    get_callback gcb = itr->second->gcb;
-    std::string key = itr->second->key;
-    this->pendingGets.erase(itr);
-    delete itr->second;
-    Debug("[shard %lu:%i] GET callback [%d]", client_id, shard, reply.status());
-    if (reply.has_timestamp()) {
-      gcb(reply.status(), key, reply.value(), Timestamp(reply.timestamp()));
-    } else {
-      gcb(reply.status(), key, reply.value(), Timestamp());
+  itr->second->numReplies++;
+  if (reply.status() == REPLY_OK) {
+    itr->second->numOKReplies++;
+    Timestamp replyTs(reply.timestamp());
+    if (itr->second->maxTs < replyTs) {
+      itr->second->maxTs = replyTs;
+      itr->second->maxValue = reply.value();
     }
+  }
+
+  if (itr->second->numOKReplies >= readQuorumSize ||
+      itr->second->numReplies == static_cast<uint64_t>(config->n)) {
+    PendingQuorumGet *req = itr->second;
+    get_callback gcb = req->gcb;
+    std::string key = req->key;
+    pendingGets.erase(itr);
+    int32_t status = REPLY_FAIL;
+    if (req->numOKReplies >= readQuorumSize) {
+      status = REPLY_OK;
+    }
+    Debug("[shard %lu:%i] GET callback [%d]", client_id, shard, status);
+    gcb(status, key, req->maxValue, req->maxTs);
+    delete req;
+    return true;
+  } else {
+    return false;
   }
 }
 
 /* Callback from a shard replica on prepare operation completion. */
-void ShardClient::PrepareCallback(uint64_t reqId,
+bool ShardClient::PrepareCallback(uint64_t reqId,
     const string &request_str, const string &reply_str) {
   Reply reply;
   reply.ParseFromString(reply_str);
@@ -321,10 +342,11 @@ void ShardClient::PrepareCallback(uint64_t reqId,
       pcb(reply.status(), Timestamp());
     }
   }
+  return true;
 }
 
 /* Callback from a shard replica on commit operation completion. */
-void ShardClient::CommitCallback(uint64_t reqId,
+bool ShardClient::CommitCallback(uint64_t reqId,
     const string &request_str, const string &reply_str) {
   // COMMITs always succeed.
   Debug("[shard %lu:%i] COMMIT callback", client_id, shard);
@@ -336,10 +358,11 @@ void ShardClient::CommitCallback(uint64_t reqId,
     delete itr->second;
     ccb(true);
   }
+  return true;
 }
 
 /* Callback from a shard replica on abort operation completion. */
-void ShardClient::AbortCallback(uint64_t reqId,
+bool ShardClient::AbortCallback(uint64_t reqId,
     const string &request_str, const string &reply_str) {
   // ABORTs always succeed.
 
@@ -355,7 +378,7 @@ void ShardClient::AbortCallback(uint64_t reqId,
     delete itr->second;
     acb();
   }
-
+  return true;
 }
 
 } // namespace indicus

@@ -104,10 +104,10 @@ private:
     void GetTimeout();
 
     /* Callbacks for hearing back from a shard for an operation. */
-    void GetCallback(const std::string &, const std::string &);
-    void PrepareCallback(const std::string &, const std::string &);
-    void CommitCallback(const std::string &, const std::string &);
-    void AbortCallback(const std::string &, const std::string &);
+    bool GetCallback(const std::string &, const std::string &);
+    bool PrepareCallback(const std::string &, const std::string &);
+    bool CommitCallback(const std::string &, const std::string &);
+    bool AbortCallback(const std::string &, const std::string &);
 
     /* Helper Functions for starting and finishing requests */
     void StartRequest();

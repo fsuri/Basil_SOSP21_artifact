@@ -141,13 +141,13 @@ class ShardClient : public TxnClient {
   void GetTimeout(uint64_t reqId);
 
   /* Callbacks for hearing back from a shard for an operation. */
-  void GetCallback(uint64_t reqId, const std::string &,
+  bool GetCallback(uint64_t reqId, const std::string &,
       const std::string &);
-  void PrepareCallback(uint64_t reqId, const std::string &,
+  bool PrepareCallback(uint64_t reqId, const std::string &,
       const std::string &);
-  void CommitCallback(uint64_t reqId, const std::string &,
+  bool CommitCallback(uint64_t reqId, const std::string &,
       const std::string &);
-  void AbortCallback(uint64_t reqId, const std::string &,
+  bool AbortCallback(uint64_t reqId, const std::string &,
       const std::string &);
 
   /* Helper Functions for starting and finishing requests */

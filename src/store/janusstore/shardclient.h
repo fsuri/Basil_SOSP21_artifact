@@ -82,13 +82,13 @@ public:
     void CommitCallback(uint64_t txn_id, janusstore::proto::Reply reply, client_commit_callback ccb);
     void ReadCallback(string key, string value, client_read_callback rcb);
 
-    void PreAcceptContinuation(const string &request_str,
+    bool PreAcceptContinuation(const string &request_str,
     const string &reply_str);
-    void AcceptContinuation(const string &request_str,
+    bool AcceptContinuation(const string &request_str,
     const string &reply_str);
-    void CommitContinuation(const string &request_str,
+    bool CommitContinuation(const string &request_str,
     const string &reply_str);
-    void ReadContinuation(const string &request_str,
+    bool ReadContinuation(const string &request_str,
     const string &reply_str);
 
     int responded;
