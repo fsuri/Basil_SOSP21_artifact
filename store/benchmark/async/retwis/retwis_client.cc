@@ -13,11 +13,11 @@ RetwisClient::RetwisClient(KeySelector *keySelector, AsyncClient &client,
     Transport &transport, uint32_t clientId, int numRequests, int expDuration,
     uint64_t delay,
     int warmupSec, int cooldownSec, int tputInterval, uint32_t abortBackoff,
-    bool retryAborted, const std::string &latencyFilename)
+    bool retryAborted, int32_t maxAttempts, const std::string &latencyFilename)
     : AsyncTransactionBenchClient(client, transport, clientId, numRequests,
         expDuration,
         delay, warmupSec, cooldownSec, tputInterval, abortBackoff,
-        retryAborted, latencyFilename), keySelector(keySelector) {
+        retryAborted, maxAttempts, latencyFilename), keySelector(keySelector) {
 }
 
 RetwisClient::~RetwisClient() {

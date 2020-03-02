@@ -5,11 +5,13 @@
 #include "store/mortystore/common.h"
 
 #define TXN_ID_SHIFT 20
+
 namespace mortystore {
 
-Client::Client(const std::string configPath, uint64_t client_id, int nShards, int nGroups,
-    int closestReplica, Transport *transport, partitioner part) : client_id(client_id), nshards(nShards),
-    ngroups(nGroups), transport(transport), part(part), lastReqId(0UL),
+Client::Client(const std::string configPath, uint64_t client_id, int nShards,
+    int nGroups, int closestReplica, Transport *transport, partitioner part,
+    bool debugStats) : client_id(client_id), nshards(nShards), ngroups(nGroups),
+    transport(transport), part(part), debugStats(debugStats), lastReqId(0UL),
     prepareBranchIds(0UL), config(nullptr) {
   t_id = client_id << TXN_ID_SHIFT; 
 
@@ -55,11 +57,15 @@ void Client::Execute(AsyncTransaction *txn, execute_callback ecb) {
 
 void Client::ExecuteNextOperation(PendingRequest *req, proto::Branch &branch) {
   ClientBranch clientBranch = GetClientBranch(branch);
-  if (clientBranch.opCount > 0) {
-    uint64_t ns = Latency_End(&opLat);
-    stats.Add("op" + std::to_string(clientBranch.opCount), ns);
+
+  if (debugStats) {
+    if (clientBranch.opCount > 0) {
+      uint64_t ns = Latency_End(&opLat);
+      stats.Add("op" + std::to_string(clientBranch.opCount), ns);
+    }
+    Latency_Start(&opLat);
   }
-  Latency_Start(&opLat);
+
   Operation op = req->txn->GetNextOperation(clientBranch.opCount,
       clientBranch.readValues);
 
@@ -113,12 +119,17 @@ void Client::HandleReadReply(const TransportAddress &remote,
     return;
   }
 
-  struct timeval now;
-  gettimeofday(&now, NULL);
-  uint64_t diff = now.tv_usec - msg.ts();
+  itr->second->waitingToAbort = false;
 
   ClientBranch clientBranch = GetClientBranch(msg.branch());
-  stats.Add("recv_read_write_reply" + std::to_string(msg.branch().txn().id()), diff);
+
+  if (debugStats) {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    uint64_t diff = now.tv_usec - msg.ts();
+    stats.Add("recv_read_write_reply" + std::to_string(msg.branch().txn().id()),
+        diff);
+  }
 
   proto::Branch branch(msg.branch());
   ExecuteNextOperation(itr->second, branch);
@@ -131,12 +142,17 @@ void Client::HandleWriteReply(const TransportAddress &remote,
     return;
   }
 
-  struct timeval now;
-  gettimeofday(&now, NULL);
-  uint64_t diff = now.tv_usec - msg.ts();
+  itr->second->waitingToAbort = false;
 
   ClientBranch clientBranch = GetClientBranch(msg.branch());
-  stats.Add("recv_read_write_reply" + std::to_string(msg.branch().txn().id()), diff);
+
+  if (debugStats) {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    uint64_t diff = now.tv_usec - msg.ts();
+    stats.Add("recv_read_write_reply" + std::to_string(msg.branch().txn().id()),
+        diff);
+  }
 
   proto::Branch branch(msg.branch());
   ExecuteNextOperation(itr->second, branch);
@@ -151,8 +167,10 @@ void Client::HandlePrepareOK(const TransportAddress &remote,
 
   itr->second->prepareOKs[msg.branch()]++;
   if (itr->second->prepareOKs[msg.branch()] == msg.branch().shards().size()) {
-    uint64_t ns = Latency_End(&opLat);
-    stats.Add("commit", ns);
+    if (debugStats) {
+      uint64_t ns = Latency_End(&opLat);
+      stats.Add("commit", ns);
+    }
 
     proto::Commit commit;
     *commit.mutable_branch() = msg.branch();
@@ -298,19 +316,36 @@ void Client::Abort(const proto::Branch &branch) {
   }
 }
 
-void Client::ProcessPrepareKOs(PendingRequest *req, const proto::Branch &branch) {
+void Client::ProcessPrepareKOs(PendingRequest *req,
+    const proto::Branch &branch) {
   req->prepareResponses++;
   if (req->prepareResponses == req->sentPrepares) {
-    uint64_t ns = Latency_End(&opLat);
-    stats.Add("abort", ns);
+    req->waitingToAbort = true;
+    uint64_t reqId = req->id;
+    //transport->Timer(10000, [&,reqId](){
+      auto itr = pendingReqs.find(reqId);
+      if (itr == pendingReqs.end()) {
+        return;
+      }
 
-    Debug("Received responses for all outstanding prepares (%lu).", req->sentPrepares);
-    
-    Abort(branch);
+      if (!itr->second->waitingToAbort) {
+        return;
+      }
 
-    req->ecb(FAILED, std::map<std::string, std::string>());
-    pendingReqs.erase(pendingReqs.find(req->id));
-    delete req;
+      if (debugStats) {
+        uint64_t ns = Latency_End(&opLat);
+        stats.Add("abort", ns);
+      }
+
+      Debug("Received responses for all outstanding prepares (%lu).",
+          itr->second->sentPrepares);
+      
+      Abort(branch);
+
+      itr->second->ecb(FAILED, std::map<std::string, std::string>());
+      pendingReqs.erase(pendingReqs.find(itr->second->id));
+      delete itr->second;
+    //});
   } else {
     Debug("Prepare failed. Waiting on %lu other prepare responses (out of %lu).",
         req->sentPrepares - req->prepareResponses, req->sentPrepares);

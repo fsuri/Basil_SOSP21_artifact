@@ -2,6 +2,7 @@
 #define MORTY_COMMON_H
 
 #include <iostream>
+#include <vector>
 
 #include "store/mortystore/morty-proto.pb.h"
 #include "store/mortystore/specstore.h"
@@ -31,19 +32,29 @@ struct BranchComparer {
   bool operator() (const proto::Branch &b1, const proto::Branch &b2) const;
 };
 
+struct TransactionVectorHasher {
+  size_t operator() (const std::vector<proto::Transaction> &v) const;
+};
+
+struct TransactionVectorComparer {
+  bool operator() (const std::vector<proto::Transaction> &v1,
+			const std::vector<proto::Transaction> &v2) const;
+};
+
+
 void PrintBranch(const proto::Branch &branch, std::ostream &os);
 
 void PrintTransactionList(const std::vector<proto::Transaction> &txns, std::ostream &os);
 
 bool CommitCompatible(const proto::Branch &branch, const SpecStore &store, const std::vector<proto::Transaction> &seq, const std::set<uint64_t> &prepared_txn_ids);
 
-bool WaitCompatible(const proto::Branch &branch, const SpecStore &store, const std::vector<proto::Transaction> &seq);
+bool WaitCompatible(const proto::Branch &branch, const SpecStore &store, const std::vector<proto::Transaction> &seq, bool ignoreLastOp = false);
 
 bool DepsFinalized(const proto::Branch &branch,
       const std::set<uint64_t> &prepared_txn_ids);
 
 bool ValidSubsequence(const proto::Branch &branch, const SpecStore &store,
-      const std::vector<proto::Transaction> &seq2);
+      const std::vector<proto::Transaction> &seq2, bool ignoreLastOp = false);
 
 bool NoConflicts(const proto::Transaction &txn,
       const std::vector<proto::Transaction> &seq);
@@ -65,6 +76,7 @@ bool ValueInTransaction(const proto::Transaction &txn, const std::string &key,
 proto::Transaction _testing_txn(const std::vector<std::vector<std::string>> &txn);
 proto::Branch _testing_branch(const std::vector<std::vector<std::vector<std::string>>> &branch);
 std::vector<proto::Transaction> _testing_txns(const std::vector<std::vector<std::vector<std::string>>> &txns);
+proto::Operation _testing_op(const std::vector<std::string> &op);
 
 
 

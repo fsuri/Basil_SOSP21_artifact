@@ -10,9 +10,13 @@
 namespace mortystore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
-    Transport *transport, bool debugStats) : config(config), idx(idx),
-    transport(transport), debugStats(debugStats) {
+    Transport *transport, bool debugStats, uint64_t prepareBatchPeriod) : config(config),
+    groupIdx(groupIdx), idx(idx), transport(transport), debugStats(debugStats),
+    prepareBatchPeriod(prepareBatchPeriod) {
   transport->Register(this, config, groupIdx, idx);
+  if (prepareBatchPeriod > 0) {
+    transport->Timer(prepareBatchPeriod, std::bind(&Server::PrepareBatchTrigger, this));
+  }
   _Latency_Init(&readWriteResp, "read_write_response");
 }
 
@@ -30,6 +34,13 @@ void Server::ReceiveMessage(const TransportAddress &remote,
 
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Read: ";
+      PrintBranch(read.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
 
     if (debugStats) {
       struct timeval now;
@@ -49,7 +60,14 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     }
   } else if (type == write.GetTypeName()) {
     write.ParseFromString(data);
-    
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Write: ";
+      PrintBranch(write.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
+
     if (debugStats) {
       struct timeval now;
       gettimeofday(&now, NULL);
@@ -69,15 +87,51 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     }
   } else if (type == prepare.GetTypeName()) {
     prepare.ParseFromString(data);
-    HandlePrepare(remote, prepare);
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Prepare: ";
+      PrintBranch(prepare.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
+
+    if (prepareBatchPeriod > 0 ){
+      prepareBatch.push_back(std::make_pair(&remote, prepare));
+    } else {
+      HandlePrepare(remote, prepare);
+    }
   } else if (type == ko.GetTypeName()) {
     ko.ParseFromString(data);
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "KO: ";
+      PrintBranch(ko.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
+
     HandleKO(remote, ko);
   } else if (type == commit.GetTypeName()) {
     commit.ParseFromString(data);
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Commit: ";
+      PrintBranch(commit.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
+
     HandleCommit(remote, commit);
   } else if (type == abort.GetTypeName()) {
     abort.ParseFromString(data);
+
+    if (Message_DebugEnabled(__FILE__)) {
+      std::stringstream ss;
+      ss << "Abort: ";
+      PrintBranch(abort.branch(), ss);
+      Debug("%s", ss.str().c_str());
+    }
+
     HandleAbort(remote, abort);
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
@@ -88,56 +142,39 @@ void Server::Load(const std::string &key, const std::string &value,
     const Timestamp timestamp) {
 }
 
-void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "Read: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
+/** State Machine Transitions **/
 
+void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) {
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
-    generator.ClearPending(msg.branch().txn().id());
+    generator.ClearActive(msg.branch().txn().id());
     return;
   }
 
-  txn_coordinators[msg.branch().txn().id()] = &remote;
-
-  generator.AddPendingRead(msg.key(), msg.branch());
-
+  if (txn_coordinators.find(msg.branch().txn().id()) == txn_coordinators.end()) {
+    txn_coordinators[msg.branch().txn().id()] = &remote;
+  }
+    
+  generator.AddActive(msg.branch());
   SendBranchReplies(msg.branch(), proto::OperationType::READ, msg.key());
 }
 
 void Server::HandleWrite(const TransportAddress &remote, const proto::Write &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "Write: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
-
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
-    generator.ClearPending(msg.branch().txn().id());
+    generator.ClearActive(msg.branch().txn().id());
     return;
   }
 
-  txn_coordinators[msg.branch().txn().id()] = &remote;
+  if (txn_coordinators.find(msg.branch().txn().id()) == txn_coordinators.end()) {
+    txn_coordinators[msg.branch().txn().id()] = &remote;
+  }
 
-  generator.AddPendingWrite(msg.key(), msg.branch());
-
+  generator.AddActive(msg.branch());
   SendBranchReplies(msg.branch(), proto::OperationType::WRITE, msg.key());
 }
 
 void Server::HandlePrepare(const TransportAddress &remote, const proto::Prepare &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "Prepare: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
-
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
     return;
@@ -149,13 +186,6 @@ void Server::HandlePrepare(const TransportAddress &remote, const proto::Prepare 
 }
 
 void Server::HandleKO(const TransportAddress &remote, const proto::KO &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "KO: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
-
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
     return;
@@ -180,34 +210,41 @@ void Server::HandleKO(const TransportAddress &remote, const proto::KO &msg) {
 }
 
 void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "Commit: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
-
   if (committed_txn_ids.find(msg.branch().txn().id()) != committed_txn_ids.end()) {
     // msg is for already committed txn
     return;
   }
 
   //committed.push_back(msg.branch().txn());
-  ApplyTransaction(msg.branch().txn());
-  prepared.erase(std::remove_if(prepared.begin(), prepared.end(), [&](const proto::Transaction &txn) {
+  store.ApplyTransaction(msg.branch().txn());
+  // TODO: this doesn't seem safe. or is it?
+  //    We only receive a commit message for this txn when all the participants have responded
+  //    PrepareOK ==> participants only respond PrepareOK when theyve received Commit messages for
+  //    dependencies
+  //    
+  //    So any conflicting transactions in prepared will be erased in dependency order
+  prepared.erase(std::remove_if(prepared.begin(), prepared.end(),
+      [&](const proto::Transaction &txn) {
         return txn.id() == msg.branch().txn().id();
       }), prepared.end());
 
   committed_txn_ids.insert(msg.branch().txn().id());
   
-  generator.ClearPending(msg.branch().txn().id());
+  generator.ClearActive(msg.branch().txn().id());
+
+  /*auto jtr = txn_coordinators.find(msg.branch().txn().id());
+  if (jtr != txn_coordinators.end()) {
+    txn_coordinators.erase(jtr);
+  }*/
 
   for (auto itr = waiting.begin(); itr != waiting.end(); ) {
     if (CheckBranch(*txn_coordinators[itr->txn().id()],
           *itr)) {
       waiting.erase(itr);
       for (auto shard : itr->shards()) {
-        transport->SendMessage(this, *shards[shard], msg);
+        if (shard != groupIdx) {
+          transport->SendMessage(this, *shards[shard], msg);
+        }
       }
     } else {
       ++itr;
@@ -216,15 +253,24 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
 }
 
 void Server::HandleAbort(const TransportAddress &remote, const proto::Abort &msg) {
-  if (Message_DebugEnabled(__FILE__)) {
-    std::stringstream ss;
-    ss << "Abort: ";
-    PrintBranch(msg.branch(), ss);
-    Debug("%s", ss.str().c_str());
-  }
-
-  generator.ClearPending(msg.branch().txn().id());
+  generator.ClearActive(msg.branch().txn().id());
 }
+
+void Server::PrepareBatchTrigger() {
+  std::sort(prepareBatch.begin(), prepareBatch.end(), [](const PrepareBatchItem &a,
+      const PrepareBatchItem &b) {
+    return a.second.branch().txn().id() < b.second.branch().txn().id();
+  });
+  for (const auto &pbi : prepareBatch) {
+    HandlePrepare(*(pbi.first), pbi.second);
+  }
+  prepareBatch.clear();
+  transport->Timer(prepareBatchPeriod, std::bind(&Server::PrepareBatchTrigger, this));
+}
+
+/** End State Machine Transitions **/
+
+/** State Machine Helper Functions **/
 
 bool Server::CheckBranch(const TransportAddress &addr, const proto::Branch &branch) {
   if (prepared_txn_ids.find(branch.txn().id()) != prepared_txn_ids.end()) {
@@ -304,16 +350,6 @@ bool Server::IsStaleMessage(uint64_t txn_id) const {
     aborted_txn_ids.find(txn_id) != aborted_txn_ids.end();
 }
 
-void Server::ApplyTransaction(const proto::Transaction &txn) {
-  std::string val;
-  for (int64_t i = 0; i < txn.ops_size(); ++i) {
-    const proto::Operation &op = txn.ops(i);
-    if (op.type() == proto::OperationType::READ) {
-      store.get(op.key(), txn, val);
-    } else {
-      store.put(op.key(), op.val(), txn);
-    }
-  }
-}
+/** End State Machine Helper Functions **/
 
 } // namespace mortystore

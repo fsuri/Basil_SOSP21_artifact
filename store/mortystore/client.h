@@ -28,8 +28,9 @@ struct ClientBranch {
 
 class Client : public ::AsyncClient {
  public:
-  Client(const std::string configPath, uint64_t client_id, int nShards, int nGroups,
-      int closestReplica, Transport *transport, partitioner part);
+  Client(const std::string configPath, uint64_t client_id, int nShards,
+      int nGroups, int closestReplica, Transport *transport, partitioner part,
+      bool debugStats);
   virtual ~Client();
 
   virtual void Execute(AsyncTransaction *txn, execute_callback ecb);
@@ -38,7 +39,8 @@ class Client : public ::AsyncClient {
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), sentPrepares(0UL),
         prepareResponses(0UL), commitTries(0), maxRepliedTs(0UL),
-        prepareStatus(REPLY_OK), prepareTimestamp(nullptr) {
+        prepareStatus(REPLY_OK), prepareTimestamp(nullptr),
+        waitingToAbort(false) {
     }
 
     ~PendingRequest() {
@@ -60,6 +62,7 @@ class Client : public ::AsyncClient {
     bool callbackInvoked;
     std::unordered_map<proto::Branch, uint64_t, BranchHasher, BranchComparer> prepareOKs; 
     std::unordered_map<proto::Branch, std::vector<proto::PrepareKO>, BranchHasher, BranchComparer> prepareKOes;
+    bool waitingToAbort;
   };
 
   void ExecuteNextOperation(PendingRequest *req, proto::Branch &branch);
@@ -96,6 +99,7 @@ class Client : public ::AsyncClient {
   Transport *transport;
 
   partitioner part;
+  const bool debugStats;
   
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;

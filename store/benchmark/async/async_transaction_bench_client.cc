@@ -6,11 +6,12 @@
 AsyncTransactionBenchClient::AsyncTransactionBenchClient(AsyncClient &client,
     Transport &transport, uint32_t clientId, int numRequests, int expDuration,
     uint64_t delay, int warmupSec, int cooldownSec, int tputInterval,
-    uint32_t abortBackoff, bool retryAborted,
+    uint32_t abortBackoff, bool retryAborted, int32_t maxAttempts,
     const std::string &latencyFilename) : BenchmarkClient(transport, clientId,
       numRequests, expDuration, delay, warmupSec, cooldownSec, tputInterval,
       latencyFilename), client(client), abortBackoff(abortBackoff),
-      retryAborted(retryAborted), currTxn(nullptr), currTxnAttempts(0UL) {
+      retryAborted(retryAborted), maxAttempts(maxAttempts), currTxn(nullptr),
+      currTxnAttempts(0UL) {
 }
 
 AsyncTransactionBenchClient::~AsyncTransactionBenchClient() {
@@ -28,7 +29,9 @@ void AsyncTransactionBenchClient::ExecuteCallback(int result,
     std::map<std::string, std::string> readValues) {
   stats.Increment(GetLastOp() + "_attempts", 1);
   ++currTxnAttempts;
-  if (result == SUCCESS || !retryAborted) {
+  if (result == SUCCESS ||
+      (maxAttempts != -1 && currTxnAttempts >= maxAttempts) ||
+      !retryAborted) {
     if (result == SUCCESS) {
       stats.Increment(GetLastOp() + "_committed", 1);
     }

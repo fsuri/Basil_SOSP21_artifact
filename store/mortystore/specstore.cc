@@ -42,5 +42,16 @@ bool SpecStore::MostRecentConflict(const proto::Operation &op,
   }
 }
 
+void SpecStore::ApplyTransaction(const proto::Transaction &txn) {
+  std::string val;
+  for (int64_t i = 0; i < txn.ops_size(); ++i) {
+    const proto::Operation &op = txn.ops(i);
+    if (op.type() == proto::OperationType::READ) {
+      get(op.key(), txn, val);
+    } else {
+      put(op.key(), op.val(), txn);
+    }
+  }
+}
 
 } // namespace mortystore

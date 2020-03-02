@@ -98,6 +98,27 @@ bool BranchComparer::operator() (const proto::Branch &b1, const proto::Branch &b
   return b1 == b2;
 }
 
+size_t TransactionVectorHasher::operator() (const std::vector<proto::Transaction> &v) const {
+  size_t hash = 0UL;
+  for (const proto::Transaction &t : v) {
+		HashTransaction(hash, t);
+  }
+  return hash;
+}
+
+bool TransactionVectorComparer::operator() (const std::vector<proto::Transaction> &v1,
+			const std::vector<proto::Transaction> &v2) const {
+  if (v1.size() != v2.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < v1.size(); ++i) {
+    if (v1[i] != v2[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 void PrintTransactionList(const std::vector<proto::Transaction> &txns,
     std::ostream &os) {
   for (const auto &t : txns) {
@@ -115,6 +136,15 @@ void PrintTransactionList(const std::vector<proto::Transaction> &txns,
 }
 
 void PrintBranch(const proto::Branch &branch, std::ostream &os) {
+  os << branch.txn().id() << "[";
+  for (const proto::Operation &o : branch.txn().ops()) {
+    if (o.type() == proto::OperationType::READ) {
+      os << "r(" << o.key() << "),";
+    } else {
+      os << "w(" << o.key() << "),";
+    }
+  }
+  os << "]{";
   for (const auto &b : branch.deps()) {
     os << b.first << "[";
     for (const proto::Operation &o : b.second.ops()) {
@@ -126,15 +156,7 @@ void PrintBranch(const proto::Branch &branch, std::ostream &os) {
     }
     os << "],";
   }
-  os << branch.txn().id() << "[";
-  for (const proto::Operation &o : branch.txn().ops()) {
-    if (o.type() == proto::OperationType::READ) {
-      os << "r(" << o.key() << "),";
-    } else {
-      os << "w(" << o.key() << "),";
-    }
-  }
-  os << "]";
+  os << "}";
 }
 
 bool CommitCompatible(const proto::Branch &branch, const SpecStore &store,
@@ -145,8 +167,8 @@ bool CommitCompatible(const proto::Branch &branch, const SpecStore &store,
 }
 
 bool WaitCompatible(const proto::Branch &branch, const SpecStore &store,
-    const std::vector<proto::Transaction> &seq) {
-  return ValidSubsequence(branch, store, seq);
+    const std::vector<proto::Transaction> &seq, bool ignoreLastOp) {
+  return ValidSubsequence(branch, store, seq, ignoreLastOp);
 }
 
 
@@ -162,11 +184,16 @@ bool DepsFinalized(const proto::Branch &branch,
 
 bool ValidSubsequence(const proto::Branch &branch,
       const SpecStore &store,
-      const std::vector<proto::Transaction> &seq2) {
+      const std::vector<proto::Transaction> &seq2,
+      bool ignoreLastOp) {
   // now check that all conflicting transactions are ordered the same
   const proto::Transaction *t;
   std::vector<int> ignoret;
-  for (const proto::Operation &op : branch.txn().ops()) {
+  for (size_t i = 0; i < branch.txn().ops_size(); ++i) {
+    if (ignoreLastOp && i == branch.txn().ops_size() - 1) {
+      continue;
+    }
+    const proto::Operation &op = branch.txn().ops(i);
     if (MostRecentConflict(op, store, seq2, t)) {
       bool found = false;
       for (const auto &kv : branch.deps()) {
@@ -175,7 +202,7 @@ bool ValidSubsequence(const proto::Branch &branch,
           ignoret.clear();
           for (int64_t k = 0; k < t->ops_size(); ++k) {
             for (int64_t l = 0; l < dep.ops_size(); ++l) { 
-              // this is sort of assuming that each operation in a txn is unique
+              // TODO: this is sort of assuming that each operation in a txn is unique
               if (t->ops(k).type() == dep.ops(l).type()
                   && t->ops(k).key() == dep.ops(l).key()
                   && t->ops(k).val() == dep.ops(l).val()) {
@@ -286,13 +313,7 @@ proto::Transaction _testing_txn(const std::vector<std::vector<std::string>> &txn
   for (size_t i = 1; i < txn.size(); ++i) {
     UW_ASSERT(txn[i].size() == 2);
     proto::Operation *o = t.add_ops();
-    o->set_key(txn[i][0]);
-    o->set_val(txn[i][1]);
-    if (txn[i][1].length() == 0) {
-      o->set_type(proto::OperationType::READ);
-    } else {
-      o->set_type(proto::OperationType::WRITE);
-    }
+    *o = _testing_op(txn[i]);
   }
   return t;
 }
@@ -316,6 +337,18 @@ std::vector<proto::Transaction> _testing_txns(
     v.push_back(_testing_txn(txns[i]));
   }
   return v;
+}
+
+proto::Operation _testing_op(const std::vector<std::string> &op) {
+  proto::Operation o;
+  o.set_key(op[0]);
+  o.set_val(op[1]);
+  if (op[1].length() == 0) {
+    o.set_type(proto::OperationType::READ);
+  } else {
+    o.set_type(proto::OperationType::WRITE);
+  }
+  return o;
 }
 
 } // namespace mortystore

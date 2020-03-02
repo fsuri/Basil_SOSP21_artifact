@@ -44,6 +44,8 @@ Store::Get(uint64_t id, const string &key, pair<Timestamp,string> &value)
 {
     Debug("[%lu] GET %s", id, key.c_str());
 
+    active.insert(id);
+
     bool ret = store.get(key, value);
     if (ret) {
         Debug("Value: %s at <%lu, %lu>", value.second.c_str(), value.first.getTimestamp(), value.first.getID());
@@ -70,6 +72,9 @@ int
 Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, Timestamp &proposedTimestamp)
 {   
     Debug("[%lu] START PREPARE", id);
+
+    Debug("[%lu] Active transactions: %lu.", id, active.size());
+    active.erase(id);
 
     if (prepared.find(id) != prepared.end()) {
         if (prepared[id].first == timestamp) {
