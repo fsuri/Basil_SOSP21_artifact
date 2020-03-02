@@ -217,7 +217,14 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
 
   //committed.push_back(msg.branch().txn());
   store.ApplyTransaction(msg.branch().txn());
-  prepared.erase(std::remove_if(prepared.begin(), prepared.end(), [&](const proto::Transaction &txn) {
+  // TODO: this doesn't seem safe. or is it?
+  //    We only receive a commit message for this txn when all the participants have responded
+  //    PrepareOK ==> participants only respond PrepareOK when theyve received Commit messages for
+  //    dependencies
+  //    
+  //    So any conflicting transactions in prepared will be erased in dependency order
+  prepared.erase(std::remove_if(prepared.begin(), prepared.end(),
+      [&](const proto::Transaction &txn) {
         return txn.id() == msg.branch().txn().id();
       }), prepared.end());
 

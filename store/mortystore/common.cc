@@ -202,7 +202,7 @@ bool ValidSubsequence(const proto::Branch &branch,
           ignoret.clear();
           for (int64_t k = 0; k < t->ops_size(); ++k) {
             for (int64_t l = 0; l < dep.ops_size(); ++l) { 
-              // this is sort of assuming that each operation in a txn is unique
+              // TODO: this is sort of assuming that each operation in a txn is unique
               if (t->ops(k).type() == dep.ops(l).type()
                   && t->ops(k).key() == dep.ops(l).key()
                   && t->ops(k).val() == dep.ops(l).val()) {
