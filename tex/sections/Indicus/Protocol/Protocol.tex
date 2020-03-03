@@ -49,12 +49,19 @@ Client execution conducts as follows:\\
 A replica returns a pair $\langle \textit{(Committed, Prepared)} \rangle _{\sigma_r}$, where \\
 $Committed \coloneqq (value, version)_{cert}$ such that $ (value, version) \in R.CommitLog$, $version = max(q) : (key, val, q) \in R.CommitLog \land v < TS \}$ and $cert$ is a certificate proving (value, version) was allowed to commit (see Section Writeback) and\\
  $Prepared \coloneqq (value, version)$ such that $(value, version) \in R.PreparedSet$ and $version = max(q) : (key, val, q) \in R.PreparedSet \land Committed < v < TS \}$ .
-I.e. Committed is the largest committed write and Prepared is the largest uncommitted write that may be  committed and would make Committed outdated. 
+I.e. Committed is the largest committed write and Prepared is the largest uncommitted write that may be  committed and would make Committed outdated. \\
+
+1. Reading from 1 Replica: could abort
+2. Reading f+1 matching Prepared that are larger than the commit --> choose that and add dependency
+Guaranteed to see 1 thats not intentionally stale. But still arbitrarily stale if unlucky.
+3. If read from 2f+1 then its effectively a read lock. Note, could still have missed a prepared write and have to abort because we required f+1 matching. Why f+1? so it comes from 1 honest: we dont need proofs, and we know it is in the system for recovery.
+Still no guarantee that newest commit was seen, but some protection from other writes.
 
 
-Note, the TS used here is not the final one, its just the tuple of time and clientId. (The triple later is just necessary to differentiate two TX by a client that were assigned the same Time
+(Note: the TS used here is not the final one, its just the tuple of time and clientId. (The triple later is just necessary to differentiate two TX by a client that were assigned the same Time
 Add Read set decision rule, put in correlation to RQS
 Add exceptions etc.
+)
 
 
 \item \textbf{Commit} A Client finalizes its execution, computes the final Timestamp and submits 
