@@ -19,8 +19,9 @@ message ReadReply {
 
 message Prepare {
   required uint64 req_id = 1;
-  required TransactionMessage txn = 2;
-  optional TimestampMessage timestamp = 3;
+  required uint64 txn_id = 2;
+  required TransactionMessage txn = 3;
+  optional TimestampMessage timestamp = 4;
 }
 
 message PrepareReply {

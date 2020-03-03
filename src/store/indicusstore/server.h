@@ -39,7 +39,15 @@
 #include "store/indicusstore/store.h"
 #include "store/indicusstore/indicus-proto.pb.h"
 
+#include <unordered_map>
+#include <set>
+
 namespace indicusstore {
+
+enum OCCType {
+  TAPIR = 0,
+  MVTSO = 1
+};
 
 class Server : public TransportReceiver, public ::Server {
  public:
@@ -62,14 +70,28 @@ class Server : public TransportReceiver, public ::Server {
   void HandleCommit(const TransportAddress &remote, const proto::Commit &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
+  int32_t DoOCCCheck(uint64_t id, const Transaction &txn,
+      const Timestamp &proposedTs, Timestamp &retryTs);
+  int32_t DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
+      const Timestamp &proposedTs, Timestamp &retryTs);
+  int32_t DoMVTSOOCCCheck(uint64_t id, const Transaction &txn,
+      const Timestamp &ts);
+  void GetPreparedWrites(
+      std::unordered_map<std::string, std::set<Timestamp>> &writes);
+  void GetPreparedReads(
+      std::unordered_map<std::string, std::set<Timestamp>> &reads);
+
   const transport::Configuration &config;
   int groupIdx;
   int idx;
   Transport *transport;
+  OCCType occType;
+  
   Stats stats;
-
   VersionedKVStore store;
+  std::unordered_map<uint64_t, std::pair<Timestamp, Transaction>> prepared;
 
+  std::unordered_set<uint64_t> active;
 };
 
 } // namespace indicusstore
