@@ -73,7 +73,23 @@ void Server::Load(const string &key, const string &value,
     const Timestamp timestamp) {
 }
 
-void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) {
+void Server::HandleRead(const TransportAddress &remote,
+    const proto::Read &msg) {
+  std::pair<Timestamp, std::string> tsVal;
+  bool exists = store.get(msg.key(), tsVal);
+
+  proto::ReadReply reply;
+  reply.set_req_id(msg.req_id());
+  reply.set_key(msg.key());
+  if (exists) {
+    reply.set_status(REPLY_OK);
+    reply.set_value(tsVal.second);
+    tsVal.first.serialize(reply.mutable_timestamp());
+  } else {
+    reply.set_status(REPLY_FAIL);
+  }
+
+  transport->SendMessage(this, remote, reply);
 }
 
 void Server::HandlePrepare(const TransportAddress &remote,

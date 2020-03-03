@@ -68,6 +68,8 @@ class Server : public TransportReceiver, public ::Server {
   Transport *transport;
   Stats stats;
 
+  VersionedKVStore store;
+
 };
 
 } // namespace indicusstore
