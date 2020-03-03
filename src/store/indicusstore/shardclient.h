@@ -47,13 +47,17 @@
 
 namespace indicusstore {
 
-class ShardClient : public TxnClient {
+class ShardClient : public TxnClient, public TransportReceiver {
  public:
   /* Constructor needs path to shard config. */
   ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int shard, int closestReplica,
       uint64_t readQuorumSize);
   virtual ~ShardClient();
+
+  virtual void ReceiveMessage(const TransportAddress &remote,
+      const std::string &type, const std::string &data,
+      void *meta_data) override;
 
   // Begin a transaction.
   virtual void Begin(uint64_t id) override;
@@ -139,24 +143,19 @@ class ShardClient : public TxnClient {
   int replica; // which replica to use for reads
   uint64_t readQuorumSize;
 
-  replication::ir::IRClient *client; // Client proxy.
-
   std::unordered_map<uint64_t, PendingQuorumGet *> pendingGets;
   std::unordered_map<uint64_t, PendingPrepare *> pendingPrepares;
   std::unordered_map<uint64_t, PendingCommit *> pendingCommits;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
 
-  /* Indicus's Decide Function. */
   std::string IndicusDecide(const std::map<std::string, std::size_t> &results);
 
   /* Timeout for Get requests, which only go to one replica. */
   void GetTimeout(uint64_t reqId);
 
   /* Callbacks for hearing back from a shard for an operation. */
-  bool GetCallback(uint64_t reqId, const std::string &,
-      const std::string &);
-  bool PrepareCallback(uint64_t reqId, const std::string &,
-      const std::string &);
+  void HandleReadReply(const proto::ReadReply &readReply);
+  void HandlePrepareReply(const proto::PrepareReply &prepareReply);
   bool CommitCallback(uint64_t reqId, const std::string &,
       const std::string &);
   bool AbortCallback(uint64_t reqId, const std::string &,

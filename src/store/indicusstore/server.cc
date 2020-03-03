@@ -35,124 +35,57 @@
 
 namespace indicusstore {
 
-using namespace std;
-using namespace proto;
-
-Server::Server(bool linearizable)
-{
-    store = new Store(linearizable);
+Server::Server(const transport::Configuration &config, int groupIdx, int idx,
+    Transport *transport) : config(config),
+    groupIdx(groupIdx), idx(idx), transport(transport) {
+  transport->Register(this, config, groupIdx, idx);
 }
 
-Server::~Server()
-{
-    delete store;
+Server::~Server() {
 }
 
-void
-Server::ExecInconsistentUpcall(const string &str1)
-{
-    Debug("Received Inconsistent Request: %s",  str1.substr(0, 10).c_str());
+void Server::ReceiveMessage(const TransportAddress &remote,
+      const std::string &type, const std::string &data, void *meta_data) {
+  proto::Read read;
+  proto::Prepare prepare;
+  proto::Commit commit;
+  proto::Abort abort;
 
-    Request request;
-
-    request.ParseFromString(str1);
-
-    switch (request.op()) {
-    case indicusstore::proto::Request::COMMIT:
-        store->Commit(request.txnid(), request.commit().timestamp());
-        break;
-    case indicusstore::proto::Request::ABORT:
-        store->Abort(request.txnid(), Transaction(request.abort().txn()));
-        break;
-    default:
-        Panic("Unrecognized inconsisternt operation.");
-    }
+  if (type == read.GetTypeName()) {
+    read.ParseFromString(data);
+    HandleRead(remote, read);
+  } else if (type == prepare.GetTypeName()) {
+    prepare.ParseFromString(data);
+    HandlePrepare(remote, prepare);
+  } else if (type == commit.GetTypeName()) {
+    commit.ParseFromString(data);
+    HandleCommit(remote, commit);
+  } else if (type == abort.GetTypeName()) {
+    abort.ParseFromString(data);
+    HandleAbort(remote, abort);
+  } else {
+    Panic("Received unexpected message type: %s", type.c_str());
+  }
 }
 
-void
-Server::ExecConsensusUpcall(const string &str1, string &str2)
-{
-    Debug("Received Consensus Request: %s", str1.substr(0,10).c_str());
 
-    Request request;
-    Reply reply;
-    int status;
-    Timestamp proposed;
-
-    request.ParseFromString(str1);
-
-    switch (request.op()) {
-    case indicusstore::proto::Request::PREPARE:
-        status = store->Prepare(request.txnid(),
-                                Transaction(request.prepare().txn()),
-                                Timestamp(request.prepare().timestamp()),
-                                proposed);
-        reply.set_status(status);
-        if (proposed.isValid()) {
-            proposed.serialize(reply.mutable_timestamp());
-        }
-        reply.SerializeToString(&str2);
-        break;
-    default:
-        Panic("Unrecognized consensus operation.");
-    }
-
+void Server::Load(const string &key, const string &value,
+    const Timestamp timestamp) {
 }
 
-void
-Server::UnloggedUpcall(const string &str1, string &str2)
-{
-    Debug("Received Unlogged Request: %s", str1.substr(0,10).c_str());
-
-    Request request;
-    Reply reply;
-    int status;
-
-    request.ParseFromString(str1);
-
-    switch (request.op()) {
-    case indicusstore::proto::Request::GET:
-        if (request.get().has_timestamp()) {
-            pair<Timestamp, string> val;
-            status = store->Get(request.txnid(), request.get().key(),
-                               request.get().timestamp(), val);
-            if (status == 0) {
-                reply.set_value(val.second);
-            }
-        } else {
-            pair<Timestamp, string> val;
-            status = store->Get(request.txnid(), request.get().key(), val);
-            if (status == 0) {
-                reply.set_value(val.second);
-                val.first.serialize(reply.mutable_timestamp());
-            }
-        }
-        reply.set_status(status);
-        reply.SerializeToString(&str2);
-        break;
-    default:
-        Panic("Unrecognized Unlogged request.");
-    }
+void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) {
 }
 
-void
-Server::Sync(const std::map<opid_t, RecordEntry>& record)
-{
-    Panic("Unimplemented!");
+void Server::HandlePrepare(const TransportAddress &remote,
+    const proto::Prepare &msg) {
 }
 
-std::map<opid_t, std::string>
-Server::Merge(const std::map<opid_t, std::vector<RecordEntry>> &d,
-              const std::map<opid_t, std::vector<RecordEntry>> &u,
-              const std::map<opid_t, std::string> &majority_results_in_d)
-{
-    Panic("Unimplemented!");
+void Server::HandleCommit(const TransportAddress &remote,
+    const proto::Commit &msg) {
 }
 
-void
-Server::Load(const string &key, const string &value, const Timestamp timestamp)
-{
-    store->Load(key, value, timestamp);
+void Server::HandleAbort(const TransportAddress &remote,
+    const proto::Abort &msg) {
 }
 
 } // namespace indicusstore

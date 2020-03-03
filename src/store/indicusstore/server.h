@@ -41,38 +41,33 @@
 
 namespace indicusstore {
 
-using opid_t = replication::ir::opid_t;
-using RecordEntry = replication::ir::RecordEntry;
+class Server : public TransportReceiver, public ::Server {
+ public:
+  Server(const transport::Configuration &config, int groupIdx, int idx,
+      Transport *transport);
+  virtual ~Server();
 
-class Server : public replication::ir::IRAppReplica, public ::Server {
-public:
-    Server(bool linearizable);
-    virtual ~Server();
+  virtual void ReceiveMessage(const TransportAddress &remote,
+      const std::string &type, const std::string &data,
+      void *meta_data) override;
 
-    // Invoke inconsistent operation, no return value
-    void ExecInconsistentUpcall(const string &str1) override;
+  virtual void Load(const string &key, const string &value,
+      const Timestamp timestamp) override;
 
-    // Invoke consensus operation
-    void ExecConsensusUpcall(const string &str1, string &str2) override;
+  virtual inline Stats &GetStats() override { return stats; }
 
-    // Invoke unreplicated operation
-    void UnloggedUpcall(const string &str1, string &str2) override;
+ private:
+  void HandleRead(const TransportAddress &remote, const proto::Read &msg);
+  void HandlePrepare(const TransportAddress &remote, const proto::Prepare &msg);
+  void HandleCommit(const TransportAddress &remote, const proto::Commit &msg);
+  void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
-    // Sync
-    void Sync(const std::map<opid_t, RecordEntry>& record) override;
+  const transport::Configuration &config;
+  int groupIdx;
+  int idx;
+  Transport *transport;
+  Stats stats;
 
-    // Merge
-    std::map<opid_t, std::string> Merge(
-        const std::map<opid_t, std::vector<RecordEntry>> &d,
-        const std::map<opid_t, std::vector<RecordEntry>> &u,
-        const std::map<opid_t, std::string> &majority_results_in_d) override;
-
-    virtual void Load(const string &key, const string &value, const Timestamp timestamp) override;
-
-    virtual inline Stats &GetStats() override { return store->GetStats(); }
-
-private:
-    TxnStore *store;
 };
 
 } // namespace indicusstore
