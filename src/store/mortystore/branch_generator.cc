@@ -17,7 +17,7 @@ BranchGenerator::~BranchGenerator() {
 
 void BranchGenerator::AddActive(const proto::Branch &branch) {
   active_tids.insert(branch.txn().id());
-  for (size_t i = 0; i < branch.txn().ops_size(); ++i) {
+  for (int64_t i = 0; i < branch.txn().ops_size(); ++i) {
     const proto::Operation &op = branch.txn().ops(i);
     if (op.type() == proto::OperationType::READ) {
       AddActiveRead(op.key(), branch);

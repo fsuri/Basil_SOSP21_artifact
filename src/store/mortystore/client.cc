@@ -183,7 +183,7 @@ void Client::HandlePrepareOK(const TransportAddress &remote,
     req->ecb(SUCCESS, clientBranch.readValues);
     delete req;
   } else if (itr->second->prepareOKs[msg.branch()] +
-      itr->second->prepareKOes[msg.branch()].size() ==
+      static_cast<int64_t>(itr->second->prepareKOes[msg.branch()].size()) ==
       msg.branch().shards().size()) {
     ProcessPrepareKOs(itr->second, msg.branch());
   }
@@ -203,7 +203,7 @@ void Client::HandlePrepareKO(const TransportAddress &remote,
 
   itr->second->prepareKOes[msg.branch()].push_back(msg);
   if (itr->second->prepareOKs[msg.branch()] +
-      itr->second->prepareKOes[msg.branch()].size() ==
+      static_cast<int64_t>(itr->second->prepareKOes[msg.branch()].size()) ==
       msg.branch().shards().size()) {
     ProcessPrepareKOs(itr->second, msg.branch());
   }

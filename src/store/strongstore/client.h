@@ -98,10 +98,11 @@ private:
     // Timestamp server shard.
     replication::vr::VRClient *tss; 
 
+    partitioner part;
+
     // TrueTime server.
     TrueTime timeServer;
 
-    partitioner part;
 
     // Synchronization variables.
     std::condition_variable cv;

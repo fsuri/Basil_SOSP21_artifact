@@ -66,7 +66,7 @@ public:
         std::vector<janusstore::proto::Reply> accept_replies;
         std::vector<janusstore::proto::Reply> commit_replies;
         std::unordered_set<int> participant_shards;
-        uint64_t responded;
+        int64_t responded;
     };
 
     replication::ir::IRClient *client; // Client proxy.

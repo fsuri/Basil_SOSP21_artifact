@@ -53,10 +53,10 @@ public:
         : txn_id(txn_id), ccb(ccb), has_fast_quorum(false), output_committed(false) {}
         ~PendingRequest() {}
 
-        execute_callback ccb;
         uint64_t txn_id;
-        bool output_committed;
+        execute_callback ccb;
         bool has_fast_quorum;
+        bool output_committed;
         std::set<uint64_t> aggregated_deps;
         std::map<uint64_t, std::set<int>> aggregated_depmeta;
         std::set<uint64_t> participant_shards;

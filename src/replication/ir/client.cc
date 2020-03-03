@@ -666,7 +666,7 @@ IRClient::UnloggedRequestTimeoutCallback(const uint64_t reqId)
     PendingUnloggedRequest *req = static_cast<PendingUnloggedRequest *>(it->second);
     UW_ASSERT(req != NULL);
 
-    Warning("Unlogged request %lu timed out: %s",
+    Warning("Unlogged request %lu:%lu timed out: %s",
         clientid, reqId, req->request.c_str());
     //Panic("Unlogged request %lu timed out", reqId);
     // delete timer event

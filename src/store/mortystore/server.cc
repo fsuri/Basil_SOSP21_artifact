@@ -242,7 +242,7 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
           *itr)) {
       waiting.erase(itr);
       for (auto shard : itr->shards()) {
-        if (shard != groupIdx) {
+        if (shard != static_cast<uint64_t>(groupIdx)) {
           transport->SendMessage(this, *shards[shard], msg);
         }
       }

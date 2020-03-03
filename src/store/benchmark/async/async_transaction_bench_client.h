@@ -29,7 +29,7 @@ private:
     bool retryAborted;
     int32_t maxAttempts;
     AsyncTransaction *currTxn;
-    size_t currTxnAttempts;
+    int32_t currTxnAttempts;
     std::mt19937 gen;
 
 };

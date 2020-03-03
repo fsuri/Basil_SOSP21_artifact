@@ -67,13 +67,14 @@ Client::Client(Mode mode, string configPath, int nShards,
     }
 
     /* Start a client for each shard. */
+    /* TODO
     for (int i = 0; i < nShards; i++) {
         string shardConfigPath = configPath + to_string(i) + ".config";
         ShardClient *shardclient = new ShardClient(mode, shardConfigPath,
             &transport, client_id, i, closestReplica);
         // TODO:
-        //bclient[i] = new BufferClient(shardclient);
-    }
+        // bclient[i] = new BufferClient(shardclient);
+    }*/
 
     /* Run the transport in a new thread. */
     clientTransport = new thread(&Client::run_client, this);
@@ -283,10 +284,11 @@ void
 Client::Abort()
 {
     Debug("ABORT Transaction");
+    /* TODO
     for (auto p : participants) {
         // TODO:
         // bclient[p]->Abort();
-    }
+    }*/
 }
 
 /* Return statistics of most recent transaction. */

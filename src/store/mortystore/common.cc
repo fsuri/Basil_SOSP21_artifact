@@ -189,7 +189,7 @@ bool ValidSubsequence(const proto::Branch &branch,
   // now check that all conflicting transactions are ordered the same
   const proto::Transaction *t;
   std::vector<int> ignoret;
-  for (size_t i = 0; i < branch.txn().ops_size(); ++i) {
+  for (int64_t i = 0; i < branch.txn().ops_size(); ++i) {
     if (ignoreLastOp && i == branch.txn().ops_size() - 1) {
       continue;
     }

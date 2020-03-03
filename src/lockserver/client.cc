@@ -180,6 +180,7 @@ LockClient::LockCallback(const std::string &request_str, const std::string &repl
     Promise *w = waiting;
     waiting = NULL;
     w->Reply(reply.status());
+    return true;
 }
 
 bool
@@ -190,6 +191,7 @@ LockClient::UnlockCallback(const std::string &request_str, const std::string &re
     Promise *w = waiting;
     waiting = NULL;
     w->Reply(0);
+    return true;
 }
 
 bool
@@ -201,6 +203,7 @@ LockClient::ErrorCallback(const std::string &request_str,
     Promise *w = waiting;
     waiting = NULL;
     w->Reply(-3);  // Invalid command.
+    return true;
 }
 
 } // namespace lockserver

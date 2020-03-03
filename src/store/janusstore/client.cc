@@ -33,7 +33,7 @@ namespace janusstore {
 
     /* Start a shardclient for each shard. */
     // TODO change this to a single config file lul
-    for (int i = 0; i < this->nshards; i++) {
+    for (uint64_t i = 0; i < this->nshards; i++) {
       ShardClient * shardclient = new ShardClient(config,
         transport, client_id, i, closestReplica);
       // we use shardclients instead of bufferclients here
@@ -64,7 +64,7 @@ namespace janusstore {
 
     /* Start a shardclient for each shard. */
     // TODO change this to a single config file lul
-    for (int i = 0; i < this->nshards; i++) {
+    for (uint64_t i = 0; i < this->nshards; i++) {
       ShardClient * shardclient = new ShardClient(config,
         transport, client_id, i, closestReplica);
       // we use shardclients instead of bufferclients here
@@ -301,13 +301,13 @@ namespace janusstore {
     PendingRequest* req = this->pendingReqs[txn_id];
 
     req->responded_shards.insert(shard);
-    Debug("CLIENT - CommitCallback - received %llu out of %llu shard responses", req->responded_shards.size(), req->participant_shards.size());
+    Debug("CLIENT - CommitCallback - received %lu out of %lu shard responses", req->responded_shards.size(), req->participant_shards.size());
 
     // printf("%s\n", ("CLIENT - COMMIT CB - added " + to_string(shard) + " to responded list").c_str());
 
     if (req->responded_shards.size() == req->participant_shards.size()) {
       // return results to async_transaction_bench_client by invoking output commit callback
-      Debug("Invoking execute callback for txn %llu", txn_id);
+      Debug("Invoking execute callback for txn %lu", txn_id);
       stats.Increment("commits", 1);
       req->ccb(0, std::map<std::string, std::string>());
       req->responded_shards.clear();

@@ -61,6 +61,7 @@ AsyncTransaction* TPCCClient::GetNextTransaction() {
     lastOp = "stock_level";
     return new StockLevel(wid, did, gen);
   } else {
+    return nullptr;
   }
 }
 

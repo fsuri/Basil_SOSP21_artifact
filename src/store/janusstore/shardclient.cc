@@ -195,7 +195,7 @@ bool ShardClient::PreAcceptContinuation(const string &request_str, const string 
 	// Debug("In preaccept continuation");
 	janusstore::proto::Reply reply;
 	reply.ParseFromString(reply_str);
-	uint64_t txn_id = NULL;
+	uint64_t txn_id = 0;
 
 	if (reply.op() == janusstore::proto::Reply::PREACCEPT_OK) {
 		txn_id = reply.preaccept_ok().txnid();
@@ -211,6 +211,7 @@ bool ShardClient::PreAcceptContinuation(const string &request_str, const string 
   	client_preaccept_callback pcb = req->cpcb;
   	// invoke the shardclient callback
   	this->PreAcceptCallback(txn_id, reply, pcb);
+    return true;
 }
 
 bool ShardClient::AcceptContinuation(const string &request_str,
@@ -219,7 +220,7 @@ bool ShardClient::AcceptContinuation(const string &request_str,
 	// Debug("In accept continuation");
 	janusstore::proto::Reply reply;
   	reply.ParseFromString(reply_str);
-	uint64_t txn_id = NULL;
+	uint64_t txn_id = 0;
 
 	if (reply.op() == janusstore::proto::Reply::ACCEPT_OK) {
 		txn_id = reply.accept_ok().txnid();
@@ -235,6 +236,7 @@ bool ShardClient::AcceptContinuation(const string &request_str,
   	client_accept_callback acb = req->cacb;
   	// invoke the shardclient callback
   	this->AcceptCallback(txn_id, reply, acb);
+    return true;
 }
 
 bool ShardClient::CommitContinuation(const string &request_str,
@@ -242,7 +244,7 @@ bool ShardClient::CommitContinuation(const string &request_str,
 
 	janusstore::proto::Reply reply;
   	reply.ParseFromString(reply_str);
-	uint64_t txn_id = NULL;
+	uint64_t txn_id = 0;
 
 	if (reply.op() == janusstore::proto::Reply::COMMIT_OK) {
 		txn_id = reply.commit_ok().txnid();
@@ -256,6 +258,7 @@ bool ShardClient::CommitContinuation(const string &request_str,
 	client_commit_callback ccb = req->cccb;
 	// invoke the shardclient callback
 	this->CommitCallback(txn_id, reply, ccb);
+  return true;
 }
 
 void ShardClient::Read(string key, client_read_callback pcb) {

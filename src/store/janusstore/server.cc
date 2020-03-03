@@ -113,7 +113,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
         reply.set_op(Reply::PREACCEPT_NOT_OK);
         reply.set_allocated_preaccept_not_ok(&pa_not_ok_msg);
         unlogged_reply->set_reply(reply.SerializeAsString());
-        Debug("[Server %i] sending PREACCEPT NOT-OK message for txn %llu",
+        Debug("[Server %i] sending PREACCEPT NOT-OK message for txn %lu",
         this->myIdx, txn_id);
         transport->SendMessage(this, remote, *unlogged_reply);
         reply.release_preaccept_not_ok();
@@ -127,7 +127,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
     PreAcceptOKMessage preaccept_ok_msg;
     preaccept_ok_msg.set_txnid(txn_id);
 
-    for (int i = 0; i < dep_list.size(); i++) {
+    for (size_t i = 0; i < dep_list.size(); i++) {
         dep.add_txnid(dep_list[i]);
         DependencyMeta* depmeta = preaccept_ok_msg.add_depmeta();
 
@@ -135,7 +135,7 @@ Server::HandlePreAccept(const TransportAddress &remote,
         depmeta->set_txnid(dep_id);
 
         // if we know what shards dep_id participates in
-        Transaction dep_txn = NULL;
+        Transaction dep_txn;
         if (id_txn_map.find(dep_id) != id_txn_map.end()) {
             dep_txn = id_txn_map[dep_id];
             for (int group : dep_txn.groups) {
@@ -165,7 +165,7 @@ vector<uint64_t>* Server::BuildDepList(Transaction &txn, uint64_t ballot) {
     if (accepted_ballots.find(txn_id) != accepted_ballots.end() &&
      ballot > accepted_ballots[txn_id]) {
         // TODO less hacky way
-        Debug("[Server %i] Sending PREACCEPT NOT-OK since %llu > %llu",
+        Debug("[Server %i] Sending PREACCEPT NOT-OK since %lu > %lu",
             this->myIdx, ballot, accepted_ballots[txn_id]);
         return NULL;
     }
@@ -253,7 +253,7 @@ void Server::HandleAccept(const TransportAddress &remote,
         reply.set_op(Reply::ACCEPT_NOT_OK);
         reply.set_allocated_accept_not_ok(&accept_not_ok_msg);
 
-        Debug("[Server %i] sending ACCEPT-NOT-OK message for txn %llu %s",
+        Debug("[Server %i] sending ACCEPT-NOT-OK message for txn %lu %s",
             this->myIdx, txn_id,
             reply.DebugString().c_str());
 
@@ -277,7 +277,7 @@ void Server::HandleAccept(const TransportAddress &remote,
         reply.set_op(Reply::ACCEPT_OK);
         reply.set_allocated_accept_ok(&accept_ok_msg);
 
-        Debug("[Server %i] sending ACCEPT-OK message for txn %llu %s",
+        Debug("[Server %i] sending ACCEPT-OK message for txn %lu %s",
             this->myIdx, txn_id,
             reply.DebugString().c_str());
 
@@ -324,10 +324,10 @@ void Server::_HandleCommit(uint64_t txn_id,
     vector<uint64_t> deps = dep_map[txn_id];
 
     txn->setTransactionStatus(TransactionMessage::COMMIT);
-    Debug("Set txn id %llu to COMMIT", txn_id);
+    Debug("Set txn id %lu to COMMIT", txn_id);
     // check if this unblocks others, and rerun HandleCommit for those
     if (blocking_ids.find(txn_id) != blocking_ids.end()) {
-        Debug("Now unblocking txns blocked by %llu", txn_id);
+        Debug("Now unblocking txns blocked by %lu", txn_id);
         _UnblockTxns(txn_id);
     }
 
@@ -350,7 +350,7 @@ void Server::_HandleCommit(uint64_t txn_id,
         bool found_on_server = false;
         bool sent_inquiry = false;
         for (uint64_t blocking_txn_id : not_committing_ids) {
-            Debug("%llu blocked by %llu", txn_id, blocking_txn_id);
+            Debug("%lu blocked by %lu", txn_id, blocking_txn_id);
             txn->blocked_by_list.insert(blocking_txn_id);
             txn->request_id = unlogged_reply->clientreqid();
 
@@ -388,7 +388,7 @@ void Server::HandleInquire(const TransportAddress &remote,
 
     uint64_t txn_id = i_msg.txnid();
 
-    Debug("[Server %i] on shard %i received inquiry for transaction %llu", myIdx, groupIdx, txn_id);
+    Debug("[Server %i] on shard %i received inquiry for transaction %lu", myIdx, groupIdx, txn_id);
     Transaction txn = this->id_txn_map[txn_id];
 
     // after txn_id is in the committing stage, return the deps list
@@ -436,13 +436,13 @@ void Server::HandleInquireReply(const proto::InquireOKMessage i_ok_msg) {
 
         id_txn_map[txn_id] = *txn;
 
-        Debug("Now unblocking txns blocked by %llu via inquire", txn_id);
+        Debug("Now unblocking txns blocked by %lu via inquire", txn_id);
         _UnblockTxns(txn_id);
     }
 }
 
 void Server::_SendInquiry(uint64_t txn_id, uint64_t blocking_txn_id) {
-    Debug("[Server %i] on shard %i sending inquiry for transaction %llu", myIdx, groupIdx, blocking_txn_id);
+    Debug("[Server %i] on shard %i sending inquiry for transaction %lu", myIdx, groupIdx, blocking_txn_id);
 
     unordered_map<uint64_t, vector<int>> dep_shards = this->depshards_map[txn_id];
     vector<int> relevant_groups = dep_shards[blocking_txn_id];
@@ -461,7 +461,7 @@ void Server::_SendInquiry(uint64_t txn_id, uint64_t blocking_txn_id) {
     request.set_op(Request::INQUIRE);
     request.mutable_inquire()->set_txnid(blocking_txn_id);
 
-    Debug("Inquiring replica %llu at group %d for blocking txn %llu", nearest_replica, nearest_group, blocking_txn_id);
+    Debug("Inquiring replica %lu at group %d for blocking txn %lu", nearest_replica, nearest_group, blocking_txn_id);
 
     transport->SendMessageToReplica(
         this, nearest_group, nearest_replica, request);
@@ -489,7 +489,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
                            const TransportAddress &remote,
                            replication::ir::proto::UnloggedReplyMessage *unlogged_reply
 ) {
-    Debug("In execute phase for %llu", txn_id);
+    Debug("In execute phase for %lu", txn_id);
     unordered_map<string, string> result;
     vector<uint64_t> deps = dep_map[txn_id];
     Transaction *txn = &id_txn_map[txn_id];
@@ -511,7 +511,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
                 continue;
             }
             if (_ReadyToProcess(id_txn_map[other_txn_id])) {
-                Debug("%llu is ready to process!", other_txn_id);
+                Debug("%lu is ready to process!", other_txn_id);
                 vector<uint64_t> scc = _StronglyConnectedComponent(other_txn_id);
                 ResolveContention(scc);
                 // TODO: txn_id is not present in scc when it should be
@@ -519,7 +519,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
                 for (uint64_t scc_id : scc) {
                     Transaction *scc_txn = &id_txn_map[scc_id];
                     scc_txn->setResult(Execute(id_txn_map[scc_id]));
-                    Debug("[Server %i] executing transaction %llu", myIdx, scc_id);
+                    Debug("[Server %i] executing transaction %lu", myIdx, scc_id);
                     processed[scc_id] = true;
                 }
                 num_deps_processed++;
@@ -531,7 +531,7 @@ void Server::_ExecutePhase(uint64_t txn_id,
 
     stats.Increment("commits", 1);
 
-    Debug("[Server %i] executing transaction %llu", myIdx, txn_id);
+    Debug("[Server %i] executing transaction %lu", myIdx, txn_id);
     processed[txn_id] = true;
 
     result = txn->result;
@@ -624,17 +624,17 @@ vector<uint64_t> Server::_StronglyConnectedComponent(uint64_t txn_id) {
             if (it != scc.end()) return scc;
         }
     }
-    Panic("Should have returned for %llu!", txn_id);
+    Panic("Should have returned for %lu!", txn_id);
 }
 
 void Server::_UnblockTxns(uint64_t txn_id) {
     for(auto blocked_id : blocking_ids[txn_id]) {
-        Debug("Found blocked id %llu for txn id %llu", blocked_id, txn_id);
+        Debug("Found blocked id %lu for txn id %lu", blocked_id, txn_id);
         Transaction *txn = &id_txn_map[blocked_id];
         txn->blocked_by_list.erase(txn_id);
         if (txn->blocked_by_list.empty()) {
             uint64_t request_id = txn->request_id;
-            Debug("Blocked id %llu commitable now", blocked_id);
+            Debug("Blocked id %lu commitable now", blocked_id);
             for (auto *client_addr : txn->client_addrs){
                 replication::ir::proto::UnloggedReplyMessage blocked_unlogged_reply;
                 blocked_unlogged_reply.set_clientreqid(request_id);

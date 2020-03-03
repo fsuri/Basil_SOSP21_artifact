@@ -60,7 +60,7 @@ class Client : public ::AsyncClient {
     int prepareStatus;
     Timestamp *prepareTimestamp;
     bool callbackInvoked;
-    std::unordered_map<proto::Branch, uint64_t, BranchHasher, BranchComparer> prepareOKs; 
+    std::unordered_map<proto::Branch, int64_t, BranchHasher, BranchComparer> prepareOKs; 
     std::unordered_map<proto::Branch, std::vector<proto::PrepareKO>, BranchHasher, BranchComparer> prepareKOes;
     bool waitingToAbort;
   };
