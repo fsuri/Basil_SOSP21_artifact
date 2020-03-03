@@ -1,0 +1,44 @@
+syntax = "proto2";
+
+import "store/common/common-proto.proto";
+
+package indicusstore.proto;
+
+message Read {
+  required uint64 req_id = 1;
+  required string key = 2;
+}
+
+message ReadReply {
+  required uint64 req_id = 1;
+  required int32 status = 2;
+  required string key = 3;
+  required string value = 4;
+  required TimestampMessage timestamp = 5;
+}
+
+message Prepare {
+  required uint64 req_id = 1;
+  required TransactionMessage txn = 2;
+  optional TimestampMessage timestamp = 3;
+}
+
+message PrepareReply {
+  required uint64 req_id = 1;
+  // 0 = OK
+  // -1 = failed
+  // -2 = retry
+  // -3 = abstain/no reply
+  required int32 status = 2;
+  optional TimestampMessage timestamp = 3;
+}
+
+message Commit {
+  required uint64 req_id = 1;
+  required uint64 timestamp = 2;
+}
+
+message Abort {
+  required uint64 req_id = 1;
+  required TransactionMessage txn = 2;
+}
