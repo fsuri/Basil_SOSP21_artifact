@@ -18,8 +18,24 @@ and
 \textbf{Byz-I} Given a protocol $P$ and an isolation level $I$:
 A history H is \textit{byzantine-I} if there exists an honest history \textit{H'} such that H is honest-view equivalent to H' and H' satisfies I. 
 
-Thus, informally a byzantine Isolation level states that the state that honest Clients experience must be explicable by an execution in which all participants were honest.
+Thus, informally a byzantine Isolation level states that the state that honest Clients experience must be explicable by an execution in which all participants were honest. Note, that we make no assumptions on the state a byzantine client \textit{chooses} to experience; i.e. byzantine Clients may read arbitrarily.
 This definition captures the requirements for any byzantine tolerant protocol that strives to maintain Isolation level I.
 
-We further define some progress properties to limit the influence Byzantine Clients have on system throughput. These will be motiviating factors that we will return to in order to justify our choice of 5f+1 replicas as well as the use of an Optimistic Concurrency Control over a Locking based schema. We later outline an alternative design using 3f+1 replicas that does not maintain this property. 
+We further define the ideal progress properties to limit the influence Byzantine Clients have on system throughput. 
 
+\textbf{Byzantine Independence}
+Given a protocol $P$ and an honest Client $c$. The result of a request $r$ issued by $c$ cannot be determinsistically decided by byzantine participants.  
+
+If the network is controlled by an adversary, this property is unattainable for Indicus. 
+In order to offer this property we must strengthen our assumption on the network. Concretely, while the network may be asynchronous, the adversary does not control the network, and hence, may not reliably impact results. 
+An exception to this are wide-ranged flooding attacks (ddos) which are beyond the scope of this work.
+We point out, that a strawman system offering interactive transactions and speculative execution while relying on Atomic Broadcast for Validation ordering suffers the same fallacy: A byzantine leader may always frontrun requests. In fact, even with strengthened network assumptions, such a a system could not offer Byzantine Independence.
+%We point out, that in fact no system that speculates on execution, and hence may incur aborts, can enjoy \textit{Byzantine Independence}. Not true since in theory one could imagine a scheme that uses "committment certification", but this is impractical
+
+
+We adapt and define gracious and uncivil executions based on cite(aardvark) to match our model. (i.e. network not sync either).
+\textbf{Gracious Execution}
+An execution is gracious iff (a) the execution is synchronous with some
+implementation-dependent short bound on message delay (b) all clients and servers behave correctly and (c) there is no contention on the objects relevant to the execution.
+\textbf{Uncivil}
+An execution is uncivil iff (a) there is no bound on message delay (asynchrony) and (b) up to f servers and an arbitrary number of clients are Byzantine 

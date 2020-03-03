@@ -7,10 +7,64 @@
 %\input{sections/Indicus/Protocol/Failures.tex}
 %\input{sections/Indicus/Protocol/Variations.tex}
 
+%-------------------------------------------------------------------------------
 
+%-------------------------------------------------------------------------------
+Indicus comes in two different flavors, Indicus3 and Indicus5 respectively, relying on varying replication degrees. Indicus3 requires 3f+1 replicas per shard to guarantee consistency, the minimum bound necessary for BFT SMR. Indicus5 uses a higher replication degree of 5f+1 replicas, but in return brings down both gracious execution latency and complexity during uncivil executions. We argue, that unlike past system settings where a single authority strives to maintain the fewest amount of replicas necessary for cost considerations, consortium systems with naturally higher replication degree are willing to pay the additional price for performance. Moreover, rather than trying to reach the threshold of replicas to tolerate some number of faults, these settings may start with a fixed number of replicas and consider the ratio of faults to be tolerable. When argueing from this perspective, the perceived difference between tolerating 1/3 and 1/5 of replica failures may be negligible.
+For the simplicity of exposition we outline Indicus5 in detail below. In section X we describe the differences in Indicus3.
+
+%-------------------------------------------------------------------------------
+\subsection{TEsting}
+%-------------------------------------------------------------------------------
+\begin{figure}[t]
+  \begin{mdframed}[roundcorner=10pt]
+ 	\textbf{TX}
+ 	\begin{itemize}
+ 	\item ClientID
+ 	\item ClientSeqNo
+ 	\item ReadSet = \{(key, version)\}
+ 	\item WriteSet = \{(key, value)\}
+ 	\item dependencies = \{$\langle (key, version)_{f+1 \sigma} \rangle$\}
+ 	\item TXID = H(TX)
+ 	\item Timestamp = (Time, ClientID)  optional:, TXID) this is just deterministic tie breaker when a client misbehaves.
+ 	\end{itemize}
+  \end{mdframed}
+  \caption{Transaction}
+  \label{fig:TX}
+\end{figure}
+
+
+NEED FIg with replica state. Need to use it to explain what "Prepared"/Committable means
 %-------------------------------------------------------------------------------
 \subsection{Execution}
 %-------------------------------------------------------------------------------
+Clients in Indicus both execute and submit their own Transactions. As previously defined a Transaction TX is a sequence of read and write requests that is ultimately terminated by a Commit or Abort decision. A TX object, as shown in Figure \ref{fig:TX} records the execution state necessary for Validation.
+
+Client execution conducts as follows:\\
+
+\begin{enumerate}
+\item \textbf{Write(key, value)}. A Client executes a request Write(key, value) by locally buffering (key, value) and returning. Concretely: $WriteSet = WriteSet \cup (key, value)$
+\item \textbf{Read(key, TS, RQS)} Given hyperparameter Read Quorum Size (RQS), a Client performs a read on given key at timestamp TS by reading from RQS different replicas. \\
+
+A replica returns a pair $\langle \textit{(Committed, Prepared)} \rangle _{\sigma_r}$, where \\
+$Committed \coloneqq (value, version)_{cert}$ such that $ (value, version) \in R.CommitLog$, $version = max(q) : (key, val, q) \in R.CommitLog \land v < TS \}$ and $cert$ is a certificate proving (value, version) was allowed to commit (see Section Writeback) and\\
+ $Prepared \coloneqq (value, version)$ such that $(value, version) \in R.PreparedSet$ and $version = max(q) : (key, val, q) \in R.PreparedSet \land Committed < v < TS \}$ .
+I.e. Committed is the largest committed write and Prepared is the largest uncommitted write that may be  committed and would make Committed outdated. 
+
+
+Note, the TS used here is not the final one, its just the tuple of time and clientId. (The triple later is just necessary to differentiate two TX by a client that were assigned the same Time
+Add Read set decision rule, put in correlation to RQS
+Add exceptions etc.
+
+
+\item \textbf{Commit} A Client finalizes its execution, computes the final Timestamp and submits 
+
+\item \textbf{Abort}
+
+\end{enumerate}
+ 
+
+
 - Read proofs required for honest client correctness. Alternatively one can read from f+1 only, but that can result in failed/older reads
 - Do not need to include read proofs in the prepare. According to Isolation definition byzantine Clients can read whatever they want. Moreover, Reads only have very limited external effect. The value does not matter for the CC check. The version has bounded effect: If it goes towards 0, then it is just a check between timestamps as normally. If it goes towards the TS, then it will never abort.
 - Fallback not just useful for dependency cleanup, but also "unclaimable" dependencies that need to finish.
@@ -21,6 +75,61 @@
 %-------------------------------------------------------------------------------
 \subsection{Concurrency Control}
 %-------------------------------------------------------------------------------
+\begin{algorithm}
+\caption{MVTSO-Check(TX, TS)}\label{euclid}
+\begin{algorithmic}[1]
+\If{\textit{$TS > localClock + \delta$} }
+\State pass
+\EndIf
+
+\For{\textit{$\forall key,version \in \textit{TX.read-set}$}}
+        \If{$ version < \textit{Store[key].max-version} < TS$}  
+          \State  \Return ABORT, \textit{Store[key].certificate}
+        \EndIf
+         \If{$ TS > \textit{MIN(prepared-writes[key]} > version$}   
+          \State  \Return ABSTAIN
+        \EndIf
+        
+   %     \If{$ \textit{dep[key]} == null \land version \notin prepared-reads[key] \cup  CommitLog \cup AbortLog $}   
+    %      \State  \Return $\textit{Proof-of-Misbehavior}$
+    %    \EndIf
+        
+        
+\EndFor
+
+\For{\textit{$\forall key \in \textit{TX.write-set}$}}
+        \If{$\exists TX2 \in Prepared/CommitLog \land TX \notin TX2.dep: \textit{TX2.read-set[key].version} < TS < TX2.TS$}
+          \State  \Return RETRY, %$\textit{TS_{new} | \forall TS_{new} > TX2.TS}$ // 
+        \EndIf
+        \If{$\exists RTS \in key.RTS: RTS > TS \land TX \notin RTS.dep$}
+          \State  \Return RETRY, %$\textit{TS_{new} | \forall TS_{new} > TX2.TS}$ // 
+        \EndIf
+
+\EndFor
+\State Prepared.add(TX) 
+\While{$\exists d \in dep: d \notin CommitLog \cup AbortLog $)}
+\State Wait
+\EndWhile
+
+\For{\textit{$\forall d \in dep$}}
+        \If{$ d \in CommitLog $}
+        	\If{$d.TS > TS$}
+        	\State Abort
+          	\EndIf
+       
+		\Else 
+		\State Abort
+		\EndIf
+\EndFor
+
+
+\State \Return COMMIT
+
+
+\end{algorithmic}
+\end{algorithm}
+
+
  - Optimization: retries - heights
  - Dependency resolution tree
  		- Equivocation not possible if TXidentifier a function with dep as argument
@@ -31,6 +140,23 @@
 %-------------------------------------------------------------------------------
 \subsection{Consistent logging.}
 %-------------------------------------------------------------------------------
+\begin{figure}
+\begin{center}
+\includegraphics[width= 0.4\textwidth]{./figures/AB.png}
+\end{center}
+\caption{Atomic Broadcast}
+\label{fig:Figure1}
+\end{figure}
+
+
+\begin{figure}
+\begin{center}
+\includegraphics[width= 0.4\textwidth]{./figures/5f+1.png}
+\end{center}
+\caption{Logging}
+\label{fig:Figure1}
+\end{figure}
+
 Principles and challenges
 
 protocol overview: pic
@@ -40,7 +166,6 @@ protocol overview: pic
 \subsection{Writeback and Multi-shard 2pc}
 %-------------------------------------------------------------------------------
 
-- Optimization: Single shard logging
 %-------------------------------------------------------------------------------
 \subsection{Failures}
 %-------------------------------------------------------------------------------
@@ -48,7 +173,44 @@ protocol overview: pic
 - Fallback requires an extra round in order to learn about current views to start viewchange, but thats ok: Its co-function with learning about full TX, and checking for existing certificates. Timeout invocation is concurrent with p1 message.
 
 %-------------------------------------------------------------------------------
-\subsection{Low Cost mode}
+\subsection{Optimizations}
 %-------------------------------------------------------------------------------
-3f+1 if not defending against byz colluders
-OCC if not worried about reads aborting
+- Retries
+- single shard logging
+\begin{figure*}
+\begin{center}
+\includegraphics[width= \textwidth]{./figures/SingleShard.png}
+\end{center}
+\caption{Single Shard Optimization}
+\label{fig:Figure1}
+\end{figure*}
+
+
+- (Read Locks ; remove can be optimization for writes)
+- OCC instead of mvtso structures if disallowing prepared writes to be visible. OCC if not worried about reads aborting
+
+%-------------------------------------------------------------------------------
+\subsection{Garbage Collection}
+%-------------------------------------------------------------------------------
+- Prepares get removed upon commit/abort. Eventually replica might need to become "interested" client.
+
+%-------------------------------------------------------------------------------
+\subsection{Indicus3}
+%-------------------------------------------------------------------------------
+3f+1 if not defending against byz colluders as much
+
+- no fast path
+- Commits in 2 rounds, Aborts in 3 (Alternatively symmetric version)
+- fallback quorums and bounds
+- proofs necessary for recovery
+- recovery rules
+
+\begin{figure}
+\begin{center}
+\includegraphics[width= 0.4\textwidth]{./figures/3f+1.png}
+\end{center}
+\caption{Logging}
+\label{fig:Figure1}
+\end{figure}
+
+
