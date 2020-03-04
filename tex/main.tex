@@ -1,58 +1,28 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Template for USENIX papers.
-%
-% History:
-%
-% - TEMPLATE for Usenix papers, specifically to meet requirements of
-%   USENIX '05. originally a template for producing IEEE-format
-%   articles using LaTeX. written by Matthew Ward, CS Department,
-%   Worcester Polytechnic Institute. adapted by David Beazley for his
-%   excellent SWIG paper in Proceedings, Tcl 96. turned into a
-%   smartass generic template by De Clarke, with thanks to both the
-%   above pioneers. Use at your own risk. Complaints to /dev/null.
-%   Make it two column with no page numbering, default is 10 point.
-%
-% - Munged by Fred Douglis <douglis@research.att.com> 10/97 to
-%   separate the .sty file from the LaTeX source template, so that
-%   people can more easily include the .sty file into an existing
-%   document. Also changed to more closely follow the style guidelines
-%   as represented by the Word sample file.
-%
-% - Note that since 2010, USENIX does not require endnotes. If you
-%   want foot of page notes, don't include the endnotes package in the
-%   usepackage command, below.
-% - This version uses the latex2e styles, not the very ancient 2.09
-%   stuff.
-%
-% - Updated July 2018: Text block size changed from 6.5" to 7"
-%
-% - Updated Dec 2018 for ATC'19:
-%
-%   * Revised text to pass HotCRP's auto-formatting check, with
-%     hotcrp.settings.submission_form.body_font_size=10pt, and
-%     hotcrp.settings.submission_form.line_height=12pt
-%
-%   * Switched from \endnote-s to \footnote-s to match Usenix's policy.
-%
-%   * \section* => \begin{abstract} ... \end{abstract}
-%
-%   * Make template self-contained in terms of bibtex entires, to allow
-%     this file to be compiled. (And changing refs style to 'plain'.)
-%
-%   * Make template self-contained in terms of figures, to
-%     allow this file to be compiled. 
-%
-%   * Added packages for hyperref, embedding fonts, and improving
-%     appearance.
-%   
-%   * Removed outdated text.
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \documentclass[letterpaper,twocolumn,10pt]{article}
 \usepackage{usenix2019_v3}
-\usepackage{preamble}
+%\usepackage{preamble}
 
+
+% to be able to draw some self-contained figs
+\usepackage{tikz}
+\usepackage{amsmath}
+
+% inlined bib file
+\usepackage{filecontents}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{mathtools}
+%\usepackage[ruled, vlined, linesnumbered]{algorithm2e}
+\usepackage{mdframed}
+\usepackage{enumitem}
+\usepackage{xcolor}
+
+% Define person specific grumblers
+\newcommand{\nc}[1]{{\textcolor{cyan}{NC: #1}}}
+\newcommand{\mb}[1]{{\textcolor{green}{MB: #1}}}
+\newcommand{\fs}[1]{{\textcolor{blue}{FS: #1}}}
+\newcommand{\la}[1]{{\textcolor{red}{LA: #1}}}
 %-------------------------------------------------------------------------------
 \begin{document}
 %-------------------------------------------------------------------------------
@@ -87,6 +57,7 @@ Not more than 200 words, if possible, and preferably closer to 150.
 \end{abstract}
 
 
+\input{sections/Intro-Notes.tex}
 %-------------------------------------------------------------------------------
 \section{Introduction}
 %-------------------------------------------------------------------------------
@@ -100,7 +71,8 @@ Not more than 200 words, if possible, and preferably closer to 150.
 %-------------------------------------------------------------------------------
 \section{Indicus}
 %-------------------------------------------------------------------------------
-\input{sections/Indicus/Preamble.tex}
+\input{sections/Indicus/Preamble.tex}\\
+\fs{Should Include what Indicus is supposed to do: Allow Clients to issue interactive TX. No Censorship, high throughput, low latency. Should be resilient to Byzantine Participants: Clients should experience a safe and live system.}
 
 \input{sections/Indicus/Architecture.tex}
 
@@ -141,8 +113,8 @@ section.
 
 %-------------------------------------------------------------------------------
 \bibliographystyle{plain}
-\bibliography{ref}
-
+%\bibliography{ref}
+\bibliography{refs}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \end{document}

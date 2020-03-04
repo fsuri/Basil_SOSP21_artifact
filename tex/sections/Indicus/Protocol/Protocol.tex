@@ -59,7 +59,7 @@ Still no guarantee that newest commit was seen, but some protection from other w
 
 
 (Note: the TS used here is not the final one, its just the tuple of time and clientId. (The triple later is just necessary to differentiate two TX by a client that were assigned the same Time
-Add Read set decision rule, put in correlation to RQS
+Add Read set decision rule, put in correlation to RQS: \fs{could only accept reads if f+1 matching always, then no proofs necessary, but then reads can fail}
 Add exceptions etc.
 )
 
@@ -90,11 +90,11 @@ Add exceptions etc.
 \EndIf
 
 \For{\textit{$\forall key,version \in \textit{TX.read-set}$}}
-        \If{$ version < \textit{Store[key].max-version} < TS$}  
-          \State  \Return ABORT, \textit{Store[key].certificate}
+        \If{$ \exists TX2 \in CommitLog: key \in \textit{TX2.write-set} \land version < \textit{TX2.TS} < TS$}  
+          \State  \Return ABORT, \textit{TX2, TX2.CommitCert}
         \EndIf
-         \If{$ TS > \textit{MIN(prepared-writes[key]} > version$}   
-          \State  \Return ABSTAIN
+         \If{$ \exists TX2 \in Prepared: key \in \textit{TX2.write-set} \land version < \textit{TX2.TS} < TS$}   
+          \State  \Return ABSTAIN, \textit{TX2}
         \EndIf
         
    %     \If{$ \textit{dep[key]} == null \land version \notin prepared-reads[key] \cup  CommitLog \cup AbortLog $}   
@@ -121,11 +121,11 @@ Add exceptions etc.
 \For{\textit{$\forall d \in dep$}}
         \If{$ d \in CommitLog $}
         	\If{$d.TS > TS$}
-        	\State Abort
+        	\State \Return ABORT, d.CommitCert
           	\EndIf
        
 		\Else 
-		\State Abort
+		\State \Return ABORT, d.AbortCert
 		\EndIf
 \EndFor
 
