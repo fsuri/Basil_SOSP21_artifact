@@ -138,6 +138,7 @@ void ShardClient::Prepare(uint64_t id, const Transaction &txn,
   // create prepare request
   proto::Prepare prepare;
   prepare.set_req_id(reqId);
+  prepare.set_txn_id(id);
   txn.serialize(prepare.mutable_txn());
   timestamp.serialize(prepare.mutable_timestamp());
 
