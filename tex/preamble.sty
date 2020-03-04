@@ -1,0 +1,150 @@
+\pdfminorversion=4
+%\usepackage{usenix}
+\usepackage[numbers,sort&compress]{natbib}
+\setlength{\bibsep}{3pt plus 4pt}
+\usepackage{nopageno}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{xspace}
+\usepackage{balance}
+\usepackage{hyperref} \usepackage{parskip}
+\usepackage{enumitem} %adds an easy way to customise margins for enums and itemize, incompatible with savetrees[moderate]
+\usepackage{subfloat}
+\usepackage{microtype}
+\usepackage{multirow}
+\usepackage{textcomp}
+\usepackage{times}
+\usepackage[group-separator={,}]{siunitx}
+\usepackage{ifthen}
+\usepackage{color,soul}
+\usepackage{makecell} % easy way to break lines latex
+\usepackage{datetime}
+\hypersetup{breaklinks=true,
+  bookmarks=true, pdfauthor={}, pdftitle={Indicus},
+  colorlinks=true,
+  citecolor=blue,
+  urlcolor=blue,
+  linkcolor=blue,
+  pdfborder={0 0 0}}
+\usepackage{url}
+\usepackage[font={it,small}]{caption}
+\usepackage{subfig}
+\usepackage{lipsum} % Used for inserting dummy 'Lorem ipsum' text into the template
+\usepackage[export]{adjustbox}
+\usepackage[normalem]{ulem} % Defines strikeout Breaks bibtex
+\usepackage{pifont}% http://ctan.org/pkg/pifont
+\usepackage{blindtext}
+\usepackage{array}
+\usepackage[compact]{titlesec}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd{\ttlh@hang}{\parindent\z@}{\parindent\z@\leavevmode}{}{}
+\patchcmd{\ttlh@hang}{\noindent}{}{}{}
+\makeatother
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{mathtools}
+\usepackage{mdframed}
+\sloppy
+\frenchspacing
+
+% OPTIONS FOR THIS DOCUMENT - (any other variables should go here)
+
+\newboolean{publicversion}
+\newboolean{tr}
+\newboolean{optanon}
+\setboolean{tr}{false}
+\setboolean{publicversion}{true}
+\setboolean{optanon}{false}
+
+% Define person specific grumblers
+\newcommand{\nc}[1]{{\color{cyan}\grumbler{nc}{#1}}}
+\newcommand{\mb}[1]{{\color{green}\grumbler{mb}{#1}}}
+\newcommand{\fs}[1]{{\color{blue}\grumbler{ra}{#1}}}
+\newcommand{\la}[1]{{\color{red}\grumbler{la}{#1}}}
+
+% Special names for this paper
+\newcommand{\sys}{Indicus\xspace}
+\newcommand{\tinydag}{\textsuperscript{\dag}}
+\newcommand{\tinyddag}{\textsuperscript{\ddag}}
+\newcommand{\tinystar}{\textsuperscript{\S}}
+
+\theoremstyle{plain}
+\newtheorem{lemma}{Lemma}
+\newtheorem{theorem}{Theorem}
+
+% Define colors
+\definecolor{lightblue}{rgb}{0.6,1.0,0.6}
+\sethlcolor{lightblue}
+
+% Defines ticks/checks
+\newcommand{\cmark}{\ding{51}}%
+\newcommand{\xmark}{\ding{55}}%
+
+%Define table new line
+\newcommand{\tabincell}[2]{\begin{tabular}{@{}#1@{}}#2\end{tabular}}
+
+% Define centered custom size column
+\newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
+%Align left single column
+\newcommand{\alignleft}[1]{\multicolumn{1}{l}{#1}}
+\newcommand{\alignright}[1]{\multicolumn{1}{r}{#1}}
+\newcommand{\aligncenter}[1]{\multicolumn{1}{c}{#1}}
+
+
+\ifthenelse{\boolean{publicversion}}{
+    \newcommand{\grumbler}[2]{}
+    \newcommand{\changebars}[2]{#1}
+    \newcommand{\pagelimit}[1]{}
+    \newcommand{\todo}[1]{}
+    % Space savings commands go here
+    \setlength{\tabcolsep}{0.25in}
+    \setlist[itemize]{leftmargin=*}
+    \setlist[enumerate]{leftmargin=*}
+    \usepackage[subtle,wordspacing=normal]{savetrees} % Saves space
+    \setlength{\parskip}{2pt plus 1mm minus 1mm} %No line skip
+    \setlength{\parindent}{5pt} % Default is 15pt. 
+    \setlength\abovedisplayskip{2pt plus 2pt minus 2pt}% minimises space above display maths
+    \setlength\belowdisplayskip{2pt plus 2pt minus 2pt}% minimises space below displaymaths
+    \setlength{\abovecaptionskip}{1pt} % minimises space below caption
+    \setlength{\belowcaptionskip}{1pt} % minimises space below caption
+    \setlength\floatsep{2pt plus  0pt minus 0pt}
+    \setlength\textfloatsep{3pt plus 0pt minus 0pt}
+     } 
+{
+ \newcommand{\grumbler}[2]{{{\bf #1:} #2}}
+  \newcommand{\pagelimit}[1]{{\hl{ #1 pages}}}
+  \newcommand{\changebars}[2]{{[check]}[{\em \color{red}#1}] [{\sout {\em #2}]}}
+  \newcommand{\todo}[1]{{{\color{red} TODO: #1}}}
+}
+
+
+% Options for anonymising
+\ifthenelse{\boolean{optanon}}%
+  {\newcommand{\anonAndNonAnon}[2]{#1}}%
+  {\newcommand{\anonAndNonAnon}[2]{#2}}
+
+%Adding an environment of for proof sketches
+
+\newenvironment{sketch}{%
+  \renewcommand{\proofname}{Proof sketch}\proof}{\endproof}
+
+
+% Enum Commands
+\newcommand{\one}{({\em i}\/)\xspace}
+\newcommand{\two}{({\em ii}\/)\xspace}
+\newcommand{\three}{({\em iii}\/)\xspace}
+\newcommand{\four}{({\em iv}\/)\xspace}
+\newcommand{\five}{({\em v}\/)\xspace}
+
+% Pseucode commands
+\newcommand{\Var}[1]{\mathrm{#1}}
+\newcommand{\Bucket}[2]{\mathcal{P}(\Var{#1},\Var{#2})}
+\newcommand{\Buckett}[3]{\mathcal{P}(\Var{#1},\Var{#2},\Var{#3})}
+\newcommand{\False}{\mathbf{false}}
+\newcommand{\True}{\mathbf{true}}
+\newcommand{\VarP}[1]{\Var{#1^\prime}}
+\newcommand{\AND}{\mathbin{\mathbf{and}}}
+
