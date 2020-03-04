@@ -6,6 +6,8 @@ SRCS += $(addprefix $(d), \
 PROTOS += $(addprefix $(d), \
 	    messages-proto.proto)
 
+LIB-bft-tapir-config := $(o)config.o
+
 OBJS-replica-client := $(LIB-udptransport) $(LIB-message) $(LIB-crypto) \
 		$(LIB-configuration) $(o)messages-proto.o $(o)config.o
 

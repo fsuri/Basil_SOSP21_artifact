@@ -47,16 +47,16 @@ Server::~Server() {
 void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
   proto::Read read;
-  proto::Prepare prepare;
+  proto::Prepare1 prepare1;
   proto::Commit commit;
   proto::Abort abort;
 
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
     HandleRead(remote, read);
-  } else if (type == prepare.GetTypeName()) {
-    prepare.ParseFromString(data);
-    HandlePrepare(remote, prepare);
+  } else if (type == prepare1.GetTypeName()) {
+    prepare1.ParseFromString(data);
+    HandlePrepare1(remote, prepare1);
   } else if (type == commit.GetTypeName()) {
     commit.ParseFromString(data);
     HandleCommit(remote, commit);
@@ -84,7 +84,7 @@ void Server::HandleRead(const TransportAddress &remote,
   if (exists) {
     reply.set_status(REPLY_OK);
     reply.set_value(tsVal.second);
-    tsVal.first.serialize(reply.mutable_timestamp());
+    tsVal.first.serialize(reply.mutable_version()->mutable_timestamp());
   } else {
     reply.set_status(REPLY_FAIL);
   }
@@ -92,8 +92,8 @@ void Server::HandleRead(const TransportAddress &remote,
   transport->SendMessage(this, remote, reply);
 }
 
-void Server::HandlePrepare(const TransportAddress &remote,
-    const proto::Prepare &msg) {
+void Server::HandlePrepare1(const TransportAddress &remote,
+    const proto::Prepare1 &msg) {
   Timestamp retryTs;
   int32_t status = DoOCCCheck(msg.txn_id(), msg.txn(), msg.timestamp(), retryTs);
 }
