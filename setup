@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# setup for new ubuntu 18.04 environment:
+sudo apt-get install libprotobuf-dev libevent-dev libssl-dev protobuf-compiler libgtest-dev make g++ pkg-config libcrypto++6 libcrypto++-dev libgflags-dev
