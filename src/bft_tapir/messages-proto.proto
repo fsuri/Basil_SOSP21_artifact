@@ -13,14 +13,21 @@ message SignedReadRequest {
     required bytes signature = 2;
 }
 
-// TODO Need proof that this response is legit
+message Version {
+  required uint64 timestamp = 1;
+  required uint64 clientid = 2;
+}
+
 message ReadResponse {
     required bytes key = 1;
     required bytes value = 2;
-    required uint64 version = 3;
+    required Version version = 3;
     required uint64 clientid = 4;
     required uint64 clientseqnum = 5;
     required uint64 replicaid = 6;
+    // TODO merkel tree could make more efficient
+    required Transaction writetx = 7;
+    required P3 p3 = 8;
 }
 
 message SignedReadResponse {
@@ -31,7 +38,7 @@ message SignedReadResponse {
 // TODO limit on key sizes?
 message Read {
     required bytes key = 1;
-    required uint64 version = 2;
+    required Version version = 2;
 }
 
 message Write {
@@ -40,11 +47,11 @@ message Write {
 }
 
 message Transaction {
-    required uint64 timestamp = 1;
+    required Version version = 1;
     repeated Read read = 2;
     repeated Write write = 3;
-    required uint64 clientid = 4;
-    required uint64 clientseqnum = 5;
+    // clientid is in version
+    required uint64 clientseqnum = 4;
 }
 
 message SignedTransaction {
@@ -91,22 +98,14 @@ message P2Echo {
     required bytes txdigest = 2;
     required uint64 replicaid = 3;
 }
-    
+
 message SignedP2Echo {
     required P2Echo p2echo = 1;
     required bytes signature = 2;
 }
 
 message P3 {
-    required TXAction action = 1;
-    required bytes txdigest = 2;
     repeated SignedP2Echo p2echos = 3;
-    required uint64 clientid = 4;
-}
-
-message SignedP3 {
-    required P3 p3 = 1;
-    required bytes signature = 2;
 }
 
 message P3Echo {
@@ -114,7 +113,7 @@ message P3Echo {
     required bytes txdigest = 2;
     required uint64 replicaid = 3;
 }
-    
+
 message SignedP3Echo {
     required P3Echo p3echo = 1;
     required bytes signature = 2;
