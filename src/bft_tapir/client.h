@@ -45,7 +45,7 @@ class Client : TransportReceiver {
 
   void SendRead(char* key);
   bool VerifyP3Commit(proto::Transaction &transaction, proto::P3 &p3);
-  bool TxWritesKey(proto::Transaction &tx, string key);
+  bool TxWritesKeyValue(proto::Transaction &tx, string key, string value);
   bool VersionsEqual(const proto::Version &v1, const proto::Version &v2);
   bool VersionGT(const proto::Version &v1, const proto::Version &v2);
   void HandleReadResponse(const proto::SignedReadResponse &readresponse);

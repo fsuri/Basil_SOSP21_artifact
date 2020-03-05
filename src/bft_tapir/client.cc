@@ -101,9 +101,9 @@ bool Client::VerifyP3Commit(Transaction &transaction, P3 &p3) {
   return true;
 }
 
-bool Client::TxWritesKey(Transaction &tx, string key) {
+bool Client::TxWritesKeyValue(Transaction &tx, string key, string value) {
   for (int i = 0; i < tx.write_size(); i++) {
-    if (tx.write(i).key() == key) {
+    if (tx.write(i).key() == key && tx.write(i).value() == value) {
       return true;
     }
   }
@@ -143,7 +143,7 @@ void Client::HandleReadResponse(const SignedReadResponse &msg) {
         P3 p3 = readResponse.p3();
 
         // Verify the the p3 commits the given tx, that the tx version matches the read version, and that the tx writes the key
-        if (VerifyP3Commit(writeTx, p3) && VersionsEqual(writeTx.version(), version) && TxWritesKey(writeTx, key)) {
+        if (VerifyP3Commit(writeTx, p3) && VersionsEqual(writeTx.version(), version) && TxWritesKeyValue(writeTx, key, value)) {
           // check if the current version is greater than the current max version
           Version max_version = get<2>(max_read_responses[client_seq_num]);
           already_replied_replicas.insert(replicaId);
