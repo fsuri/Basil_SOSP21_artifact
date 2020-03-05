@@ -38,20 +38,18 @@ PubKey DerivePublicKey(PrivKey &privateKey);
 
 // TODO should have canonical serialization for this to be correct,
 // but this should be fine for now
-template <typename M, typename S>
-void SignMessage(const PrivKey privateKey, const M *m, S &s) {
-  string serialized = m->SerializeAsString();
-  string signature = Sign(privateKey, serialized);
+template <typename S>
+void SignMessage(const PrivKey privateKey, const std::string &m, S &s) {
+  string signature = Sign(privateKey, m);
 
   s.set_signature(signature);
 }
 
-template <typename M, typename S>
-bool IsMessageValid(const PubKey publicKey, const M *m, S *s) {
-  string serialized = m->SerializeAsString();
+template <typename S>
+bool IsMessageValid(const PubKey publicKey, const std::string &m, S *s) {
   string signature = s->signature();
 
-  return Verify(publicKey, serialized, signature);
+  return Verify(publicKey, m, signature);
 }
 
 }  // namespace crypto

@@ -4,6 +4,17 @@ import "store/common/common-proto.proto";
 
 package indicusstore.proto;
 
+message SignedMessage {
+  required string msg = 1;
+  required string type = 2;
+  required uint64 process_id = 3;
+  required bytes signature = 4;
+}
+
+message SignedMessages {
+  repeated SignedMessage msgs = 1;
+}
+
 message Read {
   required uint64 req_id = 1;
   required string key = 2;
@@ -44,6 +55,11 @@ message Transaction {
   optional TimestampMessage timestamp = 3;
 }
 
+message Phase1 {
+  required uint64 txn_id = 1;
+  required Transaction txn = 2;
+}
+
 message SignedTransaction {
   required Phase1 phase1 = 1;
   required bytes signature = 2;
@@ -51,14 +67,20 @@ message SignedTransaction {
 }
 
 message Phase1Reply {
+  required int32 status = 1;
   enum ConcurrencyCheckResult {
       COMMIT = 0;
       ABORT = 1;
       ABSTAIN = 2;
       RETRY = 3;
   }
-  required ConcurrencyCheckResult ccr = 1;
-  required bytes txn_digest = 2;
+  required ConcurrencyCheckResult ccr = 2;
+  required bytes txn_digest = 3;
+  required TimestampMessage timestamp = 4;
+}
+
+message Prepare1Replies {
+  repeated Phase1Reply replies = 1;
 }
 
 message SignedPhase1Reply {
@@ -75,7 +97,10 @@ enum TxnDecision {
 message Phase2 {
   required TxnDecision decision = 1;
   required bytes txn_digest = 2;
-  repeated SignedPrepare1Reply p1_replies = 3;
+  oneof p1_replies_oneof {
+    Prepare1Replies p1_replies = 3;
+    SignedMessages signed_p1_replies = 4;
+  }
 }
 
 message SignedPhase2 {
@@ -96,5 +121,8 @@ message SignedPhase2Reply {
 }
 
 message Writeback {
-  repeated SignedPrepare2Reply p2_replies = 1;
+  repeated SignedPhase2Reply p2_replies = 1;
+}
+
+message Abort {
 }

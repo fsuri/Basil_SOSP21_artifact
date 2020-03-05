@@ -75,7 +75,8 @@ void Client::SendRead(char* key) {
 
 
   SignedReadRequest signedReadRequest;
-  crypto::SignMessage(privateKey, readRequest, signedReadRequest);
+  std::string readRequestSerialized = readRequest->SerializeAsString();
+  crypto::SignMessage(privateKey, readRequestSerialized, signedReadRequest);
   // Takes ownership of request and will make sure to delete it
   signedReadRequest.set_allocated_readrequest(readRequest);
 
@@ -89,9 +90,10 @@ bool Client::VerifyP3Commit(Transaction &transaction, P3 &p3) {
   for (int i = 0; i < p3.p2echos_size(); i++) {
     SignedP2Echo signedP2Echo = p3.p2echos(i);
     P2Echo p2Echo = signedP2Echo.p2echo();
+    std::string p2EchoSerialized = p2Echo.SerializeAsString();
     uint64_t replicaId = p2Echo.replicaid();
     crypto::PubKey replicaPublicKey = config.getReplicaPublicKey(replicaId);
-    if (crypto::IsMessageValid(replicaPublicKey, &p2Echo, &signedP2Echo) && p2Echo.txdigest() == txdigest && p2Echo.action() == COMMIT) {
+    if (crypto::IsMessageValid(replicaPublicKey, p2EchoSerialized, &signedP2Echo) && p2Echo.txdigest() == txdigest && p2Echo.action() == COMMIT) {
       // pass
     } else {
       return false;
@@ -122,6 +124,7 @@ void Client::HandleReadResponse(const SignedReadResponse &msg) {
   printf("Handling read response message\n");
 
   ReadResponse readResponse = msg.readresponse();
+  std::string readResponseSerialized = msg.SerializeAsString();
   int replicaId = readResponse.replicaid();
   uint64_t client_seq_num = readResponse.clientseqnum();
   Version version = readResponse.version();
@@ -132,7 +135,7 @@ void Client::HandleReadResponse(const SignedReadResponse &msg) {
     crypto::PubKey replicaPublicKey = config.getReplicaPublicKey(replicaId);
 
     // verify that the replica actually sent this reply and that we are expecting this reply
-    if (crypto::IsMessageValid(replicaPublicKey, &readResponse, &msg) && max_read.find(client_seq_num) != max_read.end()) {
+    if (crypto::IsMessageValid(replicaPublicKey, readResponseSerialized, &msg)) {
       printf("Message is valid!\n");
       cout << "Result: " << key << " -> " << value << endl;
 
@@ -173,7 +176,8 @@ void Client::SendPrepare() {
   long int us = tp.tv_sec * 1000000 + tp.tv_usec;
   // current_transaction.mutable_transaction()->set_timestamp(us);
 
-  crypto::SignMessage(privateKey, current_transaction.mutable_transaction(), current_transaction);
+  std::string txnStr = current_transaction.mutable_transaction()->SerializeAsString();
+  crypto::SignMessage(privateKey, txnStr, current_transaction);
 
   // send prepare to all replicas
   transport->SendMessageToAll(this, current_transaction);
@@ -191,7 +195,8 @@ void Client::HandleP1Result(const SignedP1Result &msg) {
     crypto::PubKey replicaPublicKey = config.getReplicaPublicKey(replicaId);
 
     // verify that the replica actually sent this reply and that we are expecting this reply
-    if (crypto::IsMessageValid(replicaPublicKey, &p1result, &msg)) {
+    std::string p1resultSerialized = p1result.SerializeAsString();
+    if (crypto::IsMessageValid(replicaPublicKey, p1resultSerialized, &msg)) {
       printf("Message is valid!\n");
       cout << "Result: " << txid << " -> " << ccr << endl;
 
@@ -226,6 +231,9 @@ void Client::SendP3() {
 // If we do fail at this point, we know the correct tx decision will be recovered
 // TODO reset transaction and is_committing after 2f+1 confirmations
 }
+void Client::HandleP3Echo(const proto::SignedP3Echo &p3echo) {
+}
+
 
 }  // namespace bft_tapir
 

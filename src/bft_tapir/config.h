@@ -20,8 +20,8 @@ class NodeConfig {
 
   ~NodeConfig();
 
-  crypto::PubKey getReplicaPublicKey(int id);
-  crypto::PubKey getClientPublicKey(int id);
+  const crypto::PubKey &getReplicaPublicKey(int id) const;
+  const crypto::PubKey &getClientPublicKey(int id) const;
   transport::Configuration getReplicaConfig();
   transport::ReplicaAddress getClientAddress(int id);
   crypto::PrivKey getClientPrivateKey(int id);
