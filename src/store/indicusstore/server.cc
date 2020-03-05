@@ -84,7 +84,7 @@ void Server::HandleRead(const TransportAddress &remote,
   if (exists) {
     reply.set_status(REPLY_OK);
     reply.set_value(tsVal.second);
-    tsVal.first.serialize(reply.mutable_version()->mutable_timestamp());
+    tsVal.first.serialize(reply.mutable_timestamp());
   } else {
     reply.set_status(REPLY_FAIL);
   }
@@ -199,7 +199,7 @@ int32_t Server::DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
             write.first.c_str());
         retryTs = val.first;
         stats.Increment("retries_committed_write", 1);
-        return REPLY_RETRY;	                    
+        return REPLY_RETRY;
       }
 
       // if last committed read is bigger than the timestamp, can't
@@ -213,7 +213,7 @@ int32_t Server::DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
         Debug("[%lu] RETRY wr conflict w/ prepared key:%s", id,
             write.first.c_str());
         retryTs = lastRead;
-        return REPLY_RETRY; 
+        return REPLY_RETRY;
       }
     }
 
@@ -237,7 +237,7 @@ int32_t Server::DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
     if (pReads.find(write.first) != pReads.end() &&
         pReads[write.first].upper_bound(proposedTs) !=
         pReads[write.first].end()) {
-      Debug("[%lu] ABSTAIN wr conflict w/ prepared key:%s", 
+      Debug("[%lu] ABSTAIN wr conflict w/ prepared key:%s",
             id, write.first.c_str());
       stats.Increment("abstains", 1);
       return REPLY_ABSTAIN;
