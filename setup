@@ -2,3 +2,6 @@
 
 # setup for new ubuntu 18.04 environment:
 sudo apt-get install libprotobuf-dev libevent-dev libssl-dev protobuf-compiler libgtest-dev make g++ pkg-config libcrypto++6 libcrypto++-dev libgflags-dev
+
+
+[ ! -d "/usr/src/gtest-1.10.0" ] && sudo ln -s /usr/src/googletest/ /usr/src/gtest-1.10.0
