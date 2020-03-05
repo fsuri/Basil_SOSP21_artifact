@@ -32,12 +32,14 @@
 #include "store/indicusstore/server.h"
 
 #include "lib/tcptransport.h"
+#include "store/indicusstore/common.h"
 
 namespace indicusstore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     Transport *transport) : config(config),
-    groupIdx(groupIdx), idx(idx), transport(transport), occType(TAPIR) {
+    groupIdx(groupIdx), idx(idx), transport(transport), occType(TAPIR),
+    signedMessages(false), validateProofs(false) {
   transport->Register(this, config, groupIdx, idx);
 }
 
@@ -45,11 +47,27 @@ Server::~Server() {
 }
 
 void Server::ReceiveMessage(const TransportAddress &remote,
-      const std::string &type, const std::string &data, void *meta_data) {
+      const std::string &t, const std::string &d, void *meta_data) {
+  proto::SignedMessage signedMessage;
   proto::Read read;
   proto::Phase1 phase1;
   proto::Writeback writeback;
   proto::Abort abort;
+
+  std::string type;
+  std::string data;
+  if (t == signedMessage.GetTypeName()) {
+    signedMessage.ParseFromString(d);
+    if (ValidateSignedMessage(signedMessage, cryptoConfig)) {
+      type = signedMessage.type();
+      data = signedMessage.msg();
+    } else {
+      return;
+    }
+  } else {
+    type = t;
+    data = d;
+  }
 
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
@@ -97,6 +115,38 @@ void Server::HandlePhase1(const TransportAddress &remote,
   Timestamp retryTs;
   int32_t status = DoOCCCheck(msg.txn_id(), msg.txn(), msg.txn().timestamp(), retryTs);
 }
+
+void Server::HandlePhase2(const TransportAddress &remote,
+      const proto::Phase2 &msg) {
+  std::vector<proto::Phase1Reply> prepare1Replies;
+  bool validated = true;
+  if (signedMessages) {
+    proto::Phase1Reply prepare1Reply;
+    for (const auto &signedPhase1Reply : msg.signed_p1_replies().msgs()) {
+      if (ValidateSignedMessage(signedPhase1Reply, cryptoConfig)) {
+        prepare1Reply.ParseFromString(signedPhase1Reply.msg());
+        prepare1Replies.push_back(prepare1Reply);
+      } else {
+        validated = false;
+        break;
+      }
+    }
+  } else {
+    for (const auto &prepare1Reply : msg.p1_replies().replies()) {
+      prepare1Replies.push_back(prepare1Reply);
+    }
+  }
+
+  proto::TxnDecision decision;
+  if (validated) {
+    decision = IndicusDecide(prepare1Replies, &config);
+  } else {
+    decision = proto::TxnDecision::ABORT;
+  }
+  proto::Phase2Reply prepare2Reply;
+  prepare2Reply.set_decision(decision); 
+}
+
 
 void Server::HandleWriteback(const TransportAddress &remote,
     const proto::Writeback &msg) {

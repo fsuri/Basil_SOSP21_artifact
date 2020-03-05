@@ -1,5 +1,7 @@
 #include "bft_tapir/config.h"
 
+#include "lib/assert.h"
+
 namespace bft_tapir {
 
 using namespace std;
@@ -25,11 +27,15 @@ NodeConfig::NodeConfig(transport::Configuration replicaConfig,
 
 NodeConfig::~NodeConfig() {}
 
-crypto::PubKey NodeConfig::getReplicaPublicKey(int id) {
-  return replicaPublicKeys[id];
+const crypto::PubKey &NodeConfig::getReplicaPublicKey(int id) const {
+  auto itr = replicaPublicKeys.find(id);
+  UW_ASSERT(itr != replicaPublicKeys.end());
+  return itr->second;
 }
-crypto::PubKey NodeConfig::getClientPublicKey(int id) {
-  return clientPublicKeys[id];
+const crypto::PubKey &NodeConfig::getClientPublicKey(int id) const {
+  auto itr = clientPublicKeys.find(id);
+  UW_ASSERT(itr != clientPublicKeys.end());
+  return itr->second;
 }
 transport::Configuration NodeConfig::getReplicaConfig() {
   return replicaConfig;

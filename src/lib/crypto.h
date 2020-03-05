@@ -46,12 +46,11 @@ void SignMessage(const PrivKey privateKey, const M *m, S &s) {
   s.set_signature(signature);
 }
 
-template <typename M, typename S>
-bool IsMessageValid(const PubKey publicKey, const M *m, S *s) {
-  string serialized = m->SerializeAsString();
+template <typename S>
+bool IsMessageValid(const PubKey publicKey, const std::string &m, S *s) {
   string signature = s->signature();
 
-  return Verify(publicKey, serialized, signature);
+  return Verify(publicKey, m, signature);
 }
 
 }  // namespace crypto

@@ -89,9 +89,10 @@ bool Client::VerifyP3Commit(Transaction &transaction, P3 &p3) {
   for (int i = 0; i < p3.p2echos_size(); i++) {
     SignedP2Echo signedP2Echo = p3.p2echos(i);
     P2Echo p2Echo = signedP2Echo.p2echo();
+    std::string p2EchoSerialized = p2Echo.SerializeAsString();
     uint64_t replicaId = p2Echo.replicaid();
     crypto::PubKey replicaPublicKey = config.getReplicaPublicKey(replicaId);
-    if (crypto::IsMessageValid(replicaPublicKey, &p2Echo, &signedP2Echo) && p2Echo.txdigest() == txdigest && p2Echo.action() == COMMIT) {
+    if (crypto::IsMessageValid(replicaPublicKey, p2EchoSerialized, &signedP2Echo) && p2Echo.txdigest() == txdigest && p2Echo.action() == COMMIT) {
       // pass
     } else {
       return false;
@@ -122,6 +123,7 @@ void Client::HandleReadResponse(const SignedReadResponse &msg) {
   printf("Handling read response message\n");
 
   ReadResponse readResponse = msg.readresponse();
+  std::string readResponseSerialized = msg.SerializeAsString();
   int replicaId = readResponse.replicaid();
   uint64_t client_seq_num = readResponse.clientseqnum();
   Version version = readResponse.version();
@@ -132,7 +134,7 @@ void Client::HandleReadResponse(const SignedReadResponse &msg) {
     crypto::PubKey replicaPublicKey = config.getReplicaPublicKey(replicaId);
 
     // verify that the replica actually sent this reply and that we are expecting this reply
-    if (crypto::IsMessageValid(replicaPublicKey, &readResponse, &msg) && max_read.find(client_seq_num) != max_read.end()) {
+    if (crypto::IsMessageValid(replicaPublicKey, readResponseSerialized, &msg)) {
       printf("Message is valid!\n");
       cout << "Result: " << key << " -> " << value << endl;
 
@@ -191,7 +193,8 @@ void Client::HandleP1Result(const SignedP1Result &msg) {
     crypto::PubKey replicaPublicKey = config.getReplicaPublicKey(replicaId);
 
     // verify that the replica actually sent this reply and that we are expecting this reply
-    if (crypto::IsMessageValid(replicaPublicKey, &p1result, &msg)) {
+    std::string p1resultSerialized = p1result.SerializeAsString();
+    if (crypto::IsMessageValid(replicaPublicKey, p1resultSerialized, &msg)) {
       printf("Message is valid!\n");
       cout << "Result: " << txid << " -> " << ccr << endl;
 
