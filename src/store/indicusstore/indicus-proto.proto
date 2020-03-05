@@ -15,15 +15,10 @@ message SignedRead {
   required bytes signature = 3;
 }
 
-message Version {
-  required TimestampMessage timestamp = 1;
-  required uint64 clientid = 2;
-}
-
 message WriteProof {
   // TODO merkel tree could make more efficient
   required TransactionMessage write_txn = 1;
-  required Version write_txn_version = 2;
+  required TimestampMessage write_txn_timestamp = 2;
   required Prepare3 prepare3 = 3;
 }
 
@@ -32,7 +27,7 @@ message ReadReply {
   required int32 status = 2;
   required string key = 3;
   optional string value = 4;
-  optional Version version = 5;
+  optional TimestampMessage timestamp = 5;
   optional WriteProof proof = 6;
 }
 
