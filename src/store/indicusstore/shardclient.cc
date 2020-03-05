@@ -148,7 +148,7 @@ void ShardClient::Prepare(uint64_t id, const Transaction &txn,
 void ShardClient::Commit(uint64_t id, const Transaction & txn,
       uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
       uint32_t timeout) {
-  
+
   uint64_t reqId = lastReqId++;
   PendingCommit *pendingCommit = new PendingCommit(reqId);
   pendingCommits[reqId] = pendingCommit;
@@ -176,8 +176,8 @@ void ShardClient::Commit(uint64_t id, const Transaction & txn,
   Debug("[shard %i] Sent COMMIT [%lu]", shard, id);
 
   pendingCommit->requestTimeout->Reset();
-}  
-  
+}
+
 void ShardClient::Abort(uint64_t id, const Transaction &txn,
       abort_callback acb, abort_timeout_callback atcb, uint32_t timeout) {
   Debug("[shard %i] Sending ABORT [%lu]", shard, id);
@@ -266,10 +266,10 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   if (validateProofs) {
     // Verify the the p3 commits the given tx, that the tx version matches the
     // read version, and that the tx writes the key
-    if (!VerifyP3Commit(reply.proof().write_txn(), reply.proof().prepare3())) {
+    if (!VerifyP3Commit(reply.proof().write_txn(), reply.proof().tx_writeback())) {
       return;
     }
-    if (!VersionsEqual(reply.proof().write_txn_version(), reply.version())) {
+    if (!TimestampsEqual(reply.proof().write_txn_timestamp(), reply.timestamp())) {
       return;
     }
     if (!TxWritesKey(reply.proof().write_txn(), reply.key())) {
@@ -281,7 +281,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   itr->second->numReplies++;
   if (reply.status() == REPLY_OK) {
     itr->second->numOKReplies++;
-    Timestamp replyTs(reply.version().timestamp());
+    Timestamp replyTs(reply.timestamp());
     if (itr->second->maxTs < replyTs) {
       itr->second->maxTs = replyTs;
       itr->second->maxValue = reply.value();
@@ -309,7 +309,7 @@ void ShardClient::HandleSignedReadReply(
   if (!cryptoConfig->isValidReplicaId(signedReadReply.replica_id())) {
     return;
   }
-  
+
   crypto::PubKey replicaPublicKey = cryptoConfig->getReplicaPublicKey(
       signedReadReply.replica_id());
   // verify that the replica actually sent this reply and that we are expecting
@@ -382,7 +382,7 @@ bool ShardClient::AbortCallback(uint64_t reqId,
 }
 
 bool ShardClient::VerifyP3Commit(const Transaction &transaction,
-    const Prepare3 &p3) {
+    const Writeback &p3) {
   TransactionMessage txn_msg;
   transaction.serialize(&txn_msg);
   std::string serialized = txn_msg.SerializeAsString();
@@ -409,12 +409,12 @@ bool ShardClient::TxWritesKey(const Transaction &tx, const std::string &key) {
   return tx.getWriteSet().find(key) != tx.getWriteSet().end();
 }
 
-bool ShardClient::VersionsEqual(const Version &v1, const Version &v2) {
-  return Timestamp(v1.timestamp()) == Timestamp(v2.timestamp()) && v1.clientid() == v2.clientid();
+bool ShardClient::TimestampsEqual(const TimestampMessage &v1, const TimestampMessage &v2) {
+  return Timestamp(v1.timestamp()) == Timestamp(v2.timestamp()) && v1.id() == v2.id();
 }
 
-bool ShardClient::VersionGT(const Version &v1, const Version &v2) {
-  return Timestamp(v1.timestamp()) > Timestamp(v2.timestamp()) || (Timestamp(v1.timestamp()) == Timestamp(v2.timestamp()) && v1.clientid() > v2.clientid());
+bool ShardClient::TimestampsGT(const TimestampMessage &v1, const TimestampMessage &v2) {
+  return Timestamp(v1.timestamp()) > Timestamp(v2.timestamp()) || (Timestamp(v1.timestamp()) == Timestamp(v2.timestamp()) && v1.id() > v2.id());
 }
 
 } // namespace indicus

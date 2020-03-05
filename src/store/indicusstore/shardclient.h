@@ -42,6 +42,7 @@
 #include "store/common/timestamp.h"
 #include "store/common/transaction.h"
 #include "store/common/frontend/txnclient.h"
+#include "store/common/common-proto.pb.h"
 #include "store/indicusstore/indicus-proto.pb.h"
 
 #include <map>
@@ -80,7 +81,7 @@ class ShardClient : public TxnClient, public TransportReceiver {
   virtual void Commit(uint64_t id, const Transaction & txn,
       uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
       uint32_t timeout) override;
-  
+
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(uint64_t id, const Transaction &txn,
       abort_callback acb, abort_timeout_callback atcb,
@@ -168,10 +169,10 @@ class ShardClient : public TxnClient, public TransportReceiver {
   bool AbortCallback(uint64_t reqId, const std::string &,
       const std::string &);
 
-  bool VerifyP3Commit(const Transaction &transaction, const proto::Prepare3 &p3);
+  bool VerifyP3Commit(const Transaction &transaction, const proto::Writeback &p3);
   bool TxWritesKey(const Transaction &tx, const std::string &key);
-  bool VersionsEqual(const proto::Version &v1, const proto::Version &v2);
-  bool VersionGT(const proto::Version &v1, const proto::Version &v2);
+  bool TimestampsEqual(const TimestampMessage &v1, const TimestampMessage &v2);
+  bool TimestampsGT(const TimestampMessage &v1, const TimestampMessage &v2);
 
   /* Helper Functions for starting and finishing requests */
   void StartRequest();
