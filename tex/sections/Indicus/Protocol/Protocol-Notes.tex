@@ -17,23 +17,29 @@ Goal: \\
 - limit aborts\\
 
 challenges:\\
-- concurrent read/writes\\
+- concurrent read/writes. Maintain isolation: serializability\\
 - geo-distributed so execution and validation takes long --> more interleavings\\
 - clocks are not perfectly synced\\
+- minimize unecessary aborts\\
 - byzantine clients can create artificial congestion\\
 
 
 \subsection{Validation}
 Goal:\\
 - maintain ACID guarantees: Isolation, Durability, Atomicity\\
-- Be client driven\\
+- Be client driven, i.e. leaderless and out of order\\
+- avoid frontrunning\\
+- be scalable
+- be fast
 
 Challenges:\\
 - Maintain Isolation while creating highest chance to commit\\
 - Tolerate byzantine replicas voting dishonestly\\
 - Tolerate Client failures: equivocation, crashes, stalling, replay\\
---> Answer: make final decisions idempotent
--
+--> Answer: make final decisions idempotent\\
+- enable consistent recovery
+- minimize state at replicas while still guaranteeing correct agreement. Make sure local knowledge is enough to guarantee global correctness
+- minimize necessary roundtrips and communication complexity
 
 
 

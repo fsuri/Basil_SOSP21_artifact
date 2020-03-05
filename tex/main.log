@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  5 MAR 2020 14:33
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  5 MAR 2020 14:46
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1553,7 +1553,7 @@ Underfull \hbox (badness 10000) in paragraph at lines 15--2
  []
 
 [4]
-<./figures/LC.png, id=190, 1749.53625pt x 432.61626pt>
+<./figures/LC.png, id=194, 1749.53625pt x 432.61626pt>
 File: ./figures/LC.png Graphic file (type png)
 <use ./figures/LC.png>
 Package pdftex.def Info: ./figures/LC.png  used on input line 11.
@@ -1594,17 +1594,7 @@ Underfull \hbox (badness 10000) in paragraph at lines 16--18
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 19--24
-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 27--30
-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 41--45
+Underfull \hbox (badness 10000) in paragraph at lines 19--25
 
  []
 
@@ -1613,19 +1603,24 @@ has been already used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.45 
+l.43 
       <./figures/LC.png>]
-Underfull \hbox (badness 10000) in paragraph at lines 52--56
+Underfull \hbox (badness 10000) in paragraph at lines 47--51
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 63--65
+Underfull \hbox (badness 10000) in paragraph at lines 58--62
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 69--71
 
  []
 
 ) (./sections/Indicus/Protocol/Protocol.tex
-Underfull \hbox (badness 10000) in paragraph at lines 67--9
+Underfull \hbox (badness 10000) in paragraph at lines 73--9
 
  []
 
@@ -1721,7 +1716,10 @@ Underfull \hbox (badness 10000) in paragraph at lines 96--97
 cm/m/it/10 key \OMS/pzccm/m/n/10 2 [] ^
  []
 
-[8]
+
+Underfull \vbox (badness 7151) has occurred while \output is active []
+
+ [8]
 <./figures/AB.png, id=229, 779.91376pt x 482.80376pt>
 File: ./figures/AB.png Graphic file (type png)
 <use ./figures/AB.png>
@@ -1742,19 +1740,20 @@ File: ./figures/3f+1.png Graphic file (type png)
 <use ./figures/3f+1.png>
 Package pdftex.def Info: ./figures/3f+1.png  used on input line 217.
 (pdftex.def)             Requested size: 202.3529pt x 103.22842pt.
-) (./sections/Implementation.tex) (./sections/Limitations.tex [9pdfTeX warning 
-(ext4): destination with the same identifier (name{figure.3}) has been already 
-used, duplicate ignored
+)
+(./sections/Implementation.tex) (./sections/Limitations.tex [9pdfTeX warning (e
+xt4): destination with the same identifier (name{figure.3}) has been already us
+ed, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.8 
+l.6 
     pdfTeX warning (ext4): destination with the same identifier (name{figure.4}
 ) has been already used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.8 
+l.6 
      <./figures/AB.png> <./figures/5f+1.png>]) (./sections/RelatedWork.tex
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
@@ -1771,80 +1770,47 @@ l.12
                                                   \fi \fi 
 l.12 
       <./figures/SingleShard.png> <./figures/3f+1.png>])
-(./sections/Conclusion.tex) (./main.bbl)
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 121.
+(./sections/Conclusion.tex)
+Underfull \vbox (badness 4254) has occurred while \output is active []
+
+ (./main.bbl)
 - LAST -
-Extra skip:11.72528pt
-Left:322.0pt/2.16492pt
-Right:310.64972pt/1.78992pt
-Output:322.32486pt
+Extra skip:15.98718pt
+Left:394.0pt/2.16492pt
+Right:378.38782pt/1.78992pt
+Output:394.19391pt
  [11]
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 121.
 Package atveryend Info: Empty hook `AfterLastShipout' on input line 121.
  (./main.aux)
 Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 121.
 Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 121.
+Package rerunfilecheck Info: File `main.out' has not changed.
+(rerunfilecheck)             Checksum: C738D11AADFC62ECF487D8D643B20202;2437.
 
-
-Package rerunfilecheck Warning: File `main.out' has changed.
-(rerunfilecheck)                Rerun to get outlines right
-(rerunfilecheck)                or use package `bookmark'.
-
-Package rerunfilecheck Info: Checksums for `main.out':
-(rerunfilecheck)             Before: 235BA5E6948C30E80AE0B77E97032ADF;2398
-(rerunfilecheck)             After:  C738D11AADFC62ECF487D8D643B20202;2437.
 
 LaTeX Warning: There were multiply-defined labels.
 
  ) 
 Here is how much of TeX's memory you used:
- 29374 strings out of 492982
- 557248 string characters out of 6134895
- 646921 words of memory out of 5000000
- 32199 multiletter control sequences out of 15000+600000
+ 29365 strings out of 492982
+ 557107 string characters out of 6134895
+ 648924 words of memory out of 5000000
+ 32200 multiletter control sequences out of 15000+600000
  600248 words of font info for 223 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 55i,10n,54p,10414b,464s stack positions out of 5000i,500n,10000p,200000b,80000s
-pdfTeX warning (dest): name{subsection.6.16} has been referenced but does not
- exist, replaced by a fixed one
-
-pdfTeX warning (dest): name{subsection.6.15} has been referenced but does not e
-xist, replaced by a fixed one
-
-pdfTeX warning (dest): name{subsection.6.14} has been referenced but does not e
-xist, replaced by a fixed one
-
-pdfTeX warning (dest): name{subsection.6.13} has been referenced but does not e
-xist, replaced by a fixed one
-
-pdfTeX warning (dest): name{subsection.6.12} has been referenced but does not e
-xist, replaced by a fixed one
-
-pdfTeX warning (dest): name{subsection.6.11} has been referenced but does not e
-xist, replaced by a fixed one
-
-pdfTeX warning (dest): name{subsection.6.10} has been referenced but does not e
-xist, replaced by a fixed one
-
-pdfTeX warning (dest): name{subsection.6.9} has been referenced but does not ex
-ist, replaced by a fixed one
-
-pdfTeX warning (dest): name{subsection.6.8} has been referenced but does not ex
-ist, replaced by a fixed one
-
-pdfTeX warning (dest): name{subsection.6.7} has been referenced but does not ex
-ist, replaced by a fixed one
-
-{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texlive/
-texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-
-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fo
-nts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/ty
-pe1/urw/symbol/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/ut
-mb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/
-share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (11 pages, 502538 bytes).
+ 57i,10n,54p,10414b,464s stack positions out of 5000i,500n,10000p,200000b,80000s
+{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texliv
+e/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texm
+f-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/
+fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/
+type1/urw/symbol/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/
+utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></us
+r/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
+Output written on main.pdf (11 pages, 502554 bytes).
 PDF statistics:
- 310 PDF objects out of 1000 (max. 8388607)
- 277 compressed objects within 3 object streams
- 83 named destinations out of 1000 (max. 500000)
- 43358 words of extra memory for PDF output out of 51595 (max. 10000000)
+ 302 PDF objects out of 1000 (max. 8388607)
+ 269 compressed objects within 3 object streams
+ 73 named destinations out of 1000 (max. 500000)
+ 43366 words of extra memory for PDF output out of 51595 (max. 10000000)
 
