@@ -32,6 +32,7 @@
 #ifndef _INDICUS_SERVER_H_
 #define _INDICUS_SERVER_H_
 
+#include "bft_tapir/config.h"
 #include "replication/ir/replica.h"
 #include "store/server.h"
 #include "store/common/timestamp.h"
@@ -68,6 +69,8 @@ class Server : public TransportReceiver, public ::Server {
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandlePrepare1(const TransportAddress &remote,
       const proto::Prepare1 &msg);
+  void HandlePrepare2(const TransportAddress &remote,
+      const proto::Prepare2 &msg);
   void HandleCommit(const TransportAddress &remote, const proto::Commit &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
@@ -87,6 +90,9 @@ class Server : public TransportReceiver, public ::Server {
   int idx;
   Transport *transport;
   OCCType occType;
+  bool signedMessages;
+  bool validateProofs;
+  bft_tapir::NodeConfig *cryptoConfig;
   
   Stats stats;
   VersionedKVStore store;

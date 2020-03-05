@@ -31,12 +31,9 @@
 
 #include "store/indicusstore/shardclient.h"
 
-#include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
+#include "store/indicusstore/common.h"
 
 namespace indicusstore {
-
-using namespace std;
-using namespace proto;
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int shard, int closestReplica,
@@ -57,9 +54,25 @@ ShardClient::~ShardClient() {
 }
 
 void ShardClient::ReceiveMessage(const TransportAddress &remote,
-      const std::string &type, const std::string &data, void *meta_data) {
+      const std::string &t, const std::string &d, void *meta_data) {
+  proto::SignedMessage signedMessage;
   proto::ReadReply readReply;
   proto::Prepare1Reply prepare1Reply;
+  
+  std::string type;
+  std::string data;
+  if (t == signedMessage.GetTypeName()) {
+    signedMessage.ParseFromString(d);
+    if (ValidateSignedMessage(signedMessage, cryptoConfig)) {
+      type = signedMessage.type();
+      data = signedMessage.msg();
+    } else {
+      return;
+    }
+  } else {
+    type = t;
+    data = d;
+  }
 
   if (type == readReply.GetTypeName()) {
     readReply.ParseFromString(data);
@@ -208,42 +221,6 @@ void ShardClient::Abort(uint64_t id, const Transaction &txn,
   pendingAbort->requestTimeout->Reset();
 }
 
-std::string ShardClient::IndicusDecide(const std::map<std::string,std::size_t> &results) {
-  // If a majority say prepare_ok,
-  int ok_count = 0;
-  Timestamp ts = 0;
-  string final_reply_str;
-  proto::Prepare1Reply final_reply;
-
-  for (const auto& string_and_count : results) {
-    const std::string &s = string_and_count.first;
-    const std::size_t count = string_and_count.second;
-
-    proto::Prepare1Reply reply;
-    reply.ParseFromString(s);
-
-    if (reply.status() == REPLY_OK) {
-      ok_count += count;
-    } else if (reply.status() == REPLY_FAIL) {
-      return s;
-    } else if (reply.status() == REPLY_RETRY) {
-      Timestamp t(reply.timestamp());
-      if (t > ts) {
-        ts = t;
-      }
-    }
-  }
-
-  if (ok_count >= config->QuorumSize()) {
-    final_reply.set_status(REPLY_OK);
-  } else {
-    final_reply.set_status(REPLY_RETRY);
-    ts.serialize(final_reply.mutable_timestamp());
-  }
-  final_reply.SerializeToString(&final_reply_str);
-  return final_reply_str;
-}
-
 void ShardClient::GetTimeout(uint64_t reqId) {
   auto itr = this->pendingGets.find(reqId);
   if (itr != this->pendingGets.end()) {
@@ -304,27 +281,6 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   }
 }
 
-void ShardClient::HandleSignedReadReply(
-    const proto::SignedReadReply &signedReadReply) {
-  if (!cryptoConfig->isValidReplicaId(signedReadReply.replica_id())) {
-    return;
-  }
-  
-  crypto::PubKey replicaPublicKey = cryptoConfig->getReplicaPublicKey(
-      signedReadReply.replica_id());
-  // verify that the replica actually sent this reply and that we are expecting
-  // this reply
-  if (!crypto::IsMessageValid(replicaPublicKey, &signedReadReply.read_reply(),
-        &signedReadReply)) {
-    return;
-  }
-
-  Debug("Message is valid! key=%s -> val=%s",
-      signedReadReply.read_reply().key().c_str(),
-      signedReadReply.read_reply().value().c_str());
-  HandleReadReply(signedReadReply.read_reply());
-}
-
 /* Callback from a shard replica on prepare operation completion. */
 void ShardClient::HandlePrepare1Reply(const proto::Prepare1Reply &reply) {
   auto itr = this->pendingPrepares.find(reply.req_id());
@@ -382,20 +338,21 @@ bool ShardClient::AbortCallback(uint64_t reqId,
 }
 
 bool ShardClient::VerifyP3Commit(const Transaction &transaction,
-    const Prepare3 &p3) {
+    const proto::Prepare3 &p3) {
   TransactionMessage txn_msg;
   transaction.serialize(&txn_msg);
   std::string serialized = txn_msg.SerializeAsString();
   std::string txdigest = crypto::Hash(serialized);
 
   for (int i = 0; i < p3.p2_replies_size(); i++) {
-    SignedPrepare2Reply signedPrepare2Reply = p3.p2_replies(i);
-    Prepare2Reply prepare2Reply = signedPrepare2Reply.p2_reply();
+    proto::SignedPrepare2Reply signedPrepare2Reply = p3.p2_replies(i);
+    proto::Prepare2Reply prepare2Reply = signedPrepare2Reply.p2_reply();
+    std::string prepare2ReplySerialized = prepare2Reply.SerializeAsString();
     uint64_t replicaId = signedPrepare2Reply.replica_id();
     crypto::PubKey replicaPublicKey = cryptoConfig->getReplicaPublicKey(replicaId);
-    if (crypto::IsMessageValid(replicaPublicKey, &prepare2Reply,
+    if (crypto::IsMessageValid(replicaPublicKey, prepare2ReplySerialized,
           &signedPrepare2Reply) && prepare2Reply.txdigest() == txdigest &&
-        prepare2Reply.action() == COMMIT) {
+        prepare2Reply.action() == proto::TxnAction::COMMIT) {
       // pass
     } else {
       return false;
@@ -409,11 +366,11 @@ bool ShardClient::TxWritesKey(const Transaction &tx, const std::string &key) {
   return tx.getWriteSet().find(key) != tx.getWriteSet().end();
 }
 
-bool ShardClient::VersionsEqual(const Version &v1, const Version &v2) {
+bool ShardClient::VersionsEqual(const proto::Version &v1, const proto::Version &v2) {
   return Timestamp(v1.timestamp()) == Timestamp(v2.timestamp()) && v1.clientid() == v2.clientid();
 }
 
-bool ShardClient::VersionGT(const Version &v1, const Version &v2) {
+bool ShardClient::VersionGT(const proto::Version &v1, const proto::Version &v2) {
   return Timestamp(v1.timestamp()) > Timestamp(v2.timestamp()) || (Timestamp(v1.timestamp()) == Timestamp(v2.timestamp()) && v1.clientid() > v2.clientid());
 }
 

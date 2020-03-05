@@ -148,20 +148,17 @@ class ShardClient : public TxnClient, public TransportReceiver {
   bool validateProofs;
   bft_tapir::NodeConfig *cryptoConfig;
 
-
   std::unordered_map<uint64_t, PendingQuorumGet *> pendingGets;
   std::unordered_map<uint64_t, PendingPrepare *> pendingPrepares;
   std::unordered_map<uint64_t, PendingCommit *> pendingCommits;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
 
-  std::string IndicusDecide(const std::map<std::string, std::size_t> &results);
 
   /* Timeout for Get requests, which only go to one replica. */
   void GetTimeout(uint64_t reqId);
 
   /* Callbacks for hearing back from a shard for an operation. */
   void HandleReadReply(const proto::ReadReply &readReply);
-  void HandleSignedReadReply(const proto::SignedReadReply &signedReadReply);
   void HandlePrepare1Reply(const proto::Prepare1Reply &prepare1Reply);
   bool CommitCallback(uint64_t reqId, const std::string &,
       const std::string &);

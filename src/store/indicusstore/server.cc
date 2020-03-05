@@ -32,12 +32,14 @@
 #include "store/indicusstore/server.h"
 
 #include "lib/tcptransport.h"
+#include "store/indicusstore/common.h"
 
 namespace indicusstore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     Transport *transport) : config(config),
-    groupIdx(groupIdx), idx(idx), transport(transport), occType(TAPIR) {
+    groupIdx(groupIdx), idx(idx), transport(transport), occType(TAPIR),
+    signedMessages(false), validateProofs(false) {
   transport->Register(this, config, groupIdx, idx);
 }
 
@@ -45,11 +47,27 @@ Server::~Server() {
 }
 
 void Server::ReceiveMessage(const TransportAddress &remote,
-      const std::string &type, const std::string &data, void *meta_data) {
+      const std::string &t, const std::string &d, void *meta_data) {
+  proto::SignedMessage signedMessage;
   proto::Read read;
   proto::Prepare1 prepare1;
   proto::Commit commit;
   proto::Abort abort;
+
+  std::string type;
+  std::string data;
+  if (t == signedMessage.GetTypeName()) {
+    signedMessage.ParseFromString(d);
+    if (ValidateSignedMessage(signedMessage, cryptoConfig)) {
+      type = signedMessage.type();
+      data = signedMessage.msg();
+    } else {
+      return;
+    }
+  } else {
+    type = t;
+    data = d;
+  }
 
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
@@ -95,8 +113,41 @@ void Server::HandleRead(const TransportAddress &remote,
 void Server::HandlePrepare1(const TransportAddress &remote,
     const proto::Prepare1 &msg) {
   Timestamp retryTs;
-  int32_t status = DoOCCCheck(msg.txn_id(), msg.txn(), msg.timestamp(), retryTs);
+  int32_t status = DoOCCCheck(msg.txn_id(), msg.txn(), msg.timestamp(),
+      retryTs);
 }
+
+void Server::HandlePrepare2(const TransportAddress &remote,
+      const proto::Prepare2 &msg) {
+  std::vector<proto::Prepare1Reply> prepare1Replies;
+  bool validated = true;
+  if (signedMessages) {
+    proto::Prepare1Reply prepare1Reply;
+    for (const auto &signedPrepare1Reply : msg.signed_p1_replies().msgs()) {
+      if (ValidateSignedMessage(signedPrepare1Reply, cryptoConfig)) {
+        prepare1Reply.ParseFromString(signedPrepare1Reply.msg());
+        prepare1Replies.push_back(prepare1Reply);
+      } else {
+        validated = false;
+        break;
+      }
+    }
+  } else {
+    for (const auto &prepare1Reply : msg.p1_replies().replies()) {
+      prepare1Replies.push_back(prepare1Reply);
+    }
+  }
+
+  proto::TxnAction decision;
+  if (validated) {
+    decision = IndicusDecide(prepare1Replies, &config);
+  } else {
+    decision = proto::TxnAction::ABORT;
+  }
+  proto::Prepare2Reply prepare2Reply;
+  prepare2Reply.set_action(decision); 
+}
+
 
 void Server::HandleCommit(const TransportAddress &remote,
     const proto::Commit &msg) {

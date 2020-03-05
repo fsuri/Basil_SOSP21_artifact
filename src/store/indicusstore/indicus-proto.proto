@@ -4,6 +4,17 @@ import "store/common/common-proto.proto";
 
 package indicusstore.proto;
 
+message SignedMessage {
+  required string msg = 1;
+  required string type = 2;
+  required uint64 process_id = 3;
+  required bytes signature = 4;
+}
+
+message SignedMessages {
+  repeated SignedMessage msgs = 1;
+}
+
 message Read {
   required uint64 req_id = 1;
   required string key = 2;
@@ -60,6 +71,10 @@ message Prepare1Reply {
   optional bytes txn_digest = 4;
 }
 
+message Prepare1Replies {
+  repeated Prepare1Reply replies = 1;
+}
+
 message SignedPrepare1Reply {
   required Prepare1Reply p1_reply = 1;
   required uint64 replica_id = 2;
@@ -74,7 +89,10 @@ enum TxnAction {
 message Prepare2 {
   required TxnAction action = 1;
   required bytes txn_digest = 2;
-  repeated SignedPrepare1Reply p1_replies = 3;
+  oneof p1_replies_oneof {
+    Prepare1Replies p1_replies = 3;
+    SignedMessages signed_p1_replies = 4;
+  }
 }
 
 message SignedP2 {
