@@ -8,42 +8,30 @@
  - therefore: fair and can scale to replica bandwidth/processing limits
  
  \subsection{Context}
- - people/entities would like to share data and/or split replication costs. Keep joint records of relevant data (i.e. for cross Audit): Imagine a transaction clearance between banks  (Libra as example: consortium of parties to manage a currency), a supply chain, different medical providers sharing patient data (for easy migration) - any system where users would like to easily migrate between providers.\\
- - Parties no longer from the same authority, potentially untrusted. --> byzantine fault tolerance not for increased software failure resistance (bugs etc), but to tolerate some level of misbehavior\\
+ - people/entities would like to share data and/or split replication costs. Keep joint records of relevant data (i.e. for cross Audit): Imagine a transaction clearance between banks  (Libra as example: consortium of parties to manage a currency), a supply chain, different medical providers sharing patient data (for easy migration) - any system where users would like to easily migrate between providers.
+ - Parties no longer from the same authority, potentially untrusted. --> byzantine fault tolerance not for increased software failure resistance (bugs etc), but to tolerate some level of misbehavior
  - While BFT was not warranted in single entity replication (extra cost for some more FT), it should be the standard for heterogenous replication. This is the basis for Blockchain where BFT is the norm.\\
+ 
+ -Alternatively, big corporations that use transactional systems that are geo-replicated might be worried about administrative domains: I.e. google spanner having replicas located in authoritarian regimes or out of its own control. does not "trust" its "own" replicas.
  
  -
  - SMR powerful fault tolerant technique. Creates illusion of single Database, thus simplifying application design. Replication is masked.\\
  
- 
+- ACID transactions: Absolute data integrity. Simplifies concurrency control. Intuitive data access logic.
+Concurrent access to retail inventories,  bank balance, stocks is unavoidable. I.e. serializable isolation makes reasoning simple for application developers.
+
+ Interactive TX: Most general for any kind of application.
+\fs{ Any system that provides Interactive TX can handle  One shot for example.}\\
  - Goal: Make BFT accessible to the mainstream. Requires scalability and low latency. Cost needs to be tolerable - more reasonable if replication is done as consortium (each party pays for subset).
  
 
- 
-
 \subsection{Existing systems shortcomings}
-- Historically BFT systems were designed for different assumptions: single authority low replication vs high replication degree in a consoritum of untrusted parties\\
-- Blockchains target this new setting, but either rely on old techniques of BFT SMR (in permissioned settings) or PoW/PoS in permissionless settings.
+- systems were designed for different assumptions: single authority low replication (historical use cases: aviation, space, nuclear power) vs high replication degree in a consoritum of untrusted parties\\
 - non-interactive transactions\\
 - totally ordered\\
 - leader based: fairness and scalability bottleneck \\
-- sharding approaches to improve scalability; but these still suffer from underlying total order.
-
-
-- Efforts that exploit commuativity and partial ordering have been explored only Crash Failure model: Epaxos, Tapir, Carousel etc.\\
-
-
-
-
-
-%%%%%%%%%%%%%
-Blockchains etc provide you Transactions. 
-We want to show that what they should really want is a byz DB
-Systems like blockchains or BFT consensus protocols impose a total order on operations that are often unordered
-They leave a lot of parallelism off the table
-Parallelism through executing non-conflicting operations in parallel is the bread-butter of databases. But databases don't support the "security" of blockchains/BFT system. So why not build those guarantees on top
-
-%%%%%%%%%%%%%
+- Crash Failure model\\
+- single sharded\\
 
 \subsection{Key insights}
 - ?? \\
