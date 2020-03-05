@@ -15,7 +15,7 @@
 #include "bft_tapir/config.h"
 #include <unordered_map>
 #include <unordered_set>
-#include <tuple>
+#include <vector>
 
 namespace bft_tapir {
 
@@ -63,8 +63,35 @@ class Client : TransportReceiver {
   void SendP3();
   void HandleP3Echo(const proto::SignedP3Echo &p3echo);
 
-  // read_seq_num -> (max_read_key, max_read_value, max_read_version, replied_replicas)
-  unordered_map<uint64_t, tuple<string, string, proto::Version, unordered_set<uint64_t>>> max_read_responses;
+  // replied replicas should hold the valid replica replies (non-byzantine replicas that replied)
+
+  struct max_read {
+    unordered_set<uint64_t> replied_replicas;
+    string key;
+    string max_read_value;
+    proto::Version max_read_version;
+  };
+  // read_seq_num -> max_read
+  unordered_map<uint64_t, max_read> max_read;
+
+  struct prepare_data {
+    unordered_set<uint64_t> replied_replicas;
+    vector<proto::SignedP1Result> commits;
+    vector<proto::SignedP1Result> aborts;
+    vector<proto::SignedP1Result> abstains;
+    vector<proto::SignedP1Result> retries;
+  };
+  // txid -> p1_data
+  unordered_map<string, prepare_data> prepare_data;
+  unordered_map<string, proto::TXAction> tx_decisions;
+
+  struct p2_data {
+    unordered_set<uint64_t> replied_replicas;
+    // all p2 echos that echo the decision in tx_decisions
+    vector<proto::SignedP2Echo> valid_echos;
+  };
+  // txid -> p2_data
+  unordered_map<string, p2_data> p2_data;
 };
 
 }  // namespace bft_tapir

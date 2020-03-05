@@ -70,7 +70,7 @@ void Client::SendRead(char* key) {
   readRequest->set_clientid(myId);
 
   // initialize the read response tuple with the key
-  get<0>(max_read_responses[read_seq_num]) = key;
+  max_read[read_seq_num].key = key;
   readRequest->set_clientseqnum(read_seq_num++);
 
 
@@ -132,25 +132,27 @@ void Client::HandleReadResponse(const SignedReadResponse &msg) {
     crypto::PubKey replicaPublicKey = config.getReplicaPublicKey(replicaId);
 
     // verify that the replica actually sent this reply and that we are expecting this reply
-    if (crypto::IsMessageValid(replicaPublicKey, &readResponse, &msg) && max_read_responses.find(client_seq_num) != max_read_responses.end()) {
+    if (crypto::IsMessageValid(replicaPublicKey, &readResponse, &msg) && max_read.find(client_seq_num) != max_read.end()) {
       printf("Message is valid!\n");
       cout << "Result: " << key << " -> " << value << endl;
 
       // Make sure that we haven't already processed this replica's reply and that the key is correct
-      auto already_replied_replicas = get<3>(max_read_responses[client_seq_num]);
-      if (already_replied_replicas.find(replicaId) != already_replied_replicas.end() && key == get<0>(max_read_responses[client_seq_num])) {
+      auto already_replied_replicas = max_read[client_seq_num].replied_replicas;
+      if (already_replied_replicas.find(replicaId) != already_replied_replicas.end() && key == max_read[client_seq_num].key) {
         Transaction writeTx = readResponse.writetx();
         P3 p3 = readResponse.p3();
 
         // Verify the the p3 commits the given tx, that the tx version matches the read version, and that the tx writes the key
         if (VerifyP3Commit(writeTx, p3) && VersionsEqual(writeTx.version(), version) && TxWritesKeyValue(writeTx, key, value)) {
           // check if the current version is greater than the current max version
-          Version max_version = get<2>(max_read_responses[client_seq_num]);
+          Version max_version = max_read[client_seq_num].max_read_version;
+          // This was an honest replica, so we insert it into the list of replied_replicas
           already_replied_replicas.insert(replicaId);
           if (VersionGT(version, max_version)) {
-            std::get<1>(max_read_responses[client_seq_num]) = value;
-            std::get<2>(max_read_responses[client_seq_num]) = version;
+            max_read[client_seq_num].max_read_value = value;
+            max_read[client_seq_num].max_read_version = version;
           }
+          // TODO check if we have enough reads to return the read
         }
       }
     }
@@ -177,22 +179,51 @@ void Client::SendPrepare() {
   transport->SendMessageToAll(this, current_transaction);
 }
 
-void Client::HandleP1Result(const SignedP1Result &p1result) {
+void Client::HandleP1Result(const SignedP1Result &msg) {
+  printf("Handling p1 response message\n");
 
+  P1Result p1result = msg.p1result();
+  uint64_t replicaId = p1result.replicaid();
+  P1Result::ConcurrencyCheckResult ccr = p1result.ccr();
+  string txid = p1result.txdigest();
+
+  if (config.isValidReplicaId(replicaId)) {
+    crypto::PubKey replicaPublicKey = config.getReplicaPublicKey(replicaId);
+
+    // verify that the replica actually sent this reply and that we are expecting this reply
+    if (crypto::IsMessageValid(replicaPublicKey, &p1result, &msg)) {
+      printf("Message is valid!\n");
+      cout << "Result: " << txid << " -> " << ccr << endl;
+
+      if (ccr == P1Result::COMMIT) {
+        prepare_data[txid].commits.push_back(msg);
+      } else if (ccr == P1Result::ABORT) {
+        prepare_data[txid].aborts.push_back(msg);
+      } else if (ccr == P1Result::ABSTAIN) {
+        prepare_data[txid].abstains.push_back(msg);
+      } else if (ccr == P1Result::RETRY) {
+        prepare_data[txid].retries.push_back(msg);
+      } else {
+        return;
+      }
+
+      prepare_data[txid].replied_replicas.insert(replicaId);
+      // TODO check p1 data to see if we can proceed to see what kind of decision to make
+    }
+  }
 }
 
 void Client::SendP2() {
 
 }
-void Client::HandleP2Echo(const SignedP2Echo &p2echo) {
+void Client::HandleP2Echo(const SignedP2Echo &msg) {
 
 }
 
 void Client::SendP3() {
 
-}
-void Client::HandleP3Echo(const SignedP3Echo &p3echo) {
-
+// We know that if we don't fail that the tx decision will be written
+// If we do fail at this point, we know the correct tx decision will be recovered
 // TODO reset transaction and is_committing after 2f+1 confirmations
 }
 
