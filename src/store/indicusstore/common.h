@@ -9,10 +9,16 @@
 #include <string>
 #include <vector>
 
+#include <google/protobuf/message.h>
+
 namespace indicusstore {
 
 bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
     const bft_tapir::NodeConfig *cryptoConfig);
+
+void SignMessage(const ::google::protobuf::Message &msg,
+    const crypto::PrivKey &privateKey, uint64_t processId,
+    proto::SignedMessage &signedMessage);
 
 proto::TxnDecision IndicusDecide(const std::vector<proto::Phase1Reply> &replies,
     const transport::Configuration *config);

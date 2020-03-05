@@ -15,6 +15,16 @@ bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
         &signedMessage);
 }
 
+void SignMessage(const ::google::protobuf::Message &msg,
+    const crypto::PrivKey &privateKey, uint64_t processId,
+    proto::SignedMessage &signedMessage) {
+  std::string msgData = msg.SerializeAsString();
+  crypto::SignMessage(privateKey, msgData, signedMessage);
+  signedMessage.set_msg(msgData);
+  signedMessage.set_type(msg.GetTypeName());
+  signedMessage.set_process_id(processId);
+}
+
 proto::TxnDecision IndicusDecide(const std::vector<proto::Phase1Reply> &replies,
     const transport::Configuration *config) {
   // If a majority say prepare_ok,

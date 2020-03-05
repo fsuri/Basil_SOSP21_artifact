@@ -89,16 +89,18 @@ class Server : public TransportReceiver, public ::Server {
   const transport::Configuration &config;
   int groupIdx;
   int idx;
+  int id;
   Transport *transport;
   OCCType occType;
   bool signedMessages;
   bool validateProofs;
   bft_tapir::NodeConfig *cryptoConfig;
-  
-  Stats stats;
+  crypto::PrivKey privateKey;
+
   VersionedKVStore store;
   std::unordered_map<uint64_t, std::pair<Timestamp, proto::Transaction>> prepared;
 
+  Stats stats;
   std::unordered_set<uint64_t> active;
 };
 

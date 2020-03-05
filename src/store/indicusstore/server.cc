@@ -38,8 +38,10 @@ namespace indicusstore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     Transport *transport) : config(config),
-    groupIdx(groupIdx), idx(idx), transport(transport), occType(TAPIR),
-    signedMessages(false), validateProofs(false) {
+    groupIdx(groupIdx), idx(idx), id(groupIdx * config.n + idx),
+    transport(transport), occType(TAPIR),
+    signedMessages(false), validateProofs(false), cryptoConfig(nullptr) {
+  privateKey = cryptoConfig->getClientPrivateKey(id);
   transport->Register(this, config, groupIdx, idx);
 }
 
@@ -107,7 +109,13 @@ void Server::HandleRead(const TransportAddress &remote,
     reply.set_status(REPLY_FAIL);
   }
 
-  transport->SendMessage(this, remote, reply);
+  if (signedMessages) {
+    proto::SignedMessage signedMessage;
+    SignMessage(reply, privateKey, id, signedMessage);
+    transport->SendMessage(this, remote, signedMessage);
+  } else {
+    transport->SendMessage(this, remote, reply);
+  }
 }
 
 void Server::HandlePhase1(const TransportAddress &remote,

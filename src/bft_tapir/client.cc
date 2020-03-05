@@ -75,7 +75,8 @@ void Client::SendRead(char* key) {
 
 
   SignedReadRequest signedReadRequest;
-  crypto::SignMessage(privateKey, readRequest, signedReadRequest);
+  std::string readRequestSerialized = readRequest->SerializeAsString();
+  crypto::SignMessage(privateKey, readRequestSerialized, signedReadRequest);
   // Takes ownership of request and will make sure to delete it
   signedReadRequest.set_allocated_readrequest(readRequest);
 
@@ -175,7 +176,8 @@ void Client::SendPrepare() {
   long int us = tp.tv_sec * 1000000 + tp.tv_usec;
   // current_transaction.mutable_transaction()->set_timestamp(us);
 
-  crypto::SignMessage(privateKey, current_transaction.mutable_transaction(), current_transaction);
+  std::string txnStr = current_transaction.mutable_transaction()->SerializeAsString();
+  crypto::SignMessage(privateKey, txnStr, current_transaction);
 
   // send prepare to all replicas
   transport->SendMessageToAll(this, current_transaction);
