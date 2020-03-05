@@ -19,7 +19,7 @@ message WriteProof {
   // TODO merkel tree could make more efficient
   required TransactionMessage write_txn = 1;
   required TimestampMessage write_txn_timestamp = 2;
-  required Prepare3 prepare3 = 3;
+  required Writeback tx_writeback = 3;
 }
 
 message ReadReply {
@@ -89,19 +89,8 @@ message SignedPrepare2Reply {
   required bytes signature = 3;
 }
 
-message Prepare3 {
+message Writeback {
   repeated SignedPrepare2Reply p2_replies = 1;
-}
-
-message Prepare3Reply {
-  required TxnAction action = 1;
-  required bytes txn_digest = 2;
-}
-
-message SignedPrepare3Reply {
-  required Prepare3Reply p3_reply = 1;
-  required uint64 replica_id = 2;
-  required bytes signature = 3;
 }
 
 message Commit {
