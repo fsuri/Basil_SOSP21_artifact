@@ -226,6 +226,9 @@ void Client::SendP3() {
 // If we do fail at this point, we know the correct tx decision will be recovered
 // TODO reset transaction and is_committing after 2f+1 confirmations
 }
+void Client::HandleP3Echo(const proto::SignedP3Echo &p3echo) {
+}
+
 
 }  // namespace bft_tapir
 

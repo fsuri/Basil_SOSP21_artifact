@@ -44,6 +44,11 @@ message Transaction {
   optional TimestampMessage timestamp = 3;
 }
 
+message Phase1 {
+  required uint64 txn_id = 1;
+  required Transaction txn = 2;
+}
+
 message SignedTransaction {
   required Phase1 phase1 = 1;
   required bytes signature = 2;
@@ -75,7 +80,7 @@ enum TxnDecision {
 message Phase2 {
   required TxnDecision decision = 1;
   required bytes txn_digest = 2;
-  repeated SignedPrepare1Reply p1_replies = 3;
+  repeated SignedPhase1Reply p1_replies = 3;
 }
 
 message SignedPhase2 {
@@ -96,5 +101,8 @@ message SignedPhase2Reply {
 }
 
 message Writeback {
-  repeated SignedPrepare2Reply p2_replies = 1;
+  repeated SignedPhase2Reply p2_replies = 1;
+}
+
+message Abort {
 }

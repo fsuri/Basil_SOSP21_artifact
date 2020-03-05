@@ -66,16 +66,17 @@ class Server : public TransportReceiver, public ::Server {
 
  private:
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
-  void HandlePrepare1(const TransportAddress &remote,
-      const proto::Prepare1 &msg);
-  void HandleCommit(const TransportAddress &remote, const proto::Commit &msg);
+  void HandlePhase1(const TransportAddress &remote,
+      const proto::Phase1 &msg);
+  void HandleWriteback(const TransportAddress &remote,
+      const proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
-  int32_t DoOCCCheck(uint64_t id, const Transaction &txn,
+  int32_t DoOCCCheck(uint64_t id, const proto::Transaction &txn,
       const Timestamp &proposedTs, Timestamp &retryTs);
-  int32_t DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
+  int32_t DoTAPIROCCCheck(uint64_t id, const proto::Transaction &txn,
       const Timestamp &proposedTs, Timestamp &retryTs);
-  int32_t DoMVTSOOCCCheck(uint64_t id, const Transaction &txn,
+  int32_t DoMVTSOOCCCheck(uint64_t id, const proto::Transaction &txn,
       const Timestamp &ts);
   void GetPreparedWrites(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
@@ -90,7 +91,7 @@ class Server : public TransportReceiver, public ::Server {
   
   Stats stats;
   VersionedKVStore store;
-  std::unordered_map<uint64_t, std::pair<Timestamp, Transaction>> prepared;
+  std::unordered_map<uint64_t, std::pair<Timestamp, proto::Transaction>> prepared;
 
   std::unordered_set<uint64_t> active;
 };

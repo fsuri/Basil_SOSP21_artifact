@@ -47,19 +47,19 @@ Server::~Server() {
 void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
   proto::Read read;
-  proto::Prepare1 prepare1;
-  proto::Commit commit;
+  proto::Phase1 phase1;
+  proto::Writeback writeback;
   proto::Abort abort;
 
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
     HandleRead(remote, read);
-  } else if (type == prepare1.GetTypeName()) {
-    prepare1.ParseFromString(data);
-    HandlePrepare1(remote, prepare1);
-  } else if (type == commit.GetTypeName()) {
-    commit.ParseFromString(data);
-    HandleCommit(remote, commit);
+  } else if (type == phase1.GetTypeName()) {
+    phase1.ParseFromString(data);
+    HandlePhase1(remote, phase1);
+  } else if (type == writeback.GetTypeName()) {
+    writeback.ParseFromString(data);
+    HandleWriteback(remote, writeback);
   } else if (type == abort.GetTypeName()) {
     abort.ParseFromString(data);
     HandleAbort(remote, abort);
@@ -92,21 +92,21 @@ void Server::HandleRead(const TransportAddress &remote,
   transport->SendMessage(this, remote, reply);
 }
 
-void Server::HandlePrepare1(const TransportAddress &remote,
-    const proto::Prepare1 &msg) {
+void Server::HandlePhase1(const TransportAddress &remote,
+    const proto::Phase1 &msg) {
   Timestamp retryTs;
-  int32_t status = DoOCCCheck(msg.txn_id(), msg.txn(), msg.timestamp(), retryTs);
+  int32_t status = DoOCCCheck(msg.txn_id(), msg.txn(), msg.txn().timestamp(), retryTs);
 }
 
-void Server::HandleCommit(const TransportAddress &remote,
-    const proto::Commit &msg) {
+void Server::HandleWriteback(const TransportAddress &remote,
+    const proto::Writeback &msg) {
 }
 
 void Server::HandleAbort(const TransportAddress &remote,
     const proto::Abort &msg) {
 }
 
-int32_t Server::DoOCCCheck(uint64_t id, const Transaction &txn,
+int32_t Server::DoOCCCheck(uint64_t id, const proto::Transaction &txn,
     const Timestamp &proposedTs, Timestamp &retryTs) {
   switch (occType) {
     case TAPIR:
@@ -119,7 +119,7 @@ int32_t Server::DoOCCCheck(uint64_t id, const Transaction &txn,
   }
 }
 
-int32_t Server::DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
+int32_t Server::DoTAPIROCCCheck(uint64_t id, const proto::Transaction &txn,
     const Timestamp &proposedTs, Timestamp &retryTs) {
   Debug("[%lu] START PREPARE", id);
 
@@ -143,11 +143,11 @@ int32_t Server::DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
   GetPreparedReads(pReads);
 
   // check for conflicts with the read set
-  for (auto &read : txn.getReadSet()) {
+  for (const auto &read : txn.readset()) {
     std::pair<Timestamp, Timestamp> range;
-    bool ret = store.getRange(read.first, read.second, range);
+    bool ret = store.getRange(read.key(), read.readtime(), range);
 
-    Debug("Range %lu %lu %lu", read.second.getTimestamp(),
+    Debug("Range %lu %lu %lu", Timestamp(read.readtime()).getTimestamp(),
         range.first.getTimestamp(), range.second.getTimestamp());
 
     // if we don't have this key then no conflicts for read
@@ -156,16 +156,16 @@ int32_t Server::DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
     }
 
     // if we don't have this version then no conflicts for read
-    if (range.first != read.second) {
+    if (range.first != read.readtime()) {
       continue;
     }
 
     // if the value is still valid
     if (!range.second.isValid()) {
       // check pending writes.
-      if (pWrites.find(read.first) != pWrites.end()) {
+      if (pWrites.find(read.key()) != pWrites.end()) {
         Debug("[%lu] ABSTAIN rw conflict w/ prepared key:%s", id,
-            read.first.c_str());
+            read.key().c_str());
         stats.Increment("abstains", 1);
         return REPLY_ABSTAIN;
       }
@@ -185,10 +185,10 @@ int32_t Server::DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
   }
 
   // check for conflicts with the write set
-  for (auto &write : txn.getWriteSet()) {
+  for (const auto &write : txn.writeset()) {
     std::pair<Timestamp, std::string> val;
     // if this key is in the store
-    if (store.get(write.first, val)) {
+    if (store.get(write.key(), val)) {
       Timestamp lastRead;
       bool ret;
 
@@ -196,7 +196,7 @@ int32_t Server::DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
       // then can't accept
       if (val.first > proposedTs) {
         Debug("[%lu] RETRY ww conflict w/ prepared key:%s", id,
-            write.first.c_str());
+            write.key().c_str());
         retryTs = val.first;
         stats.Increment("retries_committed_write", 1);
         return REPLY_RETRY;
@@ -206,12 +206,12 @@ int32_t Server::DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
       // accept this transaction, but can propose a retry timestamp
 
       // we get the timestamp of the last read ever on this object
-      ret = store.getLastRead(write.first, lastRead);
+      ret = store.getLastRead(write.key(), lastRead);
 
       // if this key is in the store and has been read before
       if (ret && lastRead > proposedTs) {
         Debug("[%lu] RETRY wr conflict w/ prepared key:%s", id,
-            write.first.c_str());
+            write.key().c_str());
         retryTs = lastRead;
         return REPLY_RETRY;
       }
@@ -219,26 +219,25 @@ int32_t Server::DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
 
     // if there is a pending write for this key, greater than the
     // proposed timestamp, retry
-    if (pWrites.find(write.first) != pWrites.end()) {
+    if (pWrites.find(write.key()) != pWrites.end()) {
       std::set<Timestamp>::iterator it =
-          pWrites[write.first].upper_bound(proposedTs);
-      if ( it != pWrites[write.first].end() ) {
+          pWrites[write.key()].upper_bound(proposedTs);
+      if ( it != pWrites[write.key()].end() ) {
         Debug("[%lu] RETRY ww conflict w/ prepared key:%s", id,
-            write.first.c_str());
+            write.key().c_str());
         retryTs = *it;
         stats.Increment("retries_prepared_write", 1);
         return REPLY_RETRY;
       }
     }
 
-
     //if there is a pending read for this key, greater than the
     //propsed timestamp, abstain
-    if (pReads.find(write.first) != pReads.end() &&
-        pReads[write.first].upper_bound(proposedTs) !=
-        pReads[write.first].end()) {
+    if (pReads.find(write.key()) != pReads.end() &&
+        pReads[write.key()].upper_bound(proposedTs) !=
+        pReads[write.key()].end()) {
       Debug("[%lu] ABSTAIN wr conflict w/ prepared key:%s",
-            id, write.first.c_str());
+            id, write.key().c_str());
       stats.Increment("abstains", 1);
       return REPLY_ABSTAIN;
     }
@@ -251,7 +250,7 @@ int32_t Server::DoTAPIROCCCheck(uint64_t id, const Transaction &txn,
   return REPLY_OK;
 }
 
-int32_t Server::DoMVTSOOCCCheck(uint64_t id, const Transaction &txn,
+int32_t Server::DoMVTSOOCCCheck(uint64_t id, const proto::Transaction &txn,
     const Timestamp &ts) {
   Panic("Not implemented.");
   return REPLY_FAIL;
@@ -261,8 +260,8 @@ void Server::GetPreparedWrites(
     std::unordered_map<std::string, std::set<Timestamp>> &writes) {
   // gather up the set of all writes that are currently prepared
   for (const auto &t : prepared) {
-    for (const auto &write : t.second.second.getWriteSet()) {
-      writes[write.first].insert(t.second.first);
+    for (const auto &write : t.second.second.writeset()) {
+      writes[write.key()].insert(t.second.first);
     }
   }
 }
@@ -271,8 +270,8 @@ void Server::GetPreparedReads(
     std::unordered_map<std::string, std::set<Timestamp>> &reads) {
   // gather up the set of all writes that are currently prepared
   for (const auto &t : prepared) {
-    for (const auto &read : t.second.second.getReadSet()) {
-      reads[read.first].insert(t.second.first);
+    for (const auto &read : t.second.second.readset()) {
+      reads[read.key()].insert(t.second.first);
     }
   }
 }
