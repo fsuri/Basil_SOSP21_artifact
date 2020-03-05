@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  5 MAR 2020 14:46
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  5 MAR 2020 17:12
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1576,25 +1576,25 @@ Underfull \hbox (badness 1527) in paragraph at lines 7--8
  []
 
 [5]) (./sections/Indicus/Protocol/Protocol-Notes.tex
-Underfull \hbox (badness 10000) in paragraph at lines 4--7
-
- []
-
-
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 9--12
+Underfull \hbox (badness 10000) in paragraph at lines 16--19
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 16--18
+Underfull \hbox (badness 10000) in paragraph at lines 21--24
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 19--25
+Underfull \hbox (badness 10000) in paragraph at lines 28--30
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 31--37
 
  []
 
@@ -1603,24 +1603,24 @@ has been already used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.43 
+l.46 
       <./figures/LC.png>]
-Underfull \hbox (badness 10000) in paragraph at lines 47--51
+Underfull \hbox (badness 10000) in paragraph at lines 59--63
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 58--62
+Underfull \hbox (badness 10000) in paragraph at lines 70--74
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 69--71
+Underfull \hbox (badness 10000) in paragraph at lines 81--83
 
  []
 
 ) (./sections/Indicus/Protocol/Protocol.tex
-Underfull \hbox (badness 10000) in paragraph at lines 73--9
+Underfull \hbox (badness 10000) in paragraph at lines 85--9
 
  []
 
@@ -1633,7 +1633,14 @@ Underfull \hbox (badness 10000) in paragraph at lines 43--44
 
  []
 
+[7pdfTeX warning (ext4): destination with the same identifier (name{figure.2}) 
+has been already used, duplicate ignored
 
+\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
+                                                  \fi \fi 
+l.46 \item \textbf
+                  {Write(key, value)}. A Client executes a request Write(key...
+]
 Underfull \hbox (badness 4060) in paragraph at lines 46--47
 []\T1/ptm/b/n/10 Write(key, value)\T1/ptm/m/n/10 (+20) . A Client ex-e-cutes a 
 re-quest
@@ -1693,67 +1700,56 @@ Underfull \hbox (badness 10000) in paragraph at lines 49--53
 
  []
 
-[7pdfTeX warning (ext4): destination with the same identifier (name{figure.2}) 
-has been already used, duplicate ignored
-
-\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
-                                                  \fi \fi 
-l.53 
-     ]
 Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
-put line 86.
+put line 90.
 
-Underfull \hbox (badness 3895) in paragraph at lines 93--94
+Underfull \hbox (badness 3895) in paragraph at lines 97--98
 [] \T1/ptm/b/n/10 if $\OMS/pzccm/m/n/10 9\OML/ptmcm/m/it/10 TX\OT1/ptmcm/m/n/10
  2 \OMS/pzccm/m/n/10 2 \OML/ptmcm/m/it/10 CommitLog \OT1/ptmcm/m/n/10 : \OML/pt
 mcm/m/it/10 key \OMS/pzccm/m/n/10 2 [] ^
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 96--97
+Underfull \hbox (badness 10000) in paragraph at lines 100--101
 [] \T1/ptm/b/n/10 if $\OMS/pzccm/m/n/10 9\OML/ptmcm/m/it/10 TX\OT1/ptmcm/m/n/10
  2 \OMS/pzccm/m/n/10 2 \OML/ptmcm/m/it/10 Prepared \OT1/ptmcm/m/n/10 : \OML/ptm
 cm/m/it/10 key \OMS/pzccm/m/n/10 2 [] ^
  []
 
-
-Underfull \vbox (badness 7151) has occurred while \output is active []
-
- [8]
+[8]
 <./figures/AB.png, id=229, 779.91376pt x 482.80376pt>
 File: ./figures/AB.png Graphic file (type png)
 <use ./figures/AB.png>
-Package pdftex.def Info: ./figures/AB.png  used on input line 152.
+Package pdftex.def Info: ./figures/AB.png  used on input line 156.
 (pdftex.def)             Requested size: 202.3529pt x 125.2608pt.
 <./figures/5f+1.png, id=230, 792.9625pt x 745.78625pt>
 File: ./figures/5f+1.png Graphic file (type png)
 <use ./figures/5f+1.png>
-Package pdftex.def Info: ./figures/5f+1.png  used on input line 161.
+Package pdftex.def Info: ./figures/5f+1.png  used on input line 165.
 (pdftex.def)             Requested size: 202.3529pt x 190.31522pt.
 <./figures/SingleShard.png, id=231, 1224.575pt x 307.1475pt>
 File: ./figures/SingleShard.png Graphic file (type png)
 <use ./figures/SingleShard.png>
-Package pdftex.def Info: ./figures/SingleShard.png  used on input line 189.
+Package pdftex.def Info: ./figures/SingleShard.png  used on input line 193.
 (pdftex.def)             Requested size: 505.89pt x 126.88736pt.
 <./figures/3f+1.png, id=232, 1086.0575pt x 554.07pt>
 File: ./figures/3f+1.png Graphic file (type png)
 <use ./figures/3f+1.png>
-Package pdftex.def Info: ./figures/3f+1.png  used on input line 217.
+Package pdftex.def Info: ./figures/3f+1.png  used on input line 221.
 (pdftex.def)             Requested size: 202.3529pt x 103.22842pt.
-)
-(./sections/Implementation.tex) (./sections/Limitations.tex [9pdfTeX warning (e
-xt4): destination with the same identifier (name{figure.3}) has been already us
-ed, duplicate ignored
+) (./sections/Implementation.tex) (./sections/Limitations.tex [9pdfTeX warning 
+(ext4): destination with the same identifier (name{figure.3}) has been already 
+used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.6 
+l.8 
     pdfTeX warning (ext4): destination with the same identifier (name{figure.4}
 ) has been already used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.6 
+l.8 
      <./figures/AB.png> <./figures/5f+1.png>]) (./sections/RelatedWork.tex
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
@@ -1770,15 +1766,12 @@ l.12
                                                   \fi \fi 
 l.12 
       <./figures/SingleShard.png> <./figures/3f+1.png>])
-(./sections/Conclusion.tex)
-Underfull \vbox (badness 4254) has occurred while \output is active []
-
- (./main.bbl)
+(./sections/Conclusion.tex) (./main.bbl)
 - LAST -
-Extra skip:15.98718pt
-Left:394.0pt/2.16492pt
-Right:378.38782pt/1.78992pt
-Output:394.19391pt
+Extra skip:23.72528pt
+Left:382.0pt/2.16492pt
+Right:358.64972pt/1.78992pt
+Output:382.32486pt
  [11]
 Package atveryend Info: Empty hook `BeforeClearDocument' on input line 121.
 Package atveryend Info: Empty hook `AfterLastShipout' on input line 121.
@@ -1795,11 +1788,11 @@ LaTeX Warning: There were multiply-defined labels.
 Here is how much of TeX's memory you used:
  29365 strings out of 492982
  557107 string characters out of 6134895
- 648924 words of memory out of 5000000
+ 647924 words of memory out of 5000000
  32200 multiletter control sequences out of 15000+600000
  600248 words of font info for 223 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 57i,10n,54p,10414b,464s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 56i,10n,54p,10414b,436s stack positions out of 5000i,500n,10000p,200000b,80000s
 {/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texliv
 e/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texm
 f-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/
@@ -1807,7 +1800,7 @@ fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/
 type1/urw/symbol/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/
 utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (11 pages, 502554 bytes).
+Output written on main.pdf (11 pages, 503801 bytes).
 PDF statistics:
  302 PDF objects out of 1000 (max. 8388607)
  269 compressed objects within 3 object streams

@@ -51,10 +51,13 @@ $Committed \coloneqq (value, version)_{cert}$ such that $ (value, version) \in R
  $Prepared \coloneqq (value, version)$ such that $(value, version) \in R.PreparedSet$ and $version = max(q) : (key, val, q) \in R.PreparedSet \land Committed < v < TS \}$ .
 I.e. Committed is the largest committed write and Prepared is the largest uncommitted write that may be  committed and would make Committed outdated. \\
 
-1. Reading from 1 Replica: could abort
+1. Reading from 1 Replica: could abort because reading arbitrarily stale.
+Alternatively: Read from f+1 always to reduce proof/memory costs: Could not get matching and hence fail read. Still possible to abort by reading stale data 
 2. Reading f+1 matching Prepared that are larger than the commit --> choose that and add dependency
 Guaranteed to see 1 thats not intentionally stale. But still arbitrarily stale if unlucky.
-3. If read from 2f+1 then its effectively a read lock. Note, could still have missed a prepared write and have to abort because we required f+1 matching. Why f+1? so it comes from 1 honest: we dont need proofs, and we know it is in the system for recovery.
+3. If read from 3f+1/2f+1 then its effectively a read lock. 
+If 1 prepared read was enough then this would be sufficient to see the newest "potential" value. However that is not possible for liveness reasons.
+Note, could still have missed a prepared write and have to abort because we required f+1 matching. Why f+1? so it comes from 1 honest: we dont need proofs, and we know it is in the system for recovery.
 Still no guarantee that newest commit was seen, but some protection from other writes.
 
 
@@ -64,9 +67,10 @@ Add exceptions etc.
 )
 
 
-\item \textbf{Commit} A Client finalizes its execution, computes the final Timestamp and submits 
+\item \textbf{Commit} A Client finalizes its execution, computes the final Timestamp and submits for validation.
 
-\item \textbf{Abort}
+\item \textbf{Abort} A client terminates execution, broadcasts a read-release for all potentially acquired RTS and returns.
+\fs{A byz client may not release the RTS. To circumvent this, RTS are just leases. Moreover, at some point writes will overtake them}
 
 \end{enumerate}
  

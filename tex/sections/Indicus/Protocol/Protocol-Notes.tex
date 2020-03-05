@@ -1,5 +1,17 @@
 \section{Protocol-Notes}
 
+Structure:
+0. Preamble what Indicus is and what it is supposed to offer.
+1. Model., Properties   
+2. Architecture: Exec, Val, WB, 
+3. Exec details: Read/Write Set computation
+4. Concurrency Control check. Put in relation to Exec details
+5. Validation Protocol: a) Voting and Decision rule component b) Logging. Explain similarity to other BFT protocols (logging could use anything, in 5f+1 it resembles Q/U because etc.)
+6. Writeback and Multi-shard TX
+7. Failures between 5/6
+8. Optimizations: 
+9. Indicus3: Extra abort phase, different quorums (Validation and View change), Extra proofs
+
 \subsection{TX execution}
 Goal:\\
 - clients should be able to read valid and consistent data from the database\\
