@@ -32,14 +32,17 @@
 #ifndef _INDICUS_SHARDCLIENT_H_
 #define _INDICUS_SHARDCLIENT_H_
 
+#include "bft_tapir/config.h"
 #include "lib/assert.h"
 #include "lib/configuration.h"
+#include "lib/crypto.h"
 #include "lib/message.h"
 #include "lib/transport.h"
 #include "replication/ir/client.h"
 #include "store/common/timestamp.h"
 #include "store/common/transaction.h"
 #include "store/common/frontend/txnclient.h"
+#include "store/common/common-proto.pb.h"
 #include "store/indicusstore/indicus-proto.pb.h"
 
 #include <map>
@@ -78,7 +81,7 @@ class ShardClient : public TxnClient, public TransportReceiver {
   virtual void Commit(uint64_t id, const Transaction & txn,
       uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
       uint32_t timeout) override;
-  
+
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(uint64_t id, const Transaction &txn,
       abort_callback acb, abort_timeout_callback atcb,
@@ -142,6 +145,10 @@ class ShardClient : public TxnClient, public TransportReceiver {
   int shard; // which shard this client accesses
   int replica; // which replica to use for reads
   uint64_t readQuorumSize;
+  bool signedMessages;
+  bool validateProofs;
+  bft_tapir::NodeConfig *cryptoConfig;
+
 
   std::unordered_map<uint64_t, PendingQuorumGet *> pendingGets;
   std::unordered_map<uint64_t, PendingPrepare *> pendingPrepares;
@@ -155,11 +162,17 @@ class ShardClient : public TxnClient, public TransportReceiver {
 
   /* Callbacks for hearing back from a shard for an operation. */
   void HandleReadReply(const proto::ReadReply &readReply);
-  void HandlePrepareReply(const proto::PrepareReply &prepareReply);
+  void HandleSignedReadReply(const proto::SignedReadReply &signedReadReply);
+  void HandlePrepare1Reply(const proto::Prepare1Reply &prepare1Reply);
   bool CommitCallback(uint64_t reqId, const std::string &,
       const std::string &);
   bool AbortCallback(uint64_t reqId, const std::string &,
       const std::string &);
+
+  bool VerifyP3Commit(const Transaction &transaction, const proto::Writeback &p3);
+  bool TxWritesKey(const Transaction &tx, const std::string &key);
+  bool TimestampsEqual(const TimestampMessage &v1, const TimestampMessage &v2);
+  bool TimestampsGT(const TimestampMessage &v1, const TimestampMessage &v2);
 
   /* Helper Functions for starting and finishing requests */
   void StartRequest();

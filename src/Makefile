@@ -32,6 +32,8 @@ LIBSSL_CFLAGS := $(shell pkg-config --cflags openssl)
 LIBSSL_LDFLAGS := $(shell pkg-config --libs openssl)
 CFLAGS += $(LIBSSL_CFLAGS)
 LDFLAGS += $(LIBSSL_LDFLAGS)
+# cryptopp
+LDFLAGS += -l:libcryptopp.so
 
 
 # Google test framework. This doesn't use pkgconfig
@@ -138,6 +140,7 @@ include store/mortystore/Rules.mk
 include store/strongstore/Rules.mk
 include store/weakstore/Rules.mk
 include store/janusstore/Rules.mk
+include bft_tapir/Rules.mk
 include store/indicusstore/Rules.mk
 include store/Rules.mk
 include store/benchmark/Rules.mk
@@ -150,6 +153,7 @@ include store/benchmark/async/Rules.mk
 include lockserver/Rules.mk
 include timeserver/Rules.mk
 include libtapir/Rules.mk
+include create_keys/Rules.mk
 ##################################################################
 # General rules
 #

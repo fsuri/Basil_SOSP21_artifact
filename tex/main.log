@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  5 MAR 2020 09:37
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  5 MAR 2020 12:03
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1473,26 +1473,32 @@ LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <12> not available
 (Font)              Font shape `T1/ptm/b/n' tried instead on input line 53.
 
 (./sections/Introduction/Intro-Notes.tex
-Underfull \hbox (badness 10000) in paragraph at lines 15--17
+Underfull \hbox (badness 10000) in paragraph at lines 11--14
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 23--29
+Underfull \hbox (badness 10000) in paragraph at lines 17--19
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 31--35
+Underfull \hbox (badness 10000) in paragraph at lines 29--35
 
  []
 
-LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <10> not available
-(Font)              Font shape `T1/ptm/b/n' tried instead on input line 39.
+
+Underfull \hbox (badness 10000) in paragraph at lines 37--41
+
+ []
+
 [1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}
 
 
-])
+]
+LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <10> not available
+(Font)              Font shape `T1/ptm/b/n' tried instead on input line 45.
+)
 (./sections/Introduction/NC_old_intro.tex
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <10> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 44.
@@ -1500,7 +1506,7 @@ LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <7.4> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 44.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <6> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 44.
-) [2]
+ [2])
 (./sections/Introduction/Introduction.tex
 Underfull \hbox (badness 1596) in paragraph at lines 2--5
 \T1/ptm/m/n/10 (+20) taken a rather niche role for ap-pli-ca-tions that re-quir
@@ -1521,25 +1527,24 @@ File: ./figures/LC.png Graphic file (type png)
 Package pdftex.def Info: ./figures/LC.png  used on input line 11.
 (pdftex.def)             Requested size: 505.89pt x 125.09244pt.
 )
-(./sections/Indicus/Model.tex) (./sections/Indicus/Properties.tex
+(./sections/Indicus/Model.tex [4]) (./sections/Indicus/Properties.tex
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <8> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 3.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <5> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 3.
- [4]
+
 Underfull \hbox (badness 1527) in paragraph at lines 7--8
 []\T1/ptm/b/n/10 History H. \T1/ptm/m/n/10 (+20) In-for-mally, a \T1/ptm/m/it/1
 0 (+20) H \T1/ptm/m/n/10 (+20) con-tains the op-er-a-tions
  []
 
-) (./sections/Indicus/Protocol/Protocol.tex [5pdfTeX warning (ext4): destinatio
-n with the same identifier (name{figure.1}) has been already used, duplicate ig
-nored
+) [5pdfTeX warning (ext4): destination with the same identifier (name{figure.1}
+) has been already used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.15 
-      <./figures/LC.png>]
+l.82 
+      <./figures/LC.png>] (./sections/Indicus/Protocol/Protocol.tex
 Package mdframed Info: mdframed inside float 
  mdframed uses option nobreak mdframed on input line 31.
 Package mdframed Info: mdframed inside a box 
@@ -1609,6 +1614,13 @@ Underfull \hbox (badness 10000) in paragraph at lines 49--53
 
  []
 
+[6pdfTeX warning (ext4): destination with the same identifier (name{figure.2}) 
+has been already used, duplicate ignored
+
+\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
+                                                  \fi \fi 
+l.79 \subsection
+                {Validation}]
 Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
 put line 86.
 
@@ -1625,13 +1637,6 @@ Underfull \hbox (badness 10000) in paragraph at lines 96--97
 cm/m/it/10 key \OMS/pzccm/m/n/10 2 [] ^
  []
 
-[6pdfTeX warning (ext4): destination with the same identifier (name{figure.2}) 
-has been already used, duplicate ignored
-
-\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
-                                                  \fi \fi 
-l.148 \subsection
-                 {Consistent logging.}]
 <./figures/AB.png, id=175, 779.91376pt x 482.80376pt>
 File: ./figures/AB.png Graphic file (type png)
 <use ./figures/AB.png>
@@ -1642,24 +1647,27 @@ File: ./figures/5f+1.png Graphic file (type png)
 <use ./figures/5f+1.png>
 Package pdftex.def Info: ./figures/5f+1.png  used on input line 161.
 (pdftex.def)             Requested size: 202.3529pt x 190.31522pt.
+<./figures/SingleShard.png, id=177, 1224.575pt x 307.1475pt>
+File: ./figures/SingleShard.png Graphic file (type png)
+<use ./figures/SingleShard.png>
+Package pdftex.def Info: ./figures/SingleShard.png  used on input line 189.
+(pdftex.def)             Requested size: 505.89pt x 126.88736pt.
+
+Underfull \vbox (badness 1694) has occurred while \output is active []
+
  [7pdfTeX warning (ext4): destination with the same identifier (name{figure.3})
  has been already used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.181 
+l.194 
       pdfTeX warning (ext4): destination with the same identifier (name{figure.
 4}) has been already used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.181 
+l.194 
        <./figures/AB.png> <./figures/5f+1.png>]
-<./figures/SingleShard.png, id=187, 1224.575pt x 307.1475pt>
-File: ./figures/SingleShard.png Graphic file (type png)
-<use ./figures/SingleShard.png>
-Package pdftex.def Info: ./figures/SingleShard.png  used on input line 189.
-(pdftex.def)             Requested size: 505.89pt x 126.88736pt.
 <./figures/3f+1.png, id=188, 1086.0575pt x 554.07pt>
 File: ./figures/3f+1.png Graphic file (type png)
 <use ./figures/3f+1.png>
@@ -1667,29 +1675,29 @@ Package pdftex.def Info: ./figures/3f+1.png  used on input line 217.
 (pdftex.def)             Requested size: 202.3529pt x 103.22842pt.
 ) (./sections/Implementation.tex) (./sections/Limitations.tex) (./sections/Rela
 tedWork.tex [8])
-(./sections/Conclusion.tex) (./main.bbl [9pdfTeX warning (ext4): destination wi
-th the same identifier (name{figure.5}) has been already used, duplicate ignore
-d
-
-\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
-                                                  \fi \fi 
-l.7 
-    pdfTeX warning (ext4): destination with the same identifier (name{figure.6}
-) has been already used, duplicate ignored
-
-\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
-                                                  \fi \fi 
-l.7 
-     <./figures/SingleShard.png> <./figures/3f+1.png>])
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 120.
+(./sections/Conclusion.tex) (./main.bbl)
 - LAST -
-Extra skip:22.72498pt
-Left:44.34998pt/2.16492pt
-Right:22.0pt/1.78992pt
-Output:34.17499pt
- [10]
+Extra skip:1.11862pt
+Left:455.39334pt/2.16492pt
+Right:454.64972pt/1.78992pt
+Output:456.02153pt
+ [9pdfTeX warning (ext4): destination with the same identifier (name{figure.5})
+ has been already used, duplicate ignored
+
+\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
+                                                  \fi \fi 
+l.120 \end{document}
+                    pdfTeX warning (ext4): destination with the same identifier
+ (name{figure.6}) has been already used, duplicate ignored
+
+\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
+                                                  \fi \fi 
+l.120 \end{document}
+                     <./figures/SingleShard.png> <./figures/3f+1.png>]
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 120.
 Package atveryend Info: Empty hook `AfterLastShipout' on input line 120.
- (./main.aux)
+
+(./main.aux)
 Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 120.
 Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 120.
 Package rerunfilecheck Info: File `main.out' has not changed.
@@ -1700,13 +1708,13 @@ LaTeX Warning: There were multiply-defined labels.
 
  ) 
 Here is how much of TeX's memory you used:
- 29329 strings out of 492982
- 556320 string characters out of 6134895
- 651913 words of memory out of 5000000
+ 29328 strings out of 492982
+ 556313 string characters out of 6134895
+ 649913 words of memory out of 5000000
  32190 multiletter control sequences out of 15000+600000
  600248 words of font info for 223 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 55i,10n,54p,10414b,453s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 55i,10n,54p,10414b,433s stack positions out of 5000i,500n,10000p,200000b,80000s
 {/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texliv
 e/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texm
 f-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/
@@ -1714,10 +1722,10 @@ fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/
 type1/urw/symbol/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/
 utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (10 pages, 496884 bytes).
+Output written on main.pdf (9 pages, 497306 bytes).
 PDF statistics:
- 250 PDF objects out of 1000 (max. 8388607)
- 218 compressed objects within 3 object streams
- 58 named destinations out of 1000 (max. 500000)
+ 246 PDF objects out of 1000 (max. 8388607)
+ 215 compressed objects within 3 object streams
+ 57 named destinations out of 1000 (max. 500000)
  43286 words of extra memory for PDF output out of 51595 (max. 10000000)
 

@@ -154,7 +154,7 @@ void Server::HandleRead(const TransportAddress &remote, const proto::Read &msg) 
   if (txn_coordinators.find(msg.branch().txn().id()) == txn_coordinators.end()) {
     txn_coordinators[msg.branch().txn().id()] = &remote;
   }
-    
+
   generator.AddActive(msg.branch());
   SendBranchReplies(msg.branch(), proto::OperationType::READ, msg.key());
 }
@@ -221,7 +221,7 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
   //    We only receive a commit message for this txn when all the participants have responded
   //    PrepareOK ==> participants only respond PrepareOK when theyve received Commit messages for
   //    dependencies
-  //    
+  //
   //    So any conflicting transactions in prepared will be erased in dependency order
   prepared.erase(std::remove_if(prepared.begin(), prepared.end(),
       [&](const proto::Transaction &txn) {
@@ -229,7 +229,7 @@ void Server::HandleCommit(const TransportAddress &remote, const proto::Commit &m
       }), prepared.end());
 
   committed_txn_ids.insert(msg.branch().txn().id());
-  
+
   generator.ClearActive(msg.branch().txn().id());
 
   /*auto jtr = txn_coordinators.find(msg.branch().txn().id());
@@ -316,7 +316,7 @@ void Server::SendBranchReplies(const proto::Branch &init,
     stats.Add("generate_branches" + std::to_string(init.txn().id()), ns);
   }
   for (const proto::Branch &branch : generated_branches) {
-    const proto::Operation &op = branch.txn().ops()[branch.txn().ops().size() - 1];
+    const proto::Operation &op = branch.txn().ops(branch.txn().ops().size() - 1);
     if (op.type() == proto::OperationType::READ) {
       std::string val;
       ValueOnBranch(branch, op.key(), val);
@@ -332,7 +332,7 @@ void Server::SendBranchReplies(const proto::Branch &init,
       transport->SendMessage(this, *txn_coordinators[branch.txn().id()], reply);
     } else {
       proto::WriteReply reply;
-      
+
       struct timeval now;
       gettimeofday(&now, NULL);
       reply.set_ts(now.tv_usec);
