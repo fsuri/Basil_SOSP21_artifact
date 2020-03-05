@@ -1,0 +1,69 @@
+\section{Protocol-Notes}
+
+\subsection{TX execution}
+Goal:\\
+- clients should be able to read valid and consistent data from the database\\
+- clients should see the most recent data\\
+
+
+Challenge\\
+- Replicas can be out of sync and byzantine\\
+- There might be concurrent transactions ongoing that are conflicting\\
+
+
+
+\subsection{Concurrency control}
+Goal: \\
+- limit aborts\\
+
+challenges:\\
+- concurrent read/writes\\
+- geo-distributed so execution and validation takes long --> more interleavings\\
+- clocks are not perfectly synced\\
+- byzantine clients can create artificial congestion\\
+
+
+\subsection{Validation}
+Goal:\\
+- maintain ACID guarantees: Isolation, Durability, Atomicity\\
+- Be client driven\\
+
+Challenges:\\
+- Maintain Isolation while creating highest chance to commit\\
+- Tolerate byzantine replicas voting dishonestly\\
+- Tolerate Client failures: equivocation, crashes, stalling, replay\\
+--> Answer: make final decisions idempotent
+-
+
+
+
+\subsection{Writeback}
+Goal: \\
+- Finalize commit/aborts\\
+- Maintain consistency\\
+- Enable garbage collection\\
+
+Challenges:\\
+- client failures (crash, equivocation)\\
+- 
+
+
+\subsection{Optimizations}
+Goals:\\
+- reduce write aborts\\
+- reduce redundancy in validation\\
+- reduce read lock impact (byz clients)\\
+
+Challenges:\\
+- defend against byz client abuse\\
+- respect all shard results\\
+- 
+
+\subsection{Failures}
+Goals:\\
+- be robust to byzantine client\\
+
+
+challenges:\\
+- byzantine clients can stall or equivocate during Validation/Writeback\\
+- Granting honest clients liveness --> ability to "realiably" finish all Transactions.\\

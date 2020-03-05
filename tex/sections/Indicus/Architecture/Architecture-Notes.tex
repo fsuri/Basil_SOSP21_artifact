@@ -1,0 +1,20 @@
+\section{Arch-Notes}
+
+\paragraph{Goals:}
+
+- Indicus should be a transactional database\\
+- It should be replicated and tolerate Byzantine behavior for fault tolerance and trust assumptions\\
+- It should offer the most general set of transactions, i.e. Interactive Transactions\\
+- It should enforce ACID guarantees, specifically Serialiability as Isolation level\\
+- It should not be affected by censorship\\
+- It should enforce only a partial order on Transations\\
+- Leaderless\\
+- Shardable\\
+
+\paragraph{Challenges}
+- Byzantine behavior requires additional safety precautions; higher replication degree\\
+- Providing interactive Transactions requires offering Clients an interface for execution.\\
+- Enforcing only a partial order implies the necessity of conflict checks. Concretely, maintaining serializability requires the use of Concurrency control.\\
+- If we want no total order and no censorship then we cannot have a leader. This means empowering Clients which is dangerous in a byzantine system: exposes more opportunities for misbehavior.\\
+- No leader means replicas may go out of sync, need to maintain consistency view of the database somehow\\
+- Multi-shard transactions require additional coordination\\

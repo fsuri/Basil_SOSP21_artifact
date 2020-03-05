@@ -10,21 +10,31 @@
 \BOOKMARK [1][-]{section.2}{Introduction}{}% 10
 \BOOKMARK [2][-]{subsection.2.1}{IntroBlurb}{section.2}% 11
 \BOOKMARK [1][-]{section.3}{Indicus}{}% 12
-\BOOKMARK [2][-]{subsection.3.1}{Architecture}{section.3}% 13
-\BOOKMARK [2][-]{subsection.3.2}{Model and Definitions}{section.3}% 14
-\BOOKMARK [3][-]{subsubsection.3.2.1}{System Model}{subsection.3.2}% 15
-\BOOKMARK [3][-]{subsubsection.3.2.2}{System properties}{subsection.3.2}% 16
-\BOOKMARK [2][-]{subsection.3.3}{TEsting}{section.3}% 17
-\BOOKMARK [2][-]{subsection.3.4}{Execution}{section.3}% 18
-\BOOKMARK [2][-]{subsection.3.5}{Validation}{section.3}% 19
-\BOOKMARK [2][-]{subsection.3.6}{Concurrency Control}{section.3}% 20
-\BOOKMARK [2][-]{subsection.3.7}{Consistent logging.}{section.3}% 21
-\BOOKMARK [2][-]{subsection.3.8}{Writeback and Multi-shard 2pc}{section.3}% 22
-\BOOKMARK [2][-]{subsection.3.9}{Failures}{section.3}% 23
-\BOOKMARK [2][-]{subsection.3.10}{Optimizations}{section.3}% 24
-\BOOKMARK [2][-]{subsection.3.11}{Garbage Collection}{section.3}% 25
-\BOOKMARK [2][-]{subsection.3.12}{Indicus3}{section.3}% 26
-\BOOKMARK [1][-]{section.4}{Implementation and Evaluation}{}% 27
-\BOOKMARK [1][-]{section.5}{Limitations}{}% 28
-\BOOKMARK [1][-]{section.6}{Related Work/Comparison}{}% 29
-\BOOKMARK [1][-]{section.7}{Conclusion}{}% 30
+\BOOKMARK [1][-]{section.4}{Arch-Notes}{}% 13
+\BOOKMARK [2][-]{subsection.4.1}{Architecture}{section.4}% 14
+\BOOKMARK [1][-]{section.5}{Definition- notes}{}% 15
+\BOOKMARK [2][-]{subsection.5.1}{Model and Definitions}{section.5}% 16
+\BOOKMARK [3][-]{subsubsection.5.1.1}{System Model}{subsection.5.1}% 17
+\BOOKMARK [3][-]{subsubsection.5.1.2}{System properties}{subsection.5.1}% 18
+\BOOKMARK [1][-]{section.6}{Protocol-Notes}{}% 19
+\BOOKMARK [2][-]{subsection.6.1}{TX execution}{section.6}% 20
+\BOOKMARK [2][-]{subsection.6.2}{Concurrency control}{section.6}% 21
+\BOOKMARK [2][-]{subsection.6.3}{Validation}{section.6}% 22
+\BOOKMARK [2][-]{subsection.6.4}{Writeback}{section.6}% 23
+\BOOKMARK [2][-]{subsection.6.5}{Optimizations}{section.6}% 24
+\BOOKMARK [2][-]{subsection.6.6}{Failures}{section.6}% 25
+\BOOKMARK [1][-]{section.7}{Protocol}{}% 26
+\BOOKMARK [2][-]{subsection.7.1}{TEsting}{section.7}% 27
+\BOOKMARK [2][-]{subsection.7.2}{Execution}{section.7}% 28
+\BOOKMARK [2][-]{subsection.7.3}{Validation}{section.7}% 29
+\BOOKMARK [2][-]{subsection.7.4}{Concurrency Control}{section.7}% 30
+\BOOKMARK [2][-]{subsection.7.5}{Consistent logging.}{section.7}% 31
+\BOOKMARK [2][-]{subsection.7.6}{Writeback and Multi-shard 2pc}{section.7}% 32
+\BOOKMARK [2][-]{subsection.7.7}{Failures}{section.7}% 33
+\BOOKMARK [2][-]{subsection.7.8}{Optimizations}{section.7}% 34
+\BOOKMARK [2][-]{subsection.7.9}{Garbage Collection}{section.7}% 35
+\BOOKMARK [2][-]{subsection.7.10}{Indicus3}{section.7}% 36
+\BOOKMARK [1][-]{section.8}{Implementation and Evaluation}{}% 37
+\BOOKMARK [1][-]{section.9}{Limitations}{}% 38
+\BOOKMARK [1][-]{section.10}{Related Work/Comparison}{}% 39
+\BOOKMARK [1][-]{section.11}{Conclusion}{}% 40
