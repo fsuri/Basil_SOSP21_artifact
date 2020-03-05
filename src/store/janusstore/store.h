@@ -9,6 +9,7 @@
 #include "store/janusstore/transaction.h"
 
 #include <unordered_map>
+#include <unordered_set>
 
 namespace janusstore {
 

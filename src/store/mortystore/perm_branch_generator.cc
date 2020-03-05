@@ -1,6 +1,7 @@
 #include "store/mortystore/perm_branch_generator.h"
 
 #include <sstream>
+#include <algorithm>
 
 #include "lib/message.h"
 #include "store/mortystore/common.h"
@@ -30,14 +31,14 @@ uint64_t PermBranchGenerator::GenerateBranches(const proto::Branch &init,
   for (const auto &op : init.txn().ops()) {
     auto writeItr = GetActiveWrites().find(op.key());
     if (writeItr != GetActiveWrites().end()) {
-      for (const auto &kv : writeItr->second) { 
+      for (const auto &kv : writeItr->second) {
         p_branches[kv.first].insert(kv.second.begin(), kv.second.end());
       }
     }
     if (op.type() == proto::OperationType::WRITE) {
       auto readItr = GetActiveReads().find(op.key());
       if (readItr != GetActiveReads().end()) {
-        for (const auto &kv : readItr->second) { 
+        for (const auto &kv : readItr->second) {
           p_branches[kv.first].insert(kv.second.begin(), kv.second.end());
         }
       }
@@ -48,7 +49,7 @@ uint64_t PermBranchGenerator::GenerateBranches(const proto::Branch &init,
   for (const auto &kv : p_branches) {
     if (kv.first != init.txn().id()) {
       // only generate subsets that include init
-      txns_list.push_back(kv.first); 
+      txns_list.push_back(kv.first);
     }
   }
 
@@ -62,7 +63,7 @@ uint64_t PermBranchGenerator::GenerateBranches(const proto::Branch &init,
 
   std::vector<uint64_t> subset = {init.txn().id()};
   GenerateBranchesSubsets(txns_list, p_branches, store, new_branches, subset);
-  
+
   return Latency_End(&generateLatency);
 }
 
@@ -93,7 +94,7 @@ void PermBranchGenerator::GenerateBranchesPermutations(
   std::vector<uint64_t> txns_sorted(txns);
   std::sort(txns_sorted.begin(), txns_sorted.end());
   const proto::Transaction *t1;
-  proto::Branch new_branch; 
+  proto::Branch new_branch;
   do {
     if (Message_DebugEnabled(__FILE__)) {
       std::stringstream ss;

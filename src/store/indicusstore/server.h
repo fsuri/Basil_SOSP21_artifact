@@ -66,7 +66,8 @@ class Server : public TransportReceiver, public ::Server {
 
  private:
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
-  void HandlePrepare(const TransportAddress &remote, const proto::Prepare &msg);
+  void HandlePrepare1(const TransportAddress &remote,
+      const proto::Prepare1 &msg);
   void HandleCommit(const TransportAddress &remote, const proto::Commit &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 

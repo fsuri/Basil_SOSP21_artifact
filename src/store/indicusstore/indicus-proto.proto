@@ -9,37 +9,92 @@ message Read {
   required string key = 2;
 }
 
+message SignedRead {
+  required Read read = 1;
+  required uint64 client_id = 2;
+  required bytes signature = 3;
+}
+
+message WriteProof {
+  // TODO merkel tree could make more efficient
+  required TransactionMessage write_txn = 1;
+  required TimestampMessage write_txn_timestamp = 2;
+  required Writeback tx_writeback = 3;
+}
+
 message ReadReply {
   required uint64 req_id = 1;
   required int32 status = 2;
   required string key = 3;
   optional string value = 4;
   optional TimestampMessage timestamp = 5;
+  optional WriteProof proof = 6;
 }
 
-message Prepare {
-  required uint64 req_id = 1;
-  required uint64 txn_id = 2;
-  required TransactionMessage txn = 3;
-  optional TimestampMessage timestamp = 4;
+message SignedReadReply {
+  required ReadReply read_reply = 1;
+  required uint64 replica_id = 2;
+  required bytes signature = 3;
 }
 
-message PrepareReply {
-  required uint64 req_id = 1;
-  // 0 = OK
-  // -1 = failed
-  // -2 = retry
-  // -3 = abstain/no reply
-  required int32 status = 2;
+// Phase 1
+message Transaction {
+  repeated ReadMessage readset = 1;
+  repeated WriteMessage writeset = 2;
   optional TimestampMessage timestamp = 3;
 }
 
-message Commit {
-  required uint64 req_id = 1;
-  required uint64 timestamp = 2;
+message SignedTransaction {
+  required Phase1 phase1 = 1;
+  required bytes signature = 2;
+  required uint64 client_id = 3;
 }
 
-message Abort {
-  required uint64 req_id = 1;
-  required TransactionMessage txn = 2;
+message Phase1Reply {
+  enum ConcurrencyCheckResult {
+      COMMIT = 0;
+      ABORT = 1;
+      ABSTAIN = 2;
+      RETRY = 3;
+  }
+  required ConcurrencyCheckResult ccr = 1;
+  required bytes txn_digest = 2;
+}
+
+message SignedPhase1Reply {
+  required Phase1Reply p1_reply = 1;
+  required uint64 replica_id = 2;
+  required bytes signature = 3;
+}
+
+enum TxnDecision {
+  COMMIT = 0;
+  ABORT = 1;
+}
+
+message Phase2 {
+  required TxnDecision decision = 1;
+  required bytes txn_digest = 2;
+  repeated SignedPrepare1Reply p1_replies = 3;
+}
+
+message SignedPhase2 {
+  required Phase2 phase2 = 1;
+  required uint64 client_id = 2;
+  required bytes signature = 3;
+}
+
+message Phase2Reply {
+  required TxnDecision decision = 1;
+  required bytes txdigest = 2;
+}
+
+message SignedPhase2Reply {
+  required Phase2Reply phase2_reply = 1;
+  required uint64 replica_id = 2;
+  required bytes signature = 3;
+}
+
+message Writeback {
+  repeated SignedPrepare2Reply p2_replies = 1;
 }

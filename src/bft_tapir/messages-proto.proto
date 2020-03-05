@@ -1,0 +1,120 @@
+syntax = "proto2";
+
+package bft_tapir.proto;
+
+message ReadRequest {
+    required bytes key = 1;
+    required uint64 clientid = 2;
+    required uint64 clientseqnum = 3;
+}
+
+message SignedReadRequest {
+    required ReadRequest readrequest = 1;
+    required bytes signature = 2;
+}
+
+message Version {
+  required uint64 timestamp = 1;
+  required uint64 clientid = 2;
+}
+
+message ReadResponse {
+    required bytes key = 1;
+    required bytes value = 2;
+    required Version version = 3;
+    required uint64 clientid = 4;
+    required uint64 clientseqnum = 5;
+    required uint64 replicaid = 6;
+    // TODO merkel tree could make more efficient
+    required Transaction writetx = 7;
+    required P3 p3 = 8;
+}
+
+message SignedReadResponse {
+    required ReadResponse readresponse = 1;
+    required bytes signature = 2;
+}
+
+// TODO limit on key sizes?
+message Read {
+    required bytes key = 1;
+    required Version version = 2;
+}
+
+message Write {
+    required bytes key = 1;
+    required bytes value = 2;
+}
+
+message Transaction {
+    required Version version = 1;
+    repeated Read read = 2;
+    repeated Write write = 3;
+    // clientid is in version
+    required uint64 clientseqnum = 4;
+}
+
+message SignedTransaction {
+    required Transaction transaction = 1;
+    required bytes signature = 2;
+}
+
+message P1Result {
+    enum ConcurrencyCheckResult {
+        COMMIT = 0;
+        ABORT = 1;
+        ABSTAIN = 2;
+        RETRY = 3;
+    }
+    required ConcurrencyCheckResult ccr = 1;
+    required bytes txdigest = 2;
+    required uint64 replicaid = 3;
+}
+
+message SignedP1Result {
+    required P1Result p1result = 1;
+    required bytes signature = 2;
+}
+
+enum TXAction {
+    COMMIT = 0;
+    ABORT = 1;
+}
+
+message P2 {
+    required TXAction action = 1;
+    required bytes txdigest = 2;
+    repeated SignedP1Result p1results = 3;
+    required uint64 clientid = 4;
+}
+
+message SignedP2 {
+    required P2 p2 = 1;
+    required bytes signature = 2;
+}
+
+message P2Echo {
+    required TXAction action = 1;
+    required bytes txdigest = 2;
+    required uint64 replicaid = 3;
+}
+
+message SignedP2Echo {
+    required P2Echo p2echo = 1;
+    required bytes signature = 2;
+}
+
+message P3 {
+    repeated SignedP2Echo p2echos = 3;
+}
+
+message P3Echo {
+    required TXAction action = 1;
+    required bytes txdigest = 2;
+    required uint64 replicaid = 3;
+}
+
+message SignedP3Echo {
+    required P3Echo p3echo = 1;
+    required bytes signature = 2;
+}

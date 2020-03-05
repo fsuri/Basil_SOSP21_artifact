@@ -11,6 +11,7 @@
 #include "store/janusstore/janus-proto.pb.h"
 
 #include <unordered_map>
+#include <unordered_set>
 
 // Reply types
 #define REPLY_OK 0
