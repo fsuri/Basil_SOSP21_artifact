@@ -66,7 +66,7 @@ private:
     bool linearizable;
 
     // Data store
-    VersionedKVStore store;
+    VersionedKVStore<Timestamp, std::string> store;
 
     // TODO: comment this.
     std::unordered_map<uint64_t, std::pair<Timestamp, Transaction>> prepared;

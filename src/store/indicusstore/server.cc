@@ -99,16 +99,17 @@ void Server::Load(const string &key, const string &value,
 
 void Server::HandleRead(const TransportAddress &remote,
     const proto::Read &msg) {
-  std::pair<Timestamp, std::string> tsVal;
-  bool exists = store.get(msg.key(), tsVal);
+  std::pair<Timestamp, Server::Value> tsVal;
+  bool exists;
+  store.get(msg.key(), Timestamp(msg.timestamp()), tsVal);
 
   proto::ReadReply reply;
   reply.set_req_id(msg.req_id());
   reply.set_key(msg.key());
   if (exists) {
     reply.set_status(REPLY_OK);
-    reply.set_value(tsVal.second);
-    tsVal.first.serialize(reply.mutable_timestamp());
+    reply.set_committed_value(tsVal.second.val);
+    tsVal.first.serialize(reply.mutable_committed_timestamp());
   } else {
     reply.set_status(REPLY_FAIL);
   }
@@ -283,7 +284,7 @@ int32_t Server::DoTAPIROCCCheck(uint64_t id, const proto::Transaction &txn,
 
   // check for conflicts with the write set
   for (const auto &write : txn.writeset()) {
-    std::pair<Timestamp, std::string> val;
+    std::pair<Timestamp, Server::Value> val;
     // if this key is in the store
     if (store.get(write.key(), val)) {
       Timestamp lastRead;
@@ -379,8 +380,10 @@ void Server::Commit(uint64_t txnId, const proto::Transaction &txn,
     store.commitGet(read.key(), read.readtime(), timestamp);
   }
   
+  Value val;
   for (const auto &write : txn.writeset()) {
-    store.put(write.key(), write.value(), timestamp);
+    val.val = write.value();
+    store.put(write.key(), val, timestamp);
   }
 
   prepared.erase(txnId);

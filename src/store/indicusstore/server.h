@@ -99,7 +99,11 @@ class Server : public TransportReceiver, public ::Server {
   bft_tapir::NodeConfig *cryptoConfig;
   crypto::PrivKey privateKey;
 
-  VersionedKVStore store;
+  struct Value {
+    std::string val;
+  };
+
+  VersionedKVStore<Timestamp, Value> store;
   std::unordered_map<uint64_t, std::pair<Timestamp, proto::Transaction>> prepared;
 
   Stats stats;

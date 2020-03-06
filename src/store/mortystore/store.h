@@ -20,7 +20,7 @@ class Store {
 
  private:
   // Data store
-  VersionedKVStore store;
+  VersionedKVStore<Timestamp, std::string> store;
 };
 
 } // namespace mortystore
