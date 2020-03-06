@@ -4,6 +4,9 @@ Structure:
 0. Preamble what Indicus is and what it is supposed to offer.
 1. Model., Properties   
 2. Architecture: Exec, Val, WB, 
+
+Replica state?
+
 3. Exec details: Read/Write Set computation
 4. Concurrency Control check. Put in relation to Exec details
 5. Validation Protocol: a) Voting and Decision rule component b) Logging. Explain similarity to other BFT protocols (logging could use anything, in 5f+1 it resembles Q/U because etc.)
@@ -11,6 +14,10 @@ Structure:
 7. Failures between 5/6
 8. Optimizations: 
 9. Indicus3: Extra abort phase, different quorums (Validation and View change), Extra proofs
+10. Correctness proofs: Only for 5f+1?
+	- ACID: serializable specifically
+	- Prove recovery maintains same result and consistency
+	- Prove liveness (i.e. client has all tools necessary: dependency resolution, general aborts/abstains. Fallback live leader election. )
 
 \subsection{TX execution}
 Goal:\\
@@ -22,10 +29,18 @@ Challenge\\
 - Replicas can be out of sync and byzantine\\
 - There might be concurrent transactions ongoing that are conflicting\\
 
+Our Design:\\
+- Clients speculatively execute their TX: Writes buffered locally, Reads go remote\\
+- Reads can read committed and potentially committing values\\
+- Necessary quorums sized so validity (and liveness) is maintained
 
+Subtlelties:
+- unique TX ID -- avoids equivocation and makes Tx uniquely indexable in efficient data structures
+- include dependencies in their TX (f+1 signed copies - Q: Why is this necessary? A: To make replicas believe it exists so that other clients are able to recover that knowledge.)
+- 
 
 \subsection{Concurrency control}
-Goal: \\
+Goal: \\(Exceptions, read leases, dependencies: Q: how to store full txid)
 - limit aborts\\
 
 challenges:\\
@@ -35,14 +50,42 @@ challenges:\\
 - minimize unecessary aborts\\
 - byzantine clients can create artificial congestion\\
 
+- Maintain Isolation while replicas out of order. In total order protocols (SMR), deviation from the "common" vote signals misbehavior, whereas for us that is not the case. \\
+
+Our Design:\\
+- TSO based concurrency control: Assign optimistic timestamps that define serialization order\\
+- Enforce loose bound on the timestamps. This is fine for safety, but necessary to restrict progress damage. Alternative way is to have a TS gen phase, but this induces a RTT and certificate to attach\\
+- Reads and Writes are tested on Conflicts with previously committed or possibly committing Transactions. Evaluation happens based on TS and whether serialization order would be violated.\\
+- MVTSO: 3 techniques to reduce the number of aborts:\\
+	- Read from TS, and not newest. This allows reads (especially long reads, which can happen in a WAN network) to avoid aborting due to later writes. This requires a multi version store.\\
+	- Read possibly committing writes. This is to avoid missing writes that should have been seen. Effectively minimizes the "lockout window" that the latency of validation-writeback phases incur.\\
+	- Reads issue RTS in order to acquire "locks" on concurrent writes that would cause reads to abort. This requires the Timestamp to be known in advance. \\
+	
+Subtlelties:\\
+- concurrent read and dependency validation could make own dependencies abort. This can especially be strategically abused by byz clients. To avoid this, add dependency exceptions: Async read exceptions sent by honest clients to minimize this window.\\
+- Read leases: Read "locks" could be arbitrarily acquired by byz clients without intention of completing a TX. Thus they are on a timeout. Larger writes are not affected anyways. Application option: decide who to grant read locks, since they are not a safety mechanism, but an additional progress "shield"\\
+- Efficient dependency storage: Only claim dependencies on f+1 for several reasons: a) at least one honest believes this could commit, b) allows to only store TXIDS in a TX and not full dependency, because that dep can be recovered when necessary - having info about deps is necessary for client liveness.\\
+
+- how to bound dep depth? Reads return a field that says dep depth. Honest clients will not create deeper deps. Byzantine Clients may try, but cannot, because the f+1 signed dep messages include the full dep tree, and replicas will not accept any TX that have depth > some d. In practice we probably want d = 1, so the fallback starts directly for the immediate depdency.
+	- in general it was possible to "miss" comittable/prepared tXs, thats okay since reading prepared is just an optimization.
+	
+- Abort decisions need to come with proofs that client can validate: Avoids fake aborts. In 5f+1 the proof is implicit since f+1 abort votes are necessary.
+- Optimization: Retries for Writes. Comes at a tradeoff for validation phase latency, so we elaborate only later.
+-
+	
+Replica datastructures:
+- for efficient lookups we have following data structures:
+- 
+
 
 \subsection{Validation}
 Goal:\\
 - maintain ACID guarantees: Isolation, Durability, Atomicity\\
 - Be client driven, i.e. leaderless and out of order\\
 - avoid frontrunning\\
-- be scalable
-- be fast
+- be scalable\\
+- be fast\\
+
 
 Challenges:\\
 - Maintain Isolation while creating highest chance to commit\\
@@ -53,6 +96,27 @@ Challenges:\\
 - minimize state at replicas while still guaranteeing correct agreement. Make sure local knowledge is enough to guarantee global correctness
 - minimize necessary roundtrips and communication complexity
 
+
+Basic design:
+- Voting phase:
+	- Client sends to all, All to CC check, all reply
+	- Client makes decision based off Quorum and Decision Rule (have figure for it?)
+	- Metaphor: Instead of a leader serializing and deciding on a decision, the decisin was made jointly by all replicas. Hence, "voting" phase
+- Decision rule:
+	- Since votes can be inconsistent (no total order enforced on replicas) we must aggregate them
+	- Must be designed in a way that maintains Isolation
+	- 3f+1 commit necessary. Vice versa, 3f+1 abstain necessary. Absense of enough commit votes requires pessimistic decision in abort.
+	- Wait up to time out for at least 2f+1. If timeout expires and less than 2f+1, keep waiting. 
+- Persistant Logging. 2pc analogy. (or is 3pc analogy better?)
+	- Want to make sure, that whatever client decision was made (equivalent to choice of Vote quorum), is going to be persistent and idempotent. I.e. if commit/abort is returned to the application any re-issue of the protocol (which can be necessary under faults) is consistent with the original decision.
+	- In 2pc decision is logged to persistant storage. That obviously doesnt work in this setting (byz client, even under crash you would like to make progress). So a Client "logs" the decision by replicating it consistently to the replicas.
+	- Client sends decision, gets back echo
+	- If enough consistent echos then the result may return. This guarantees that decision can be recovered.
+	- 4f+1 matching replies required: We will show recovery later.
+
+Subtlelties:
+- 5f+1 commit fast path: 3f+1 abstain/abort fast path. (Cannot have these with retries). If Abort includes proof, then 1 abort fast path as well.
+- 
 
 
 \subsection{Writeback}
@@ -65,6 +129,15 @@ Challenges:\\
 - client failures (crash, equivocation)\\
 - 
 
+Basic Design:
+- Client uses the Logging certificates to proceed. Aggregates these certificates for every shard.
+- Any Client can fulfill this role, arbitrary amount in parallel or even Replicas because this operation is guaranteed to be idempotent (due to the validation and recovery logic)
+- Upon Receiving Commit Abort, Replicas update their data structures. Remove from Prepared strucutres, Add to Commit/Abort Logs. 
+- Dont need a dedicated append only ledger (?). It would be different for each replica anyways. Can just store these logs as Hashmaps (i.e. reuse our lookup structures)
+- 
+
+Subtlelties:
+- Optimization: Single shard logging
 
 \subsection{Optimizations}
 Goals:\\
@@ -84,4 +157,14 @@ Goals:\\
 
 challenges:\\
 - byzantine clients can stall or equivocate during Validation/Writeback\\
+- replicas can diverge due to byzantine clients. Need to reconcile safely\\
 - Granting honest clients liveness --> ability to "realiably" finish all Transactions.\\
+
+
+Subtletlties:
+- (Maybe useless:) Only a client that provides a dep proof (f+1) or abstain proof is allowed to issue fallback. Doesnt make it impossible to start FB, but at least some hurdle (a client could always just receive such a abstain message with the proof from a byz colluder replica
+- Fallback election is not started if that TX has a dependency - wait for all deps to be finished themselves.
+
+\subsection{Discussion: }
+- Explain/Define Client relative liveness. We dont provide liveness if something is async, "liveness" ill defined for this sort of system. What it means: Clients that follow P experience liveness, but there is no system notion because there is no shared total ledger.  Progress is client relative
+- Several seperate binary consensus instances 
