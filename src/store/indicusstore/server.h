@@ -69,10 +69,10 @@ class Server : public TransportReceiver, public ::Server {
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
       const proto::Phase1 &msg);
-  void HandleWriteback(const TransportAddress &remote,
-      const proto::Writeback &msg);
   void HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg);
+  void HandleWriteback(const TransportAddress &remote,
+      const proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
   int32_t DoOCCCheck(uint64_t id, const proto::Transaction &txn,
@@ -85,6 +85,8 @@ class Server : public TransportReceiver, public ::Server {
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
   void GetPreparedReads(
       std::unordered_map<std::string, std::set<Timestamp>> &reads);
+  void Commit(uint64_t txnId, const proto::Transaction &txn,
+      const Timestamp &timestamp);
 
   const transport::Configuration &config;
   int groupIdx;

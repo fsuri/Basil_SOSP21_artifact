@@ -75,8 +75,8 @@ message Phase1Reply {
       RETRY = 3;
   }
   required ConcurrencyCheckResult ccr = 2;
-  required bytes txn_digest = 3;
-  required TimestampMessage timestamp = 4;
+  optional Transaction txn = 3;
+  optional TimestampMessage timestamp = 4;
 }
 
 message Prepare1Replies {
@@ -121,7 +121,9 @@ message SignedPhase2Reply {
 }
 
 message Writeback {
-  repeated SignedPhase2Reply p2_replies = 1;
+  required uint64 txn_id = 1;
+  required Transaction txn = 2;
+  repeated SignedPhase2Reply p2_replies = 3;
 }
 
 message Abort {

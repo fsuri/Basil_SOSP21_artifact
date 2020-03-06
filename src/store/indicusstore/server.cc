@@ -53,6 +53,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
   proto::SignedMessage signedMessage;
   proto::Read read;
   proto::Phase1 phase1;
+  proto::Phase2 phase2;
   proto::Writeback writeback;
   proto::Abort abort;
 
@@ -77,6 +78,9 @@ void Server::ReceiveMessage(const TransportAddress &remote,
   } else if (type == phase1.GetTypeName()) {
     phase1.ParseFromString(data);
     HandlePhase1(remote, phase1);
+  } else if (type == phase2.GetTypeName()) {
+    phase2.ParseFromString(data);
+    HandlePhase2(remote, phase2);
   } else if (type == writeback.GetTypeName()) {
     writeback.ParseFromString(data);
     HandleWriteback(remote, writeback);
@@ -111,6 +115,9 @@ void Server::HandleRead(const TransportAddress &remote,
 
   if (signedMessages) {
     proto::SignedMessage signedMessage;
+    signedMessage.set_msg(reply.SerializeAsString());
+    signedMessage.set_type(reply.GetTypeName());
+    signedMessage.set_process_id(id);
     SignMessage(reply, privateKey, id, signedMessage);
     transport->SendMessage(this, remote, signedMessage);
   } else {
@@ -121,7 +128,26 @@ void Server::HandleRead(const TransportAddress &remote,
 void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
   Timestamp retryTs;
-  int32_t status = DoOCCCheck(msg.txn_id(), msg.txn(), msg.txn().timestamp(), retryTs);
+  int32_t status = DoOCCCheck(msg.txn_id(), msg.txn(), msg.txn().timestamp(),
+      retryTs);
+
+  proto::Phase1Reply reply;
+  reply.set_status(status);
+
+  if (validateProofs) {
+    *reply.mutable_txn() = msg.txn();
+  }
+
+  if (signedMessages) {
+    proto::SignedMessage signedMessage;
+    signedMessage.set_msg(reply.SerializeAsString());
+    signedMessage.set_type(reply.GetTypeName());
+    signedMessage.set_process_id(id);
+    SignMessage(reply, privateKey, id, signedMessage);
+    transport->SendMessage(this, remote, signedMessage);
+  } else {
+    transport->SendMessage(this, remote, reply);
+  }
 }
 
 void Server::HandlePhase2(const TransportAddress &remote,
@@ -151,13 +177,26 @@ void Server::HandlePhase2(const TransportAddress &remote,
   } else {
     decision = proto::TxnDecision::ABORT;
   }
-  proto::Phase2Reply prepare2Reply;
-  prepare2Reply.set_decision(decision); 
+
+  proto::Phase2Reply reply;
+  reply.set_decision(decision); 
+
+  if (signedMessages) {
+    proto::SignedMessage signedMessage;
+    signedMessage.set_msg(reply.SerializeAsString());
+    signedMessage.set_type(reply.GetTypeName());
+    signedMessage.set_process_id(id);
+    SignMessage(reply, privateKey, id, signedMessage);
+    transport->SendMessage(this, remote, signedMessage);
+  } else {
+    transport->SendMessage(this, remote, reply);
+  }
 }
 
 
 void Server::HandleWriteback(const TransportAddress &remote,
     const proto::Writeback &msg) {
+  Commit(msg.txn_id(), msg.txn(), Timestamp(msg.txn().timestamp()));
 }
 
 void Server::HandleAbort(const TransportAddress &remote,
@@ -332,6 +371,19 @@ void Server::GetPreparedReads(
       reads[read.key()].insert(t.second.first);
     }
   }
+}
+
+void Server::Commit(uint64_t txnId, const proto::Transaction &txn,
+    const Timestamp &timestamp) {
+  for (const auto &read : txn.readset()) {
+    store.commitGet(read.key(), read.readtime(), timestamp);
+  }
+  
+  for (const auto &write : txn.writeset()) {
+    store.put(write.key(), write.value(), timestamp);
+  }
+
+  prepared.erase(txnId);
 }
 
 } // namespace indicusstore
