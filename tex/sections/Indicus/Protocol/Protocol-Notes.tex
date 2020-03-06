@@ -54,7 +54,7 @@ challenges:\\
 
 Our Design:\\
 - TSO based concurrency control: Assign optimistic timestamps that define serialization order\\
-- Enforce loose bound on the timestamps. This is fine for safety, but necessary to restrict progress damage. Alternative way is to have a TS gen phase, but this induces a RTT and certificate to attach\\
+- Enforce loose bound on the timestamps. This is fine for safety, but necessary to restrict progress damage. Alternative way is to have a TS gen phase, but this induces a RTT and certificate to attach so it is undesirable. Instead we ignore Transactions that are too far in the future, as such reads could make a lot of writes abort. Reads are not affected by writes with large timestamps, since we allow to read from RTS time.\\
 - Reads and Writes are tested on Conflicts with previously committed or possibly committing Transactions. Evaluation happens based on TS and whether serialization order would be violated.\\
 - MVTSO: 3 techniques to reduce the number of aborts:\\
 	- Read from TS, and not newest. This allows reads (especially long reads, which can happen in a WAN network) to avoid aborting due to later writes. This requires a multi version store.\\
@@ -66,16 +66,23 @@ Subtlelties:\\
 - Read leases: Read "locks" could be arbitrarily acquired by byz clients without intention of completing a TX. Thus they are on a timeout. Larger writes are not affected anyways. Application option: decide who to grant read locks, since they are not a safety mechanism, but an additional progress "shield"\\
 - Efficient dependency storage: Only claim dependencies on f+1 for several reasons: a) at least one honest believes this could commit, b) allows to only store TXIDS in a TX and not full dependency, because that dep can be recovered when necessary - having info about deps is necessary for client liveness.\\
 
-- how to bound dep depth? Reads return a field that says dep depth. Honest clients will not create deeper deps. Byzantine Clients may try, but cannot, because the f+1 signed dep messages include the full dep tree, and replicas will not accept any TX that have depth > some d. In practice we probably want d = 1, so the fallback starts directly for the immediate depdency.
-	- in general it was possible to "miss" comittable/prepared tXs, thats okay since reading prepared is just an optimization.
+- how to bound dep depth? Reads return a field that says dep depth. Honest clients will not create deeper deps. Byzantine Clients may try, but cannot, because the f+1 signed dep messages include the full dep tree, and replicas will not accept any TX that have depth > some d. In practice we probably want d = 1, so the fallback starts directly for the immediate depdency.\\
+	- in general it was possible to "miss" comittable/prepared tXs, thats okay since reading prepared is just an optimization.\\
 	
-- Abort decisions need to come with proofs that client can validate: Avoids fake aborts. In 5f+1 the proof is implicit since f+1 abort votes are necessary.
-- Optimization: Retries for Writes. Comes at a tradeoff for validation phase latency, so we elaborate only later.
+- Abort decisions need to come with proofs that client can validate: Avoids fake aborts. In 5f+1 the proof is implicit since f+1 abort votes are necessary.\\
+- Optimization: Retries for Writes. Comes at a tradeoff for validation phase latency, so we elaborate only later.\\
 -
 	
 Replica datastructures:
 - for efficient lookups we have following data structures:
-- 
+-   Hashmap from TXIDs to protocol state (for easy management of ongoing TX). 
+- Key value store for prepared TX, includes Writes, Reads, and RTS
+- Committed State: Key value store of the DB. Allows to Read. Allows to lookup for conflicts.
+- Commit Log: Set of TXIDS that are committed (maps TXID to TX)  (allows to check if deps have alreaday committed. 
+- Abort Log: See Commit Log (allows to check if dependencies have already aborted)
+- Dependency set: Map from TXID to waiting dependents (allows to unblock waiting dependencies when a TX finishes)
+- (optional: dependant to dependency mapping. Once mapping is empty, this TX is not waiting on anybody anymore)
+
 
 
 \subsection{Validation}
@@ -206,9 +213,24 @@ Subtletlties:\\
 - Tx map to different initial fallbacks: I.e. (TXID + view) mod n \\
 
 
+\subsection{Garbage Collection}
+Challenge:
+- memory footprint grows large due to multi version
+- certificates impose large signature overheads
+
+Options:
+- Need to bound and remove versions below watermarks
+- In 5f+1 can read based on f+1 matching committed. Dont need certs and can still be safe for recovery and robust to replicas "claiming random dependency aborts"
+
+
 \subsection{Discussion: }
 - Explain/Define Client relative liveness. We dont provide liveness if something is async, "liveness" ill defined for this sort of system. What it means: Clients that follow P experience liveness, but there is no system notion because there is no shared total ledger.  Progress is client relative\\
 - Several seperate binary consensus instances \\
+
+
+optional Extras to mention:
+-Can use Witnesses instead of replicas to lighten replication burden
+- only need to contain key/version and not values
 
 
 \subsection{Indicus3}

@@ -23,20 +23,22 @@
 \BOOKMARK [2][-]{subsection.6.4}{Writeback}{section.6}% 23
 \BOOKMARK [2][-]{subsection.6.5}{Optimizations}{section.6}% 24
 \BOOKMARK [2][-]{subsection.6.6}{Failures}{section.6}% 25
-\BOOKMARK [2][-]{subsection.6.7}{Discussion: }{section.6}% 26
-\BOOKMARK [2][-]{subsection.6.8}{Indicus3}{section.6}% 27
-\BOOKMARK [1][-]{section.7}{Protocol}{}% 28
-\BOOKMARK [2][-]{subsection.7.1}{TEsting}{section.7}% 29
-\BOOKMARK [2][-]{subsection.7.2}{Execution}{section.7}% 30
-\BOOKMARK [2][-]{subsection.7.3}{Validation}{section.7}% 31
-\BOOKMARK [2][-]{subsection.7.4}{Concurrency Control}{section.7}% 32
-\BOOKMARK [2][-]{subsection.7.5}{Consistent logging.}{section.7}% 33
-\BOOKMARK [2][-]{subsection.7.6}{Writeback and Multi-shard 2pc}{section.7}% 34
-\BOOKMARK [2][-]{subsection.7.7}{Failures}{section.7}% 35
-\BOOKMARK [2][-]{subsection.7.8}{Optimizations}{section.7}% 36
-\BOOKMARK [2][-]{subsection.7.9}{Garbage Collection}{section.7}% 37
-\BOOKMARK [2][-]{subsection.7.10}{Indicus3}{section.7}% 38
-\BOOKMARK [1][-]{section.8}{Implementation and Evaluation}{}% 39
-\BOOKMARK [1][-]{section.9}{Limitations}{}% 40
-\BOOKMARK [1][-]{section.10}{Related Work/Comparison}{}% 41
-\BOOKMARK [1][-]{section.11}{Conclusion}{}% 42
+\BOOKMARK [2][-]{subsection.6.7}{Garbage Collection}{section.6}% 26
+\BOOKMARK [2][-]{subsection.6.8}{Discussion: }{section.6}% 27
+\BOOKMARK [2][-]{subsection.6.9}{Indicus3}{section.6}% 28
+\BOOKMARK [1][-]{section.7}{Protocol}{}% 29
+\BOOKMARK [2][-]{subsection.7.1}{TEsting}{section.7}% 30
+\BOOKMARK [2][-]{subsection.7.2}{Execution}{section.7}% 31
+\BOOKMARK [2][-]{subsection.7.3}{Validation}{section.7}% 32
+\BOOKMARK [2][-]{subsection.7.4}{Concurrency Control}{section.7}% 33
+\BOOKMARK [2][-]{subsection.7.5}{Consistent logging.}{section.7}% 34
+\BOOKMARK [2][-]{subsection.7.6}{Writeback and Multi-shard 2pc}{section.7}% 35
+\BOOKMARK [2][-]{subsection.7.7}{Failures}{section.7}% 36
+\BOOKMARK [2][-]{subsection.7.8}{Optimizations}{section.7}% 37
+\BOOKMARK [2][-]{subsection.7.9}{Garbage Collection}{section.7}% 38
+\BOOKMARK [2][-]{subsection.7.10}{Indicus3}{section.7}% 39
+\BOOKMARK [1][-]{section.8}{Implementation and Evaluation}{}% 40
+\BOOKMARK [2][-]{subsection.8.1}{Experiments}{section.8}% 41
+\BOOKMARK [1][-]{section.9}{Limitations}{}% 42
+\BOOKMARK [1][-]{section.10}{Related Work/Comparison}{}% 43
+\BOOKMARK [1][-]{section.11}{Conclusion}{}% 44
