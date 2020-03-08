@@ -19,6 +19,22 @@
 \usepackage{color,soul}
 \usepackage{makecell} % easy way to break lines latex
 \usepackage{datetime}
+
+%%%%%%%%%%%
+% to be able to draw some self-contained figs
+\usepackage{tikz}
+%\usepackage{amsmath}
+
+% inlined bib file
+\usepackage{filecontents}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{mathtools}
+%\usepackage[ruled, vlined, linesnumbered]{algorithm2e}
+\usepackage{mdframed}
+%\usepackage{enumitem}
+
+%%%%%%%%%%
 \hypersetup{breaklinks=true,
   bookmarks=true, pdfauthor={}, pdftitle={Indicus},
   colorlinks=true,
@@ -43,10 +59,7 @@
 \patchcmd{\ttlh@hang}{\parindent\z@}{\parindent\z@\leavevmode}{}{}
 \patchcmd{\ttlh@hang}{\noindent}{}{}{}
 \makeatother
-\usepackage{algorithm}
-\usepackage{algpseudocode}
-\usepackage{mathtools}
-\usepackage{mdframed}
+
 \sloppy
 \frenchspacing
 
@@ -62,7 +75,7 @@
 % Define person specific grumblers
 \newcommand{\nc}[1]{{\color{cyan}\grumbler{nc}{#1}}}
 \newcommand{\mb}[1]{{\color{green}\grumbler{mb}{#1}}}
-\newcommand{\fs}[1]{{\color{blue}\grumbler{ra}{#1}}}
+\newcommand{\fs}[1]{{\color{blue}\grumbler{fs}{#1}}}
 \newcommand{\la}[1]{{\color{red}\grumbler{la}{#1}}}
 
 % Special names for this paper

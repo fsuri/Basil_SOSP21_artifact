@@ -32,6 +32,7 @@
 #ifndef _INDICUS_SERVER_H_
 #define _INDICUS_SERVER_H_
 
+#include "bft_tapir/config.h"
 #include "replication/ir/replica.h"
 #include "store/server.h"
 #include "store/common/timestamp.h"
@@ -39,7 +40,15 @@
 #include "store/indicusstore/store.h"
 #include "store/indicusstore/indicus-proto.pb.h"
 
+#include <unordered_map>
+#include <set>
+
 namespace indicusstore {
+
+enum OCCType {
+  TAPIR = 0,
+  MVTSO = 1
+};
 
 class Server : public TransportReceiver, public ::Server {
  public:
@@ -58,18 +67,41 @@ class Server : public TransportReceiver, public ::Server {
 
  private:
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
-  void HandlePrepare(const TransportAddress &remote, const proto::Prepare &msg);
-  void HandleCommit(const TransportAddress &remote, const proto::Commit &msg);
+  void HandlePhase1(const TransportAddress &remote,
+      const proto::Phase1 &msg);
+  void HandleWriteback(const TransportAddress &remote,
+      const proto::Writeback &msg);
+  void HandlePhase2(const TransportAddress &remote,
+      const proto::Phase2 &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
+
+  int32_t DoOCCCheck(uint64_t id, const proto::Transaction &txn,
+      const Timestamp &proposedTs, Timestamp &retryTs);
+  int32_t DoTAPIROCCCheck(uint64_t id, const proto::Transaction &txn,
+      const Timestamp &proposedTs, Timestamp &retryTs);
+  int32_t DoMVTSOOCCCheck(uint64_t id, const proto::Transaction &txn,
+      const Timestamp &ts);
+  void GetPreparedWrites(
+      std::unordered_map<std::string, std::set<Timestamp>> &writes);
+  void GetPreparedReads(
+      std::unordered_map<std::string, std::set<Timestamp>> &reads);
 
   const transport::Configuration &config;
   int groupIdx;
   int idx;
+  int id;
   Transport *transport;
-  Stats stats;
+  OCCType occType;
+  bool signedMessages;
+  bool validateProofs;
+  bft_tapir::NodeConfig *cryptoConfig;
+  crypto::PrivKey privateKey;
 
   VersionedKVStore store;
+  std::unordered_map<uint64_t, std::pair<Timestamp, proto::Transaction>> prepared;
 
+  Stats stats;
+  std::unordered_set<uint64_t> active;
 };
 
 } // namespace indicusstore

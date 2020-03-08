@@ -1,14 +1,14 @@
-%\input{sections/Indicus/Protocol/Execution.tex}
-%\input{sections/Indicus/Protocol/Validation.tex}
-%\input{sections/Indicus/Protocol/ConcurrencyControl.tex}
-%\input{sections/Indicus/Protocol/ConsistentLogging.tex}
-%\input{sections/Indicus/Protocol/Writeback.tex}
-%\input{sections/Indicus/Protocol/MultiSharding.tex}
-%\input{sections/Indicus/Protocol/Failures.tex}
-%\input{sections/Indicus/Protocol/Variations.tex}
+%\input{sections/Indicus/Protocol/subsections/Execution.tex}
+%\input{sections/Indicus/Protocol/subsections/Validation.tex}
+%\input{sections/Indicus/Protocol/subsections/ConcurrencyControl.tex}
+%\input{sections/Indicus/Protocol/subsections/ConsistentLogging.tex}
+%\input{sections/Indicus/Protocol/subsections/Writeback.tex}
+%\input{sections/Indicus/Protocol/subsections/MultiSharding.tex}
+%\input{sections/Indicus/Protocol/subsections/Failures.tex}
+%\input{sections/Indicus/Protocol/subsections/Variations.tex}
 
 %-------------------------------------------------------------------------------
-
+\section{Protocol}
 %-------------------------------------------------------------------------------
 Indicus comes in two different flavors, Indicus3 and Indicus5 respectively, relying on varying replication degrees. Indicus3 requires 3f+1 replicas per shard to guarantee consistency, the minimum bound necessary for BFT SMR. Indicus5 uses a higher replication degree of 5f+1 replicas, but in return brings down both gracious execution latency and complexity during uncivil executions. We argue, that unlike past system settings where a single authority strives to maintain the fewest amount of replicas necessary for cost considerations, consortium systems with naturally higher replication degree are willing to pay the additional price for performance. Moreover, rather than trying to reach the threshold of replicas to tolerate some number of faults, these settings may start with a fixed number of replicas and consider the ratio of faults to be tolerable. When argueing from this perspective, the perceived difference between tolerating 1/3 and 1/5 of replica failures may be negligible.
 For the simplicity of exposition we outline Indicus5 in detail below. In section X we describe the differences in Indicus3.
@@ -51,22 +51,26 @@ $Committed \coloneqq (value, version)_{cert}$ such that $ (value, version) \in R
  $Prepared \coloneqq (value, version)$ such that $(value, version) \in R.PreparedSet$ and $version = max(q) : (key, val, q) \in R.PreparedSet \land Committed < v < TS \}$ .
 I.e. Committed is the largest committed write and Prepared is the largest uncommitted write that may be  committed and would make Committed outdated. \\
 
-1. Reading from 1 Replica: could abort
+1. Reading from 1 Replica: could abort because reading arbitrarily stale.
+Alternatively: Read from f+1 always to reduce proof/memory costs: Could not get matching and hence fail read. Still possible to abort by reading stale data 
 2. Reading f+1 matching Prepared that are larger than the commit --> choose that and add dependency
 Guaranteed to see 1 thats not intentionally stale. But still arbitrarily stale if unlucky.
-3. If read from 2f+1 then its effectively a read lock. Note, could still have missed a prepared write and have to abort because we required f+1 matching. Why f+1? so it comes from 1 honest: we dont need proofs, and we know it is in the system for recovery.
+3. If read from 3f+1/2f+1 then its effectively a read lock. 
+If 1 prepared read was enough then this would be sufficient to see the newest "potential" value. However that is not possible for liveness reasons.
+Note, could still have missed a prepared write and have to abort because we required f+1 matching. Why f+1? so it comes from 1 honest: we dont need proofs, and we know it is in the system for recovery.
 Still no guarantee that newest commit was seen, but some protection from other writes.
 
 
 (Note: the TS used here is not the final one, its just the tuple of time and clientId. (The triple later is just necessary to differentiate two TX by a client that were assigned the same Time
-Add Read set decision rule, put in correlation to RQS
+Add Read set decision rule, put in correlation to RQS: \fs{could only accept reads if f+1 matching always, then no proofs necessary, but then reads can fail}
 Add exceptions etc.
 )
 
 
-\item \textbf{Commit} A Client finalizes its execution, computes the final Timestamp and submits 
+\item \textbf{Commit} A Client finalizes its execution, computes the final Timestamp and submits for validation.
 
-\item \textbf{Abort}
+\item \textbf{Abort} A client terminates execution, broadcasts a read-release for all potentially acquired RTS and returns.
+\fs{A byz client may not release the RTS. To circumvent this, RTS are just leases. Moreover, at some point writes will overtake them}
 
 \end{enumerate}
  
@@ -90,11 +94,11 @@ Add exceptions etc.
 \EndIf
 
 \For{\textit{$\forall key,version \in \textit{TX.read-set}$}}
-        \If{$ version < \textit{Store[key].max-version} < TS$}  
-          \State  \Return ABORT, \textit{Store[key].certificate}
+        \If{$ \exists TX2 \in CommitLog: key \in \textit{TX2.write-set} \land version < \textit{TX2.TS} < TS$}  
+          \State  \Return ABORT, \textit{TX2, TX2.CommitCert}
         \EndIf
-         \If{$ TS > \textit{MIN(prepared-writes[key]} > version$}   
-          \State  \Return ABSTAIN
+         \If{$ \exists TX2 \in Prepared: key \in \textit{TX2.write-set} \land version < \textit{TX2.TS} < TS$}   
+          \State  \Return ABSTAIN, \textit{TX2}
         \EndIf
         
    %     \If{$ \textit{dep[key]} == null \land version \notin prepared-reads[key] \cup  CommitLog \cup AbortLog $}   
@@ -121,11 +125,11 @@ Add exceptions etc.
 \For{\textit{$\forall d \in dep$}}
         \If{$ d \in CommitLog $}
         	\If{$d.TS > TS$}
-        	\State Abort
+        	\State \Return ABORT, d.CommitCert
           	\EndIf
        
 		\Else 
-		\State Abort
+		\State \Return ABORT, d.AbortCert
 		\EndIf
 \EndFor
 

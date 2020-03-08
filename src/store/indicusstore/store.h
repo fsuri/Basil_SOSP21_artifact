@@ -41,6 +41,7 @@
 
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace indicusstore {
 
@@ -69,7 +70,7 @@ private:
 
     // TODO: comment this.
     std::unordered_map<uint64_t, std::pair<Timestamp, Transaction>> prepared;
-    
+
     void GetPreparedWrites(std::unordered_map< std::string, std::set<Timestamp> > &writes);
     void GetPreparedReads(std::unordered_map< std::string, std::set<Timestamp> > &reads);
     void Commit(const Timestamp &timestamp, const Transaction &txn);

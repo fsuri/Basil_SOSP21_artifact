@@ -1,0 +1,13 @@
+\section{Definition- notes}
+
+\paragraph{Goals:}
+
+- Define what liveness guarantees there should be in a byz system\\
+- Want to offer interactive ACID TX in a byz setting \\
+- be robust to byz contention\\
+
+
+\paragraph{Challenges}
+- Clients can intertwine their fate with byz participants. When can/should liveness be guaranteed and when should it not. Under which network assumptions?\\
+-  Unclear what correct behavior should be. Thus, we need to define what ACID (specifically Isolation) means in a byzantine context. byzantine Clients can execute arbitrary transactions, might not care for guarantees. Begs the question: Should one enforce "safety" for them too?\\
+- What does it mean to be robust to byz contention? To what extent is independence possible
