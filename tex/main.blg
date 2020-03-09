@@ -2,47 +2,47 @@ This is BibTeX, Version 0.99d (TeX Live 2017/Debian)
 Capacity: max_strings=100000, hash_size=100000, hash_prime=85009
 The top-level auxiliary file: main.aux
 The style file: plain.bst
-Database file #1: ref.bib
-Warning--I didn't find a database entry for ""
-You've used 1 entry,
+Database file #1: refs.bib
+Warning--I didn't find a database entry for "kotla2007zyzzyva"
+You've used 2 entries,
             2118 wiz_defined-function locations,
-            506 strings with 4206 characters,
-and the built_in function-call counts, 428 in all, are:
-= -- 39
-> -- 28
+            714 strings with 7907 characters,
+and the built_in function-call counts, 375 in all, are:
+= -- 32
+> -- 8
 < -- 0
-+ -- 11
-- -- 10
-* -- 39
-:= -- 80
-add.period$ -- 3
-call.type$ -- 1
++ -- 4
+- -- 2
+* -- 12
+:= -- 58
+add.period$ -- 4
+call.type$ -- 2
 change.case$ -- 8
 chr.to.int$ -- 0
-cite$ -- 1
-duplicate$ -- 11
-empty$ -- 26
-format.name$ -- 10
-if$ -- 80
+cite$ -- 2
+duplicate$ -- 14
+empty$ -- 46
+format.name$ -- 2
+if$ -- 84
 int.to.chr$ -- 0
-int.to.str$ -- 1
-missing$ -- 1
-newline$ -- 8
+int.to.str$ -- 2
+missing$ -- 0
+newline$ -- 11
 num.names$ -- 2
-pop$ -- 6
+pop$ -- 16
 preamble$ -- 1
-purify$ -- 7
+purify$ -- 6
 quote$ -- 0
-skip$ -- 7
+skip$ -- 17
 stack$ -- 0
-substring$ -- 24
-swap$ -- 1
+substring$ -- 10
+swap$ -- 2
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 4
+type$ -- 8
 warning$ -- 0
-while$ -- 4
-width$ -- 2
-write$ -- 13
+while$ -- 2
+width$ -- 3
+write$ -- 17
 (There was 1 warning)
