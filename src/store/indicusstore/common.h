@@ -20,7 +20,7 @@ void SignMessage(const ::google::protobuf::Message &msg,
     const crypto::PrivKey &privateKey, uint64_t processId,
     proto::SignedMessage &signedMessage);
 
-proto::TxnDecision IndicusDecide(const std::vector<proto::Phase1Reply> &replies,
+proto::CommitDecision IndicusDecide(const std::vector<proto::Phase1Reply> &replies,
     const transport::Configuration *config);
 
 } // namespace indicusstore

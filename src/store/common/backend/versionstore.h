@@ -50,6 +50,8 @@ class VersionedKVStore {
   bool getRange(const std::string &key, const T &t, std::pair<T, T> &range);
   bool getLastRead(const std::string &key, T &readTime);
   bool getLastRead(const std::string &key, const T &t, T &readTime);
+  bool getCommittedAfter(const std::string &key, const T &t,
+      std::vector<std::pair<T, V>> &values);
   void put(const std::string &key, const V &v, const T &t);
   void commitGet(const std::string &key, const T &readTime, const T &commit);
 
@@ -215,5 +217,22 @@ bool VersionedKVStore<T, V>::getLastRead(const std::string &key, const T &t,
   }
   return false;	
 }
+
+template<class T, class V>
+bool VersionedKVStore<T, V>::getCommittedAfter(const std::string &key,
+    const T &t, std::vector<std::pair<T, V>> &values) {
+  VersionedKVStore<T, V>::VersionedValue v(t);
+  const auto itr = store.find(key);
+  if (itr != store.end()) {
+    auto setItr = itr->second.upper_bound(v);
+    while (setItr != itr->second.end()) {
+      values.push_back(std::make_pair(setItr->write, setItr->value));
+      setItr++;
+    }
+    return true;
+  }
+  return false;
+}
+
 
 #endif  /* _VERSIONED_KV_STORE_H_ */

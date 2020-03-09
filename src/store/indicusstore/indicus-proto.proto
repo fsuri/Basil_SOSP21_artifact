@@ -4,6 +4,11 @@ import "store/common/common-proto.proto";
 
 package indicusstore.proto;
 
+enum CommitDecision {
+  COMMIT = 0;
+  ABORT = 1;
+}
+
 message SignedMessage {
   required string msg = 1;
   required string type = 2;
@@ -60,11 +65,12 @@ message SignedReadReply {
 
 // Phase 1
 message Transaction {
-  repeated ReadMessage readset = 1;
-  repeated WriteMessage writeset = 2;
-  optional TimestampMessage timestamp = 3;
+  required uint64 id = 1;
+  repeated ReadMessage readset = 2;
+  repeated WriteMessage writeset = 3;
+  optional TimestampMessage timestamp = 4;
   // set of txn ids
-  //optional Map<uint64,bool> deps = 4;
+  repeated Transaction deps = 5;
 }
 
 message Phase1 {
@@ -79,16 +85,16 @@ message SignedTransaction {
 }
 
 message Phase1Reply {
-  required int32 status = 1;
-  enum ConcurrencyCheckResult {
-      COMMIT = 0;
-      ABORT = 1;
-      ABSTAIN = 2;
-      RETRY = 3;
+  enum ConcurrencyControlResult {
+    COMMIT = 0;
+    ABORT = 1;
+    ABSTAIN = 2;
+    WAIT = 3;
+    RETRY = 4;
   }
-  required ConcurrencyCheckResult ccr = 2;
-  optional Transaction txn = 3;
-  optional TimestampMessage timestamp = 4;
+  required ConcurrencyControlResult ccr = 1;
+  optional Transaction txn = 2;
+  optional TimestampMessage timestamp = 3;
 }
 
 message Prepare1Replies {
@@ -101,18 +107,13 @@ message SignedPhase1Reply {
   required bytes signature = 3;
 }
 
-enum TxnDecision {
-  COMMIT = 0;
-  ABORT = 1;
-}
-
 message Phase2 {
-  required TxnDecision decision = 1;
-  required uint64 txn_id = 2;
+  required uint64 txn_id = 1;
   oneof p1_replies_oneof {
-    Prepare1Replies p1_replies = 3;
-    SignedMessages signed_p1_replies = 4;
+    Prepare1Replies p1_replies = 2;
+    SignedMessages signed_p1_replies = 3;
   }
+  optional CommitDecision decision = 4;
 }
 
 message SignedPhase2 {
@@ -122,7 +123,7 @@ message SignedPhase2 {
 }
 
 message Phase2Reply {
-  required TxnDecision decision = 1;
+  required CommitDecision decision = 1;
   required bytes txdigest = 2;
 }
 

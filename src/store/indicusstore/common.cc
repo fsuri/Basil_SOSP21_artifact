@@ -30,15 +30,15 @@ proto::TxnDecision IndicusDecide(const std::vector<proto::Phase1Reply> &replies,
   // If a majority say prepare_ok,
   int ok_count = 0;
   Timestamp ts = 0;
-  proto::TxnDecision decision;
+  proto::CommitDecision decision;
   proto::Phase1Reply final_reply;
 
   for (const auto& reply : replies) {
-    if (reply.status() == REPLY_OK) {
+    if (reply.ccr() == proto::ConcurrencyControlResult::COMMIT) {
       ok_count++;
-    } else if (reply.status() == REPLY_FAIL) {
-      return proto::TxnDecision::ABORT;
-    } else if (reply.status() == REPLY_RETRY) {
+    } else if (reply.ccr() == proto::ConcurrencyControlResult::ABORT) {
+      return proto::CommitDecision::ABORT;
+    } else if (reply.ccr() == proto::ConcurrencyControlResult::RETRY) {
       Timestamp t(reply.timestamp());
       if (t > ts) {
         ts = t;
@@ -47,9 +47,9 @@ proto::TxnDecision IndicusDecide(const std::vector<proto::Phase1Reply> &replies,
   }
 
   if (ok_count >= config->QuorumSize()) {
-    decision = proto::TxnDecision::COMMIT;
+    decision = proto::CommitDecision::COMMIT;
   } else {
-    decision = proto::TxnDecision::ABORT;
+    decision = proto::CommitDecision::ABORT;
   }
   return decision;
 }
