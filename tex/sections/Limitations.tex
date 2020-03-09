@@ -8,3 +8,5 @@ Similarly, as is the case in any transaction protocol, Indicus is vulnerable to 
 
 
 \fs{technical limitations: We require more replicas to avoid certificate signature overheads. Since in 3f+1 one decision needs to be enough to recover. byzantine replicas/clients have more power to vote arbitrarily, because they cannot be held accountable for it. In total order protocols (SMR), deviation from the "common" vote signals misbehavior, whereas for us that is not the case. --> this should go as a challenge somewhere.}
+
+\fs{Clients are more heavyweight. Not suitable for settings where clients just have minimal processing capacity. Also, Clients need to be registered in system with a sig - necessary to enforce access control in any system however}

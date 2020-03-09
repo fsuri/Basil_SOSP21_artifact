@@ -1,0 +1,43 @@
+\BOOKMARK [1][-]{section.1}{Introduction}{}% 1
+\BOOKMARK [1][-]{section.2}{Intro-Notes}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{Header}{section.2}% 3
+\BOOKMARK [2][-]{subsection.2.2}{Context}{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.3}{Existing systems shortcomings}{section.2}% 5
+\BOOKMARK [2][-]{subsection.2.4}{Key insights}{section.2}% 6
+\BOOKMARK [2][-]{subsection.2.5}{Positive Implications of Insight/Design}{section.2}% 7
+\BOOKMARK [2][-]{subsection.2.6}{Results discussion}{section.2}% 8
+\BOOKMARK [2][-]{subsection.2.7}{Limitations}{section.2}% 9
+\BOOKMARK [2][-]{subsection.2.8}{Contribution summary}{section.2}% 10
+\BOOKMARK [1][-]{section.3}{Indicus}{}% 11
+\BOOKMARK [1][-]{section.4}{Arch-Notes}{}% 12
+\BOOKMARK [2][-]{subsection.4.1}{Architecture}{section.4}% 13
+\BOOKMARK [1][-]{section.5}{Definition- notes}{}% 14
+\BOOKMARK [2][-]{subsection.5.1}{Model and Definitions}{section.5}% 15
+\BOOKMARK [3][-]{subsubsection.5.1.1}{System Model}{subsection.5.1}% 16
+\BOOKMARK [3][-]{subsubsection.5.1.2}{System properties}{subsection.5.1}% 17
+\BOOKMARK [1][-]{section.6}{Protocol-Notes}{}% 18
+\BOOKMARK [2][-]{subsection.6.1}{TX execution}{section.6}% 19
+\BOOKMARK [2][-]{subsection.6.2}{Concurrency control}{section.6}% 20
+\BOOKMARK [2][-]{subsection.6.3}{Validation}{section.6}% 21
+\BOOKMARK [2][-]{subsection.6.4}{Writeback}{section.6}% 22
+\BOOKMARK [2][-]{subsection.6.5}{Optimizations}{section.6}% 23
+\BOOKMARK [2][-]{subsection.6.6}{Failures}{section.6}% 24
+\BOOKMARK [2][-]{subsection.6.7}{Garbage Collection}{section.6}% 25
+\BOOKMARK [2][-]{subsection.6.8}{Discussion: }{section.6}% 26
+\BOOKMARK [2][-]{subsection.6.9}{Indicus3}{section.6}% 27
+\BOOKMARK [1][-]{section.7}{Protocol}{}% 28
+\BOOKMARK [2][-]{subsection.7.1}{TEsting}{section.7}% 29
+\BOOKMARK [2][-]{subsection.7.2}{Execution}{section.7}% 30
+\BOOKMARK [2][-]{subsection.7.3}{Validation}{section.7}% 31
+\BOOKMARK [2][-]{subsection.7.4}{Concurrency Control}{section.7}% 32
+\BOOKMARK [2][-]{subsection.7.5}{Consistent logging.}{section.7}% 33
+\BOOKMARK [2][-]{subsection.7.6}{Writeback and Multi-shard 2pc}{section.7}% 34
+\BOOKMARK [2][-]{subsection.7.7}{Failures}{section.7}% 35
+\BOOKMARK [2][-]{subsection.7.8}{Optimizations}{section.7}% 36
+\BOOKMARK [2][-]{subsection.7.9}{Garbage Collection}{section.7}% 37
+\BOOKMARK [2][-]{subsection.7.10}{Indicus3}{section.7}% 38
+\BOOKMARK [1][-]{section.8}{Implementation and Evaluation}{}% 39
+\BOOKMARK [2][-]{subsection.8.1}{Experiments}{section.8}% 40
+\BOOKMARK [1][-]{section.9}{Limitations}{}% 41
+\BOOKMARK [1][-]{section.10}{Related Work/Comparison}{}% 42
+\BOOKMARK [1][-]{section.11}{Conclusion}{}% 43
