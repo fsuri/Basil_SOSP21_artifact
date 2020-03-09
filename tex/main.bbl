@@ -4,8 +4,9 @@
 Apple.
 \newblock Apple supplier list, 2019.
 
-\bibitem{}
-At {LAX}, computer glitch delays 20,000 passengers.
-\newblock http://travel.latimes.com/articles/la-trw-lax12aug12.
+\bibitem{2002}
+TPCW consortium.
+\newblock Tpc benchmark-w specification v. 1.8.
+\newblock \url{http://www.tpc.org/tpcw/spec/tpcw_v1.8.pdf}, 2002.
 
 \end{thebibliography}

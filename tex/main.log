@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  9 MAR 2020 16:10
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2018.10.22)  9 MAR 2020 17:27
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1562,30 +1562,7 @@ Underfull \hbox (badness 10000) in paragraph at lines 48--49
 
 LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <10> not available
 (Font)              Font shape `T1/ptm/b/n' tried instead on input line 54.
-[3]) (./sections/Indicus/Preamble.tex)
-(./sections/Indicus/Architecture/Architecture-Notes.tex
-Underfull \hbox (badness 10000) in paragraph at lines 5--13
-
- []
-
-) (./sections/Indicus/Architecture/Architecture.tex
-Underfull \hbox (badness 4954) in paragraph at lines 15--2
-\T1/ptm/m/n/10 (+20) con-flict checks. Con-cretely, main-tain-ing se-ri-al-iz-a
-bil-ity
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 15--2
-
- []
-
-[4]
-<./figures/LC.png, id=215, 1749.53625pt x 432.61626pt>
-File: ./figures/LC.png Graphic file (type png)
-<use ./figures/LC.png>
-Package pdftex.def Info: ./figures/LC.png  used on input line 11.
-(pdftex.def)             Requested size: 505.89pt x 125.09244pt.
-) (./sections/Indicus/Definitions/Definitions-Notes.tex
+[3]) (./sections/Indicus/Definitions/Definitions-Notes.tex
 Underfull \hbox (badness 10000) in paragraph at lines 5--8
 
  []
@@ -1597,35 +1574,130 @@ LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <7.4> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 9.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <6> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 9.
-)
-(./sections/Indicus/Definitions/Properties.tex
+
+Underfull \hbox (badness 1062) in paragraph at lines 6--10
+\T1/ptm/m/n/10 (+20) spread uni-formly across shards (ran-domly or based on
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 6--10
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 11--13
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 14--15
+
+ []
+
+[4]) (./sections/Indicus/Definitions/Properties.tex
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <8> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 3.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <5> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 3.
+
+Underfull \hbox (badness 10000) in paragraph at lines 2--4
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 5--6
+
+ []
+
 
 Underfull \hbox (badness 1527) in paragraph at lines 7--8
 []\T1/ptm/b/n/10 History H. \T1/ptm/m/n/10 (+20) In-for-mally, a \T1/ptm/m/it/1
 0 (+20) H \T1/ptm/m/n/10 (+20) con-tains the op-er-a-tions
  []
 
-[5]) (./sections/Indicus/Protocol/Protocol-Notes.tex
+
+Underfull \hbox (badness 10000) in paragraph at lines 7--8
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 9--10
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 11--12
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 13--15
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 16--17
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 18--20
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 21--23
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 24--25
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 26--28
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 29--34
+
+ []
+
+) (./sections/Indicus/Preamble.tex)
+(./sections/Indicus/Architecture/Architecture-Notes.tex
+Underfull \hbox (badness 10000) in paragraph at lines 5--13
+
+ []
+
+[5]) (./sections/Indicus/Architecture/Architecture.tex
+Underfull \hbox (badness 4954) in paragraph at lines 15--2
+\T1/ptm/m/n/10 (+20) con-flict checks. Con-cretely, main-tain-ing se-ri-al-iz-a
+bil-ity
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 15--2
+
+ []
+
+<./figures/LC.png, id=220, 1749.53625pt x 432.61626pt>
+File: ./figures/LC.png Graphic file (type png)
+<use ./figures/LC.png>
+Package pdftex.def Info: ./figures/LC.png  used on input line 11.
+(pdftex.def)             Requested size: 505.89pt x 125.09244pt.
+) (./sections/Indicus/Protocol/Protocol-Notes.tex
 Underfull \hbox (badness 10000) in paragraph at lines 23--26
 
  []
 
-[6pdfTeX warning (ext4): destination with the same identifier (name{figure.1}) 
-has been already used, duplicate ignored
 
-\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
-                                                  \fi \fi 
-l.26 
-      <./figures/LC.png>]
 Underfull \hbox (badness 10000) in paragraph at lines 28--31
 
  []
 
-
+[6]
 Underfull \hbox (badness 10000) in paragraph at lines 43--45
 
  []
@@ -1660,7 +1732,16 @@ Underfull \hbox (badness 10000) in paragraph at lines 69--71
 
  []
 
-[7]
+
+Underfull \vbox (badness 1728) has occurred while \output is active []
+
+ [7pdfTeX warning (ext4): destination with the same identifier (name{figure.1})
+ has been already used, duplicate ignored
+
+\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
+                                                  \fi \fi 
+l.71 
+      <./figures/LC.png>]
 Underfull \hbox (badness 10000) in paragraph at lines 89--95
 
  []
@@ -1705,12 +1786,12 @@ Underfull \hbox (badness 10000) in paragraph at lines 136--140
 
  []
 
-
+[8]
 Underfull \hbox (badness 10000) in paragraph at lines 152--155
 
  []
 
-[8]
+
 Underfull \hbox (badness 10000) in paragraph at lines 157--161
 
  []
@@ -1740,7 +1821,7 @@ Underfull \hbox (badness 10000) in paragraph at lines 191--193
 
  []
 
-
+[9]
 Underfull \hbox (badness 10000) in paragraph at lines 203--208
 
  []
@@ -1750,12 +1831,16 @@ Underfull \hbox (badness 10000) in paragraph at lines 210--214
 
  []
 
-[9]
+
 Underfull \hbox (badness 10000) in paragraph at lines 227--229
 
  []
 
-) (./sections/Indicus/Protocol/Protocol.tex
+
+Underfull \vbox (badness 1087) has occurred while \output is active []
+
+)
+(./sections/Indicus/Protocol/Protocol.tex
 Package mdframed Info: mdframed inside float 
  mdframed uses option nobreak mdframed on input line 31.
 Package mdframed Info: mdframed inside a box 
@@ -1782,13 +1867,7 @@ Underfull \hbox (badness 10000) in paragraph at lines 47--48
 
  []
 
-[10pdfTeX warning (ext4): destination with the same identifier (name{figure.2})
- has been already used, duplicate ignored
-
-\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
-                                                  \fi \fi 
-l.48 
-     ]
+[10]
 Underfull \hbox (badness 1052) in paragraph at lines 49--53
 []\T1/ptm/m/n/10 (+20) A replica re-turns a pair $\OMS/pzccm/m/n/10 h[]i[]$\T1/
 ptm/m/n/10 (+20) ,
@@ -1847,54 +1926,48 @@ Underfull \hbox (badness 10000) in paragraph at lines 100--101
 cm/m/it/10 key \OMS/pzccm/m/n/10 2 [] ^
  []
 
-<./figures/AB.png, id=256, 779.91376pt x 482.80376pt>
+<./figures/AB.png, id=251, 779.91376pt x 482.80376pt>
 File: ./figures/AB.png Graphic file (type png)
 <use ./figures/AB.png>
 Package pdftex.def Info: ./figures/AB.png  used on input line 156.
 (pdftex.def)             Requested size: 202.3529pt x 125.2608pt.
-[11]
-<./figures/5f+1.png, id=264, 792.9625pt x 745.78625pt>
+<./figures/5f+1.png, id=252, 792.9625pt x 745.78625pt>
 File: ./figures/5f+1.png Graphic file (type png)
 <use ./figures/5f+1.png>
 Package pdftex.def Info: ./figures/5f+1.png  used on input line 165.
 (pdftex.def)             Requested size: 202.3529pt x 190.31522pt.
-<./figures/SingleShard.png, id=265, 1224.575pt x 307.1475pt>
+[11pdfTeX warning (ext4): destination with the same identifier (name{figure.2})
+ has been already used, duplicate ignored
+
+\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
+                                                  \fi \fi 
+l.185 
+      ]
+<./figures/SingleShard.png, id=260, 1224.575pt x 307.1475pt>
 File: ./figures/SingleShard.png Graphic file (type png)
 <use ./figures/SingleShard.png>
 Package pdftex.def Info: ./figures/SingleShard.png  used on input line 193.
 (pdftex.def)             Requested size: 505.89pt x 126.88736pt.
-
-Underfull \vbox (badness 1694) has occurred while \output is active []
-
-<./figures/3f+1.png, id=266, 1086.0575pt x 554.07pt>
+<./figures/3f+1.png, id=261, 1086.0575pt x 554.07pt>
 File: ./figures/3f+1.png Graphic file (type png)
 <use ./figures/3f+1.png>
 Package pdftex.def Info: ./figures/3f+1.png  used on input line 221.
 (pdftex.def)             Requested size: 202.3529pt x 103.22842pt.
-)
-(./sections/Implementation.tex) (./sections/Limitations.tex [12pdfTeX warning (
-ext4): destination with the same identifier (name{figure.3}) has been already u
-sed, duplicate ignored
+) (./sections/Implementation.tex) [12pdfTeX warning (ext4): destination with th
+e same identifier (name{figure.3}) has been already used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.7 S
-     imilarly, as is the case in any transaction protocol, Indicus is vulner...
-pdfTeX warning (ext4): destination with the same identifier (name{figure.4}) ha
-s been already used, duplicate ignored
+l.96 
+     pdfTeX warning (ext4): destination with the same identifier (name{figure.4
+}) has been already used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.7 S
-     imilarly, as is the case in any transaction protocol, Indicus is vulner...
- <./figures/AB.png> <./figures/5f+1.png>]) (./sections/RelatedWork.tex
-Underfull \vbox (badness 2181) has occurred while \output is active []
-
-
-Underfull \vbox (badness 1845) has occurred while \output is active []
-
- [13pdfTeX warning (ext4): destination with the same identifier (name{figure.5}
-) has been already used, duplicate ignored
+l.96 
+      <./figures/AB.png> <./figures/5f+1.png>] (./sections/Limitations.tex)
+(./sections/RelatedWork.tex [13pdfTeX warning (ext4): destination with the same
+ identifier (name{figure.5}) has been already used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
@@ -1906,35 +1979,37 @@ l.12
                                                   \fi \fi 
 l.12 
       <./figures/SingleShard.png> <./figures/3f+1.png>]
+Underfull \vbox (badness 10000) has occurred while \output is active []
+
+
 
 LaTeX Warning: Citation `kotla2007zyzzyva' on page 14 undefined on input line 1
 3.
 
-) (./sections/Conclusion.tex)
-Underfull \vbox (badness 10000) has occurred while \output is active []
+) (./sections/Conclusion.tex) (./main.bbl
+Underfull \vbox (badness 1521) has occurred while \output is active []
 
-
-(./main.bbl)
-- LAST -
-Extra skip:16.2002pt
-Left:454.0pt/2.16492pt
-Right:437.7998pt/2.16492pt
-Output:454.8999pt
  [14]
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 126.
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 126.
+Package microtype Info: Loading generic protrusion settings for font family
+(microtype)             `pcr' (encoding: T1).
+(microtype)             For optimal results, create family-specific settings.
+(microtype)             See the microtype manual for details.
+)
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 127.
+- LAST -
+Extra skip:31.05994pt
+Left:52.34998pt/2.16492pt
+Right:22.0pt/1.45496pt
+Output:51.17499pt
+
+[15]
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 127.
  (./main.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 126.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 126.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 127.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 127.
+Package rerunfilecheck Info: File `main.out' has not changed.
+(rerunfilecheck)             Checksum: C6C6A60A9FFFF0027A1AC95C40F91D95;2639.
 
-
-Package rerunfilecheck Warning: File `main.out' has changed.
-(rerunfilecheck)                Rerun to get outlines right
-(rerunfilecheck)                or use package `bookmark'.
-
-Package rerunfilecheck Info: Checksums for `main.out':
-(rerunfilecheck)             Before: 7BD2920954B02E06D184A038D0C3D99A;2686
-(rerunfilecheck)             After:  B5546D0A5632EC40902BC707347C9332;2626.
 
 LaTeX Warning: There were undefined references.
 
@@ -1943,27 +2018,25 @@ LaTeX Warning: There were multiply-defined labels.
 
  ) 
 Here is how much of TeX's memory you used:
- 29374 strings out of 492982
- 557128 string characters out of 6134895
- 651940 words of memory out of 5000000
- 32206 multiletter control sequences out of 15000+600000
- 599798 words of font info for 219 fonts, out of 8000000 for 9000
+ 29377 strings out of 492982
+ 557184 string characters out of 6134895
+ 651944 words of memory out of 5000000
+ 32209 multiletter control sequences out of 15000+600000
+ 600184 words of font info for 219 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 62i,10n,56p,10414b,464s stack positions out of 5000i,500n,10000p,200000b,80000s
-pdfTeX warning (dest): name{subsection.2.9} has been referenced but does not 
-exist, replaced by a fixed one
-
-{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texlive/
-texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-
-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fo
-nts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/ty
-pe1/urw/symbol/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/ut
-mb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/
-share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (14 pages, 520291 bytes).
+ 55i,10n,54p,10414b,460s stack positions out of 5000i,500n,10000p,200000b,80000s
+{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texliv
+e/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texm
+f-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/
+fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/
+type1/urw/courier/ucrr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/sym
+bol/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></
+usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texli
+ve/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
+Output written on main.pdf (15 pages, 530222 bytes).
 PDF statistics:
- 339 PDF objects out of 1000 (max. 8388607)
- 302 compressed objects within 4 object streams
+ 345 PDF objects out of 1000 (max. 8388607)
+ 306 compressed objects within 4 object streams
  85 named destinations out of 1000 (max. 500000)
- 43398 words of extra memory for PDF output out of 51595 (max. 10000000)
+ 43902 words of extra memory for PDF output out of 51595 (max. 10000000)
 
