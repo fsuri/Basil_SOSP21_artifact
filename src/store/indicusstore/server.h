@@ -105,6 +105,8 @@ class Server : public TransportReceiver, public ::Server {
 
   VersionedKVStore<Timestamp, Value> store;
   std::unordered_map<uint64_t, std::pair<Timestamp, proto::Transaction>> prepared;
+  std::unordered_map<uint64_t, int32_t> p1Decisions;
+  std::unordered_map<uint64_t, int32_t> p2Decisions;
 
   Stats stats;
   std::unordered_set<uint64_t> active;

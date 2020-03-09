@@ -134,6 +134,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
   proto::Phase1Reply reply;
   reply.set_status(status);
+  p1Decisions[msg.txn_id()] = status;
 
   if (validateProofs) {
     *reply.mutable_txn() = msg.txn();
@@ -181,6 +182,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   proto::Phase2Reply reply;
   reply.set_decision(decision); 
+  p2Decisions[msg.txn_id()] = decision;
 
   if (signedMessages) {
     proto::SignedMessage signedMessage;
