@@ -59,7 +59,7 @@ public:
 
 private:
     // Data store.
-    VersionedKVStore store;
+    VersionedKVStore<Timestamp, std::string> store;
 
     std::map<uint64_t, Transaction> prepared;
 

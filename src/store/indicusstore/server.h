@@ -37,11 +37,13 @@
 #include "store/server.h"
 #include "store/common/timestamp.h"
 #include "store/common/truetime.h"
+#include "store/indicusstore/common.h"
 #include "store/indicusstore/store.h"
 #include "store/indicusstore/indicus-proto.pb.h"
 
-#include <unordered_map>
 #include <set>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace indicusstore {
 
@@ -53,7 +55,7 @@ enum OCCType {
 class Server : public TransportReceiver, public ::Server {
  public:
   Server(const transport::Configuration &config, int groupIdx, int idx,
-      Transport *transport);
+      Transport *transport, TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
@@ -69,36 +71,58 @@ class Server : public TransportReceiver, public ::Server {
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
       const proto::Phase1 &msg);
-  void HandleWriteback(const TransportAddress &remote,
-      const proto::Writeback &msg);
   void HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg);
+  void HandleWriteback(const TransportAddress &remote,
+      const proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
-  int32_t DoOCCCheck(uint64_t id, const proto::Transaction &txn,
+  proto::Phase1Reply::ConcurrencyControlResult DoOCCCheck(uint64_t id, const proto::Transaction &txn,
       const Timestamp &proposedTs, Timestamp &retryTs);
-  int32_t DoTAPIROCCCheck(uint64_t id, const proto::Transaction &txn,
+  proto::Phase1Reply::ConcurrencyControlResult DoTAPIROCCCheck(uint64_t id, const proto::Transaction &txn,
       const Timestamp &proposedTs, Timestamp &retryTs);
-  int32_t DoMVTSOOCCCheck(uint64_t id, const proto::Transaction &txn,
+  proto::Phase1Reply::ConcurrencyControlResult DoMVTSOOCCCheck(uint64_t id, const proto::Transaction &txn,
       const Timestamp &ts);
-  void GetPreparedWrites(
+
+  void GetPreparedWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
-  void GetPreparedReads(
+  void GetPreparedWrites(
+      std::unordered_map<std::string, std::vector<proto::Transaction>> &writes);
+  void GetPreparedReadTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &reads);
+  void GetPreparedReads(
+      std::unordered_map<std::string, std::vector<proto::Transaction>> &reads);
+  void GetCommittedWrites(const std::string &key, const Timestamp &ts,
+      std::set<Timestamp> &writes);
+  void GetCommittedReads(const std::string &key, const Timestamp &ts,
+      std::set<Timestamp> &reads);
+  void Commit(uint64_t txnId, const proto::Transaction &txn,
+      const Timestamp &timestamp);
 
   const transport::Configuration &config;
-  int groupIdx;
-  int idx;
-  int id;
+  const int groupIdx;
+  const int idx;
+  const int id;
   Transport *transport;
-  OCCType occType;
-  bool signedMessages;
-  bool validateProofs;
+  const OCCType occType;
+  const bool signedMessages;
+  const bool validateProofs;
   bft_tapir::NodeConfig *cryptoConfig;
+  const uint64_t timeDelta;
+  TrueTime timeServer;
   crypto::PrivKey privateKey;
 
-  VersionedKVStore store;
+  struct Value {
+    std::string val;
+  };
+
+  VersionedKVStore<Timestamp, Value> store;
+  std::unordered_map<std::string, std::map<uint64_t, std::set<Timestamp>>> rts;
   std::unordered_map<uint64_t, std::pair<Timestamp, proto::Transaction>> prepared;
+  std::unordered_map<uint64_t, proto::Phase1Reply::ConcurrencyControlResult> p1Decisions;
+  std::unordered_map<uint64_t, proto::CommitDecision> p2Decisions;
+  std::unordered_set<uint64_t> committed;
+  std::unordered_set<uint64_t> aborted;
 
   Stats stats;
   std::unordered_set<uint64_t> active;
