@@ -46,6 +46,8 @@ Client execution conducts as follows:\\
 \item \textbf{Write(key, value)}. A Client executes a request Write(key, value) by locally buffering (key, value) and returning. Concretely: $WriteSet = WriteSet \cup (key, value)$
 \item \textbf{Read(key, TS, RQS)} Given hyperparameter Read Quorum Size (RQS), a Client performs a read on given key at timestamp TS by reading from RQS different replicas. \\
 
+\fs{Replicas ignore requests if the Timestamp is too high}
+
 A replica returns a pair $\langle \textit{(Committed, Prepared)} \rangle _{\sigma_r}$, where \\
 $Committed \coloneqq (value, version)_{cert}$ such that $ (value, version) \in R.CommitLog$, $version = max(q) : (key, val, q) \in R.CommitLog \land v < TS \}$ and $cert$ is a certificate proving (value, version) was allowed to commit (see Section Writeback) and\\
  $Prepared \coloneqq (value, version)$ such that $(value, version) \in R.PreparedSet$ and $version = max(q) : (key, val, q) \in R.PreparedSet \land Committed < v < TS \}$ .
@@ -59,6 +61,7 @@ Guaranteed to see 1 thats not intentionally stale. But still arbitrarily stale i
 If 1 prepared read was enough then this would be sufficient to see the newest "potential" value. However that is not possible for liveness reasons.
 Note, could still have missed a prepared write and have to abort because we required f+1 matching. Why f+1? so it comes from 1 honest: we dont need proofs, and we know it is in the system for recovery.
 Still no guarantee that newest commit was seen, but some protection from other writes.
+
 
 
 (Note: the TS used here is not the final one, its just the tuple of time and clientId. (The triple later is just necessary to differentiate two TX by a client that were assigned the same Time
