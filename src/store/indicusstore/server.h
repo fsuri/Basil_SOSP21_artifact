@@ -84,8 +84,10 @@ class Server : public TransportReceiver, public ::Server {
   proto::Phase1Reply::ConcurrencyControlResult DoMVTSOOCCCheck(uint64_t id, const proto::Transaction &txn,
       const Timestamp &ts);
 
-  void GetPreparedWrites(
+  void GetPreparedWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
+  void GetPreparedWrites(
+      std::unordered_map<std::string, std::vector<proto::Transaction>> &writes);
   void GetPreparedReadTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &reads);
   void GetPreparedReads(
@@ -115,6 +117,7 @@ class Server : public TransportReceiver, public ::Server {
   };
 
   VersionedKVStore<Timestamp, Value> store;
+  std::unordered_map<std::string, std::map<uint64_t, std::set<Timestamp>>> rts;
   std::unordered_map<uint64_t, std::pair<Timestamp, proto::Transaction>> prepared;
   std::unordered_map<uint64_t, proto::Phase1Reply::ConcurrencyControlResult> p1Decisions;
   std::unordered_map<uint64_t, proto::CommitDecision> p2Decisions;

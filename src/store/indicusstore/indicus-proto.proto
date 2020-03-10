@@ -22,9 +22,10 @@ message SignedMessages {
 
 message Read {
   required uint64 req_id = 1;
-  required string key = 2;
+  required uint64 txn_id = 2;
+  required string key = 3;
   // timestamps are (time, client_id, txn_id)
-  required TimestampMessage timestamp = 3;
+  required TimestampMessage timestamp = 4;
 }
 
 message SignedRead {
@@ -54,7 +55,10 @@ message ReadReply {
   optional TimestampMessage committed_timestamp = 5;
   optional WriteProof committed_proof = 6;
   // most recently prepared
-  optional SignedMessage signed_prepared = 7;
+  oneof prepared_oneof {
+    PreparedWrite prepared = 7;
+    SignedMessage signed_prepared = 8;
+  }
 }
 
 message SignedReadReply {

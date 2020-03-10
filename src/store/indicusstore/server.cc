@@ -115,6 +115,51 @@ void Server::HandleRead(const TransportAddress &remote,
     reply.set_status(proto::Phase1Reply::ABORT);
   }
 
+  if (occType == MVTSO) {
+    Timestamp localTs(timeServer.GetTime());
+    // add delta to current local time
+    localTs.setTimestamp(localTs.getTimestamp() + timeDelta);
+    if (Timestamp(msg.timestamp()) <= localTs) {
+      rts[msg.key()][msg.txn_id()].insert(msg.timestamp());
+    }
+
+    std::unordered_map<std::string, std::vector<proto::Transaction>> writes;
+    GetPreparedWrites(writes);
+    auto itr = writes.find(msg.key());
+    if (itr != writes.end()) {
+      // there is a prepared write for the key being read
+      proto::PreparedWrite preparedWrite;
+      proto::Transaction mostRecent;
+      for (const auto &t : itr->second) {
+        if (Timestamp(t.timestamp()) > Timestamp(mostRecent.timestamp())) {
+          mostRecent = t;
+        }
+      }
+
+      std::string preparedValue;
+      for (const auto &w : mostRecent.writeset()) {
+        if (w.key() == msg.key()) {
+          preparedValue = w.value();
+          break;
+        }
+      }
+
+      preparedWrite.set_prepared_value(preparedValue);
+      *preparedWrite.mutable_prepared_timestamp() = mostRecent.timestamp();
+
+      if (signedMessages) {
+        proto::SignedMessage signedMessage;
+        signedMessage.set_msg(preparedWrite.SerializeAsString());
+        signedMessage.set_type(preparedWrite.GetTypeName());
+        signedMessage.set_process_id(id);
+        SignMessage(preparedWrite, privateKey, id, signedMessage);
+        *reply.mutable_signed_prepared() = signedMessage;
+      } else {
+        *reply.mutable_prepared() = preparedWrite;
+      }
+    }
+  }
+
   if (signedMessages) {
     proto::SignedMessage signedMessage;
     signedMessage.set_msg(reply.SerializeAsString());
@@ -242,7 +287,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(uint64_t id
 
   // do OCC checks
   std::unordered_map<string, std::set<Timestamp>> pWrites;
-  GetPreparedWrites(pWrites);
+  GetPreparedWriteTimestamps(pWrites);
   std::unordered_map<string, std::set<Timestamp>> pReads;
   GetPreparedReadTimestamps(pReads);
 
@@ -364,7 +409,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
   }
 
   std::unordered_map<std::string, std::set<Timestamp>> preparedWrites;
-  GetPreparedWrites(preparedWrites);
+  GetPreparedWriteTimestamps(preparedWrites);
   for (const auto &read : txn.readset()) {
     std::set<Timestamp> committedWrites;
     GetCommittedWrites(read.key(), read.readtime(), committedWrites);
@@ -392,7 +437,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     std::set<Timestamp> committedReads;
     for (const auto &committedTs : committedReads) {
       if (ts < committedTs) {
-        return proto::Phase1Reply::RETRY;
+        return proto::Phase1Reply::ABORT;
       }
     }
 
@@ -416,15 +461,23 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
         }
         if (!isDep && isReadVersionEarlier &&
             ts < Timestamp(preparedReadTxn.timestamp())) {
-          return proto::Phase1Reply::RETRY;
+          return proto::Phase1Reply::ABSTAIN;
         }
       }
     }
 
-    if (/*the rts is in the set of rts for this key such that rts > ts and tx
-          is not in the deps of rts*/) {
-      return proto::Phase1Reply::RETRY;
+    auto rtsItr = rts.find(write.key());
+    if (rtsItr != rts.end()) {
+      auto rtsTxnItr = rtsItr->second.find(txn.id());
+      if (rtsTxnItr != rtsItr->second.end()) {
+        for (const auto &readTs : rtsTxnItr->second) {
+          if (readTs > ts) {
+            return proto::Phase1Reply::ABSTAIN;
+          }
+        }
+      }
     }
+    // TODO: add additional rts dep check to shrink abort window
   }
 
   prepared[id] = std::make_pair(ts, txn);
@@ -453,7 +506,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
   }
 }
 
-void Server::GetPreparedWrites(
+void Server::GetPreparedWriteTimestamps(
     std::unordered_map<std::string, std::set<Timestamp>> &writes) {
   // gather up the set of all writes that are currently prepared
   for (const auto &t : prepared) {
@@ -462,6 +515,17 @@ void Server::GetPreparedWrites(
     }
   }
 }
+
+void Server::GetPreparedWrites(
+      std::unordered_map<std::string, std::vector<proto::Transaction>> &writes) {
+  for (const auto &t : prepared) {
+    for (const auto &write : t.second.second.writeset()) {
+      writes[write.key()].push_back(t.second.second);
+    }
+  }
+}
+
+
 
 void Server::GetPreparedReadTimestamps(
     std::unordered_map<std::string, std::set<Timestamp>> &reads) {

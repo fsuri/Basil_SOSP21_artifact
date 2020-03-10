@@ -25,7 +25,7 @@ void SignMessage(const ::google::protobuf::Message &msg,
   signedMessage.set_process_id(processId);
 }
 
-proto::TxnDecision IndicusDecide(const std::vector<proto::Phase1Reply> &replies,
+proto::CommitDecision IndicusDecide(const std::vector<proto::Phase1Reply> &replies,
     const transport::Configuration *config) {
   // If a majority say prepare_ok,
   int ok_count = 0;
@@ -34,11 +34,11 @@ proto::TxnDecision IndicusDecide(const std::vector<proto::Phase1Reply> &replies,
   proto::Phase1Reply final_reply;
 
   for (const auto& reply : replies) {
-    if (reply.ccr() == proto::ConcurrencyControlResult::COMMIT) {
+    if (reply.ccr() == proto::Phase1Reply::COMMIT) {
       ok_count++;
-    } else if (reply.ccr() == proto::ConcurrencyControlResult::ABORT) {
+    } else if (reply.ccr() == proto::Phase1Reply::ABORT) {
       return proto::CommitDecision::ABORT;
-    } else if (reply.ccr() == proto::ConcurrencyControlResult::RETRY) {
+    } else if (reply.ccr() == proto::Phase1Reply::RETRY) {
       Timestamp t(reply.timestamp());
       if (t > ts) {
         ts = t;
