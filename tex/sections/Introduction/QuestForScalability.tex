@@ -1,0 +1,17 @@
+\section{On the quest for scalability}
+
+Talk more about total order. 
+And how we really would like to enforce it when necessary only.
+How we abstractly treat it as seperate registers on which we can run independent consensus
+
+Talk more about sharding.
+How it is more of a hack and conflates objectives.
+
+Talk about leader based. How PBFT is bottlenecked scalability wise. Reference to BFT Mir here. 
+Also elaborate how systems that scale to multi-leaders (i.e. MIR, or a hypothetical BFT EPaxos) would still have inherent fairness struggles. Even with rotating leaders the problem does not go away, it is just mitigated. It always gives every byzantine replica the "chance" for damage. With a leaderless approach this does not arrive. Byzantine replicas can only try to equivocate or vote unfavorably.
+Instead our crux becomes how to deal with byzantine clients.
+What requirements does this put on the system? Byz should not be able to interfere with honest, or at least in a bounded way.
+The ideal mechanism: Honest and byz are fully independent, that we cannot guarantee. But we can give a client the keys to its own liveness. Bounded amount of conflicts to pick up (that are not due to concurrency)
+
+Our achilles heel, under congestion you can always abort, and byantine clients can create that congestion if they have the access control. But you expect this to be limited. 
+Replicas can enforce exponential backoff on clients.

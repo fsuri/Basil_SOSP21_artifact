@@ -1,34 +1,35 @@
 \BOOKMARK [1][-]{section.1}{Introduction}{}% 1
-\BOOKMARK [1][-]{section.2}{Definition- notes}{}% 2
-\BOOKMARK [2][-]{subsection.2.1}{Model and Definitions}{section.2}% 3
-\BOOKMARK [3][-]{subsubsection.2.1.1}{System Model}{subsection.2.1}% 4
-\BOOKMARK [3][-]{subsubsection.2.1.2}{System properties}{subsection.2.1}% 5
-\BOOKMARK [1][-]{section.3}{Indicus}{}% 6
-\BOOKMARK [1][-]{section.4}{Arch-Notes}{}% 7
-\BOOKMARK [2][-]{subsection.4.1}{Architecture}{section.4}% 8
-\BOOKMARK [1][-]{section.5}{Protocol-Notes}{}% 9
-\BOOKMARK [2][-]{subsection.5.1}{TX execution}{section.5}% 10
-\BOOKMARK [2][-]{subsection.5.2}{Concurrency control}{section.5}% 11
-\BOOKMARK [2][-]{subsection.5.3}{Validation}{section.5}% 12
-\BOOKMARK [2][-]{subsection.5.4}{Writeback}{section.5}% 13
-\BOOKMARK [2][-]{subsection.5.5}{Optimizations}{section.5}% 14
-\BOOKMARK [2][-]{subsection.5.6}{Failures}{section.5}% 15
-\BOOKMARK [2][-]{subsection.5.7}{Garbage Collection}{section.5}% 16
-\BOOKMARK [2][-]{subsection.5.8}{Discussion: }{section.5}% 17
-\BOOKMARK [2][-]{subsection.5.9}{Indicus3}{section.5}% 18
-\BOOKMARK [1][-]{section.6}{Protocol}{}% 19
-\BOOKMARK [2][-]{subsection.6.1}{TEsting}{section.6}% 20
-\BOOKMARK [2][-]{subsection.6.2}{Execution}{section.6}% 21
-\BOOKMARK [2][-]{subsection.6.3}{Validation}{section.6}% 22
-\BOOKMARK [2][-]{subsection.6.4}{Concurrency Control}{section.6}% 23
-\BOOKMARK [2][-]{subsection.6.5}{Consistent logging.}{section.6}% 24
-\BOOKMARK [2][-]{subsection.6.6}{Writeback and Multi-shard 2pc}{section.6}% 25
-\BOOKMARK [2][-]{subsection.6.7}{Failures}{section.6}% 26
-\BOOKMARK [2][-]{subsection.6.8}{Optimizations}{section.6}% 27
-\BOOKMARK [2][-]{subsection.6.9}{Garbage Collection}{section.6}% 28
-\BOOKMARK [2][-]{subsection.6.10}{Indicus3}{section.6}% 29
-\BOOKMARK [1][-]{section.7}{Implementation and Evaluation}{}% 30
-\BOOKMARK [2][-]{subsection.7.1}{Experiments}{section.7}% 31
-\BOOKMARK [1][-]{section.8}{Limitations}{}% 32
-\BOOKMARK [1][-]{section.9}{Related Work/Comparison}{}% 33
-\BOOKMARK [1][-]{section.10}{Conclusion}{}% 34
+\BOOKMARK [1][-]{section.2}{On the quest for scalability}{}% 2
+\BOOKMARK [1][-]{section.3}{Definition- notes}{}% 3
+\BOOKMARK [2][-]{subsection.3.1}{Model and Definitions}{section.3}% 4
+\BOOKMARK [3][-]{subsubsection.3.1.1}{System Model}{subsection.3.1}% 5
+\BOOKMARK [3][-]{subsubsection.3.1.2}{System properties}{subsection.3.1}% 6
+\BOOKMARK [1][-]{section.4}{Indicus}{}% 7
+\BOOKMARK [1][-]{section.5}{Arch-Notes}{}% 8
+\BOOKMARK [2][-]{subsection.5.1}{Architecture}{section.5}% 9
+\BOOKMARK [1][-]{section.6}{Protocol-Notes}{}% 10
+\BOOKMARK [2][-]{subsection.6.1}{TX execution}{section.6}% 11
+\BOOKMARK [2][-]{subsection.6.2}{Concurrency control}{section.6}% 12
+\BOOKMARK [2][-]{subsection.6.3}{Validation}{section.6}% 13
+\BOOKMARK [2][-]{subsection.6.4}{Writeback}{section.6}% 14
+\BOOKMARK [2][-]{subsection.6.5}{Optimizations}{section.6}% 15
+\BOOKMARK [2][-]{subsection.6.6}{Failures}{section.6}% 16
+\BOOKMARK [2][-]{subsection.6.7}{Garbage Collection}{section.6}% 17
+\BOOKMARK [2][-]{subsection.6.8}{Discussion: }{section.6}% 18
+\BOOKMARK [2][-]{subsection.6.9}{Indicus3}{section.6}% 19
+\BOOKMARK [1][-]{section.7}{Protocol}{}% 20
+\BOOKMARK [2][-]{subsection.7.1}{TEsting}{section.7}% 21
+\BOOKMARK [2][-]{subsection.7.2}{Execution}{section.7}% 22
+\BOOKMARK [2][-]{subsection.7.3}{Validation}{section.7}% 23
+\BOOKMARK [2][-]{subsection.7.4}{Concurrency Control}{section.7}% 24
+\BOOKMARK [2][-]{subsection.7.5}{Consistent logging.}{section.7}% 25
+\BOOKMARK [2][-]{subsection.7.6}{Writeback and Multi-shard 2pc}{section.7}% 26
+\BOOKMARK [2][-]{subsection.7.7}{Failures}{section.7}% 27
+\BOOKMARK [2][-]{subsection.7.8}{Optimizations}{section.7}% 28
+\BOOKMARK [2][-]{subsection.7.9}{Garbage Collection}{section.7}% 29
+\BOOKMARK [2][-]{subsection.7.10}{Indicus3}{section.7}% 30
+\BOOKMARK [1][-]{section.8}{Implementation and Evaluation}{}% 31
+\BOOKMARK [2][-]{subsection.8.1}{Experiments}{section.8}% 32
+\BOOKMARK [1][-]{section.9}{Limitations}{}% 33
+\BOOKMARK [1][-]{section.10}{Related Work/Comparison}{}% 34
+\BOOKMARK [1][-]{section.11}{Conclusion}{}% 35
