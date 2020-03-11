@@ -36,40 +36,38 @@ namespace indicusstore {
 using namespace std;
 
 Client::Client(const string configPath, int nShards, int nGroups,
-                int closestReplica, Transport *transport, partitioner part,
-                bool syncCommit, uint64_t readQuorumSize, TrueTime timeServer)
-    : nshards(nShards), ngroups(nGroups), transport(transport), part(part),
-    syncCommit(syncCommit), timeServer(timeServer),
-    lastReqId(0UL), config(nullptr) {
-    // Initialize all state here;
-    client_id = 0;
-    while (client_id == 0) {
-        random_device rd;
-        mt19937_64 gen(rd());
-        uniform_int_distribution<uint64_t> dis;
-        client_id = dis(gen);
-    }
-    t_id = (client_id/10000)*10000;
+    int closestReplica, Transport *transport, partitioner part, bool syncCommit,
+    uint64_t readQuorumSize, TrueTime timeServer) : nshards(nShards),
+    ngroups(nGroups), transport(transport), part(part), syncCommit(syncCommit),
+    timeServer(timeServer), lastReqId(0UL), config(nullptr) {
+  // Initialize all state here;
+  client_id = 0;
+  while (client_id == 0) {
+    random_device rd;
+    mt19937_64 gen(rd());
+    uniform_int_distribution<uint64_t> dis;
+    client_id = dis(gen);
+  }
+  t_id = (client_id/10000)*10000;
 
-    bclient.reserve(nshards);
+  bclient.reserve(nshards);
 
-    Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
+  Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
 
+  std::ifstream configStream(configPath);
+  if (configStream.fail()) {
+    Panic("Unable to read configuration file: %s\n", configPath.c_str());
+  }
+  config = new transport::Configuration(configStream);
 
-    std::ifstream configStream(configPath);
-    if (configStream.fail()) {
-      Panic("Unable to read configuration file: %s\n", configPath.c_str());
-    }
-    config = new transport::Configuration(configStream);
+  /* Start a client for each shard. */
+  for (uint64_t i = 0; i < ngroups; i++) {
+    bclient[i] = new ShardClient(config, transport, client_id, i,
+        closestReplica, readQuorumSize, timeServer);
+  }
 
-    /* Start a client for each shard. */
-    for (uint64_t i = 0; i < ngroups; i++) {
-        ShardClient *shardclient = new ShardClient(config,
-                transport, client_id, i, closestReplica, readQuorumSize);
-        bclient[i] = new BufferClient(shardclient);
-    }
-
-    Debug("Indicus client [%lu] created! %lu %lu", client_id, nshards, bclient.size());
+  Debug("Indicus client [%lu] created! %lu %lu", client_id, nshards,
+      bclient.size());
 }
 
 Client::~Client()
@@ -106,8 +104,15 @@ void Client::Get(const std::string &key, get_callback gcb,
     bclient[i]->Begin(t_id);
   }
 
+  read_callback rcb = [gcb](int status, const std::string &key,
+      const std::string &val, Timestamp ts, const proto::Transaction &dep,
+      bool hasDep) {
+    gcb(status, key, val, ts);
+  };
+  read_timeout_callback rtcb = gtcb;
+
   // Send the GET operation to appropriate shard.
-  bclient[i]->Get(key, gcb, gtcb, timeout);
+  bclient[i]->Get(t_id, key, rcb, rtcb, timeout);
 }
 
 void Client::Put(const std::string &key, const std::string &value,
@@ -125,7 +130,7 @@ void Client::Put(const std::string &key, const std::string &value,
   }
 
   // Buffering, so no need to wait.
-  bclient[i]->Put(key, value, pcb, ptcb, timeout);
+  bclient[i]->Put(t_id, key, value, pcb, ptcb, timeout);
 }
 
 void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
@@ -149,7 +154,7 @@ void Client::Prepare(PendingRequest *req, uint32_t timeout) {
   UW_ASSERT(participants.size() > 0);
 
   for (auto p : participants) {
-    bclient[p]->Prepare(*req->prepareTimestamp, std::bind(
+    bclient[p]->Prepare(t_id, Transaction(), *req->prepareTimestamp, std::bind(
           &Client::PrepareCallback, this, req->id, std::placeholders::_1,
           std::placeholders::_2), std::bind(&Client::PrepareCallback, this,
             req->id, std::placeholders::_1, std::placeholders::_2), timeout);
@@ -223,7 +228,9 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
       };
       commit_timeout_callback ctcb = [](int status){};
       for (auto p : participants) {
-          bclient[p]->Commit(req->prepareTimestamp->getTimestamp(), ccb, ctcb,
+          bclient[p]->Commit(t_id, Transaction(),
+              req->prepareTimestamp->getTimestamp(), ccb,
+              ctcb,
               1000); // we don't really care about the timeout here
       }
       if (!syncCommit) {
@@ -289,7 +296,7 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
   Debug("ABORT [%lu]", t_id);
 
   for (auto p : participants) {
-    bclient[p]->Abort(acb, atcb, timeout);
+    bclient[p]->Abort(t_id, Transaction(), acb, atcb, timeout);
   }
 }
 

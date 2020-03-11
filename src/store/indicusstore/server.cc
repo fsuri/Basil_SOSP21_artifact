@@ -108,14 +108,15 @@ void Server::HandleRead(const TransportAddress &remote,
   reply.set_req_id(msg.req_id());
   reply.set_key(msg.key());
   if (exists) {
-    reply.set_status(proto::Phase1Reply::COMMIT);
+    reply.set_status(REPLY_OK);
     reply.set_committed_value(tsVal.second.val);
     tsVal.first.serialize(reply.mutable_committed_timestamp());
   } else {
-    reply.set_status(proto::Phase1Reply::ABORT);
+    reply.set_status(REPLY_FAIL);
   }
 
   if (occType == MVTSO) {
+    /* update rts */
     Timestamp localTs(timeServer.GetTime());
     // add delta to current local time
     localTs.setTimestamp(localTs.getTimestamp() + timeDelta);
@@ -123,6 +124,7 @@ void Server::HandleRead(const TransportAddress &remote,
       rts[msg.key()][msg.txn_id()].insert(msg.timestamp());
     }
 
+    /* add prepared deps */
     std::unordered_map<std::string, std::vector<proto::Transaction>> writes;
     GetPreparedWrites(writes);
     auto itr = writes.find(msg.key());
@@ -144,8 +146,9 @@ void Server::HandleRead(const TransportAddress &remote,
         }
       }
 
-      preparedWrite.set_prepared_value(preparedValue);
-      *preparedWrite.mutable_prepared_timestamp() = mostRecent.timestamp();
+      preparedWrite.set_value(preparedValue);
+      *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
+      *preparedWrite.mutable_txn() = mostRecent;
 
       if (signedMessages) {
         proto::SignedMessage signedMessage;
@@ -157,6 +160,8 @@ void Server::HandleRead(const TransportAddress &remote,
       } else {
         *reply.mutable_prepared() = preparedWrite;
       }
+
+      reply.set_status(REPLY_OK);
     }
   }
 

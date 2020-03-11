@@ -37,10 +37,11 @@ namespace indicusstore {
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int shard, int closestReplica,
-    uint64_t readQuorumSize) : client_id(client_id),
+    uint64_t readQuorumSize, TrueTime &timeServer) : client_id(client_id),
     transport(transport), config(config), shard(shard),
-    readQuorumSize(readQuorumSize), signedMessages(false),
-    validateProofs(false), cryptoConfig(nullptr) {
+    readQuorumSize(readQuorumSize), timeServer(timeServer),
+    signedMessages(false), validateProofs(false), cryptoConfig(nullptr),
+    lastReqId(0UL) {
   transport->Register(this, *config, -1, -1);
 
   if (closestReplica == -1) {
@@ -57,7 +58,8 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
       const std::string &t, const std::string &d, void *meta_data) {
   proto::SignedMessage signedMessage;
   proto::ReadReply readReply;
-  proto::Prepare1Reply prepare1Reply;
+  proto::Phase1Reply phase1Reply;
+  proto::Phase2Reply phase2Reply;
   
   std::string type;
   std::string data;
@@ -77,9 +79,12 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   if (type == readReply.GetTypeName()) {
     readReply.ParseFromString(data);
     HandleReadReply(readReply);
-  } else if (type == prepare1Reply.GetTypeName()) {
-    prepare1Reply.ParseFromString(data);
-    HandlePrepare1Reply(prepare1Reply);
+  } else if (type == phase1Reply.GetTypeName()) {
+    phase1Reply.ParseFromString(data);
+    HandlePhase1Reply(phase1Reply);
+  } else if (type == phase2Reply.GetTypeName()) {
+    phase2Reply.ParseFromString(data);
+    HandlePhase2Reply(phase2Reply);
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
@@ -87,11 +92,15 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
 
 void ShardClient::Begin(uint64_t id) {
   Debug("[shard %i] BEGIN: %lu", shard, id);
+
+  txn = proto::Transaction();
 }
 
-void ShardClient::Get(uint64_t id, const std::string &key, get_callback gcb,
-      get_timeout_callback gtcb, uint32_t timeout) {
-  // Send the GET operation to appropriate shard.
+void ShardClient::Get(uint64_t id, const std::string &key, read_callback gcb,
+      read_timeout_callback gtcb, uint32_t timeout) {
+  if (BufferGet(key, gcb)) {
+    return;
+  }
 
   uint64_t reqId = lastReqId++;
   PendingQuorumGet *pendingGet = new PendingQuorumGet(reqId);
@@ -103,23 +112,21 @@ void ShardClient::Get(uint64_t id, const std::string &key, get_callback gcb,
   proto::Read read;
   read.set_req_id(reqId);
   read.set_key(key);
+  Timestamp localTs(timeServer.GetTime());
+  localTs.serialize(read.mutable_timestamp());
 
   transport->SendMessageToAll(this, read);
 
   Debug("[shard %i] Sent GET [%lu : %s]", shard, id, key.c_str());
 }
 
-void ShardClient::Get(uint64_t id, const std::string &key,
-    const Timestamp &timestamp, get_callback gcb, get_timeout_callback gtcb,
-    uint32_t timeout) {
-  Get(id, key, gcb, gtcb, timeout);
-}
-
 void ShardClient::Put(uint64_t id, const std::string &key,
       const std::string &value, put_callback pcb, put_timeout_callback ptcb,
       uint32_t timeout) {
-  Panic("Unimplemented PUT");
-  return;
+  WriteMessage *writeMsg = txn.add_writeset();
+  writeMsg->set_key(key);
+  writeMsg->set_value(value);
+  pcb(REPLY_OK, key, value);
 }
 
 void ShardClient::Prepare(uint64_t id, const Transaction &txn,
@@ -146,14 +153,31 @@ void ShardClient::Prepare(uint64_t id, const Transaction &txn,
       ptcb(REPLY_TIMEOUT, ts);
   });
 
-  // create prepare request
-  proto::Prepare1 prepare;
-  prepare.set_req_id(reqId);
-  prepare.set_txn_id(id);
-  txn.serialize(prepare.mutable_txn());
-  timestamp.serialize(prepare.mutable_timestamp());
+  proto::Transaction txnMsg;
+  txnMsg.set_id(id);
+  ReadMessage readMsg;
+  WriteMessage writeMsg;
+  for (const auto &read : txn.getReadSet()) {
+    readMsg.set_key(read.first);
+    read.second.serialize(readMsg.mutable_readtime());
+    ReadMessage *newReadMsg = txnMsg.add_readset();
+    *newReadMsg = readMsg;
+  }
+  for (const auto &write : txn.getWriteSet()) {
+    writeMsg.set_key(write.first);
+    writeMsg.set_value(write.second);
+    WriteMessage *newWriteMsg = txnMsg.add_writeset();
+    *newWriteMsg = writeMsg;
+  }
+  timestamp.serialize(txnMsg.mutable_timestamp());
 
-  transport->SendMessageToAll(this, prepare);
+  // create prepare request
+  proto::Phase1 phase1;
+  phase1.set_req_id(reqId);
+  phase1.set_txn_id(id);
+  *phase1.mutable_txn() = txnMsg;
+
+  transport->SendMessageToAll(this, phase1);
 
   pendingPrepare->requestTimeout->Reset();
 }
@@ -181,12 +205,11 @@ void ShardClient::Commit(uint64_t id, const Transaction & txn,
   });
 
   // create commit request
-  proto::Commit commit;
-  commit.set_req_id(reqId);
-  commit.set_timestamp(timestamp);
+  proto::Writeback writeback;
+  writeback.set_req_id(reqId);
 
-  transport->SendMessageToAll(this, commit);
-  Debug("[shard %i] Sent COMMIT [%lu]", shard, id);
+  transport->SendMessageToAll(this, writeback);
+  Debug("[shard %i] Sent WRITEBACK [%lu]", shard, id);
 
   pendingCommit->requestTimeout->Reset();
 }
@@ -214,11 +237,29 @@ void ShardClient::Abort(uint64_t id, const Transaction &txn,
   // create abort request
   proto::Abort abort;
   abort.set_req_id(reqId);
-  txn.serialize(abort.mutable_txn());
 
   transport->SendMessageToAll(this, abort);
 
   pendingAbort->requestTimeout->Reset();
+}
+
+bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
+  for (const auto &write : txn.writeset()) {
+    if (write.key() == key) {
+      rcb(REPLY_OK, key, write.value(), Timestamp(), proto::Transaction(),
+          false);
+      return true;
+    }
+  }
+
+  /* TODO: cache value already read by txn
+  for (const auto &read : txn.readset()) {
+    if (read.key() == key) {
+      
+    }
+  }*/
+
+  return false;
 }
 
 void ShardClient::GetTimeout(uint64_t reqId) {
@@ -234,22 +275,17 @@ void ShardClient::GetTimeout(uint64_t reqId) {
 
 /* Callback from a shard replica on get operation completion. */
 void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
-  // reply has already been validated as sent by the expected replica
   auto itr = this->pendingGets.find(reply.req_id());
   if (itr == this->pendingGets.end()) {
     return; // this is a stale request
   }
 
   if (validateProofs) {
-    // Verify the the p3 commits the given tx, that the tx version matches the
-    // read version, and that the tx writes the key
-    if (!VerifyP3Commit(reply.proof().write_txn(), reply.proof().tx_writeback())) {
-      return;
-    }
-    if (!TimestampsEqual(reply.proof().write_txn_timestamp(), reply.timestamp())) {
-      return;
-    }
-    if (!TxWritesKey(reply.proof().write_txn(), reply.key())) {
+    // TODO: does write proof need to be signed?
+    if (!ValidateWriteProof(reply.committed_proof(), itr->second->key,
+          reply.committed_value(), reply.committed_timestamp())) {
+      // invalid replies can be treated as if we never received a reply from
+      //     a crashed replica
       return;
     }
   }
@@ -258,17 +294,38 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   itr->second->numReplies++;
   if (reply.status() == REPLY_OK) {
     itr->second->numOKReplies++;
-    Timestamp replyTs(reply.timestamp());
+    Timestamp replyTs(reply.committed_timestamp());
     if (itr->second->maxTs < replyTs) {
       itr->second->maxTs = replyTs;
-      itr->second->maxValue = reply.value();
+      itr->second->maxValue = reply.committed_value();
+    }
+  }
+
+  if (reply.has_prepared() || reply.has_signed_prepared()) {
+    proto::PreparedWrite prepared;
+    if (signedMessages) {
+      if (ValidateSignedMessage(reply.signed_prepared(), cryptoConfig)) {
+        prepared.ParseFromString(reply.signed_prepared().msg());
+      } else {
+        // TODO: should we continue with the committed value?
+        return;
+      }
+    } else {
+      prepared = reply.prepared();
+    }
+
+    Timestamp preparedTs(prepared.timestamp());
+    if (itr->second->maxTs < preparedTs) {
+      itr->second->maxTs = preparedTs;
+      itr->second->maxValue = prepared.value();
+      itr->second->dep = prepared.txn();
     }
   }
 
   if (itr->second->numOKReplies >= readQuorumSize ||
       itr->second->numReplies == static_cast<uint64_t>(config->n)) {
     PendingQuorumGet *req = itr->second;
-    get_callback gcb = req->gcb;
+    read_callback gcb = req->gcb;
     std::string key = req->key;
     pendingGets.erase(itr);
     int32_t status = REPLY_FAIL;
@@ -276,37 +333,13 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
       status = REPLY_OK;
     }
     Debug("[shard %lu:%i] GET callback [%d]", client_id, shard, status);
-    gcb(status, key, req->maxValue, req->maxTs);
+    gcb(status, key, req->maxValue, req->maxTs, req->dep, req->hasDep);
     delete req;
   }
 }
 
-<<<<<<< HEAD
-void ShardClient::HandleSignedReadReply(
-    const proto::SignedReadReply &signedReadReply) {
-  if (!cryptoConfig->isValidReplicaId(signedReadReply.replica_id())) {
-    return;
-  }
-
-  crypto::PubKey replicaPublicKey = cryptoConfig->getReplicaPublicKey(
-      signedReadReply.replica_id());
-  // verify that the replica actually sent this reply and that we are expecting
-  // this reply
-  if (!crypto::IsMessageValid(replicaPublicKey, &signedReadReply.read_reply(),
-        &signedReadReply)) {
-    return;
-  }
-
-  Debug("Message is valid! key=%s -> val=%s",
-      signedReadReply.read_reply().key().c_str(),
-      signedReadReply.read_reply().value().c_str());
-  HandleReadReply(signedReadReply.read_reply());
-}
-
-=======
->>>>>>> server
 /* Callback from a shard replica on prepare operation completion. */
-void ShardClient::HandlePrepare1Reply(const proto::Prepare1Reply &reply) {
+void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
   auto itr = this->pendingPrepares.find(reply.req_id());
   if (itr == this->pendingPrepares.end()) {
     return; // this is a stale request
@@ -323,6 +356,8 @@ void ShardClient::HandlePrepare1Reply(const proto::Prepare1Reply &reply) {
   } else {
     pcb(reply.status(), Timestamp());
   }
+}
+void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &phase2Reply) {
 }
 
 /* Callback from a shard replica on commit operation completion. */
@@ -361,41 +396,9 @@ bool ShardClient::AbortCallback(uint64_t reqId,
   return true;
 }
 
-bool ShardClient::VerifyP3Commit(const Transaction &transaction,
-    const Writeback &p3) {
-  TransactionMessage txn_msg;
-  transaction.serialize(&txn_msg);
-  std::string serialized = txn_msg.SerializeAsString();
-  std::string txdigest = crypto::Hash(serialized);
-
-  for (int i = 0; i < p3.p2_replies_size(); i++) {
-    proto::SignedPrepare2Reply signedPrepare2Reply = p3.p2_replies(i);
-    proto::Prepare2Reply prepare2Reply = signedPrepare2Reply.p2_reply();
-    std::string prepare2ReplySerialized = prepare2Reply.SerializeAsString();
-    uint64_t replicaId = signedPrepare2Reply.replica_id();
-    crypto::PubKey replicaPublicKey = cryptoConfig->getReplicaPublicKey(replicaId);
-    if (crypto::IsMessageValid(replicaPublicKey, prepare2ReplySerialized,
-          &signedPrepare2Reply) && prepare2Reply.txdigest() == txdigest &&
-        prepare2Reply.action() == proto::TxnAction::COMMIT) {
-      // pass
-    } else {
-      return false;
-    }
-
-  }
+bool ShardClient::ValidateWriteProof(const proto::WriteProof &proof,
+    const std::string &key, const std::string &val, const Timestamp &timestamp) {
   return true;
-}
-
-bool ShardClient::TxWritesKey(const Transaction &tx, const std::string &key) {
-  return tx.getWriteSet().find(key) != tx.getWriteSet().end();
-}
-
-bool ShardClient::TimestampsEqual(const TimestampMessage &v1, const TimestampMessage &v2) {
-  return Timestamp(v1.timestamp()) == Timestamp(v2.timestamp()) && v1.id() == v2.id();
-}
-
-bool ShardClient::TimestampsGT(const TimestampMessage &v1, const TimestampMessage &v2) {
-  return Timestamp(v1.timestamp()) > Timestamp(v2.timestamp()) || (Timestamp(v1.timestamp()) == Timestamp(v2.timestamp()) && v1.id() > v2.id());
 }
 
 } // namespace indicus

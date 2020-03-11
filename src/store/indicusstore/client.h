@@ -105,6 +105,7 @@ class Client : public ::Client {
     int prepareStatus;
     Timestamp *prepareTimestamp;
     bool callbackInvoked;
+    std::vector<proto::Transaction> deps;
   };
 
   // Prepare function
@@ -131,8 +132,8 @@ class Client : public ::Client {
   // Transport used by IR client proxies.
   Transport *transport;
   
-  // Buffering client for each shard.
-  std::vector<BufferClient *> bclient;
+  // Client for each shard
+  std::vector<ShardClient *> bclient;
 
   partitioner part;
   
