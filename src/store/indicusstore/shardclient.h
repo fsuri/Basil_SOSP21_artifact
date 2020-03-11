@@ -81,19 +81,16 @@ class ShardClient : public TransportReceiver {
       uint32_t timeout);
 
   // Commit all Get(s) and Put(s) since Begin().
-  virtual void Commit(uint64_t id, const Transaction & txn,
-      uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
-      uint32_t timeout);
+  virtual void Commit(uint64_t id, uint64_t timestamp, commit_callback ccb,
+      commit_timeout_callback ctcb, uint32_t timeout);
 
   // Abort all Get(s) and Put(s) since Begin().
-  virtual void Abort(uint64_t id, const Transaction &txn,
-      abort_callback acb, abort_timeout_callback atcb,
-      uint32_t timeout);
+  virtual void Abort(uint64_t id, abort_callback acb,
+      abort_timeout_callback atcb, uint32_t timeout);
 
   // Prepare the transaction.
-  virtual void Prepare(uint64_t id, const Transaction &txn,
-      const Timestamp &timestamp, prepare_callback pcb,
-      prepare_timeout_callback ptcb, uint32_t timeout);
+  virtual void Prepare(uint64_t id, const Timestamp &timestamp,
+      prepare_callback pcb, prepare_timeout_callback ptcb, uint32_t timeout);
 
  private:
   struct PendingQuorumGet {
@@ -122,7 +119,7 @@ class ShardClient : public TransportReceiver {
     }
     uint64_t reqId;
     Timestamp ts;
-    Transaction txn;
+    proto::Transaction txn;
     Timeout *requestTimeout;
     prepare_callback pcb;
     prepare_timeout_callback ptcb;
@@ -138,7 +135,7 @@ class ShardClient : public TransportReceiver {
     }
     uint64_t reqId;
     uint64_t ts;
-    Transaction txn;
+    proto::Transaction txn;
     Timeout *requestTimeout;
     commit_callback ccb;
     commit_timeout_callback ctcb;
@@ -152,7 +149,7 @@ class ShardClient : public TransportReceiver {
       }
     }
     uint64_t reqId;
-    Transaction txn;
+    proto::Transaction txn;
     Timeout *requestTimeout;
     abort_callback acb;
     abort_timeout_callback atcb;

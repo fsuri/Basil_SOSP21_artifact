@@ -80,15 +80,11 @@ Client::~Client()
 
 /* Begins a transaction. All subsequent operations before a commit() or
  * abort() are part of this transaction.
- *
- * Return a TID for the transaction.
  */
-void
-Client::Begin()
-{
-    Debug("BEGIN [%lu]", t_id + 1);
-    t_id++;
-    participants.clear();
+void Client::Begin() {
+  t_id++;
+  Debug("BEGIN [%lu]", t_id);
+  participants.clear();
 }
 
 void Client::Get(const std::string &key, get_callback gcb,
@@ -154,7 +150,7 @@ void Client::Prepare(PendingRequest *req, uint32_t timeout) {
   UW_ASSERT(participants.size() > 0);
 
   for (auto p : participants) {
-    bclient[p]->Prepare(t_id, Transaction(), *req->prepareTimestamp, std::bind(
+    bclient[p]->Prepare(t_id, *req->prepareTimestamp, std::bind(
           &Client::PrepareCallback, this, req->id, std::placeholders::_1,
           std::placeholders::_2), std::bind(&Client::PrepareCallback, this,
             req->id, std::placeholders::_1, std::placeholders::_2), timeout);
@@ -228,10 +224,8 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
       };
       commit_timeout_callback ctcb = [](int status){};
       for (auto p : participants) {
-          bclient[p]->Commit(t_id, Transaction(),
-              req->prepareTimestamp->getTimestamp(), ccb,
-              ctcb,
-              1000); // we don't really care about the timeout here
+          bclient[p]->Commit(t_id, req->prepareTimestamp->getTimestamp(),
+              ccb, ctcb, 1000); // we don't really care about the timeout here
       }
       if (!syncCommit) {
         if (!req->callbackInvoked) {
@@ -296,7 +290,7 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
   Debug("ABORT [%lu]", t_id);
 
   for (auto p : participants) {
-    bclient[p]->Abort(t_id, Transaction(), acb, atcb, timeout);
+    bclient[p]->Abort(t_id, acb, atcb, timeout);
   }
 }
 

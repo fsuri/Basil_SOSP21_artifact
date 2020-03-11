@@ -129,11 +129,9 @@ void ShardClient::Put(uint64_t id, const std::string &key,
   pcb(REPLY_OK, key, value);
 }
 
-void ShardClient::Prepare(uint64_t id, const Transaction &txn,
-      const Timestamp &timestamp, prepare_callback pcb,
-      prepare_timeout_callback ptcb, uint32_t timeout) {
+void ShardClient::Prepare(uint64_t id, const Timestamp &timestamp,
+    prepare_callback pcb, prepare_timeout_callback ptcb, uint32_t timeout) {
   Debug("[shard %i] Sending PREPARE [%lu]", shard, id);
-
   uint64_t reqId = lastReqId++;
   PendingPrepare *pendingPrepare = new PendingPrepare(reqId);
   pendingPrepares[reqId] = pendingPrepare;
@@ -157,17 +155,13 @@ void ShardClient::Prepare(uint64_t id, const Transaction &txn,
   txnMsg.set_id(id);
   ReadMessage readMsg;
   WriteMessage writeMsg;
-  for (const auto &read : txn.getReadSet()) {
-    readMsg.set_key(read.first);
-    read.second.serialize(readMsg.mutable_readtime());
+  for (const auto &read : txn.readset()) {
     ReadMessage *newReadMsg = txnMsg.add_readset();
-    *newReadMsg = readMsg;
+    *newReadMsg = read;
   }
-  for (const auto &write : txn.getWriteSet()) {
-    writeMsg.set_key(write.first);
-    writeMsg.set_value(write.second);
+  for (const auto &write : txn.writeset()) {
     WriteMessage *newWriteMsg = txnMsg.add_writeset();
-    *newWriteMsg = writeMsg;
+    *newWriteMsg = write;
   }
   timestamp.serialize(txnMsg.mutable_timestamp());
 
@@ -182,10 +176,8 @@ void ShardClient::Prepare(uint64_t id, const Transaction &txn,
   pendingPrepare->requestTimeout->Reset();
 }
 
-void ShardClient::Commit(uint64_t id, const Transaction & txn,
-      uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
-      uint32_t timeout) {
-
+void ShardClient::Commit(uint64_t id, uint64_t timestamp, commit_callback ccb,
+    commit_timeout_callback ctcb, uint32_t timeout) {
   uint64_t reqId = lastReqId++;
   PendingCommit *pendingCommit = new PendingCommit(reqId);
   pendingCommits[reqId] = pendingCommit;
@@ -214,8 +206,8 @@ void ShardClient::Commit(uint64_t id, const Transaction & txn,
   pendingCommit->requestTimeout->Reset();
 }
 
-void ShardClient::Abort(uint64_t id, const Transaction &txn,
-      abort_callback acb, abort_timeout_callback atcb, uint32_t timeout) {
+void ShardClient::Abort(uint64_t id, abort_callback acb,
+    abort_timeout_callback atcb, uint32_t timeout) {
   Debug("[shard %i] Sending ABORT [%lu]", shard, id);
 
   uint64_t reqId = lastReqId++;
