@@ -109,6 +109,7 @@ Basic design:\\
 	- Client sends to all, All to CC check, all reply\\
 	- Client makes decision based off Quorum and Decision Rule (have figure for it?)\\
 	- Metaphor: Instead of a leader serializing and deciding on a decision, the decisin was made jointly by all replicas. Hence, "voting" phase
+	- After the voting phase a TX is persistant (? \fs{technically only needs to be at f+1} and some order is finalized (this order can still change with retries), but the TX is ordered AT least at this spot \fs{super weird phrasing rn, maybe useless for intuition anyways}
 	
 - Decision rule:\\
 	- Since votes can be inconsistent (no total order enforced on replicas) we must aggregate them\\

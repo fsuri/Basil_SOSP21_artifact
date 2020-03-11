@@ -1,12 +1,52 @@
-\begin{thebibliography}{1}
+\begin{thebibliography}{10}
 
 \bibitem{AppleSup}
 Apple.
 \newblock Apple supplier list, 2019.
 
-\bibitem{2002}
-TPCW consortium.
-\newblock Tpc benchmark-w specification v. 1.8.
-\newblock \url{http://www.tpc.org/tpcw/spec/tpcw_v1.8.pdf}, 2002.
+\bibitem{StateFarmQuorum2}
+Coindesk.
+\newblock State farm, usaa to pay each other insurance claims on blockchain by
+  2020, May, 2019.
+
+\bibitem{AutoInventory}
+Coindesk.
+\newblock Jpmorgan tests private blockchain to track auto dealer inventory,
+  November, 2019.
+
+\bibitem{StateFarmQuorum}
+Forbes.
+\newblock State farm and usaa see stark increase in efficiency when testing
+  blockchain subrogation, July, 2019.
+
+\bibitem{Hyperledger}
+The~Linux Foundation.
+\newblock Hyperledger fabric, 2020.
+
+\bibitem{HyperledgerHealth}
+The~Linux Foundation.
+\newblock Change healthcare using hyperledger fabric to improve claims
+  lifecycle throughput and transparency, June, 2019.
+
+\bibitem{HyperledgerTelecom}
+The~Linux Foundation.
+\newblock Optimizing wholesale intercarrier settlement with hyperledger fabric
+  blockchain, November2019.
+
+\bibitem{kotla2007zyzzyva}
+Ramakrishna Kotla, Lorenzo Alvisi, Mike Dahlin, Allen Clement, and Edmund Wong.
+\newblock Zyzzyva: speculative byzantine fault tolerance.
+\newblock {\em ACM SIGOPS Operating Systems Review}, 41(6):45--58, 2007.
+
+\bibitem{EthereumQuorum}
+JP~Morgan.
+\newblock Quorum, 2020.
+
+\bibitem{zhang2016operation}
+Irene Zhang, Naveen~Kr Sharma, Adriana Szekeres, Arvind Krishnamurthy, and
+  Dan~RK Ports.
+\newblock When is operation ordering required in replicated transactional
+  storage?
+\newblock {\em IEEE Data Eng. Bull.}, 39(1):27--38, 2016.
 
 \end{thebibliography}
