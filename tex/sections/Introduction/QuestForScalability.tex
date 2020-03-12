@@ -1,12 +1,27 @@
 \section{On the quest for scalable fault tolerance}
 
-\subsection{The benefits and limitations of total order}
+
+\subsection{In light of partial ordering}
 Talk more about total order. 
 And how we really would like to enforce it when necessary only.
 How we abstractly treat it as seperate registers on which we can run independent consensus
 
+Databases do it right: They do a partial order and only show the equivalence. 
+Hyperledger is a database in its on way: Exec, order, validate architecture. Uses CF consensus however - could be swapped out.\\
+
+
+Imposing a shared total order across different machines solves the problem of State Machine Replication, i.e. the objective of maintaining consistent data replicas. It does so however, by a reduction of problem, rather than solving the original goal: providing consistent output. While execution in a common order implies agreement on a common result, this additional step adds coordination overhead, when possibly unecessary, as each transaction is declared to be co-dependent with all other transactions.
+Concretely, when requiring agreement on a totally ordered ledger of transactions, achieving agreement on each new request implies achieving agreement on the entire history prefix. This is desirable in settings relying on probabilistic finality (such as permissionless blockchains), however unecessary in traditional BFT/permissioned blockchain settings. In fact, when all transactions are commutative, all requests could reach agreement in parallel and out of order. Thus, in practice, where only a subset of transactions conflict, a partial order suffices. 
+This is the bread and butter of decades of database research. Transactions inherently are run concurrently and may interleave arbitrarily, while Concurrency Control mechanisms enforce an implicit partial order by resolving conflicts only when necessary. The premise of such an approach is simple: Databases allow for a natural, partially ordered execution, that merely maintains the equivalence to a sequential execution.
+However, traditional databases assume the stronger Crash-Failure model and cannot be modified straightforwardly to tolerate Byzantine Faults. Existing blockchain technologies such as Hyperledger Fabric, consider themselves shared databases, yet fall back to restrictive total order broadcast primitives and hence fundamentally limiting scalability. 
+
+
 \subsection{A shard of truth}
-Talk more about sharding.
+To combat this scalability bottleneck many systems rely on sharding. Orignially a database technique, sharding partitions the datastore into smaller and faster \textit{shards} that are easier to manage. While sharding approaches in practice (often) induce partial ordering and increase parallelism, this is not a principled property as in this case the application of sharding conflates two objectives:
+At its core, sharding horizontally scales hardware resources, in order reduce memory overheads such as storage cost or lookup time. When there exist exploitable spacial locality within the data, i.e. transaction access patterns are limited to a subset of shards
+and a suitable partition data mapping is chosen
+
+
 "Sharding is a type of database partitioning that separates very large databases the into smaller, faster, more easily managed parts called data shards"
 
 Cost and speed for lookups.
@@ -16,12 +31,21 @@ How it is more of a hack and conflates objectives.
 Partial order is a byproduct of "share nothing". Works, when there is spacial locality in the data. Shards could be co-located with certain demographic etc.  Otherwise coordination is required across shards.
 
 
+Redundancy can be avoided by integrating replicaiton and transaction layer with concurrency control. See tapir: they show that isolation and replication are not orthogonal.
+
 \subsection{Decentralizing decentralized systems}
-Talk about leader based. How PBFT is bottlenecked scalability wise. Reference to BFT Mir here. 
+Talk about leader based. How PBFT is bottlenecked scalability wise. Reference to BFT Mir here. Multi leaders. When view changes happen the system is not down fully.
+
 Also elaborate how systems that scale to multi-leaders (i.e. MIR, or a hypothetical BFT EPaxos) would still have inherent fairness struggles. Even with rotating leaders the problem does not go away, it is just mitigated. It always gives every byzantine replica the "chance" for damage. With a leaderless approach this does not arrive. Byzantine replicas can only try to equivocate or vote unfavorably.
-Instead our crux becomes how to deal with byzantine clients.
+Push scalability from 1 to n leaders to c clients.
+Our crux becomes how to deal with byzantine clients.
 What requirements does this put on the system? Byz should not be able to interfere with honest, or at least in a bounded way.
 The ideal mechanism: Honest and byz are fully independent, that we cannot guarantee. But we can give a client the keys to its own liveness. Bounded amount of conflicts to pick up (that are not due to concurrency)
+
+\subsection{Linearity}
+dont use all to all, avoid large signature overheads if possible?
+
+Maybe dont have this section. 
 
 \subsection{A byzantine empire}
 Crash Failure is not enough. Does not extend trivially to weaker and more complex failure domains.
