@@ -56,6 +56,9 @@ typedef std::function<void(int, const std::string &,
     bool)> read_callback;
 typedef std::function<void(int, const std::string &)> read_timeout_callback;
 
+typedef std::function<void(proto::CommitDecision, Timestamp)> phase1_callback;
+typedef std::function<void(int, Timestamp)> phase1_timeout_callback;
+
 class ShardClient : public TransportReceiver {
  public:
   /* Constructor needs path to shard config. */
@@ -88,9 +91,8 @@ class ShardClient : public TransportReceiver {
   virtual void Abort(uint64_t id, abort_callback acb,
       abort_timeout_callback atcb, uint32_t timeout);
 
-  // Prepare the transaction.
-  virtual void Prepare(uint64_t id, const Timestamp &timestamp,
-      prepare_callback pcb, prepare_timeout_callback ptcb, uint32_t timeout);
+  virtual void Phase1(uint64_t id, const Timestamp &timestamp,
+      phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout);
 
  private:
   struct PendingQuorumGet {
@@ -109,21 +111,22 @@ class ShardClient : public TransportReceiver {
     read_timeout_callback gtcb;
   };
 
-  struct PendingPrepare {
-    PendingPrepare(uint64_t reqId) : reqId(reqId),
+  struct PendingPhase1 {
+    PendingPhase1(uint64_t reqId) : reqId(reqId),
         requestTimeout(nullptr) { }
-    ~PendingPrepare() {
+    ~PendingPhase1() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
       }
     }
     uint64_t reqId;
+    Timeout *requestTimeout;
+    std::vector<proto::Phase1Reply> phase1Replies;
+    std::vector<proto::SignedMessage> signedPhase1Replies;
     Timestamp ts;
     proto::Transaction txn;
-    Timeout *requestTimeout;
-    prepare_callback pcb;
-    prepare_timeout_callback ptcb;
-
+    phase1_callback pcb;
+    phase1_timeout_callback ptcb;
   };
   struct PendingCommit {
     PendingCommit(uint64_t reqId) : reqId(reqId),
@@ -162,7 +165,8 @@ class ShardClient : public TransportReceiver {
 
   /* Callbacks for hearing back from a shard for an operation. */
   void HandleReadReply(const proto::ReadReply &readReply);
-  void HandlePhase1Reply(const proto::Phase1Reply &phase1Reply);
+  void HandlePhase1Reply(const proto::Phase1Reply &phase1Reply,
+      const proto::SignedMessage &signedPhase1Reply);
   void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply);
   bool CommitCallback(uint64_t reqId, const std::string &,
       const std::string &);
@@ -193,7 +197,7 @@ class ShardClient : public TransportReceiver {
   uint64_t lastReqId;
   proto::Transaction txn;
   std::unordered_map<uint64_t, PendingQuorumGet *> pendingGets;
-  std::unordered_map<uint64_t, PendingPrepare *> pendingPrepares;
+  std::unordered_map<uint64_t, PendingPhase1 *> pendingPhase1s;
   std::unordered_map<uint64_t, PendingCommit *> pendingCommits;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
 };

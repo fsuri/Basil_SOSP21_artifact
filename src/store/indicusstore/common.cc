@@ -39,7 +39,7 @@ proto::CommitDecision IndicusDecide(const std::vector<proto::Phase1Reply> &repli
     } else if (reply.ccr() == proto::Phase1Reply::ABORT) {
       return proto::CommitDecision::ABORT;
     } else if (reply.ccr() == proto::Phase1Reply::RETRY) {
-      Timestamp t(reply.timestamp());
+      Timestamp t(reply.retry_timestamp());
       if (t > ts) {
         ts = t;
       }

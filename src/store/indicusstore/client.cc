@@ -113,7 +113,6 @@ void Client::Get(const std::string &key, get_callback gcb,
 
 void Client::Put(const std::string &key, const std::string &value,
     put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
-
   Debug("PUT [%lu : %s]", t_id, key.c_str());
 
   // Contact the appropriate shard to set the value.
@@ -142,44 +141,46 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
   req->prepareTimestamp = new Timestamp(timeServer.GetTime(), client_id);
   req->callbackInvoked = false;
   
-  Prepare(req, timeout);
+  Phase1(req, timeout);
 }
 
-void Client::Prepare(PendingRequest *req, uint32_t timeout) {
-  Debug("PREPARE [%lu] at %lu", t_id, req->prepareTimestamp->getTimestamp());
+void Client::Phase1(PendingRequest *req, uint32_t timeout) {
+  Debug("PHASE1 [%lu] at %lu", t_id, req->prepareTimestamp->getTimestamp());
   UW_ASSERT(participants.size() > 0);
 
   for (auto p : participants) {
-    bclient[p]->Prepare(t_id, *req->prepareTimestamp, std::bind(
-          &Client::PrepareCallback, this, req->id, std::placeholders::_1,
-          std::placeholders::_2), std::bind(&Client::PrepareCallback, this,
+    bclient[p]->Phase1(t_id, *req->prepareTimestamp, std::bind(
+          &Client::Phase1Callback, this, req->id, std::placeholders::_1,
+          std::placeholders::_2), std::bind(&Client::Phase1TimeoutCallback, this,
             req->id, std::placeholders::_1, std::placeholders::_2), timeout);
     req->outstandingPrepares++;
   }
 }
 
-void Client::PrepareCallback(uint64_t reqId, int status, Timestamp ts) {
-  Debug("PREPARE [%lu] callback %d,%lu", t_id, status, ts.getTimestamp());
+void Client::Phase1Callback(uint64_t reqId, proto::CommitDecision decision,
+    Timestamp ts) {
+  Debug("PHASE1 [%lu] callback %d,%lu", t_id, decision, ts.getTimestamp());
   auto itr = this->pendingReqs.find(reqId);
   if (itr == this->pendingReqs.end()) {
-    Debug("PrepareCallback for terminated request id %lu (txn already committed or aborted.", reqId);
+    Debug("Phase1Callback for terminated request id %lu (txn already committed or aborted.", reqId);
     return;
   }
   PendingRequest *req = itr->second;
 
-  uint64_t proposed = ts.getTimestamp();
+  //uint64_t proposed = ts.getTimestamp();
 
   --req->outstandingPrepares;
-  switch(status) {
-    case REPLY_OK:
+  switch(decision) {
+    case proto::COMMIT:
       Debug("PREPARE [%lu] OK", t_id);
       break;
-    case REPLY_FAIL:
+    case proto::ABORT:
       // abort!
       Debug("PREPARE [%lu] ABORT", t_id);
       req->prepareStatus = REPLY_FAIL;
       req->outstandingPrepares = 0;
       break;
+    /* TODO: are RETRY and ABSTAIN commit decisions?
     case REPLY_RETRY:
       req->prepareStatus = REPLY_RETRY;
       if (proposed > req->maxRepliedTs) {
@@ -191,17 +192,20 @@ void Client::PrepareCallback(uint64_t reqId, int status, Timestamp ts) {
       break;
     case REPLY_ABSTAIN:
       // just ignore abstains
-      break;
+      break;*/
     default:
       break;
   }
 
   if (req->outstandingPrepares == 0) {
-    HandleAllPreparesReceived(req);
+    HandleAllPhase1Received(req);
   }
 }
 
-void Client::HandleAllPreparesReceived(PendingRequest *req) {
+void Client::Phase1TimeoutCallback(uint64_t reqId, int status, Timestamp ts) {
+}
+
+void Client::HandleAllPhase1Received(PendingRequest *req) {
   Debug("All PREPARE's [%lu] received", t_id);
   uint64_t reqId = req->id;
   int abortResult = -1;
@@ -246,7 +250,7 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
           req->prepareTimestamp->setTimestamp(req->maxRepliedTs);
         }
         Debug("RETRY [%lu] at [%lu]", t_id, req->prepareTimestamp->getTimestamp());
-        Prepare(req, 1000); // this timeout should probably be the same as 
+        Phase1(req, 1000); // this timeout should probably be the same as 
         // the timeout passed to Client::Commit, or maybe that timeout / COMMIT_RETRIES
         break;
       } 

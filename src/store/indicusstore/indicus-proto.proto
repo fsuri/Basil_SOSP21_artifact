@@ -83,18 +83,12 @@ message Phase1Reply {
   required uint64 req_id = 1;
   required int32 status = 2;
   required ConcurrencyControlResult ccr = 3;
-  optional Transaction txn = 4;
-  optional TimestampMessage timestamp = 5;
+  optional Transaction txn_conflict = 4;
+  optional TimestampMessage retry_timestamp = 5;
 }
 
 message Phase1Replies {
   repeated Phase1Reply replies = 1;
-}
-
-message SignedPhase1Reply {
-  required Phase1Reply p1_reply = 1;
-  required uint64 replica_id = 2;
-  required bytes signature = 3;
 }
 
 message Phase2 {

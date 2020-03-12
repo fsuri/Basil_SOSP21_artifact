@@ -114,6 +114,9 @@ class Server : public TransportReceiver, public ::Server {
 
   struct Value {
     std::string val;
+    proto::Transaction txn;
+    std::vector<proto::SignedMessage> signedPhase2Replies;
+    std::vector<proto::Phase2Reply> phase2Replies;
   };
 
   VersionedKVStore<Timestamp, Value> store;

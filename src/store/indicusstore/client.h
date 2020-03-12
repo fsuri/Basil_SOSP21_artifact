@@ -109,9 +109,11 @@ class Client : public ::Client {
   };
 
   // Prepare function
-  void Prepare(PendingRequest *req, uint32_t timeout);
-  void PrepareCallback(uint64_t reqId, int status, Timestamp ts);
-  void HandleAllPreparesReceived(PendingRequest *req);
+  void Phase1(PendingRequest *req, uint32_t timeout);
+  void Phase1Callback(uint64_t reqId, proto::CommitDecision decision,
+      Timestamp ts);
+  void Phase1TimeoutCallback(uint64_t reqId, int status, Timestamp ts);
+  void HandleAllPhase1Received(PendingRequest *req);
 
   // Unique ID for this client.
   uint64_t client_id;

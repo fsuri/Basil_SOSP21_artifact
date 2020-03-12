@@ -111,6 +111,22 @@ void Server::HandleRead(const TransportAddress &remote,
     reply.set_status(REPLY_OK);
     reply.set_committed_value(tsVal.second.val);
     tsVal.first.serialize(reply.mutable_committed_timestamp());
+    if (validateProofs) {
+      proto::WriteProof committedProof;
+      *committedProof.mutable_txn() = tsVal.second.txn;
+      if (signedMessages) {
+        for (const auto &reply : tsVal.second.signedPhase2Replies) {
+          proto::SignedMessage *signedP2Reply = committedProof.mutable_signed_p2_replies()->add_msgs();   
+          *signedP2Reply = reply;
+        }
+      } else {
+        for (const auto &reply : tsVal.second.phase2Replies) {
+          proto::Phase2Reply *p2Reply = committedProof.mutable_p2_replies()->add_replies();   
+          *p2Reply = reply;
+        }
+      }
+      *reply.mutable_committed_proof() = committedProof;
+    }
   } else {
     reply.set_status(REPLY_FAIL);
   }
@@ -180,15 +196,21 @@ void Server::HandleRead(const TransportAddress &remote,
 void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
   Timestamp retryTs;
-  proto::Phase1Reply::ConcurrencyControlResult result = DoOCCCheck(msg.txn_id(), msg.txn(),
-      msg.txn().timestamp(), retryTs);
-
-  proto::Phase1Reply reply;
-  reply.set_ccr(result);
+  proto::Transaction txnConflict;
+  proto::Phase1Reply::ConcurrencyControlResult result = DoOCCCheck(msg.txn_id(),
+      msg.txn(), msg.txn().timestamp(), retryTs);
   p1Decisions[msg.txn_id()] = result;
 
+  proto::Phase1Reply reply;
+  reply.set_req_id(msg.req_id());
+  reply.set_status(REPLY_OK);
+  reply.set_ccr(result);
+  if (result == proto::Phase1Reply::RETRY) {
+    retryTs.serialize(reply.mutable_retry_timestamp());
+  }
+
   if (validateProofs) {
-    *reply.mutable_txn() = msg.txn();
+    *reply.mutable_txn_conflict() = txnConflict;
   }
 
   if (signedMessages) {
