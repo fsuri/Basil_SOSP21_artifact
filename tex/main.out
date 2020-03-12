@@ -1,35 +1,41 @@
 \BOOKMARK [1][-]{section.1}{Introduction}{}% 1
-\BOOKMARK [1][-]{section.2}{On the quest for scalability}{}% 2
-\BOOKMARK [1][-]{section.3}{Definition- notes}{}% 3
-\BOOKMARK [2][-]{subsection.3.1}{Model and Definitions}{section.3}% 4
-\BOOKMARK [3][-]{subsubsection.3.1.1}{System Model}{subsection.3.1}% 5
-\BOOKMARK [3][-]{subsubsection.3.1.2}{System properties}{subsection.3.1}% 6
-\BOOKMARK [1][-]{section.4}{Indicus}{}% 7
-\BOOKMARK [1][-]{section.5}{Arch-Notes}{}% 8
-\BOOKMARK [2][-]{subsection.5.1}{Architecture}{section.5}% 9
-\BOOKMARK [1][-]{section.6}{Protocol-Notes}{}% 10
-\BOOKMARK [2][-]{subsection.6.1}{TX execution}{section.6}% 11
-\BOOKMARK [2][-]{subsection.6.2}{Concurrency control}{section.6}% 12
-\BOOKMARK [2][-]{subsection.6.3}{Validation}{section.6}% 13
-\BOOKMARK [2][-]{subsection.6.4}{Writeback}{section.6}% 14
-\BOOKMARK [2][-]{subsection.6.5}{Optimizations}{section.6}% 15
-\BOOKMARK [2][-]{subsection.6.6}{Failures}{section.6}% 16
-\BOOKMARK [2][-]{subsection.6.7}{Garbage Collection}{section.6}% 17
-\BOOKMARK [2][-]{subsection.6.8}{Discussion: }{section.6}% 18
-\BOOKMARK [2][-]{subsection.6.9}{Indicus3}{section.6}% 19
-\BOOKMARK [1][-]{section.7}{Protocol}{}% 20
-\BOOKMARK [2][-]{subsection.7.1}{TEsting}{section.7}% 21
-\BOOKMARK [2][-]{subsection.7.2}{Execution}{section.7}% 22
-\BOOKMARK [2][-]{subsection.7.3}{Validation}{section.7}% 23
-\BOOKMARK [2][-]{subsection.7.4}{Concurrency Control}{section.7}% 24
-\BOOKMARK [2][-]{subsection.7.5}{Consistent logging.}{section.7}% 25
-\BOOKMARK [2][-]{subsection.7.6}{Writeback and Multi-shard 2pc}{section.7}% 26
-\BOOKMARK [2][-]{subsection.7.7}{Failures}{section.7}% 27
-\BOOKMARK [2][-]{subsection.7.8}{Optimizations}{section.7}% 28
-\BOOKMARK [2][-]{subsection.7.9}{Garbage Collection}{section.7}% 29
-\BOOKMARK [2][-]{subsection.7.10}{Indicus3}{section.7}% 30
-\BOOKMARK [1][-]{section.8}{Implementation and Evaluation}{}% 31
-\BOOKMARK [2][-]{subsection.8.1}{Experiments}{section.8}% 32
-\BOOKMARK [1][-]{section.9}{Limitations}{}% 33
-\BOOKMARK [1][-]{section.10}{Related Work/Comparison}{}% 34
-\BOOKMARK [1][-]{section.11}{Conclusion}{}% 35
+\BOOKMARK [1][-]{section.2}{On the quest for scalable fault tolerance}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{The benefits and limitations of total order}{section.2}% 3
+\BOOKMARK [2][-]{subsection.2.2}{A shard of truth}{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.3}{Decentralizing decentralized systems}{section.2}% 5
+\BOOKMARK [2][-]{subsection.2.4}{A byzantine empire}{section.2}% 6
+\BOOKMARK [2][-]{subsection.2.5}{Indicus' heel}{section.2}% 7
+\BOOKMARK [1][-]{section.3}{Definition- notes}{}% 8
+\BOOKMARK [2][-]{subsection.3.1}{Model and Definitions}{section.3}% 9
+\BOOKMARK [3][-]{subsubsection.3.1.1}{System Model}{subsection.3.1}% 10
+\BOOKMARK [3][-]{subsubsection.3.1.2}{System properties}{subsection.3.1}% 11
+\BOOKMARK [1][-]{section.4}{Indicus}{}% 12
+\BOOKMARK [1][-]{section.5}{Arch-Notes}{}% 13
+\BOOKMARK [2][-]{subsection.5.1}{Architecture}{section.5}% 14
+\BOOKMARK [1][-]{section.6}{Protocol-Notes}{}% 15
+\BOOKMARK [2][-]{subsection.6.1}{TX execution}{section.6}% 16
+\BOOKMARK [2][-]{subsection.6.2}{Concurrency control}{section.6}% 17
+\BOOKMARK [2][-]{subsection.6.3}{Validation}{section.6}% 18
+\BOOKMARK [2][-]{subsection.6.4}{Writeback}{section.6}% 19
+\BOOKMARK [2][-]{subsection.6.5}{Optimizations}{section.6}% 20
+\BOOKMARK [2][-]{subsection.6.6}{Granting Liveness}{section.6}% 21
+\BOOKMARK [2][-]{subsection.6.7}{Byzantine Client behaviors}{section.6}% 22
+\BOOKMARK [2][-]{subsection.6.8}{Garbage Collection}{section.6}% 23
+\BOOKMARK [2][-]{subsection.6.9}{Discussion: }{section.6}% 24
+\BOOKMARK [2][-]{subsection.6.10}{Indicus3}{section.6}% 25
+\BOOKMARK [1][-]{section.7}{Protocol}{}% 26
+\BOOKMARK [2][-]{subsection.7.1}{TEsting}{section.7}% 27
+\BOOKMARK [2][-]{subsection.7.2}{Execution}{section.7}% 28
+\BOOKMARK [2][-]{subsection.7.3}{Validation}{section.7}% 29
+\BOOKMARK [2][-]{subsection.7.4}{Concurrency Control}{section.7}% 30
+\BOOKMARK [2][-]{subsection.7.5}{Consistent logging.}{section.7}% 31
+\BOOKMARK [2][-]{subsection.7.6}{Writeback and Multi-shard 2pc}{section.7}% 32
+\BOOKMARK [2][-]{subsection.7.7}{Failures}{section.7}% 33
+\BOOKMARK [2][-]{subsection.7.8}{Optimizations}{section.7}% 34
+\BOOKMARK [2][-]{subsection.7.9}{Garbage Collection}{section.7}% 35
+\BOOKMARK [2][-]{subsection.7.10}{Indicus3}{section.7}% 36
+\BOOKMARK [1][-]{section.8}{Implementation and Evaluation}{}% 37
+\BOOKMARK [2][-]{subsection.8.1}{Experiments}{section.8}% 38
+\BOOKMARK [1][-]{section.9}{Limitations}{}% 39
+\BOOKMARK [1][-]{section.10}{Related Work/Comparison}{}% 40
+\BOOKMARK [1][-]{section.11}{Conclusion}{}% 41

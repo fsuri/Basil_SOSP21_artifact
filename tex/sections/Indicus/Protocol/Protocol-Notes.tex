@@ -167,7 +167,7 @@ Challenges:\\
 
 - Pretty much mentioned in other sections already. Seems like its more suitable to have it with the contet right away.?
 
-\subsection{Failures}
+\subsection{Granting Liveness}
 Goals:\\
 - be robust to byzantine client\\
 
@@ -212,6 +212,28 @@ Subtletlties:\\
 - (Maybe useless:) Only a client that provides a dep proof (f+1) or abstain proof is allowed to issue fallback. Doesnt make it impossible to start FB, but at least some hurdle (a client could always just receive such a abstain message with the proof from a byz colluder replica\\
 - Fallback election is not started if that TX itself has a dependency - wait for all deps to be finished themselves. This is to distinguish whether a Client has been slow, or its blocking itself due to another dependency.\\
 - Tx map to different initial fallbacks: I.e. (TXID + view) mod n \\
+
+\subsection{Byzantine Client behaviors}
+
+- Can acquire random read "locks". Problem: Takes external effect without ever committing anything. Solution: Only grant Read timestamps (locks) to timely clients. 
+
+- Can increase congestion by submitting multiple TX concurrently. Solution: Replicas can vote to abstain on concurrent TX. Disincentivized because Replicas processing 2 TX from 1 client before they have received a commit message can be used as Proof of Misbehavior. (Assume messges from a same client are always fifo, simple to maintain with a sequence number: Dont allow clients to skip sequence numbers. Requires a client to finish up his own TXs if he crashed)
+
+- Can fake read sets: Read illegal values OR not include performed reads. Solution: This is ok according to the Byz-I definition. Such reads only have limited external effect: No more than in simple read/write conflict OCC
+
+- Can fake dependencies: Either equivocate or not include them. Solution: Cannot equivocate without it manifesting as 2 different TX. Not including them is fine, then there is no dependency on which replicas block.
+
+- Arbitrary timestamps. Solution: Bound too large TS because they could create a lot of aborts. Small timestamps are fine, they become obsolete. Can disallow them for garbage collection
+
+- can strategically/reactively make concurrent TXs abort, i.e. "artificial congestion". Solution: Only works reliably if network is under adversarial control.
+
+- Submit two different TX with same TS (TS is not part of ID, due to retries. If retries are disallowed, then this phenomena is impossible). Solution: Break ties via ID. Serves as proof of misbehavior and could be voted to abstain.
+
+- go fast path but retry anyways. Solution: Must disallow one of the options
+
+- can equivocate during agreement. Solution: Quorums make sure only one solution can be returned and that this solution can be maintained. Transforms problem into stalling. In traditional SMR protocols this would eventually trigger a view change once replicas time out.
+
+- can stall during agreement. Solution: Fallback mechanism for interested Client liveness
 
 
 \subsection{Garbage Collection}

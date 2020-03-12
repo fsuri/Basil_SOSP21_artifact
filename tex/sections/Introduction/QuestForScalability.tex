@@ -1,17 +1,31 @@
-\section{On the quest for scalability}
+\section{On the quest for scalable fault tolerance}
 
+\subsection{The benefits and limitations of total order}
 Talk more about total order. 
 And how we really would like to enforce it when necessary only.
 How we abstractly treat it as seperate registers on which we can run independent consensus
 
+\subsection{A shard of truth}
 Talk more about sharding.
+"Sharding is a type of database partitioning that separates very large databases the into smaller, faster, more easily managed parts called data shards"
+
+Cost and speed for lookups.
+
 How it is more of a hack and conflates objectives.
 
+Partial order is a byproduct of "share nothing". Works, when there is spacial locality in the data. Shards could be co-located with certain demographic etc.  Otherwise coordination is required across shards.
+
+
+\subsection{Decentralizing decentralized systems}
 Talk about leader based. How PBFT is bottlenecked scalability wise. Reference to BFT Mir here. 
 Also elaborate how systems that scale to multi-leaders (i.e. MIR, or a hypothetical BFT EPaxos) would still have inherent fairness struggles. Even with rotating leaders the problem does not go away, it is just mitigated. It always gives every byzantine replica the "chance" for damage. With a leaderless approach this does not arrive. Byzantine replicas can only try to equivocate or vote unfavorably.
 Instead our crux becomes how to deal with byzantine clients.
 What requirements does this put on the system? Byz should not be able to interfere with honest, or at least in a bounded way.
 The ideal mechanism: Honest and byz are fully independent, that we cannot guarantee. But we can give a client the keys to its own liveness. Bounded amount of conflicts to pick up (that are not due to concurrency)
 
+\subsection{A byzantine empire}
+Crash Failure is not enough. Does not extend trivially to weaker and more complex failure domains.
+
+\subsection{Indicus' heel}
 Our achilles heel, under congestion you can always abort, and byantine clients can create that congestion if they have the access control. But you expect this to be limited. 
 Replicas can enforce exponential backoff on clients.
