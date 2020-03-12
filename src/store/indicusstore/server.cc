@@ -112,20 +112,7 @@ void Server::HandleRead(const TransportAddress &remote,
     reply.set_committed_value(tsVal.second.val);
     tsVal.first.serialize(reply.mutable_committed_timestamp());
     if (validateProofs) {
-      proto::WriteProof committedProof;
-      *committedProof.mutable_txn() = tsVal.second.txn;
-      if (signedMessages) {
-        for (const auto &reply : tsVal.second.signedPhase2Replies) {
-          proto::SignedMessage *signedP2Reply = committedProof.mutable_signed_p2_replies()->add_msgs();   
-          *signedP2Reply = reply;
-        }
-      } else {
-        for (const auto &reply : tsVal.second.phase2Replies) {
-          proto::Phase2Reply *p2Reply = committedProof.mutable_p2_replies()->add_replies();   
-          *p2Reply = reply;
-        }
-      }
-      *reply.mutable_committed_proof() = committedProof;
+      *reply.mutable_committed_proof() = tsVal.second.proof;
     }
   } else {
     reply.set_status(REPLY_FAIL);
@@ -196,21 +183,22 @@ void Server::HandleRead(const TransportAddress &remote,
 void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
   Timestamp retryTs;
-  proto::Transaction txnConflict;
+  proto::CommittedProof conflict;
   proto::Phase1Reply::ConcurrencyControlResult result = DoOCCCheck(msg.txn_id(),
-      msg.txn(), msg.txn().timestamp(), retryTs);
+      msg.txn(), msg.txn().timestamp(), retryTs, conflict);
   p1Decisions[msg.txn_id()] = result;
 
   proto::Phase1Reply reply;
   reply.set_req_id(msg.req_id());
   reply.set_status(REPLY_OK);
   reply.set_ccr(result);
+  /* TODO: are retries a thing?
   if (result == proto::Phase1Reply::RETRY) {
     retryTs.serialize(reply.mutable_retry_timestamp());
-  }
+  }*/
 
   if (validateProofs) {
-    *reply.mutable_txn_conflict() = txnConflict;
+    *reply.mutable_committed_conflict() = conflict;
   }
 
   if (signedMessages) {
@@ -248,7 +236,8 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   proto::CommitDecision decision;
   if (validated) {
-    decision = IndicusDecide(prepare1Replies, &config);
+    bool fast;
+    decision = IndicusDecide(prepare1Replies, &config, validateProofs, fast);
   } else {
     decision = proto::CommitDecision::ABORT;
   }
@@ -282,13 +271,14 @@ void Server::HandleAbort(const TransportAddress &remote,
   aborted.insert(txnId);
 }
 
-proto::Phase1Reply::ConcurrencyControlResult Server::DoOCCCheck(uint64_t id, const proto::Transaction &txn,
-    const Timestamp &proposedTs, Timestamp &retryTs) {
+proto::Phase1Reply::ConcurrencyControlResult Server::DoOCCCheck(uint64_t id,
+    const proto::Transaction &txn, const Timestamp &proposedTs,
+    Timestamp &retryTs, proto::CommittedProof &conflict) {
   switch (occType) {
     case TAPIR:
       return DoTAPIROCCCheck(id, txn, proposedTs, retryTs);
     case MVTSO:
-      return DoMVTSOOCCCheck(id, txn, proposedTs);
+      return DoMVTSOOCCCheck(id, txn, proposedTs, conflict);
     default:
       Panic("Unknown OCC type: %d.", occType);
       return proto::Phase1Reply::ABORT;
@@ -427,7 +417,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(uint64_t id
 }
 
 proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
-    uint64_t id, const proto::Transaction &txn, const Timestamp &ts) {
+    uint64_t id, const proto::Transaction &txn, const Timestamp &ts,
+    proto::CommittedProof &conflict) {
   Timestamp localTs(timeServer.GetTime());
   // add delta to current local time
   localTs.setTimestamp(localTs.getTimestamp() + timeDelta);
@@ -438,12 +429,15 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
   std::unordered_map<std::string, std::set<Timestamp>> preparedWrites;
   GetPreparedWriteTimestamps(preparedWrites);
   for (const auto &read : txn.readset()) {
-    std::set<Timestamp> committedWrites;
+    std::vector<std::pair<Timestamp, Server::Value>> committedWrites;
     GetCommittedWrites(read.key(), read.readtime(), committedWrites);
-    for (const auto &committedTs : committedWrites) {
+    for (const auto &committedWrite : committedWrites) {
       // readVersion < committedTs < ts
       //     GetCommittedWrites only returns writes larger than readVersion
-      if (committedTs < ts) {
+      if (committedWrite.first < ts) {
+        if (validateProofs) {
+          conflict = committedWrite.second.proof;
+        } 
         return proto::Phase1Reply::ABORT; // TODO: return conflicting txn
       }
     }
@@ -574,13 +568,12 @@ void Server::GetPreparedReads(
   }
 }
 
-
 void Server::GetCommittedWrites(const std::string &key, const Timestamp &ts,
-    std::set<Timestamp> &writes) {
+    std::vector<std::pair<Timestamp, Server::Value>> &writes) {
   std::vector<std::pair<Timestamp, Server::Value>> values;
   if (store.getCommittedAfter(key, ts, values)) {
     for (const auto &p : values) {
-      writes.insert(p.first);
+      writes.push_back(p);
     }
   }
 }

@@ -86,8 +86,9 @@ class Client : public ::Client {
 
  private:
   struct PendingRequest {
-    PendingRequest(uint64_t id) : id(id), outstandingPrepares(0), commitTries(0),
-        maxRepliedTs(0UL), prepareStatus(REPLY_OK), prepareTimestamp(nullptr) {
+    PendingRequest(uint64_t id) : id(id), outstandingPhase1s(0),
+        outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
+        decision(proto::COMMIT), fast(true), prepareTimestamp(nullptr) {
     }
 
     ~PendingRequest() {
@@ -99,10 +100,12 @@ class Client : public ::Client {
     commit_callback ccb;
     commit_timeout_callback ctcb;
     uint64_t id;
-    int outstandingPrepares;
+    int outstandingPhase1s;
+    int outstandingPhase2s;
     int commitTries;
     uint64_t maxRepliedTs;
-    int prepareStatus;
+    proto::CommitDecision decision;
+    bool fast;
     Timestamp *prepareTimestamp;
     bool callbackInvoked;
     std::vector<proto::Transaction> deps;
@@ -111,9 +114,13 @@ class Client : public ::Client {
   // Prepare function
   void Phase1(PendingRequest *req, uint32_t timeout);
   void Phase1Callback(uint64_t reqId, proto::CommitDecision decision,
-      Timestamp ts);
+      bool fast, Timestamp ts);
   void Phase1TimeoutCallback(uint64_t reqId, int status, Timestamp ts);
   void HandleAllPhase1Received(PendingRequest *req);
+
+  void Phase2(PendingRequest *req, uint32_t timeout);
+  void Phase2Callback(uint64_t reqId, proto::CommitDecision decision);
+  void Phase2TimeoutCallback(uint64_t reqId, int status);
 
   // Unique ID for this client.
   uint64_t client_id;

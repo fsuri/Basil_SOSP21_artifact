@@ -151,14 +151,15 @@ void Client::Phase1(PendingRequest *req, uint32_t timeout) {
   for (auto p : participants) {
     bclient[p]->Phase1(t_id, *req->prepareTimestamp, std::bind(
           &Client::Phase1Callback, this, req->id, std::placeholders::_1,
-          std::placeholders::_2), std::bind(&Client::Phase1TimeoutCallback, this,
-            req->id, std::placeholders::_1, std::placeholders::_2), timeout);
-    req->outstandingPrepares++;
+          std::placeholders::_2, std::placeholders::_3),
+        std::bind(&Client::Phase1TimeoutCallback, this, req->id,
+          std::placeholders::_1, std::placeholders::_2), timeout);
+    req->outstandingPhase1s++;
   }
 }
 
 void Client::Phase1Callback(uint64_t reqId, proto::CommitDecision decision,
-    Timestamp ts) {
+    bool fast, Timestamp ts) {
   Debug("PHASE1 [%lu] callback %d,%lu", t_id, decision, ts.getTimestamp());
   auto itr = this->pendingReqs.find(reqId);
   if (itr == this->pendingReqs.end()) {
@@ -169,7 +170,8 @@ void Client::Phase1Callback(uint64_t reqId, proto::CommitDecision decision,
 
   //uint64_t proposed = ts.getTimestamp();
 
-  --req->outstandingPrepares;
+  req->fast = req->fast && fast;
+  --req->outstandingPhase1s;
   switch(decision) {
     case proto::COMMIT:
       Debug("PREPARE [%lu] OK", t_id);
@@ -177,8 +179,8 @@ void Client::Phase1Callback(uint64_t reqId, proto::CommitDecision decision,
     case proto::ABORT:
       // abort!
       Debug("PREPARE [%lu] ABORT", t_id);
-      req->prepareStatus = REPLY_FAIL;
-      req->outstandingPrepares = 0;
+      req->decision = proto::ABORT;
+      req->outstandingPhase1s = 0;
       break;
     /* TODO: are RETRY and ABSTAIN commit decisions?
     case REPLY_RETRY:
@@ -197,7 +199,7 @@ void Client::Phase1Callback(uint64_t reqId, proto::CommitDecision decision,
       break;
   }
 
-  if (req->outstandingPrepares == 0) {
+  if (req->outstandingPhase1s == 0) {
     HandleAllPhase1Received(req);
   }
 }
@@ -209,8 +211,8 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
   Debug("All PREPARE's [%lu] received", t_id);
   uint64_t reqId = req->id;
   int abortResult = -1;
-  switch (req->prepareStatus) {
-    case REPLY_OK: {
+  switch (req->decision) {
+    case proto::COMMIT: {
       Debug("COMMIT [%lu]", t_id);
       // application doesn't need to be notified when commit has been acknowledged,
       // so we use empty callback functions and directly call the commit callback
@@ -239,7 +241,7 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
       }
       break;
     }
-    case REPLY_RETRY: {
+    /*case REPLY_RETRY: {
       ++req->commitTries;
       if (req->commitTries < COMMIT_RETRIES) {
         statInts["retries"] += 1;
@@ -257,8 +259,8 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
       statInts["aborts_max_retries"] += 1;
       abortResult = RESULT_MAX_RETRIES;
       break;
-    }
-    case REPLY_FAIL: {
+    }*/
+    case proto::ABORT: {
       abortResult = RESULT_SYSTEM_ABORTED;
       break;
     }
@@ -284,6 +286,25 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
       req->callbackInvoked = true;
     }
   }
+}
+
+void Client::Phase2(PendingRequest *req, uint32_t timeout) {
+  Debug("PHASE2 [%lu] at %lu", t_id, req->prepareTimestamp->getTimestamp());
+
+  for (auto p : participants) {
+    bclient[p]->Phase2(t_id, std::bind(&Client::Phase2Callback, this, req->id,
+          std::placeholders::_1),
+        std::bind(&Client::Phase2TimeoutCallback, this, req->id,
+          std::placeholders::_1), timeout);
+    req->outstandingPhase2s++;
+  }
+
+}
+
+void Client::Phase2Callback(uint64_t reqId, proto::CommitDecision decision) {
+}
+
+void Client::Phase2TimeoutCallback(uint64_t reqId, int status) {
 }
 
 void Client::Abort(abort_callback acb, abort_timeout_callback atcb,

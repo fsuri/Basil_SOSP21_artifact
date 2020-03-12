@@ -165,6 +165,14 @@ void ShardClient::Phase1(uint64_t id, const Timestamp &timestamp,
   pendingPhase1->requestTimeout->Reset();
 }
 
+void ShardClient::Phase2(uint64_t id, phase2_callback pcb,
+      phase2_timeout_callback ptcb, uint32_t timeout) {
+}
+
+void ShardClient::Writeback(uint64_t id, writeback_callback wcb,
+      writeback_timeout_callback wtcb, uint32_t timeout) {
+}
+
 void ShardClient::Commit(uint64_t id, uint64_t timestamp, commit_callback ccb,
     commit_timeout_callback ctcb, uint32_t timeout) {
   uint64_t reqId = lastReqId++;
@@ -263,7 +271,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
 
   if (validateProofs) {
     // TODO: does write proof need to be signed?
-    if (!ValidateWriteProof(reply.committed_proof(), itr->second->key,
+    if (!ValidateCommittedProof(reply.committed_proof(), itr->second->key,
           reply.committed_value(), reply.committed_timestamp())) {
       // invalid replies can be treated as if we never received a reply from
       //     a crashed replica
@@ -343,16 +351,16 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
 
   if (itr->second->phase1Replies.size() == static_cast<size_t>(config->n)) {
     Timestamp retryTs;
+    bool fast = false;
     proto::CommitDecision decision = IndicusDecide(itr->second->phase1Replies,
-        config);
+        config, validateProofs, fast);
     phase1_callback pcb = itr->second->pcb;
     this->pendingPhase1s.erase(itr);
     delete itr->second;
-    if (reply.has_retry_timestamp()) {
-      pcb(decision, Timestamp(reply.retry_timestamp()));
-    } else {
-      pcb(decision, Timestamp());
-    }
+    pcb(decision, fast, Timestamp());
+  } else {
+    // if we have received 1 abort or 3f + 1 abstains or 3f+1 commits, we can
+    // move on to 2nd phase
   }
 }
 void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &phase2Reply) {
@@ -394,9 +402,5 @@ bool ShardClient::AbortCallback(uint64_t reqId,
   return true;
 }
 
-bool ShardClient::ValidateWriteProof(const proto::WriteProof &proof,
-    const std::string &key, const std::string &val, const Timestamp &timestamp) {
-  return true;
-}
 
 } // namespace indicus

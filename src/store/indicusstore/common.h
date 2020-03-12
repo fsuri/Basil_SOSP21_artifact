@@ -3,6 +3,7 @@
 
 #include "bft_tapir/config.h"
 #include "lib/configuration.h"
+#include "store/common/timestamp.h"
 #include "store/indicusstore/indicus-proto.pb.h"
 
 #include <map>
@@ -20,8 +21,14 @@ void SignMessage(const ::google::protobuf::Message &msg,
     const crypto::PrivKey &privateKey, uint64_t processId,
     proto::SignedMessage &signedMessage);
 
-proto::CommitDecision IndicusDecide(const std::vector<proto::Phase1Reply> &replies,
-    const transport::Configuration *config);
+proto::CommitDecision IndicusDecide(
+    const std::vector<proto::Phase1Reply> &replies,
+    const transport::Configuration *config, bool validateProofs, bool &fast);
+
+bool ValidateCommittedProof(const proto::CommittedProof &proof,
+    const std::string &key, const std::string &val, const Timestamp &timestamp);
+
+bool ValidateProof(const proto::CommittedProof &proof);
 
 } // namespace indicusstore
 

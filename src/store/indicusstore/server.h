@@ -68,6 +68,11 @@ class Server : public TransportReceiver, public ::Server {
   virtual inline Stats &GetStats() override { return stats; }
 
  private:
+  struct Value {
+    std::string val;
+    proto::CommittedProof proof;
+  };
+
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
       const proto::Phase1 &msg);
@@ -77,12 +82,15 @@ class Server : public TransportReceiver, public ::Server {
       const proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
-  proto::Phase1Reply::ConcurrencyControlResult DoOCCCheck(uint64_t id, const proto::Transaction &txn,
-      const Timestamp &proposedTs, Timestamp &retryTs);
-  proto::Phase1Reply::ConcurrencyControlResult DoTAPIROCCCheck(uint64_t id, const proto::Transaction &txn,
-      const Timestamp &proposedTs, Timestamp &retryTs);
-  proto::Phase1Reply::ConcurrencyControlResult DoMVTSOOCCCheck(uint64_t id, const proto::Transaction &txn,
-      const Timestamp &ts);
+  proto::Phase1Reply::ConcurrencyControlResult DoOCCCheck(uint64_t id,
+      const proto::Transaction &txn, const Timestamp &proposedTs,
+      Timestamp &retryTs, proto::CommittedProof &conflict);
+  proto::Phase1Reply::ConcurrencyControlResult DoTAPIROCCCheck(uint64_t id,
+      const proto::Transaction &txn, const Timestamp &proposedTs,
+      Timestamp &retryTs);
+  proto::Phase1Reply::ConcurrencyControlResult DoMVTSOOCCCheck(uint64_t id,
+      const proto::Transaction &txn, const Timestamp &ts,
+      proto::CommittedProof &conflict);
 
   void GetPreparedWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
@@ -93,7 +101,7 @@ class Server : public TransportReceiver, public ::Server {
   void GetPreparedReads(
       std::unordered_map<std::string, std::vector<proto::Transaction>> &reads);
   void GetCommittedWrites(const std::string &key, const Timestamp &ts,
-      std::set<Timestamp> &writes);
+      std::vector<std::pair<Timestamp, Value>> &writes);
   void GetCommittedReads(const std::string &key, const Timestamp &ts,
       std::set<Timestamp> &reads);
   void Commit(uint64_t txnId, const proto::Transaction &txn,
@@ -111,13 +119,6 @@ class Server : public TransportReceiver, public ::Server {
   const uint64_t timeDelta;
   TrueTime timeServer;
   crypto::PrivKey privateKey;
-
-  struct Value {
-    std::string val;
-    proto::Transaction txn;
-    std::vector<proto::SignedMessage> signedPhase2Replies;
-    std::vector<proto::Phase2Reply> phase2Replies;
-  };
 
   VersionedKVStore<Timestamp, Value> store;
   std::unordered_map<std::string, std::map<uint64_t, std::set<Timestamp>>> rts;

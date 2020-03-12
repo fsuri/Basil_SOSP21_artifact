@@ -56,8 +56,17 @@ typedef std::function<void(int, const std::string &,
     bool)> read_callback;
 typedef std::function<void(int, const std::string &)> read_timeout_callback;
 
-typedef std::function<void(proto::CommitDecision, Timestamp)> phase1_callback;
+typedef std::function<void(proto::CommitDecision, bool,
+    Timestamp)> phase1_callback;
 typedef std::function<void(int, Timestamp)> phase1_timeout_callback;
+
+typedef std::function<void(proto::CommitDecision)> phase2_callback;
+typedef std::function<void(int)> phase2_timeout_callback;
+
+typedef std::function<void()> writeback_callback;
+typedef std::function<void(int)> writeback_timeout_callback;
+
+
 
 class ShardClient : public TransportReceiver {
  public:
@@ -93,6 +102,10 @@ class ShardClient : public TransportReceiver {
 
   virtual void Phase1(uint64_t id, const Timestamp &timestamp,
       phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout);
+  virtual void Phase2(uint64_t id, phase2_callback pcb,
+      phase2_timeout_callback ptcb, uint32_t timeout);
+  virtual void Writeback(uint64_t id, writeback_callback wcb,
+      writeback_timeout_callback wtcb, uint32_t timeout);
 
  private:
   struct PendingQuorumGet {
@@ -172,9 +185,6 @@ class ShardClient : public TransportReceiver {
       const std::string &);
   bool AbortCallback(uint64_t reqId, const std::string &,
       const std::string &);
-
-  bool ValidateWriteProof(const proto::WriteProof &proof, const std::string &key,
-      const std::string &val, const Timestamp &timestamp);
 
   /* Helper Functions for starting and finishing requests */
   void StartRequest();
