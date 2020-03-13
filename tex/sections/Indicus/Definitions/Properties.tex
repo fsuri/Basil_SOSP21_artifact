@@ -39,3 +39,10 @@ An execution is gracious iff (a) the execution is synchronous with some
 implementation-dependent short bound on message delay (b) all clients and servers behave correctly and (c) there is no contention on the objects relevant to the execution.
 \textbf{Uncivil}
 An execution is uncivil iff (a) there is no bound on message delay (asynchrony) and (b) up to f servers and an arbitrary number of clients are Byzantine 
+
+
+\subsection{Assumptions on Behaviors}
+Clients can do what they want, but we assume there is access control to bound the reach. We dont expect clients to explicitly try to circumvent others progress (this requires knowledge of what they are doing in the first place).
+We expect a level of performance, if you dont meet it you are not fit for the system.
+Replicas can enforce such access lists, i.e. via timeouts of blacklists.
+unlikely that a Client can lock out a lot of the system, would mean he has total access control.

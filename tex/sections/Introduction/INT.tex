@@ -6,7 +6,7 @@ This paper introduces Indicus, the first leaderless transactional key-value stor
 \fs{this maybe sounds too much like a permissioneless blockchain} Specifically, this paper asks the question: how can we enable \textit{mutually distrustful parties} to consistently, reliably share and scalably share data, while minimizing centralization. \\
 
 
-The ability to share data online offers exciting opportunities, however, increased datasharing also raises the concern of how to \textit{decentralize trust}. In banking, systems like SWIFT (cite) enable financial institutions to quickly and accurately enable cross-institutional transaction clearance, at the cost of placing their trust in the centralized SWIFT network. In manufacturing, online data sharing can improve accountability and auditing amongst the globally distributed supply chain, but there may not be an identifiable source of trust. Consider the supply chain for the latest iPhone: it spans three continents, and hundreds of different contractors \cite{AppleSup} that may neither trust Apple, nor each other, yet must be willing to share and agree on information concerning the construction of the same product. Even, sole entities that distribute their dataceneters globally (i.e. Google, Amazon), may not trust their \textit{own} datacenters located in authoritative domains or legislations out of its control.\\
+The ability to share data online offers exciting opportunities, however, increased datasharing also raises the concern of how to \textit{decentralize trust}. In banking, systems like SWIFT (cite) enable financial institutions to quickly and accurately enable cross-institutional transaction clearance, at the cost of placing their trust in the centralized SWIFT network. In manufacturing, online data sharing can improve accountability and auditing amongst the globally distributed supply chain, but there may not be an identifiable source of trust. Consider the supply chain for the latest iPhone: it spans three continents, and hundreds of different contractors \cite{AppleSup} that may neither trust Apple, nor each other, yet must be willing to share and agree on information concerning the construction of the same product. Even sole entities that distribute their dataceneters globally (i.e. Google, Amazon), may not trust their \textit{own} datacenters located in authoritative domains or legislations out of its control.\\
 
 
 Recognizing this challenge by both the research and industrial communities, much effort has focused on enabling shared computation between mutually distrustful parties in the context of Byzantine Fault Tolerance (BFT) and Blockchains. 
@@ -20,6 +20,8 @@ While applications in stronger failure domains are built atop transactional Data
 Concretely, we stipulate that an appropriate Database for the Byzantine Fault Model should 1) maintain the \textit{abstraction} of a sequential execution, 2) be scalable, 3) be resitant to censorship and frontrunning and 4) bound the effects of byzantine components, be it replicas or clients.
 We outline how existing approaches fall short of satisfying one or more of these requirements, and finally propose a system to fill this gap.
 
+\iffalse
+\fs{CUT from HERE}
 First, we argue there exists a fundamental mismatch between the implementation of a totally ordered log and the reality of much large-scale distrubted processing. Many large-scale distributed systems consists primarily of unordered and unrelated operations. For example, a product supply chain consists of many concurrent steps that do not require ordering. Imposing an ordering on non-conflicting operations is not only often unecessary, but costly: participants in the shared computation must vote to order operations and serialize request execution accordingly, thus harming both throughput and end-to-end latency. \fs{people can claim that there exist partially ordered solutions -> Dag blockchains, clairvoyant}\\
 
 Second, while there exists work on mitigating this scalability bottleneck through sharding (cite Omniledger, Chainspace, Callinicos), it remains largely an engineering optimization. At its core, the application of sharding conflates two objectives: Horizontal hardware scaling and transactional concurrency \fs{too vague currently}. When a mapping from data to shards is well chosen (note, that this relies on application specific knowledge) partial ordering between objects on different shards manifests as a side-effect of seperating resources \fs{will others agree to this view?}. In fact, when transactions span multiple shards, the latent total order requirement can introduce redundant coordination overheads, as coordination may need to be performed twice, at the level of individual shards, and across shards \cite{zhang2016operation}. This is especially problematic when workloads are geo-replicated (citation?), or when, as in BFT, the replication factor is high \fs{why? be more specific}. \\
@@ -33,12 +35,22 @@ In summary, prior BFT solutions succumb to one or more of the following fallacie
 
 \fs{this paragraph feels like taking a step back}
 Leveraging commutativity between transactions is not a new idea. As a research trend of mitigating the scalability bottleneck, EPaxos (cite), TAPIR (cite) and CURP (cite) only consider the ordering between potentially conflicting operations. However, these systems assume the stronger crash-failure model and are non-trivial to extend to the Byzantine model, so that they cannot directly solve the problem of data sharing among mutually distrustful, malicious or arbitrarily failing parties.
+\fs{CUT TILL HERE}
+\fi
+
 Existing research, in essence, is either attempting to build concurrency control and sharding functionalities over BFT replication, or integrating these functionalities into a crash-failure replication protocol. In this paper, we will show how to build these desiring functionalities inside a BFT replication protocol. Specifically, our goal is to \textit{provide the illusion of a centralized shared log, rather than the non-scalable reality of a totally ordered log}.\\
 
+\iffalse
 \fs{rambling too long}
+\fs{CUT FROM HERE}
+
 While copious efforts exist to design decentralized systems that exploit transaction semantics for the crash failure model, few, if any attempts have been made for the Byzantine Fault Model. This naturally raises the question, why so? One explanation is that in Byzantine Systems, some centralization is in fact highly desirable as it simplifies the problem by identifying a single point of accountability. A natural way to improve both scalability and fairness is to avoid this bottleneck, at the cost of paving the path for a wider set of undesirable phenomena. The challenge of a leaderless byzantine system is simple yet daunting: It empowers both malicious users and system components to collude and misbehave in potentially unaccountable ways.
 In this paper we will show to overcome this challenge by designing and implementing the leaderless BFT system Indicus that avoids near-all centralization while replicating interactive ACID transactions in a partial order. 
 \fs{client driven protocol could be seen as nightmare for byz system. What is our design agenda to control this? -> Byz can only influence itself. Honest users can keep using the system }\\
+\fs{CUT TILL HERE}
+\fi
+
+In this paper we will show to realize this goal by designing and implementing a leaderless BFT system called Indicus, that avoids near-all centralization while replicating interactive ACID transactions in a partial order. 
 
 Indicus' design is driven by the ethos of \textit{independent operability}; both safety \fs{(integrity, serializability)} and liveness \fs{ability to issue and complete TX} are per-client properties and independent from one client to another.
 \fs{Indicus embraces partial order across the entire transaction stack} Unlike State Machine Replication (SMR) based systems that achieve agreement on computation (i.e. state transitions) by imposing a total order on execution across all replicas, Indicus executes transactions speculatively at clients, while validating and replicating \textit{all } transactions in arbitrary order at any given replica. Abstractly, Indicus proposes each transaction for a seperate concurrent binary consensus instance and enforces an implicit partial order by aborting transactions when inconistencies arise. In order to maintain a serializable transaction history, Indicus assigns each transaction an optimistic timestamp and uses a variation of Multiversioned Timestamp Ordering (MVTSO) for concurrency control. Ordering conflicts between transactions whose interleavings would violate prescribed Isolation guarantees are broken based on the given timestamps and speculative execution results. \fs{does all of this need to be in an intro? There needs to be a little of key insight, but it feels more appropriate for discussion}\\
@@ -47,7 +59,7 @@ Indicus' design is driven by the ethos of \textit{independent operability}; both
 
 
 Overall, the Indicus design has the following implications:
-\begin{itemize}
+\begin{itemize}%[noitemsep,topsep=0pt,parsep=0pt,partopsep=0pt]
 
 \item Indicus is robust to censorship and frontrunning as there exist no central authority that admits and orders transactions
 \item Indicus allows commutative/non-conflicting Transactions to both be executed and validated out of order, thus maximizing parallelism. \fs{ (This should increase throughput and reduce latency, because clients arent waiting for all previously sequenced tx to finish. Consequently the tail latency does not dominate throughput as much.)}

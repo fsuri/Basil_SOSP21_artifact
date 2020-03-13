@@ -1,7 +1,8 @@
-\section{On the quest for scalable fault tolerance}
+\section{On the quest for scalable, decentralized, fault tolerance}
 
 
 \subsection{In light of partial ordering}
+Notes:
 Talk more about total order. 
 And how we really would like to enforce it when necessary only.
 How we abstractly treat it as seperate registers on which we can run independent consensus
@@ -18,29 +19,31 @@ However, traditional databases assume the stronger Crash-Failure model and canno
 
 \subsection{A shard of truth}
 To combat this scalability bottleneck many systems rely on sharding. Orignially a database technique, sharding partitions the datastore into smaller and faster \textit{shards} that are easier to manage. While sharding approaches in practice (often) induce partial ordering and increase parallelism, this is not a principled property as in this case the application of sharding conflates two objectives:
-At its core, sharding horizontally scales hardware resources, in order reduce memory overheads such as storage cost or lookup time. When there exist exploitable spacial locality within the data, i.e. transaction access patterns are limited to a subset of shards
-and a suitable partition data mapping is chosen
+At its core, sharding horizontally scales hardware resources, in order reduce memory overheads such as storage cost or lookup time. In order to maintain consistency across the database, sharding requires coordination between shards, typically in the form of a joint two-phase commit and concurrency control protocol. 
+When there exist exploitable spacial locality within the data, i.e. transaction access patterns are limited to a subset of shards coordination across all shards is not necessary and a partial order on transactions may manifest. Note however, that chosing a suitable partition data mapping is highly workload dependent and hence from a system design perspective is not agnostic to the application.
+Partial order execution and replication is therefore not an inherent property of sharding, but rather a by-product of the desired "share-nothing" partition architecture. 
+
+In fact, transactions span multiple shards, the latent total order requirment within each shard introduces redundant coordination overheads, as coordination may need to be performed twice, at the level of individual shards, and across shards. This is especially problematic when workloads are geo-replicated, or when, as in BFT, the replication factor is high. 
+We argue, that there exist no optimal calibration for the degree of sharding: When sharding is coarse (few large shards), scalabiliy suffers under the per-shard total order, wheras when sharding is fine-grained (a lot of small shards), cross-shard overheads begin to dominate. 
+Instead of relying on sharding to achieve partial-order transaction processing, it is desirable to build atop primitives that inherently assume partially ordered.
+Zhang et al (cite ordering paper), where the first to point out, that replication and isolation are not orthogonal problems. They reconcile redundant coordination overheads, by integrating both replication and transaction layer, and consequently relaxing the total order requirement within shards.
+In Indicus we adopt this rationale by co-designing concurrency control and replication, thus naturally exposing existing commutativty between transactions.
 
 
-"Sharding is a type of database partitioning that separates very large databases the into smaller, faster, more easily managed parts called data shards"
-
-Cost and speed for lookups.
-
-How it is more of a hack and conflates objectives.
-
-Partial order is a byproduct of "share nothing". Works, when there is spacial locality in the data. Shards could be co-located with certain demographic etc.  Otherwise coordination is required across shards.
-
-
-Redundancy can be avoided by integrating replicaiton and transaction layer with concurrency control. See tapir: they show that isolation and replication are not orthogonal.
 
 \subsection{Decentralizing decentralized systems}
-Talk about leader based. How PBFT is bottlenecked scalability wise. Reference to BFT Mir here. Multi leaders. When view changes happen the system is not down fully.
+Blockchain technologies are often advertised as a shared database that decentralized trust (i.e. Hyperledger). While true to an extent in permissionless, open-membership settings (in practice mining pools dominate), this is rarely the case in permissioned, fixed-membership blockchain settings. In order to achieve better performance and scalability, relative to slow and wasteful techniques such as Proof of Work (PoW), the fixed membership bounds allow systems to rely on traditional BFT SMR, such as the seminal PBFT protocol and its descendants, in order to provide the totally ordered log abstraction.
+In practice, most of these solutions intertwine the requirement for a total order with the existance of a dedicated leader replica that acts as centralized sequencer. While simple, \fs{(or arguably necessary to establish a live agreement protocol on a totally ordered ledger (i.e. a BFT paxos cannot be live)} a dedicated leader exposes two obvious concerns: scalability and fairness.
 
-Also elaborate how systems that scale to multi-leaders (i.e. MIR, or a hypothetical BFT EPaxos) would still have inherent fairness struggles. Even with rotating leaders the problem does not go away, it is just mitigated. It always gives every byzantine replica the "chance" for damage. With a leaderless approach this does not arrive. Byzantine replicas can only try to equivocate or vote unfavorably.
-Push scalability from 1 to n leaders to c clients.
-Our crux becomes how to deal with byzantine clients.
-What requirements does this put on the system? Byz should not be able to interfere with honest, or at least in a bounded way.
-The ideal mechanism: Honest and byz are fully independent, that we cannot guarantee. But we can give a client the keys to its own liveness. Bounded amount of conflicts to pick up (that are not due to concurrency)
+A single sequencer exposes a proposal bottleneck, as load is focused entirely on the leader, while other replicas sit idle. Moreover, when the leader is faulty, i.e. crashes or misbehaves, the system comes to a halt, requiring expensive re-election schemes to re-gain liveness while maintaining consistency. BFT-MIR takes a step towards reconciling this bottleneck by allowing all replicas to act as proposers for a subset of the request space (cite BFT MIR). This approach scales the bottleneck by a factor of $n$, but remains coarse grained under failures, as an entire partition of the request space remains unavailable during re-assignment.
+
+Moreover, a dedicated sequencer exposes a fairness vulnerability. A malicious, or simply rationally biased proposer may censor, delay or frontrun transactions with only limited accountability. Such authority is antithetical to the ethos of decentralized trust and thus highly undesirable. Variations of this scheme enforce either periodic or continuous leader rotation, yet only help to mititage the problem, as each leader has undisclosed authority during its tenure. Multi-leadered systems, such as BFT-MIR \fs{(or a hypothetical EPaxos)} suffer
+
+These restrictions motivate us to design a leaderless protocol. Concretely, we avoid proposal delegation to an untrusted replica by declaring each client to be its own transaction coordinator.
+By shifting responsibility from replicas to clients, the proposal bottleneck becomes the max-capacity of incoming requests replicas can process \fs{(from 1 to n to c "leaders" - need to distinguish better what leaderless means: No replica leader, each client is its own leader, akak coordinator)}, while fairness is entirely up to the network delivey. In doing so, the crux of the design becomes how to tolerate byzantine clients. In particular, byzantine participants should not be able to interfere with honest participants in an unbounded manner and without being held accountable for their participation. \fs{An ideal mechanism would allow honest participants to act fully independently of all byzantine actors. While guaranteeing this is impossible (strong statement), we can give a client the keys to its own liveness. comment: this excludes lack of progress due to concurrency - in this case only exponential backoff can help}
+
+
+
 
 \subsection{Linearity}
 dont use all to all, avoid large signature overheads if possible?
