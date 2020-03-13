@@ -37,11 +37,12 @@ namespace indicusstore {
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int shard, int closestReplica,
-    uint64_t readQuorumSize, TrueTime &timeServer) : client_id(client_id),
-    transport(transport), config(config), shard(shard),
+    uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
+    bft_tapir::NodeConfig *cryptoConfig, TrueTime &timeServer) :
+    client_id(client_id), transport(transport), config(config), shard(shard),
     readQuorumSize(readQuorumSize), timeServer(timeServer),
-    signedMessages(false), validateProofs(false), cryptoConfig(nullptr),
-    lastReqId(0UL) {
+    signedMessages(signedMessages), validateProofs(validateProofs),
+    cryptoConfig(cryptoConfig), lastReqId(0UL) {
   transport->Register(this, *config, -1, -1);
 
   if (closestReplica == -1) {
@@ -352,7 +353,7 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
   if (itr->second->phase1Replies.size() == static_cast<size_t>(config->n)) {
     Timestamp retryTs;
     bool fast = false;
-    proto::CommitDecision decision = IndicusDecide(itr->second->phase1Replies,
+    proto::CommitDecision decision = IndicusShardDecide(itr->second->phase1Replies,
         config, validateProofs, fast);
     phase1_callback pcb = itr->second->pcb;
     this->pendingPhase1s.erase(itr);

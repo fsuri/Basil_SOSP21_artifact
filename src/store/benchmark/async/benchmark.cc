@@ -27,6 +27,7 @@
 #include "store/mortystore/client.h"
 #include "store/benchmark/async/smallbank/smallbank_client.h"
 #include "store/janusstore/client.h"
+#include "store/indicusstore/client.h"
 #include "store/common/frontend/one_shot_client.h"
 #include "store/common/frontend/async_one_shot_adapter_client.h"
 #include "store/benchmark/async/common/zipf_key_selector.h"
@@ -44,7 +45,8 @@ enum protomode_t {
 	PROTO_WEAK,
 	PROTO_STRONG,
   PROTO_JANUS,
-  PROTO_MORTY
+  PROTO_MORTY,
+  PROTO_INDICUS
 };
 
 enum benchmode_t {
@@ -67,6 +69,13 @@ enum transmode_t {
   TRANS_TCP,
 };
 
+enum read_quorum_t {
+  READ_QUORUM_UNKNOWN,
+  READ_QUORUM_ONE,
+  READ_QUORUM_ONE_HONEST,
+  READ_QUORUM_MAJORITY_HONEST
+};
+
 /**
  * System settings.
  */
@@ -74,8 +83,42 @@ DEFINE_uint64(client_id, 0, "unique identifier for client");
 DEFINE_string(config_path, "", "path to shard configuration file");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
 DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
+
 DEFINE_bool(tapir_sync_commit, true, "wait until commit phase completes before"
     " sending additional transactions (for TAPIR)");
+
+const std::string read_quorum_args[] = {
+	"one",
+  "one-honest",
+  "majority-honest"
+};
+const read_quorum_t read_quorums[] {
+	READ_QUORUM_ONE,
+  READ_QUORUM_ONE_HONEST,
+  READ_QUORUM_MAJORITY_HONEST
+};
+static bool ValidateReadQuorum(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(read_quorum_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == read_quorum_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(indicus_read_quorum, read_quorum_args[0], "size of read quorums"
+    " (for Indicus)");
+DEFINE_validator(indicus_read_quorum, &ValidateReadQuorum);
+DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
+    " necessary to prevent impersonation (for Indicus)");
+DEFINE_bool(indicus_validate_proofs, false, "send and validate proofs as"
+    " necessary to check Byzantine behavior (for Indicus)");
+DEFINE_string(indicus_crypto_config_path, "", "path to crypto configuration"
+    " directory (for Indicus)");
+
+
 DEFINE_bool(debug_stats, false, "record stats related to debugging");
 
 const std::string trans_args[] = {
@@ -111,7 +154,8 @@ const std::string protocol_args[] = {
   "span-occ",
   "span-lock",
   "janus",
-  "morty"
+  "morty",
+  "indicus"
 };
 const protomode_t protomodes[] {
   PROTO_TAPIR,
@@ -122,7 +166,8 @@ const protomode_t protomodes[] {
   PROTO_STRONG,
   PROTO_STRONG,
   PROTO_JANUS,
-  PROTO_MORTY
+  PROTO_MORTY,
+  PROTO_INDICUS
 };
 const strongstore::Mode strongmodes[] {
   strongstore::Mode::MODE_UNKNOWN,
@@ -132,6 +177,8 @@ const strongstore::Mode strongmodes[] {
   strongstore::Mode::MODE_LOCK,
   strongstore::Mode::MODE_SPAN_OCC,
   strongstore::Mode::MODE_SPAN_LOCK,
+  strongstore::Mode::MODE_UNKNOWN,
+  strongstore::Mode::MODE_UNKNOWN,
   strongstore::Mode::MODE_UNKNOWN
 };
 static bool ValidateProtocolMode(const char* flagname,
@@ -368,6 +415,20 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // parse read quorum
+  read_quorum_t read_quorum = READ_QUORUM_UNKNOWN;
+  int numReadQuorums = sizeof(read_quorum_args);
+  for (int i = 0; i < numReadQuorums; ++i) {
+    if (FLAGS_indicus_read_quorum == read_quorum_args[i]) {
+      read_quorum = read_quorums[i];
+      break;
+    }
+  }
+  if (mode == PROTO_INDICUS && read_quorum == READ_QUORUM_UNKNOWN) {
+    std::cerr << "Unknown read quorum." << std::endl;
+    return 1;
+  }
+
   // parse retwis settings
   std::vector<std::string> keys;
   if (benchMode == BENCH_RETWIS || benchMode == BENCH_RW) {
@@ -505,6 +566,29 @@ int main(int argc, char **argv) {
         asyncClient = new mortystore::Client(FLAGS_config_path,
             (FLAGS_client_id << 3) | i, FLAGS_num_shards, FLAGS_num_groups,
             FLAGS_closest_replica, transport, part, FLAGS_debug_stats);
+        break;
+      }
+      case PROTO_INDICUS: {
+        uint64_t readQuorumSize = 0;
+        switch (read_quorum) {
+          case READ_QUORUM_ONE:
+            readQuorumSize = 1;
+            break;
+          case READ_QUORUM_ONE_HONEST:
+            readQuorumSize = config->f + 1;
+            break;
+          case READ_QUORUM_MAJORITY_HONEST:
+            readQuorumSize = config->f * 2 + 1;
+            break;
+          default:
+            NOT_REACHABLE();
+        }
+        client = new indicusstore::Client(FLAGS_config_path, FLAGS_num_shards,
+            FLAGS_num_groups, FLAGS_closest_replica, transport, part,
+            FLAGS_tapir_sync_commit, readQuorumSize,
+            FLAGS_indicus_sign_messages,
+            FLAGS_indicus_validate_proofs, FLAGS_indicus_crypto_config_path,
+            TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
       }
       default:

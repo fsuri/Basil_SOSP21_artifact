@@ -237,7 +237,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   proto::CommitDecision decision;
   if (validated) {
     bool fast;
-    decision = IndicusDecide(prepare1Replies, &config, validateProofs, fast);
+    decision = IndicusShardDecide(prepare1Replies, &config, validateProofs, fast);
   } else {
     decision = proto::CommitDecision::ABORT;
   }

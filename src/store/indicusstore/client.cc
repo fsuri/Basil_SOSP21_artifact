@@ -35,9 +35,10 @@ namespace indicusstore {
 
 using namespace std;
 
-Client::Client(const string configPath, int nShards, int nGroups,
+Client::Client(const std::string &configPath, int nShards, int nGroups,
     int closestReplica, Transport *transport, partitioner part, bool syncCommit,
-    uint64_t readQuorumSize, TrueTime timeServer) : nshards(nShards),
+    uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
+    const std::string &cryptoConfigPath, TrueTime timeServer) : nshards(nShards),
     ngroups(nGroups), transport(transport), part(part), syncCommit(syncCommit),
     timeServer(timeServer), lastReqId(0UL), config(nullptr) {
   // Initialize all state here;
@@ -63,7 +64,8 @@ Client::Client(const string configPath, int nShards, int nGroups,
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
     bclient[i] = new ShardClient(config, transport, client_id, i,
-        closestReplica, readQuorumSize, timeServer);
+        closestReplica, readQuorumSize, signedMessages, validateProofs,
+        cryptoConfigPath, timeServer);
   }
 
   Debug("Indicus client [%lu] created! %lu %lu", client_id, nshards,
@@ -292,6 +294,8 @@ void Client::Phase2(PendingRequest *req, uint32_t timeout) {
   Debug("PHASE2 [%lu] at %lu", t_id, req->prepareTimestamp->getTimestamp());
 
   for (auto p : participants) {
+    // replicas need to check that there are P1 replies for each shard in the
+    //    read set and write set
     bclient[p]->Phase2(t_id, std::bind(&Client::Phase2Callback, this, req->id,
           std::placeholders::_1),
         std::bind(&Client::Phase2TimeoutCallback, this, req->id,

@@ -22,12 +22,17 @@ void SignMessage(const ::google::protobuf::Message &msg,
     proto::SignedMessage &signedMessage);
 
 proto::CommitDecision IndicusDecide(
+    const std::map<int, std::vector<proto::Phase1Reply>> &replies,
+    const transport::Configuration *config, bool validateProofs);
+
+proto::CommitDecision IndicusShardDecide(
     const std::vector<proto::Phase1Reply> &replies,
     const transport::Configuration *config, bool validateProofs, bool &fast);
 
 bool ValidateCommittedProof(const proto::CommittedProof &proof,
     const std::string &key, const std::string &val, const Timestamp &timestamp);
 
+// check must validate that proof replies are from all involved shards
 bool ValidateProof(const proto::CommittedProof &proof);
 
 } // namespace indicusstore

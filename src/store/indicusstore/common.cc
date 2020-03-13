@@ -26,6 +26,12 @@ void SignMessage(const ::google::protobuf::Message &msg,
 }
 
 proto::CommitDecision IndicusDecide(
+    const std::map<int, std::vector<proto::Phase1Reply>> &replies,
+    const transport::Configuration *config, bool validateProofs) {
+  return proto::CommitDecision::ABORT;
+}
+
+proto::CommitDecision IndicusShardDecide(
     const std::vector<proto::Phase1Reply> &replies,
     const transport::Configuration *config, bool validateProofs, bool &fast) {
   int commits = 0;

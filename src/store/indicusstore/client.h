@@ -56,9 +56,10 @@ namespace indicusstore {
 
 class Client : public ::Client {
  public:
-  Client(const std::string configPath, int nShards, int nGroups,
+  Client(const std::string &configPath, int nShards, int nGroups,
       int closestReplica, Transport *transport, partitioner part,
-      bool syncCommit, uint64_t readQuorumSize,
+      bool syncCommit, uint64_t readQuorumSize, bool signedMessages,
+      bool validateProofs, const std::string &cryptoConfigPath,
       TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 

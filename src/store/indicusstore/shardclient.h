@@ -73,7 +73,8 @@ class ShardClient : public TransportReceiver {
   /* Constructor needs path to shard config. */
   ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int shard, int closestReplica,
-      uint64_t readQuorumSize, TrueTime &timeServer);
+      uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
+      bft_tapir::NodeConfig *cryptoConfig, TrueTime &timeServer);
   virtual ~ShardClient();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
