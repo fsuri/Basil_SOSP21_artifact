@@ -2,6 +2,7 @@
 
 
 \subsection{In light of partial ordering}
+\iffalse
 Notes:
 Talk more about total order. 
 And how we really would like to enforce it when necessary only.
@@ -9,40 +10,45 @@ How we abstractly treat it as seperate registers on which we can run independent
 
 Databases do it right: They do a partial order and only show the equivalence. 
 Hyperledger is a database in its on way: Exec, order, validate architecture. Uses CF consensus however - could be swapped out.\\
+\fi
 
 
-Imposing a shared total order across different machines solves the problem of State Machine Replication, i.e. the objective of maintaining consistent data replicas. It does so however, by a reduction of problem, rather than solving the original goal: providing consistent output. While execution in a common order implies agreement on a common result, this additional step adds coordination overhead, when possibly unecessary, as each transaction is declared to be co-dependent with all other transactions.
+Imposing a shared total order across different machines solves the problem of State Machine Replication, i.e. the objective of maintaining consistent data replicas. It does so however, by a reduction of problem, rather than solving the original goal: providing consistent output. While execution in a common order implies agreement on a common result, this additional step adds coordination overhead, when possibly unecessary, as each transaction is declared to be co-dependent with all other transactions. 
 Concretely, when requiring agreement on a totally ordered ledger of transactions, achieving agreement on each new request implies achieving agreement on the entire history prefix. This is desirable in settings relying on probabilistic finality (such as permissionless blockchains), however unecessary in traditional BFT/permissioned blockchain settings. In fact, when all transactions are commutative, all requests could reach agreement in parallel and out of order. Thus, in practice, where only a subset of transactions conflict, a partial order suffices. 
+Many large-scale distributed systems consist primarliy of unordered and unrelated operations. For example, a product supply chain consists of many concurrent steps that do not require ordering.
 This is the bread and butter of decades of database research. Transactions inherently are run concurrently and may interleave arbitrarily, while Concurrency Control mechanisms enforce an implicit partial order by resolving conflicts only when necessary. The premise of such an approach is simple: Databases allow for a natural, partially ordered execution, that merely maintains the equivalence to a sequential execution.
-However, traditional databases assume the stronger Crash-Failure model and cannot be modified straightforwardly to tolerate Byzantine Faults. Existing blockchain technologies such as Hyperledger Fabric, consider themselves shared databases, yet fall back to restrictive total order broadcast primitives and hence fundamentally limiting scalability. 
+However, traditional databases assume the stronger Crash-Failure model and cannot be modified straightforwardly to tolerate Byzantine Faults. Existing blockchain technologies such as Hyperledger Fabric, consider themselves shared databases, yet fall back to restrictive total order broadcast primitives, hence fundamentally limiting scalability. 
 
 
 \subsection{A shard of truth}
 To combat this scalability bottleneck many systems rely on sharding. Orignially a database technique, sharding partitions the datastore into smaller and faster \textit{shards} that are easier to manage. While sharding approaches in practice (often) induce partial ordering and increase parallelism, this is not a principled property as in this case the application of sharding conflates two objectives:
 At its core, sharding horizontally scales hardware resources, in order reduce memory overheads such as storage cost or lookup time. In order to maintain consistency across the database, sharding requires coordination between shards, typically in the form of a joint two-phase commit and concurrency control protocol. 
 When there exist exploitable spacial locality within the data, i.e. transaction access patterns are limited to a subset of shards coordination across all shards is not necessary and a partial order on transactions may manifest. Note however, that chosing a suitable partition data mapping is highly workload dependent and hence from a system design perspective is not agnostic to the application.
-Partial order execution and replication is therefore not an inherent property of sharding, but rather a by-product of the desired "share-nothing" partition architecture. 
+Partial order execution and replication is therefore not an inherent property of sharding, but rather a by-product of the desired "share-nothing" partition architecture. \fs{super awkward sentence, replace}
 
-In fact, transactions span multiple shards, the latent total order requirment within each shard introduces redundant coordination overheads, as coordination may need to be performed twice, at the level of individual shards, and across shards. This is especially problematic when workloads are geo-replicated, or when, as in BFT, the replication factor is high. 
+In fact, when transactions span multiple shards, the latent total order requirment within each shard introduces redundant coordination overheads, as coordination may need to be performed twice, at the level of individual shards, and across shards. This is especially problematic when workloads are geo-replicated, or when, as in BFT, the replication factor is high. 
 We argue, that there exist no optimal calibration for the degree of sharding: When sharding is coarse (few large shards), scalabiliy suffers under the per-shard total order, wheras when sharding is fine-grained (a lot of small shards), cross-shard overheads begin to dominate. 
-Instead of relying on sharding to achieve partial-order transaction processing, it is desirable to build atop primitives that inherently assume partially ordered.
+Instead of relying on sharding to achieve partial-order transaction processing, it is desirable to build atop primitives that inherently assume a partial order.
 Zhang et al (cite ordering paper), where the first to point out, that replication and isolation are not orthogonal problems. They reconcile redundant coordination overheads, by integrating both replication and transaction layer, and consequently relaxing the total order requirement within shards.
 In Indicus we adopt this rationale by co-designing concurrency control and replication, thus naturally exposing existing commutativty between transactions.
 
 
 
 \subsection{Decentralizing decentralized systems}
-Blockchain technologies are often advertised as a shared database that decentralized trust (i.e. Hyperledger). While true to an extent in permissionless, open-membership settings (in practice mining pools dominate), this is rarely the case in permissioned, fixed-membership blockchain settings. In order to achieve better performance and scalability, relative to slow and wasteful techniques such as Proof of Work (PoW), the fixed membership bounds allow systems to rely on traditional BFT SMR, such as the seminal PBFT protocol and its descendants, in order to provide the totally ordered log abstraction.
+Blockchain technologies are often advertised as a shared database that decentralizes trust (i.e. Hyperledger). While this is upheld, to an extent, in permissionless, open-membership settings (in practice mining pools dominate), this is rarely the case in permissioned, fixed-membership blockchain settings. In order to achieve better performance and scalability, relative to slow and wasteful techniques such as Proof of Work (PoW), the fixed membership bounds allow systems to rely on traditional BFT SMR, such as the seminal PBFT protocol and its descendants, in order to provide the totally ordered log abstraction.
 In practice, most of these solutions intertwine the requirement for a total order with the existance of a dedicated leader replica that acts as centralized sequencer. While simple, \fs{(or arguably necessary to establish a live agreement protocol on a totally ordered ledger (i.e. a BFT paxos cannot be live)} a dedicated leader exposes two obvious concerns: scalability and fairness.
 
-A single sequencer exposes a proposal bottleneck, as load is focused entirely on the leader, while other replicas sit idle. Moreover, when the leader is faulty, i.e. crashes or misbehaves, the system comes to a halt, requiring expensive re-election schemes to re-gain liveness while maintaining consistency. BFT-MIR takes a step towards reconciling this bottleneck by allowing all replicas to act as proposers for a subset of the request space (cite BFT MIR). This approach scales the bottleneck by a factor of $n$, but remains coarse grained under failures, as an entire partition of the request space remains unavailable during re-assignment.
+A single sequencer exposes a proposal bottleneck, as load is focused entirely on the leader, while other replicas sit idle. Moreover, when the leader is faulty, i.e. crashes or misbehaves, the system comes to a halt, requiring expensive re-election schemes to re-gain liveness while maintaining consistency. BFT-MIR takes a step towards reconciling this bottleneck by allowing all replicas to act as proposers for a subset of the request space (cite BFT MIR). This approach scales the proposal bottleneck by a factor of $n$, but remains coarse grained under failures, as an entire partition of the request space remains unavailable during re-assignment.
 
 Moreover, a dedicated sequencer exposes a fairness vulnerability. A malicious, or simply rationally biased proposer may censor, delay or frontrun transactions with only limited accountability. Such authority is antithetical to the ethos of decentralized trust and thus highly undesirable. Variations of this scheme enforce either periodic or continuous leader rotation, yet only help to mititage the problem, as each leader has undisclosed authority during its tenure. Multi-leadered systems, such as BFT-MIR \fs{(or a hypothetical EPaxos)} suffer
 
 These restrictions motivate us to design a leaderless protocol. Concretely, we avoid proposal delegation to an untrusted replica by declaring each client to be its own transaction coordinator.
 By shifting responsibility from replicas to clients, the proposal bottleneck becomes the max-capacity of incoming requests replicas can process \fs{(from 1 to n to c "leaders" - need to distinguish better what leaderless means: No replica leader, each client is its own leader, akak coordinator)}, while fairness is entirely up to the network delivey. In doing so, the crux of the design becomes how to tolerate byzantine clients. In particular, byzantine participants should not be able to interfere with honest participants in an unbounded manner and without being held accountable for their participation. \fs{An ideal mechanism would allow honest participants to act fully independently of all byzantine actors. While guaranteeing this is impossible (strong statement), we can give a client the keys to its own liveness. comment: this excludes lack of progress due to concurrency - in this case only exponential backoff can help}
 
+\subsection{A transactions only wish}
+Most BFT SMR, Blockchains or existing transactional systems (cite callinicos) support transactions under the assumption that their read and write operations are known a priori, limiting the set of applications they can support. In Indicus we assume an interactive transaction model. A Client may execute an arbitrary set of reads and writes, and decide to abort at any time. This is the most general transaction model and offers the most flexibility for applications.
 
+\fs{"A TX can be whatever it wants to be. Its parent DB doesnt prescribe its career."}
 
 
 \subsection{Linearity}

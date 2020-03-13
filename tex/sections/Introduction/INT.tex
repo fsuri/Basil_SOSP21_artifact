@@ -55,7 +55,9 @@ In this paper we will show to realize this goal by designing and implementing a 
 Indicus' design is driven by the ethos of \textit{independent operability}; both safety \fs{(integrity, serializability)} and liveness \fs{ability to issue and complete TX} are per-client properties and independent from one client to another.
 \fs{Indicus embraces partial order across the entire transaction stack} Unlike State Machine Replication (SMR) based systems that achieve agreement on computation (i.e. state transitions) by imposing a total order on execution across all replicas, Indicus executes transactions speculatively at clients, while validating and replicating \textit{all } transactions in arbitrary order at any given replica. Abstractly, Indicus proposes each transaction for a seperate concurrent binary consensus instance and enforces an implicit partial order by aborting transactions when inconistencies arise. In order to maintain a serializable transaction history, Indicus assigns each transaction an optimistic timestamp and uses a variation of Multiversioned Timestamp Ordering (MVTSO) for concurrency control. Ordering conflicts between transactions whose interleavings would violate prescribed Isolation guarantees are broken based on the given timestamps and speculative execution results. \fs{does all of this need to be in an intro? There needs to be a little of key insight, but it feels more appropriate for discussion}\\
 
-\fs{In Indicus, client is king. However, this entails the responsibility of ruling its kingdom.}
+\fs{Talk about the main challenge: 
+In Indicus, client is king. However, this entails the responsibility of ruling its kingdom.
+"Client is king, but rulers have to be regulated."}
 
 
 Overall, the Indicus design has the following implications:
