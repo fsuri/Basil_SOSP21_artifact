@@ -351,14 +351,14 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
   itr->second->phase1Replies.push_back(reply);
 
   if (itr->second->phase1Replies.size() == static_cast<size_t>(config->n)) {
-    Timestamp retryTs;
     bool fast = false;
     proto::CommitDecision decision = IndicusShardDecide(itr->second->phase1Replies,
         config, validateProofs, fast);
     phase1_callback pcb = itr->second->pcb;
+    pcb(decision, fast, itr->second->phase1Replies,
+        itr->second->signedPhase1Replies);
     this->pendingPhase1s.erase(itr);
     delete itr->second;
-    pcb(decision, fast, Timestamp());
   } else {
     // if we have received 1 abort or 3f + 1 abstains or 3f+1 commits, we can
     // move on to 2nd phase

@@ -111,12 +111,15 @@ class Client : public ::Client {
     Timestamp *prepareTimestamp;
     bool callbackInvoked;
     std::vector<proto::Transaction> deps;
+    std::map<int, std::vector<proto::Phase1Reply>> phase1RepliesGrouped;
+    std::map<int, std::vector<proto::SignedMessage>> signedPhase1RepliesGrouped;
   };
 
   // Prepare function
   void Phase1(PendingRequest *req, uint32_t timeout);
-  void Phase1Callback(uint64_t reqId, proto::CommitDecision decision,
-      bool fast, Timestamp ts);
+  void Phase1Callback(uint64_t reqId, int group, proto::CommitDecision decision,
+      bool fast, const std::vector<proto::Phase1Reply> &phase1Replies,
+      const std::vector<proto::SignedMessage> &signedPhase1Replies);
   void Phase1TimeoutCallback(uint64_t reqId, int status, Timestamp ts);
   void HandleAllPhase1Received(PendingRequest *req);
 
@@ -151,6 +154,7 @@ class Client : public ::Client {
   partitioner part;
   
   bool syncCommit;
+  bool signedMessages;
 
   uint64_t lastReqId;
   KeyManager *keyManager;

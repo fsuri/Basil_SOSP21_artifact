@@ -57,7 +57,8 @@ typedef std::function<void(int, const std::string &,
 typedef std::function<void(int, const std::string &)> read_timeout_callback;
 
 typedef std::function<void(proto::CommitDecision, bool,
-    Timestamp)> phase1_callback;
+    const std::vector<proto::Phase1Reply> &,
+    const std::vector<proto::SignedMessage> &)> phase1_callback;
 typedef std::function<void(int, Timestamp)> phase1_timeout_callback;
 
 typedef std::function<void(proto::CommitDecision)> phase2_callback;

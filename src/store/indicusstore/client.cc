@@ -40,7 +40,7 @@ Client::Client(transport::Configuration *config, int nShards, int nGroups,
     uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
     KeyManager *keyManager, TrueTime timeServer) : config(config),
     nshards(nShards), ngroups(nGroups), transport(transport), part(part),
-    syncCommit(syncCommit),
+    syncCommit(syncCommit), signedMessages(signedMessages),
     lastReqId(0UL),
     keyManager(keyManager),
     timeServer(timeServer) {
@@ -147,19 +147,21 @@ void Client::Phase1(PendingRequest *req, uint32_t timeout) {
   Debug("PHASE1 [%lu] at %lu", t_id, req->prepareTimestamp->getTimestamp());
   UW_ASSERT(participants.size() > 0);
 
-  for (auto p : participants) {
-    bclient[p]->Phase1(t_id, *req->prepareTimestamp, std::bind(
-          &Client::Phase1Callback, this, req->id, std::placeholders::_1,
-          std::placeholders::_2, std::placeholders::_3),
+  for (auto group : participants) {
+    bclient[group]->Phase1(t_id, *req->prepareTimestamp, std::bind(
+          &Client::Phase1Callback, this, req->id, group, std::placeholders::_1,
+          std::placeholders::_2, std::placeholders::_3, std::placeholders::_4),
         std::bind(&Client::Phase1TimeoutCallback, this, req->id,
           std::placeholders::_1, std::placeholders::_2), timeout);
     req->outstandingPhase1s++;
   }
 }
 
-void Client::Phase1Callback(uint64_t reqId, proto::CommitDecision decision,
-    bool fast, Timestamp ts) {
-  Debug("PHASE1 [%lu] callback %d,%lu", t_id, decision, ts.getTimestamp());
+void Client::Phase1Callback(uint64_t reqId, int group,
+    proto::CommitDecision decision, bool fast,
+    const std::vector<proto::Phase1Reply> &phase1Replies,
+    const std::vector<proto::SignedMessage> &signedPhase1Replies) {
+  Debug("PHASE1 [%lu] callback %d", t_id, decision);
   auto itr = this->pendingReqs.find(reqId);
   if (itr == this->pendingReqs.end()) {
     Debug("Phase1Callback for terminated request id %lu (txn already committed or aborted.", reqId);
@@ -167,33 +169,23 @@ void Client::Phase1Callback(uint64_t reqId, proto::CommitDecision decision,
   }
   PendingRequest *req = itr->second;
 
-  //uint64_t proposed = ts.getTimestamp();
+  req->phase1RepliesGrouped[group] = phase1Replies;
+  if (signedMessages) {
+    req->signedPhase1RepliesGrouped[group] = signedPhase1Replies;
+  }
 
   req->fast = req->fast && fast;
   --req->outstandingPhase1s;
   switch(decision) {
     case proto::COMMIT:
-      Debug("PREPARE [%lu] OK", t_id);
+      Debug("PHASE1 [%lu] COMMIT %d", t_id, group);
       break;
     case proto::ABORT:
       // abort!
-      Debug("PREPARE [%lu] ABORT", t_id);
+      Debug("PREPARE [%lu] ABORT %d", t_id, group);
       req->decision = proto::ABORT;
       req->outstandingPhase1s = 0;
       break;
-    /* TODO: are RETRY and ABSTAIN commit decisions?
-    case REPLY_RETRY:
-      req->prepareStatus = REPLY_RETRY;
-      if (proposed > req->maxRepliedTs) {
-        req->maxRepliedTs = proposed;
-      }
-      break;
-    case REPLY_TIMEOUT:
-      req->prepareStatus = REPLY_RETRY;
-      break;
-    case REPLY_ABSTAIN:
-      // just ignore abstains
-      break;*/
     default:
       break;
   }
@@ -207,8 +199,7 @@ void Client::Phase1TimeoutCallback(uint64_t reqId, int status, Timestamp ts) {
 }
 
 void Client::HandleAllPhase1Received(PendingRequest *req) {
-  Debug("All PREPARE's [%lu] received", t_id);
-  uint64_t reqId = req->id;
+  Debug("All PHASE1's [%lu] received", t_id);
   int abortResult = -1;
   switch (req->decision) {
     case proto::COMMIT: {
@@ -216,8 +207,8 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
       // application doesn't need to be notified when commit has been acknowledged,
       // so we use empty callback functions and directly call the commit callback
       // function (with commit=true indicating a commit)
-      commit_callback ccb = [this, reqId](bool committed) {
-        auto itr = this->pendingReqs.find(reqId);
+      commit_callback ccb = [this, req](bool committed) {
+        auto itr = this->pendingReqs.find(req->id);
         if (itr != this->pendingReqs.end()) {
           if (!itr->second->callbackInvoked) {
             itr->second->ccb(RESULT_COMMITTED);
@@ -228,37 +219,12 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
         }
       };
       commit_timeout_callback ctcb = [](int status){};
-      for (auto p : participants) {
-          bclient[p]->Commit(t_id, req->prepareTimestamp->getTimestamp(),
+      for (auto group : participants) {
+          bclient[group]->Commit(t_id, req->prepareTimestamp->getTimestamp(),
               ccb, ctcb, 1000); // we don't really care about the timeout here
-      }
-      if (!syncCommit) {
-        if (!req->callbackInvoked) {
-          req->ccb(RESULT_COMMITTED);
-          req->callbackInvoked = true;
-        }
       }
       break;
     }
-    /*case REPLY_RETRY: {
-      ++req->commitTries;
-      if (req->commitTries < COMMIT_RETRIES) {
-        statInts["retries"] += 1;
-        uint64_t now = timeServer.GetTime();
-        if (now > req->maxRepliedTs) {
-          req->prepareTimestamp->setTimestamp(now);
-        } else {
-          req->prepareTimestamp->setTimestamp(req->maxRepliedTs);
-        }
-        Debug("RETRY [%lu] at [%lu]", t_id, req->prepareTimestamp->getTimestamp());
-        Phase1(req, 1000); // this timeout should probably be the same as 
-        // the timeout passed to Client::Commit, or maybe that timeout / COMMIT_RETRIES
-        break;
-      } 
-      statInts["aborts_max_retries"] += 1;
-      abortResult = RESULT_MAX_RETRIES;
-      break;
-    }*/
     case proto::ABORT: {
       abortResult = RESULT_SYSTEM_ABORTED;
       break;
@@ -271,8 +237,8 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
     // application doesn't need to be notified when abort has been acknowledged,
     // so we use empty callback functions and directly call the commit callback
     // function (with commit=false indicating an abort)
-    abort_callback acb = [this, reqId]() {
-      auto itr = this->pendingReqs.find(reqId);
+    abort_callback acb = [this, req]() {
+      auto itr = this->pendingReqs.find(req->id);
       if (itr != this->pendingReqs.end()) {
         this->pendingReqs.erase(itr);
         delete itr->second;
