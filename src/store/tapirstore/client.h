@@ -56,7 +56,7 @@ namespace tapirstore {
 
 class Client : public ::Client {
  public:
-  Client(const std::string configPath, int nShards, int nGroups,
+  Client(transport::Configuration *config, int nShards, int nGroups,
       int closestReplica, Transport *transport, partitioner part,
       bool syncCommit, TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
@@ -111,6 +111,7 @@ class Client : public ::Client {
   void PrepareCallback(uint64_t reqId, int status, Timestamp ts);
   void HandleAllPreparesReceived(PendingRequest *req);
 
+  transport::Configuration *config;
   // Unique ID for this client.
   uint64_t client_id;
 
@@ -143,7 +144,6 @@ class Client : public ::Client {
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
   std::unordered_map<std::string, uint32_t> statInts;
-  transport::Configuration *config;
 };
 
 } // namespace tapirstore

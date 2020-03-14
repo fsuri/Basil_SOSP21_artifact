@@ -55,7 +55,8 @@ enum OCCType {
 class Server : public TransportReceiver, public ::Server {
  public:
   Server(const transport::Configuration &config, int groupIdx, int idx,
-      Transport *transport, TrueTime timeServer = TrueTime(0, 0));
+      Transport *transport, KeyManager *keyManager,
+      TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
@@ -115,7 +116,7 @@ class Server : public TransportReceiver, public ::Server {
   const OCCType occType;
   const bool signedMessages;
   const bool validateProofs;
-  bft_tapir::NodeConfig *cryptoConfig;
+  KeyManager *keyManager;
   const uint64_t timeDelta;
   TrueTime timeServer;
   crypto::PrivKey privateKey;

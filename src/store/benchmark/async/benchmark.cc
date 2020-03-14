@@ -6,6 +6,7 @@
  *
  **********************************************************************/
 
+#include "lib/keymanager.h"
 #include "lib/latency.h"
 #include "lib/timeval.h"
 #include "lib/tcptransport.h"
@@ -533,6 +534,16 @@ int main(int argc, char **argv) {
       transport->Stop();
     }
   };
+
+  std::ifstream configStream(FLAGS_config_path);
+  if (configStream.fail()) {
+    std::cerr << "Unable to read configuration file: " << FLAGS_config_path
+              << std::endl;
+    return -1;
+  }
+  transport::Configuration *config = new transport::Configuration(configStream);
+  KeyManager *keyManager = new KeyManager(FLAGS_indicus_crypto_config_path);
+
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
     Client *client = nullptr;
     AsyncClient *asyncClient = nullptr;
@@ -541,14 +552,14 @@ int main(int argc, char **argv) {
 
     switch (mode) {
       case PROTO_TAPIR: {
-        client = new tapirstore::Client(FLAGS_config_path, FLAGS_num_shards,
+        client = new tapirstore::Client(config, FLAGS_num_shards,
             FLAGS_num_groups, FLAGS_closest_replica, transport, part,
             FLAGS_tapir_sync_commit, TrueTime(FLAGS_clock_skew,
               FLAGS_clock_error));
         break;
       }
       case PROTO_JANUS: {
-        oneShotClient = new janusstore::Client(FLAGS_config_path,
+        oneShotClient = new janusstore::Client(config,
             FLAGS_num_shards, FLAGS_closest_replica, transport);
         asyncClient = new AsyncOneShotAdapterClient(oneShotClient);
         break;
@@ -563,7 +574,7 @@ int main(int argc, char **argv) {
         break;
       }*/
       case PROTO_MORTY: {
-        asyncClient = new mortystore::Client(FLAGS_config_path,
+        asyncClient = new mortystore::Client(config,
             (FLAGS_client_id << 3) | i, FLAGS_num_shards, FLAGS_num_groups,
             FLAGS_closest_replica, transport, part, FLAGS_debug_stats);
         break;
@@ -583,12 +594,12 @@ int main(int argc, char **argv) {
           default:
             NOT_REACHABLE();
         }
-        client = new indicusstore::Client(FLAGS_config_path, FLAGS_num_shards,
+
+        client = new indicusstore::Client(config, FLAGS_num_shards,
             FLAGS_num_groups, FLAGS_closest_replica, transport, part,
             FLAGS_tapir_sync_commit, readQuorumSize,
-            FLAGS_indicus_sign_messages,
-            FLAGS_indicus_validate_proofs, FLAGS_indicus_crypto_config_path,
-            TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+            FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+            keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
       }
       default:
@@ -705,6 +716,9 @@ int main(int argc, char **argv) {
 
   transport->Timer(4950, std::bind(FlushStats, benchClients, asyncClients));
   transport->Run();
+
+  delete config;
+  delete keyManager;
 
   for (auto i : threads) {
     i->join();

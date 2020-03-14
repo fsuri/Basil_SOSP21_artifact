@@ -37,12 +37,12 @@
 namespace indicusstore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
-    Transport *transport, TrueTime timeServer) : config(config),
-    groupIdx(groupIdx), idx(idx), id(groupIdx * config.n + idx),
+    Transport *transport, KeyManager *keyManager, TrueTime timeServer) :
+    config(config), groupIdx(groupIdx), idx(idx), id(groupIdx * config.n + idx),
     transport(transport), occType(TAPIR),
-    signedMessages(false), validateProofs(false), cryptoConfig(nullptr),
+    signedMessages(false), validateProofs(false), keyManager(keyManager),
     timeDelta(100UL), timeServer(timeServer) {
-  privateKey = cryptoConfig->getClientPrivateKey(id);
+  privateKey = keyManager->GetPrivateKey(id);
   transport->Register(this, config, groupIdx, idx);
 }
 
@@ -62,7 +62,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
   std::string data;
   if (t == signedMessage.GetTypeName()) {
     signedMessage.ParseFromString(d);
-    if (ValidateSignedMessage(signedMessage, cryptoConfig)) {
+    if (ValidateSignedMessage(signedMessage, keyManager)) {
       type = signedMessage.type();
       data = signedMessage.msg();
     } else {
@@ -220,7 +220,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   if (signedMessages) {
     proto::Phase1Reply prepare1Reply;
     for (const auto &signedPhase1Reply : msg.signed_p1_replies().msgs()) {
-      if (ValidateSignedMessage(signedPhase1Reply, cryptoConfig)) {
+      if (ValidateSignedMessage(signedPhase1Reply, keyManager)) {
         prepare1Reply.ParseFromString(signedPhase1Reply.msg());
         prepare1Replies.push_back(prepare1Reply);
       } else {

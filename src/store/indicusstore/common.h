@@ -1,8 +1,8 @@
 #ifndef INDICUS_COMMON_H
 #define INDICUS_COMMON_H
 
-#include "bft_tapir/config.h"
 #include "lib/configuration.h"
+#include "lib/keymanager.h"
 #include "store/common/timestamp.h"
 #include "store/indicusstore/indicus-proto.pb.h"
 
@@ -15,7 +15,7 @@
 namespace indicusstore {
 
 bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
-    const bft_tapir::NodeConfig *cryptoConfig);
+    KeyManager *keyManager);
 
 void SignMessage(const ::google::protobuf::Message &msg,
     const crypto::PrivKey &privateKey, uint64_t processId,

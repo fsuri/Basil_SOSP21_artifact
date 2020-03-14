@@ -38,11 +38,11 @@ namespace indicusstore {
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int shard, int closestReplica,
     uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
-    bft_tapir::NodeConfig *cryptoConfig, TrueTime &timeServer) :
+    KeyManager *keyManager, TrueTime &timeServer) :
     client_id(client_id), transport(transport), config(config), shard(shard),
     readQuorumSize(readQuorumSize), timeServer(timeServer),
     signedMessages(signedMessages), validateProofs(validateProofs),
-    cryptoConfig(cryptoConfig), lastReqId(0UL) {
+    keyManager(keyManager), lastReqId(0UL) {
   transport->Register(this, *config, -1, -1);
 
   if (closestReplica == -1) {
@@ -66,7 +66,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   std::string data;
   if (t == signedMessage.GetTypeName()) {
     signedMessage.ParseFromString(d);
-    if (ValidateSignedMessage(signedMessage, cryptoConfig)) {
+    if (ValidateSignedMessage(signedMessage, keyManager)) {
       type = signedMessage.type();
       data = signedMessage.msg();
     } else {
@@ -295,7 +295,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   bool hasPrepared = false;
   if (signedMessages) {
     if (reply.has_signed_prepared()) {
-      if (ValidateSignedMessage(reply.signed_prepared(), cryptoConfig)) {
+      if (ValidateSignedMessage(reply.signed_prepared(), keyManager)) {
         prepared.ParseFromString(reply.signed_prepared().msg());
         hasPrepared = true;
       } else {

@@ -31,6 +31,7 @@
 
 #include <csignal>
 
+#include "lib/keymanager.h"
 #include "lib/transport.h"
 #include "lib/tcptransport.h"
 #include "lib/udptransport.h"
@@ -44,6 +45,7 @@
 #include "store/weakstore/server.h"
 #include "store/janusstore/server.h"
 #include "store/mortystore/server.h"
+#include "store/indicusstore/server.h"
 
 #include <gflags/gflags.h>
 
@@ -53,7 +55,8 @@ enum protocol_t {
 	PROTO_WEAK,
 	PROTO_STRONG,
   PROTO_JANUS,
-  PROTO_MORTY
+  PROTO_MORTY,
+  PROTO_INDICUS
 };
 
 enum transmode_t {
@@ -77,14 +80,16 @@ const std::string protocol_args[] = {
   "weak",
   "strong",
   "janus",
-  "morty"
+  "morty",
+  "indicus"
 };
 const protocol_t protos[] {
   PROTO_TAPIR,
   PROTO_WEAK,
   PROTO_STRONG,
   PROTO_JANUS,
-  PROTO_MORTY
+  PROTO_MORTY,
+  PROTO_INDICUS
 };
 static bool ValidateProtocol(const char* flagname,
     const std::string &value) {
@@ -191,6 +196,12 @@ DEFINE_uint64(prepare_batch_period, 0, "length of batches for deterministic prep
     " processing.");
 
 /**
+ * Indicus settings.
+ */
+DEFINE_string(indicus_key_path, "", "path to directory containing public and"
+    " private keys (for Indicus)");
+
+/**
  * Experiment settings.
  */
 DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
@@ -281,6 +292,8 @@ int main(int argc, char **argv) {
       NOT_REACHABLE();
   }
 
+  KeyManager keyManager(FLAGS_indicus_key_path);
+
   switch (proto) {
     case PROTO_TAPIR: {
       server = new tapirstore::Server(FLAGS_linearizable);
@@ -307,6 +320,10 @@ int main(int argc, char **argv) {
       server = new mortystore::Server(config, FLAGS_group_idx, FLAGS_replica_idx,
           tport, FLAGS_debug_stats, FLAGS_prepare_batch_period);
       break;
+    }
+    case PROTO_INDICUS: {
+      server = new indicusstore::Server(config, FLAGS_group_idx,
+          FLAGS_replica_idx, tport, &keyManager);
     }
     default: {
       NOT_REACHABLE();

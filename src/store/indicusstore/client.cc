@@ -35,12 +35,15 @@ namespace indicusstore {
 
 using namespace std;
 
-Client::Client(const std::string &configPath, int nShards, int nGroups,
+Client::Client(transport::Configuration *config, int nShards, int nGroups,
     int closestReplica, Transport *transport, partitioner part, bool syncCommit,
     uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
-    const std::string &cryptoConfigPath, TrueTime timeServer) : nshards(nShards),
-    ngroups(nGroups), transport(transport), part(part), syncCommit(syncCommit),
-    timeServer(timeServer), lastReqId(0UL), config(nullptr) {
+    KeyManager *keyManager, TrueTime timeServer) : config(config),
+    nshards(nShards), ngroups(nGroups), transport(transport), part(part),
+    syncCommit(syncCommit),
+    lastReqId(0UL),
+    keyManager(keyManager),
+    timeServer(timeServer) {
   // Initialize all state here;
   client_id = 0;
   while (client_id == 0) {
@@ -55,17 +58,11 @@ Client::Client(const std::string &configPath, int nShards, int nGroups,
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
 
-  std::ifstream configStream(configPath);
-  if (configStream.fail()) {
-    Panic("Unable to read configuration file: %s\n", configPath.c_str());
-  }
-  config = new transport::Configuration(configStream);
-
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
     bclient[i] = new ShardClient(config, transport, client_id, i,
         closestReplica, readQuorumSize, signedMessages, validateProofs,
-        cryptoConfigPath, timeServer);
+        keyManager, timeServer);
   }
 
   Debug("Indicus client [%lu] created! %lu %lu", client_id, nshards,

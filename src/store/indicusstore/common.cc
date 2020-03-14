@@ -6,8 +6,8 @@
 namespace indicusstore {
 
 bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
-    const bft_tapir::NodeConfig *cryptoConfig) {
-  crypto::PubKey replicaPublicKey = cryptoConfig->getReplicaPublicKey(
+    KeyManager *keyManager) {
+  crypto::PubKey replicaPublicKey = keyManager->GetPublicKey(
       signedMessage.process_id());
   // verify that the replica actually sent this reply and that we are expecting
   // this reply

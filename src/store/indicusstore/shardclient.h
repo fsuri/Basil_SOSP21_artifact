@@ -32,7 +32,7 @@
 #ifndef _INDICUS_SHARDCLIENT_H_
 #define _INDICUS_SHARDCLIENT_H_
 
-#include "bft_tapir/config.h"
+#include "lib/keymanager.h"
 #include "lib/assert.h"
 #include "lib/configuration.h"
 #include "lib/crypto.h"
@@ -66,15 +66,13 @@ typedef std::function<void(int)> phase2_timeout_callback;
 typedef std::function<void()> writeback_callback;
 typedef std::function<void(int)> writeback_timeout_callback;
 
-
-
 class ShardClient : public TransportReceiver {
  public:
   /* Constructor needs path to shard config. */
   ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int shard, int closestReplica,
       uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
-      bft_tapir::NodeConfig *cryptoConfig, TrueTime &timeServer);
+      KeyManager *keyManager, TrueTime &timeServer);
   virtual ~ShardClient();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
@@ -203,7 +201,7 @@ class ShardClient : public TransportReceiver {
   TrueTime &timeServer;
   bool signedMessages;
   bool validateProofs;
-  bft_tapir::NodeConfig *cryptoConfig;
+  KeyManager *keyManager;
 
   uint64_t lastReqId;
   proto::Transaction txn;

@@ -35,12 +35,11 @@ namespace tapirstore {
 
 using namespace std;
 
-Client::Client(const string configPath, int nShards, int nGroups,
+Client::Client(transport::Configuration *config, int nShards, int nGroups,
                 int closestReplica, Transport *transport, partitioner part,
                 bool syncCommit, TrueTime timeServer)
-    : nshards(nShards), ngroups(nGroups), transport(transport), part(part),
-    syncCommit(syncCommit), timeServer(timeServer),
-    lastReqId(0UL), config(nullptr) {
+    : config(config), nshards(nShards), ngroups(nGroups), transport(transport),
+    part(part), syncCommit(syncCommit), timeServer(timeServer), lastReqId(0UL) {
     // Initialize all state here;
     client_id = 0;
     while (client_id == 0) {
@@ -54,13 +53,6 @@ Client::Client(const string configPath, int nShards, int nGroups,
     bclient.reserve(nshards);
 
     Debug("Initializing Tapir client with id [%lu] %lu", client_id, nshards);
-
-
-    std::ifstream configStream(configPath);
-    if (configStream.fail()) {
-      Panic("Unable to read configuration file: %s\n", configPath.c_str());
-    }
-    config = new transport::Configuration(configStream);
 
     /* Start a client for each shard. */
     for (uint64_t i = 0; i < ngroups; i++) {
