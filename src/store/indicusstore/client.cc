@@ -200,56 +200,61 @@ void Client::Phase1TimeoutCallback(uint64_t reqId, int status, Timestamp ts) {
 
 void Client::HandleAllPhase1Received(PendingRequest *req) {
   Debug("All PHASE1's [%lu] received", t_id);
-  int abortResult = -1;
-  switch (req->decision) {
-    case proto::COMMIT: {
-      Debug("COMMIT [%lu]", t_id);
-      // application doesn't need to be notified when commit has been acknowledged,
+  if (req->fast) {
+    int abortResult = -1;
+    switch (req->decision) {
+      case proto::COMMIT: {
+        Debug("COMMIT [%lu]", t_id);
+        // application doesn't need to be notified when commit has been acknowledged,
+        // so we use empty callback functions and directly call the commit callback
+        // function (with commit=true indicating a commit)
+        commit_callback ccb = [this, req](bool committed) {
+          auto itr = this->pendingReqs.find(req->id);
+          if (itr != this->pendingReqs.end()) {
+            if (!itr->second->callbackInvoked) {
+              itr->second->ccb(RESULT_COMMITTED);
+              itr->second->callbackInvoked = true;
+            }
+            this->pendingReqs.erase(itr);
+            delete itr->second;
+          }
+        };
+        commit_timeout_callback ctcb = [](int status){};
+        for (auto group : participants) {
+            bclient[group]->Commit(t_id, req->prepareTimestamp->getTimestamp(),
+                ccb, ctcb, 1000); // we don't really care about the timeout here
+        }
+        break;
+      }
+      case proto::ABORT: {
+        abortResult = RESULT_SYSTEM_ABORTED;
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+    if (abortResult > 0) {
+      // application doesn't need to be notified when abort has been acknowledged,
       // so we use empty callback functions and directly call the commit callback
-      // function (with commit=true indicating a commit)
-      commit_callback ccb = [this, req](bool committed) {
+      // function (with commit=false indicating an abort)
+      abort_callback acb = [this, req]() {
         auto itr = this->pendingReqs.find(req->id);
         if (itr != this->pendingReqs.end()) {
-          if (!itr->second->callbackInvoked) {
-            itr->second->ccb(RESULT_COMMITTED);
-            itr->second->callbackInvoked = true;
-          }
           this->pendingReqs.erase(itr);
           delete itr->second;
         }
       };
-      commit_timeout_callback ctcb = [](int status){};
-      for (auto group : participants) {
-          bclient[group]->Commit(t_id, req->prepareTimestamp->getTimestamp(),
-              ccb, ctcb, 1000); // we don't really care about the timeout here
+      abort_timeout_callback atcb = [](int status){};
+      Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
+      if (!req->callbackInvoked) {
+        req->ccb(abortResult);
+        req->callbackInvoked = true;
       }
-      break;
     }
-    case proto::ABORT: {
-      abortResult = RESULT_SYSTEM_ABORTED;
-      break;
-    }
-    default: {
-      break;
-    }
-  }
-  if (abortResult > 0) {
-    // application doesn't need to be notified when abort has been acknowledged,
-    // so we use empty callback functions and directly call the commit callback
-    // function (with commit=false indicating an abort)
-    abort_callback acb = [this, req]() {
-      auto itr = this->pendingReqs.find(req->id);
-      if (itr != this->pendingReqs.end()) {
-        this->pendingReqs.erase(itr);
-        delete itr->second;
-      }
-    };
-    abort_timeout_callback atcb = [](int status){};
-    Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
-    if (!req->callbackInvoked) {
-      req->ccb(abortResult);
-      req->callbackInvoked = true;
-    }
+  } else {
+    // slow path, must log final result to 1 group
+    Phase2(req, 3000); // todo: do we care about timeouts?
   }
 }
 

@@ -133,7 +133,7 @@ void ShardClient::Put(uint64_t id, const std::string &key,
 
 void ShardClient::Phase1(uint64_t id, const Timestamp &timestamp,
     phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout) {
-  Debug("[shard %i] Sending PREPARE [%lu]", shard, id);
+  Debug("[shard %i] Sending PHASE1 [%lu]", shard, id);
   uint64_t reqId = lastReqId++;
   PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId);
   pendingPhase1s[reqId] = pendingPhase1;
@@ -168,6 +168,31 @@ void ShardClient::Phase1(uint64_t id, const Timestamp &timestamp,
 
 void ShardClient::Phase2(uint64_t id, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout) {
+  Debug("[group %i] Sending PHASE1 [%lu]", shard, id);
+  uint64_t reqId = lastReqId++;
+  PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId);
+  pendingPhase2s[reqId] = pendingPhase2;
+  pendingPhase2->txn = txn;
+  pendingPhase2->pcb = pcb;
+  pendingPhase2->ptcb = ptcb;
+  pendingPhase2->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase2]() {
+      Timestamp ts = pendingPhase2->ts;
+      phase2_timeout_callback ptcb = pendingPhase2->ptcb;
+      auto itr = this->pendingPhase2s.find(pendingPhase2->reqId);
+      if (itr != this->pendingPhase2s.end()) {
+        this->pendingPhase2s.erase(itr);
+        delete itr->second;
+      }
+
+      ptcb(REPLY_TIMEOUT);
+  });
+
+  // create prepare request
+  proto::Phase2 phase2;
+
+  transport->SendMessageToAll(this, phase2);
+
+  pendingPhase2->requestTimeout->Reset();
 }
 
 void ShardClient::Writeback(uint64_t id, writeback_callback wcb,

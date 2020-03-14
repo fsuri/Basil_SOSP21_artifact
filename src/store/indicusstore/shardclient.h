@@ -141,6 +141,25 @@ class ShardClient : public TransportReceiver {
     phase1_callback pcb;
     phase1_timeout_callback ptcb;
   };
+
+  struct PendingPhase2 {
+    PendingPhase2(uint64_t reqId) : reqId(reqId),
+        requestTimeout(nullptr) { }
+    ~PendingPhase2() {
+      if (requestTimeout != nullptr) {
+        delete requestTimeout;
+      }
+    }
+    uint64_t reqId;
+    Timeout *requestTimeout;
+    std::vector<proto::Phase2Reply> phase2Replies;
+    std::vector<proto::SignedMessage> signedPhase2Replies;
+    Timestamp ts;
+    proto::Transaction txn;
+    phase2_callback pcb;
+    phase2_timeout_callback ptcb;
+  };
+
   struct PendingCommit {
     PendingCommit(uint64_t reqId) : reqId(reqId),
         requestTimeout(nullptr) { }
@@ -208,6 +227,7 @@ class ShardClient : public TransportReceiver {
   proto::Transaction txn;
   std::unordered_map<uint64_t, PendingQuorumGet *> pendingGets;
   std::unordered_map<uint64_t, PendingPhase1 *> pendingPhase1s;
+  std::unordered_map<uint64_t, PendingPhase2 *> pendingPhase2s;
   std::unordered_map<uint64_t, PendingCommit *> pendingCommits;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
 };
