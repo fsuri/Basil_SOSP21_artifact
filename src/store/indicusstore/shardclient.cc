@@ -166,8 +166,11 @@ void ShardClient::Phase1(uint64_t id, const Timestamp &timestamp,
   pendingPhase1->requestTimeout->Reset();
 }
 
-void ShardClient::Phase2(uint64_t id, phase2_callback pcb,
-      phase2_timeout_callback ptcb, uint32_t timeout) {
+void ShardClient::Phase2(uint64_t id,
+    const std::map<int, std::vector<proto::Phase1Reply>> &groupedPhase1Replies,
+    const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
+    proto::CommitDecision decision, phase2_callback pcb,
+    phase2_timeout_callback ptcb, uint32_t timeout) {
   Debug("[group %i] Sending PHASE1 [%lu]", shard, id);
   uint64_t reqId = lastReqId++;
   PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId);
@@ -189,6 +192,25 @@ void ShardClient::Phase2(uint64_t id, phase2_callback pcb,
 
   // create prepare request
   proto::Phase2 phase2;
+  phase2.set_txn_id(txn.id());
+  if (validateProofs) {
+    if (signedMessages) {
+      for (const auto &group : groupedSignedPhase1Replies) {
+        for (const auto &reply : group.second) {
+          *(*phase2.mutable_signed_p1_replies()->mutable_replies())[group.first].add_msgs() = reply;
+        }
+
+      }
+    } else {
+      for (const auto &group : groupedPhase1Replies) {
+        for (const auto &reply : group.second) {
+          *(*phase2.mutable_p1_replies()->mutable_replies())[group.first].add_replies() = reply;
+        }
+      }
+    }
+  } else {
+    phase2.set_decision(decision);
+  }
 
   transport->SendMessageToAll(this, phase2);
 

@@ -127,6 +127,8 @@ class Client : public ::Client {
   void Phase2Callback(uint64_t reqId, proto::CommitDecision decision);
   void Phase2TimeoutCallback(uint64_t reqId, int status);
 
+  void Writeback(PendingRequest *req, uint32_t timeout);
+
   transport::Configuration *config;
 
   // Unique ID for this client.

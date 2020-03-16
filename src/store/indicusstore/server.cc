@@ -215,29 +215,36 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
-  std::vector<proto::Phase1Reply> prepare1Replies;
+  std::map<int, std::vector<proto::Phase1Reply>> groupedPhase1Replies;
   bool validated = true;
   if (signedMessages) {
-    proto::Phase1Reply prepare1Reply;
-    for (const auto &signedPhase1Reply : msg.signed_p1_replies().msgs()) {
-      if (ValidateSignedMessage(signedPhase1Reply, keyManager)) {
-        prepare1Reply.ParseFromString(signedPhase1Reply.msg());
-        prepare1Replies.push_back(prepare1Reply);
-      } else {
-        validated = false;
-        break;
+    proto::Phase1Reply phase1Reply;
+    for (const auto &group : msg.signed_p1_replies().replies()) {
+      std::vector<proto::Phase1Reply> phase1Replies;
+      for (const auto &signedPhase1Reply : group.second.msgs()) {
+        if (ValidateSignedMessage(signedPhase1Reply, keyManager)) {
+          phase1Reply.ParseFromString(signedPhase1Reply.msg());
+          phase1Replies.push_back(phase1Reply);
+        } else {
+          validated = false;
+          break;
+        }
       }
+      groupedPhase1Replies.insert(std::make_pair(group.first, phase1Replies));
     }
   } else {
-    for (const auto &prepare1Reply : msg.p1_replies().replies()) {
-      prepare1Replies.push_back(prepare1Reply);
+    for (const auto &group : msg.p1_replies().replies()) {
+      std::vector<proto::Phase1Reply> phase1Replies;
+      for (const auto &phase1Reply : group.second.replies()) {
+        phase1Replies.push_back(phase1Reply);
+      }
+      groupedPhase1Replies.insert(std::make_pair(group.first, phase1Replies));
     }
   }
 
   proto::CommitDecision decision;
   if (validated) {
-    bool fast;
-    decision = IndicusShardDecide(prepare1Replies, &config, validateProofs, fast);
+    decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs);
   } else {
     decision = proto::CommitDecision::ABORT;
   }
@@ -257,7 +264,6 @@ void Server::HandlePhase2(const TransportAddress &remote,
     transport->SendMessage(this, remote, reply);
   }
 }
-
 
 void Server::HandleWriteback(const TransportAddress &remote,
     const proto::Writeback &msg) {
