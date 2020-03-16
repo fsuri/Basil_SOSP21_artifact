@@ -53,3 +53,8 @@ Clients can do what they want, but we assume there is access control to bound th
 We expect a level of performance, if you dont meet it you are not fit for the system.
 Replicas can enforce such access lists, i.e. via timeouts of blacklists.
 unlikely that a Client can lock out a lot of the system, would mean he has total access control.
+
+Assume byz is rare and have disincentives. We dont expect strategic congestion aborts. Because a) those require knowledge of the keys, b) requires access control and c) requires to post legitimate transactions that will be recorded, might commit since its up to network (imagine a bank account: withdrawing probably illegal, only paying allowed by arbitrary party. now i am paying in order to avoid the real user being able to withdraw)
+Have to design protocol so that there is minimal impact of malicious actions.
+
+Since a client cannot drive the system into inconsistency: he can only slow down or cause aborts.
