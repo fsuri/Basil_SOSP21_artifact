@@ -45,6 +45,12 @@ Moreover, a dedicated sequencer exposes a fairness vulnerability. A malicious, o
 These restrictions motivate us to design a leaderless protocol. Concretely, we avoid proposal delegation to an untrusted replica by declaring each client to be its own transaction coordinator.
 By shifting responsibility from replicas to clients, the proposal bottleneck becomes the max-capacity of incoming requests replicas can process \fs{(from 1 to n to c "leaders" - need to distinguish better what leaderless means: No replica leader, each client is its own leader, akak coordinator)}, while fairness is entirely up to the network delivey. In doing so, the crux of the design becomes how to tolerate byzantine clients. In particular, byzantine participants should not be able to interfere with honest participants in an unbounded manner and without being held accountable for their participation. \fs{An ideal mechanism would allow honest participants to act fully independently of all byzantine actors. While guaranteeing this is impossible (strong statement), we can give a client the keys to its own liveness. comment: this excludes lack of progress due to concurrency - in this case only exponential backoff can help}
 
+
+
+\subsection{A byzantine empire}
+Leveraging commutativity between transactions is not a new idea. As a research trend of mitigating the scalability bottleneck induced by total, or redundant ordering requirements, EPaxos (cite), CURP (cite), TAPIR (cite) or Carousel (cite) only consider the ordering between potentially conflicting operations. However, these systems assume the stronger crash-failure model and are non-trivial to extend to the Byzantine model, so that they cannot directly solve the problem of data sharing among mutually distrustful, malicious or arbitrarily failing parties.
+While copious efforts exist to design decentralized systems that exploit transaction semantics for the crash failure model, few, if any attempts have been made for the Byzantine Fault Model. This naturally raises the question, why so? One explanation is that in Byzantine Systems, some centralization is in fact highly desirable as it simplifies the problem by identifying a single point of accountability. A natural way to improve both scalability and fairness is to avoid this bottleneck, at the cost of paving the path for a wider set of undesirable phenomena. The challenge of a leaderless byzantine system is simple yet daunting: It empowers both malicious users and system components to collude and misbehave in potentially unaccountable ways. In Indicus, we will show how to overcome this challenge by limiting a clients immediate control to its own transactions while offering tools to aid termination of transactions requests considered stalled.
+
 \subsection{A transactions only wish}
 Most BFT SMR, Blockchains or existing transactional systems (cite callinicos) support transactions under the assumption that their read and write operations are known a priori, limiting the set of applications they can support. In Indicus we assume an interactive transaction model. A Client may execute an arbitrary set of reads and writes, and decide to abort at any time. This is the most general transaction model and offers the most flexibility for applications.
 
@@ -52,13 +58,16 @@ Most BFT SMR, Blockchains or existing transactional systems (cite callinicos) su
 
 
 \subsection{Linearity}
-dont use all to all, avoid large signature overheads if possible?
+\fs{Maybe dont have this section. }\\
+Finally, Indicus aims to be as efficient as possible in its agreement protocol. In order to scale with regards to clients \fs{(weird phrasing)}, we avoid unecessary all-to-all communication between replicas and instead utilize clients as broadcasts channels for their own transactions. Moreover, we present two versions of Indicus, Indicus3 and Indicus5, that trade off replication degree for reduced latency and signature overheads respectively. While Indicus3 achieves the optimal minimal replication degree in a BFT system, Indicus5 achieves optimal latency and minimal signature overheads.
 
-Maybe dont have this section. 
-
-\subsection{A byzantine empire}
-Crash Failure is not enough. Does not extend trivially to weaker and more complex failure domains.
 
 \subsection{Indicus' heel}
-Our achilles heel, under congestion you can always abort, and byantine clients can create that congestion if they have the access control. But you expect this to be limited. 
-Replicas can enforce exponential backoff on clients.
+\fs{perhaps currently redundant with intro}
+Indicus' achilles heel is its speculative nature. Like any system with optimistic concurrency control, Indicus is vulnerable to aborts due to congestion. This is aggregated when replicas may be byzantine and hence local reads do not suffice to maintain integrity. However, reading remotely in a wide area network increases the likelihood for transaction interleavings and consequently abort likelihood. In order to mitigate this we develop a distributed design of multi-version timestamp ordering (MVTSO), an aggressive optimistic concurrency control that minmizes abort windows for read requests. A challenge in doing so efficiently is avoiding abuse by byzantine participants. \fs{this is supposed to reference the read timestamps (no real fix), stalling (fallback mechanism to handle) or dependency hogging (we do deps only on f+1 in order to avoid carrying the entire TX)}
+
+\fs{byantine clients can create that congestion if they have the access control. But you expect this to be limited.Replicas can enforce exponential backoff on clients. Clients can only reactively create targeted congestion if they control the network.  (All of this should not go here)}\\
+
+
+
+In this paper we show how to complete this Quest, resulting in our design and implementation of Indicus. In the following we define our system model as well as general properties for reasoning about a byzantine database.
