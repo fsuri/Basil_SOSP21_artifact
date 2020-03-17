@@ -124,7 +124,9 @@ class Client : public ::Client {
   void HandleAllPhase1Received(PendingRequest *req);
 
   void Phase2(PendingRequest *req, uint32_t timeout);
-  void Phase2Callback(uint64_t reqId, proto::CommitDecision decision);
+  void Phase2Callback(uint64_t reqId,
+      const std::vector<proto::Phase2Reply> &phase2Replies,
+      const std::vector<proto::SignedMessage> &signedPhase2Replies);
   void Phase2TimeoutCallback(uint64_t reqId, int status);
 
   void Writeback(PendingRequest *req, uint32_t timeout);

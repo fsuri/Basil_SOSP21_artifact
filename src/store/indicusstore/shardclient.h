@@ -61,7 +61,9 @@ typedef std::function<void(proto::CommitDecision, bool,
     const std::vector<proto::SignedMessage> &)> phase1_callback;
 typedef std::function<void(int, Timestamp)> phase1_timeout_callback;
 
-typedef std::function<void(proto::CommitDecision)> phase2_callback;
+typedef std::function<void(
+    const std::vector<proto::Phase2Reply> &,
+    const std::vector<proto::SignedMessage> &)> phase2_callback;
 typedef std::function<void(int)> phase2_timeout_callback;
 
 typedef std::function<void()> writeback_callback;
@@ -92,14 +94,6 @@ class ShardClient : public TransportReceiver {
       const std::string &value, put_callback pcb, put_timeout_callback ptcb,
       uint32_t timeout);
 
-  // Commit all Get(s) and Put(s) since Begin().
-  virtual void Commit(uint64_t id, uint64_t timestamp, commit_callback ccb,
-      commit_timeout_callback ctcb, uint32_t timeout);
-
-  // Abort all Get(s) and Put(s) since Begin().
-  virtual void Abort(uint64_t id, abort_callback acb,
-      abort_timeout_callback atcb, uint32_t timeout);
-
   virtual void Phase1(uint64_t id, const Timestamp &timestamp,
       phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout);
   virtual void Phase2(uint64_t id,
@@ -107,8 +101,9 @@ class ShardClient : public TransportReceiver {
       const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
       proto::CommitDecision decision, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout);
-  virtual void Writeback(uint64_t id, writeback_callback wcb,
-      writeback_timeout_callback wtcb, uint32_t timeout);
+  virtual void Writeback(uint64_t id, proto::CommitDecision decision,
+      const proto::CommittedProof &proof,
+      writeback_callback wcb, writeback_timeout_callback wtcb, uint32_t timeout);
 
  private:
   struct PendingQuorumGet {
@@ -146,19 +141,20 @@ class ShardClient : public TransportReceiver {
   };
 
   struct PendingPhase2 {
-    PendingPhase2(uint64_t reqId) : reqId(reqId),
-        requestTimeout(nullptr) { }
+    PendingPhase2(uint64_t reqId, proto::CommitDecision decision) : reqId(reqId),
+        decision(decision), requestTimeout(nullptr) { }
     ~PendingPhase2() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
       }
     }
     uint64_t reqId;
+    proto::CommitDecision decision;
     Timeout *requestTimeout;
+
     std::vector<proto::Phase2Reply> phase2Replies;
     std::vector<proto::SignedMessage> signedPhase2Replies;
-    Timestamp ts;
-    proto::Transaction txn;
+    uint64_t matchingReplies;
     phase2_callback pcb;
     phase2_timeout_callback ptcb;
   };
@@ -175,8 +171,8 @@ class ShardClient : public TransportReceiver {
     uint64_t ts;
     proto::Transaction txn;
     Timeout *requestTimeout;
-    commit_callback ccb;
-    commit_timeout_callback ctcb;
+    writeback_callback ccb;
+    writeback_timeout_callback ctcb;
   };
   struct PendingAbort {
     PendingAbort(uint64_t reqId) : reqId(reqId),
@@ -202,7 +198,8 @@ class ShardClient : public TransportReceiver {
   void HandleReadReply(const proto::ReadReply &readReply);
   void HandlePhase1Reply(const proto::Phase1Reply &phase1Reply,
       const proto::SignedMessage &signedPhase1Reply);
-  void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply);
+  void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply,
+      const proto::SignedMessage &signedPhase2Reply);
   bool CommitCallback(uint64_t reqId, const std::string &,
       const std::string &);
   bool AbortCallback(uint64_t reqId, const std::string &,

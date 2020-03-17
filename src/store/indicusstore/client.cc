@@ -161,7 +161,7 @@ void Client::Phase1Callback(uint64_t reqId, int group,
     proto::CommitDecision decision, bool fast,
     const std::vector<proto::Phase1Reply> &phase1Replies,
     const std::vector<proto::SignedMessage> &signedPhase1Replies) {
-  Debug("PHASE1 [%lu] callback %d", t_id, decision);
+  Debug("PHASE1 [%lu] callback decision %d from group %d", t_id, decision, group);
   auto itr = this->pendingReqs.find(reqId);
   if (itr == this->pendingReqs.end()) {
     Debug("Phase1Callback for terminated request id %lu (txn already committed or aborted.", reqId);
@@ -211,20 +211,25 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
 void Client::Phase2(PendingRequest *req, uint32_t timeout) {
   Debug("PHASE2 [%lu]", t_id);
 
-  for (auto p : participants) {
-    // replicas need to check that there are P1 replies for each shard in the
-    //    read set and write set
-    bclient[p]->Phase2(t_id, req->phase1RepliesGrouped, req->signedPhase1RepliesGrouped,
-        req->decision, std::bind(&Client::Phase2Callback, this, req->id,
-          std::placeholders::_1),
-        std::bind(&Client::Phase2TimeoutCallback, this, req->id,
-          std::placeholders::_1), timeout);
-    req->outstandingPhase2s++;
-  }
-
+  bclient[0]->Phase2(t_id, req->phase1RepliesGrouped, req->signedPhase1RepliesGrouped,
+      req->decision, std::bind(&Client::Phase2Callback, this, req->id,
+        std::placeholders::_1, std::placeholders::_2),
+      std::bind(&Client::Phase2TimeoutCallback, this, req->id,
+        std::placeholders::_1), timeout);
 }
 
-void Client::Phase2Callback(uint64_t reqId, proto::CommitDecision decision) {
+void Client::Phase2Callback(uint64_t reqId,
+    const std::vector<proto::Phase2Reply> &phase2Replies,
+    const std::vector<proto::SignedMessage> &signedPhase2Replies) {
+  Debug("PHASE2 [%lu] callback", t_id);
+
+  auto itr = this->pendingReqs.find(reqId);
+  if (itr == this->pendingReqs.end()) {
+    Debug("Phase2Callback for terminated request id %lu (txn already committed or aborted.", reqId);
+    return;
+  }
+
+  Writeback(itr->second, 3000);
 }
 
 void Client::Phase2TimeoutCallback(uint64_t reqId, int status) {
@@ -232,56 +237,44 @@ void Client::Phase2TimeoutCallback(uint64_t reqId, int status) {
 
 void Client::Writeback(PendingRequest *req, uint32_t timeout) {
   Debug("WRITEBACK [%lu]", t_id);
-  int abortResult = -1;
+
+  int result;
   switch (req->decision) {
     case proto::COMMIT: {
       Debug("COMMIT [%lu]", t_id);
-      // application doesn't need to be notified when commit has been acknowledged,
-      // so we use empty callback functions and directly call the commit callback
-      // function (with commit=true indicating a commit)
-      commit_callback ccb = [this, req](bool committed) {
-        auto itr = this->pendingReqs.find(req->id);
-        if (itr != this->pendingReqs.end()) {
-          if (!itr->second->callbackInvoked) {
-            itr->second->ccb(RESULT_COMMITTED);
-            itr->second->callbackInvoked = true;
-          }
-          this->pendingReqs.erase(itr);
-          delete itr->second;
-        }
-      };
-      commit_timeout_callback ctcb = [](int status){};
-      for (auto group : participants) {
-          bclient[group]->Commit(t_id, req->prepareTimestamp->getTimestamp(),
-              ccb, ctcb, 1000); // we don't really care about the timeout here
-      }
+      result = RESULT_COMMITTED;
       break;
     }
     case proto::ABORT: {
-      abortResult = RESULT_SYSTEM_ABORTED;
+      result = RESULT_SYSTEM_ABORTED;
       break;
     }
     default: {
       break;
     }
   }
-  if (abortResult > 0) {
-    // application doesn't need to be notified when abort has been acknowledged,
-    // so we use empty callback functions and directly call the commit callback
-    // function (with commit=false indicating an abort)
-    abort_callback acb = [this, req]() {
-      auto itr = this->pendingReqs.find(req->id);
-      if (itr != this->pendingReqs.end()) {
-        this->pendingReqs.erase(itr);
-        delete itr->second;
+
+  writeback_callback wcb = [this, req, result]() {
+    auto itr = this->pendingReqs.find(req->id);
+    if (itr != this->pendingReqs.end()) {
+      if (!itr->second->callbackInvoked) {
+        itr->second->ccb(result);
+        itr->second->callbackInvoked = true;
       }
-    };
-    abort_timeout_callback atcb = [](int status){};
-    Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
-    if (!req->callbackInvoked) {
-      req->ccb(abortResult);
-      req->callbackInvoked = true;
+      this->pendingReqs.erase(itr);
+      delete req;
     }
+  };
+
+  proto::CommittedProof proof;
+  writeback_timeout_callback wtcb = [](int status){};
+  for (auto group : participants) {
+    bclient[group]->Writeback(t_id, req->decision, proof, wcb, wtcb, timeout);
+  }
+
+  if (!req->callbackInvoked) {
+    req->ccb(result);
+    req->callbackInvoked = true;
   }
 }
 
@@ -292,9 +285,16 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
   // that this transaction was aborted
   Debug("ABORT [%lu]", t_id);
 
-  for (auto p : participants) {
-    bclient[p]->Abort(t_id, acb, atcb, timeout);
+
+  proto::CommittedProof proof;
+  writeback_callback wcb = []() {};
+
+  writeback_timeout_callback wtcb = [](int status){};
+  for (auto group : participants) {
+    bclient[group]->Writeback(t_id, proto::ABORT, proof, wcb, wtcb, timeout);
   }
+  // TODO: can we just call callback immediately?
+  acb();
 }
 
 /* Return statistics of most recent transaction. */

@@ -85,7 +85,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
     HandlePhase1Reply(phase1Reply, signedMessage);
   } else if (type == phase2Reply.GetTypeName()) {
     phase2Reply.ParseFromString(data);
-    HandlePhase2Reply(phase2Reply);
+    HandlePhase2Reply(phase2Reply, signedMessage);
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
@@ -173,13 +173,11 @@ void ShardClient::Phase2(uint64_t id,
     phase2_timeout_callback ptcb, uint32_t timeout) {
   Debug("[group %i] Sending PHASE1 [%lu]", shard, id);
   uint64_t reqId = lastReqId++;
-  PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId);
+  PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);
   pendingPhase2s[reqId] = pendingPhase2;
-  pendingPhase2->txn = txn;
   pendingPhase2->pcb = pcb;
   pendingPhase2->ptcb = ptcb;
   pendingPhase2->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase2]() {
-      Timestamp ts = pendingPhase2->ts;
       phase2_timeout_callback ptcb = pendingPhase2->ptcb;
       auto itr = this->pendingPhase2s.find(pendingPhase2->reqId);
       if (itr != this->pendingPhase2s.end()) {
@@ -217,19 +215,15 @@ void ShardClient::Phase2(uint64_t id,
   pendingPhase2->requestTimeout->Reset();
 }
 
-void ShardClient::Writeback(uint64_t id, writeback_callback wcb,
-      writeback_timeout_callback wtcb, uint32_t timeout) {
-}
-
-void ShardClient::Commit(uint64_t id, uint64_t timestamp, commit_callback ccb,
-    commit_timeout_callback ctcb, uint32_t timeout) {
+void ShardClient::Writeback(uint64_t id, proto::CommitDecision decision,
+    const proto::CommittedProof &proof,
+    writeback_callback wcb, writeback_timeout_callback wtcb, uint32_t timeout) {
   uint64_t reqId = lastReqId++;
   PendingCommit *pendingCommit = new PendingCommit(reqId);
   pendingCommits[reqId] = pendingCommit;
-  pendingCommit->ts = timestamp;
   pendingCommit->txn = txn;
-  pendingCommit->ccb = ccb;
-  pendingCommit->ctcb = ctcb;
+  pendingCommit->ccb = wcb;
+  pendingCommit->ctcb = wtcb;
   pendingCommit->requestTimeout = new Timeout(transport, timeout, [this, reqId]() {
       auto itr = this->pendingCommits.find(reqId);
       if (itr != this->pendingCommits.end()) {
@@ -249,35 +243,6 @@ void ShardClient::Commit(uint64_t id, uint64_t timestamp, commit_callback ccb,
   Debug("[shard %i] Sent WRITEBACK [%lu]", shard, id);
 
   pendingCommit->requestTimeout->Reset();
-}
-
-void ShardClient::Abort(uint64_t id, abort_callback acb,
-    abort_timeout_callback atcb, uint32_t timeout) {
-  Debug("[shard %i] Sending ABORT [%lu]", shard, id);
-
-  uint64_t reqId = lastReqId++;
-  PendingAbort *pendingAbort = new PendingAbort(reqId);
-  pendingAborts[reqId] = pendingAbort;
-  pendingAbort->txn = txn;
-  pendingAbort->acb = acb;
-  pendingAbort->atcb = atcb;
-  pendingAbort->requestTimeout = new Timeout(transport, timeout, [this, reqId]() {
-      auto itr = this->pendingAborts.find(reqId);
-      if (itr != this->pendingAborts.end()) {
-        abort_timeout_callback atcb = itr->second->atcb;
-        this->pendingAborts.erase(itr);
-        delete itr->second;
-        atcb(REPLY_TIMEOUT);
-      }
-  });
-
-  // create abort request
-  proto::Abort abort;
-  abort.set_req_id(reqId);
-
-  transport->SendMessageToAll(this, abort);
-
-  pendingAbort->requestTimeout->Reset();
 }
 
 bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
@@ -411,7 +376,31 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
     // move on to 2nd phase
   }
 }
-void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &phase2Reply) {
+
+void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply,
+    const proto::SignedMessage &signedReply) {
+  auto itr = this->pendingPhase2s.find(reply.req_id());
+  if (itr == this->pendingPhase2s.end()) {
+    return; // this is a stale request
+  }
+
+  if (validateProofs) {
+    itr->second->phase2Replies.push_back(reply);
+    if (signedMessages) {
+      itr->second->signedPhase2Replies.push_back(signedReply);
+    }
+  }
+
+  if (reply.decision() == itr->second->decision) {
+    itr->second->matchingReplies++;
+  }
+
+  if (itr->second->matchingReplies >= 4 * static_cast<uint64_t>(config->f) + 1) {
+    phase2_callback pcb = itr->second->pcb;
+    pcb(itr->second->phase2Replies, itr->second->signedPhase2Replies);
+    this->pendingPhase2s.erase(itr);
+    delete itr->second;
+  }
 }
 
 /* Callback from a shard replica on commit operation completion. */
@@ -422,10 +411,10 @@ bool ShardClient::CommitCallback(uint64_t reqId,
 
   auto itr = this->pendingCommits.find(reqId);
   if (itr != this->pendingCommits.end()) {
-    commit_callback ccb = itr->second->ccb;
+    writeback_callback ccb = itr->second->ccb;
     this->pendingCommits.erase(itr);
     delete itr->second;
-    ccb(true);
+    ccb();
   }
   return true;
 }
