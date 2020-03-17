@@ -13,9 +13,8 @@
 Indicus comes in two different flavors, Indicus3 and Indicus5 respectively, relying on varying replication degrees. Indicus3 requires 3f+1 replicas per shard to guarantee consistency, the minimum bound necessary for BFT SMR. Indicus5 uses a higher replication degree of 5f+1 replicas, but in return brings down both gracious execution latency and complexity during uncivil executions. We argue, that unlike past system settings where a single authority strives to maintain the fewest amount of replicas necessary for cost considerations, consortium systems with naturally higher replication degree are willing to pay the additional price for performance. Moreover, rather than trying to reach the threshold of replicas to tolerate some number of faults, these settings may start with a fixed number of replicas and consider the ratio of faults to be tolerable. When argueing from this perspective, the perceived difference between tolerating 1/3 and 1/5 of replica failures may be negligible.
 For the simplicity of exposition we outline Indicus5 in detail below. In section X we describe the differences in Indicus3.
 
-%-------------------------------------------------------------------------------
-\subsection{TEsting}
-%-------------------------------------------------------------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Figs
 \begin{figure}[t]
   \begin{mdframed}[roundcorner=10pt]
  	\textbf{TX}
@@ -24,38 +23,106 @@ For the simplicity of exposition we outline Indicus5 in detail below. In section
  	\item ClientSeqNo
  	\item ReadSet = \{(key, version)\}
  	\item WriteSet = \{(key, value)\}
- 	\item dependencies = \{$\langle (key, version)_{f+1 \sigma} \rangle$\}
- 	\item TXID = H(TX)
- 	\item Timestamp = (Time, ClientID)  optional:, TXID) this is just deterministic tie breaker when a client misbehaves.
+ 	\item dependencies = \{$\langle (key, version, \{TxID'\})_{f+1 \sigma} \rangle$\}
+ 	\item TxID = H(TX)
+ 	\item Timestamp = (Time, ClientID)  optional:, TxID) this is just deterministic tie breaker when a client misbehaves.
  	\end{itemize}
   \end{mdframed}
   \caption{Transaction}
   \label{fig:TX}
 \end{figure}
 
+\newcommand{\SubItem}[1]{
+    {\setlength\itemindent{15pt} \item[-] #1}
+}
+
+\begin{figure}[t]
+  \begin{mdframed}[roundcorner=10pt]
+ 	\textbf{Replica }
+ 	\begin{itemize}
+ 	\item ReplicaID
+ 	\item ShardNo
+ 	\item LocalClock
+ 	\item RTS = \{(key, \{(TS, \{dep\})\})\}
+ 	\item Prepared:
+ 	\subitem PreparedTX = \{(TxID, [TX, state])\}
+ 	\subitem PreparedDB = \{(key, [writes:\{(val, version, TxID)\},  reads: \{TS, rversion, TxID\}])\}
+ 	\subitem WaitingDeps = \{(TxID, dependents\}
+ 	\subitem Deps = \{(TxID, dependencies\}
+ 	\item Database = \{(key, [w: \{(val, ver)\}, r: \{(TS, rv)\}])\}
+ 	\subitem CommitLog = \{(TxID, CommitCert)\}
+ 	\subitem AbortLog = \{(TxID, AbortCert)\}
+	 	
+ 	
+ 	\end{itemize}
+  \end{mdframed}
+  \caption{Replica State and Datastructures}
+  \label{fig:RS}
+\end{figure}
 
 NEED FIg with replica state. Need to use it to explain what "Prepared"/Committable means
 %-------------------------------------------------------------------------------
 \subsection{Execution}
 %-------------------------------------------------------------------------------
-Clients in Indicus both execute and submit their own Transactions. As previously defined a Transaction TX is a sequence of read and write requests that is ultimately terminated by a Commit or Abort decision. A TX object, as shown in Figure \ref{fig:TX} records the execution state necessary for Validation.
+Clients in Indicus both execute and submit their own Transactions. As previously defined a Transaction TX is a sequence of read and write requests that is ultimately terminated by a Commit or Abort decision. A TX object, as shown in Figure \ref{fig:TX} records the execution state necessary for Validation. The execution protocol has three goals: 1) Honest Clients should read valid data, i.e. experience read integrity, 2) Honest Clients should read fresh data, i.e. minimize staleness and hence maximize commit chance, and 3) avoid expensive coordination as much as possible. This is complicated by the presence of byzantine replicas as well as concurrent transactions. Byzantine replicas may provide invalid or arbitrarily stale data and honest replicas may be temporarily out of sync.
+
+We avoid invalid reads by requiring replicas to provide a proof of validity, i.e. a Quorum of Writeback signatures confirming the committment, or alternatively, trusting only $f+1$ matching replies from discrete replicas. In order to minimize coordination only read requests incur a network rountrip, while writes are buffered locally until Validation. 
+Since together Validation and Writeback together incur several Wide Area Network (WAN) message delays, a committing transaction is invisible to concurrent transactions for the time-being, yet results in isolation conflicts that need be resolved. In order to minimize this window, we allow transactions to speculatively read proposed, yet uncommitted values. Similarly, since Execution can span multiple read requests that require WAN message delays, there remains a potentially large period in which reads are vulnerable to conflict. To mitigate aborts due to write conflicts, we a) let reads be sequenced at a pre-defined timestamp (rather than always reading the most recent) and b) let reads acquire implicit read-locks that disallow conflicting writes.
+
+
 
 Client execution conducts as follows:\\
 
 \begin{enumerate}
 \item \textbf{Write(key, value)}. A Client executes a request Write(key, value) by locally buffering (key, value) and returning. Concretely: $WriteSet = WriteSet \cup (key, value)$
-\item \textbf{Read(key, TS, RQS)} Given hyperparameter Read Quorum Size (RQS), a Client performs a read on given key at timestamp TS by reading from RQS different replicas. \\
 
-\fs{Replicas ignore requests if the Timestamp is too high}
+%%%%%%%%%Read protocol%%%%%%%%%%%
 
-A replica returns a pair $\langle \textit{(Committed, Prepared)} \rangle _{\sigma_r}$, where \\
-$Committed \coloneqq (value, version)_{cert}$ such that $ (value, version) \in R.CommitLog$, $version = max(q) : (key, val, q) \in R.CommitLog \land v < TS \}$ and $cert$ is a certificate proving (value, version) was allowed to commit (see Section Writeback) and\\
- $Prepared \coloneqq (value, version)$ such that $(value, version) \in R.PreparedSet$ and $version = max(q) : (key, val, q) \in R.PreparedSet \land Committed < v < TS \}$ .
-I.e. Committed is the largest committed write and Prepared is the largest uncommitted write that may be  committed and would make Committed outdated. \\
+\item \textbf{Read(key, TS, RQS)} 
 
+\fbox{\begin{minipage}{20em}
+\textbf{1: C} $\rightarrow$ \textbf{R}: Client sends read request to Replicas
+\end{minipage}}
+
+Given hyperparameter Read Quorum Size (RQS), a Client performs a read on given key at timestamp TS by reading from RQS different replicas. To do so, a Client sends $\langle(CID, key, TS)\rangle_{\sigma_c}$ \fs{technically CID is part of TS} to the respective replicas.\\
+
+\fbox{\begin{minipage}{20em}
+\textbf{2: R} $\rightarrow$ \textbf{C}: Replica processes Client read and returns reply
+\end{minipage}}
+
+A replica returns a signed pair \text{$\langle \textit{(Committed, Prepared)} \rangle _{\sigma_r}$}, where Committed is the write with largest committed write version prior to the specified Timestamp and Prepared is the respective largest uncommitted write that might be committed and would make Committed outdated. 
+
+\underline{Additional subtlelties}: If the timestamp is beyond a Highwater mark ($HW = localClock + \delta$) replicas ignore the requests. If the request is serviced, a Replica adds the timestamp to its Read Timestamp Set (RTSS): $RTSS(key) += (TS)$. \text{$Committed \coloneqq (value, version)_{cert}$} such that $ (value, version) \in R.CommitLog$, $version = max(q) : (key, val, q) \in R.CommitLog \land v < TS \}$ and $cert$ is a certificate proving (value, version) was legally committed (see Section Writeback) and 
+ $Prepared \coloneqq (value, version, dep)$ such that $(value, version) \in R.PreparedSet$, $version = max(q) : (key, val, q) \in R.PreparedSet \land Committed < v < TS \}$ and $dep$ is a DAG of Transaction IDs, starting from the TX that wrote $(value, version)$ and extending to its own dependencies.
+
+
+
+\fbox{\begin{minipage}{20em}
+\textbf{3: C} ($\rightarrow$ \textbf{R}): Client receives read replies and asynchronously dissipates dependencies
+\end{minipage}}
+
+A client waits for RQS read replies and validates the integrity of any $Committed$ it receives.  It adds the biggest $Committed$ or $Prepared$ (iff enough matching) version seen to its Read Set, and claims a dependency if it was a $Prepared$ version. If it claims a dependency, it asynchronously forwards this dependency to all replicas. 
+
+
+
+\underline{Additional subtlelties}: If $RQS > n-f$ a Client waits only up to a application set timeout beyond the first $n-f$ received replies. If $f+1$ matching $Committed$ are received they need to be validated. If $f+1$ matching $Pepared$ are received from disjoint replicas, and
+ $Prepared.version > max(\{Committed.version\}, \{\langle Prepared.versions \rangle_{f+1 \sigma_r}\})$ the client adds Prepared to its Read Set and claims a dependency by including the $f+1$ signatures: $ReadSet += (key, Prepared.version)$ and $dependencies += \langle Prepared.dep \rangle_{f+1 \sigma_r}$. 
+
+\fs{does the value need to be included?} Further, a Client sends $\langle (key, TS, dep)\rangle_{\sigma_c}$ to all replicas. If there exists no such Prepared, it adds the largest valid Committed, i.e. $ReadSet += (key, max(Committed.version)$. 
+
+
+
+\fbox{\begin{minipage}{20em}
+\textbf{(4: R)} : Replica receives dependency and adds exception
+\end{minipage}}
+Upon reception of $\langle (key, TS, dep)\rangle_{\sigma_c}$ a replica adds an exception to its Read Timestamp Set. Concretely, $RTSS(key)(TS) += dep$.
+
+
+
+Implications: 
 1. Reading from 1 Replica: could abort because reading arbitrarily stale.
 Alternatively: Read from f+1 always to reduce proof/memory costs: Could not get matching and hence fail read. Still possible to abort by reading stale data 
-2. Reading f+1 matching Prepared that are larger than the commit --> choose that and add dependency
+2. Reading f+1 matching Prepared that are larger than the commit --> choose that and add dependency (in 5f+1 might only want to do it if read 2f+1, not necessary for safety, but higher commit chance?)
 Guaranteed to see 1 thats not intentionally stale. But still arbitrarily stale if unlucky.
 3. If read from 3f+1/2f+1 then its effectively a read lock. 
 If 1 prepared read was enough then this would be sufficient to see the newest "potential" value. However that is not possible for liveness reasons.
