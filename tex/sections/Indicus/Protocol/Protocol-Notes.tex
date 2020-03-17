@@ -1,23 +1,23 @@
 \section{Protocol-Notes}
 
-Structure:
-0. Preamble what Indicus is and what it is supposed to offer.
-1. Model., Properties   
-2. Architecture: Exec, Val, WB, 
+Structure:\\
+0. Preamble what Indicus is and what it is supposed to offer.\\
+1. Model., Properties   \\
+2. Architecture: Exec, Val, WB, \\
 
-Replica state?
+Replica state?\\
 
-3. Exec details: Read/Write Set computation
-4. Concurrency Control check. Put in relation to Exec details
-5. Validation Protocol: a) Voting and Decision rule component b) Logging. Explain similarity to other BFT protocols (logging could use anything, in 5f+1 it resembles Q/U because etc.)
-6. Writeback and Multi-shard TX
-7. Failures between 5/6
-8. Optimizations: 
-9. Indicus3: Extra abort phase, different quorums (Validation and View change), Extra proofs
-10. Correctness proofs: Only for 5f+1?
-	- ACID: serializable specifically
-	- Prove recovery maintains same result and consistency
-	- Prove liveness (i.e. client has all tools necessary: dependency resolution, general aborts/abstains. Fallback live leader election. )
+3. Exec details: Read/Write Set computation\\
+4. Concurrency Control check. Put in relation to Exec details\\
+5. Validation Protocol: a) Voting and Decision rule component b) Logging. Explain similarity to other BFT protocols (logging could use anything, in 5f+1 it resembles Q/U because etc.)\\
+6. Writeback and Multi-shard TX\\
+7. Failures between 5/6\\
+8. Optimizations: \\
+9. Indicus3: Extra abort phase, different quorums (Validation and View change), Extra proofs\\
+10. Correctness proofs: Only for 5f+1?\\
+	- ACID: serializable specifically\\
+	- Prove recovery maintains same result and consistency\\
+	- Prove liveness (i.e. client has all tools necessary: dependency resolution, general aborts/abstains. Fallback live leader election. )\\
 
 \subsection{TX execution}
 Goal:\\
