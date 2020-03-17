@@ -17,7 +17,7 @@ For the simplicity of exposition we outline Indicus5 in detail below. In section
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%Figs
 \begin{figure}[t]
   \begin{mdframed}[roundcorner=10pt]
- 	\textbf{TX}
+ 	\textbf{TX Exec State}
  	\begin{itemize}
  	\item ClientID
  	\item ClientSeqNo
@@ -28,7 +28,7 @@ For the simplicity of exposition we outline Indicus5 in detail below. In section
  	\item Timestamp = (Time, ClientID)  optional:, TxID) this is just deterministic tie breaker when a client misbehaves.
  	\end{itemize}
   \end{mdframed}
-  \caption{Transaction}
+  \caption{Transaction Execution state}
   \label{fig:TX}
 \end{figure}
 
@@ -67,26 +67,29 @@ NEED FIg with replica state. Need to use it to explain what "Prepared"/Committab
 Clients in Indicus both execute and submit their own Transactions. As previously defined a Transaction TX is a sequence of read and write requests that is ultimately terminated by a Commit or Abort decision. A TX object, as shown in Figure \ref{fig:TX} records the execution state necessary for Validation. The execution protocol has three goals: 1) Honest Clients should read valid data, i.e. experience read integrity, 2) Honest Clients should read fresh data, i.e. minimize staleness and hence maximize commit chance, and 3) avoid expensive coordination as much as possible. This is complicated by the presence of byzantine replicas as well as concurrent transactions. Byzantine replicas may provide invalid or arbitrarily stale data and honest replicas may be temporarily out of sync.
 
 We avoid invalid reads by requiring replicas to provide a proof of validity, i.e. a Quorum of Writeback signatures confirming the committment, or alternatively, trusting only $f+1$ matching replies from discrete replicas. In order to minimize coordination only read requests incur a network rountrip, while writes are buffered locally until Validation. 
-Since together Validation and Writeback together incur several Wide Area Network (WAN) message delays, a committing transaction is invisible to concurrent transactions for the time-being, yet results in isolation conflicts that need be resolved. In order to minimize this window, we allow transactions to speculatively read proposed, yet uncommitted values. Similarly, since Execution can span multiple read requests that require WAN message delays, there remains a potentially large period in which reads are vulnerable to conflict. To mitigate aborts due to write conflicts, we a) let reads be sequenced at a pre-defined timestamp (rather than always reading the most recent) and b) let reads acquire implicit read-locks that disallow conflicting writes.
+Since together Validation and Writeback together incur several Wide Area Network (WAN) message delays, a committing transaction is invisible to concurrent transactions for the time-being, yet results in isolation conflicts that need be resolved. In order to minimize this window, we allow transactions to speculatively read proposed, yet uncommitted values. Similarly, since Execution can span multiple read requests that require WAN message delays, there remains a potentially large period in which reads are vulnerable to conflict. To mitigate aborts due to write conflicts, we a) let reads be sequenced at a pre-defined timestamp (rather than always reading the most recent) and b) let reads acquire implicit read-locks that disallow conflicting writes. 
+
+\fs{lead over to MVTSO - what I just described are the three base techniques}
 
 
 
-Client execution conducts as follows:\\
+Client execution conducts as follows:
 
 \begin{enumerate}
+\item \textbf{Begin} A client begins a Transaction by optimistically choosing a timestamp $TS \coloneqq (Time, Client ID)$. 
 \item \textbf{Write(key, value)}. A Client executes a request Write(key, value) by locally buffering (key, value) and returning. Concretely: $WriteSet = WriteSet \cup (key, value)$
 
 %%%%%%%%%Read protocol%%%%%%%%%%%
 
 \item \textbf{Read(key, TS, RQS)} 
-
-\fbox{\begin{minipage}{20em}
+\fbox{Client does blabla}
+\fbox{\begin{minipage}{21em}
 \textbf{1: C} $\rightarrow$ \textbf{R}: Client sends read request to Replicas
 \end{minipage}}
 
 Given hyperparameter Read Quorum Size (RQS), a Client performs a read on given key at timestamp TS by reading from RQS different replicas. To do so, a Client sends $\langle(CID, key, TS)\rangle_{\sigma_c}$ \fs{technically CID is part of TS} to the respective replicas.\\
 
-\fbox{\begin{minipage}{20em}
+\fbox{\begin{minipage}{21em}
 \textbf{2: R} $\rightarrow$ \textbf{C}: Replica processes Client read and returns reply
 \end{minipage}}
 
@@ -97,7 +100,7 @@ A replica returns a signed pair \text{$\langle \textit{(Committed, Prepared)} \r
 
 
 
-\fbox{\begin{minipage}{20em}
+\fbox{\begin{minipage}{21em}
 \textbf{3: C} ($\rightarrow$ \textbf{R}): Client receives read replies and asynchronously dissipates dependencies
 \end{minipage}}
 
@@ -112,14 +115,35 @@ A client waits for RQS read replies and validates the integrity of any $Committe
 
 
 
-\fbox{\begin{minipage}{20em}
+\fbox{\begin{minipage}{21em}
 \textbf{(4: R)} : Replica receives dependency and adds exception
 \end{minipage}}
 Upon reception of $\langle (key, TS, dep)\rangle_{\sigma_c}$ a replica adds an exception to its Read Timestamp Set. Concretely, $RTSS(key)(TS) += dep$.
 
 
 
-Implications: 
+
+\item \textbf{Commit} A Client finalizes its execution, computes the final $TxID \coloneqq H(TX)$  and submits the Transaction for validation.
+
+\item \textbf{Abort} A client terminates execution, broadcasts a read-release for all potentially acquired Read Timestamps (RTS) and returns.
+\fs{A byz client may not release the RTS. To circumvent this, RTS are just leases. Moreover, at some point writes will overtake them}
+
+\end{enumerate}
+
+\fs{Need to talk about MVTSO here first}
+ 
+We briefly discuss some implications of the choice of Read Quorum Size (RQS) as well as the general MVTSO design.
+ 
+A client may choose to read from any number of replicas. Following cases may be distinguished:
+\begin{itemize}
+\item \textbf{$RQS = 1$} A replica may read from just 1 replica at the risk of later aborting due to reading maliciously stale data (i.e. replica claiming no write ever existed). Note, that an honest client is still guaranteed to read valid data, as only Committed reads are processed. If a Client trusts a local replica \textbf{and} the replica is not lagging behind, this is a viable option to reduce execution time and hence improve both latency and conflict likelihood.
+\item \textbf{$RQS \geq f+1$} When reading from $f+1$ or more replicas a client is not susceptible to maliciously stale reads, yet it is still possible to read (arbitrarily) stale data, either due to inconsistency caused by asynchrony or a byzantine client not fully replicating its transaction. Furthermore, it is always possible to miss a concurrent TX in the pipeline.
+\item \textbf{$RQS \geq \frac{n+f+1}{2}$} When reading from $3f+1$ (in Indicus5, or $2f+1$ respectively in Indicus3), a client guarantees, that no more \textbf{additional} conflicting writes can be admitted, since such a Quorum acts as a read-lock. If a single Prepared write would suffice to form a dependency, then it would be guaranteed, that a read cannot abort, since the freshest possible value would have been read. This however, overly empowers byzantine replicas:  Depending on such transactions is undesirable, as there exists neither confidence that this transaction does not violate Isolation, nor would \textit{Byzantine Independence} be upheld as byzantine replicas could reactively fabricate Transactions. Thus, 
+
+- also has the effect of not needing to store the full TX always, because one honest is guaranteed to have it and we can get it later.
+- Byz clients could fabricate their own dependencies 
+\end{itemize}
+
 1. Reading from 1 Replica: could abort because reading arbitrarily stale.
 Alternatively: Read from f+1 always to reduce proof/memory costs: Could not get matching and hence fail read. Still possible to abort by reading stale data 
 2. Reading f+1 matching Prepared that are larger than the commit --> choose that and add dependency (in 5f+1 might only want to do it if read 2f+1, not necessary for safety, but higher commit chance?)
@@ -128,8 +152,7 @@ Guaranteed to see 1 thats not intentionally stale. But still arbitrarily stale i
 If 1 prepared read was enough then this would be sufficient to see the newest "potential" value. However that is not possible for liveness reasons.
 Note, could still have missed a prepared write and have to abort because we required f+1 matching. Why f+1? so it comes from 1 honest: we dont need proofs, and we know it is in the system for recovery.
 Still no guarantee that newest commit was seen, but some protection from other writes.
-
-
+4. Exceptions: granting exceptions is protection for oneself: minimize the window of dependent writes aborting against oneself
 
 (Note: the TS used here is not the final one, its just the tuple of time and clientId. (The triple later is just necessary to differentiate two TX by a client that were assigned the same Time
 Add Read set decision rule, put in correlation to RQS: \fs{could only accept reads if f+1 matching always, then no proofs necessary, but then reads can fail}
@@ -137,21 +160,71 @@ Add exceptions etc.
 )
 
 
-\item \textbf{Commit} A Client finalizes its execution, computes the final Timestamp and submits for validation.
-
-\item \textbf{Abort} A client terminates execution, broadcasts a read-release for all potentially acquired RTS and returns.
-\fs{A byz client may not release the RTS. To circumvent this, RTS are just leases. Moreover, at some point writes will overtake them}
-
-\end{enumerate}
- 
-
 
 - Read proofs required for honest client correctness. Alternatively one can read from f+1 only, but that can result in failed/older reads
-- Do not need to include read proofs in the prepare. According to Isolation definition byzantine Clients can read whatever they want. Moreover, Reads only have very limited external effect. The value does not matter for the CC check. The version has bounded effect: If it goes towards 0, then it is just a check between timestamps as normally. If it goes towards the TS, then it will never abort.
-- Fallback not just useful for dependency cleanup, but also "unclaimable" dependencies that need to finish.
+- Notice, that a byz client does not follow this protocol. It can do whatever reads it wants, but it cannot claim non-existant dependencies. Do not need to include read proofs in the prepare. According to Isolation definition byzantine Clients can read whatever they want. Moreover, Reads only have very limited external effect. The value does not matter for the CC check. The version has bounded effect: If it goes towards 0, then it is just a check between timestamps as normally. If it goes towards the TS, then it will never abort.
+- Fallback not just useful for dependency cleanup, but also "unclaimable" concurrent TX that need to finish.
+
+\fs{
+1. read access control not possible since 1 byz can return write. This requires Multi party computation, shared secrets (verifiable secret sharing), beyond the scope of our work (reference soumyas paper)
+2. need to be clearer on the byz independence violation when single read deps are allowed. Byz clients could fabricate their own dependencies 
+}
+THEOREM:
+Our design accomplishes Byzantine Independence in the absence of an adverserial network.
 %-------------------------------------------------------------------------------
 \subsection{Validation}
 %-------------------------------------------------------------------------------
+
+The Validation protocol can be broken down into two functionalities: Voting and Logging.
+Since Indicus is leaderless, Replicas need to agree on results, rather than an Ordering. To do so, they vote. As in any democratic decision, these votes are then aggregated into a decision. In the case of Indicus, the client acts as the transaction coordinator who aggregates and relays results. In order to maintain consistency in the presence of failures, this decision must be logged prior to returning, guaranteeing that a replay of any Writeback is idempotent. This two step decision protocol resembles Two-Phase Commit. Since we cannot trust a byzantine coordinator to persist a decision, nor could we retain liveness during a crash, we delegate the decision logging to the replicas.
+The voting phase requires a single round-trip to all replicas, whereas the logging phase requires at most one round-trip \fs{in Indicus5 and at most two round-trips in Indicus3.}
+To describe how the protocol operates we follow a transaction through the system.:
+
+\fbox{\begin{minipage}{21em}
+\textbf{(1: C $\rightarrow$ R)}: Client sends Prepare request to the Replicas.
+\end{minipage}}
+
+Upon deciding to Commit in the Execution phase, a Client initiates Validation, by sending a message $\langle Prepare, TX, (TS) \rangle_{\sigma_c}$ to all Replicas.
+
+\underline{Additional subtlelties}: A client may not equivocate this request. Any change to the TX state changes the TXiD and hence is treated as seperate TX. A client may choose identical timestamps for 2 TX, these ties are broken by TXID order.
+
+\fbox{\begin{minipage}{21em}
+\textbf{(2: R $\rightarrow$ C)}: Replica runs Concurrency Control Check and returns vote to Client.
+\end{minipage}}
+Every Replica evaluates the Transactions according to the MVTSO Concurrency Control Check (CCC), as shown in algorithm 1. This check is entirely based on local knowledge. Updates local state. Returns vote to Client.
+
+Different replicas receive these out of order.
+
+\underline{Additional subtlelties}: A replica updates its internal state.. Ongoing TX set, prepared set. Checks whether dependencies are resolved already, otherwise puts that thread to sleep. 
+\fs{edit Replica state to include ONGOING set: has p1, and p2 info, view, dependencies, proofs, etc., has field that says prepared or not - remove Prepared set.)}
+
+\fbox{\begin{minipage}{21em}
+\textbf{(3a: C)}: Client returns to application. Proceeds to Writeback
+\end{minipage}}
+
+\fbox{\begin{minipage}{21em}
+\textbf{(3b: C $\rightarrow$ R)}: Client sends decision to Replicas for Logging
+\end{minipage}}
+
+\fbox{\begin{minipage}{21em}
+\textbf{(4: R $\rightarrow$ C)}: Replicas validate and echo decision
+\end{minipage}}
+
+%%%Optional for Indicus3
+\fbox{\begin{minipage}{21em}
+\textbf{(5a: C)}: Client returns Commit to application
+\end{minipage}}
+
+\fbox{\begin{minipage}{21em}
+\textbf{(5b: C $\rightarrow$ R)}: Client sends consistent echo to Replicas
+\end{minipage}}
+
+\fbox{\begin{minipage}{21em}
+\textbf{(6 : R $\rightarrow$ C)}: Replicas echo 
+\end{minipage}}
+
+
+
 
 %-------------------------------------------------------------------------------
 \subsection{Concurrency Control}
@@ -246,17 +319,69 @@ protocol overview: pic
 %-------------------------------------------------------------------------------
 \subsection{Writeback and Multi-shard 2pc}
 %-------------------------------------------------------------------------------
-
+Client puts in the TX which shards are involved, if that does not match the read/write set, then its not atomic. A shard will not accept reads/writes for which there exist no shard proof.
+Client waits for all shard results. Then issues Writeback.
+\fbox{\begin{minipage}{21em}
+\textbf{(1: C $\rightarrow$ R)}: Client sends Commit/Abort decision to the Replicas.
+\end{minipage}}
 %-------------------------------------------------------------------------------
 \subsection{Failures}
 %-------------------------------------------------------------------------------
 - Fallback: election (only starts if not waiting on another dep to avoid early eviction), views, resolution, subtelties with mvtso (block because of dep), necessity even without dependencies. Interested clients, write-back multishard. garbage collection
 - Fallback requires an extra round in order to learn about current views to start viewchange, but thats ok: Its co-function with learning about full TX, and checking for existing certificates. Timeout invocation is concurrent with p1 message.
+\fs{think carefully about how to write Fallback down. Decision rules for view consistency vs all to all. In 5f+1 vs 3f+1}
 
+\fs{why not elect a client? could be byzantine, unbounded amount --> no guarantee that we ever finish. Replicas are bounded.}
+%% Gathering info
+\fbox{\begin{minipage}{21em}
+\textbf{(1: C $\rightarrow$ R)}: Client sends Fallback invocation.
+Asks for state, views, acts as p1 if not received yet. OR ASKS for p1 if havent received yet... 
+\end{minipage}}
+
+\fbox{\begin{minipage}{21em}
+\textbf{(1: R $\rightarrow$ C)}:  process p1 if they have not yet, and reply (can go fp right here to Writeback if everybody cooperates. Needs to do this on every shard for p1, only on 1 shard for p2)
+the above is WRONG. Correct: they just reply with p2 state, views, and full TX (if they have)
+
+Replicas mark Client as interested
+\end{minipage}}
+
+
+%%Fallback start
+\fbox{\begin{minipage}{21em}
+\textbf{(1: C $\rightarrow$ R)}:  sends Fallback elect msg for view x (uses view update rules as described) (maybe only p1 here)
+\end{minipage}}
+
+\fbox{\begin{minipage}{21em}
+\textbf{(1: R $\rightarrow$ R)}: Replicas send elect msg to fallback if timeout expires, blacklist old client (implicitly by increasing view), send p1 to client  (potential fastpath)
+
+
+addional pedantics:  replicas send all to all to start election. First (few)view change happens without this. after that always all to all, to avoid timeouts growing exponentially because byz clients keep trying to view change without true election having happened.
+
+\fs{election only works if the logging shard can elect solo. Any client should be able to re-do the p1, if no p2 exists yet (only after the timeout ofc). }
+\end{minipage}}
+
+\fbox{\begin{minipage}{21em}
+\textbf{(1: R(FB) $\rightarrow$ R)}:  sends p2 decision
+\end{minipage}}
+
+\fbox{\begin{minipage}{21em}
+\textbf{(1: R $\rightarrow$ C, FB)}:  echo decision to interested client, and back to fallback. 
+\end{minipage}}
+
+%%optional 
+\fbox{\begin{minipage}{21em}
+\textbf{(1: FB $\rightarrow$ R)}:  FB sends p3 as final certificates. Can be writeback if only single shard involved, or if replicas know about all other shards.
+\end{minipage}}
+
+So in total if it goes badly: 1 rr voting, 3 rr FB, 1 rr logging.
+
+
+View changes are per-TX. they dont affect liveness of all other TX. If a client is responsible for allowing up to X view changes it can be expelled for not being timely enough for the system.
+Not just byz clients, but poor clients get excluded.
 %-------------------------------------------------------------------------------
 \subsection{Optimizations}
 %-------------------------------------------------------------------------------
-- Retries
+- Retries: How it works (just change timestamps, only accept if p2 doesnt exist already; fallback needs to resolve). Retries can be per client choice (have a flag that says whether fast path or retires available).
 - single shard logging
 \begin{figure*}
 \begin{center}

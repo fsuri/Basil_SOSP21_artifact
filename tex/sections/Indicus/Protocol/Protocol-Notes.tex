@@ -197,7 +197,7 @@ SAFE RECOVERY:\\
 - Clients can only use Quorums from matching views to return to the application (simple counterexample: 3 commits 3 aborts and then swap)\\
 - FB can use decisions from multiple views for the decision rule (i.e. decision rule is view agnostic). When could this arise? Because newer views subsume older views and FBs might have been byzantine, or been replaced too quickly. \\
 - Proof by Induction: If something returned then ... guaranteed to only ever issue that decision\\
-- 
+- Theorem: decisions returned are idempotent.
 
 
 
@@ -261,7 +261,7 @@ optional Extras to mention:
 
 
 View changes:
-- bounding rule works differently: slightly weaker guarantee
+- bounding rule works differently: slightly weaker guarantee (2 additional rounds)
 - Decision rule: In View change hierarchy!! I.e. higher view beats anything. Implication: If conflicting decision to previous view was made, then previous view vote could not have been final.
 	1. 1 p3 commit: use it to return
 	2. 1 p3 abort: re-issue p2 abort 
