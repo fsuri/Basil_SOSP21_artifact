@@ -55,7 +55,8 @@ enum OCCType {
 class Server : public TransportReceiver, public ::Server {
  public:
   Server(const transport::Configuration &config, int groupIdx, int idx,
-      Transport *transport, KeyManager *keyManager,
+      Transport *transport, KeyManager *keyManager, bool signedMessages,
+      bool validateProofs, uint64_t timeDelta, OCCType occType,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 

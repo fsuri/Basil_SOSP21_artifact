@@ -69,7 +69,6 @@ Client::~Client()
     for (auto b : bclient) {
         delete b;
     }
-    delete config;
 }
 
 /* Begins a transaction. All subsequent operations before a commit() or

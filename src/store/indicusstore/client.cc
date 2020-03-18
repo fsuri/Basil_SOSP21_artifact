@@ -74,7 +74,6 @@ Client::~Client()
     for (auto b : bclient) {
         delete b;
     }
-    delete config;
 }
 
 /* Begins a transaction. All subsequent operations before a commit() or
@@ -99,9 +98,16 @@ void Client::Get(const std::string &key, get_callback gcb,
     bclient[i]->Begin(t_id);
   }
 
-  read_callback rcb = [gcb](int status, const std::string &key,
+  read_callback rcb = [gcb, this](int status, const std::string &key,
       const std::string &val, Timestamp ts, const proto::Transaction &dep,
       bool hasDep) {
+    if (Message_DebugEnabled(__FILE__)) {
+      uint64_t intValue = 0;
+      for (int i = 0; i < 4; ++i) {
+        intValue = intValue | (static_cast<uint64_t>(val[i]) << ((3 - i) * 8));
+      }
+      Debug("GET CALLBACK [%lu : %s] Read value %lu.", t_id, key.c_str(), intValue);
+    }
     gcb(status, key, val, ts);
   };
   read_timeout_callback rtcb = gtcb;
@@ -112,7 +118,13 @@ void Client::Get(const std::string &key, get_callback gcb,
 
 void Client::Put(const std::string &key, const std::string &value,
     put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
-  Debug("PUT [%lu : %s]", t_id, key.c_str());
+  if (Message_DebugEnabled(__FILE__)) {
+    uint64_t intValue = 0;
+    for (int i = 0; i < 4; ++i) {
+      intValue = intValue | (static_cast<uint64_t>(value[i]) << ((3 - i) * 8));
+    }
+    Debug("PUT [%lu : %s : %lu]", t_id, key.c_str(), intValue);
+  }
 
   // Contact the appropriate shard to set the value.
   int i = part(key, nshards) % ngroups;

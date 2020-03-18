@@ -123,11 +123,8 @@ message Writeback {
   required uint64 req_id = 1;
   required uint64 txn_id = 2;
   required Transaction txn = 3;
-  optional CommittedProof proof = 4;
-  oneof p1_replies_oneof {
-    Phase2Replies p2_replies = 5;
-    SignedMessages signed_p2_replies = 6;
-  }
+  required CommitDecision decision = 4;
+  optional CommittedProof proof = 5;
 }
 
 message Abort {

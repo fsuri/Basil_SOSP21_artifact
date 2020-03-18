@@ -107,13 +107,13 @@ DEFINE_string(protocol, protocol_args[0],	"the protocol to use during this"
 DEFINE_validator(protocol, &ValidateProtocol);
 
 const std::string trans_args[] = {
-	"tcp",
-  "udp"
+  "udp",
+	"tcp"
 };
 
 const transmode_t transmodes[] {
-	TRANS_TCP,
-  TRANS_UDP
+  TRANS_UDP,
+	TRANS_TCP
 };
 static bool ValidateTransMode(const char* flagname,
     const std::string &value) {
@@ -198,6 +198,12 @@ DEFINE_uint64(prepare_batch_period, 0, "length of batches for deterministic prep
 /**
  * Indicus settings.
  */
+DEFINE_uint64(indicus_time_delta, 100, "max clock skew allowed for concurrency"
+    " control (for Indicus)");
+DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
+    " necessary to prevent impersonation (for Indicus)");
+DEFINE_bool(indicus_validate_proofs, false, "send and validate proofs as"
+    " necessary to check Byzantine behavior (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
 
@@ -323,7 +329,10 @@ int main(int argc, char **argv) {
     }
     case PROTO_INDICUS: {
       server = new indicusstore::Server(config, FLAGS_group_idx,
-          FLAGS_replica_idx, tport, &keyManager);
+          FLAGS_replica_idx, tport, &keyManager, FLAGS_indicus_sign_messages,
+          FLAGS_indicus_validate_proofs, FLAGS_indicus_time_delta,
+          indicusstore::MVTSO);
+      break;
     }
     default: {
       NOT_REACHABLE();

@@ -31,7 +31,6 @@ Client::~Client() {
   for (auto sclient : sclients) {
     delete sclient;
   }
-  delete config;
 }
 
 void Client::Execute(AsyncTransaction *txn, execute_callback ecb) {

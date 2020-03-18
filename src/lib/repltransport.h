@@ -249,10 +249,10 @@ private:
     void PrintState() const;
 
     struct QueuedMessage {
-        ReplTransportAddress src;
+        const ReplTransportAddress *src;
         std::unique_ptr<Message> msg;
 
-        QueuedMessage(ReplTransportAddress src, std::unique_ptr<Message> msg)
+        QueuedMessage(const ReplTransportAddress *src, std::unique_ptr<Message> msg)
             : src(std::move(src)), msg(std::move(msg)) {}
     };
 

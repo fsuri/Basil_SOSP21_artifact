@@ -42,10 +42,10 @@ TransportReceiver::SetAddress(const TransportAddress *addr)
     this->myAddress = addr;
 }
 
-const TransportAddress &
+const TransportAddress *
 TransportReceiver::GetAddress()
 {
-    return *(this->myAddress);
+    return this->myAddress;
 }
 
 Timeout::Timeout(Transport *transport, uint64_t ms, timer_callback_t cb)

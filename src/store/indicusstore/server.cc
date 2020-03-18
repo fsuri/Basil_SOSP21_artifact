@@ -37,11 +37,12 @@
 namespace indicusstore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
-    Transport *transport, KeyManager *keyManager, TrueTime timeServer) :
+    Transport *transport, KeyManager *keyManager, bool signedMessages,
+    bool validateProofs, uint64_t timeDelta, OCCType occType, TrueTime timeServer) :
     config(config), groupIdx(groupIdx), idx(idx), id(groupIdx * config.n + idx),
-    transport(transport), occType(TAPIR),
-    signedMessages(false), validateProofs(false), keyManager(keyManager),
-    timeDelta(100UL), timeServer(timeServer) {
+    transport(transport), occType(occType),
+    signedMessages(signedMessages), validateProofs(validateProofs), keyManager(keyManager),
+    timeDelta(timeDelta), timeServer(timeServer) {
   privateKey = keyManager->GetPrivateKey(id);
   transport->Register(this, config, groupIdx, idx);
 }
@@ -100,6 +101,8 @@ void Server::Load(const string &key, const string &value,
 
 void Server::HandleRead(const TransportAddress &remote,
     const proto::Read &msg) {
+  Debug("READ[%lu,%lu] for key %s.", msg.txn_id(), msg.req_id(), msg.key().c_str());
+
   std::pair<Timestamp, Server::Value> tsVal;
   bool exists;
   store.get(msg.key(), Timestamp(msg.timestamp()), tsVal);
@@ -182,6 +185,9 @@ void Server::HandleRead(const TransportAddress &remote,
 
 void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
+  Debug("PHASE1[%lu,%lu] with ts %lu.", msg.txn_id(), msg.req_id(),
+      msg.txn().timestamp().timestamp());
+
   Timestamp retryTs;
   proto::CommittedProof conflict;
   proto::Phase1Reply::ConcurrencyControlResult result = DoOCCCheck(msg.txn_id(),
@@ -215,6 +221,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
+  Debug("PHASE1[%lu,%lu].", msg.txn_id(), msg.req_id());
+
   std::map<int, std::vector<proto::Phase1Reply>> groupedPhase1Replies;
   bool validated = true;
   if (signedMessages) {
@@ -267,7 +275,11 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
 void Server::HandleWriteback(const TransportAddress &remote,
     const proto::Writeback &msg) {
-  Commit(msg.txn_id(), msg.txn(), Timestamp(msg.txn().timestamp()));
+  Debug("WRITEBACK[%lu,%lu]  with decision %d.", msg.txn_id(), msg.req_id(),
+      msg.decision());
+  if (msg.decision() == proto::COMMIT) {
+    Commit(msg.txn_id(), msg.txn(), Timestamp(msg.txn().timestamp()));
+  }
 }
 
 void Server::HandleAbort(const TransportAddress &remote,

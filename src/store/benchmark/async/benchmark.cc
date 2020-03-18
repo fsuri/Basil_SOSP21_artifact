@@ -116,20 +116,20 @@ DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
     " necessary to prevent impersonation (for Indicus)");
 DEFINE_bool(indicus_validate_proofs, false, "send and validate proofs as"
     " necessary to check Byzantine behavior (for Indicus)");
-DEFINE_string(indicus_crypto_config_path, "", "path to crypto configuration"
-    " directory (for Indicus)");
+DEFINE_string(indicus_key_path, "", "path to directory containing public and"
+    " private keys (for Indicus)");
 
 
 DEFINE_bool(debug_stats, false, "record stats related to debugging");
 
 const std::string trans_args[] = {
-	"tcp",
-  "udp"
+  "udp",
+	"tcp"
 };
 
 const transmode_t transmodes[] {
-	TRANS_TCP,
-  TRANS_UDP
+  TRANS_UDP,
+	TRANS_TCP
 };
 static bool ValidateTransMode(const char* flagname,
     const std::string &value) {
@@ -542,7 +542,7 @@ int main(int argc, char **argv) {
     return -1;
   }
   transport::Configuration *config = new transport::Configuration(configStream);
-  KeyManager *keyManager = new KeyManager(FLAGS_indicus_crypto_config_path);
+  KeyManager *keyManager = new KeyManager(FLAGS_indicus_key_path);
 
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
     Client *client = nullptr;

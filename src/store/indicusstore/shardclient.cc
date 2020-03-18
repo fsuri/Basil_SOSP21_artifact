@@ -113,6 +113,7 @@ void ShardClient::Get(uint64_t id, const std::string &key, read_callback gcb,
 
   proto::Read read;
   read.set_req_id(reqId);
+  read.set_txn_id(id);
   read.set_key(key);
   Timestamp localTs(timeServer.GetTime());
   localTs.serialize(read.mutable_timestamp());
@@ -238,6 +239,9 @@ void ShardClient::Writeback(uint64_t id, proto::CommitDecision decision,
   // create commit request
   proto::Writeback writeback;
   writeback.set_req_id(reqId);
+  writeback.set_txn_id(id);
+  *writeback.mutable_txn() = txn;
+  writeback.set_decision(decision);
 
   transport->SendMessageToAll(this, writeback);
   Debug("[shard %i] Sent WRITEBACK [%lu]", shard, id);

@@ -54,7 +54,7 @@ protected:
 public:
     virtual ~TransportReceiver();
     virtual void SetAddress(const TransportAddress *addr);
-    virtual const TransportAddress& GetAddress();
+    virtual const TransportAddress *GetAddress();
 
     virtual void ReceiveMessage(const TransportAddress &remote,
                                 const string &type,
