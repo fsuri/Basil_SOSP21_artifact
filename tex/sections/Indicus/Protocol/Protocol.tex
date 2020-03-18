@@ -21,6 +21,7 @@ For the simplicity of exposition we outline Indicus5 in detail below. In section
  	\begin{itemize}
  	\item ClientID
  	\item ClientSeqNo
+ 	\item InvolvedShards = \{S\}
  	\item ReadSet = \{(key, version)\}
  	\item WriteSet = \{(key, value)\}
  	\item dependencies = \{$\langle (key, version, \{TxID'\})_{f+1 \sigma} \rangle$\}
@@ -97,7 +98,9 @@ A replica returns a signed pair \text{$\langle \textit{(Committed, Prepared)} \r
 
 \underline{Additional subtlelties}: If the timestamp is beyond a Highwater mark ($HW = localClock + \delta$) replicas ignore the requests. If the request is serviced, a Replica adds the timestamp to its Read Timestamp Set (RTSS): $RTSS(key) += (TS)$. \text{$Committed \coloneqq (value, version)_{cert}$} such that $ (value, version) \in R.CommitLog$, $version = max(q) : (key, val, q) \in R.CommitLog \land v < TS \}$ and $cert$ is a certificate proving (value, version) was legally committed (see Section Writeback) and 
  $Prepared \coloneqq (value, version, dep)$ such that $(value, version) \in R.PreparedSet$, $version = max(q) : (key, val, q) \in R.PreparedSet \land Committed < v < TS \}$ and $dep$ is a DAG of Transaction IDs, starting from the TX that wrote $(value, version)$ and extending to its own dependencies.
+\fs{a replica does not return a prepared val, if that is still waiting on its own dependencies. Want to avoid chains. In this case one does not need a DAG, because its only direct deps}
 
+A replica only does this, if the client has access control for the value. (limits ability of byz clients to claim dependencies)
 
 
 \fbox{\begin{minipage}{21em}
@@ -105,7 +108,7 @@ A replica returns a signed pair \text{$\langle \textit{(Committed, Prepared)} \r
 \end{minipage}}
 
 A client waits for RQS read replies and validates the integrity of any $Committed$ it receives.  It adds the biggest $Committed$ or $Prepared$ (iff enough matching) version seen to its Read Set, and claims a dependency if it was a $Prepared$ version. If it claims a dependency, it asynchronously forwards this dependency to all replicas. 
-
+\{send dependency set, does not need to be proven.\}
 
 
 \underline{Additional subtlelties}: If $RQS > n-f$ a Client waits only up to a application set timeout beyond the first $n-f$ received replies. If $f+1$ matching $Committed$ are received they need to be validated. If $f+1$ matching $Pepared$ are received from disjoint replicas, and
@@ -116,10 +119,13 @@ A client waits for RQS read replies and validates the integrity of any $Committe
 
 
 \fbox{\begin{minipage}{21em}
-\textbf{(4: R)} : Replica receives dependency and adds exception
+\textbf{(4: R)} : Replica receives dependencies and adds exceptions
 \end{minipage}}
 Upon reception of $\langle (key, TS, dep)\rangle_{\sigma_c}$ a replica adds an exception to its Read Timestamp Set. Concretely, $RTSS(key)(TS) += dep$.
 
+\underline{Additional subtlelties}: the dep set received does not need to have proofs, since a client is only trying to gain additional protection by allowing dependencies to be committed. If this set is "fake", it will only cause the own read to abort later, because more writes than desired were allowed to pass. "It just weakens the power of the read lock", which is not relevant for safety, but only for commit rate.
+(does one need a check in MVTSO that deps are correct? If max depth =1, then one does not need to send deps anyways, because byz can always lie; or is it still necessary to finish with fallback)
+A: byz client only includes dependencies to avoid direct fallback eviction. Only by including proof for deps can it be validated, that these deps are real and can be traced in order to induce a fallback on them)
 
 
 
@@ -152,7 +158,7 @@ Guaranteed to see 1 thats not intentionally stale. But still arbitrarily stale i
 If 1 prepared read was enough then this would be sufficient to see the newest "potential" value. However that is not possible for liveness reasons.
 Note, could still have missed a prepared write and have to abort because we required f+1 matching. Why f+1? so it comes from 1 honest: we dont need proofs, and we know it is in the system for recovery.
 Still no guarantee that newest commit was seen, but some protection from other writes.
-4. Exceptions: granting exceptions is protection for oneself: minimize the window of dependent writes aborting against oneself
+4. Exceptions: granting exceptions is protection for oneself: minimize the window of dependent writes aborting against oneself. \fs{Should not rely on deps beyond depth 1, because those could be both byz and not claim exceptions and abort themselves always}
 
 (Note: the TS used here is not the final one, its just the tuple of time and clientId. (The triple later is just necessary to differentiate two TX by a client that were assigned the same Time
 Add Read set decision rule, put in correlation to RQS: \fs{could only accept reads if f+1 matching always, then no proofs necessary, but then reads can fail}
@@ -174,9 +180,11 @@ Our design accomplishes Byzantine Independence in the absence of an adverserial 
 %-------------------------------------------------------------------------------
 \subsection{Validation}
 %-------------------------------------------------------------------------------
+The goals of the Validation design are threefold: i) It needs to preserve Isolation guarantees between transactions, ii) It should embrace partial ordering, while minimizing commit latency and  maximizing scalability, and iii) it should be \textit{leaderless}. Satisfying these goals requires ovecoming several challenges. In order to maximize parallelism and embrace partial ordering, Indicus allows replicas to process requests out of order. Consequently, replicas may temporarily be out of sync, and hence return different results. Such divergence must be reconciled in a way that maintains Isolation, but not overly conservatively in order to maximize the ability to commit successfully and bound the impact of byzantine participants. Further, Indicus designates clients as validation coordinator for its own transactions. The respective protocol must tolerate client failures such as crashes, omission/stalling, equivocation, or replays and allow for consistent recovery. 
 
 The Validation protocol can be broken down into two functionalities: Voting and Logging.
-Since Indicus is leaderless, Replicas need to agree on results, rather than an Ordering. To do so, they vote. As in any democratic decision, these votes are then aggregated into a decision. In the case of Indicus, the client acts as the transaction coordinator who aggregates and relays results. In order to maintain consistency in the presence of failures, this decision must be logged prior to returning, guaranteeing that a replay of any Writeback is idempotent. This two step decision protocol resembles Two-Phase Commit. Since we cannot trust a byzantine coordinator to persist a decision, nor could we retain liveness during a crash, we delegate the decision logging to the replicas.
+Since Indicus aims to prescribe a partial order, Replicas need to agree on results, rather than an Ordering. To do so in a leaderless fashion, they vote. As in any democratic decision, these votes are then aggregated into a decision. In the case of Indicus, the client acts as the transaction coordinator who aggregates and relays results (along with necessary evidence).
+ In order to maintain consistency in the presence of failures, this decision must be logged prior to returning, guaranteeing that a replay of any Writeback is idempotent. \fs{This two step decision protocol resembles Two-Phase Commit.} However, since we cannot trust a byzantine coordinator to persist a decision, nor could we retain liveness during a crash, we delegate the decision logging to the replicas.
 The voting phase requires a single round-trip to all replicas, whereas the logging phase requires at most one round-trip \fs{in Indicus5 and at most two round-trips in Indicus3.}
 To describe how the protocol operates we follow a transaction through the system.:
 
@@ -184,19 +192,26 @@ To describe how the protocol operates we follow a transaction through the system
 \textbf{(1: C $\rightarrow$ R)}: Client sends Prepare request to the Replicas.
 \end{minipage}}
 
-Upon deciding to Commit in the Execution phase, a Client initiates Validation, by sending a message $\langle Prepare, TX, (TS) \rangle_{\sigma_c}$ to all Replicas.
+Upon deciding to Commit in the Execution phase, a Client initiates Validation by sending a message $\langle Prepare, TX, (TS) \rangle_{\sigma_c}$ to all Replicas.
 
-\underline{Additional subtlelties}: A client may not equivocate this request. Any change to the TX state changes the TXiD and hence is treated as seperate TX. A client may choose identical timestamps for 2 TX, these ties are broken by TXID order.
+\underline{Additional subtlelties}: A client may not equivocate this request. Any change to the TX state changes the TXiD and hence is treated as seperate TX. 
 
 \fbox{\begin{minipage}{21em}
-\textbf{(2: R $\rightarrow$ C)}: Replica runs Concurrency Control Check and returns vote to Client.
+\textbf{(2: R $\rightarrow$ C)}: Replica receives validation request, processes it and returns vote to Client.
 \end{minipage}}
-Every Replica evaluates the Transactions according to the MVTSO Concurrency Control Check (CCC), as shown in algorithm 1. This check is entirely based on local knowledge. Updates local state. Returns vote to Client.
+A replica validates Timestamp and Dependency integrity of the request. It then evaluates Read and Write Sets for Isolation conflicts using the MVTSO Concurrency Control Check (CCC), as shown in algorithm 1. This concurrency check is entirely based on local knowledge of previously committed, and concurrently ongoing transactions. If successful, a replica updates its set of potenially committable transactions (Prepared) and returns a Commit Vote to the client. If unsuccessful, a replica returns an Abort/Abstain Vote to the client, along with evidence justifying the decision. 
 
 Different replicas receive these out of order.
 
-\underline{Additional subtlelties}: A replica updates its internal state.. Ongoing TX set, prepared set. Checks whether dependencies are resolved already, otherwise puts that thread to sleep. 
+\underline{Additional subtlelties}: A replica validates whether all entries in the dependency set are legal, i.e. whether f+1 matching signatures exist. If this is not the case, a replica rejects the request and submits a Proof of Misbheavior (PoM) to expel the client from the system. A byzantine client may neither match read set and dependency set, nor match read set to the involved shards. This is tolerated, as a byzantine client chooses whether to experience Isolation and Atomicity. Illegal reads, or un-committed writes do not have external effect, but are auditable in the committed ledger to trace misbehavior.
+\fs{ In effect, any claimed deps implies a client did those reads, but he does not necessarily have to include them} 
+
+%%%%%%%%%%%%%
+A replica furthermore checks whether access control on the writes exists.
+A replica updates its internal state.. Ongoing TX set, prepared set. Checks whether dependencies are resolved already, otherwise puts that thread to sleep. 
 \fs{edit Replica state to include ONGOING set: has p1, and p2 info, view, dependencies, proofs, etc., has field that says prepared or not - remove Prepared set.)}
+A client may however choose identical timestamps for two different transactions, these ties are broken by TXID order. Replays are ignored (stored reply is returned). We discuss a Retry optimization later.
+
 
 \fbox{\begin{minipage}{21em}
 \textbf{(3a: C)}: Client returns to application. Proceeds to Writeback
@@ -243,10 +258,11 @@ Different replicas receive these out of order.
          \If{$ \exists TX2 \in Prepared: key \in \textit{TX2.write-set} \land version < \textit{TX2.TS} < TS$}   
           \State  \Return ABSTAIN, \textit{TX2}
         \EndIf
-        
+          
    %     \If{$ \textit{dep[key]} == null \land version \notin prepared-reads[key] \cup  CommitLog \cup AbortLog $}   
     %      \State  \Return $\textit{Proof-of-Misbehavior}$
     %    \EndIf
+		   
         
         
 \EndFor
