@@ -10,7 +10,7 @@ enum CommitDecision {
 }
 
 message SignedMessage {
-  required string msg = 1;
+  required bytes msg = 1;
   required string type = 2;
   required uint64 process_id = 3;
   required bytes signature = 4;
@@ -23,7 +23,7 @@ message SignedMessages {
 message Read {
   required uint64 req_id = 1;
   required uint64 txn_id = 2;
-  required string key = 3;
+  required bytes key = 3;
   // timestamps are (time, client_id, txn_id)
   required TimestampMessage timestamp = 4;
 }
@@ -47,7 +47,7 @@ message CommittedProof {
 }
 
 message PreparedWrite {
-  required string value = 1;
+  required bytes value = 1;
   required TimestampMessage timestamp = 2;
   required Transaction txn = 3;
 }
@@ -55,8 +55,8 @@ message PreparedWrite {
 message ReadReply {
   required uint64 req_id = 1;
   required int32 status = 2;
-  required string key = 3;
-  optional string committed_value = 4;
+  required bytes key = 3;
+  optional bytes committed_value = 4;
   optional TimestampMessage committed_timestamp = 5;
   optional CommittedProof committed_proof = 6;
   // most recently prepared

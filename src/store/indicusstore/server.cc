@@ -104,8 +104,7 @@ void Server::HandleRead(const TransportAddress &remote,
   Debug("READ[%lu,%lu] for key %s.", msg.txn_id(), msg.req_id(), msg.key().c_str());
 
   std::pair<Timestamp, Server::Value> tsVal;
-  bool exists;
-  store.get(msg.key(), Timestamp(msg.timestamp()), tsVal);
+  bool exists = store.get(msg.key(), Timestamp(msg.timestamp()), tsVal);
 
   proto::ReadReply reply;
   reply.set_req_id(msg.req_id());
