@@ -9,11 +9,13 @@ Biblos achieves leaderless SMR by leveraging a non-skipping timestamp protocol. 
 While the literature on BFT state machine replication is extensive, the efforts to offer a transactional interface for BFT is scarce. SMR itself can be utilized as a straw-man system to implement pre-defined Transactions (one-shot or stored procedures) by enforcing a common total order  in which replicas will execute the transactions. 
 HRDB offers a dedicated BFT Database, but assumes a trusted shepheard layer, thus not being truly BF resilient
 Byantium offers Snapshot Isolation for Transactions by re-purposing PBFT as atomic broadcast. It executes requests only at a primary and uses replicas to validate results in the total order defined by the SMR protocol. Augustus implements mini-transactions, a limited TX model that declares all operations before execution. It offers scalability via partitioning and achieves consistency within partitions by utilizing atomic broadcast. Whiile Augustus assumes an optimistic execution model that allows for aborts under concurrency, its follow up work Callinicos implements a locking scheme in order to avoid Transaction aborts. To do so efficiently it resorts to a limited transaction model that requires knowledge of read/write sets and otherwise locks an entire partition in order to guarantee mutual exclusion, thus voiding any concurrency. BFT Deferred update replication adopts an interactive OCC transaction model comparable to ours, allowing execution to be speculative at clients. However, it uses PBFT atomic broadcast to enforce SMR on validation, thus resorting to a leader, and totally ordering all requests. It moreover does not extend to multiple shards.
-Chainspace and Omniledger implement blockchain sharding by layering 2PC and atomic broadcast (within shards) for UTXO transactions. Rapidchain offers efficient sharding for a permissionless system (what else? didnt read much, not so relevant). Hyperledger (uses Raft).. Mention other Permissioned Blockchain systems: Ethereum Quorum? (uses Raft or IstanbulBFT = implementation of pbft)
+Chainspace and Omniledger implement blockchain sharding by layering 2PC and atomic broadcast (within shards) for UTXO transactions. Rapidchain offers efficient sharding for a permissionless system (what else? didnt read much, not so relevant). Hyperledger (uses simulation-ordering-validation architecture. uses Raft for trusted ordering).. Mention other Permissioned Blockchain systems: Ethereum Quorum? (uses Raft or IstanbulBFT = implementation of pbft)
 
 
 \fs{CURP is a CF replication using commutativity too: Makes request durable first and orders later.}
 
 \fs{Mention DAGs for permissionless systems.}
+
+\fs{Databasify paper: tries to add some bandaid db techniques to hyperledger. Transaction re-ordering (still total order), and early aborts.}
 
 \cite{kotla2007zyzzyva}

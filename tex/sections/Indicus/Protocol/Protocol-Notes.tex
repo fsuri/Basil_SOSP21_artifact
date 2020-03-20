@@ -157,16 +157,20 @@ Subtlelties:\\
 \subsection{Optimizations}
 Goals:\\
 - reduce write aborts\\
-- reduce redundancy in validation\\
+- reduce redundancy in validation across shards\\
 - reduce read lock impact (byz clients)\\
 
 Challenges:\\
 - defend against byz client abuse\\
 - respect all shard results\\
-- 
+- only grant read locks temporarily and on per-client list basis.\\
 
 - Pretty much mentioned in other sections already. Seems like its more suitable to have it with the contet right away.?
 
+Others:
+- can do early aborts by notifying\\
+- can reduce message for certificates by having only one replica send the content and everybody else just digest
+-
 \subsection{Granting Liveness}
 Goals:\\
 - be robust to byzantine client\\
