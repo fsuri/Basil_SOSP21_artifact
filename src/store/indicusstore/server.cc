@@ -43,7 +43,6 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     transport(transport), occType(occType),
     signedMessages(signedMessages), validateProofs(validateProofs), keyManager(keyManager),
     timeDelta(timeDelta), timeServer(timeServer) {
-  privateKey = keyManager->GetPrivateKey(id);
   transport->Register(this, config, groupIdx, idx);
 }
 
@@ -160,7 +159,7 @@ void Server::HandleRead(const TransportAddress &remote,
         signedMessage.set_msg(preparedWrite.SerializeAsString());
         signedMessage.set_type(preparedWrite.GetTypeName());
         signedMessage.set_process_id(id);
-        SignMessage(preparedWrite, privateKey, id, signedMessage);
+        SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id, signedMessage);
         *reply.mutable_signed_prepared() = signedMessage;
       } else {
         *reply.mutable_prepared() = preparedWrite;
@@ -175,7 +174,7 @@ void Server::HandleRead(const TransportAddress &remote,
     signedMessage.set_msg(reply.SerializeAsString());
     signedMessage.set_type(reply.GetTypeName());
     signedMessage.set_process_id(id);
-    SignMessage(reply, privateKey, id, signedMessage);
+    SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
     transport->SendMessage(this, remote, signedMessage);
   } else {
     transport->SendMessage(this, remote, reply);
@@ -211,7 +210,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
     signedMessage.set_msg(reply.SerializeAsString());
     signedMessage.set_type(reply.GetTypeName());
     signedMessage.set_process_id(id);
-    SignMessage(reply, privateKey, id, signedMessage);
+    SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
     transport->SendMessage(this, remote, signedMessage);
   } else {
     transport->SendMessage(this, remote, reply);
@@ -265,7 +264,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
     signedMessage.set_msg(reply.SerializeAsString());
     signedMessage.set_type(reply.GetTypeName());
     signedMessage.set_process_id(id);
-    SignMessage(reply, privateKey, id, signedMessage);
+    SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
     transport->SendMessage(this, remote, signedMessage);
   } else {
     transport->SendMessage(this, remote, reply);

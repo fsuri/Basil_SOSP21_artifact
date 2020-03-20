@@ -120,7 +120,6 @@ class Server : public TransportReceiver, public ::Server {
   KeyManager *keyManager;
   const uint64_t timeDelta;
   TrueTime timeServer;
-  crypto::PrivKey privateKey;
 
   VersionedKVStore<Timestamp, Value> store;
   std::unordered_map<std::string, std::map<uint64_t, std::set<Timestamp>>> rts;
