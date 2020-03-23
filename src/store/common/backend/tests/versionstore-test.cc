@@ -34,7 +34,7 @@
 
 TEST(VersionedKVStore, Get)
 {
-    VersionedKVStore store;
+    VersionedKVStore<Timestamp, std::string> store;
     std::pair<Timestamp, std::string> val;
 
     store.put("test1", "abc", Timestamp(10));

@@ -130,7 +130,7 @@ SimulatedTransport::SendMessageInternal(TransportReceiver *src,
     msg->CheckTypeAndMergeFrom(m);
 
     int srcAddr =
-        dynamic_cast<const SimulatedTransportAddress &>(src->GetAddress()).addr;
+        dynamic_cast<const SimulatedTransportAddress *>(src->GetAddress())->addr;
 
     uint64_t delay = 0;
     for (auto f : filters) {
@@ -173,11 +173,11 @@ SimulatedTransport::LookupAddress(const transport::Configuration &cfg,
     for (auto & kv : configurations) {
         if (*(kv.second) == cfg) {
             // Configuration matches. Does the index?
-            const SimulatedTransportAddress &addr =
-                dynamic_cast<const SimulatedTransportAddress&>(kv.first->GetAddress());
-            if (replicaIdxs[addr.addr] == idx) {
+            const SimulatedTransportAddress *addr =
+                dynamic_cast<const SimulatedTransportAddress *>(kv.first->GetAddress());
+            if (replicaIdxs[addr->addr] == idx) {
                 // Matches.
-                return addr;
+                return *addr;
             }
         }
     }
@@ -193,11 +193,11 @@ SimulatedTransport::LookupAddress(const transport::Configuration &cfg,
     for (auto & kv : configurations) {
         if (*(kv.second) == cfg) {
             // Configuration matches. Does the index?
-            const SimulatedTransportAddress &addr =
-                dynamic_cast<const SimulatedTransportAddress&>(kv.first->GetAddress());
-            if (g_replicaIdxs[groupIdx][addr.addr] == idx) {
+            const SimulatedTransportAddress *addr =
+                dynamic_cast<const SimulatedTransportAddress*>(kv.first->GetAddress());
+            if (g_replicaIdxs[groupIdx][addr->addr] == idx) {
                 // Matches.
-                return addr;
+                return *addr;
             }
         }
     }
