@@ -47,6 +47,8 @@
 
 namespace indicusstore {
 
+class ServerTest;
+
 enum OCCType {
   TAPIR = 0,
   MVTSO = 1
@@ -70,6 +72,7 @@ class Server : public TransportReceiver, public ::Server {
   virtual inline Stats &GetStats() override { return stats; }
 
  private:
+  friend class ServerTest;
   struct Value {
     std::string val;
     proto::CommittedProof proof;

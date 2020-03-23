@@ -33,7 +33,9 @@
 
 TransportReceiver::~TransportReceiver()
 {
+  if (this->myAddress != nullptr) {
     delete this->myAddress;
+  }
 }
 
 void
