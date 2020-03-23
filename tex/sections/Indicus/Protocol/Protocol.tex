@@ -61,7 +61,26 @@ For the simplicity of exposition we outline Indicus5 in detail below. In section
   \label{fig:RS}
 \end{figure}
 
-NEED FIg with replica state. Need to use it to explain what "Prepared"/Committable means
+
+\begin{figure}[t]
+  \begin{mdframed}[roundcorner=10pt]
+ 	\textbf{TX Val State}
+ 	\begin{itemize}
+ 	\item TxID
+ 	\item originalClientID
+ 	\item interestedClients = \{CID\}
+ 	\item ClientSeqNo
+ 	\item Transaction = TXExecState
+ 	\item vote   ~~~~~~~~~~//Prepare1R
+ 	\item decision = (dec, view.no) ~~~~~~~//Prepare2R
+ 	\item optional: dec proof = \{$votes_r$ \} ~~~ //Only for Retries and Indicus3
+ 	\item current.view
+ 	\end{itemize}
+  \end{mdframed}
+  \caption{Transaction Validation State at Replicas}
+  \label{fig:TX}
+\end{figure}
+
 %-------------------------------------------------------------------------------
 \subsection{Execution}
 %-------------------------------------------------------------------------------
@@ -301,13 +320,13 @@ Indicus maintains Byzantine Independence in the absence of network adversary.
 
 We show, that once a Client submits a transaction for validation, the result cannot be unilaterally decided by any byzantine participant, be it client or replica.
 \begin{proof}
-First, we observe that a client may never choose a result itself, but only implicitly influence a decision by choice of Slow-Path Quorum. Specifically, a byzantine client cannot single-handedly decide to abort its own transaction and consequently, cannot force potentially dependent transactions to abort as well.
+First, we observe that a client may never choose a result itself, but only implicitly influence a decision by choice of Slow-Path Quorum. Specifically, a byzantine client cannot single-handedly decide to abort its own transaction and consequently, cannot force potentially dependent transactions to abort as well. \fs{this is not quite true, need to expand on it}
 Second, any Quorum decision requires at least one honest replicas vote. In particular, a $f$ byzantine replicas may vote to abstain arbitrarily (by always reactively generating a ficticious transaction), but at least one additional honest abort vote is necessary to result in an abort (at least $f+1$ additional honest votes if the network is synchronous with regards to the timeout $\delta$). 
 Thus, in order to artificially cause transactions to abort, a conflicting transaction must be generated (artificial congestion). However, to do so strategically and reliably, the adversary must control the network in order to guarantee the artifical transactions arrival at honest replicas \textit{before} the original transaction. 
 \fs{likewise 2 byz clients may not abort each other;  1 byz client could issue two tx that arrive only in fifo order so its fine too (more than some threshold t of concurrent tx will be counted as PoM)}
 Thus, when the network is not adversarial, validation decisions are \textit{Byzantine Independent}.
 
-\fs{need to add the case of dependency trying to get aborted by its own dependent. this too is up to the network: A byz replica does not know that there is a dependent until the exceptions or prepares are being issued. needs to have faster connection in order to still abort. if there are multiple levels then the colluders could already pre-abort each other: example: out of order at 3 replicas each. any TX coming after that claims a dep is doomed.}
+\fs{need to add the case of dependency trying to get aborted by its own dependent. this too is up to the network: A byz replica does not know that there is a dependent until the exceptions or prepares are being issued. needs to have faster connection in order to still abort. if there are multiple levels then the colluders could already pre-abort each other: example: out of order at 3 replicas each. any TX coming after that claims a dep is doomed. But this is not deterministic: it requires preemtive setup, but keys are not known}
 \end{proof}
 We note, that Indicus3 does not have this property: Byzantine Clients can always abort themselves, which is undesirable when wanting to allow dependencies. \fs{Furthermore, when allowing for dep depth >1, two byz could abort each other reliably, thus creating cascading aborts. In a way, this is also up to network ordering though?}
 
@@ -454,61 +473,6 @@ Lastly, if a set of dependents existed in the WaitingDeps set, the replica updat
 We point out, that the Writeback coordinator need not be the client issuing the transaction, but can in fact be an arbitrary party (client or replica) that is interested in completing the Writeback. This follows straightforwardly from Theorem Y: Any certified shard-decision implies the existence of a logged decision, and hence the Writeback phase is idempotent.
 We utilize this to drive the recovery protocol outlined in section X. 
 
-%-------------------------------------------------------------------------------
-\subsection{Optimizations}
-%-------------------------------------------------------------------------------
-Next, we discuss a series of optional optimizations: \fs{not necessarily optimizations}
-
-\fs{retries come at the cost of no fast path and having to store proofs for the transaction. These proofs are only necessary for the fallback.}
-\fs{If limiting Fallback}
-\textbf{Retries:} MVTSO, by design, favors read requests, at the cost of potentially aborting concurrent write transactions. This is intuitively sensible, as reads require additional WAN roundtrips in order to execute. 
-However, when a transaction includes both reads and writes, and execution spans several reads, it becomes increasingly suceptible to abort as consequence of a conflicting read request. Observe, that aborts due a write-read conflict are a consequence of a read having failed to observe a relevant write with smaller timestamp. Thus, such an abort could have been avoided by simply choosing a larger timestamp. In order to faciliate this, we offer write transactions the option to Retry (with a larger timestamp), rather than abort. This however, comes at a tradeoff: Clients may not utilize the validation Fast-Path when opting into the availability of Retries. We outline the Retry protocol and implication for Fast-Paths as follows:
-
-- timestamp must be seperate from TXid
-- Timestamp acts as "retry height"
-- replicas dont accept retry prepare if they have received a p2. Allow a max limit of prepare retries.
-- dont accept p2 from smaller height if larger p1 has been accepted.
-- if a byz client equivocates p2 with different timestamps we must reconcile this in the recovery protocol. 
-
-- cant allow fast path: then a TxId could commit/abort fast path but commit/abort slow path with 2 different timestamps. If we made the timestamp part of the ID. then we couldnt track that it is the same TX. garbage collection would be impossible and we might lose state necessary for safety.
-
-
-Fallback (p2 certofocates from 2 different heights cannot co-exist. if the rules for fallback dont fire, i.e. if there is none with >=2f+1 matching: choose larger height that has >=f+1 matching. Else make decision of p1s: (are included in the decision)
-
-Correctness of retries: Show how MVTSO is fine with it. Adds additional check for dependencies TS. 
-If a TX retries: Its read locks might have been useless, i.e. doing the CC check might fail now. 
-If a dependency retries: If the dependencies writes would now be bigger than own TS then own TX needs to abort upon being released from blocking. I.e. before returning check and change the result to abstain.
-
-
-
-
-- Retries: How it works (just change timestamps, only accept if p2 doesnt exist already; fallback needs to resolve). Retries can be per client choice (have a flag that says whether fast path or retires available). Cannot have both fast path and retries.
-
-\textbf{single shard logging}
-\begin{figure*}
-\begin{center}
-\includegraphics[width= \textwidth]{./figures/SingleShard.png}
-\end{center}
-\caption{Single Shard Optimization}
-\label{fig:Figure1}
-\end{figure*}
-
--> has impact on fallback: only runs on one shard: potentially needs p1s from all shards. (its a clients job to send these; replicas will accept them as p2 for the sake of sending to the fallback)
-
-
-\textbf{read leases}: only for a time (does not matter so much; concurrent tx should get past that TS anyways). But if a client has a history of expired leases, then grant no more, or grant shorter and shorter.
-- (Read Locks ; remove can be optimization for writes)
-
-- OCC instead of mvtso structures if disallowing prepared writes to be visible. OCC if not worried about reads aborting
---> if there is no concurrency, then MVTSO degenerates to TSO.
-
-
-
-\paragraph{Optimization}: 
-
-
-Optimization:
-- validation effort redundant, select single shard to do it
 
 
 %-------------------------------------------------------------------------------
@@ -546,9 +510,9 @@ An interested client broadcast a message $Rec-Phase1 \coloneqq (TX.Phase1, CID)$
 \textbf{(2: R $\rightarrow$ C)}: Replica receives and processes Client request.
 \end{minipage}}
 If a replica has not previously processed the same Phase1 message, it executes the normal validation protocol and returns the according reply to both the interested client and orignial client. It furthermore starts a time-out on the transaction and adds CID to a list of \textit{InterestedClients} for the respective transaction.
-Otherwise, it skips re-execution and does the following: It adds CID to the list of \textit{InterestedClients} and replies with the transactions state stored in $OngoingTX[TxID]$. This state includes the existing $Phase1R$ reply message and, if existing, a decision value, as well as the \textit{view.no} of the decision.
+Otherwise, it skips re-execution and does the following: It adds CID to the list of \textit{InterestedClients} and replies with the transactions state stored in $OngoingTX[TxID]$. This state includes the existing $Phase1R$ reply message and, if existing, a decision value ($Phase2R$ message), as well as the \textit{view.no} of the decision. It additionally includes its current $view$.
 
-\underline{Additional subtlelties}: A replica does not need to return $Phase1R$ if it has a decision. The $view.no$ of the original client is zero. Larger views indicate decisions made by a Fallback replica, specifically by the replica with $RID = view.no \% n$. 
+\underline{Additional subtlelties}: A replica does not need to return $Phase1R$ if it has a decision. The $view.no$ of the original client is zero. Larger views indicate decisions made by a Fallback replica, specifically by the replica with $RID = view.no \% n$. The current view indicates which is the last $Fallback$ replica a client has attempted to elect (Zero, if none yet). 
 
 
 %%Fallback start
@@ -556,40 +520,40 @@ Otherwise, it skips re-execution and does the following: It adds CID to the list
 \textbf{(3: C $\rightarrow$ R)}: Client receives responses and either returns to Writeback or invokes \textit{Fallback} election.
 \end{minipage}}
 We distinguish the following two cases:
-1) Subcases:
-a) If a received enough p1, goes Fast path and moves to Writeback.
-b) Alternatively, if received enough p2 for certificate. Must be from matching view
+1) A client receives the necessary information to proceed to Writeback. We consider two subcases:\\
+a) If a client receives enough matching $Phase1R$ messages to fulfill a Fast-Path Threshold, it can move on to Writeback. This is safe, because these are logged decisions and imply that any potenially existing Slow-Path decision is the same.
+b) Alternatively, if a client receives enough matching (in decision and view) $Phase2R$ messages to form a certificate it proceeds to the Writeback phase.\\
 
-2)
-a) received some p2 but not enough, or inconsistent p2s. send fallback elect msg for view x (rules described later). If f+1 matching p2 use those as proof to re-issue other p2. favors commit. Otherwise do b) as well.
-b) Use p1 quorums to make decision oneself. (replicas will only process it after original client imeout)
+2) A client needs to go Slow-Path or observes inconsistency and requires assistance for resolution:\\
+If a client receives $\geq f+1$ matching decision values and views ($Phase2R$ messages; favors Commit if two matching sets exist) it forwards those to the replicas as proof for a new $Phase2$ message (with the same decision) that it broadcasts to all replicas. If it instead receives $< f+1$ matching decisions it uses the received $Phase1R$ messages to iniate its own $Phase2$ message (identical to validation step, but signed by this client). 
+Additionally, if the client received inconsistent decisions (i.e. both Commit and Abort) or $<f+1$ total decision messages that differ from its own proposed decision, it initiates a \textit{Fallback election}. To do so, it broadcasts a message $electFB \coloneqq (TxID, CID, \{view\}_R$. It attaches a set of $4f+1$ signed view messages.  
 
-
-Additonal details: client needs to send view quorum: this includes the states, proving that there is inconsistency that needs to be resolved. Replicas dont need to start fallback otherwise, because clearly a shard-decision exists. (replicas can store it as p2 cert)
-
-\fbox{\begin{minipage}{21em}
-\textbf{(4a: R $\rightarrow$ C)}:  Replicas reply
-\end{minipage}}
-Replicas ignore p2 if they have p2. 
-
-Replicas echo existing p2s to client.
+\fs{refine this}
+\underline{Additonal subtlelties}: \textbf{View Change Rules:} A client sends a set of signed view messages in order to let potenially diverged replicas now what next view to vote for. However, replicas only adopt a view $v+1$ if the view set includes $3f+1$ \fs{3f+1 should be enough: satisfies that f+1 votes will be found. Can use 4f+1 instead otherwise} votes from view $v$. \textit{Vote subsumtion:} A view $v$ subsumes all prior views: I.e. a replica vote $v$ may count as a vote for all $v' \leq v$. If a byzantine client attempted to diverge the views by only invoking a view change for a subset of replicas, such matching set of views might not exist. 
+Replicas that lag behind, may catch up to the maximum view $v$ present $f+1$ times. Such view vote implies, that at least one honest replica has voted for view $v$, and would have done so only, if $2f+1$ honest replicas had previously been in view $v-1$. The possible divergence can be reconciled in a single step, since there must always exist some view $v'$ for which at least $f+1$ honest votes exist in any Quorum (set of 4f+1 voteS) such that $v' \geq max(honest.views) -1 $ (see Vote subsumtion). Thus, the next view change incurs at most 1 additional Roundtrip, since all honest replicas either join max(honest.view) (no additional overhead) or max(honest.view)-1 (another roundtrip to gather $3f+1$ votes.)
 
 
 
 
 \fbox{\begin{minipage}{21em}
-\textbf{(4b: R $\rightarrow$ R)}:  Replicas Elect
+\textbf{(4a: R $\rightarrow$ C)}:  Replicas receive $Phase2$ messages and reply
 \end{minipage}}
-If election request received and either timeout done or inconsistent decisions received.
- Replicas send elect msg to fallback for the client proposed view (unless their own view is larger; only accept if 3f+1 have been in same max view. Jump ahead to view if f+1 were in past) if timeout 
-expires, they only send it if they have a p2. (blacklist old client is implicit by having received a p2) (implicitly by increasing view), send p1 to client  (potential fastpath)
+If a replica receives a valid $Phase2$ request (see Validation) it adopts the decision and replies with a corresponding $Phase2R$ message.
+
+\underline{Additional subtlelties:} A replica will buffer requests from $CID \neq originalCID$ and process them only \textbf{after} the timer (set in step 2) expires. If the client request includes a proof of inconsistency (see step 3 and 4b) it will ignore the timer and process the request immediately. If a replica previously adopted a decision, it treats the new request as no-op and returns the stored decision.
 
 
-addional pedantics:  replicas send all to all to start election (adopt the view if f+1 voted). First (few)view change happens without this. after that always all to all, to avoid timeouts growing exponentially because byz clients keep trying to view change without true election having happened.
+\fbox{\begin{minipage}{21em}
+\textbf{(4b: R $\rightarrow$ R)}:  Replica additionally receives Fallback invocation and starts election
+\end{minipage}}
 
-election (only starts if not waiting on another dep to avoid early eviction)
+If a replica receives an $electFB$ message and the original client has timed-out it attempts to elect a new \textit{Fallback replica}. To do so, they follow the \textbf{View Change Rules} and adopts new view $current.view = v$ if $v > current.view$. Replicas send an $Elect \coloneqq (TxID, decision, current.view)_R$ to replica $current.view + TxID \% n$.
 
-\fs{election only works if the logging shard can elect solo. Any client should be able to re-do the p1, if no p2 exists yet (only after the timeout ofc). }
+
+\underline{Additional subtlelties:} 
+When byzantine clients attempt to invoke elections they may only send the request to a subset of honest replicas, thus never truly enabling an election (requires $4f+1$ elect votes). If there are no concurrent honest interested clients, this can result in replicas being skipped in consideration to become the next Fallback. Moreover, to achieve liveness, we assume a weakly synchronous model, and hence increase the timeouts for each view exponentially.
+In order to avoid artificially increased timeouts and enforce a round robin election without skipped candidates, replicas can forward the $Elect$ message to all other replicas. If another replica receives $f+1$ such messages, it adopts the view and sends an $Elect$ message of its own. This ensures, that for each view, a Fallback is indeed elected (if the network is synchronous within timeout $\delta$). This optimization only aids practical progress in the face of misbehavior and is not necessary for theoretical liveness. To avoid unecessary all-to-all communication, it may only be enforced for views $v > T$, where T is some system defined threshold. \fs{We choose T = f, to avoid false client suspicion in case the first f Fallbacks were byzantine and never replied} 
+
 
 
 \fbox{\begin{minipage}{21em}
@@ -604,6 +568,7 @@ additional details: authenticates himself with the elect quorum as proof for vie
 \fbox{\begin{minipage}{21em}
 \textbf{(6: R $\rightarrow$ C, FB)}:  echo decision to interested client, and back to fallback. 
 \end{minipage}}
+need decisions from matching view.
 
 
 \fbox{\begin{minipage}{21em}
@@ -620,17 +585,25 @@ only from matching view count. (decision, v)
 \textbf{(8: R }:  store certificate. use it to reply to clients that ask in the future if necessary.
 \end{minipage}}
 
+THeorem: logged decision is preserved
+proof: by induction, does not need view of decision.
+
+effectively when a replica adopts a view, it ignores all older views. Trivial, since it only accepts the first p2 and then never changes. Only thing that changes this is a FB message from higher view.
+
 If a client does not get enough responses that match, he only ever needs to keep doing the second part, i.e. election invocation. The first round was just to make sure there exist enough p1 and p2.
 
 - Fallback: election (only starts if not waiting on another dep to avoid early eviction), views, resolution, subtelties with mvtso (block because of dep), necessity even without dependencies. Interested clients, write-back multishard. garbage collection
 - Fallback requires an extra round in order to learn about current views to start viewchange, but thats ok: Its co-function with learning about full TX, and checking for existing certificates. Timeout invocation is concurrent with p1 message.
 
 Notice, how in the "first" case a client basically just does the normal validation protocol. This could happen if the original client was just slow (i.e. there are no inconsistencies). After a timeout this transaction is "fair game" and anybody can finish it. Note that going p1 fast path is always fair anyways, and it does not matter which client executes it. We grant a timeout window, in order to avoid byzantine clients or just interested clients to create decision divergence for no reason.
+We remark also, that the orignial client becomes an interested client itself automatically. (If it was slow, others might get the chance to interject, but this client will still be interested in finishing the TX).
 
-So in total if it goes badly: 1 rr voting, 3 rr FB, 1 rr logging.
+So in total if it goes badly: 1 rr voting, 3 rr FB (+1 wb) for dependencies (can be in parallel for all), 1 rr logging.
+
 
 
 Next we show how to create a live round robin that is client driven: Liveness of mechanism: view rule, replica all to all.
+We do not want replicas to just keep view changing as in normal SMR protocols. This does not work because there is no notion of progress for replicas. (we add the practical optimization of certificates so they can stop). View changes would happen when nobody cared about them, wasted work/network overhead.
 
 View changes are per-TX. they dont affect liveness of all other TX. If a client is responsible for allowing up to X view changes it can be expelled for not being timely enough for the system.
 Not just byz clients, but poor clients get excluded.
@@ -640,6 +613,67 @@ Not just byz clients, but poor clients get excluded.
 \subsection{Garbage Collection}
 %-------------------------------------------------------------------------------
 - Prepares get removed upon commit/abort. Eventually replica might need to become "interested" client.
+
+- keep low watermark. Abstain from all TX blow this watermark or TX with dependencies below this watermark. (Byz replicas can still vote abort with the proof if they have it, speeds things up).
+Remove proofs for commit/abort 
+%-------------------------------------------------------------------------------
+\subsection{Optimizations}
+%-------------------------------------------------------------------------------
+Next, we discuss a series of optional optimizations: \fs{not necessarily optimizations}
+
+\fs{retries come at the cost of no fast path and having to store proofs for the transaction. These proofs are only necessary for the fallback.}
+\fs{If limiting Fallback}
+\textbf{Retries:} MVTSO, by design, favors read requests, at the cost of potentially aborting concurrent write transactions. This is intuitively sensible, as reads require additional WAN roundtrips in order to execute. 
+However, when a transaction includes both reads and writes, and execution spans several reads, it becomes increasingly suceptible to abort as consequence of a conflicting read request. Observe, that aborts due a write-read conflict are a consequence of a read having failed to observe a relevant write with smaller timestamp. Thus, such an abort could have been avoided by simply choosing a larger timestamp. In order to faciliate this, we offer write transactions the option to Retry (with a larger timestamp), rather than abort. This however, comes at a tradeoff: Clients may not utilize the validation Fast-Path when opting into the availability of Retries. We outline the Retry protocol and implication for Fast-Paths as follows:
+
+- timestamp must be seperate from TXid
+- Timestamp acts as "retry height"
+- replicas dont accept retry prepare if they have received a p2. Allow a max limit of prepare retries.
+- dont accept p2 from smaller height if larger p1 has been accepted.
+- if a byz client equivocates p2 with different timestamps we must reconcile this in the recovery protocol. 
+
+- cant allow fast path: then a TxId could commit/abort fast path but commit/abort slow path with 2 different timestamps. If we made the timestamp part of the ID. then we couldnt track that it is the same TX. garbage collection would be impossible and we might lose state necessary for safety.
+
+
+Fallback (p2 certofocates from 2 different heights cannot co-exist. if the rules for fallback dont fire, i.e. if there is none with >=2f+1 matching: choose larger height that has >=f+1 matching. Else make decision of p1s: (are included in the decision)
+
+Correctness of retries: Show how MVTSO is fine with it. Adds additional check for dependencies TS. 
+If a TX retries: Its read locks might have been useless, i.e. doing the CC check might fail now. 
+If a dependency retries: If the dependencies writes would now be bigger than own TS then own TX needs to abort upon being released from blocking. I.e. before returning check and change the result to abstain.
+
+
+
+
+- Retries: How it works (just change timestamps, only accept if p2 doesnt exist already; fallback needs to resolve). Retries can be per client choice (have a flag that says whether fast path or retires available). Cannot have both fast path and retries.
+
+\textbf{Single shard logging}
+
+\begin{figure*}
+\begin{center}
+\includegraphics[width= \textwidth]{./figures/SingleShard.png}
+\end{center}
+\caption{Single Shard Optimization}
+\label{fig:Figure1}
+\end{figure*}
+
+-> has impact on fallback: only runs on one shard: potentially needs p1s from all shards. (its a clients job to send these; replicas will accept them as p2 for the sake of sending to the fallback)
+
+\fs{election only works if the logging shard can elect solo. Any client should be able to re-do the p1, if no p2 exists yet (only after the timeout ofc). }
+
+\textbf{read leases}: only for a time (does not matter so much; concurrent tx should get past that TS anyways). But if a client has a history of expired leases, then grant no more, or grant shorter and shorter.
+- (Read Locks ; remove can be optimization for writes)
+
+- OCC instead of mvtso structures if disallowing prepared writes to be visible. OCC if not worried about reads aborting
+--> if there is no concurrency, then MVTSO degenerates to TSO.
+
+
+
+\paragraph{Optimization}: 
+
+
+Optimization:
+- validation effort redundant, select single shard to do it
+
 
 %-------------------------------------------------------------------------------
 \subsection{Indicus3}
