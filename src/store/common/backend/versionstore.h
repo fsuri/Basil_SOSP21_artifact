@@ -175,10 +175,9 @@ void VersionedKVStore<T, V>::commitGet(const std::string &key,
     if (it != store[key].end()) {
       // figure out if anyone has read this version before
       if (lastReads.find(key) != lastReads.end() &&
-        lastReads[key].find((*it).write) != lastReads[key].end()) {
-        if (lastReads[key][(*it).write] < commit) {
-          lastReads[key][(*it).write] = commit;
-        }
+        lastReads[key].find((*it).write) != lastReads[key].end() &&
+        lastReads[key][(*it).write] < commit) {
+        lastReads[key][(*it).write] = commit;
       }
     }
   } // otherwise, ignore the read

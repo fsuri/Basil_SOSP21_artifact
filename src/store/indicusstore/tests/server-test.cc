@@ -83,6 +83,20 @@ class ServerTest : public ::testing::Test {
     server->HandleRead(remote, msg);
   }
 
+  void HandlePhase1(const TransportAddress &remote, const proto::Phase1 &msg) {
+    server->HandlePhase1(remote, msg);
+  }
+
+  void Prepare(uint64_t txnId, const proto::Transaction &txn,
+      const Timestamp &timestamp) {
+    server->Prepare(txnId, txn, timestamp);
+  }
+
+  void Commit(uint64_t txnId, const proto::Transaction &txn,
+      const Timestamp &timestamp) {
+    server->Commit(txnId, txn, timestamp);
+  }
+
   MockTransportAddress clientAddress;
   MockTransport *transport;
   Server *server;
@@ -94,12 +108,8 @@ class ServerTest : public ::testing::Test {
 };
 
 
-MATCHER(ExpectedReadReply, "") {
-  proto::ReadReply expectedReply;
-  expectedReply.set_req_id(3);
-  expectedReply.set_status(REPLY_FAIL);
-  expectedReply.set_key("key0");
-  return google::protobuf::util::MessageDifferencer::Equals(arg, expectedReply);
+MATCHER_P(ExpectedMessage, expected, "") {
+  return google::protobuf::util::MessageDifferencer::Equals(arg, expected);
 }
 
 TEST_F(ServerTest, ReadNoData) {
@@ -110,9 +120,132 @@ TEST_F(ServerTest, ReadNoData) {
   Timestamp timestamp(100, 2);
   timestamp.serialize(read.mutable_timestamp());
 
-  EXPECT_CALL(*transport, SendMessage(server, ::testing::_, ExpectedReadReply()));
+  proto::ReadReply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_FAIL);
+  expectedReply.set_key("key0");
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
 
   HandleRead(clientAddress, read);
 }
+
+TEST_F(ServerTest, ReadCommittedData) {
+  proto::Transaction txn;
+  WriteMessage *write = txn.add_writeset();
+  write->set_key("key0");
+  write->set_value("val0");
+  Timestamp wts(50, 1);
+  Commit(1, txn, wts);
+
+  proto::Read read;
+  read.set_req_id(3);
+  read.set_txn_id(4);
+  read.set_key("key0");
+  Timestamp timestamp(100, 2);
+  timestamp.serialize(read.mutable_timestamp());
+
+  proto::ReadReply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_key("key0");
+  expectedReply.set_committed_value("val0");
+  wts.serialize(expectedReply.mutable_committed_timestamp());
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandleRead(clientAddress, read);
+}
+
+TEST_F(ServerTest, ReadPreparedData) {
+  proto::Transaction txn;
+  WriteMessage *write = txn.add_writeset();
+  write->set_key("key0");
+  write->set_value("val0");
+  Timestamp wts(50, 1);
+  wts.serialize(txn.mutable_timestamp());
+  Prepare(1, txn, wts);
+
+  proto::Read read;
+  read.set_req_id(3);
+  read.set_txn_id(4);
+  read.set_key("key0");
+  Timestamp timestamp(100, 2);
+  timestamp.serialize(read.mutable_timestamp());
+
+  proto::ReadReply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_key("key0");
+  expectedReply.mutable_prepared()->set_value("val0");
+  wts.serialize(expectedReply.mutable_prepared()->mutable_timestamp());
+  *expectedReply.mutable_prepared()->mutable_txn() = txn;
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandleRead(clientAddress, read);
+}
+
+TEST_F(ServerTest, Phase1Commit) {
+  proto::Transaction txn;
+  WriteMessage *write = txn.add_writeset();
+  write->set_key("key0");
+  write->set_value("val0");
+  Timestamp wts(50, 1);
+  wts.serialize(txn.mutable_timestamp());
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_id(4);
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::COMMIT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+TEST_F(ServerTest, Phase1CommittedConflict) {
+  proto::Transaction committedTxn;
+  ReadMessage *read = committedTxn.add_readset();
+  read->set_key("key0");
+  Timestamp readTime(51, 2);
+  readTime.serialize(read->mutable_readtime());
+  Timestamp committedRts(55, 2);
+  committedRts.serialize(committedTxn.mutable_timestamp());
+  Commit(1, committedTxn, committedRts);
+
+  proto::Transaction txn;
+  WriteMessage *write = txn.add_writeset();
+  write->set_key("key0");
+  write->set_value("val0");
+  Timestamp wts(50, 1);
+  wts.serialize(txn.mutable_timestamp());
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_id(4);
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::RETRY);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+
 
 }

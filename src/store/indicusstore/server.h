@@ -105,10 +105,12 @@ class Server : public TransportReceiver, public ::Server {
       std::unordered_map<std::string, std::set<Timestamp>> &reads);
   void GetPreparedReads(
       std::unordered_map<std::string, std::vector<proto::Transaction>> &reads);
+  void Prepare(uint64_t txnId, const proto::Transaction &txn,
+      const Timestamp &timestamp);
   void GetCommittedWrites(const std::string &key, const Timestamp &ts,
       std::vector<std::pair<Timestamp, Value>> &writes);
-  void GetCommittedReads(const std::string &key, const Timestamp &ts,
-      std::set<Timestamp> &reads);
+  void GetCommittedReads(const std::string &key,
+      std::set<std::pair<Timestamp, Timestamp>> &reads);
   void Commit(uint64_t txnId, const proto::Transaction &txn,
       const Timestamp &timestamp);
 
@@ -125,6 +127,7 @@ class Server : public TransportReceiver, public ::Server {
   TrueTime timeServer;
 
   VersionedKVStore<Timestamp, Value> store;
+  std::unordered_map<std::string, std::set<std::pair<Timestamp, Timestamp>>> committedReads;
   std::unordered_map<std::string, std::map<uint64_t, std::set<Timestamp>>> rts;
   std::unordered_map<uint64_t, std::pair<Timestamp, proto::Transaction>> prepared;
   std::unordered_map<uint64_t, proto::Phase1Reply::ConcurrencyControlResult> p1Decisions;

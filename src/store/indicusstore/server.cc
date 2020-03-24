@@ -472,10 +472,14 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
   std::unordered_map<std::string, std::vector<proto::Transaction>> preparedReads;
   GetPreparedReads(preparedReads);
   for (const auto &write : txn.writeset()) {
-    std::set<Timestamp> committedReads;
-    for (const auto &committedTs : committedReads) {
-      if (ts < committedTs) {
-        return proto::Phase1Reply::ABORT;
+    std::set<std::pair<Timestamp, Timestamp>> committedReads;
+    GetCommittedReads(write.key(), committedReads);
+
+    if (committedReads.size() > 0) {
+      for (const auto &committedReadTs : committedReads) {
+        if (committedReadTs.second < ts && ts < committedReadTs.first) {
+          return proto::Phase1Reply::RETRY;
+        }
       }
     }
 
@@ -499,7 +503,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
         }
         if (!isDep && isReadVersionEarlier &&
             ts < Timestamp(preparedReadTxn.timestamp())) {
-          return proto::Phase1Reply::ABSTAIN;
+          return proto::Phase1Reply::RETRY;
         }
       }
     }
@@ -510,7 +514,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
       if (rtsTxnItr != rtsItr->second.end()) {
         for (const auto &readTs : rtsTxnItr->second) {
           if (readTs > ts) {
-            return proto::Phase1Reply::ABSTAIN;
+            return proto::Phase1Reply::RETRY;
           }
         }
       }
@@ -518,7 +522,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     // TODO: add additional rts dep check to shrink abort window
   }
 
-  prepared[id] = std::make_pair(ts, txn);
+  Prepare(id, txn, ts);
+
   bool allFinished = true;
   for (const auto &dep : txn.deps()) {
     if (committed.find(dep.id()) == committed.end() &&
@@ -585,6 +590,11 @@ void Server::GetPreparedReads(
   }
 }
 
+void Server::Prepare(uint64_t txnId, const proto::Transaction &txn,
+    const Timestamp &timestamp) {
+  prepared[txnId] = std::make_pair(timestamp, txn);
+}
+
 void Server::GetCommittedWrites(const std::string &key, const Timestamp &ts,
     std::vector<std::pair<Timestamp, Server::Value>> &writes) {
   std::vector<std::pair<Timestamp, Server::Value>> values;
@@ -595,27 +605,19 @@ void Server::GetCommittedWrites(const std::string &key, const Timestamp &ts,
   }
 }
 
-void Server::GetCommittedReads(const std::string &key, const Timestamp &ts,
-    std::set<Timestamp> &reads) {
-  /*std::vector<std::pair<Timestamp, Server::Value>> values;
-  if (store.getCommittedAfter(key, ts, values)) {
-    for (const auto &p : values) {
-      writes.insert(p.first);
-    }
+void Server::GetCommittedReads(const std::string &key,
+      std::set<std::pair<Timestamp, Timestamp>> &reads) {
+  auto itr = committedReads.find(key);
+  if (itr != committedReads.end()) {
+    reads = itr->second;
   }
-
-  for (const auto &t : prepared) {
-    for (const auto &read : t.second.second.readset()) {
-      reads[read.key()].insert(t.second.first);
-    }
-  }*/
 }
-
 
 void Server::Commit(uint64_t txnId, const proto::Transaction &txn,
     const Timestamp &timestamp) {
   for (const auto &read : txn.readset()) {
     store.commitGet(read.key(), read.readtime(), timestamp);
+    committedReads[read.key()].insert(std::make_pair(timestamp, read.readtime()));
   }
   
   Value val;
