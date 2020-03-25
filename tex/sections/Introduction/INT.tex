@@ -1,3 +1,68 @@
+Safe and efficient online data sharing among mutually distrustful
+parties offers exciting opportunities for a variety of applications,
+including healthcare~\cite{}, financial services~\cite{}, supply chain
+management~~\cite{} and more~\cite{}. It is also challenging, as it
+requires building a new breed of systems, which can offer to their
+users the functionaalities of a distributed database but do so under
+much weaker trust assumptions that the database community has
+typically considered.
+
+An increasingly popular answer to this challenge are permissioned
+blockchains. These systems use a Byzantine fault tolerant (BFT)
+replicated state machine protocol\cite{} to produce a totally ordered
+log of client transactions, uopn which they layer a database
+abstraction.  The obvious appeal of this approach is that it can
+immediately benefit from, and  build upon, the existing BFT
+literature. However, the total order it imposes on transactions is not
+only costly to implement and hard to scale, but it is unnecessary for
+many of its target applications. For example, unrelated financial
+transactions need not be totally ordered, and supply chains, despite
+their name, are actually complex networks that generate and process
+many logically concurrent transactions.
+
+This mismatch motivates us to explore in this paper a fundamentally
+different design point: instead of layering database functionalities on top
+of BFT state machine replication, we aim to build \la{the first (?)} a
+{\em Byzantine fault tolerant transactional key-value store}.
+
+In principle, this new approach can yield several benefits.
+
+First, it can overcome the scalability bottleneck of a low-level
+implementation based on a totally ordered BFT log. Sharded blockchains
+can mitigate this bottleneck, but only to a point, as the cuncurrency
+they can achieve is limited by the degree to which transactions can be
+executed on individual shards. In contrast, we aim to leverage
+databases' ability, honed over decades of research in concurrency
+control, to support highly concurrent transaction processing while
+retaining, to ease reasoning about correctness, the capacity to
+generate executions equivalent to a total order of commmitted
+transaction.
+
+
+Second, by doing away with an explicit orsdering service, it can
+sidestep the growing concerns~\cite{} about ensuring that blockchains order
+transactions fairly. Some protocols~\cite{} leave that ordering to the
+whim of a leader; to limit its discretion, other protocol rotate
+that rsponsibility, thus reducing, but not eliminating, the skew that can be
+introduced by a malicious or self-interested leader. To make things
+worse, there is no rigorous, non-anecdotal definition for what
+fairness should mean in this context.
+
+Third, it offers the opportunity to eliminate the redundant efforts of
+transactional systems built on top state machine replication, which
+enforce strong consistency twice, first running replication and then
+running atomic commit~\cite{}.
+
+At the same time, a BFT it also presents obviois challenges
+
+
+\la{Explain the challenge}
+\la{Point to our ethos as the way we try to address the challenges}
+\la{briefly introduce the system, unclear in what detail--but not too much}
+\la{The describe our experience in building and evaluating: we have implemented... We find...}
+\la{Conclude with the key contributions}
+
+------------------------------------
 
 
 
