@@ -68,17 +68,18 @@ message ReadReply {
 
 // Phase 1
 message Transaction {
-  required uint64 id = 1;
-  repeated ReadMessage readset = 2;
-  repeated WriteMessage writeset = 3;
-  optional TimestampMessage timestamp = 4;
-  // set of txn ids
-  repeated Transaction deps = 5;
+  required uint64 client_id = 1;
+  required uint64 client_seq_num = 2;
+  repeated int64 involved_groups = 3;
+  repeated ReadMessage read_set = 4;
+  repeated WriteMessage write_set = 5;
+  repeated Transaction deps = 6;
+  required TimestampMessage timestamp = 7;
 }
 
 message Phase1 {
   required uint64 req_id = 1;
-  required uint64 txn_id = 2;
+  required uint64 txn_digest = 2;
   required Transaction txn = 3;
 }
 
@@ -102,7 +103,7 @@ message Phase1Replies {
 
 message Phase2 {
   required uint64 req_id = 1;
-  required uint64 txn_id = 2;
+  required uint64 txn_digest = 2;
   oneof p1_replies_oneof {
     GroupedPhase1Replies p1_replies = 3;
     GroupedSignedPhase1Replies signed_p1_replies = 4;
@@ -121,7 +122,7 @@ message Phase2Replies {
 
 message Writeback {
   required uint64 req_id = 1;
-  required uint64 txn_id = 2;
+  required uint64 txn_digest = 2;
   required Transaction txn = 3;
   required CommitDecision decision = 4;
   optional CommittedProof proof = 5;
@@ -129,4 +130,5 @@ message Writeback {
 
 message Abort {
   required uint64 req_id = 1;
+  required uint64 txn_id = 2;
 }

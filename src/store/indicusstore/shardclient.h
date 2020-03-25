@@ -74,7 +74,7 @@ class ShardClient : public TransportReceiver {
   /* Constructor needs path to shard config. */
   ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int shard, int closestReplica,
-      uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
+      bool signedMessages, bool validateProofs,
       KeyManager *keyManager, TrueTime &timeServer);
   virtual ~ShardClient();
 
@@ -86,8 +86,9 @@ class ShardClient : public TransportReceiver {
   virtual void Begin(uint64_t id);
 
   // Get the value corresponding to key.
-  virtual void Get(uint64_t id, const std::string &key, read_callback gcb,
-      read_timeout_callback gtcb, uint32_t timeout);
+  virtual void Get(uint64_t id, const std::string &key, const Timestamp &rts,
+      uint64_t rqs, read_callback gcb, read_timeout_callback gtcb,
+      uint32_t timeout);
 
   // Set the value for the given key.
   virtual void Put(uint64_t id, const std::string &key,
@@ -112,6 +113,8 @@ class ShardClient : public TransportReceiver {
     ~PendingQuorumGet() { }
     uint64_t reqId;
     std::string key;
+    Timestamp rts;
+    uint64_t rqs;
     Timestamp maxTs;
     std::string maxValue;
     uint64_t numReplies;
@@ -217,7 +220,6 @@ class ShardClient : public TransportReceiver {
   transport::Configuration *config;
   int shard; // which shard this client accesses
   int replica; // which replica to use for reads
-  uint64_t readQuorumSize;
   TrueTime &timeServer;
   bool signedMessages;
   bool validateProofs;

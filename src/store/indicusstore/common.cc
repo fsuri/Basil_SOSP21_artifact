@@ -89,4 +89,8 @@ bool ValidateProof(const proto::CommittedProof &proof) {
   return true;
 }
 
+uint64_t TransactionDigest(const proto::Transaction &txn) {
+  return 0UL;
+}
+
 } // namespace indicusstore

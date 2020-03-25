@@ -87,15 +87,13 @@ class Server : public TransportReceiver, public ::Server {
       const proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
-  proto::Phase1Reply::ConcurrencyControlResult DoOCCCheck(uint64_t id,
-      const proto::Transaction &txn, const Timestamp &proposedTs,
-      Timestamp &retryTs, proto::CommittedProof &conflict);
-  proto::Phase1Reply::ConcurrencyControlResult DoTAPIROCCCheck(uint64_t id,
-      const proto::Transaction &txn, const Timestamp &proposedTs,
-      Timestamp &retryTs);
-  proto::Phase1Reply::ConcurrencyControlResult DoMVTSOOCCCheck(uint64_t id,
-      const proto::Transaction &txn, const Timestamp &ts,
+  proto::Phase1Reply::ConcurrencyControlResult DoOCCCheck(uint64_t txnDigest,
+      const proto::Transaction &txn, Timestamp &retryTs,
       proto::CommittedProof &conflict);
+  proto::Phase1Reply::ConcurrencyControlResult DoTAPIROCCCheck(uint64_t txnDigest,
+      const proto::Transaction &txn, Timestamp &retryTs);
+  proto::Phase1Reply::ConcurrencyControlResult DoMVTSOOCCCheck(uint64_t txnDigest,
+      const proto::Transaction &txn, proto::CommittedProof &conflict);
 
   void GetPreparedWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
@@ -105,14 +103,15 @@ class Server : public TransportReceiver, public ::Server {
       std::unordered_map<std::string, std::set<Timestamp>> &reads);
   void GetPreparedReads(
       std::unordered_map<std::string, std::vector<proto::Transaction>> &reads);
-  void Prepare(uint64_t txnId, const proto::Transaction &txn,
-      const Timestamp &timestamp);
+  void Prepare(uint64_t txnDigest, const proto::Transaction &txn);
   void GetCommittedWrites(const std::string &key, const Timestamp &ts,
       std::vector<std::pair<Timestamp, Value>> &writes);
   void GetCommittedReads(const std::string &key,
       std::set<std::pair<Timestamp, Timestamp>> &reads);
-  void Commit(uint64_t txnId, const proto::Transaction &txn,
-      const Timestamp &timestamp);
+  void Commit(uint64_t txnDigest, const proto::Transaction &txn);
+  void Abort(uint64_t txnId);
+  void CheckDependents(uint64_t txnId);
+  bool CheckHighWatermark(const Timestamp &ts);
 
   const transport::Configuration &config;
   const int groupIdx;
@@ -134,6 +133,7 @@ class Server : public TransportReceiver, public ::Server {
   std::unordered_map<uint64_t, proto::CommitDecision> p2Decisions;
   std::unordered_set<uint64_t> committed;
   std::unordered_set<uint64_t> aborted;
+  std::unordered_map<uint64_t, std::unordered_set<uint64_t>> depends; // V depends on K
 
   Stats stats;
   std::unordered_set<uint64_t> active;

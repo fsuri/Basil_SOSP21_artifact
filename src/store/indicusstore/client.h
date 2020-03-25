@@ -131,41 +131,44 @@ class Client : public ::Client {
 
   void Writeback(PendingRequest *req, uint32_t timeout);
 
-  transport::Configuration *config;
+  bool IsParticipant(int g) const;
 
+  /* Configuration State */
+  transport::Configuration *config;
   // Unique ID for this client.
   uint64_t client_id;
-
-  // Ongoing transaction ID.
-  uint64_t t_id;
-
   // Number of shards.
   uint64_t nshards;
+  // Number of replica groups.
   uint64_t ngroups;
-
-  // Number of retries for current transaction.
-  long retries;
-
-  // List of participants in the ongoing transaction.
-  std::set<int> participants;
-
-  // Transport used by IR client proxies.
+  // Transport used by shard clients.
   Transport *transport;
-  
   // Client for each shard
   std::vector<ShardClient *> bclient;
-
   partitioner part;
-  
   bool syncCommit;
+  uint64_t readQuorumSize;
   bool signedMessages;
-
-  uint64_t lastReqId;
   KeyManager *keyManager;
   // TrueTime server.
   TrueTime timeServer;
-  
+
+
+  /* Transaction Execution State */
+  // Ongoing transaction ID.
+  uint64_t client_seq_num;
+  // Read timestamp for transaction.
+  Timestamp rts;
+  // Last request ID.
+  uint64_t lastReqId;
+  // Number of retries for current transaction.
+  long retries;
+  // Current transaction.
+  proto::Transaction txn;
+  // Outstanding requests.
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
+
+  /* Debug State */
   std::unordered_map<std::string, uint32_t> statInts;
 };
 

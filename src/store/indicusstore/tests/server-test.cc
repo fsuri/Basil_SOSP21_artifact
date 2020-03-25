@@ -217,7 +217,7 @@ TEST_F(ServerTest, Phase1CommittedConflict) {
   proto::Transaction committedTxn;
   ReadMessage *read = committedTxn.add_readset();
   read->set_key("key0");
-  Timestamp readTime(51, 2);
+  Timestamp readTime(45, 2);
   readTime.serialize(read->mutable_readtime());
   Timestamp committedRts(55, 2);
   committedRts.serialize(committedTxn.mutable_timestamp());

@@ -37,10 +37,10 @@ namespace indicusstore {
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int shard, int closestReplica,
-    uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
+    bool signedMessages, bool validateProofs,
     KeyManager *keyManager, TrueTime &timeServer) :
     client_id(client_id), transport(transport), config(config), shard(shard),
-    readQuorumSize(readQuorumSize), timeServer(timeServer),
+    timeServer(timeServer),
     signedMessages(signedMessages), validateProofs(validateProofs),
     keyManager(keyManager), lastReqId(0UL) {
   transport->Register(this, *config, -1, -1);
@@ -95,11 +95,11 @@ void ShardClient::Begin(uint64_t id) {
   Debug("[shard %i] BEGIN: %lu", shard, id);
 
   txn = proto::Transaction();
-  txn.set_id(id);
 }
 
-void ShardClient::Get(uint64_t id, const std::string &key, read_callback gcb,
-      read_timeout_callback gtcb, uint32_t timeout) {
+void ShardClient::Get(uint64_t id, const std::string &key,
+    const Timestamp &rts, uint64_t rqs, read_callback gcb,
+    read_timeout_callback gtcb, uint32_t timeout) {
   if (BufferGet(key, gcb)) {
     return;
   }
@@ -108,6 +108,8 @@ void ShardClient::Get(uint64_t id, const std::string &key, read_callback gcb,
   PendingQuorumGet *pendingGet = new PendingQuorumGet(reqId);
   pendingGets[reqId] = pendingGet;
   pendingGet->key = key;
+  pendingGet->rts = rts;
+  pendingGet->rqs = rqs;
   pendingGet->gcb = gcb;
   pendingGet->gtcb = gtcb;
 
@@ -115,8 +117,7 @@ void ShardClient::Get(uint64_t id, const std::string &key, read_callback gcb,
   read.set_req_id(reqId);
   read.set_txn_id(id);
   read.set_key(key);
-  Timestamp localTs(timeServer.GetTime());
-  localTs.serialize(read.mutable_timestamp());
+  rts.serialize(read.mutable_timestamp());
 
   transport->SendMessageToAll(this, read);
 
@@ -126,7 +127,7 @@ void ShardClient::Get(uint64_t id, const std::string &key, read_callback gcb,
 void ShardClient::Put(uint64_t id, const std::string &key,
       const std::string &value, put_callback pcb, put_timeout_callback ptcb,
       uint32_t timeout) {
-  WriteMessage *writeMsg = txn.add_writeset();
+  WriteMessage *writeMsg = txn.add_write_set();
   writeMsg->set_key(key);
   writeMsg->set_value(value);
   pcb(REPLY_OK, key, value);
@@ -159,7 +160,7 @@ void ShardClient::Phase1(uint64_t id, const Timestamp &timestamp,
   // create prepare request
   proto::Phase1 phase1;
   phase1.set_req_id(reqId);
-  phase1.set_txn_id(id);
+  phase1.set_txn_digest(TransactionDigest(txn));
   *phase1.mutable_txn() = txn;
 
   transport->SendMessageToAll(this, phase1);
@@ -191,7 +192,7 @@ void ShardClient::Phase2(uint64_t id,
 
   // create prepare request
   proto::Phase2 phase2;
-  phase2.set_txn_id(txn.id());
+  phase2.set_txn_digest(TransactionDigest(txn));
   if (validateProofs) {
     if (signedMessages) {
       for (const auto &group : groupedSignedPhase1Replies) {
@@ -239,7 +240,7 @@ void ShardClient::Writeback(uint64_t id, proto::CommitDecision decision,
   // create commit request
   proto::Writeback writeback;
   writeback.set_req_id(reqId);
-  writeback.set_txn_id(id);
+  writeback.set_txn_digest(TransactionDigest(txn));
   *writeback.mutable_txn() = txn;
   writeback.set_decision(decision);
 
@@ -250,7 +251,7 @@ void ShardClient::Writeback(uint64_t id, proto::CommitDecision decision,
 }
 
 bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
-  for (const auto &write : txn.writeset()) {
+  for (const auto &write : txn.write_set()) {
     if (write.key() == key) {
       rcb(REPLY_OK, key, write.value(), Timestamp(), proto::Transaction(),
           false);
@@ -259,7 +260,7 @@ bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
   }
 
   /* TODO: cache value already read by txn
-  for (const auto &read : txn.readset()) {
+  for (const auto &read : txn.read_set()) {
     if (read.key() == key) {
       
     }
@@ -335,14 +336,14 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     }
   }
 
-  if (itr->second->numOKReplies >= readQuorumSize ||
+  if (itr->second->numOKReplies >= itr->second->rqs ||
       itr->second->numReplies == static_cast<uint64_t>(config->n)) {
     PendingQuorumGet *req = itr->second;
     read_callback gcb = req->gcb;
     std::string key = req->key;
     pendingGets.erase(itr);
     int32_t status = REPLY_FAIL;
-    if (req->numOKReplies >= readQuorumSize) {
+    if (req->numOKReplies >= itr->second->rqs) {
       status = REPLY_OK;
     }
     Debug("[shard %lu:%i] GET callback [%d]", client_id, shard, status);
