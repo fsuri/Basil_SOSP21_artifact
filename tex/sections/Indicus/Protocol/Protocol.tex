@@ -46,7 +46,7 @@ For the simplicity of exposition we outline Indicus5 in detail below. In section
  	\item LocalClock
  	\item RTS = \{(key, \{(TS, \{dep\})\})\}
  	\item Ongoing:
- 	\subitem OngoingTX = \{(TxID, [TX, state])\}
+ 	\subitem OngoingTX = \{(TxID, [TX, val state])\}
  	\subitem PreparedDB = \{(key, [writes:\{(val, version, TxID)\},  reads: \{TS, rversion, TxID\}])\}
  	\subitem WaitingDeps = \{(TxID, dependents\}
  	\subitem Deps = \{(TxID, dependencies\}
@@ -171,6 +171,7 @@ A client may choose to read from any number of replicas. Following cases may be 
 - Byz clients could fabricate their own dependencies 
 \end{itemize}
 
+
 1. Reading from 1 Replica: could abort because reading arbitrarily stale.
 Alternatively: Read from f+1 always to reduce proof/memory costs: Could not get matching and hence fail read. Still possible to abort by reading stale data 
 2. Reading f+1 matching Prepared that are larger than the commit --> choose that and add dependency (in 5f+1 might only want to do it if read 2f+1, not necessary for safety, but higher commit chance?)
@@ -196,8 +197,171 @@ Add exceptions etc.
 1. read access control not possible since 1 byz can return write. This requires Multi party computation, shared secrets (verifiable secret sharing), beyond the scope of our work (reference soumyas paper)
 2. need to be clearer on the byz independence violation when single read deps are allowed. Byz clients could fabricate their own dependencies 
 }
-THEOREM:
-Our design accomplishes Byzantine Independence in the absence of an adverserial network.
+
+
+
+%-------------------------------------------------------------------------------
+\subsection{Concurrency Control}
+%-------------------------------------------------------------------------------
+Next, we discuss the concurrency control necessary to maintain Byzantine-Serializability. Since Indicus clients execute optimistically concurrently Isolation conflicts might arise. In order to reconcile conflicts we need to design an appropriate Validation check that assures that no two conflicting transactions may commit. In this section we discuss the design of our concurrency control check (CCC). In section X (Validation) we then we discuss how to coordinate this check in a replicated but on-ordered setting.
+
+\fs{this text is a hot mess and needs to be reworked. How to express concisely why we want our MVTSO design. Avoid redundancy with previous section. Does this need to come inbetween?}
+The goal of the concurrency control mechanism is to maximize the legal commutativity between transactions (i.e. maximize commit rate for concurrent transactions) while maintaining the desired Isolation level, Byzantine-Serializability. A naive Optimistic Concurrency Control (OCC) mechanism pairwise evaluates any two concurrent transactions and classifies any concurrent read/write, write/read, write/write as a conflict. Aborting every conflict preserves safety, yet is often overly pessimistic and could be avoided by a simple re-ordering of transactions. Such could either be achieved in hindsight, i.e. by forming and evaluating a DAG of transactions, or by optimistically pre-defining an order.
+Our starting point is a traditional Timestamp Ordering approach (TSO) in which each transaction is assigned a speculative timestamp \textit{before} Validation. This allows us to a) evaluate read/write conflicts on the basis of their pre-defined order, i.e. only classify them as conflict if their arrival order violates the timestamp order, and b) avoid write/write conflicts alltogether by simply ignoring obsolete writes (Thomas Write Rule). 
+When execution results match the pre-defined timestamp order, no aborts are necessary. Our challenge then becomes to 1) assign appropriate timestamps and 2) coordinate execution in a way that maximizes such coherence; the presence of byzantine participants (clients/replicas) complicates this.
+
+1) First, we require a timestamping service that (accurately) reflects the real-time execution start. While we assume that clocks are loosely synchronized across honest participants, byzantine participants may diverge arbitrarily in undesirable fashion. Read transactions with timestamps that are too far in the future can cause all successive "younger" transactions to abort. 
+A straightforward way to bound legal timestamps is to rely on a verifiable timestamping phase: A client may query a Quorum of $\geq 2f+1$ replicas for their local time and choose the median which provably bounds byzantine timestamp divergence. This however, entails an extra WAN Roundtrip, increases observed clock divergence due to different replica latencies and requires attaching a Quorum of signatures. To side-step this additional overhead we compromise by allowing clients to optimistically select their own timestamp, but rejecting timestamps above some Threshold. We point out, that both choosing a timestamp that is too small or too large increases the risk of ones own transaction being ignored, thus incentivising clients to select real-time timestamps. In order to facilitate a total serialization order across all clients, we define Timestamps to be tuples of the form $(Time, CID)$. 
+
+2) Second, in order to maximize coherence between execution and timestamp we desire to minimize both execution and commit (validation \& writeback) time. The smaller the window for out-of-order interleavings, the higher the rate to commit. As previously alluded to, writes are buffered locally, while reads may require WAN roundtrips to provide integrity. This increases the window for conflicting writes to arrive, thus causing read transactions to abort.
+Moreover, achieving replication (Validation/Writeback phase) requires additional roundtrips in order to maintain consistency. Consequently, write transactions become committed only after a long time, resulting in successive concurrent reads arriving out-of-order.
+To mititage the frequency of read aborts we add three mechanisms on top of TSO:
+\begin{itemize}
+\item Multiversioning: We store multiple past write versions and allow read transactions to "read in the past". This avoids unecessary aborts when read transactions execute only \textit{after} a write with higher timestamp. Previously, long executing read transactions (i.e. multiple sequential reads) could have suffered from their timestamp growing smaller and smaller relative to concurrent write transactions validating at the same times.
+\item Read Uncommitted: We allow read transactions to optimistically read partially validated, but not fully committed transactions. By making writes \textit{visible earlier}, unecessary aborts for reads that would have previously missed the newer write are avoided.
+\item Read Timestamps: We allow read ransactions to claim \textit{Read Timestamps} by signaling replicas to abort out-of-order writes (writes with smaller timestamps). This fairness policy implements a bias towards read transactions, by aborting writes instead of reads. Since most workloads are read dominated and write-only transactions can re-execute more swiftly, this is an intuitively sensible trade-off. In section Y we discuss an optional modification to support read-modify-write transactions. \fs{retries}
+\end{itemize}
+
+\fs{Note, that if there is no concurrency, then MVTSO degenerates to TSO.}
+
+Algorithm \ref{mvtso} shows the necessary validation check to preserve Byzantine-Serializability. 
+Given a transaction TX finalized execution state, i.e. its read-set, write-set and dependencies, and a proposed timestamp, the validation check returns \textit{Abstain/Abort} (we discuss the distinction further in section X (validation)) if a conflict has been detected. Otherwise, a replica tentatively \textit{Prepares} a transaction, making its writes visible and evaluating future transactions against it for conflicts. It then waits for necessary dependencies (uncommited writes that were read) to be resolved. If they do so successfully the check returns Commit, and otherwise un-prepares the transaction and returns Abstain/Abort. We remark, that the concurrency control check is serialized and executed atomically for each transaction.
+
+\fs{should unprepare if dep aborts; cannot move prepare after its own dependencies are resolved, otherwise other transactions could have prepared in the meantime which would not be legal. CC check needs to be atomic, i.e. have locks for all relevant keys and be serialized.  If dep depth max 1, one could technically move the dep wait to the front; but this diminishes the chances for the transactions commit longer which is undesirable.}
+
+%%%%%%%%%%%
+We conjecture that no two transactions can have the same timestamp:
+A client may however choose identical timestamps for two different transactions, these ties are broken by TXID order. (this is technically a misbehavior; can just abstain from the second one received and report TX)
+%%%%%%%%%%%
+
+\begin{theorem}
+The set of transactions for which the MVTSO-Check returns Commit is Byzantine-Serializable. 
+\end{theorem}
+\begin{proof}
+We first show, that the MVTSO-Check never returns Commit for two conflicting transactions TX1 and TX2.
+WLOG, assume that TX1 is validated before TX2 and MVTSO-Check(TX1, TX1.TS) returns Commit. Implies that TX1 is in PreparedDB
+We show by case distinction that TX2's validation cannot return Commit:
+\begin{itemize}
+\item \textbf{TX2} TX2 read missed TX1 write -> abort. If Tx2 ts < TX1 ts then no conflict. If Tx2 version > Tx1 ts then no conflcit
+
+
+\item TX2 write not seen by Tx1 -> abort. If Tx2 ts > Tx1 then no conflict. If Tx1 version > Tx2 ts then no conflict.
+\end{itemize}
+
+We now show, that every honest clients transaction is \textit{legal}, i.e. its reads are based on committed writes.
+-> reads either committed or f+1 prepared to form a dependency. Only returns commit If all deps committed.
+
+Thus, all honest clients exerpience Serializability and thus the MTVTSO check maintains byz serializability.
+\end{proof}
+
+
+Everything else are extras: I.e. do not abort your own dependency (exception), dont let writes pass against read timestamps (conservative, so it is safe)
+
+
+%%%%%%%%%%%%%%%%%%%%%%
+
+1. Abstain from TX that are undesirable Timestamp wise: Either too large timestamp: need to bound the impact of byz TX. Or too small: Want to garbgage collect log. Dont accept new TX or TX for who we need the dependency proofs. (maybe we just want to vote abstain/commit for such deps without proofs.)
+
+2. make sure all reads are legitimate: did not miss committed or prepared writes
+
+3. make sure all writes maintain read legitimacy. Dont allow writes for currently executing reads 
+
+Subtlelties: grant exceptions for out of order 
+
+4. Wait on dependencies to complete. Replicas block here. Need liveness granting mechanism to not block infinitely. At least one honest replica has seen the full TX and will reply with it. Thus we did not need to return it right away, but only when needed.
+Byz client cannot equivocate dependencies because the TXID is dependent on it. So DAG is consistent and fully recoverable.
+
+5. Check outcome of dependencies and legitimacy in case they retried. (probably omit from base version).
+
+
+
+\begin{algorithm}
+\caption{MVTSO-Check(TX, TS)}\label{mvtso}
+\begin{algorithmic}[1]
+\If{\textit{$TS > localClock + \delta$  || $TS < lowWM$ || $\exists d \in dep: d.TS < lowWM$} }
+\State \Return ABSTAIN
+\EndIf
+
+
+
+\For{\textit{$\forall key,version \in \textit{TX.read-set}$}}
+        \If{$ \exists TX2 \in CommitLog: key \in \textit{TX2.write-set} \land version < \textit{TX2.TS} < TS$}  
+          \State  \Return ABORT, \textit{TX2, TX2.CommitCert}
+        \EndIf
+         \If{$ \exists TX2 \in Prepared: key \in \textit{TX2.write-set} \land version < \textit{TX2.TS} < TS$}   
+          \State  \Return ABSTAIN, \textit{TX2}
+        \EndIf
+          
+   %     \If{$ \textit{dep[key]} == null \land version \notin prepared-reads[key] \cup  CommitLog \cup AbortLog $}   
+    %      \State  \Return $\textit{Proof-of-Misbehavior}$
+    %    \EndIf
+		   
+        
+        
+\EndFor
+
+\For{\textit{$\forall key \in \textit{TX.write-set}$}}
+        \If{$\exists TX2 \in Prepared/CommitLog \land TX \notin TX2.dep: \textit{TX2.read-set[key].version} < TS < TX2.TS$}
+          \State  \Return ABSTAIN, \textit{TX2} || ABORT, \textit{TX2, TX2.CommitCert}
+          %\State  \Return RETRY, %$\textit{TS_{new} | \forall TS_{new} > TX2.TS}$ // 
+        \EndIf
+        \If{$\exists RTS \in key.RTS: RTS > TS \land TX \notin RTS.dep$}
+          %\State  \Return RETRY, %$\textit{TS_{new} | \forall TS_{new} > TX2.TS}$ // 
+          \State  \Return ABSTAIN
+        \EndIf
+
+\EndFor
+\State Prepared.add(TX) 
+
+
+\While{$\exists d \in dep: d \notin CommitLog \cup AbortLog $)}
+\State Wait
+\EndWhile
+
+%structure it in a way that is better
+\For{\textit{$\forall d \in dep$}}
+        \If{$ d \in CommitLog $}
+        	\If{$d.TS > TS$}
+        	\State \Return ABORT, d.CommitCert  %% Remove because it is only a Retry optimization
+          	\EndIf
+       
+		\Else 
+		\State \Return ABORT, d.AbortCert
+		\EndIf
+\EndFor
+
+
+\State \Return COMMIT
+
+
+\end{algorithmic}
+
+\end{algorithm}
+
+Datastructures..
+
+Replica updates them how..
+
+
+A replica updates its internal state.. Ongoing TX set, prepared set. Checks whether dependencies are resolved already, otherwise puts that thread to sleep. 
+Upon receiving commits/aborts it checks whether blocked dependencies can wake up.
+
+\fs{edit Replica state to include ONGOING set: has p1, and p2 info, view, dependencies, proofs, etc., has field that says prepared or not - remove Prepared set.)}
+
+
+
+
+ 
+Dependency resolution tree
+ 		- Equivocation not possible if TXidentifier a function with dep as argument
+ 		- Cannot claim dep if not f+1 times (If you want to, you would require proofs again, which we try to avoid because dep trees can grow exponentially). More reads also more likely to commit --> f+1 guarantees 1 honest thinks it is legit.
+ - Exception for depedency and early async read response to inform of exceptions
+ - Read leases instead of unlimited locks - in practice only grant to timely clients (not a safety measure, but an increased progress guarantee)
+ - 
+
+
+Goal of validation: maintain isolation even though replicas are out of order. In total order protocols agreement is expected, for us it is not, yet we need to maintain correctness.
+
 %-------------------------------------------------------------------------------
 \subsection{Validation}
 %-------------------------------------------------------------------------------
@@ -331,110 +495,7 @@ Thus, when the network is not adversarial, validation decisions are \textit{Byza
 We note, that Indicus3 does not have this property: Byzantine Clients can always abort themselves, which is undesirable when wanting to allow dependencies. \fs{Furthermore, when allowing for dep depth >1, two byz could abort each other reliably, thus creating cascading aborts. In a way, this is also up to network ordering though?}
 
 
-%-------------------------------------------------------------------------------
-\subsection{Concurrency Control}
-%-------------------------------------------------------------------------------
-Next, we discuss the concurrency control necessary to maintain byzantine serializability. The goal is to minimize abort rate. Compress execution window and validation/writeback time, so TXs happen in as atomic of a time unit as possible. --> minimizes read aborts. We use TSO to predescribe a timestamp order to reduce read/write conflicts and use multi versioning in order to reduce total conflicts. This weakens strict serializability to serializability.
 
-Goal of validation: maintain isolation even though replicas are out of order. In total order protocols agreement is expected, for us it is not, yet we need to maintain correctness.
-
-
-1. Abstain from TX that are undesirable Timestamp wise: Either too large timestamp: need to bound the impact of byz TX. Or too small: Want to garbgage collect log. Dont accept new TX or TX for who we need the dependency proofs. (maybe we just want to vote abstain/commit for such deps without proofs.)
-
-2. make sure all reads are legitimate: did not miss committed or prepared writes
-
-3. make sure all writes maintain read legitimacy. Dont allow writes for currently executing reads 
-
-Subtlelties: grant exceptions for out of order 
-
-4. Wait on dependencies to complete. Replicas block here. Need liveness granting mechanism to not block infinitely. At least one honest replica has seen the full TX and will reply with it. Thus we did not need to return it right away, but only when needed.
-Byz client cannot equivocate dependencies because the TXID is dependent on it. So DAG is consistent and fully recoverable.
-
-5. Check outcome of dependencies and legitimacy in case they retried. (probably omit from base version).
-
-
-
-\begin{algorithm}
-\caption{MVTSO-Check(TX, TS)}\label{euclid}
-\begin{algorithmic}[1]
-\If{\textit{$TS > localClock + \delta$  || $TS < lowWM$ || $\exists d \in dep: d.TS < lowWM$} }
-\State \Return ABSTAIN
-\EndIf
-
-
-
-\For{\textit{$\forall key,version \in \textit{TX.read-set}$}}
-        \If{$ \exists TX2 \in CommitLog: key \in \textit{TX2.write-set} \land version < \textit{TX2.TS} < TS$}  
-          \State  \Return ABORT, \textit{TX2, TX2.CommitCert}
-        \EndIf
-         \If{$ \exists TX2 \in Prepared: key \in \textit{TX2.write-set} \land version < \textit{TX2.TS} < TS$}   
-          \State  \Return ABSTAIN, \textit{TX2}
-        \EndIf
-          
-   %     \If{$ \textit{dep[key]} == null \land version \notin prepared-reads[key] \cup  CommitLog \cup AbortLog $}   
-    %      \State  \Return $\textit{Proof-of-Misbehavior}$
-    %    \EndIf
-		   
-        
-        
-\EndFor
-
-\For{\textit{$\forall key \in \textit{TX.write-set}$}}
-        \If{$\exists TX2 \in Prepared/CommitLog \land TX \notin TX2.dep: \textit{TX2.read-set[key].version} < TS < TX2.TS$}
-          \State  \Return ABSTAIN, \textit{TX2} || ABORT, \textit{TX2, TX2.CommitCert}
-          %\State  \Return RETRY, %$\textit{TS_{new} | \forall TS_{new} > TX2.TS}$ // 
-        \EndIf
-        \If{$\exists RTS \in key.RTS: RTS > TS \land TX \notin RTS.dep$}
-          %\State  \Return RETRY, %$\textit{TS_{new} | \forall TS_{new} > TX2.TS}$ // 
-          \State  \Return ABSTAIN
-        \EndIf
-
-\EndFor
-\State Prepared.add(TX) 
-
-
-\While{$\exists d \in dep: d \notin CommitLog \cup AbortLog $)}
-\State Wait
-\EndWhile
-
-\For{\textit{$\forall d \in dep$}}
-        \If{$ d \in CommitLog $}
-        	\If{$d.TS > TS$}
-        	\State \Return ABORT, d.CommitCert
-          	\EndIf
-       
-		\Else 
-		\State \Return ABORT, d.AbortCert
-		\EndIf
-\EndFor
-
-
-\State \Return COMMIT
-
-
-\end{algorithmic}
-\end{algorithm}
-
-Datastructures..
-
-Replica updates them how..
-
-Ties broken between identical timestmaps.
-A replica updates its internal state.. Ongoing TX set, prepared set. Checks whether dependencies are resolved already, otherwise puts that thread to sleep. 
-\fs{edit Replica state to include ONGOING set: has p1, and p2 info, view, dependencies, proofs, etc., has field that says prepared or not - remove Prepared set.)}
-A client may however choose identical timestamps for two different transactions, these ties are broken by TXID order.
-
-Correctness:
-Why bound timestamps:
-
-
- - Optimization: retries - heights
- - Dependency resolution tree
- 		- Equivocation not possible if TXidentifier a function with dep as argument
- 		- Cannot claim dep if not f+1 times (If you want to, you would require proofs again, which we try to avoid because dep trees can grow exponentially). More reads also more likely to commit --> f+1 guarantees 1 honest thinks it is legit.
- - Exception for depedency and early async read response to inform of exceptions
- - Read leases instead of unlimited locks - in practice only grant to timely clients (not a safety measure, but an increased progress guarantee)
- - 
  
  \iffalse
 %-------------------------------------------------------------------------------
@@ -465,6 +526,7 @@ protocol overview: pic
 %-------------------------------------------------------------------------------
 \subsection{Writeback and Multi-shard 2pc}
 %-------------------------------------------------------------------------------
+
 Validation occurs on every Shard that a transaction spans. The goal of the Writeback phase is to aggregate all relevant shard-decisions and to inform replicas of finalized Commit or Abort decisions. This is necessary in order for replicas to be able to garbage collect meta-data of ongoing transactions, and to allow consecutive transactions to reliably observe the updated state. Any finalized decision must respect all shard-decisions relevant to a transaction. Thus, all decisions are aggregated according to standard two-phase commit. Only if all shards agree that a transaction may commit (i.e. there exist commit certificates for every shard), then a transaction may commit. The protocol is simple:
 
 \textbf{1. A coordinator waits for all shard decisions, including certificates}\\
@@ -664,10 +726,15 @@ Upon receiving $2f+1$ discrete replica confirmations a replica is aware that $\g
 
 Next, we discuss how to prune old versions from the store.
 
-\textbf{Versions}: We keep a shared \textit{low Watermark} that denotes what versions can be pruned. Whenever \fs{it is also fine to do it less frequent} a write (on any key) occurs, we advance the Watermark to $lowWM = localClock - \delta$. We then prune all versions $< lowWM$, the latest version being exempt in order to maintain at least one version. \fs{periodically, we may do this for all keys in order to also prune "inactive" keys that still have multiple versions.} We point out, that client reads with $TS < lowWM$ may fail once we prune the genesis version. This does not imply transaction abort, since clients are free to change their timestamp and retry a read during execution.
 
+
+\textbf{Versions}: We keep a shared \textit{low Watermark} that denotes what versions can be pruned. Whenever \fs{it is also fine to do it less frequent} a write (on any key) occurs, we advance the Watermark to $lowWM = localClock - \delta$. We then prune all versions $< lowWM$, the latest version being exempt in order to maintain at least one version. \fs{periodically, we may do this for all keys in order to also prune "inactive" keys that still have multiple versions.} We point out, that client reads with $TS < lowWM$ may fail once we prune the genesis version. This does not imply transaction abort, since clients are free to change their timestamp and retry a read during execution.
+\fs{we might want to abstain from transactions even if we did not prune the log, because those do not offer efficient lookups for conflicts: I.e. move the abstain logic for TX to this paragraph, and only keep dependency abstains in the log section.}
+
+\fs{Read versions below watermark: must abstain because it is unknown whether conflicting writes were already garbage collected. Write TS below watermark: must abstain because it is unknown whether conlicting reads were gc.}
 \textbf{Log Entries}: We store all committed or aborted transactions in respective Commit/Abort logs. These are un-ordered sets and allow both for fast lookup during Validation as well as offline audit off all transactions. For example, an audit on transaction reads or writes may be performed in order hold byzantine clients responsible for participation in the system. Illegal reads or non-atomic writes can be discovered and serve as Proof of Misbheavior to expell a client. When audit is not desired, we can garbage collect old transaction decisions. We can remove CommitLog entries whenver a respective version of one of its writes (i.e. the first or last) is pruned. AbortLog entries instead can be removed whenever the Low Watermark increases (need not happen on every update, but periodically). 
-In order to maintain Isolation, a replica must vote to Abstain from every new transaction with timestamp below the low watermark. Such a transactions reads and writes cannot be checked for conflicts anymore, as existing conflicts might have been garbage collected already. \fs{for reads: we can be a little more fine-grained: If there still exists a version that is smaller than the low WM, then no gc has happened yet and isolation is still safe. For writes this is not the case: cannot know whether there was a read above the write TS but below the WM that has been gc. } Additionally, replicas must abstain from any transaction that has a dependency with $dep.version  < lowWM$ \fs{dep version is the timestamp of such tx}, as its dependency could have been garbage collected already. \fs{in this case it would block infinitely. We can be a little more frine-grained: only need to abstain if the dep is not in the commit log. If it is, there is no need to abstain}. 
+In order to maintain Isolation, a replica must vote to Abstain from every new transaction with timestamp below the low watermark. Such a transactions reads and writes cannot be checked for conflicts anymore, as existing conflicts might have been garbage collected already. \fs{for reads: we can be a little more fine-grained: If there still exists a version that is smaller than the low WM, then no gc has happened yet and isolation is still safe. For writes this is not the case: cannot know whether there was a read above the write TS but below the WM that has been gc. } Additionally (for the same reason), replicas must Abstain from transactions that read versions below the watermark.
+Lastly, replicas must abstain from any transaction that has a dependency with $dep.version  < lowWM$ \fs{dep version is the timestamp of such tx}, as its dependency could have been garbage collected already. \fs{in this case it would block infinitely. We can be a little more frine-grained: only need to abstain if the dep is not in the commit log. If it is, there is no need to abstain}. 
 
 
 
@@ -750,13 +817,17 @@ Fallback finish certificates (and do writeback themselves).\\
 \fi
 
 
+
 \textbf{read leases}: only for a time (does not matter so much; concurrent tx should get past that TS anyways). But if a client has a history of expired leases, then grant no more, or grant shorter and shorter.
 - (Read Locks ; remove can be optimization for writes)
 
 - OCC instead of mvtso structures if disallowing prepared writes to be visible. OCC if not worried about reads aborting
---> if there is no concurrency, then MVTSO degenerates to TSO.
 
 
+
+\textbf{Reduce tx object content per shard.}
+\fs{Each shard should only store the objects necessary for its shard: changes ID.
+keep track of not just involved shards, but of involved sub TXIDS: Each shard involved has a different TXID: Each sub TX object includes a list of the other TXIDS. An honest client experiences atomicity by bundling - doesnt work straightforward because cyclic. Need 2 levels of ID.}
 
 \paragraph{Optimization}: 
 
