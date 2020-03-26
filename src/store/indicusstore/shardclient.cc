@@ -42,7 +42,7 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     client_id(client_id), transport(transport), config(config), shard(shard),
     timeServer(timeServer),
     signedMessages(signedMessages), validateProofs(validateProofs),
-    keyManager(keyManager), lastReqId(0UL) {
+    keyManager(keyManager), phase1DecisionTimeout(1000UL), lastReqId(0UL) {
   transport->Register(this, *config, -1, -1);
 
   if (closestReplica == -1) {
@@ -98,7 +98,7 @@ void ShardClient::Begin(uint64_t id) {
 }
 
 void ShardClient::Get(uint64_t id, const std::string &key,
-    const Timestamp &rts, uint64_t rqs, read_callback gcb,
+    const TimestampMessage &ts, uint64_t rqs, read_callback gcb,
     read_timeout_callback gtcb, uint32_t timeout) {
   if (BufferGet(key, gcb)) {
     return;
@@ -108,7 +108,6 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   PendingQuorumGet *pendingGet = new PendingQuorumGet(reqId);
   pendingGets[reqId] = pendingGet;
   pendingGet->key = key;
-  pendingGet->rts = rts;
   pendingGet->rqs = rqs;
   pendingGet->gcb = gcb;
   pendingGet->gtcb = gtcb;
@@ -117,7 +116,7 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   read.set_req_id(reqId);
   read.set_txn_id(id);
   read.set_key(key);
-  rts.serialize(read.mutable_timestamp());
+  *read.mutable_timestamp() = ts;
 
   transport->SendMessageToAll(this, read);
 
@@ -133,42 +132,36 @@ void ShardClient::Put(uint64_t id, const std::string &key,
   pcb(REPLY_OK, key, value);
 }
 
-void ShardClient::Phase1(uint64_t id, const Timestamp &timestamp,
+void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
     phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout) {
   Debug("[shard %i] Sending PHASE1 [%lu]", shard, id);
   uint64_t reqId = lastReqId++;
   PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId);
   pendingPhase1s[reqId] = pendingPhase1;
-  pendingPhase1->ts = timestamp;
-  pendingPhase1->txn = txn;
   pendingPhase1->pcb = pcb;
   pendingPhase1->ptcb = ptcb;
   pendingPhase1->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase1]() {
-      Timestamp ts = pendingPhase1->ts;
       phase1_timeout_callback ptcb = pendingPhase1->ptcb;
       auto itr = this->pendingPhase1s.find(pendingPhase1->reqId);
       if (itr != this->pendingPhase1s.end()) {
         this->pendingPhase1s.erase(itr);
         delete itr->second;
       }
-
-      ptcb(REPLY_TIMEOUT, ts);
+      ptcb(REPLY_TIMEOUT);
   });
-
-  timestamp.serialize(txn.mutable_timestamp());
 
   // create prepare request
   proto::Phase1 phase1;
   phase1.set_req_id(reqId);
-  phase1.set_txn_digest(TransactionDigest(txn));
-  *phase1.mutable_txn() = txn;
+  phase1.set_txn_digest(TransactionDigest(transaction));
+  *phase1.mutable_txn() = transaction;
 
   transport->SendMessageToAll(this, phase1);
 
   pendingPhase1->requestTimeout->Reset();
 }
 
-void ShardClient::Phase2(uint64_t id,
+void ShardClient::Phase2(uint64_t id, const proto::Transaction &transaction,
     const std::map<int, std::vector<proto::Phase1Reply>> &groupedPhase1Replies,
     const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
     proto::CommitDecision decision, phase2_callback pcb,
@@ -192,7 +185,7 @@ void ShardClient::Phase2(uint64_t id,
 
   // create prepare request
   proto::Phase2 phase2;
-  phase2.set_txn_digest(TransactionDigest(txn));
+  phase2.set_txn_digest(TransactionDigest(transaction));
   if (validateProofs) {
     if (signedMessages) {
       for (const auto &group : groupedSignedPhase1Replies) {
@@ -217,13 +210,12 @@ void ShardClient::Phase2(uint64_t id,
   pendingPhase2->requestTimeout->Reset();
 }
 
-void ShardClient::Writeback(uint64_t id, proto::CommitDecision decision,
-    const proto::CommittedProof &proof,
+void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
+    proto::CommitDecision decision, const proto::CommittedProof &proof,
     writeback_callback wcb, writeback_timeout_callback wtcb, uint32_t timeout) {
   uint64_t reqId = lastReqId++;
   PendingCommit *pendingCommit = new PendingCommit(reqId);
   pendingCommits[reqId] = pendingCommit;
-  pendingCommit->txn = txn;
   pendingCommit->ccb = wcb;
   pendingCommit->ctcb = wtcb;
   pendingCommit->requestTimeout = new Timeout(transport, timeout, [this, reqId]() {
@@ -240,8 +232,8 @@ void ShardClient::Writeback(uint64_t id, proto::CommitDecision decision,
   // create commit request
   proto::Writeback writeback;
   writeback.set_req_id(reqId);
-  writeback.set_txn_digest(TransactionDigest(txn));
-  *writeback.mutable_txn() = txn;
+  writeback.set_txn_digest(TransactionDigest(transaction));
+  *writeback.mutable_txn() = transaction;
   writeback.set_decision(decision);
 
   transport->SendMessageToAll(this, writeback);
@@ -368,17 +360,17 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
   itr->second->phase1Replies.push_back(reply);
 
   if (itr->second->phase1Replies.size() == static_cast<size_t>(config->n)) {
-    bool fast = false;
-    proto::CommitDecision decision = IndicusShardDecide(itr->second->phase1Replies,
-        config, validateProofs, fast);
-    phase1_callback pcb = itr->second->pcb;
-    pcb(decision, fast, itr->second->phase1Replies,
-        itr->second->signedPhase1Replies);
-    this->pendingPhase1s.erase(itr);
-    delete itr->second;
-  } else {
-    // if we have received 1 abort or 3f + 1 abstains or 3f+1 commits, we can
-    // move on to 2nd phase
+    Phase1Decision(itr);
+  } else if (itr->second->phase1Replies.size() >= QuorumSize() &&
+      !itr->second->decisionTimeoutStarted) {
+    uint64_t reqId = reply.req_id();
+    itr->second->decisionTimeout = new Timeout(transport,
+        phase1DecisionTimeout, [this, reqId]() {
+          Phase1Decision(reqId);      
+        }
+      );
+    itr->second->decisionTimeout->Reset();
+    itr->second->decisionTimeoutStarted = true;
   }
 }
 
@@ -444,5 +436,25 @@ bool ShardClient::AbortCallback(uint64_t reqId,
   return true;
 }
 
+void ShardClient::Phase1Decision(uint64_t reqId) {
+  auto itr = this->pendingPhase1s.find(reqId);
+  if (itr == this->pendingPhase1s.end()) {
+    return; // this is a stale request
+  }
+
+  Phase1Decision(itr);
+}
+
+void ShardClient::Phase1Decision(
+    std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr) {
+  bool fast = false;
+  proto::CommitDecision decision = IndicusShardDecide(itr->second->phase1Replies,
+      config, validateProofs, fast);
+  phase1_callback pcb = itr->second->pcb;
+  pcb(decision, fast, itr->second->phase1Replies,
+      itr->second->signedPhase1Replies);
+  this->pendingPhase1s.erase(itr);
+  delete itr->second;
+}
 
 } // namespace indicus

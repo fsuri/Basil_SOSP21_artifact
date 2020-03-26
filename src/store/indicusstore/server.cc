@@ -258,6 +258,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   proto::Phase2Reply reply;
   reply.set_req_id(msg.req_id());
   reply.set_decision(decision); 
+
   p2Decisions[msg.txn_digest()] = decision;
 
   if (signedMessages) {

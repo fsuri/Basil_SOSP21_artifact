@@ -52,14 +52,14 @@
 namespace indicusstore {
 
 typedef std::function<void(int, const std::string &,
-    const std::string &, Timestamp, const proto::Transaction &,
+    const std::string &, const Timestamp &, const proto::Transaction &,
     bool)> read_callback;
 typedef std::function<void(int, const std::string &)> read_timeout_callback;
 
 typedef std::function<void(proto::CommitDecision, bool,
     const std::vector<proto::Phase1Reply> &,
     const std::vector<proto::SignedMessage> &)> phase1_callback;
-typedef std::function<void(int, Timestamp)> phase1_timeout_callback;
+typedef std::function<void(int)> phase1_timeout_callback;
 
 typedef std::function<void(
     const std::vector<proto::Phase2Reply> &,
@@ -86,7 +86,7 @@ class ShardClient : public TransportReceiver {
   virtual void Begin(uint64_t id);
 
   // Get the value corresponding to key.
-  virtual void Get(uint64_t id, const std::string &key, const Timestamp &rts,
+  virtual void Get(uint64_t id, const std::string &key, const TimestampMessage &ts,
       uint64_t rqs, read_callback gcb, read_timeout_callback gtcb,
       uint32_t timeout);
 
@@ -95,15 +95,15 @@ class ShardClient : public TransportReceiver {
       const std::string &value, put_callback pcb, put_timeout_callback ptcb,
       uint32_t timeout);
 
-  virtual void Phase1(uint64_t id, const Timestamp &timestamp,
+  virtual void Phase1(uint64_t id, const proto::Transaction &transaction,
       phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout);
-  virtual void Phase2(uint64_t id,
+  virtual void Phase2(uint64_t id, const proto::Transaction &transaction,
       const std::map<int, std::vector<proto::Phase1Reply>> &groupedPhase1Replies,
       const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
       proto::CommitDecision decision, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout);
-  virtual void Writeback(uint64_t id, proto::CommitDecision decision,
-      const proto::CommittedProof &proof,
+  virtual void Writeback(uint64_t id, const proto::Transaction &transaction,
+      proto::CommitDecision decision, const proto::CommittedProof &proof,
       writeback_callback wcb, writeback_timeout_callback wtcb, uint32_t timeout);
 
  private:
@@ -127,18 +127,22 @@ class ShardClient : public TransportReceiver {
 
   struct PendingPhase1 {
     PendingPhase1(uint64_t reqId) : reqId(reqId),
-        requestTimeout(nullptr) { }
+        requestTimeout(nullptr), decisionTimeout(nullptr),
+        decisionTimeoutStarted(false) { }
     ~PendingPhase1() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
       }
+      if (decisionTimeout != nullptr) {
+        delete decisionTimeout;
+      }
     }
     uint64_t reqId;
     Timeout *requestTimeout;
+    Timeout *decisionTimeout;
+    bool decisionTimeoutStarted;
     std::vector<proto::Phase1Reply> phase1Replies;
     std::vector<proto::SignedMessage> signedPhase1Replies;
-    Timestamp ts;
-    proto::Transaction txn;
     phase1_callback pcb;
     phase1_timeout_callback ptcb;
   };
@@ -208,6 +212,11 @@ class ShardClient : public TransportReceiver {
   bool AbortCallback(uint64_t reqId, const std::string &,
       const std::string &);
 
+  inline uint64_t QuorumSize() const { return 4 * config->f + 1; } 
+  void Phase1Decision(uint64_t reqId);
+  void Phase1Decision(
+      std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
+
   /* Helper Functions for starting and finishing requests */
   void StartRequest();
   void WaitForResponse();
@@ -224,6 +233,7 @@ class ShardClient : public TransportReceiver {
   bool signedMessages;
   bool validateProofs;
   KeyManager *keyManager;
+  uint64_t phase1DecisionTimeout;
 
   uint64_t lastReqId;
   proto::Transaction txn;

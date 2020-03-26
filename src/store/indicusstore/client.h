@@ -110,9 +110,10 @@ class Client : public ::Client {
     bool fast;
     Timestamp *prepareTimestamp;
     bool callbackInvoked;
-    std::vector<proto::Transaction> deps;
     std::map<int, std::vector<proto::Phase1Reply>> phase1RepliesGrouped;
     std::map<int, std::vector<proto::SignedMessage>> signedPhase1RepliesGrouped;
+    std::vector<proto::Phase2Reply> phase2Replies;
+    std::vector<proto::SignedMessage> signedPhase2Replies;
   };
 
   // Prepare function
@@ -120,7 +121,7 @@ class Client : public ::Client {
   void Phase1Callback(uint64_t reqId, int group, proto::CommitDecision decision,
       bool fast, const std::vector<proto::Phase1Reply> &phase1Replies,
       const std::vector<proto::SignedMessage> &signedPhase1Replies);
-  void Phase1TimeoutCallback(uint64_t reqId, int status, Timestamp ts);
+  void Phase1TimeoutCallback(uint64_t reqId, int status);
   void HandleAllPhase1Received(PendingRequest *req);
 
   void Phase2(PendingRequest *req, uint32_t timeout);
@@ -149,6 +150,7 @@ class Client : public ::Client {
   bool syncCommit;
   uint64_t readQuorumSize;
   bool signedMessages;
+  bool validateProofs;
   KeyManager *keyManager;
   // TrueTime server.
   TrueTime timeServer;
