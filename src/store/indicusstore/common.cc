@@ -1,5 +1,7 @@
 #include "store/indicusstore/common.h"
 
+#include <cryptopp/sha.h>
+
 #include "store/common/timestamp.h"
 #include "store/common/transaction.h"
 
@@ -89,8 +91,39 @@ bool ValidateProof(const proto::CommittedProof &proof) {
   return true;
 }
 
-uint64_t TransactionDigest(const proto::Transaction &txn) {
-  return 0UL;
+std::string TransactionDigest(const proto::Transaction &txn) {
+  CryptoPP::SHA256 hash;
+  std::string digest;
+
+  hash.Update((const byte*) txn.client_id(), sizeof(txn.client_id()));
+  hash.Update((const byte*) txn.client_seq_num(), sizeof(txn.client_seq_num()));
+  for (const auto &group : txn.involved_groups()) {
+    hash.Update((const byte*) group, sizeof(group));
+  }
+  for (const auto &read : txn.read_set()) {
+    hash.Update((const byte*) &read.key()[0], read.key().length());
+    hash.Update((const byte*) read.readtime().id(),
+        sizeof(read.readtime().id()));
+    hash.Update((const byte*) read.readtime().timestamp(),
+        sizeof(read.readtime().timestamp()));
+  }
+  for (const auto &write : txn.write_set()) {
+    hash.Update((const byte*) &write.key()[0], write.key().length());
+    hash.Update((const byte*) &write.value()[0], write.value().length());
+  }
+  for (const auto &dep : txn.deps()) {
+    std::string depDigest = TransactionDigest(dep);
+    hash.Update((const byte*) &depDigest[0], depDigest.length());
+  }
+  hash.Update((const byte*) txn.timestamp().id(),
+      sizeof(txn.timestamp().id()));
+  hash.Update((const byte*) txn.timestamp().timestamp(),
+      sizeof(txn.timestamp().timestamp()));
+  
+  digest.resize(hash.DigestSize());
+  hash.Final((byte*) &digest[0]);
+
+  return digest;
 }
 
 } // namespace indicusstore

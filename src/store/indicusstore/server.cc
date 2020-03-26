@@ -100,7 +100,7 @@ void Server::Load(const string &key, const string &value,
 
 void Server::HandleRead(const TransportAddress &remote,
     const proto::Read &msg) {
-  Debug("READ[%lu,%lu] for key %s.", msg.txn_id(), msg.req_id(), msg.key().c_str());
+  Debug("READ[%lu] for key %s.", msg.req_id(), msg.key().c_str());
   Timestamp ts(msg.timestamp());
   if (CheckHighWatermark(ts)) {
     // ignore request if beyond high watermark
@@ -126,7 +126,8 @@ void Server::HandleRead(const TransportAddress &remote,
 
   if (occType == MVTSO) {
     /* update rts */
-    rts[msg.key()][msg.txn_id()].insert(ts);
+    // TODO: how to track RTS by transaction without knowing transaction digest?
+    rts[msg.key()][0].insert(ts);
 
     /* add prepared deps */
     std::unordered_map<std::string, std::vector<proto::Transaction>> writes;
@@ -182,7 +183,7 @@ void Server::HandleRead(const TransportAddress &remote,
 
 void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
-  Debug("PHASE1[%lu,%lu] with ts %lu.", msg.txn_digest(), msg.req_id(),
+  Debug("PHASE1[%s,%lu] with ts %lu.", msg.txn_digest().c_str(), msg.req_id(),
       msg.txn().timestamp().timestamp());
 
   Timestamp retryTs;
@@ -218,7 +219,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
-  Debug("PHASE1[%lu,%lu].", msg.txn_digest(), msg.req_id());
+  Debug("PHASE1[%s,%lu].", msg.txn_digest().c_str(), msg.req_id());
 
   std::map<int, std::vector<proto::Phase1Reply>> groupedPhase1Replies;
   bool validated = true;
@@ -273,8 +274,8 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
 void Server::HandleWriteback(const TransportAddress &remote,
     const proto::Writeback &msg) {
-  Debug("WRITEBACK[%lu,%lu]  with decision %d.", msg.txn_digest(), msg.req_id(),
-      msg.decision());
+  Debug("WRITEBACK[%s,%lu]  with decision %d.", msg.txn_digest().c_str(),
+      msg.req_id(), msg.decision());
   if (msg.decision() == proto::COMMIT) {
     Commit(msg.txn_digest(), msg.txn());
   } else {
@@ -284,12 +285,12 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
 void Server::HandleAbort(const TransportAddress &remote,
     const proto::Abort &msg) {
-  Abort(msg.txn_id());
+  Abort(msg.txn_digest());
 }
 
-proto::Phase1Reply::ConcurrencyControlResult Server::DoOCCCheck(uint64_t txnDigest,
-    const proto::Transaction &txn, Timestamp &retryTs,
-    proto::CommittedProof &conflict) {
+proto::Phase1Reply::ConcurrencyControlResult Server::DoOCCCheck(
+    const std::string &txnDigest, const proto::Transaction &txn,
+    Timestamp &retryTs, proto::CommittedProof &conflict) {
   switch (occType) {
     case TAPIR:
       return DoTAPIROCCCheck(txnDigest, txn, retryTs);
@@ -302,15 +303,16 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoOCCCheck(uint64_t txnDige
 }
 
 proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
-    uint64_t txnDigest, const proto::Transaction &txn, Timestamp &retryTs) {
-  Debug("[%lu] START PREPARE", txnDigest);
+    const std::string &txnDigest, const proto::Transaction &txn,
+    Timestamp &retryTs) {
+  Debug("[%s] START PREPARE", txnDigest.c_str());
 
-  Debug("[%lu] Active transactions: %lu.", txnDigest, active.size());
+  Debug("[%s] Active transactions: %lu.", txnDigest.c_str(), active.size());
   active.erase(txnDigest);
 
   if (prepared.find(txnDigest) != prepared.end()) {
     if (prepared[txnDigest].first == txn.timestamp()) {
-      Warning("[%lu] Already Prepared!", txnDigest);
+      Warning("[%s] Already Prepared!", txnDigest.c_str());
       return proto::Phase1Reply::COMMIT;
     } else {
       // run the checks again for a new timestamp
@@ -346,7 +348,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
     if (!range.second.isValid()) {
       // check pending writes.
       if (pWrites.find(read.key()) != pWrites.end()) {
-        Debug("[%lu] ABSTAIN rw conflict w/ prepared key:%s", txnDigest,
+        Debug("[%s] ABSTAIN rw conflict w/ prepared key:%s", txnDigest.c_str(),
             read.key().c_str());
         stats.Increment("abstains", 1);
         return proto::Phase1Reply::ABSTAIN;
@@ -359,7 +361,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
             range.second.getTimestamp());
       }
       //UW_ASSERT(timestamp > range.first);
-      Debug("[%lu] ABORT rw conflict: %lu > %lu", txnDigest,
+      Debug("[%s] ABORT rw conflict: %lu > %lu", txnDigest.c_str(),
           txn.timestamp().timestamp(), range.second.getTimestamp());
       stats.Increment("aborts", 1);
       return proto::Phase1Reply::ABORT;
@@ -377,7 +379,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
       // if the last committed write is bigger than the timestamp,
       // then can't accept
       if (val.first > Timestamp(txn.timestamp())) {
-        Debug("[%lu] RETRY ww conflict w/ prepared key:%s", txnDigest,
+        Debug("[%s] RETRY ww conflict w/ prepared key:%s", txnDigest.c_str(),
             write.key().c_str());
         retryTs = val.first;
         stats.Increment("retries_committed_write", 1);
@@ -392,7 +394,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
 
       // if this key is in the store and has been read before
       if (ret && lastRead > Timestamp(txn.timestamp())) {
-        Debug("[%lu] RETRY wr conflict w/ prepared key:%s", txnDigest,
+        Debug("[%s] RETRY wr conflict w/ prepared key:%s", txnDigest.c_str(),
             write.key().c_str());
         retryTs = lastRead;
         return proto::Phase1Reply::RETRY;
@@ -405,7 +407,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
       std::set<Timestamp>::iterator it =
           pWrites[write.key()].upper_bound(txn.timestamp());
       if ( it != pWrites[write.key()].end() ) {
-        Debug("[%lu] RETRY ww conflict w/ prepared key:%s", txnDigest,
+        Debug("[%s] RETRY ww conflict w/ prepared key:%s", txnDigest.c_str(),
             write.key().c_str());
         retryTs = *it;
         stats.Increment("retries_prepared_write", 1);
@@ -418,8 +420,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
     if (pReads.find(write.key()) != pReads.end() &&
         pReads[write.key()].upper_bound(txn.timestamp()) !=
         pReads[write.key()].end()) {
-      Debug("[%lu] ABSTAIN wr conflict w/ prepared key:%s",
-            txnDigest, write.key().c_str());
+      Debug("[%s] ABSTAIN wr conflict w/ prepared key: %s",
+            txnDigest.c_str(), write.key().c_str());
       stats.Increment("abstains", 1);
       return proto::Phase1Reply::ABSTAIN;
     }
@@ -428,13 +430,13 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
   // Otherwise, prepare this transaction for commit
   Prepare(txnDigest, txn);
 
-  Debug("[%lu] PREPARED TO COMMIT", txnDigest);
+  Debug("[%s] PREPARED TO COMMIT", txnDigest.c_str());
 
   return proto::Phase1Reply::COMMIT;
 }
 
 proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
-    uint64_t txnDigest, const proto::Transaction &txn,
+    const std::string &txnDigest, const proto::Transaction &txn,
     proto::CommittedProof &conflict) {
   Timestamp ts(txn.timestamp());
   if (CheckHighWatermark(ts)) {
@@ -486,7 +488,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
       for (const auto &preparedReadTxn : preparedReadsItr->second) {
         bool isDep = false;
         for (const auto &dep : preparedReadTxn.deps()) {
-          uint64_t depDigest = TransactionDigest(dep);
+          std::string depDigest = TransactionDigest(dep);
           if (txnDigest == depDigest) {
             isDep = true;
             break;
@@ -525,7 +527,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
 
   bool allFinished = true;
   for (const auto &dep : txn.deps()) {
-    uint64_t depDigest = TransactionDigest(dep);
+    std::string depDigest = TransactionDigest(dep);
     if (committed.find(depDigest) == committed.end() &&
         aborted.find(depDigest) == aborted.end()) {
       allFinished = false;
@@ -537,7 +539,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     return proto::Phase1Reply::WAIT;
   } else {
     for (const auto &dep : txn.deps()) {
-      uint64_t depDigest = TransactionDigest(dep);
+      std::string depDigest = TransactionDigest(dep);
       if (committed.find(depDigest) != committed.end()) {
         if (Timestamp(dep.timestamp()) > ts) {
           return proto::Phase1Reply::ABORT;
@@ -591,7 +593,8 @@ void Server::GetPreparedReads(
   }
 }
 
-void Server::Prepare(uint64_t txnDigest, const proto::Transaction &txn) {
+void Server::Prepare(const std::string &txnDigest,
+    const proto::Transaction &txn) {
   prepared[txnDigest] = std::make_pair(Timestamp(txn.timestamp()), txn);
 }
 
@@ -613,7 +616,8 @@ void Server::GetCommittedReads(const std::string &key,
   }
 }
 
-void Server::Commit(uint64_t txnDigest, const proto::Transaction &txn) {
+void Server::Commit(const std::string &txnDigest,
+    const proto::Transaction &txn) {
   Timestamp ts(txn.timestamp());
   for (const auto &read : txn.read_set()) {
     store.commitGet(read.key(), read.readtime(), ts);
@@ -631,13 +635,13 @@ void Server::Commit(uint64_t txnDigest, const proto::Transaction &txn) {
   CheckDependents(txnDigest);
 }
 
-void Server::Abort(uint64_t txnId) {
-  prepared.erase(txnId);
-  aborted.insert(txnId);
-  CheckDependents(txnId);
+void Server::Abort(const std::string &txnDigest) {
+  prepared.erase(txnDigest);
+  aborted.insert(txnDigest);
+  CheckDependents(txnDigest);
 }
 
-void Server::CheckDependents(uint64_t txnId) {
+void Server::CheckDependents(const std::string &txnDigest) {
 }
 
 bool Server::CheckHighWatermark(const Timestamp &ts) {

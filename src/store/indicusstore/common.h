@@ -35,7 +35,7 @@ bool ValidateCommittedProof(const proto::CommittedProof &proof,
 // check must validate that proof replies are from all involved shards
 bool ValidateProof(const proto::CommittedProof &proof);
 
-uint64_t TransactionDigest(const proto::Transaction &txn);
+std::string TransactionDigest(const proto::Transaction &txn);
 
 } // namespace indicusstore
 
