@@ -127,7 +127,7 @@ void Server::HandleRead(const TransportAddress &remote,
   if (occType == MVTSO) {
     /* update rts */
     // TODO: how to track RTS by transaction without knowing transaction digest?
-    rts[msg.key()][0].insert(ts);
+    rts[msg.key()].insert(ts);
 
     /* add prepared deps */
     std::unordered_map<std::string, std::vector<proto::Transaction>> writes;
@@ -277,6 +277,14 @@ void Server::HandleWriteback(const TransportAddress &remote,
     const proto::Writeback &msg) {
   Debug("WRITEBACK[%s,%lu]  with decision %d.", msg.txn_digest().c_str(),
       msg.req_id(), msg.decision());
+
+  if (validateProofs) {
+    if (!ValidateProof(msg.proof())) {
+      // ignore Writeback without valid proof
+      return;
+    }
+  }
+
   if (msg.decision() == proto::COMMIT) {
     Commit(msg.txn_digest(), msg.txn());
   } else {
@@ -512,16 +520,12 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
 
     auto rtsItr = rts.find(write.key());
     if (rtsItr != rts.end()) {
-      auto rtsTxnItr = rtsItr->second.find(txnDigest);
-      if (rtsTxnItr != rtsItr->second.end()) {
-        for (const auto &readTs : rtsTxnItr->second) {
-          if (readTs > ts) {
-            return proto::Phase1Reply::RETRY;
-          }
-        }
+      if (rtsItr->second.lower_bound(ts) != rtsItr->second.end()) {
+        return proto::Phase1Reply::RETRY;
       }
     }
     // TODO: add additional rts dep check to shrink abort window
+    //    Is this still a thing?
   }
 
   Prepare(txnDigest, txn);
@@ -532,7 +536,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     if (committed.find(depDigest) == committed.end() &&
         aborted.find(depDigest) == aborted.end()) {
       allFinished = false;
-      depends[depDigest].insert(txnDigest);
+      dependents[depDigest].insert(txnDigest);
     }
   }
 
@@ -571,8 +575,6 @@ void Server::GetPreparedWrites(
     }
   }
 }
-
-
 
 void Server::GetPreparedReadTimestamps(
     std::unordered_map<std::string, std::set<Timestamp>> &reads) {
@@ -626,10 +628,23 @@ void Server::Commit(const std::string &txnDigest,
   }
   
   Value val;
+  if (validateProofs) {
+  }
+
   for (const auto &write : txn.write_set()) {
     val.val = write.value();
     store.put(write.key(), val, ts);
+
+    auto rtsItr = rts.find(write.key());
+    if (rtsItr != rts.end()) {
+      auto itr = rtsItr->second.begin();
+      auto endItr = rtsItr->second.upper_bound(ts);
+      while (itr != endItr) {
+        itr = rtsItr->second.erase(itr);
+      }
+    }
   }
+
 
   prepared.erase(txnDigest);
   committed.insert(txnDigest);
@@ -643,6 +658,9 @@ void Server::Abort(const std::string &txnDigest) {
 }
 
 void Server::CheckDependents(const std::string &txnDigest) {
+  auto dependentsItr = dependents.find(txnDigest);
+  if (dependentsItr != dependents.end()) {
+  }
 }
 
 bool Server::CheckHighWatermark(const Timestamp &ts) {

@@ -130,14 +130,15 @@ class Server : public TransportReceiver, public ::Server {
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
   std::unordered_map<std::string, std::set<std::pair<Timestamp, Timestamp>>> committedReads;
-  std::unordered_map<std::string, std::map<std::string, std::set<Timestamp>>> rts;
+  std::unordered_map<std::string, std::set<Timestamp>> rts;
+
   // Digest -> V
   std::unordered_map<std::string, std::pair<Timestamp, proto::Transaction>> prepared;
   std::unordered_map<std::string, proto::Phase1Reply::ConcurrencyControlResult> p1Decisions;
   std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
   std::unordered_set<std::string> committed;
   std::unordered_set<std::string> aborted;
-  std::unordered_map<std::string, std::unordered_set<std::string>> depends; // V depends on K
+  std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // V depends on K
 
   Stats stats;
   std::unordered_set<std::string> active;
