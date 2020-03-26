@@ -389,7 +389,7 @@ A client waits for at least $n-f$ ($4f+1$ in Indicus5) distinct replica votes, o
 \end{minipage}}
 In any of the following 3 cases, a client may short-circuit waiting for additional votes and omit a dedicated Logging round:
 \begin{enumerate}
-\item \textbf{$1$ Abort vote w/ Conflicting TX \& CommitCertificate}: The client validates the integrity of the CommitCertificate (CC) and returns the shard decision $(TxID, Abort, \langle ConflTX \rangle_{CC})$.
+\item \textbf{$1$ Abort vote w/ Conflicting TX \& CommitCertificate}: The client validates the integrity of the CommitCertificate (CC) and returns the shard decision $(TxID, Abort, \langle ConflTX \rangle_{CC})$.  \fs{clients (and replicas during writeback) must validate the legitimacy of the conflict against the certified Transaction - it might be simpler for exposition to not include this case and just always vote abstain - this can be called Abort too then.}
 \item \textbf{$3f+1$ Abstain votes w/ Conflicting TX}: The client returns the shard decision $(TxID, Abort, \{\langle AbstainVote\rangle_r\})$. 
 \underline{Additional subtlelties}: The client temporarily stores the conflicting TX Phase1 requests, in order to be able to aid termination if necessary (see Section X).
 \item \textbf{$5f+1$ Commit votes}: The client returns the shard decision $(TxID, Commit, \{\langle CommitVote \rangle_r\}$
@@ -731,16 +731,23 @@ Lastly, replicas must abstain from any transaction that has a dependency with $d
 %-------------------------------------------------------------------------------
 \subsection{Optional Modifications}
 %-------------------------------------------------------------------------------
-Next, we discuss a series of optional optimizations: \fs{not necessarily optimizations: Retries, Single shard logging, speeding up shard certificates, read leases}
+Next, we discuss a series of optional modifications: \fs{not necessarily optimizations: Retries, Single shard logging, speeding up shard certificates, read leases}
 
-\fs{retries come at the cost of no fast path and having to store proofs for the transaction. These proofs are only necessary for the fallback.}
-\fs{If limiting Fallback}
+\fs{Retries are a mess currently and might not be worth to include}
+\fs{retries come at the cost of no fast path and having to store proofs for the transaction. These proofs are only necessary for the fallback. Moreover, it can create multiple dependencies since multi p1 remain.}
+
 \textbf{Retries:} MVTSO, by design, favors read requests, at the cost of potentially aborting concurrent write transactions. This is intuitively sensible, as reads require additional WAN roundtrips in order to execute. 
 However, when a transaction includes both reads and writes, and execution spans several reads, it becomes increasingly suceptible to abort as consequence of a conflicting read request. Observe, that aborts due a write-read conflict are a consequence of a read having failed to observe a relevant write with smaller timestamp. Thus, such an abort could have been avoided by simply choosing a larger timestamp. In order to faciliate this, we offer write transactions the option to Retry (with a larger timestamp), rather than abort. This however, comes at a tradeoff: Clients may not utilize the validation Fast-Path when opting into the availability of Retries. We outline the Retry protocol and implication for Fast-Paths as follows:
 
-In order to be able to change the timestamp for the same transaction we must make the Transaction ID independent from it. Thus, we re-define $TxID \coloneqq H(TX \setminus TS)$. A Prepare message then takes the form $Phase1 \coloneqq \langle Prepare, TxID, TX, TS \rangle_{\sigma c}$
+In order to be able to change the timestamp for the same transaction we must make the Transaction ID independent from it. Otherwise, it would not be possible to map retries to the same transaction in order to avoid double-commits and enable garbage collection.
+Therefore, we re-define $TxID \coloneqq H(TX \setminus TS)$. A Prepare message then takes the form $Phase1 \coloneqq \langle Prepare, TxID, TX, TS \rangle_{\sigma c}$
 Effectively, timestamps act as \textit{Retry Heights}: Analogous to views, only retries from a larger height can superseed previous attempts. Only the original client may retry, up to a pre-defined maximum attempts.
+An honest client follows the validation protocol as previously, with the exception that it may re-do Voting phase ($Phase1$). In order to preserve Isolation, a previously Prepared transation must pass the MVTSO-Check again, as a new timestamp exposes new potential conflicts. Conflicts are not evaluated against the transaction itself at a lower height, as only a single height can ever commit.
+Replicas continue to only accept the first decision they receive (maps to a single height), but must store $Phase1R$ for every retry received. This is necessary in order to maintain liveness in the presence of a byzantine or concurrent (if the original client times out) client. Interested clients may be dependent or conflicting with different heights of the same transaction and must be able to receive a $Phase1R$ Quorum in order to complete the Logging protocol. Additionally, in order to guarantee that a transaction does not commit twice for different heights, the Fast-Path must be disabled. \fs{Retries are a opt-in decision for each transaction, not for the system as whole}. When the orignial client is byzantine, or concurrent interested clients issue $Phase2$ messages, it is possible for replicas to diverge in not only their decisions, but also their respective heights. Conequently, it might be impossible for there to exist $f+1$ matching decisions from the same height. Yet, a Fallback replica must be able to safely reconcile a state. To facilitate this replicas must additionally store and include the $Phase1R$ vote Quorum in any $Elect$ message in order to prove the validity of a decision. \fs{this makes message overhead quadratic}
+With this tools in hand, the updated reconciliation decision rule is simple: If there exist a Quorum of $\geq 2f+1$ matching (decision, height) pairs, preserve this pair. Othwerise choose the decision from the largest height (favoring Commit when breaking ties). This is safe, as any logged decision is preserved.
 
+\fs{this "solution" is quite unelegant - but I suspect there might be no better way. The price for Retries are no fast path, and extra proofs. Effectively it degenerates to Indicus3}
+\iffalse
 
 - replicas keep p1s for all heights; might be necessary in case it still commits (for both safety and liveness: need to maintain isolation, need to reply with enough p1s.)
 Never accept more than 1 p2, othwerise it could be committed twice.
@@ -754,14 +761,19 @@ Never accept more than 1 p2, othwerise it could be committed twice.
 Require proofs of p1s in the p2 decisions: because we might not get enough matching p2 ether. need to be able to decide based off just 1.
 
 Fallback (p2 certofocates from 2 different heights cannot co-exist. if the rules for fallback dont fire, i.e. if there is none with >=2f+1 matching: choose larger height that has >=f+1 matching. Else make decision of p1s: (are included in the decision)
+\fi
 
-Correctness of retries: Show how MVTSO is fine with it. Adds additional check for dependencies TS. 
-If a TX retries: Its read locks might have been useless, i.e. doing the CC check might fail now. 
-If a dependency retries: If the dependencies writes would now be bigger than own TS then own TX needs to abort upon being released from blocking. I.e. before returning check and change the result to abstain.
+Enabling retries retries two modifications of the MVTSO-Check: 
+First, replicas must return $RETRY, (suggestedTS)$ instead of Abstain/Abort for conflicting writes in order to allow a client to distinguish the cause of conflict. If a conflict was caused by a write, it may be resolved by attempting to commit the transaction at a higher timestamp. Naturally, this comes at the risk of additional potential read conflicts; this however, is a sensible drawback, as the transaction would have aborted in the first place. Replicas may include a \textit{suggested Timestamp} that side-steps the detected conflict. An honest client retries only, if both an insufficient number of Commit votes, but at least one Retry vote was received. \fs{Previous Abstain votes for read conflicts can potentially turn into commits, if those transactions ended up aborting}
+\fs{We can keep the abort fast path with certificate for reads. This must be disallowed for writes in order to distinguish: In general, aborts with certificates require you to validate the conflict.}
+
+Second, a transaction, whose dependencies retried, might no longer be valid. The integrity of an honest clients read transaction is violated when its dependency retries with a timestamp higher than the read. To detect this, we add additional requirement to the MVTSO-Check: $If dep \in CommitLog \land dep.TS > TX.TS:$ Return Abort/Abstain \fs{Abort with cert, Abstain without}.
 
 
 
-- Retries can be per client choice (have a flag in a TX that says whether fast path or retires available). Cannot have both fast path and retries.
+Whether to opt into the availability of retries need not be a global system decision, but can be decided on a per-transaction basis. By signaling a flag within the transaction object (this changes the ID) a client can decide whether to allow for the possibility of retries which incurs the trade-off of sacrificing the opportunity of using a Fast-Path (attempts to go Fast-Path will be ignored by honest replicas if the flag is set), and additonal replica storage and bandwidth overhead (vote quorums to justify decisions) to enable live reconciliation.
+
+
 
 \paragraph{Single shard logging}
 When transaction execution touches multiple shards validation can incur redundant explicit logging overhead. When a Slow-Path is necessary to arrive at a logged decision on S different shards, bandwith is wasted. Consider an example in which $S-1$ shards attempt to log the decision Commit, while a single shard attempts to log an Abort decision. If the latter shard succeeds, the effort of the remaining shards was in vain. 
