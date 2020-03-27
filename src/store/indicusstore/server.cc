@@ -37,10 +37,13 @@
 namespace indicusstore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
-    Transport *transport, KeyManager *keyManager, bool signedMessages,
-    bool validateProofs, uint64_t timeDelta, OCCType occType, TrueTime timeServer) :
-    config(config), groupIdx(groupIdx), idx(idx), id(groupIdx * config.n + idx),
-    transport(transport), occType(occType),
+    int numShards, int numGroups, Transport *transport, KeyManager *keyManager,
+    bool signedMessages,
+    bool validateProofs, uint64_t timeDelta, OCCType occType, partitioner part,
+    TrueTime timeServer) :
+    config(config), groupIdx(groupIdx), idx(idx), numShards(numShards),
+    numGroups(numGroups), id(groupIdx * config.n + idx),
+    transport(transport), occType(occType), part(part),
     signedMessages(signedMessages), validateProofs(validateProofs), keyManager(keyManager),
     timeDelta(timeDelta), timeServer(timeServer) {
   transport->Register(this, config, groupIdx, idx);
@@ -461,6 +464,12 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
   std::unordered_map<std::string, std::set<Timestamp>> preparedWrites;
   GetPreparedWriteTimestamps(preparedWrites);
   for (const auto &read : txn.read_set()) {
+    // TODO: remove this check when txns only contain read set/write set for the
+    //   shards stored at this replica
+    if (!IsKeyOwned(read.key())) {
+      continue;
+    }
+
     std::vector<std::pair<Timestamp, Server::Value>> committedWrites;
     GetCommittedWrites(read.key(), read.readtime(), committedWrites);
     for (const auto &committedWrite : committedWrites) {
@@ -497,6 +506,10 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
   std::unordered_map<std::string, std::vector<proto::Transaction>> preparedReads;
   GetPreparedReads(preparedReads);
   for (const auto &write : txn.write_set()) {
+    if (!IsKeyOwned(write.key())) {
+      continue;
+    }
+
     std::set<std::pair<Timestamp, Timestamp>> committedReads;
     GetCommittedReads(write.key(), committedReads);
 
@@ -587,7 +600,9 @@ void Server::GetPreparedWriteTimestamps(
   // gather up the set of all writes that are currently prepared
   for (const auto &t : prepared) {
     for (const auto &write : t.second.second.write_set()) {
-      writes[write.key()].insert(t.second.first);
+      if (IsKeyOwned(write.key())) {
+        writes[write.key()].insert(t.second.first);
+      }
     }
   }
 }
@@ -596,7 +611,9 @@ void Server::GetPreparedWrites(
       std::unordered_map<std::string, std::vector<proto::Transaction>> &writes) {
   for (const auto &t : prepared) {
     for (const auto &write : t.second.second.write_set()) {
-      writes[write.key()].push_back(t.second.second);
+      if (IsKeyOwned(write.key())) {
+        writes[write.key()].push_back(t.second.second);
+      }
     }
   }
 }
@@ -606,7 +623,9 @@ void Server::GetPreparedReadTimestamps(
   // gather up the set of all writes that are currently prepared
   for (const auto &t : prepared) {
     for (const auto &read : t.second.second.read_set()) {
-      reads[read.key()].insert(t.second.first);
+      if (IsKeyOwned(read.key())) {
+        reads[read.key()].insert(t.second.first);
+      }
     }
   }
 }
@@ -616,7 +635,9 @@ void Server::GetPreparedReads(
   // gather up the set of all writes that are currently prepared
   for (const auto &t : prepared) {
     for (const auto &read : t.second.second.read_set()) {
-      reads[read.key()].push_back(t.second.second);
+      if (IsKeyOwned(read.key())) {
+        reads[read.key()].push_back(t.second.second);
+      }
     }
   }
 }
@@ -648,6 +669,9 @@ void Server::Commit(const std::string &txnDigest,
     const proto::Transaction &txn) {
   Timestamp ts(txn.timestamp());
   for (const auto &read : txn.read_set()) {
+    if (!IsKeyOwned(read.key())) {
+      continue;
+    }
     store.commitGet(read.key(), read.readtime(), ts);
     committedReads[read.key()].insert(std::make_pair(ts, read.readtime()));
   }
@@ -657,6 +681,10 @@ void Server::Commit(const std::string &txnDigest,
   }
 
   for (const auto &write : txn.write_set()) {
+    if (!IsKeyOwned(write.key())) {
+      continue;
+    }
+
     val.val = write.value();
     store.put(write.key(), val, ts);
 

@@ -35,6 +35,7 @@
 #include "bft_tapir/config.h"
 #include "replication/ir/replica.h"
 #include "store/server.h"
+#include "store/common/partitioner.h"
 #include "store/common/timestamp.h"
 #include "store/common/truetime.h"
 #include "store/indicusstore/common.h"
@@ -57,8 +58,9 @@ enum OCCType {
 class Server : public TransportReceiver, public ::Server {
  public:
   Server(const transport::Configuration &config, int groupIdx, int idx,
+      int numShards, int numGroups,
       Transport *transport, KeyManager *keyManager, bool signedMessages,
-      bool validateProofs, uint64_t timeDelta, OCCType occType,
+      bool validateProofs, uint64_t timeDelta, OCCType occType, partitioner part,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
@@ -117,12 +119,20 @@ class Server : public TransportReceiver, public ::Server {
   proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(const proto::Transaction &txn);
   bool CheckHighWatermark(const Timestamp &ts);
 
+  inline bool IsKeyOwned(const std::string &key) const {
+    return static_cast<int>(part(key, numShards) % numGroups) == groupIdx;
+  }
+
+
   const transport::Configuration &config;
   const int groupIdx;
   const int idx;
+  const int numShards;
+  const int numGroups;
   const int id;
   Transport *transport;
   const OCCType occType;
+  partitioner part;
   const bool signedMessages;
   const bool validateProofs;
   KeyManager *keyManager;

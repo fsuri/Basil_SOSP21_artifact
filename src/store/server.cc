@@ -298,6 +298,29 @@ int main(int argc, char **argv) {
       NOT_REACHABLE();
   }
 
+  // parse protocol and mode
+  Partitioner partType = DEFAULT;
+  int numParts = sizeof(partitioner_args);
+  for (int i = 0; i < numParts; ++i) {
+    if (FLAGS_partitioner == partitioner_args[i]) {
+      partType = parts[i];
+      break;
+    }
+  }
+
+  partitioner part;
+  switch (partType) {
+    case DEFAULT:
+      part = default_partitioner;
+      break;
+    case WAREHOUSE:
+      part = warehouse_partitioner;
+      break;
+    default:
+      NOT_REACHABLE();
+  }
+
+
   KeyManager keyManager(FLAGS_indicus_key_path);
 
   switch (proto) {
@@ -329,36 +352,15 @@ int main(int argc, char **argv) {
     }
     case PROTO_INDICUS: {
       server = new indicusstore::Server(config, FLAGS_group_idx,
-          FLAGS_replica_idx, tport, &keyManager, FLAGS_indicus_sign_messages,
+          FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
+          tport, &keyManager, FLAGS_indicus_sign_messages,
           FLAGS_indicus_validate_proofs, FLAGS_indicus_time_delta,
-          indicusstore::MVTSO);
+          indicusstore::MVTSO, part);
       break;
     }
     default: {
       NOT_REACHABLE();
     }
-  }
-
-  // parse protocol and mode
-  Partitioner partType = DEFAULT;
-  int numParts = sizeof(partitioner_args);
-  for (int i = 0; i < numParts; ++i) {
-    if (FLAGS_partitioner == partitioner_args[i]) {
-      partType = parts[i];
-      break;
-    }
-  }
-
-  partitioner part;
-  switch (partType) {
-    case DEFAULT:
-      part = default_partitioner;
-      break;
-    case WAREHOUSE:
-      part = warehouse_partitioner;
-      break;
-    default:
-      NOT_REACHABLE();
   }
 
   // parse keys
