@@ -455,7 +455,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
   if (CheckHighWatermark(ts)) {
     Debug("[%s] ABORT ts %lu.%lu beyond high watermark.", txnDigest.c_str(),
         ts.getTimestamp(), ts.getID());
-    return proto::Phase1Reply::ABORT;
+    return proto::Phase1Reply::ABSTAIN;
   }
 
   std::unordered_map<std::string, std::set<Timestamp>> preparedWrites;
@@ -503,12 +503,12 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     if (committedReads.size() > 0) {
       for (const auto &committedReadTs : committedReads) {
         if (committedReadTs.second < ts && ts < committedReadTs.first) {
-          Debug("[%s] RETRY rw conflict committed read for key %s: committed"
+          Debug("[%s] ABORT rw conflict committed read for key %s: committed"
               " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
               txnDigest.c_str(), write.key().c_str(), committedReadTs.second.getTimestamp(),
               committedReadTs.second.getID(), ts.getTimestamp(),
               ts.getID(), committedReadTs.first.getTimestamp(), committedReadTs.first.getID());
-          return proto::Phase1Reply::RETRY;
+          return proto::Phase1Reply::ABORT;
         }
       }
     }
@@ -536,13 +536,13 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
         }
         if (!isDep && isReadVersionEarlier &&
             ts < Timestamp(preparedReadTxn.timestamp())) {
-          Debug("[%s] RETRY rw conflict prepared read for key %s: prepared"
+          Debug("[%s] ABSTAIN rw conflict prepared read for key %s: prepared"
               " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
               txnDigest.c_str(), write.key().c_str(), readTs.getTimestamp(),
               readTs.getID(), ts.getTimestamp(),
               ts.getID(), preparedReadTxn.timestamp().timestamp(),
               preparedReadTxn.timestamp().id());
-          return proto::Phase1Reply::RETRY;
+          return proto::Phase1Reply::ABSTAIN;
         }
       }
     }
@@ -551,11 +551,11 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     if (rtsItr != rts.end()) {
       auto rtsLB = rtsItr->second.lower_bound(ts);
       if (rtsLB != rtsItr->second.end() && *rtsLB > ts) {
-        Debug("[%s] RETRY larger rts acquired for key %s: rts %lu.%lu >"
+        Debug("[%s] ABSTAIN larger rts acquired for key %s: rts %lu.%lu >"
             " this txn's ts %lu.%lu.",
             txnDigest.c_str(), write.key().c_str(), rtsLB->getTimestamp(),
             rtsLB->getID(), ts.getTimestamp(), ts.getID());
-        return proto::Phase1Reply::RETRY;
+        return proto::Phase1Reply::ABSTAIN;
       }
     }
     // TODO: add additional rts dep check to shrink abort window
