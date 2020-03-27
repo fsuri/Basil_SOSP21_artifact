@@ -87,14 +87,14 @@ class ServerTest : public ::testing::Test {
     server->HandlePhase1(remote, msg);
   }
 
-  void Prepare(uint64_t txnId, const proto::Transaction &txn,
-      const Timestamp &timestamp) {
-    server->Prepare(txnId, txn, timestamp);
+  void Prepare(const proto::Transaction &txn) {
+    std::string txnDigest = TransactionDigest(txn);
+    server->Prepare(txnDigest, txn);
   }
 
-  void Commit(uint64_t txnId, const proto::Transaction &txn,
-      const Timestamp &timestamp) {
-    server->Commit(txnId, txn, timestamp);
+  void Commit(const proto::Transaction &txn) {
+    std::string txnDigest = TransactionDigest(txn);
+    server->Commit(txnDigest, txn);
   }
 
   MockTransportAddress clientAddress;
@@ -115,7 +115,6 @@ MATCHER_P(ExpectedMessage, expected, "") {
 TEST_F(ServerTest, ReadNoData) {
   proto::Read read;
   read.set_req_id(3);
-  read.set_txn_id(4);
   read.set_key("key0");
   Timestamp timestamp(100, 2);
   timestamp.serialize(read.mutable_timestamp());
@@ -133,15 +132,17 @@ TEST_F(ServerTest, ReadNoData) {
 
 TEST_F(ServerTest, ReadCommittedData) {
   proto::Transaction txn;
-  WriteMessage *write = txn.add_writeset();
+  txn.set_client_id(1);
+  txn.set_client_seq_num(2);
+  WriteMessage *write = txn.add_write_set();
   write->set_key("key0");
   write->set_value("val0");
   Timestamp wts(50, 1);
-  Commit(1, txn, wts);
+  wts.serialize(txn.mutable_timestamp());
+  Commit(txn);
 
   proto::Read read;
   read.set_req_id(3);
-  read.set_txn_id(4);
   read.set_key("key0");
   Timestamp timestamp(100, 2);
   timestamp.serialize(read.mutable_timestamp());
@@ -161,16 +162,15 @@ TEST_F(ServerTest, ReadCommittedData) {
 
 TEST_F(ServerTest, ReadPreparedData) {
   proto::Transaction txn;
-  WriteMessage *write = txn.add_writeset();
+  WriteMessage *write = txn.add_write_set();
   write->set_key("key0");
   write->set_value("val0");
   Timestamp wts(50, 1);
   wts.serialize(txn.mutable_timestamp());
-  Prepare(1, txn, wts);
+  Prepare(txn);
 
   proto::Read read;
   read.set_req_id(3);
-  read.set_txn_id(4);
   read.set_key("key0");
   Timestamp timestamp(100, 2);
   timestamp.serialize(read.mutable_timestamp());
@@ -191,7 +191,7 @@ TEST_F(ServerTest, ReadPreparedData) {
 
 TEST_F(ServerTest, Phase1Commit) {
   proto::Transaction txn;
-  WriteMessage *write = txn.add_writeset();
+  WriteMessage *write = txn.add_write_set();
   write->set_key("key0");
   write->set_value("val0");
   Timestamp wts(50, 1);
@@ -199,7 +199,7 @@ TEST_F(ServerTest, Phase1Commit) {
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
-  phase1.set_txn_id(4);
+  phase1.set_txn_digest(TransactionDigest(txn));
   *phase1.mutable_txn() = txn;
 
   proto::Phase1Reply expectedReply;
@@ -215,16 +215,16 @@ TEST_F(ServerTest, Phase1Commit) {
 
 TEST_F(ServerTest, Phase1CommittedConflict) {
   proto::Transaction committedTxn;
-  ReadMessage *read = committedTxn.add_readset();
+  ReadMessage *read = committedTxn.add_read_set();
   read->set_key("key0");
   Timestamp readTime(45, 2);
   readTime.serialize(read->mutable_readtime());
   Timestamp committedRts(55, 2);
   committedRts.serialize(committedTxn.mutable_timestamp());
-  Commit(1, committedTxn, committedRts);
+  Commit(committedTxn);
 
   proto::Transaction txn;
-  WriteMessage *write = txn.add_writeset();
+  WriteMessage *write = txn.add_write_set();
   write->set_key("key0");
   write->set_value("val0");
   Timestamp wts(50, 1);
@@ -232,7 +232,7 @@ TEST_F(ServerTest, Phase1CommittedConflict) {
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
-  phase1.set_txn_id(4);
+  phase1.set_txn_digest(TransactionDigest(txn));
   *phase1.mutable_txn() = txn;
 
   proto::Phase1Reply expectedReply;

@@ -185,6 +185,7 @@ void ShardClient::Phase2(uint64_t id, const proto::Transaction &transaction,
 
   // create prepare request
   proto::Phase2 phase2;
+  phase2.set_req_id(reqId);
   phase2.set_txn_digest(TransactionDigest(transaction));
   if (validateProofs) {
     if (signedMessages) {
@@ -351,8 +352,8 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
     return; // this is a stale request
   }
 
-  Debug("[shard %lu:%i] PHASE1 callback [%d]", client_id, shard,
-      reply.status());
+  Debug("[shard %lu:%i] PHASE1 callback [%d] ccr=%d", client_id, shard,
+      reply.status(), reply.ccr());
 
   if (signedMessages) {
     itr->second->signedPhase1Replies.push_back(signedReply);

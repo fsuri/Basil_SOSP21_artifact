@@ -185,6 +185,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
   Debug("PHASE1[%s,%lu] with ts %lu.", msg.txn_digest().c_str(), msg.req_id(),
       msg.txn().timestamp().timestamp());
+  
+  ongoing[msg.txn_digest()] = msg.txn();
 
   Timestamp retryTs;
   proto::CommittedProof conflict;
@@ -192,28 +194,30 @@ void Server::HandlePhase1(const TransportAddress &remote,
       msg.txn_digest(), msg.txn(), retryTs, conflict);
   p1Decisions[msg.txn_digest()] = result;
 
-  proto::Phase1Reply reply;
-  reply.set_req_id(msg.req_id());
-  reply.set_status(REPLY_OK);
-  reply.set_ccr(result);
-  /* TODO: are retries a thing?
-  if (result == proto::Phase1Reply::RETRY) {
-    retryTs.serialize(reply.mutable_retry_timestamp());
-  }*/
+  if (result != proto::Phase1Reply::WAIT) {
+    proto::Phase1Reply reply;
+    reply.set_req_id(msg.req_id());
+    reply.set_status(REPLY_OK);
+    reply.set_ccr(result);
+    /* TODO: are retries a thing?
+    if (result == proto::Phase1Reply::RETRY) {
+      retryTs.serialize(reply.mutable_retry_timestamp());
+    }*/
 
-  if (validateProofs) {
-    *reply.mutable_committed_conflict() = conflict;
-  }
+    if (validateProofs) {
+      *reply.mutable_committed_conflict() = conflict;
+    }
 
-  if (signedMessages) {
-    proto::SignedMessage signedMessage;
-    signedMessage.set_msg(reply.SerializeAsString());
-    signedMessage.set_type(reply.GetTypeName());
-    signedMessage.set_process_id(id);
-    SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
-    transport->SendMessage(this, remote, signedMessage);
-  } else {
-    transport->SendMessage(this, remote, reply);
+    if (signedMessages) {
+      proto::SignedMessage signedMessage;
+      signedMessage.set_msg(reply.SerializeAsString());
+      signedMessage.set_type(reply.GetTypeName());
+      signedMessage.set_process_id(id);
+      SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
+      transport->SendMessage(this, remote, signedMessage);
+    } else {
+      transport->SendMessage(this, remote, reply);
+    }
   }
 }
 
@@ -449,6 +453,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     proto::CommittedProof &conflict) {
   Timestamp ts(txn.timestamp());
   if (CheckHighWatermark(ts)) {
+    Debug("[%s] ABORT ts %lu.%lu beyond high watermark.", txnDigest.c_str(),
+        ts.getTimestamp(), ts.getID());
     return proto::Phase1Reply::ABORT;
   }
 
@@ -464,6 +470,11 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
         if (validateProofs) {
           conflict = committedWrite.second.proof;
         } 
+        Debug("[%s] ABORT wr conflict committed write for key %s: this txn's"
+            " read ts %lu.%lu < committed ts %lu.%lu < this txn's ts %lu.%lu.",
+            txnDigest.c_str(), read.key().c_str(), read.readtime().timestamp(),
+            read.readtime().id(), committedWrite.first.getTimestamp(),
+            committedWrite.first.getID(), ts.getTimestamp(), ts.getID());
         return proto::Phase1Reply::ABORT; // TODO: return conflicting txn
       }
     }
@@ -472,6 +483,11 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     if (preparedWritesItr != preparedWrites.end()) {
       for (const auto &preparedTs : preparedWritesItr->second) {
         if (Timestamp(read.readtime()) < preparedTs && preparedTs < ts) {
+          Debug("[%s] ABSTAIN wr conflict prepared write for key %s: this txn's"
+              " read ts %lu.%lu < prepared ts %lu.%lu < this txn's ts %lu.%lu.",
+              txnDigest.c_str(), read.key().c_str(), read.readtime().timestamp(),
+              read.readtime().id(), preparedTs.getTimestamp(),
+              preparedTs.getID(), ts.getTimestamp(), ts.getID());
           return proto::Phase1Reply::ABSTAIN; // TODO: return conflicting txn
         }
       }
@@ -487,6 +503,11 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     if (committedReads.size() > 0) {
       for (const auto &committedReadTs : committedReads) {
         if (committedReadTs.second < ts && ts < committedReadTs.first) {
+          Debug("[%s] RETRY rw conflict committed read for key %s: committed"
+              " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
+              txnDigest.c_str(), write.key().c_str(), committedReadTs.second.getTimestamp(),
+              committedReadTs.second.getID(), ts.getTimestamp(),
+              ts.getID(), committedReadTs.first.getTimestamp(), committedReadTs.first.getID());
           return proto::Phase1Reply::RETRY;
         }
       }
@@ -505,14 +526,22 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
         }
 
         bool isReadVersionEarlier = false;
+        Timestamp readTs;
         for (const auto &read : preparedReadTxn.read_set()) {
           if (read.key() == write.key()) {
-            isReadVersionEarlier = Timestamp(read.readtime()) < ts;
+            readTs = Timestamp(read.readtime());
+            isReadVersionEarlier = readTs < ts;
             break;
           }
         }
         if (!isDep && isReadVersionEarlier &&
             ts < Timestamp(preparedReadTxn.timestamp())) {
+          Debug("[%s] RETRY rw conflict prepared read for key %s: prepared"
+              " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
+              txnDigest.c_str(), write.key().c_str(), readTs.getTimestamp(),
+              readTs.getID(), ts.getTimestamp(),
+              ts.getID(), preparedReadTxn.timestamp().timestamp(),
+              preparedReadTxn.timestamp().id());
           return proto::Phase1Reply::RETRY;
         }
       }
@@ -520,7 +549,12 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
 
     auto rtsItr = rts.find(write.key());
     if (rtsItr != rts.end()) {
-      if (rtsItr->second.lower_bound(ts) != rtsItr->second.end()) {
+      auto rtsLB = rtsItr->second.lower_bound(ts);
+      if (rtsLB != rtsItr->second.end() && *rtsLB > ts) {
+        Debug("[%s] RETRY larger rts acquired for key %s: rts %lu.%lu >"
+            " this txn's ts %lu.%lu.",
+            txnDigest.c_str(), write.key().c_str(), rtsLB->getTimestamp(),
+            rtsLB->getID(), ts.getTimestamp(), ts.getID());
         return proto::Phase1Reply::RETRY;
       }
     }
@@ -537,23 +571,14 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
         aborted.find(depDigest) == aborted.end()) {
       allFinished = false;
       dependents[depDigest].insert(txnDigest);
+      waitingDependencies[txnDigest].insert(depDigest);
     }
   }
 
   if (!allFinished) {
     return proto::Phase1Reply::WAIT;
   } else {
-    for (const auto &dep : txn.deps()) {
-      std::string depDigest = TransactionDigest(dep);
-      if (committed.find(depDigest) != committed.end()) {
-        if (Timestamp(dep.timestamp()) > ts) {
-          return proto::Phase1Reply::ABORT;
-        }
-      } else {
-        return proto::Phase1Reply::ABORT;
-      }
-    } 
-    return proto::Phase1Reply::COMMIT;
+    return CheckDependencies(txn);
   }
 }
 
@@ -646,12 +671,14 @@ void Server::Commit(const std::string &txnDigest,
   }
 
 
+  ongoing.erase(txnDigest);
   prepared.erase(txnDigest);
   committed.insert(txnDigest);
   CheckDependents(txnDigest);
 }
 
 void Server::Abort(const std::string &txnDigest) {
+  ongoing.erase(txnDigest);
   prepared.erase(txnDigest);
   aborted.insert(txnDigest);
   CheckDependents(txnDigest);
@@ -660,7 +687,41 @@ void Server::Abort(const std::string &txnDigest) {
 void Server::CheckDependents(const std::string &txnDigest) {
   auto dependentsItr = dependents.find(txnDigest);
   if (dependentsItr != dependents.end()) {
+    for (const auto &dependent : dependentsItr->second) {
+      auto dependenciesItr = waitingDependencies.find(dependent);
+      if (dependenciesItr == waitingDependencies.end()) {
+        CheckDependencies(dependent);
+      } else {
+        dependenciesItr->second.erase(txnDigest);
+        if (dependenciesItr->second.size() == 0) {
+          CheckDependencies(dependent);
+          waitingDependencies.erase(dependent);
+        }
+      }
+    }
   }
+}
+
+proto::Phase1Reply::ConcurrencyControlResult Server::CheckDependencies(
+    const std::string &txnDigest) {
+  auto txnItr = ongoing.find(txnDigest);
+  UW_ASSERT(txnItr != ongoing.end());
+  return CheckDependencies(txnItr->second);
+}
+
+proto::Phase1Reply::ConcurrencyControlResult Server::CheckDependencies(
+    const proto::Transaction &txn) {
+  for (const auto &dep : txn.deps()) {
+    std::string depDigest = TransactionDigest(dep);
+    if (committed.find(depDigest) != committed.end()) {
+      if (Timestamp(dep.timestamp()) > Timestamp(txn.timestamp())) {
+        return proto::Phase1Reply::ABORT;
+      }
+    } else {
+      return proto::Phase1Reply::ABORT;
+    }
+  } 
+  return proto::Phase1Reply::COMMIT;
 }
 
 bool Server::CheckHighWatermark(const Timestamp &ts) {

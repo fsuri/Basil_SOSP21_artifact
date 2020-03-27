@@ -113,6 +113,8 @@ class Server : public TransportReceiver, public ::Server {
   void Commit(const std::string &txnDigest, const proto::Transaction &txn);
   void Abort(const std::string &txnDigest);
   void CheckDependents(const std::string &txnDigest);
+  proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(const std::string &txnDigest);
+  proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(const proto::Transaction &txn);
   bool CheckHighWatermark(const Timestamp &ts);
 
   const transport::Configuration &config;
@@ -133,12 +135,14 @@ class Server : public TransportReceiver, public ::Server {
   std::unordered_map<std::string, std::set<Timestamp>> rts;
 
   // Digest -> V
+  std::unordered_map<std::string, proto::Transaction> ongoing;
   std::unordered_map<std::string, std::pair<Timestamp, proto::Transaction>> prepared;
   std::unordered_map<std::string, proto::Phase1Reply::ConcurrencyControlResult> p1Decisions;
   std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
   std::unordered_set<std::string> committed;
   std::unordered_set<std::string> aborted;
-  std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // V depends on K
+  std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
+  std::unordered_map<std::string, std::unordered_set<std::string>> waitingDependencies; // K depends on each V
 
   Stats stats;
   std::unordered_set<std::string> active;
