@@ -4,11 +4,13 @@
 
 #include "lib/assert.h"
 #include "lib/transport.h"
+#include "store/common/partitioner.h"
 #include "store/indicusstore/server.h"
 #include "store/indicusstore/tests/common.h"
 
 #define F 1
 #define G 3
+#define S 3
 
 namespace indicusstore {
 
@@ -67,8 +69,8 @@ class ServerTest : public ::testing::Test {
     config = new transport::Configuration(configSS);
     transport = new MockTransport();
     keyManager = new KeyManager("./");
-    server = new Server(*config, groupIdx, idx, transport, keyManager,
-      signedMessages, validateProofs, timeDelta, occType);
+    server = new Server(*config, groupIdx, idx, G, S, transport, keyManager,
+      signedMessages, validateProofs, timeDelta, occType, default_partitioner);
   }
 
   virtual void TearDown() {
@@ -132,13 +134,8 @@ TEST_F(ServerTest, ReadNoData) {
 
 TEST_F(ServerTest, ReadCommittedData) {
   proto::Transaction txn;
-  txn.set_client_id(1);
-  txn.set_client_seq_num(2);
-  WriteMessage *write = txn.add_write_set();
-  write->set_key("key0");
-  write->set_value("val0");
   Timestamp wts(50, 1);
-  wts.serialize(txn.mutable_timestamp());
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
   Commit(txn);
 
   proto::Read read;
@@ -162,11 +159,8 @@ TEST_F(ServerTest, ReadCommittedData) {
 
 TEST_F(ServerTest, ReadPreparedData) {
   proto::Transaction txn;
-  WriteMessage *write = txn.add_write_set();
-  write->set_key("key0");
-  write->set_value("val0");
   Timestamp wts(50, 1);
-  wts.serialize(txn.mutable_timestamp());
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
   Prepare(txn);
 
   proto::Read read;
@@ -191,11 +185,8 @@ TEST_F(ServerTest, ReadPreparedData) {
 
 TEST_F(ServerTest, Phase1Commit) {
   proto::Transaction txn;
-  WriteMessage *write = txn.add_write_set();
-  write->set_key("key0");
-  write->set_value("val0");
   Timestamp wts(50, 1);
-  wts.serialize(txn.mutable_timestamp());
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -213,22 +204,19 @@ TEST_F(ServerTest, Phase1Commit) {
   HandlePhase1(clientAddress, phase1);
 }
 
-TEST_F(ServerTest, Phase1CommittedConflict) {
+/**
+ * Transaction T_1 must abort if there is a committed conflicting transaction
+ *   T_2 with a read version such that read version < T_1.ts < T_2.ts
+ */
+TEST_F(ServerTest, Phase1CommittedReadConflictAbort) {
   proto::Transaction committedTxn;
-  ReadMessage *read = committedTxn.add_read_set();
-  read->set_key("key0");
-  Timestamp readTime(45, 2);
-  readTime.serialize(read->mutable_readtime());
   Timestamp committedRts(55, 2);
-  committedRts.serialize(committedTxn.mutable_timestamp());
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, committedTxn);
   Commit(committedTxn);
 
   proto::Transaction txn;
-  WriteMessage *write = txn.add_write_set();
-  write->set_key("key0");
-  write->set_value("val0");
   Timestamp wts(50, 1);
-  wts.serialize(txn.mutable_timestamp());
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -238,7 +226,7 @@ TEST_F(ServerTest, Phase1CommittedConflict) {
   proto::Phase1Reply expectedReply;
   expectedReply.set_req_id(3);
   expectedReply.set_status(REPLY_OK);
-  expectedReply.set_ccr(proto::Phase1Reply::RETRY);
+  expectedReply.set_ccr(proto::Phase1Reply::ABORT);
 
   EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
         ExpectedMessage(expectedReply)));
@@ -246,6 +234,334 @@ TEST_F(ServerTest, Phase1CommittedConflict) {
   HandlePhase1(clientAddress, phase1);
 }
 
+/**
+ * Transaction T_1 is allowed to commit if T_2.ts < T_1.ts with committed
+ *   conflicting transaction T_2.
+ */
+TEST_F(ServerTest, Phase1CommittedReadConflictCommitNewerTS) {
+  proto::Transaction committedTxn;
+  Timestamp committedRts(55, 2);
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, committedTxn);
+  Commit(committedTxn);
 
+  proto::Transaction txn;
+  Timestamp wts(60, 1);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::COMMIT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+/**
+ * Transaction T_1 is allowed to commit if T_1.ts < read version in committed
+ *   transaction T_2.
+ */
+TEST_F(ServerTest, Phase1CommittedReadConflictCommitOlderTS) {
+  proto::Transaction committedTxn;
+  Timestamp committedRts(55, 2);
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, committedTxn);
+  Commit(committedTxn);
+
+  proto::Transaction txn;
+  Timestamp wts(40, 1);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::COMMIT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+/**
+ * Transaction T_1 must abort if T_1 has a read version that conflicts with a
+ *   committed transaction T_2 and read version < T_2.ts < T_1.ts.
+ */
+TEST_F(ServerTest, Phase1CommittedWriteConflictAbort) {
+  proto::Transaction committedTxn;
+  Timestamp committedRts(50, 2);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, committedTxn);
+  Commit(committedTxn);
+
+  proto::Transaction txn;
+  Timestamp wts(55, 1);
+  PopulateTransaction({{"key0", Timestamp(45, 1)}}, {}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::ABORT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+/**
+ * Transaction T_1 can commit if T_1 has a read version that conflicts with a
+ *   committed transaction T_2, but T_2.ts < read version.
+ */
+TEST_F(ServerTest, Phase1CommittedWriteConflictCommitNewerReadVersion) {
+  proto::Transaction committedTxn;
+  Timestamp committedRts(50, 2);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, committedTxn);
+  Commit(committedTxn);
+
+  proto::Transaction txn;
+  Timestamp wts(55, 1);
+  PopulateTransaction({{"key0", Timestamp(52, 1)}}, {}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::COMMIT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+/**
+ * Transaction T_1 can commit if T_1 has a read version that conflicts with a
+ *   committed transaction T_2, but T_1.ts < T_2.ts.
+ */
+TEST_F(ServerTest, Phase1CommittedWriteConflictCommitOlderTS) {
+  proto::Transaction committedTxn;
+  Timestamp committedRts(50, 2);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, committedTxn);
+  Commit(committedTxn);
+
+  proto::Transaction txn;
+  Timestamp wts(49, 1);
+  PopulateTransaction({{"key0", Timestamp(48, 1)}}, {}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::COMMIT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+/**
+ * Transaction T_1 must abstain if there is a prepared conflicting transaction
+ *   T_2 with a read version such that read version < T_1.ts < T_2.ts
+ */
+TEST_F(ServerTest, Phase1PreparedReadConflictAbort) {
+  proto::Transaction preparedTxn;
+  Timestamp committedRts(55, 2);
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, preparedTxn);
+  Prepare(preparedTxn);
+
+  proto::Transaction txn;
+  Timestamp wts(50, 1);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::ABSTAIN);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+/**
+ * Transaction T_1 is allowed to commit if T_2.ts < T_1.ts with prepared
+ *   conflicting transaction T_2.
+ */
+TEST_F(ServerTest, Phase1PreparedReadConflictCommitNewerTS) {
+  proto::Transaction preparedTxn;
+  Timestamp committedRts(55, 2);
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, preparedTxn);
+  Prepare(preparedTxn);
+
+  proto::Transaction txn;
+  Timestamp wts(60, 1);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::COMMIT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+/**
+ * Transaction T_1 is allowed to commit if T_1.ts < read version in prepared
+ *   transaction T_2.
+ */
+TEST_F(ServerTest, Phase1PreparedReadConflictCommitOlderTS) {
+  proto::Transaction preparedTxn;
+  Timestamp committedRts(55, 2);
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, preparedTxn);
+  Prepare(preparedTxn);
+
+  proto::Transaction txn;
+  Timestamp wts(40, 1);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::COMMIT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+/**
+ * Transaction T_1 must abstain if T_1 has a read version that conflicts with a
+ *   prepared transaction T_2 and read version < T_2.ts < T_1.ts.
+ */
+TEST_F(ServerTest, Phase1PreparedWriteConflictAbort) {
+  proto::Transaction preparedTxn;
+  Timestamp committedRts(50, 2);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, preparedTxn);
+  Prepare(preparedTxn);
+
+  proto::Transaction txn;
+  Timestamp wts(55, 1);
+  PopulateTransaction({{"key0", Timestamp(45, 1)}}, {}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::ABSTAIN);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+/**
+ * Transaction T_1 can commit if T_1 has a read version that conflicts with a
+ *   prepared transaction T_2, but T_2.ts < read version.
+ */
+TEST_F(ServerTest, Phase1PreparedWriteConflictCommitNewerReadVersion) {
+  proto::Transaction preparedTxn;
+  Timestamp committedRts(50, 2);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, preparedTxn);
+  Prepare(preparedTxn);
+
+  proto::Transaction txn;
+  Timestamp wts(55, 1);
+  PopulateTransaction({{"key0", Timestamp(52, 1)}}, {}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::COMMIT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+/**
+ * Transaction T_1 can commit if T_1 has a read version that conflicts with a
+ *   prepared transaction T_2, but T_1.ts < T_2.ts.
+ */
+TEST_F(ServerTest, Phase1PreparedWriteConflictCommitOlderTS) {
+  proto::Transaction preparedTxn;
+  Timestamp committedRts(50, 2);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, preparedTxn);
+  Prepare(preparedTxn);
+
+  proto::Transaction txn;
+  Timestamp wts(49, 1);
+  PopulateTransaction({{"key0", Timestamp(48, 1)}}, {}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::COMMIT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
 
 }
