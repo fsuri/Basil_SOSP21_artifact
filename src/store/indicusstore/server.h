@@ -90,12 +90,14 @@ class Server : public TransportReceiver, public ::Server {
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
   proto::Phase1Reply::ConcurrencyControlResult DoOCCCheck(
+      uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
       Timestamp &retryTs, proto::CommittedProof &conflict);
   proto::Phase1Reply::ConcurrencyControlResult DoTAPIROCCCheck(
       const std::string &txnDigest, const proto::Transaction &txn,
       Timestamp &retryTs);
   proto::Phase1Reply::ConcurrencyControlResult DoMVTSOOCCCheck(
+      uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
       proto::CommittedProof &conflict);
 
@@ -115,9 +117,14 @@ class Server : public TransportReceiver, public ::Server {
   void Commit(const std::string &txnDigest, const proto::Transaction &txn);
   void Abort(const std::string &txnDigest);
   void CheckDependents(const std::string &txnDigest);
-  proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(const std::string &txnDigest);
-  proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(const proto::Transaction &txn);
+  proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(
+      const std::string &txnDigest);
+  proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(
+      const proto::Transaction &txn);
   bool CheckHighWatermark(const Timestamp &ts);
+  void SendPhase1Reply(uint64_t reqId,
+    proto::Phase1Reply::ConcurrencyControlResult result,
+    const proto::CommittedProof &conflict, const TransportAddress &remote);
 
   inline bool IsKeyOwned(const std::string &key) const {
     return static_cast<int>(part(key, numShards) % numGroups) == groupIdx;
@@ -152,7 +159,12 @@ class Server : public TransportReceiver, public ::Server {
   std::unordered_set<std::string> committed;
   std::unordered_set<std::string> aborted;
   std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
-  std::unordered_map<std::string, std::unordered_set<std::string>> waitingDependencies; // K depends on each V
+  struct WaitingDependency {
+    uint64_t reqId;
+    const TransportAddress *remote;
+    std::unordered_set<std::string> deps;
+  };
+  std::unordered_map<std::string, WaitingDependency> waitingDependencies; // K depends on each V
 
   Stats stats;
   std::unordered_set<std::string> active;

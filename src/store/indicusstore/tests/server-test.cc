@@ -99,6 +99,11 @@ class ServerTest : public ::testing::Test {
     server->Commit(txnDigest, txn);
   }
 
+  void Abort(const proto::Transaction &txn) {
+    std::string txnDigest = TransactionDigest(txn);
+    server->Abort(txnDigest);
+  }
+
   MockTransportAddress clientAddress;
   MockTransport *transport;
   Server *server;
@@ -562,6 +567,112 @@ TEST_F(ServerTest, Phase1PreparedWriteConflictCommitOlderTS) {
         ExpectedMessage(expectedReply)));
 
   HandlePhase1(clientAddress, phase1);
+}
+
+TEST_F(ServerTest, Phase1RTSConflictAbort) {
+  proto::Read read;
+  read.set_req_id(1);
+  read.set_key("key0");
+  Timestamp timestamp(100, 2);
+  timestamp.serialize(read.mutable_timestamp());
+  HandleRead(clientAddress, read);
+
+  proto::Transaction txn;
+  Timestamp wts(50, 1);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::ABSTAIN);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+TEST_F(ServerTest, Phase1DepWait) {
+  proto::Transaction preparedTxn;
+  Timestamp preparedTs(50, 2);
+  PopulateTransaction({}, {{"key0", "val0"}}, preparedTs, preparedTxn);
+  Prepare(preparedTxn);
+
+  proto::Transaction txn;
+  Timestamp ts(100, 1);
+  PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, txn);
+  *txn.add_deps() = preparedTxn;
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+
+  EXPECT_CALL(*transport, SendMessage(::testing::_, ::testing::_,
+        ::testing::_)).Times(0);
+
+  HandlePhase1(clientAddress, phase1);
+}
+
+TEST_F(ServerTest, Phase1DepCommit) {
+  proto::Transaction preparedTxn;
+  Timestamp preparedTs(50, 2);
+  PopulateTransaction({}, {{"key0", "val0"}}, preparedTs, preparedTxn);
+  Prepare(preparedTxn);
+
+  proto::Transaction txn;
+  Timestamp ts(100, 1);
+  PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, txn);
+  *txn.add_deps() = preparedTxn;
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+  HandlePhase1(clientAddress, phase1);
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::COMMIT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  Commit(preparedTxn);
+}
+
+TEST_F(ServerTest, Phase1DepAbort) {
+  proto::Transaction preparedTxn;
+  Timestamp preparedTs(50, 2);
+  PopulateTransaction({}, {{"key0", "val0"}}, preparedTs, preparedTxn);
+  Prepare(preparedTxn);
+
+  proto::Transaction txn;
+  Timestamp ts(100, 1);
+  PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, txn);
+  *txn.add_deps() = preparedTxn;
+
+  proto::Phase1 phase1;
+  phase1.set_req_id(3);
+  phase1.set_txn_digest(TransactionDigest(txn));
+  *phase1.mutable_txn() = txn;
+  HandlePhase1(clientAddress, phase1);
+
+  proto::Phase1Reply expectedReply;
+  expectedReply.set_req_id(3);
+  expectedReply.set_status(REPLY_OK);
+  expectedReply.set_ccr(proto::Phase1Reply::ABORT);
+
+  EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
+        ExpectedMessage(expectedReply)));
+
+  Abort(preparedTxn);
 }
 
 }

@@ -194,33 +194,12 @@ void Server::HandlePhase1(const TransportAddress &remote,
   Timestamp retryTs;
   proto::CommittedProof conflict;
   proto::Phase1Reply::ConcurrencyControlResult result = DoOCCCheck(
+      msg.req_id(), remote,
       msg.txn_digest(), msg.txn(), retryTs, conflict);
   p1Decisions[msg.txn_digest()] = result;
 
   if (result != proto::Phase1Reply::WAIT) {
-    proto::Phase1Reply reply;
-    reply.set_req_id(msg.req_id());
-    reply.set_status(REPLY_OK);
-    reply.set_ccr(result);
-    /* TODO: are retries a thing?
-    if (result == proto::Phase1Reply::RETRY) {
-      retryTs.serialize(reply.mutable_retry_timestamp());
-    }*/
-
-    if (validateProofs) {
-      *reply.mutable_committed_conflict() = conflict;
-    }
-
-    if (signedMessages) {
-      proto::SignedMessage signedMessage;
-      signedMessage.set_msg(reply.SerializeAsString());
-      signedMessage.set_type(reply.GetTypeName());
-      signedMessage.set_process_id(id);
-      SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
-      transport->SendMessage(this, remote, signedMessage);
-    } else {
-      transport->SendMessage(this, remote, reply);
-    }
+    SendPhase1Reply(msg.req_id(), result, conflict, remote);
   }
 }
 
@@ -305,13 +284,14 @@ void Server::HandleAbort(const TransportAddress &remote,
 }
 
 proto::Phase1Reply::ConcurrencyControlResult Server::DoOCCCheck(
+    uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
     Timestamp &retryTs, proto::CommittedProof &conflict) {
   switch (occType) {
     case TAPIR:
       return DoTAPIROCCCheck(txnDigest, txn, retryTs);
     case MVTSO:
-      return DoMVTSOOCCCheck(txnDigest, txn, conflict);
+      return DoMVTSOOCCCheck(reqId, remote, txnDigest, txn, conflict);
     default:
       Panic("Unknown OCC type: %d.", occType);
       return proto::Phase1Reply::ABORT;
@@ -452,6 +432,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
 }
 
 proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
+    uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
     proto::CommittedProof &conflict) {
   Timestamp ts(txn.timestamp());
@@ -584,7 +565,16 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
         aborted.find(depDigest) == aborted.end()) {
       allFinished = false;
       dependents[depDigest].insert(txnDigest);
-      waitingDependencies[txnDigest].insert(depDigest);
+      auto dependenciesItr = waitingDependencies.find(txnDigest);
+      if (dependenciesItr == waitingDependencies.end()) {
+        auto inserted =waitingDependencies.insert(std::make_pair(txnDigest,
+              WaitingDependency()));
+        UW_ASSERT(inserted.second);
+        dependenciesItr = inserted.first;
+      }
+      dependenciesItr->second.reqId = reqId;
+      dependenciesItr->second.remote = &remote;
+      dependenciesItr->second.deps.insert(depDigest);
     }
   }
 
@@ -717,14 +707,16 @@ void Server::CheckDependents(const std::string &txnDigest) {
   if (dependentsItr != dependents.end()) {
     for (const auto &dependent : dependentsItr->second) {
       auto dependenciesItr = waitingDependencies.find(dependent);
-      if (dependenciesItr == waitingDependencies.end()) {
-        CheckDependencies(dependent);
-      } else {
-        dependenciesItr->second.erase(txnDigest);
-        if (dependenciesItr->second.size() == 0) {
-          CheckDependencies(dependent);
-          waitingDependencies.erase(dependent);
-        }
+      UW_ASSERT(dependenciesItr != waitingDependencies.end());
+
+      dependenciesItr->second.deps.erase(txnDigest);
+      if (dependenciesItr->second.deps.size() == 0) {
+        proto::Phase1Reply::ConcurrencyControlResult result = CheckDependencies(
+            dependent);
+        waitingDependencies.erase(dependent);
+        proto::CommittedProof conflict;
+        SendPhase1Reply(dependenciesItr->second.reqId, result, conflict,
+            *dependenciesItr->second.remote);
       }
     }
   }
@@ -757,6 +749,35 @@ bool Server::CheckHighWatermark(const Timestamp &ts) {
   // add delta to current local time
   highWatermark.setTimestamp(highWatermark.getTimestamp() + timeDelta);
   return ts > highWatermark;
+}
+
+void Server::SendPhase1Reply(uint64_t reqId,
+    proto::Phase1Reply::ConcurrencyControlResult result,
+    const proto::CommittedProof &conflict, const TransportAddress &remote) {
+  proto::Phase1Reply reply;
+  reply.set_req_id(reqId);
+  reply.set_status(REPLY_OK);
+  reply.set_ccr(result);
+  /* TODO: are retries a thing?
+  if (result == proto::Phase1Reply::RETRY) {
+    retryTs.serialize(reply.mutable_retry_timestamp());
+  }*/
+
+  if (validateProofs) {
+    *reply.mutable_committed_conflict() = conflict;
+  }
+
+  if (signedMessages) {
+    proto::SignedMessage signedMessage;
+    signedMessage.set_msg(reply.SerializeAsString());
+    signedMessage.set_type(reply.GetTypeName());
+    signedMessage.set_process_id(id);
+    SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
+    transport->SendMessage(this, remote, signedMessage);
+  } else {
+    transport->SendMessage(this, remote, reply);
+  }
+
 }
 
 } // namespace indicusstore
