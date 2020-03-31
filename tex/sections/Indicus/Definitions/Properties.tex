@@ -50,7 +50,7 @@ An execution is uncivil iff (a) there is no bound on message delay (asynchrony) 
 \subsection{Assumptions on Behaviors}
 \subsubsection{Notes}
 Clients can do what they want, but we assume there is access control to bound the reach. We dont expect clients to explicitly try to circumvent others progress (this requires knowledge of what they are doing in the first place).
-We expect a level of performance, if you dont meet it you are not fit for the system.
+We expect a level of performance, if you dont meet it you are not fit for the system. (Slow behavior is misbehavior)
 Replicas can enforce such access lists, i.e. via timeouts of blacklists.
 unlikely that a Client can lock out a lot of the system, would mean he has total access control.
 

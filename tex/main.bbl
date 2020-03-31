@@ -1,8 +1,79 @@
 \begin{thebibliography}{10}
 
+\bibitem{abd2005fault}
+Michael Abd-El-Malek, Gregory~R Ganger, Garth~R Goodson, Michael~K Reiter, and
+  Jay~J Wylie.
+\newblock Fault-scalable byzantine fault-tolerant services.
+\newblock {\em ACM SIGOPS Operating Systems Review}, 39(5):59--74, 2005.
+
+\bibitem{abraham2017revisiting}
+Ittai Abraham, Guy Gueta, Dahlia Malkhi, Lorenzo Alvisi, Rama Kotla, and
+  Jean-Philippe Martin.
+\newblock Revisiting fast practical byzantine fault tolerance.
+\newblock {\em arXiv preprint arXiv:1712.01367}, 2017.
+
+\bibitem{abraham2018revisiting}
+Ittai Abraham, Guy Gueta, Dahlia Malkhi, and Jean-Philippe Martin.
+\newblock Revisiting fast practical byzantine fault tolerance: Thelma, velma,
+  and zelma.
+\newblock {\em arXiv preprint arXiv:1801.10022}, 2018.
+
+\bibitem{al2017chainspace}
+Mustafa Al-Bassam, Alberto Sonnino, Shehar Bano, Dave Hrycyszyn, and George
+  Danezis.
+\newblock Chainspace: A sharded smart contracts platform.
+\newblock {\em arXiv preprint arXiv:1708.03778}, 2017.
+
 \bibitem{AppleSup}
 Apple.
 \newblock Apple supplier list, 2019.
+
+\bibitem{arun2019ezbft}
+Balaji Arun, Sebastiano Peluso, and Binoy Ravindran.
+\newblock ezbft: Decentralizing byzantine fault-tolerant state machine
+  replication.
+\newblock In {\em 2019 IEEE 39th International Conference on Distributed
+  Computing Systems (ICDCS)}, pages 565--577. IEEE, 2019.
+
+\bibitem{bazzi2018clairvoyant}
+Rida Bazzi and Maurice Herlihy.
+\newblock Clairvoyant state machine replications.
+\newblock In {\em International Symposium on Stabilizing, Safety, and Security
+  of Distributed Systems}, pages 254--268. Springer, 2018.
+
+\bibitem{ben1983another}
+Michael Ben-Or.
+\newblock Another advantage of free choice: Completely asynchronous agreement
+  protocols (extended abstract),".
+\newblock In {\em Proceedings of the 2nd ACM Annual Symposium on Principles of
+  Distributed Computing, Montreal, Quebec}, pages 27--30, 1983.
+
+\bibitem{bessani2014state}
+Alysson Bessani, Jo{\~a}o Sousa, and Eduardo~EP Alchieri.
+\newblock State machine replication for the masses with bft-smart.
+\newblock In {\em 2014 44th Annual IEEE/IFIP International Conference on
+  Dependable Systems and Networks}, pages 355--362. IEEE, 2014.
+
+\bibitem{buchman2016tendermint}
+Ethan Buchman.
+\newblock {\em Tendermint: Byzantine fault tolerance in the age of
+  blockchains}.
+\newblock PhD thesis, 2016.
+
+\bibitem{castro1999practical}
+Miguel Castro, Barbara Liskov, et~al.
+\newblock Practical byzantine fault tolerance.
+\newblock In {\em OSDI}, volume~99, pages 173--186, 1999.
+
+\bibitem{}
+At {LAX}, computer glitch delays 20,000 passengers.
+\newblock http://travel.latimes.com/articles/la-trw-lax12aug12.
+
+\bibitem{clement2009making}
+Allen Clement, Edmund~L Wong, Lorenzo Alvisi, Michael Dahlin, and Mirco
+  Marchetti.
+\newblock Making byzantine fault tolerant systems tolerate byzantine faults.
+\newblock In {\em NSDI}, volume~9, pages 153--168, 2009.
 
 \bibitem{StateFarmQuorum2}
 Coindesk.
@@ -14,6 +85,31 @@ Coindesk.
 \newblock Jpmorgan tests private blockchain to track auto dealer inventory,
   November, 2019.
 
+\bibitem{cowling2006hq}
+James Cowling, Daniel Myers, Barbara Liskov, Rodrigo Rodrigues, and Liuba
+  Shrira.
+\newblock Hq replication: A hybrid quorum protocol for byzantine fault
+  tolerance.
+\newblock In {\em Proceedings of the 7th symposium on Operating systems design
+  and implementation}, pages 177--190, 2006.
+
+\bibitem{duan2014hbft}
+Sisi Duan, Sean Peisert, and Karl~N Levitt.
+\newblock hbft: speculative byzantine fault tolerance with minimum cost.
+\newblock {\em IEEE Transactions on Dependable and Secure Computing},
+  12(1):58--70, 2014.
+
+\bibitem{duan2018beat}
+Sisi Duan, Michael~K Reiter, and Haibin Zhang.
+\newblock Beat: Asynchronous bft made practical.
+\newblock In {\em Proceedings of the 2018 ACM SIGSAC Conference on Computer and
+  Communications Security}, pages 2028--2041, 2018.
+
+\bibitem{fischer1985impossibility}
+Michael~J Fischer, Nancy~A Lynch, and Michael~S Paterson.
+\newblock Impossibility of distributed consensus with one faulty process.
+\newblock {\em Journal of the ACM (JACM)}, 32(2):374--382, 1985.
+
 \bibitem{StateFarmQuorum}
 Forbes.
 \newblock State farm and usaa see stark increase in efficiency when testing
@@ -21,7 +117,7 @@ Forbes.
 
 \bibitem{Hyperledger}
 The~Linux Foundation.
-\newblock Hyperledger fabric, 2020.
+\newblock An introduction to hyperledger, July, 2018.
 
 \bibitem{HyperledgerHealth}
 The~Linux Foundation.
@@ -33,20 +129,174 @@ The~Linux Foundation.
 \newblock Optimizing wholesale intercarrier settlement with hyperledger fabric
   blockchain, November2019.
 
+\bibitem{garcia2011efficient}
+Rui Garcia, Rodrigo Rodrigues, and Nuno Pregui{\c{c}}a.
+\newblock Efficient middleware for byzantine fault tolerant database
+  replication.
+\newblock In {\em Proceedings of the sixth conference on Computer systems},
+  pages 107--122, 2011.
+
+\bibitem{gueta2018sbft}
+Guy~Golan Gueta, Ittai Abraham, Shelly Grossman, Dahlia Malkhi, Benny Pinkas,
+  Michael~K Reiter, Dragos-Adrian Seredinschi, Orr Tamir, and Alin Tomescu.
+\newblock Sbft: a scalable decentralized trust infrastructure for blockchains.
+\newblock {\em arXiv preprint arXiv:1804.01626}, 2018.
+
+\bibitem{herlihy2016enhancing}
+Maurice Herlihy and Mark Moir.
+\newblock Enhancing accountability and trust in distributed ledgers.
+\newblock {\em arXiv preprint arXiv:1606.07490}, 2016.
+
+\bibitem{kokoris2018omniledger}
+Eleftherios Kokoris-Kogias, Philipp Jovanovic, Linus Gasser, Nicolas Gailly,
+  Ewa Syta, and Bryan Ford.
+\newblock Omniledger: A secure, scale-out, decentralized ledger via sharding.
+\newblock In {\em 2018 IEEE Symposium on Security and Privacy (SP)}, pages
+  583--598. IEEE, 2018.
+
 \bibitem{kotla2007zyzzyva}
 Ramakrishna Kotla, Lorenzo Alvisi, Mike Dahlin, Allen Clement, and Edmund Wong.
 \newblock Zyzzyva: speculative byzantine fault tolerance.
 \newblock {\em ACM SIGOPS Operating Systems Review}, 41(6):45--58, 2007.
 
+\bibitem{lamport2011byzantizing}
+Leslie Lamport.
+\newblock Byzantizing paxos by refinement.
+\newblock In {\em International Symposium on Distributed Computing}, pages
+  211--224. Springer, 2011.
+
+\bibitem{lamport2019byzantine}
+Leslie Lamport, Robert Shostak, and Marshall Pease.
+\newblock The byzantine generals problem.
+\newblock In {\em Concurrency: the Works of Leslie Lamport}, pages 203--226.
+  2019.
+
+\bibitem{liskov2006tolerating}
+Barbara Liskov and Rodrigo Rodrigues.
+\newblock Tolerating byzantine faulty clients in a quorum system.
+\newblock In {\em 26th IEEE International Conference on Distributed Computing
+  Systems (ICDCS'06)}, pages 34--34. IEEE, 2006.
+
+\bibitem{malkhi2019flexible}
+Dahlia Malkhi, Kartik Nayak, and Ling Ren.
+\newblock Flexible byzantine fault tolerance.
+\newblock In {\em Proceedings of the 2019 ACM SIGSAC Conference on Computer and
+  Communications Security}, pages 1041--1053, 2019.
+
+\bibitem{martin2006fast}
+J-P Martin and Lorenzo Alvisi.
+\newblock Fast byzantine consensus.
+\newblock {\em IEEE Transactions on Dependable and Secure Computing},
+  3(3):202--215, 2006.
+
+\bibitem{miller2016honey}
+Andrew Miller, Yu~Xia, Kyle Croman, Elaine Shi, and Dawn Song.
+\newblock The honey badger of bft protocols.
+\newblock In {\em Proceedings of the 2016 ACM SIGSAC Conference on Computer and
+  Communications Security}, pages 31--42, 2016.
+
 \bibitem{EthereumQuorum}
 JP~Morgan.
 \newblock Quorum, 2020.
 
-\bibitem{zhang2016operation}
-Irene Zhang, Naveen~Kr Sharma, Adriana Szekeres, Arvind Krishnamurthy, and
-  Dan~RK Ports.
-\newblock When is operation ordering required in replicated transactional
-  storage?
-\newblock {\em IEEE Data Eng. Bull.}, 39(1):27--38, 2016.
+\bibitem{mu2016consolidating}
+Shuai Mu, Lamont Nelson, Wyatt Lloyd, and Jinyang Li.
+\newblock Consolidating concurrency control and consensus for commits under
+  conflicts.
+\newblock In {\em 12th $\{$USENIX$\}$ Symposium on Operating Systems Design and
+  Implementation ($\{$OSDI$\}$ 16)}, pages 517--532, 2016.
+
+\bibitem{ongaro2014search}
+Diego Ongaro and John Ousterhout.
+\newblock In search of an understandable consensus algorithm.
+\newblock In {\em 2014 $\{$USENIX$\}$ Annual Technical Conference
+  ($\{$USENIX$\}$$\{$ATC$\}$ 14)}, pages 305--319, 2014.
+
+\bibitem{padilha2016callinicos}
+Ricardo Padilha, Enrique Fynn, Robert Soul{\'e}, and Fernando Pedone.
+\newblock Callinicos: Robust transactional storage for distributed data
+  structures.
+\newblock In {\em 2016 $\{$USENIX$\}$ Annual Technical Conference
+  ($\{$USENIX$\}$$\{$ATC$\}$ 16)}, pages 223--235, 2016.
+
+\bibitem{padilha2013augustus}
+Ricardo Padilha and Fernando Pedone.
+\newblock Augustus: Scalable and robust storage for cloud applications.
+\newblock In {\em Proceedings of the 8th ACM European Conference on Computer
+  Systems}, EuroSys '13, pages 99--112.
+
+\bibitem{park2019exploiting}
+Seo~Jin Park and John Ousterhout.
+\newblock Exploiting commutativity for practical fast replication.
+\newblock In {\em 16th $\{$USENIX$\}$ Symposium on Networked Systems Design and
+  Implementation ($\{$NSDI$\}$ 19)}, pages 47--64, 2019.
+
+\bibitem{pedone2012byzantine}
+Fernando Pedone and Nicolas Schiper.
+\newblock Byzantine fault-tolerant deferred update replication.
+\newblock {\em Journal of the Brazilian Computer Society}, 18(1):3--18, 2012.
+
+\bibitem{pervez2018comparative}
+Huma Pervez, Muhammad Muneeb, Muhammad~Usama Irfan, and Irfan~Ul Haq.
+\newblock A comparative analysis of dag-based blockchain architectures.
+\newblock In {\em 2018 12th International Conference on Open Source Systems and
+  Technologies (ICOSST)}, pages 27--34. IEEE, 2018.
+
+\bibitem{pires2018generalized}
+Miguel Pires, Srivatsan Ravi, and Rodrigo Rodrigues.
+\newblock Generalized paxos made byzantine (and less complex).
+\newblock {\em Algorithms}, 11(9):141, 2018.
+
+\bibitem{shrestha2019revisiting}
+Nibesh Shrestha and Mohan Kumar.
+\newblock Revisiting ezbft: A decentralized byzantine fault tolerant protocol
+  with speculation.
+\newblock {\em arXiv preprint arXiv:1909.03990}, 2019.
+
+\bibitem{singh2008bft}
+Atul Singh, Tathagata Das, Petros Maniatis, Peter Druschel, and Timothy Roscoe.
+\newblock Bft protocols under fire.
+\newblock In {\em NSDI}, volume~8, pages 189--204, 2008.
+
+\bibitem{stathakopoulou2019mir}
+Chrysoula Stathakopoulou, Tudor David, and Marko Vukoli{\'c}.
+\newblock Mir-bft: High-throughput bft for blockchains.
+\newblock {\em arXiv preprint arXiv:1906.05552}, 2019.
+
+\bibitem{vandiver2007tolerating}
+Ben Vandiver, Hari Balakrishnan, Barbara Liskov, and Sam Madden.
+\newblock Tolerating byzantine faults in transaction processing systems using
+  commit barrier scheduling.
+\newblock In {\em Proceedings of twenty-first ACM SIGOPS symposium on Operating
+  systems principles}, pages 59--72, 2007.
+
+\bibitem{yan2018carousel}
+Xinan Yan, Linguan Yang, Hongbo Zhang, Xiayue~Charles Lin, Bernard Wong,
+  Kenneth Salem, and Tim Brecht.
+\newblock Carousel: Low-latency transaction processing for globally-distributed
+  data.
+\newblock In {\em Proceedings of the 2018 International Conference on
+  Management of Data}, pages 231--243, 2018.
+
+\bibitem{yin2003separating}
+Jian Yin, Jean-Philippe Martin, Arun Venkataramani, Lorenzo Alvisi, and Mike
+  Dahlin.
+\newblock Separating agreement from execution for byzantine fault tolerant
+  services.
+\newblock In {\em Proceedings of the nineteenth ACM symposium on Operating
+  systems principles}, pages 253--267, 2003.
+
+\bibitem{yin2019hotstuff}
+Maofan Yin, Dahlia Malkhi, Michael~K Reiter, Guy~Golan Gueta, and Ittai
+  Abraham.
+\newblock Hotstuff: Bft consensus with linearity and responsiveness.
+\newblock In {\em Proceedings of the 2019 ACM Symposium on Principles of
+  Distributed Computing}, pages 347--356, 2019.
+
+\bibitem{zamani2018rapidchain}
+Mahdi Zamani, Mahnush Movahedi, and Mariana Raykova.
+\newblock Rapidchain: Scaling blockchain via full sharding.
+\newblock In {\em Proceedings of the 2018 ACM SIGSAC Conference on Computer and
+  Communications Security}, pages 931--948, 2018.
 
 \end{thebibliography}
