@@ -1,0 +1,15 @@
+%-------------------------------------------------------------------------------
+\section{Discussion}
+%-------------------------------------------------------------------------------
+1. Explain or prove how we satisfy byzantine independence and why we want it:
+
+byz participants cannot reactively make aborts happen if they do not control the network. 
+This is stronger than a leader based setting.  A byzantine leader can always reactively create a conflicting TX. An honest leader would not do this. 
+Thus we are equivalent to an honest leader.
+
+(If you know the keys beforehand it is possible to create mutually aborting transactions to form dependencies. But this requires additional knowledge; arguably dependent on the network too).
+
+
+2. Can use witnesses instead of full replicas to reduce replication cost. Those need to only contain key/version and no values.
+
+
