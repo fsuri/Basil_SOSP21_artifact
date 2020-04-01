@@ -119,6 +119,7 @@ class ShardClient : public TransportReceiver {
     std::string maxValue;
     uint64_t numReplies;
     uint64_t numOKReplies;
+    std::map<Timestamp, std::pair<proto::PreparedWrite, uint64_t>> prepared;
     proto::Transaction dep;
     bool hasDep;
     read_callback gcb;

@@ -159,9 +159,6 @@ void Client::Put(const std::string &key, const std::string &value,
 
 void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     uint32_t timeout) {
-  // TODO: this codepath is sketchy and probably has a bug (especially in the
-  // failure cases)
-
   uint64_t reqId = lastReqId++;
   PendingRequest *req = new PendingRequest(reqId);
   pendingReqs[reqId] = req;

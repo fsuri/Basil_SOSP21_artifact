@@ -31,6 +31,8 @@
 
 #include "store/indicusstore/shardclient.h"
 
+#include <google/protobuf/util/message_differencer.h>
+
 #include "store/indicusstore/common.h"
 
 namespace indicusstore {
@@ -321,16 +323,32 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
 
   if (hasPrepared) {
     Timestamp preparedTs(prepared.timestamp());
-    if (itr->second->maxTs < preparedTs) {
-      itr->second->maxTs = preparedTs;
-      itr->second->maxValue = prepared.value();
-      itr->second->dep = prepared.txn();
+    auto preparedItr = itr->second->prepared.find(preparedTs);
+    if (preparedItr == itr->second->prepared.end()) {
+      itr->second->prepared.insert(std::make_pair(preparedTs,
+            std::make_pair(prepared, 1)));
+    } else if (::google::protobuf::util::MessageDifferencer::Equals(preparedItr->second.first, prepared)) {
+      // TODO: MessageDifferencer::Equals is too slow. Need custom implementation
+      preparedItr->second.second += 1;
     }
   }
 
   if (itr->second->numOKReplies >= itr->second->rqs ||
       itr->second->numReplies == static_cast<uint64_t>(config->n)) {
     PendingQuorumGet *req = itr->second;
+    for (auto preparedItr = req->prepared.rbegin();
+        preparedItr != req->prepared.rend(); ++preparedItr) {
+      if (preparedItr->first < req->maxTs) {
+        break;
+      }
+
+      if (preparedItr->second.second >= static_cast<uint64_t>(config->f + 1)) {
+        req->maxTs = preparedItr->first;
+        req->maxValue = preparedItr->second.first.value();
+        req->dep = preparedItr->second.first.txn();
+        break;
+      }
+    }
     read_callback gcb = req->gcb;
     std::string key = req->key;
     pendingGets.erase(itr);
