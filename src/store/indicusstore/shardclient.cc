@@ -58,6 +58,7 @@ ShardClient::~ShardClient() {
 void ShardClient::ReceiveMessage(const TransportAddress &remote,
       const std::string &t, const std::string &d, void *meta_data) {
   proto::SignedMessage signedMessage;
+  proto::PackedMessage packedMessage;
   proto::ReadReply readReply;
   proto::Phase1Reply phase1Reply;
   proto::Phase2Reply phase2Reply;
@@ -65,11 +66,11 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   std::string type;
   std::string data;
   if (t == signedMessage.GetTypeName()) {
-    signedMessage.ParseFromString(d);
-    if (ValidateSignedMessage(signedMessage, keyManager)) {
-      type = signedMessage.type();
-      data = signedMessage.msg();
-    } else {
+    if (!signedMessage.ParseFromString(d)) {
+      return;
+    }
+
+    if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
       return;
     }
   } else {
@@ -114,7 +115,6 @@ void ShardClient::Get(uint64_t id, const std::string &key,
 
   proto::Read read;
   read.set_req_id(reqId);
-  read.set_txn_id(id);
   read.set_key(key);
   *read.mutable_timestamp() = ts;
 
@@ -281,9 +281,9 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   }
 
   if (validateProofs) {
-    // TODO: does write proof need to be signed?
-    if (!ValidateCommittedProof(reply.committed_proof(), itr->second->key,
-          reply.committed_value(), reply.committed_timestamp())) {
+    if (!ValidateTransactionWrite(reply.committed_proof(), itr->second->key,
+          reply.committed_value(), reply.committed_timestamp(), config,
+          signedMessages, keyManager)) {
       // invalid replies can be treated as if we never received a reply from
       //     a crashed replica
       return;
@@ -305,8 +305,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   bool hasPrepared = false;
   if (signedMessages) {
     if (reply.has_signed_prepared()) {
-      if (ValidateSignedMessage(reply.signed_prepared(), keyManager)) {
-        prepared.ParseFromString(reply.signed_prepared().msg());
+      if (ValidateSignedMessage(reply.signed_prepared(), keyManager, prepared)) {
         hasPrepared = true;
       } else {
         // TODO: should we continue with the committed value?
@@ -450,7 +449,7 @@ void ShardClient::Phase1Decision(
     std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr) {
   bool fast = false;
   proto::CommitDecision decision = IndicusShardDecide(itr->second->phase1Replies,
-      config, validateProofs, fast);
+      config, validateProofs, signedMessages, keyManager, fast);
   phase1_callback pcb = itr->second->pcb;
   pcb(decision, fast, itr->second->phase1Replies,
       itr->second->signedPhase1Replies);

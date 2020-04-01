@@ -9,11 +9,15 @@ enum CommitDecision {
   ABORT = 1;
 }
 
-message SignedMessage {
+message PackedMessage {
   required bytes msg = 1;
   required string type = 2;
-  required uint64 process_id = 3;
-  required bytes signature = 4;
+}
+
+message SignedMessage {
+  required bytes packed_msg = 1;
+  required uint64 process_id = 2;
+  required bytes signature = 3;
 }
 
 message SignedMessages {
@@ -22,10 +26,8 @@ message SignedMessages {
 
 message Read {
   required uint64 req_id = 1;
-  required uint64 txn_id = 2;
-  required bytes key = 3;
-  // timestamps are (time, client_id, txn_id)
-  required TimestampMessage timestamp = 4;
+  required bytes key = 2;
+  required TimestampMessage timestamp = 3;
 }
 
 message GroupedPhase1Replies {
@@ -95,6 +97,7 @@ message Phase1Reply {
   required int32 status = 2;
   required ConcurrencyControlResult ccr = 3;
   optional CommittedProof committed_conflict = 4;
+  optional bytes txn_digest = 5;
 }
 
 message Phase1Replies {

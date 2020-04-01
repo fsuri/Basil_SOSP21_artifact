@@ -15,7 +15,13 @@
 namespace indicusstore {
 
 bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
-    KeyManager *keyManager);
+    KeyManager *keyManager, ::google::protobuf::Message &plaintextMsg);
+
+bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
+    KeyManager *keyManager, std::string &data, std::string &type);
+
+bool __PreValidateSignedMessage(const proto::SignedMessage &signedMessage,
+    KeyManager *keyManager, proto::PackedMessage &packedMessage);
 
 void SignMessage(const ::google::protobuf::Message &msg,
     const crypto::PrivKey &privateKey, uint64_t processId,
@@ -23,17 +29,33 @@ void SignMessage(const ::google::protobuf::Message &msg,
 
 proto::CommitDecision IndicusDecide(
     const std::map<int, std::vector<proto::Phase1Reply>> &replies,
-    const transport::Configuration *config, bool validateProofs);
+    const transport::Configuration *config, bool validateProofs,
+    bool signedMessages, KeyManager *keyManager);
 
 proto::CommitDecision IndicusShardDecide(
     const std::vector<proto::Phase1Reply> &replies,
-    const transport::Configuration *config, bool validateProofs, bool &fast);
+    const transport::Configuration *config, bool validateProofs,
+    bool signedMessages, KeyManager *keyManager, bool &fast);
 
-bool ValidateCommittedProof(const proto::CommittedProof &proof,
-    const std::string &key, const std::string &val, const Timestamp &timestamp);
+bool ValidateTransactionWrite(const proto::CommittedProof &proof,
+    const std::string &key, const std::string &val, const Timestamp &timestamp,
+    const transport::Configuration *config, bool signedMessages,
+    KeyManager *keyManager);
 
 // check must validate that proof replies are from all involved shards
-bool ValidateProof(const proto::CommittedProof &proof);
+bool ValidateProof(const proto::CommittedProof &proof,
+    const transport::Configuration *config, bool signedMessages,
+    KeyManager *keyManager);
+
+bool ValidateP1RepliesCommit(
+    const std::map<int, std::vector<proto::Phase1Reply>> &groupedP1Replies,
+    const std::string &txnDigest, const proto::Transaction &txn,
+    const transport::Configuration *config);
+
+bool ValidateP2RepliesCommit(
+    const std::vector<proto::Phase2Reply> &p2Replies,
+    const std::string &txnDigest, const proto::Transaction &txn,
+    const transport::Configuration *config);
 
 std::string TransactionDigest(const proto::Transaction &txn);
 

@@ -55,6 +55,7 @@ Server::~Server() {
 void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &t, const std::string &d, void *meta_data) {
   proto::SignedMessage signedMessage;
+  proto::PackedMessage packedMessage;
   proto::Read read;
   proto::Phase1 phase1;
   proto::Phase2 phase2;
@@ -64,11 +65,11 @@ void Server::ReceiveMessage(const TransportAddress &remote,
   std::string type;
   std::string data;
   if (t == signedMessage.GetTypeName()) {
-    signedMessage.ParseFromString(d);
-    if (ValidateSignedMessage(signedMessage, keyManager)) {
-      type = signedMessage.type();
-      data = signedMessage.msg();
-    } else {
+    if (!signedMessage.ParseFromString(d)) {
+      return;
+    }
+
+    if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
       return;
     }
   } else {
@@ -160,9 +161,6 @@ void Server::HandleRead(const TransportAddress &remote,
 
       if (signedMessages) {
         proto::SignedMessage signedMessage;
-        signedMessage.set_msg(preparedWrite.SerializeAsString());
-        signedMessage.set_type(preparedWrite.GetTypeName());
-        signedMessage.set_process_id(id);
         SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id, signedMessage);
         *reply.mutable_signed_prepared() = signedMessage;
       } else {
@@ -174,9 +172,6 @@ void Server::HandleRead(const TransportAddress &remote,
 
   if (signedMessages) {
     proto::SignedMessage signedMessage;
-    signedMessage.set_msg(reply.SerializeAsString());
-    signedMessage.set_type(reply.GetTypeName());
-    signedMessage.set_process_id(id);
     SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
     transport->SendMessage(this, remote, signedMessage);
   } else {
@@ -214,8 +209,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
     for (const auto &group : msg.signed_p1_replies().replies()) {
       std::vector<proto::Phase1Reply> phase1Replies;
       for (const auto &signedPhase1Reply : group.second.msgs()) {
-        if (ValidateSignedMessage(signedPhase1Reply, keyManager)) {
-          phase1Reply.ParseFromString(signedPhase1Reply.msg());
+        if (ValidateSignedMessage(signedPhase1Reply, keyManager, phase1Reply)) {
           phase1Replies.push_back(phase1Reply);
         } else {
           validated = false;
@@ -236,7 +230,8 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   proto::CommitDecision decision;
   if (validated) {
-    decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs);
+    decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs,
+        signedMessages, keyManager);
   } else {
     decision = proto::CommitDecision::ABORT;
   }
@@ -249,9 +244,6 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   if (signedMessages) {
     proto::SignedMessage signedMessage;
-    signedMessage.set_msg(reply.SerializeAsString());
-    signedMessage.set_type(reply.GetTypeName());
-    signedMessage.set_process_id(id);
     SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
     transport->SendMessage(this, remote, signedMessage);
   } else {
@@ -265,7 +257,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
       msg.req_id(), msg.decision());
 
   if (validateProofs) {
-    if (!ValidateProof(msg.proof())) {
+    if (!ValidateProof(msg.proof(), &config, signedMessages, keyManager)) {
       // ignore Writeback without valid proof
       return;
     }
@@ -769,9 +761,6 @@ void Server::SendPhase1Reply(uint64_t reqId,
 
   if (signedMessages) {
     proto::SignedMessage signedMessage;
-    signedMessage.set_msg(reply.SerializeAsString());
-    signedMessage.set_type(reply.GetTypeName());
-    signedMessage.set_process_id(id);
     SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
     transport->SendMessage(this, remote, signedMessage);
   } else {
