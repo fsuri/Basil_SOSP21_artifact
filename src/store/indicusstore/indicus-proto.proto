@@ -117,6 +117,7 @@ message Phase2 {
 message Phase2Reply {
   required uint64 req_id = 1;
   required CommitDecision decision = 2;
+  optional bytes txn_digest = 3;
 }
 
 message Phase2Replies {

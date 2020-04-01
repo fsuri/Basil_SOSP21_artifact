@@ -15,10 +15,12 @@ void GenerateTestConfig(int g, int f, std::stringstream &ss) {
 
 void PopulateTransaction(const std::map<std::string, Timestamp> &readSet,
     const std::map<std::string, std::string> &writeSet, const Timestamp &ts,
-    proto::Transaction &txn) {
+    const std::set<int> &involvedGroups, proto::Transaction &txn) {
   txn.set_client_id(1);
   txn.set_client_seq_num(1);
-  txn.add_involved_groups(0);
+  for (const auto group : involvedGroups) {
+    txn.add_involved_groups(group);
+  }
   for (const auto &read : readSet) {
     ReadMessage *readMsg = txn.add_read_set();
     readMsg->set_key(read.first);

@@ -140,7 +140,7 @@ TEST_F(ServerTest, ReadNoData) {
 TEST_F(ServerTest, ReadCommittedData) {
   proto::Transaction txn;
   Timestamp wts(50, 1);
-  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, {0}, txn);
   Commit(txn);
 
   proto::Read read;
@@ -165,7 +165,7 @@ TEST_F(ServerTest, ReadCommittedData) {
 TEST_F(ServerTest, ReadPreparedData) {
   proto::Transaction txn;
   Timestamp wts(50, 1);
-  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, {0}, txn);
   Prepare(txn);
 
   proto::Read read;
@@ -191,7 +191,7 @@ TEST_F(ServerTest, ReadPreparedData) {
 TEST_F(ServerTest, Phase1Commit) {
   proto::Transaction txn;
   Timestamp wts(50, 1);
-  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -216,12 +216,13 @@ TEST_F(ServerTest, Phase1Commit) {
 TEST_F(ServerTest, Phase1CommittedReadConflictAbort) {
   proto::Transaction committedTxn;
   Timestamp committedRts(55, 2);
-  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, committedTxn);
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, {0},
+      committedTxn);
   Commit(committedTxn);
 
   proto::Transaction txn;
   Timestamp wts(50, 1);
-  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -246,12 +247,13 @@ TEST_F(ServerTest, Phase1CommittedReadConflictAbort) {
 TEST_F(ServerTest, Phase1CommittedReadConflictCommitNewerTS) {
   proto::Transaction committedTxn;
   Timestamp committedRts(55, 2);
-  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, committedTxn);
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, {0},
+      committedTxn);
   Commit(committedTxn);
 
   proto::Transaction txn;
   Timestamp wts(60, 1);
-  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -276,12 +278,13 @@ TEST_F(ServerTest, Phase1CommittedReadConflictCommitNewerTS) {
 TEST_F(ServerTest, Phase1CommittedReadConflictCommitOlderTS) {
   proto::Transaction committedTxn;
   Timestamp committedRts(55, 2);
-  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, committedTxn);
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, {0},
+      committedTxn);
   Commit(committedTxn);
 
   proto::Transaction txn;
   Timestamp wts(40, 1);
-  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -306,12 +309,12 @@ TEST_F(ServerTest, Phase1CommittedReadConflictCommitOlderTS) {
 TEST_F(ServerTest, Phase1CommittedWriteConflictAbort) {
   proto::Transaction committedTxn;
   Timestamp committedRts(50, 2);
-  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, committedTxn);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, {0}, committedTxn);
   Commit(committedTxn);
 
   proto::Transaction txn;
   Timestamp wts(55, 1);
-  PopulateTransaction({{"key0", Timestamp(45, 1)}}, {}, wts, txn);
+  PopulateTransaction({{"key0", Timestamp(45, 1)}}, {}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -336,12 +339,12 @@ TEST_F(ServerTest, Phase1CommittedWriteConflictAbort) {
 TEST_F(ServerTest, Phase1CommittedWriteConflictCommitNewerReadVersion) {
   proto::Transaction committedTxn;
   Timestamp committedRts(50, 2);
-  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, committedTxn);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, {0}, committedTxn);
   Commit(committedTxn);
 
   proto::Transaction txn;
   Timestamp wts(55, 1);
-  PopulateTransaction({{"key0", Timestamp(52, 1)}}, {}, wts, txn);
+  PopulateTransaction({{"key0", Timestamp(52, 1)}}, {}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -366,12 +369,12 @@ TEST_F(ServerTest, Phase1CommittedWriteConflictCommitNewerReadVersion) {
 TEST_F(ServerTest, Phase1CommittedWriteConflictCommitOlderTS) {
   proto::Transaction committedTxn;
   Timestamp committedRts(50, 2);
-  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, committedTxn);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, {0}, committedTxn);
   Commit(committedTxn);
 
   proto::Transaction txn;
   Timestamp wts(49, 1);
-  PopulateTransaction({{"key0", Timestamp(48, 1)}}, {}, wts, txn);
+  PopulateTransaction({{"key0", Timestamp(48, 1)}}, {}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -396,12 +399,13 @@ TEST_F(ServerTest, Phase1CommittedWriteConflictCommitOlderTS) {
 TEST_F(ServerTest, Phase1PreparedReadConflictAbort) {
   proto::Transaction preparedTxn;
   Timestamp committedRts(55, 2);
-  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, preparedTxn);
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, {0},
+      preparedTxn);
   Prepare(preparedTxn);
 
   proto::Transaction txn;
   Timestamp wts(50, 1);
-  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -426,12 +430,13 @@ TEST_F(ServerTest, Phase1PreparedReadConflictAbort) {
 TEST_F(ServerTest, Phase1PreparedReadConflictCommitNewerTS) {
   proto::Transaction preparedTxn;
   Timestamp committedRts(55, 2);
-  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, preparedTxn);
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, {0},
+      preparedTxn);
   Prepare(preparedTxn);
 
   proto::Transaction txn;
   Timestamp wts(60, 1);
-  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -456,12 +461,13 @@ TEST_F(ServerTest, Phase1PreparedReadConflictCommitNewerTS) {
 TEST_F(ServerTest, Phase1PreparedReadConflictCommitOlderTS) {
   proto::Transaction preparedTxn;
   Timestamp committedRts(55, 2);
-  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, preparedTxn);
+  PopulateTransaction({{"key0", Timestamp(45,2)}}, {}, committedRts, {0},
+      preparedTxn);
   Prepare(preparedTxn);
 
   proto::Transaction txn;
   Timestamp wts(40, 1);
-  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -486,12 +492,12 @@ TEST_F(ServerTest, Phase1PreparedReadConflictCommitOlderTS) {
 TEST_F(ServerTest, Phase1PreparedWriteConflictAbort) {
   proto::Transaction preparedTxn;
   Timestamp committedRts(50, 2);
-  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, preparedTxn);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, {0}, preparedTxn);
   Prepare(preparedTxn);
 
   proto::Transaction txn;
   Timestamp wts(55, 1);
-  PopulateTransaction({{"key0", Timestamp(45, 1)}}, {}, wts, txn);
+  PopulateTransaction({{"key0", Timestamp(45, 1)}}, {}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -516,12 +522,12 @@ TEST_F(ServerTest, Phase1PreparedWriteConflictAbort) {
 TEST_F(ServerTest, Phase1PreparedWriteConflictCommitNewerReadVersion) {
   proto::Transaction preparedTxn;
   Timestamp committedRts(50, 2);
-  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, preparedTxn);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, {0}, preparedTxn);
   Prepare(preparedTxn);
 
   proto::Transaction txn;
   Timestamp wts(55, 1);
-  PopulateTransaction({{"key0", Timestamp(52, 1)}}, {}, wts, txn);
+  PopulateTransaction({{"key0", Timestamp(52, 1)}}, {}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -546,12 +552,12 @@ TEST_F(ServerTest, Phase1PreparedWriteConflictCommitNewerReadVersion) {
 TEST_F(ServerTest, Phase1PreparedWriteConflictCommitOlderTS) {
   proto::Transaction preparedTxn;
   Timestamp committedRts(50, 2);
-  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, preparedTxn);
+  PopulateTransaction({}, {{"key0", "val0"}}, committedRts, {0},  preparedTxn);
   Prepare(preparedTxn);
 
   proto::Transaction txn;
   Timestamp wts(49, 1);
-  PopulateTransaction({{"key0", Timestamp(48, 1)}}, {}, wts, txn);
+  PopulateTransaction({{"key0", Timestamp(48, 1)}}, {}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -579,7 +585,7 @@ TEST_F(ServerTest, Phase1RTSConflictAbort) {
 
   proto::Transaction txn;
   Timestamp wts(50, 1);
-  PopulateTransaction({}, {{"key0", "val0"}}, wts, txn);
+  PopulateTransaction({}, {{"key0", "val0"}}, wts, {0}, txn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -600,12 +606,12 @@ TEST_F(ServerTest, Phase1RTSConflictAbort) {
 TEST_F(ServerTest, Phase1DepWait) {
   proto::Transaction preparedTxn;
   Timestamp preparedTs(50, 2);
-  PopulateTransaction({}, {{"key0", "val0"}}, preparedTs, preparedTxn);
+  PopulateTransaction({}, {{"key0", "val0"}}, preparedTs, {0}, preparedTxn);
   Prepare(preparedTxn);
 
   proto::Transaction txn;
   Timestamp ts(100, 1);
-  PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, txn);
+  PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, {0}, txn);
   *txn.add_deps() = preparedTxn;
 
   proto::Phase1 phase1;
@@ -622,12 +628,12 @@ TEST_F(ServerTest, Phase1DepWait) {
 TEST_F(ServerTest, Phase1DepCommit) {
   proto::Transaction preparedTxn;
   Timestamp preparedTs(50, 2);
-  PopulateTransaction({}, {{"key0", "val0"}}, preparedTs, preparedTxn);
+  PopulateTransaction({}, {{"key0", "val0"}}, preparedTs, {0}, preparedTxn);
   Prepare(preparedTxn);
 
   proto::Transaction txn;
   Timestamp ts(100, 1);
-  PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, txn);
+  PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, {0}, txn);
   *txn.add_deps() = preparedTxn;
 
   proto::Phase1 phase1;
@@ -650,12 +656,12 @@ TEST_F(ServerTest, Phase1DepCommit) {
 TEST_F(ServerTest, Phase1DepAbort) {
   proto::Transaction preparedTxn;
   Timestamp preparedTs(50, 2);
-  PopulateTransaction({}, {{"key0", "val0"}}, preparedTs, preparedTxn);
+  PopulateTransaction({}, {{"key0", "val0"}}, preparedTs, {0}, preparedTxn);
   Prepare(preparedTxn);
 
   proto::Transaction txn;
   Timestamp ts(100, 1);
-  PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, txn);
+  PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, {0}, txn);
   *txn.add_deps() = preparedTxn;
 
   proto::Phase1 phase1;

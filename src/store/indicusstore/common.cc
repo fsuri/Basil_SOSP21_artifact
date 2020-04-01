@@ -243,12 +243,16 @@ bool ValidateP2RepliesCommit(
     const std::vector<proto::Phase2Reply> &p2Replies,
     const std::string &txnDigest, const proto::Transaction &txn,
     const transport::Configuration *config) {
-  if (p2Replies.size() <= 4 * config->f + 1) {
+  if (p2Replies.size() < 4 * config->f + 1) {
     return false;
   }
 
   for (const auto &p2Reply : p2Replies) {
     if (p2Reply.decision() != proto::COMMIT) {
+      return false;
+    }
+    
+    if (p2Reply.txn_digest() != txnDigest) {
       return false;
     }
   }
