@@ -1,25 +1,86 @@
 %-------------------------------------------------------------------------------
 \section{Implementation and Evaluation}
 %-------------------------------------------------------------------------------
+Question: Is clock skew something we need to explicitly handle? Clock sync etc across machines?
+
+Plan for the evaluation:
+1) Questions and experiments that answer those.
+  1. compare against state of the art: Tapir, vs Hyperledger (our version)
+  
+
+- Need TPC-C?
+- Try to get Hyperledger to run?
+- If benefit of partial order is worse than engineering optimization its not worth doing. In reality it should be fairly easy.
+- Could add smart contract layer (like ethereum evm) on top of ours.
+
+Is there code that inputs smallbank into hyperledger smart contracts api. ?
 
 
+2) Which experiments and write the sections on what we expect. What do the graphs look like.
+
+
+Headline graph: Show performance compared to TApir, hyperledger, occ+pbft.
 
 \subsection{Experiment Notes}
 What experiments do we want? Phrase as questions
 
 \begin{itemize}
 \item What overhead does a BFT database add compared to a CF database? Show the tradeoff between fault tolerance and performance.
-Corresponding experiment: Compare performance with Tapir
+Corresponding experiment: Compare both throughput and latency with Tapir. Also evaluate Abort rate (caused by additional execution time overheads).
+
+Run some (or one) of the Benchmarks: Retwis, YCSB, Smallbank, (TPC-C)?
+
+Show: Throughput vs Latency graph, Skew vs Abort Rate graph
+
+Single data center vs WAN? We probably only want Wan? In low latency environment our validation overheads etc dominate, but our RR reads are not as costly.
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 \item How big is the benefit of avoiding a total order?
 Corresponding experiment: Compare against a SMR protocol (PBFT). Single shard evaluation. TX execution the same, but validation in total order. Measure throughput.
+
+- Can do both only validation, or full execution smr (but in this case reads would be local so it is not a fair comparison - also unclear how this case would work multi-sharded).
+Do the PBFT validation with both MVTSO and a trivial OCC. Measure only the validation overhead: Since execution should be same? (differs slightly for OCC, no prepared reads)
+
+Do it for multiple shard settings: 2, 4, 6 shards; objects distributed uniformly?
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\item Whats the use of our Concurrency Control techniques
+Compare MVTSO vs just TSO and vs OCC
+TSO: disable read timestamp check, disable prepared Reads, analyze abort rates. Also need to not do multi version: I.e. Timestamp chosen at the end to be max (current time, max read version)
+OCC: 
+
+Tapir compares vs OCC-store (which would be our Pbft equivalent.. Should our PBFT store example just do normal OCC? I.e. pbft for every read request: check if there is uncommitted write -> abort read. Check validation against buffered writes: 
+ Was there any read ongoing that is not yet committed
+
 \item How big is the benefit of avoiding redundant coordination?
 Corresponding experiment: Multi-sharded setting, show that the "partial" order through sharding is not as good as a true partial order.
+
+--> Run our OCC-store version (pbft validation) with multiple shards and compare. Measure throughput and latency.
+
 \item How does Indicus perform under different workloads? When is it practical and when is it not?
 Corresponding experiment: Observe abort rates under contention
+
+Increase throughput and skew. 
+
+
 \item How does Indicus perform under failures?
 Corresponding experiment: Let a fraction of clients time out which results in a fallback invocation. Should show that the throughput hardly gets affected; only tail latency increases.
+
 \item What are the design agnostic overheads?
 Corresponding experiment: Measure the costs of signature generation/validation etc. This is cost that is related to CPU power.
+
+\item How does the system behave when scaling number of shards or shard size
+Corresponding experiment: Evaluate different shard and replication degrees.
+
+For constant shard size: Increase the number of objects a TX touches (if shard allocation is random this implies 
+
+Expected: More shards increases throughput, but only up to some count, because then coordination overheads increase. More nodes per shard? Should not affect throughput? Latency depends on tail latency - so it can be better or worse depending on how nodes are located. More nodes = bigger proffs = more processing
 \item Optional: How does Indicus stack up against a real-world system (albeit with different interfaces etc)?
 Corresponding experiment: Compare against Hyperledger throughput. Assume fixed tx sets.
 \end{itemize}
