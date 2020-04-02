@@ -248,7 +248,7 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
 bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
   for (const auto &write : txn.write_set()) {
     if (write.key() == key) {
-      rcb(REPLY_OK, key, write.value(), Timestamp(), proto::Transaction(),
+      rcb(REPLY_OK, key, write.value(), Timestamp(), proto::Dependency(),
           false);
       return true;
     }
@@ -283,8 +283,8 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   }
 
   if (validateProofs) {
-    if (!ValidateTransactionWrite(reply.committed_proof(), itr->second->key,
-          reply.committed_value(), reply.committed_timestamp(), config,
+    if (!ValidateTransactionWrite(reply.committed().proof(), itr->second->key,
+          reply.committed().value(), reply.committed().timestamp(), config,
           signedMessages, keyManager)) {
       // invalid replies can be treated as if we never received a reply from
       //     a crashed replica
@@ -296,10 +296,10 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   itr->second->numReplies++;
   if (reply.status() == REPLY_OK) {
     itr->second->numOKReplies++;
-    Timestamp replyTs(reply.committed_timestamp());
+    Timestamp replyTs(reply.committed().timestamp());
     if (itr->second->maxTs < replyTs) {
       itr->second->maxTs = replyTs;
-      itr->second->maxValue = reply.committed_value();
+      itr->second->maxValue = reply.committed().value();
     }
   }
 
@@ -331,6 +331,10 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
       // TODO: MessageDifferencer::Equals is too slow. Need custom implementation
       preparedItr->second.second += 1;
     }
+
+    if (signedMessages) {
+      itr->second->signedPrepared[preparedTs].push_back(reply.signed_prepared());
+    }
   }
 
   if (itr->second->numOKReplies >= itr->second->rqs ||
@@ -345,7 +349,15 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
       if (preparedItr->second.second >= static_cast<uint64_t>(config->f + 1)) {
         req->maxTs = preparedItr->first;
         req->maxValue = preparedItr->second.first.value();
-        req->dep = preparedItr->second.first.txn();
+        *req->dep.mutable_prepared() = preparedItr->second.first;
+        if (signedMessages) {
+          for (const auto &signedWrite : req->signedPrepared[preparedItr->first]) {
+            *req->dep.mutable_proof()->mutable_signed_prepared()->add_msgs() = signedWrite;
+          }
+        } else {
+          // TODO: do we want to validate unsigned messages? seems overly redundant
+        }
+        req->hasDep = true;
         break;
       }
     }
@@ -357,6 +369,8 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
       status = REPLY_OK;
     }
     Debug("[shard %lu:%i] GET callback [%d]", client_id, shard, status);
+    // TODO: there is probably a more efficient way to pass signedPrepared
+    //   back to top-level client
     gcb(status, key, req->maxValue, req->maxTs, req->dep, req->hasDep);
     delete req;
   }

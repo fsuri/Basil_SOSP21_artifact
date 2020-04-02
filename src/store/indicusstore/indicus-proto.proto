@@ -48,23 +48,42 @@ message CommittedProof {
   }
 }
 
+message CommittedWrite {
+  required bytes value = 1;
+  required TimestampMessage timestamp = 2;
+  required CommittedProof proof = 3;
+}
+
+message Dependency {
+  required PreparedWrite prepared = 1;
+  optional PreparedProof proof = 2;
+}
+
 message PreparedWrite {
   required bytes value = 1;
   required TimestampMessage timestamp = 2;
-  required Transaction txn = 3;
+  required bytes txn_digest = 3;
+}
+
+message PreparedWrites {
+  repeated PreparedWrite writes = 1;
+}
+
+message PreparedProof {
+  oneof prepared_oneof {
+    PreparedWrites prepared = 1;
+    SignedMessages signed_prepared = 2;
+  }
 }
 
 message ReadReply {
   required uint64 req_id = 1;
   required int32 status = 2;
   required bytes key = 3;
-  optional bytes committed_value = 4;
-  optional TimestampMessage committed_timestamp = 5;
-  optional CommittedProof committed_proof = 6;
-  // most recently prepared
+  optional CommittedWrite committed = 4;
   oneof prepared_oneof {
-    PreparedWrite prepared = 7;
-    SignedMessage signed_prepared = 8;
+    PreparedWrite prepared = 5;
+    SignedMessage signed_prepared = 6;
   }
 }
 
@@ -75,7 +94,7 @@ message Transaction {
   repeated int64 involved_groups = 3;
   repeated ReadMessage read_set = 4;
   repeated WriteMessage write_set = 5;
-  repeated Transaction deps = 6;
+  repeated Dependency deps = 6;
   required TimestampMessage timestamp = 7;
 }
 

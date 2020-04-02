@@ -119,10 +119,10 @@ void Server::HandleRead(const TransportAddress &remote,
   reply.set_key(msg.key());
   if (exists) {
     reply.set_status(REPLY_OK);
-    reply.set_committed_value(tsVal.second.val);
-    tsVal.first.serialize(reply.mutable_committed_timestamp());
+    reply.mutable_committed()->set_value(tsVal.second.val);
+    tsVal.first.serialize(reply.mutable_committed()->mutable_timestamp());
     if (validateProofs) {
-      *reply.mutable_committed_proof() = tsVal.second.proof;
+      *reply.mutable_committed()->mutable_proof() = tsVal.second.proof;
     }
   } else {
     reply.set_status(REPLY_FAIL);
@@ -157,7 +157,7 @@ void Server::HandleRead(const TransportAddress &remote,
 
       preparedWrite.set_value(preparedValue);
       *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
-      *preparedWrite.mutable_txn() = mostRecent;
+      *preparedWrite.mutable_txn_digest() = TransactionDigest(mostRecent);
 
       if (signedMessages) {
         proto::SignedMessage signedMessage;
@@ -170,19 +170,23 @@ void Server::HandleRead(const TransportAddress &remote,
     }
   }
 
-  if (signedMessages) {
-    proto::SignedMessage signedMessage;
-    SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
-    transport->SendMessage(this, remote, signedMessage);
-  } else {
-    transport->SendMessage(this, remote, reply);
-  }
+  // Only need to sign prepared portion of reply
+  transport->SendMessage(this, remote, reply);
 }
 
 void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
   Debug("PHASE1[%s,%lu] with ts %lu.", msg.txn_digest().c_str(), msg.req_id(),
       msg.txn().timestamp().timestamp());
+
+  if (validateProofs) {
+    for (const auto &dep : msg.txn().deps()) {
+      if (!ValidateDependency(dep, &config, signedMessages, keyManager)) {
+        // safe to ignore Byzantine client
+        return;
+      }
+    }
+  }
   
   ongoing[msg.txn_digest()] = msg.txn();
 
@@ -505,8 +509,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
       for (const auto &preparedReadTxn : preparedReadsItr->second) {
         bool isDep = false;
         for (const auto &dep : preparedReadTxn.deps()) {
-          std::string depDigest = TransactionDigest(dep);
-          if (txnDigest == depDigest) {
+          if (txnDigest == dep.prepared().txn_digest()) {
             isDep = true;
             break;
           }
@@ -553,11 +556,10 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
 
   bool allFinished = true;
   for (const auto &dep : txn.deps()) {
-    std::string depDigest = TransactionDigest(dep);
-    if (committed.find(depDigest) == committed.end() &&
-        aborted.find(depDigest) == aborted.end()) {
+    if (committed.find(dep.prepared().txn_digest()) == committed.end() &&
+        aborted.find(dep.prepared().txn_digest()) == aborted.end()) {
       allFinished = false;
-      dependents[depDigest].insert(txnDigest);
+      dependents[dep.prepared().txn_digest()].insert(txnDigest);
       auto dependenciesItr = waitingDependencies.find(txnDigest);
       if (dependenciesItr == waitingDependencies.end()) {
         auto inserted =waitingDependencies.insert(std::make_pair(txnDigest,
@@ -567,7 +569,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
       }
       dependenciesItr->second.reqId = reqId;
       dependenciesItr->second.remote = &remote;
-      dependenciesItr->second.deps.insert(depDigest);
+      dependenciesItr->second.deps.insert(dep.prepared().txn_digest());
     }
   }
 
@@ -725,9 +727,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::CheckDependencies(
 proto::Phase1Reply::ConcurrencyControlResult Server::CheckDependencies(
     const proto::Transaction &txn) {
   for (const auto &dep : txn.deps()) {
-    std::string depDigest = TransactionDigest(dep);
-    if (committed.find(depDigest) != committed.end()) {
-      if (Timestamp(dep.timestamp()) > Timestamp(txn.timestamp())) {
+    if (committed.find(dep.prepared().txn_digest()) != committed.end()) {
+      if (Timestamp(dep.prepared().timestamp()) > Timestamp(txn.timestamp())) {
         return proto::Phase1Reply::ABORT;
       }
     } else {

@@ -259,6 +259,53 @@ bool ValidateP2RepliesCommit(
   return true;
 }
 
+bool ValidateDependency(const proto::Dependency &dep,
+    const transport::Configuration *config, bool signedMessages,
+    KeyManager *keyManager) {
+  if (signedMessages) {
+    if (dep.proof().has_signed_prepared()) {
+      if (dep.proof().signed_prepared().msgs().size() < config->f + 1) {
+        return false;
+      }
+
+      for (const auto &signedWrite : dep.proof().signed_prepared().msgs()) {
+        proto::PreparedWrite write;
+        if (!ValidateSignedMessage(signedWrite, keyManager, write)) {
+          return false;
+        }
+        
+        if (write != dep.prepared()) {
+          return false;
+        }
+      }
+      return true;
+    } else {
+      return false;
+    }
+  } else {
+    if (dep.proof().prepared().writes().size() < config->f + 1) {
+      return false;
+    }
+
+    for (const auto &write : dep.proof().prepared().writes()) {
+      if (write != dep.prepared()) {
+        return false;
+      }
+    }
+    return true;
+  }
+}
+
+bool operator==(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2) {
+  return pw1.value() == pw2.value() &&
+    pw1.timestamp().timestamp() == pw2.timestamp().timestamp() &&
+    pw1.timestamp().id() == pw2.timestamp().id() &&
+    pw1.txn_digest() == pw2.txn_digest();
+}
+
+bool operator!=(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2) {
+  return !(pw1 == pw2);
+}
 
 std::string TransactionDigest(const proto::Transaction &txn) {
   CryptoPP::SHA256 hash;
@@ -285,8 +332,8 @@ std::string TransactionDigest(const proto::Transaction &txn) {
     hash.Update((const byte*) &write.value()[0], write.value().length());
   }
   for (const auto &dep : txn.deps()) {
-    std::string depDigest = TransactionDigest(dep);
-    hash.Update((const byte*) &depDigest[0], depDigest.length());
+    hash.Update((const byte*) &dep.prepared().txn_digest()[0],
+        dep.prepared().txn_digest().length());
   }
   uint64_t timestampId = txn.timestamp().id();
   uint64_t timestampTs = txn.timestamp().timestamp();

@@ -57,6 +57,14 @@ bool ValidateP2RepliesCommit(
     const std::string &txnDigest, const proto::Transaction &txn,
     const transport::Configuration *config);
 
+bool ValidateDependency(const proto::Dependency &dep,
+    const transport::Configuration *config, bool signedMessages,
+    KeyManager *keyManager);
+
+bool operator==(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2);
+
+bool operator!=(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2);
+
 std::string TransactionDigest(const proto::Transaction &txn);
 
 } // namespace indicusstore

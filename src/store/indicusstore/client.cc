@@ -106,7 +106,7 @@ void Client::Get(const std::string &key, get_callback gcb,
   }
 
   read_callback rcb = [gcb, this](int status, const std::string &key,
-      const std::string &val, const Timestamp &ts, const proto::Transaction &dep,
+      const std::string &val, const Timestamp &ts, const proto::Dependency &dep,
       bool hasDep) {
     if (Message_DebugEnabled(__FILE__)) {
       uint64_t intValue = 0;

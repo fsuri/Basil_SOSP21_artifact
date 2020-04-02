@@ -52,7 +52,7 @@
 namespace indicusstore {
 
 typedef std::function<void(int, const std::string &,
-    const std::string &, const Timestamp &, const proto::Transaction &,
+    const std::string &, const Timestamp &, const proto::Dependency &,
     bool)> read_callback;
 typedef std::function<void(int, const std::string &)> read_timeout_callback;
 
@@ -120,7 +120,8 @@ class ShardClient : public TransportReceiver {
     uint64_t numReplies;
     uint64_t numOKReplies;
     std::map<Timestamp, std::pair<proto::PreparedWrite, uint64_t>> prepared;
-    proto::Transaction dep;
+    std::map<Timestamp, std::vector<proto::SignedMessage>> signedPrepared;
+    proto::Dependency dep;
     bool hasDep;
     read_callback gcb;
     read_timeout_callback gtcb;
