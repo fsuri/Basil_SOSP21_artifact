@@ -885,6 +885,11 @@ Alternatively, Tau as low protection mark; i.e. if conflicts above TS-tau they p
 
 
 %%%%% OTHER
+\textbf{Tolerating High Skew}
+Use Waits at replicas to re-order in timestamp order
+Use write promises.
+
+
 \textbf{Exponential Backoff}
 When there is contention one might need exponential backoff in order for one transaction to eventually succeed. Cannot rely on clients to enforce this because they may be byzantine. Replicas must keep backoff list for each client.
 Open question: When to reset to 0? Upon success? This would mean that a single client could get lucky many times in a row. More likely: reset after some k amount of tx have passed? But then those could be byzantine and never attempt to commit. --> Reset after some timeout.
