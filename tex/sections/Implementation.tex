@@ -1,6 +1,173 @@
 %-------------------------------------------------------------------------------
-\section{Implementation and Evaluation}
+\section{Implementation}
 %-------------------------------------------------------------------------------
+
+%-------------------------------------------------------------------------------
+\section{Evaluation}
+%-------------------------------------------------------------------------------
+
+Our evaluation seeks to answer the following questions:
+\begin{itemize}
+  \item How do the throughput and latency of \sys{} compare to the
+    state-of-the-art distributed replicated transactional key-value
+    stores?
+  \item What are the overheads of providing Byzantine fault tolerance over
+    crash fault tolerance?
+  \item How is the commit rate affected by the choice of concurrency control?
+  \item What is the tradeoff between leader-based replication and quorum-based
+    replication?
+  \item How does \sys{} perform when clients or replicas exhibit Byzantine
+    behavior?
+\end{itemize}
+
+\paragraph{Baselines.} TAPIR, OCC+PBFT, Hyperledger.
+\paragraph{Setup.} Use CloudLab machines, add WAN latency with \texttt{tc}.
+\paragraph{Methodology.} Run experiments for several minutes, exclude results
+from beginning and end, closed loop clients.
+
+\subsection{Applications}
+
+\begin{figure}
+  Scatter Plot\\
+  X-axis: throughput (committed new order transactions per second)\\
+  Y-axis: latency (median)\\
+  Series: Indicus, TAPIR, OCC+PBFT, Hyperledger\\
+  Workload: TPC-C\\
+  Setup: WAN, 3 shards / groups\\
+  \caption{Throughput versus latency of \sys{} and baselines for the TPC-C
+  workload in a wide-area network deployment.}
+  \label{fig:tpcc-tput-lat}
+\end{figure}
+
+We measure the throughput and median latency of \sys{} and the baselines with the
+industry standard TPC-C benchmark. Each system is configured to tolerate $f=1$
+failures and replicas are deployed across a WAN. Clients are co-located with
+replicas in each geographic region, so the round trip time between a client and
+its nearest replica is much less than the wide-area network round trip time when
+all replicas are correct and responsive. The data is partioned across
+three groups of replicas. Figure~\ref{fig:tpcc-tput-lat} shows the results.
+
+TAPIR achieves the lowest median latency when not saturated because reads only
+need to be executed at the nearest replica and it often commits transactions in
+a single round trip on the fast path of its commit protocol. In Hyperledger and
+OCC+PBFT, reads also only need to be executed at the nearest replica, but
+transactions from clients not co-located with the leader replicas require two
+round trips to commit. \sys{} requires reads to be executed at $f+1$ replicas,
+so each read requires a wide-area network round trip to the second nearest
+replica to a client. Once the execution phase is complete, \sys{} often commits
+in a single round trip on the fast path to all $5f+1$ replicas.
+
+TAPIR also achieves the highest throughput before saturation because it does not
+require expensive signature computations and validation of proofs. \sys{} achieves
+better throughput than Hyperledger and OCC+PBFT because no single replica handles
+every transaction for a group as is the case with the leader replicas in Hyperledger
+and OCC+PBFT.
+
+\subsection{Microbenchmarks}
+
+\begin{figure}
+  Bar Graph\\
+  Y-axis: throughput at saturation (committed transactions per second)\\
+  Workload: YCSB+T, moderate skew\\
+  Series: Indicus (no proofs, no signatures), Indicus (proofs, no signatures),
+    Indicus (no proofs, signatures), Indicus (full), TAPIR\\
+  Setup: WAN, 3 shards / groups\\
+  \caption{Throughput of \sys{} with increasing amounts of Byzantine
+  ``protection'' for fixed YCSB+T workload.}
+  \label{fig:bft-overhead-tpu}
+\end{figure}
+
+We measure the maximum throughput of \sys{} and TAPIR with the YCSB+T workload at
+moderate skew to observe the performance impact of tolerating Byzantine failures.
+Figure~\ref{fig:bft-overhead-tput} shows the results.
+
+Indicus with no proofs and no signatures comes within 10\% of the throughput of
+TAPIR. This is because Indicus' commit protocol exchanges around the same
+number of messages per replica as TAPIR's commit protocol, with
+transactions committing after either one round trip to every replica or after
+two round trips to a majority of honest replicas.  TAPIR still achieves slightly
+better throughput because reads are only executed by a single replica whereas in
+Indicus, reads are executed by $f+1$ replicas.
+
+Indicus with signatures and no proofs achieves a lower maximum throughput than
+Indicus with no signatures and no proofs because signature computations are
+expensive.
+
+Similarly, the computation required to serialize, deserialize, and validate
+proofs reduces the throughput of Indicus with no signature and proofs relative
+to Indicus with no signatures and no proofs and TAPIR.
+
+Indicus with both signatures and proofs achieves the lowest maximum throughput.
+In total, tolerating Byzantine failures imposes about a 75\% throughput overhead
+for this workload.
+
+\begin{figure}
+  Bar Graph\\
+  X-axis: grouped by geographic region\\
+  Y-axis: latency at fixed non-saturated load (average + 25th and 75th percentiles)\\
+  Workload: YCSB+T, moderate skew\\
+  Series: Indicus, TAPIR\\
+  Setup: WAN, 3 shards / groups\\
+  \caption{Region-by-region latency of \sys{} and TAPIR for fixed YCSB+T workload.}
+\end{figure}
+
+\begin{figure}
+  Scatter Plot\\
+  X-axis: Zipfian parameter\\
+  Y-axis: Abort Rate (1 - committed / attempts)\\
+  Workload: YCSB+T\\
+  Series: Indicus, TAPIR\\
+  Setup: WAN, 3 shards / groups\\
+  \caption{Abort rate of \sys{} and TAPIR with increasing skew.}
+\end{figure}
+
+\begin{figure}
+  Scatter Plot\\
+  X-axis: Zipfian parameter\\
+  Y-axis: Abort Rate (1 - committed / attempts)\\
+  Workload: YCSB+T\\
+  Series: Indicus+OCC, Indicus+MVTSO-RTS-DEP, Indicus+MVTSO-DEP, Indicus+MVTSO\\
+  Setup: WAN, 3 shards / groups\\
+  \caption{Abort rate of \sys{} with different types of concurrency control
+  increasing skew.}
+\end{figure}
+
+\begin{figure}
+  Scatter Plot\\
+  X-axis: throughput (committed transactions per second)\\
+  Y-axis: latency (median)\\
+  Series: Indicus+OCC, OCC+PBFT\\
+  Workload: YCSB+T\\
+  Setup: WAN, 3 shards / groups\\
+  \caption{Throughput versus latency of \sys{} w/ simple OCC check and
+  OCC+PBFT in a wide-area network deployment.}
+  \label{fig:to-vs-po-tput-lat}
+\end{figure}
+
+\subsection{Failures}
+
+\begin{figure}
+  Scatter Plot\\
+  X-axis: time (since start of experiment)\\
+  Y-axis: throughput (committed transactions per second)\\
+  Series: Indicus\\
+  Workload: TPC-C\\
+  Setup: WAN, 3 shards / groups, Byzantine replica failure at midway point of
+  experiment.\\
+\end{figure}
+
+\begin{figure}
+  Scatter Plot\\
+  X-axis: time (since start of experiment)\\
+  Y-axis: throughput (committed transactions per second)\\
+  Series: Indicus\\
+  Workload: TPC-C\\
+  Setup: WAN, 3 shards / groups, Byzantine clients attack system at midway point
+  of experiment.\\
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 Question: Is clock skew something we need to explicitly handle? Clock sync etc across machines?
 
 Plan for the evaluation:
