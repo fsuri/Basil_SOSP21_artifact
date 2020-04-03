@@ -49,13 +49,16 @@ three groups of replicas. Figure~\ref{fig:tpcc-tput-lat} shows the results.
 
 TAPIR achieves the lowest median latency when not saturated because reads only
 need to be executed at the nearest replica and it often commits transactions in
-a single round trip on the fast path of its commit protocol. In Hyperledger and
-OCC+PBFT, reads also only need to be executed at the nearest replica, but
-transactions from clients not co-located with the leader replicas require two
-round trips to commit. \sys{} requires reads to be executed at $f+1$ replicas,
-so each read requires a wide-area network round trip to the second nearest
-replica to a client. Once the execution phase is complete, \sys{} often commits
-in a single round trip on the fast path to all $5f+1$ replicas.
+a single round trip on the fast path of its commit protocol.
+
+Hyperledger, OCC+PBFT, and \sys{} require reads to be
+executed at $f+1$ replicas, so each read requires a wide-area network round trip
+to the second nearest replica to a client.
+
+Once the execution phase is complete,
+\sys{} often commits in a single round trip on the fast path to all $5f+1$
+replicas as in TAPIR. Hyperledger and OCC+PBFT take an additional round trip
+because their commit protocols are run by a leader replica at each shard.
 
 TAPIR also achieves the highest throughput before saturation because it does not
 require expensive signature computations and validation of proofs. \sys{} achieves
@@ -74,7 +77,7 @@ and OCC+PBFT.
   Setup: WAN, 3 shards / groups\\
   \caption{Throughput of \sys{} with increasing amounts of Byzantine
   ``protection'' for fixed YCSB+T workload.}
-  \label{fig:bft-overhead-tpu}
+  \label{fig:bft-overhead-tput}
 \end{figure}
 
 We measure the maximum throughput of \sys{} and TAPIR with the YCSB+T workload at
@@ -111,6 +114,15 @@ for this workload.
   \caption{Region-by-region latency of \sys{} and TAPIR for fixed YCSB+T workload.}
 \end{figure}
 
+Figure~\ref{fig:bft-overhead-lat} shows the latency overheads of tolerating
+Byzantine failures. Using the same workload as before, we measure the average,
+first quartile, and third quartile latencies. 
+
+\sys{} has higher latency than TAPIR in all geographic regions because its
+reads must be executed by $f+1$ replicas instead of just a single replica. This
+requires reads to be sent across the wide-area network, which increases total
+transaction latency in proportion to the number of reads in the transaction.
+
 \begin{figure}
   Scatter Plot\\
   X-axis: Zipfian parameter\\
@@ -120,6 +132,14 @@ for this workload.
   Setup: WAN, 3 shards / groups\\
   \caption{Abort rate of \sys{} and TAPIR with increasing skew.}
 \end{figure}
+
+Figure~\ref{fig:bft-overhead-aborts} shows the commit rate overhead of tolerating
+Byzantine failures. It shows the abort rate of transactions from the YCSB+T
+workload with increasing contention. 
+
+Because \sys{}'s execution phase takes longer than TAPIR, there is a larger
+window during which conflicting transactions can overlap. This directly leads
+to more aborts.
 
 \begin{figure}
   Scatter Plot\\
@@ -132,6 +152,22 @@ for this workload.
   increasing skew.}
 \end{figure}
 
+Figure~\ref{fig:cc-aborts} shows how the choice of concurrency control in
+\sys{} affects the abort rate of transactions under increasing levels of 
+contetion.
+
+Indicus+OCC uses basic OCC validation that disallows concurrenct conflicting
+transactions from committing. Indicus+MVTSO improves (reduces the number of
+aborts) on this by allowing transactions to read from older versions and by
+allowing concurrent conflicting write transactions to commit if their assigned
+timestamps match their validation orer at each shard.
+
+Indicus+MVTSO+RTS further improves abort rate by reducing the size of the window
+during which transactions execution overlaps. 
+
+Indicus+MVTSO+RTS+DEP improves on this even further by allowing transactions to
+read uncommitted writes. This comes at the risk of cascading aborts.
+
 \begin{figure}
   Scatter Plot\\
   X-axis: throughput (committed transactions per second)\\
@@ -143,6 +179,13 @@ for this workload.
   OCC+PBFT in a wide-area network deployment.}
   \label{fig:to-vs-po-tput-lat}
 \end{figure}
+
+Figure~\ref{fig:to-vs-po-tput-lat} shows the overhead from the leader-based
+OCC+PBFT relative to the quorum-based \sys{}. Latency is higher because leader-based
+protocols require redundant wide-area round trips during the validation phase.
+Throughput is lower because the leader of each shard processes every transaction
+that touches the shard whereas in quorum-based protocols, the processing load 
+may be spread equally across all replicas in the shard.
 
 \subsection{Failures}
 
@@ -167,6 +210,12 @@ for this workload.
 \end{figure}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Questions:
+\begin{itemize}
+  \item Are there any experiments where we explcitily want to measure behavior in LAN?
+  \item Hyperledger uses stored procedures/one-shot transactions - how do we compare this to Indicus? Do we use the read-only + conclusory transaction strategy? Or rewrite workloads as one-shot for Hyperledger?
+  \item 
+\end{itemize}
 
 Question: Is clock skew something we need to explicitly handle? Clock sync etc across machines?
 
