@@ -34,6 +34,7 @@ from beginning and end, closed loop clients.
   Series: Indicus, TAPIR, OCC+PBFT, Hyperledger\\
   Workload: TPC-C\\
   Setup: WAN, 3 shards / groups\\
+  \includegraphics[width=\columnwidth]{figures/eval/tpcc-tput-lat.png}
   \caption{Throughput versus latency of \sys{} and baselines for the TPC-C
   workload in a wide-area network deployment.}
   \label{fig:tpcc-tput-lat}
@@ -75,12 +76,13 @@ and OCC+PBFT.
   Series: Indicus (no proofs, no signatures), Indicus (proofs, no signatures),
     Indicus (no proofs, signatures), Indicus (full), TAPIR\\
   Setup: WAN, 3 shards / groups\\
+  \includegraphics[width=\columnwidth]{figures/eval/bft-overhead-tput.png}
   \caption{Throughput of \sys{} with increasing amounts of Byzantine
   ``protection'' for fixed YCSB+T workload.}
   \label{fig:bft-overhead-tput}
 \end{figure}
 
-We measure the maximum throughput of \sys{} and TAPIR with the YCSB+T workload at
+\paragraph{BFT Overheads.} We measure the maximum throughput of \sys{} and TAPIR with the YCSB+T workload at
 moderate skew to observe the performance impact of tolerating Byzantine failures.
 Figure~\ref{fig:bft-overhead-tput} shows the results.
 
@@ -111,7 +113,9 @@ for this workload.
   Workload: YCSB+T, moderate skew\\
   Series: Indicus, TAPIR\\
   Setup: WAN, 3 shards / groups\\
+  \includegraphics[width=\columnwidth]{figures/eval/bft-overhead-lat.png}
   \caption{Region-by-region latency of \sys{} and TAPIR for fixed YCSB+T workload.}
+  \label{fig:bft-overhead-lat}
 \end{figure}
 
 Figure~\ref{fig:bft-overhead-lat} shows the latency overheads of tolerating
@@ -130,7 +134,9 @@ transaction latency in proportion to the number of reads in the transaction.
   Workload: YCSB+T\\
   Series: Indicus, TAPIR\\
   Setup: WAN, 3 shards / groups\\
+  \includegraphics[width=\columnwidth]{figures/eval/bft-overhead-aborts.png}
   \caption{Abort rate of \sys{} and TAPIR with increasing skew.}
+  \label{fig:bft-overhead-aborts}
 \end{figure}
 
 Figure~\ref{fig:bft-overhead-aborts} shows the commit rate overhead of tolerating
@@ -150,9 +156,10 @@ to more aborts.
   Setup: WAN, 3 shards / groups\\
   \caption{Abort rate of \sys{} with different types of concurrency control
   increasing skew.}
+  \label{fig:cc-aborts}
 \end{figure}
 
-Figure~\ref{fig:cc-aborts} shows how the choice of concurrency control in
+\paragraph{Concurrency Control.} Figure~\ref{fig:cc-aborts} shows how the choice of concurrency control in
 \sys{} affects the abort rate of transactions under increasing levels of 
 contetion.
 
@@ -180,7 +187,7 @@ read uncommitted writes. This comes at the risk of cascading aborts.
   \label{fig:to-vs-po-tput-lat}
 \end{figure}
 
-Figure~\ref{fig:to-vs-po-tput-lat} shows the overhead from the leader-based
+\paragraph{Leaders vs. Quorums.} Figure~\ref{fig:to-vs-po-tput-lat} shows the overhead from the leader-based
 OCC+PBFT relative to the quorum-based \sys{}. Latency is higher because leader-based
 protocols require redundant wide-area round trips during the validation phase.
 Throughput is lower because the leader of each shard processes every transaction
@@ -197,6 +204,9 @@ may be spread equally across all replicas in the shard.
   Workload: TPC-C\\
   Setup: WAN, 3 shards / groups, Byzantine replica failure at midway point of
   experiment.\\
+  \caption{Throughput over time of \sys{}. A replica exhibits Byzantine
+  behavior at time $t=x$.}
+  \label{fig:failure-replica-tot}
 \end{figure}
 
 \begin{figure}
@@ -207,6 +217,9 @@ may be spread equally across all replicas in the shard.
   Workload: TPC-C\\
   Setup: WAN, 3 shards / groups, Byzantine clients attack system at midway point
   of experiment.\\
+  \caption{Average latency over time of \sys{}. A subset of clients exhibit
+  Byzantine behavior at time $t=x$.}
+  \label{fig:failure-clients-lot}
 \end{figure}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
