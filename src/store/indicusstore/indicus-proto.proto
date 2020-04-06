@@ -51,7 +51,7 @@ message CommittedProof {
 message CommittedWrite {
   required bytes value = 1;
   required TimestampMessage timestamp = 2;
-  required CommittedProof proof = 3;
+  optional CommittedProof proof = 3;
 }
 
 message Dependency {

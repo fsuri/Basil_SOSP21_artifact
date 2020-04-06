@@ -42,7 +42,7 @@ using namespace proto;
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int shard, int closestReplica) : client_id(client_id),
     transport(transport), config(config), shard(shard) {
-  client = new replication::ir::IRClient(*config, transport, client_id);
+  client = new replication::ir::IRClient(*config, transport, shard, client_id);
 
   if (closestReplica == -1) {
     replica = client_id % config->n;

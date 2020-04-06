@@ -100,6 +100,13 @@ void Server::ReceiveMessage(const TransportAddress &remote,
 
 void Server::Load(const string &key, const string &value,
     const Timestamp timestamp) {
+  Value val;
+  val.val = value;
+  val.proof.mutable_txn()->set_client_id(0);
+  val.proof.mutable_txn()->set_client_seq_num(0);
+  val.proof.mutable_txn()->mutable_timestamp()->set_timestamp(0);
+  val.proof.mutable_txn()->mutable_timestamp()->set_id(0);
+  store.put(key, val, timestamp);
 }
 
 void Server::HandleRead(const TransportAddress &remote,
@@ -118,6 +125,7 @@ void Server::HandleRead(const TransportAddress &remote,
   reply.set_req_id(msg.req_id());
   reply.set_key(msg.key());
   if (exists) {
+    Debug("Have committed value of length %lu bytes.", tsVal.second.val.length());
     reply.set_status(REPLY_OK);
     reply.mutable_committed()->set_value(tsVal.second.val);
     tsVal.first.serialize(reply.mutable_committed()->mutable_timestamp());

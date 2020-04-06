@@ -1,8 +1,8 @@
 // -*- mode: c++; c-file-style: "k&r"; c-basic-offset: 4 -*-
 /***********************************************************************
  *
- * store/indicusstore/shardclient.cc:
- *   Single shard indicus transactional client.
+ * store/indicusstore/groupclient.cc:
+ *   Single group indicus transactional client.
  *
  * Copyright 2015 Irene Zhang <iyzhang@cs.washington.edu>
  *                Naveen Kr. Sharma <naveenks@cs.washington.edu>
@@ -38,10 +38,10 @@
 namespace indicusstore {
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
-    uint64_t client_id, int shard, int closestReplica,
+    uint64_t client_id, int group, int closestReplica,
     bool signedMessages, bool validateProofs,
     KeyManager *keyManager, TrueTime &timeServer) :
-    client_id(client_id), transport(transport), config(config), shard(shard),
+    client_id(client_id), transport(transport), config(config), group(group),
     timeServer(timeServer),
     signedMessages(signedMessages), validateProofs(validateProofs),
     keyManager(keyManager), phase1DecisionTimeout(1000UL), lastReqId(0UL) {
@@ -95,7 +95,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
 }
 
 void ShardClient::Begin(uint64_t id) {
-  Debug("[shard %i] BEGIN: %lu", shard, id);
+  Debug("[group %i] BEGIN: %lu", group, id);
 
   txn = proto::Transaction();
 }
@@ -120,9 +120,9 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   read.set_key(key);
   *read.mutable_timestamp() = ts;
 
-  transport->SendMessageToAll(this, read);
+  transport->SendMessageToGroup(this, group, read);
 
-  Debug("[shard %i] Sent GET [%lu : %s]", shard, id, key.c_str());
+  Debug("[group %i] Sent GET [%lu : %lu]", group, id, reqId);
 }
 
 void ShardClient::Put(uint64_t id, const std::string &key,
@@ -136,7 +136,7 @@ void ShardClient::Put(uint64_t id, const std::string &key,
 
 void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
     phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout) {
-  Debug("[shard %i] Sending PHASE1 [%lu]", shard, id);
+  Debug("[group %i] Sending PHASE1 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
   PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId);
   pendingPhase1s[reqId] = pendingPhase1;
@@ -158,7 +158,7 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
   phase1.set_txn_digest(TransactionDigest(transaction));
   *phase1.mutable_txn() = transaction;
 
-  transport->SendMessageToAll(this, phase1);
+  transport->SendMessageToGroup(this, group, phase1);
 
   pendingPhase1->requestTimeout->Reset();
 }
@@ -168,7 +168,7 @@ void ShardClient::Phase2(uint64_t id, const proto::Transaction &transaction,
     const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
     proto::CommitDecision decision, phase2_callback pcb,
     phase2_timeout_callback ptcb, uint32_t timeout) {
-  Debug("[group %i] Sending PHASE1 [%lu]", shard, id);
+  Debug("[group %i] Sending PHASE1 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
   PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);
   pendingPhase2s[reqId] = pendingPhase2;
@@ -208,7 +208,7 @@ void ShardClient::Phase2(uint64_t id, const proto::Transaction &transaction,
     phase2.set_decision(decision);
   }
 
-  transport->SendMessageToAll(this, phase2);
+  transport->SendMessageToGroup(this, group, phase2);
 
   pendingPhase2->requestTimeout->Reset();
 }
@@ -239,8 +239,8 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
   *writeback.mutable_txn() = transaction;
   writeback.set_decision(decision);
 
-  transport->SendMessageToAll(this, writeback);
-  Debug("[shard %i] Sent WRITEBACK [%lu]", shard, id);
+  transport->SendMessageToGroup(this, group, writeback);
+  Debug("[group %i] Sent WRITEBACK [%lu]", group, id);
 
   pendingCommit->requestTimeout->Reset();
 }
@@ -275,7 +275,7 @@ void ShardClient::GetTimeout(uint64_t reqId) {
   }
 }
 
-/* Callback from a shard replica on get operation completion. */
+/* Callback from a group replica on get operation completion. */
 void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   auto itr = this->pendingGets.find(reply.req_id());
   if (itr == this->pendingGets.end()) {
@@ -296,8 +296,10 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   itr->second->numReplies++;
   if (reply.status() == REPLY_OK) {
     itr->second->numOKReplies++;
+    Debug("[group %i] ReadReply %lu for %lu byte value.", group, reply.req_id(),
+      itr->second->maxValue.length());
     Timestamp replyTs(reply.committed().timestamp());
-    if (itr->second->maxTs < replyTs) {
+    if (itr->second->numOKReplies == 1 || itr->second->maxTs < replyTs) {
       itr->second->maxTs = replyTs;
       itr->second->maxValue = reply.committed().value();
     }
@@ -368,7 +370,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     if (req->numOKReplies >= itr->second->rqs) {
       status = REPLY_OK;
     }
-    Debug("[shard %lu:%i] GET callback [%d]", client_id, shard, status);
+    Debug("[group %i] GET callback [%d]", group, status);
     // TODO: there is probably a more efficient way to pass signedPrepared
     //   back to top-level client
     gcb(status, key, req->maxValue, req->maxTs, req->dep, req->hasDep);
@@ -383,7 +385,7 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
     return; // this is a stale request
   }
 
-  Debug("[shard %lu:%i] PHASE1 callback [%d] ccr=%d", client_id, shard,
+  Debug("[group %i] PHASE1 callback [%d] ccr=%d", group,
       reply.status(), reply.ccr());
 
   if (signedMessages) {
@@ -432,11 +434,11 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply,
   }
 }
 
-/* Callback from a shard replica on commit operation completion. */
+/* Callback from a group replica on commit operation completion. */
 bool ShardClient::CommitCallback(uint64_t reqId,
     const string &request_str, const string &reply_str) {
   // COMMITs always succeed.
-  Debug("[shard %lu:%i] COMMIT callback", client_id, shard);
+  Debug("[group %i] COMMIT callback", group);
 
   auto itr = this->pendingCommits.find(reqId);
   if (itr != this->pendingCommits.end()) {
@@ -448,7 +450,7 @@ bool ShardClient::CommitCallback(uint64_t reqId,
   return true;
 }
 
-/* Callback from a shard replica on abort operation completion. */
+/* Callback from a group replica on abort operation completion. */
 bool ShardClient::AbortCallback(uint64_t reqId,
     const string &request_str, const string &reply_str) {
   // ABORTs always succeed.
@@ -456,7 +458,7 @@ bool ShardClient::AbortCallback(uint64_t reqId,
   // UW_ASSERT(blockingBegin != NULL);
   // blockingBegin->Reply(0);
 
-  Debug("[shard %lu:%i] ABORT callback", client_id, shard);
+  Debug("[group %i] ABORT callback", group);
 
   auto itr = this->pendingAborts.find(reqId);
   if (itr != this->pendingAborts.end()) {

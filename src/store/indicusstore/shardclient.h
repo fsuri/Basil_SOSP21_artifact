@@ -71,9 +71,8 @@ typedef std::function<void(int)> writeback_timeout_callback;
 
 class ShardClient : public TransportReceiver {
  public:
-  /* Constructor needs path to shard config. */
   ShardClient(transport::Configuration *config, Transport *transport,
-      uint64_t client_id, int shard, int closestReplica,
+      uint64_t client_id, int group, int closestReplica,
       bool signedMessages, bool validateProofs,
       KeyManager *keyManager, TrueTime &timeServer);
   virtual ~ShardClient();
@@ -229,7 +228,7 @@ class ShardClient : public TransportReceiver {
   uint64_t client_id; // Unique ID for this client.
   Transport *transport; // Transport layer.
   transport::Configuration *config;
-  int shard; // which shard this client accesses
+  int group; // which shard this client accesses
   int replica; // which replica to use for reads
   TrueTime &timeServer;
   bool signedMessages;

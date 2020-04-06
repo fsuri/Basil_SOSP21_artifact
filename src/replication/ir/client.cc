@@ -45,9 +45,9 @@ namespace ir {
 using namespace std;
 
 IRClient::IRClient(const transport::Configuration &config,
-                   Transport *transport,
+                   Transport *transport, int group,
                    uint64_t clientid)
-    : Client(config, transport, clientid),
+    : Client(config, transport, group, clientid),
       lastReqId(0)
 {
 
@@ -100,7 +100,7 @@ IRClient::SendInconsistent(const PendingInconsistentRequest *req)
     reqMsg.mutable_req()->set_clientid(clientid);
     reqMsg.mutable_req()->set_clientreqid(req->clientReqId);
 
-    if (transport->SendMessageToAll(this, reqMsg)) {
+    if (transport->SendMessageToGroup(this, group, reqMsg)) {
         req->timer->Reset();
     } else {
         Warning("Could not send inconsistent request to replicas");
@@ -147,7 +147,7 @@ IRClient::SendConsensus(const PendingConsensusRequest *req)
     reqMsg.mutable_req()->set_clientid(clientid);
     reqMsg.mutable_req()->set_clientreqid(req->clientReqId);
 
-    if (transport->SendMessageToAll(this, reqMsg)) {
+    if (transport->SendMessageToGroup(this, group, reqMsg)) {
         req->timer->Reset();
     } else {
         Warning("Could not send consensus request to replicas");
@@ -180,7 +180,7 @@ IRClient::InvokeUnlogged(int replicaIdx,
     reqMsg.mutable_req()->set_clientid(clientid);
     reqMsg.mutable_req()->set_clientreqid(reqId);
 
-    if (transport->SendMessageToReplica(this, replicaIdx, reqMsg)) {
+    if (transport->SendMessageToReplica(this, group, replicaIdx, reqMsg)) {
 	req->timer->Start();
 	pendingReqs[reqId] = req;
     } else {
@@ -204,48 +204,13 @@ void IRClient::InvokeUnloggedAll(const string &request,
   reqMsg.mutable_req()->set_clientid(clientid);
   reqMsg.mutable_req()->set_clientreqid(reqId);
 
-  if (transport->SendMessageToAll(this, reqMsg)) {
+  if (transport->SendMessageToGroup(this, group, reqMsg)) {
     req->timer->Reset();
     pendingReqs[reqId] = req;
   } else {
     Warning("Could not send unlogged request to replica");
     delete req;
   }
-}
-
-
-void
-IRClient::InvokeUnlogged(int groupIdx,
-                         int replicaIdx,
-                         const string &request,
-                         continuation_t continuation,
-                         error_continuation_t error_continuation,
-                         uint32_t timeout)
-{
-    uint64_t reqId = ++lastReqId;
-    auto timer = std::unique_ptr<Timeout>(new Timeout(
-        transport, timeout,
-        [this, reqId]() { UnloggedRequestTimeoutCallback(reqId); }));
-
-    PendingUnloggedRequest *req =
-    new PendingUnloggedRequest(request,
-                   reqId,
-                   continuation,
-                   error_continuation,
-                   std::move(timer));
-
-    proto::UnloggedRequestMessage reqMsg;
-    reqMsg.mutable_req()->set_op(request);
-    reqMsg.mutable_req()->set_clientid(clientid);
-    reqMsg.mutable_req()->set_clientreqid(reqId);
-    // Debug("Sending to %i, %i with id %lu", groupIdx, replicaIdx, reqId);
-    if (transport->SendMessageToReplica(this, groupIdx, replicaIdx, reqMsg)) {
-    req->timer->Start();
-    pendingReqs[reqId] = req;
-    } else {
-        Warning("Could not send unlogged request to replica");
-    delete req;
-    }
 }
 
 void
@@ -330,7 +295,7 @@ void IRClient::HandleSlowPathConsensus(
     response.mutable_opid()->set_clientid(clientid);
     response.mutable_opid()->set_clientreqid(reqid);
     response.set_result(req->decideResult);
-    if (transport->SendMessageToAll(this, response)) {
+    if (transport->SendMessageToGroup(this, group, response)) {
         Debug("FinalizeConsensusMessages sent for request %lu.", reqid);
         req->sent_confirms = true;
         req->timer->Start();
@@ -377,7 +342,7 @@ void IRClient::HandleFastPathConsensus(
         response.mutable_opid()->set_clientid(clientid);
         response.mutable_opid()->set_clientreqid(reqid);
         response.set_result(result.first);
-        if (transport->SendMessageToAll(this, response)) {
+        if (transport->SendMessageToGroup(this, group, response)) {
             Debug("FinalizeConsensusMessages sent for request %lu.", reqid);
             req->sent_confirms = true;
             req->timer->Start();
@@ -423,7 +388,7 @@ IRClient::ResendConfirmation(const uint64_t reqId, bool isConsensus)
         response.mutable_opid()->set_clientreqid(req->clientReqId);
         response.set_result(req->decideResult);
 
-        if(transport->SendMessageToAll(this, response)) {
+        if(transport->SendMessageToGroup(this, group, response)) {
             req->timer->Reset();
         } else {
             Warning("Could not send finalize message to replicas");
@@ -439,7 +404,7 @@ IRClient::ResendConfirmation(const uint64_t reqId, bool isConsensus)
         response.mutable_opid()->set_clientid(clientid);
         response.mutable_opid()->set_clientreqid(req->clientReqId);
 
-        if (transport->SendMessageToAll(this, response)) {
+        if (transport->SendMessageToGroup(this, group, response)) {
 	    req->timer->Reset();
 	} else {
             Warning("Could not send finalize message to replicas");
@@ -516,7 +481,7 @@ IRClient::HandleInconsistentReply(const TransportAddress &remote,
             proto::FinalizeInconsistentMessage response;
             *(response.mutable_opid()) = msg.opid();
 
-            if (transport->SendMessageToAll(this, response)) {
+            if (transport->SendMessageToGroup(this, group, response)) {
                 req->timer->Start();
             } else {
                 Warning("Could not send finalize message to replicas");

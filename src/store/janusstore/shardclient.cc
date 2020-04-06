@@ -14,7 +14,7 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
   this->num_replicas = config->n;
   // Debug("shardclient%d has %d replicas\n", shard, this->num_replicas);
 
-  client = new replication::ir::IRClient(*config, transport, client_id);
+  client = new replication::ir::IRClient(*config, transport, shard, client_id);
 
   if (closestReplica == -1) {
     replica = client_id % config->n;
@@ -62,7 +62,7 @@ void ShardClient::PreAccept(const Transaction &txn, uint64_t ballot, client_prea
 	// the Client's callback function when all responses returned
 	// Debug("shardclient%d shardcasting PREACCEPT to %d replicas\n for txn %i", this->shard, this->num_replicas, txn_id);
 	for (int i = 0; i < this->num_replicas; i++) {
-		client->InvokeUnlogged(shard, i, request_str,
+		client->InvokeUnlogged(i, request_str,
 			std::bind(&ShardClient::PreAcceptContinuation, this,
 			placeholders::_1, placeholders::_2), nullptr, 10000);
 	}
@@ -92,7 +92,7 @@ void ShardClient::Accept(uint64_t txn_id, std::vector<uint64_t> deps, uint64_t b
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
 	for (int i = 0; i < this->num_replicas; i++) {
-		client->InvokeUnlogged(shard, i, request_str,
+		client->InvokeUnlogged(i, request_str,
 			std::bind(&ShardClient::AcceptContinuation, this,
 			placeholders::_1, placeholders::_2), nullptr, 10000);
 	}
@@ -132,7 +132,7 @@ void ShardClient::Commit(uint64_t txn_id, std::vector<uint64_t> deps, std::map<u
 	// ShardClient continutation will be able to invoke
 	// the Client's callback function when all responses returned
 	for (int i = 0; i < this->num_replicas; i++) {
-		client->InvokeUnlogged(shard, i, request_str,
+		client->InvokeUnlogged(i, request_str,
 			std::bind(&ShardClient::CommitContinuation, this,
 			placeholders::_1, placeholders::_2), nullptr, 10000);
 	}
@@ -273,7 +273,7 @@ void ShardClient::Read(string key, client_read_callback pcb) {
 	request.SerializeToString(&request_str);
 	this->pendingReads[key] = pcb;
 	for (int i = 0; i < this->num_replicas; i++) {
-		client->InvokeUnlogged(shard, i, request_str,
+		client->InvokeUnlogged(i, request_str,
 			std::bind(&ShardClient::ReadContinuation, this,
 			placeholders::_1, placeholders::_2), nullptr, 10000);
 	}

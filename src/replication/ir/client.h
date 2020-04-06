@@ -53,7 +53,7 @@ public:
     using decide_t = std::function<string(const result_set_t &)>;
 
     IRClient(const transport::Configuration &config,
-             Transport *transport,
+             Transport *transport, int group,
              uint64_t clientid = 0);
     virtual ~IRClient();
 
@@ -72,13 +72,6 @@ public:
         continuation_t continuation,
         error_continuation_t error_continuation = nullptr,
         uint32_t timeout = DEFAULT_UNLOGGED_OP_TIMEOUT) override;
-    virtual void InvokeUnlogged(
-        int groupIdx,
-        int replicaIdx,
-        const string &request,
-        continuation_t continuation,
-        error_continuation_t error_continuation = nullptr,
-        uint32_t timeout = DEFAULT_UNLOGGED_OP_TIMEOUT);
     virtual void ReceiveMessage(
         const TransportAddress &remote,
         const string &type,

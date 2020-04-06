@@ -113,7 +113,8 @@ void Client::Get(const std::string &key, get_callback gcb,
       for (int i = 0; i < 4; ++i) {
         intValue = intValue | (static_cast<uint64_t>(val[i]) << ((3 - i) * 8));
       }
-      Debug("GET CALLBACK [%lu : %s] Read value %lu.", client_seq_num, key.c_str(), intValue);
+      Debug("GET CALLBACK [%lu : %s] Read int value %lu (%lu total bytes).",
+          client_seq_num, key.c_str(), intValue, val.length());
     }
     ReadMessage *read = txn.add_read_set();
     read->set_key(key);

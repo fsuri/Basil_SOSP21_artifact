@@ -40,9 +40,9 @@ namespace replication {
 namespace vr {
 
 VRClient::VRClient(const transport::Configuration &config,
-                   Transport *transport,
+                   Transport *transport, int group,
                    uint64_t clientid)
-    : Client(config, transport, clientid)
+    : Client(config, transport, group, clientid)
 {
     lastReqId = 0;
 }
@@ -87,7 +87,7 @@ VRClient::InvokeUnlogged(int replicaIdx,
     reqMsg.mutable_req()->set_clientid(clientid);
     reqMsg.mutable_req()->set_clientreqid(reqId);
 
-    if (transport->SendMessageToReplica(this, replicaIdx, reqMsg)) {
+    if (transport->SendMessageToReplica(this, group, replicaIdx, reqMsg)) {
 	Timeout *timer =
 	    new Timeout(transport, timeout, [this, reqId]() {
 		    UnloggedRequestTimeoutCallback(reqId);
@@ -121,7 +121,7 @@ VRClient::SendRequest(const PendingRequest *req)
 
     //Debug("SENDING REQUEST: %lu %lu", clientid, pendingRequest->clientReqId);
     // XXX Try sending only to (what we think is) the leader first
-    if (transport->SendMessageToAll(this, reqMsg)) {
+    if (transport->SendMessageToGroup(this, group, reqMsg)) {
 	req->timer->Reset();
     } else {
 	Warning("Could not send request to replicas.");
