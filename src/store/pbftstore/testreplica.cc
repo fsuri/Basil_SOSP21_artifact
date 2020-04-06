@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
 
   pbftstore::Server* server = new pbftstore::Server();
   KeyManager keyManager(keyPath);
-  pbftstore::Replica replica(config, &keyManager, dynamic_cast<pbftstore::App *>(server), groupIdx, myId, false, &transport);
+  pbftstore::Replica replica(config, &keyManager, dynamic_cast<pbftstore::App *>(server), groupIdx, myId, true, &transport);
 
   transport.Run();
 

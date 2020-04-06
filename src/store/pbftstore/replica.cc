@@ -43,7 +43,7 @@ Replica::~Replica() {}
 
 void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
                           const string &d, void *meta_data) {
-  printf("Received a message\n");
+  // printf("Received a message\n");
   proto::SignedMessage signedMessage;
   string type;
   string data;
@@ -92,6 +92,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
   printf("Handling request message\n");
 
   if (!slots.requestExists(request)) {
+    cout << "new request: " << request.packed_msg().type() << endl;
 
     slots.addVerifiedRequest(request);
 
@@ -143,7 +144,10 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
       return;
     }
   }
-  slots.setVerifiedPreprepare(primaryId, preprepare);
+  if(!slots.setVerifiedPreprepare(primaryId, preprepare)) {
+    // The primary is equivocating, don't accept the preprepare
+    return;
+  }
 
   // Multicast prepare to everyone
   proto::Prepare prepare;
@@ -179,7 +183,11 @@ void Replica::HandlePrepare(const TransportAddress &remote,
 
   // wait for 2f prepare + preprepare all matching and then send commit to
   // everyone start timer for 2f+1 commits
-  if (slots.Prepared(seqnum, viewnum, config.f)) {
+  if (slots.Prepared(seqnum, viewnum, config.f) && sentCommits[seqnum].find(viewnum) == sentCommits[seqnum].end()) {
+    cout << "Sending commit to everyone" << endl;
+
+    sentCommits[seqnum].insert(viewnum);
+
     // Multicast commit to everyone
     proto::Commit commit;
     commit.set_seqnum(seqnum);
@@ -215,8 +223,18 @@ void Replica::HandleCommit(const TransportAddress &remote,
 
   // wait for 2f+1 matching commit messages, then mark message as committed,
   // clear timer
+  cout << config.f << endl;
   if (slots.CommittedLocal(seqnum, viewnum, config.f)) {
     cout << "Committed message with type: " << slots.getRequestMessage(digest)->type() << endl;
+    std::pair<uint64_t, std::string> view_and_digest(viewnum, digest);
+    pendingSeqNum[seqnum] = view_and_digest;
+
+    while(pendingSeqNum.find(execSeqNum) != pendingSeqNum.end()) {
+      std::string digest = pendingSeqNum[execSeqNum].second;
+      proto::PackedMessage* msg = slots.getRequestMessage(digest);
+      app->Execute(msg->type(), msg->msg());
+      execSeqNum++;
+    }
   }
 }
 }  // namespace pbftstore

@@ -3,8 +3,8 @@
 
 class NodeClient : TransportReceiver {
  public:
-  NodeClient(UDPTransport *transport) : transport(transport) {
-
+  NodeClient(UDPTransport *transport, transport::Configuration &config) : transport(transport) {
+    transport->Register(this, config, -1, -1);
   }
   ~NodeClient() {}
 
@@ -33,9 +33,17 @@ private:
 };
 
 int main(int argc, char **argv) {
+  std::ifstream configStream("test.config");
+  if (configStream.fail()) {
+    fprintf(stderr, "unable to read configuration file: %s\n",
+            "test.config");
+    exit(1);
+  }
+  transport::Configuration config(configStream);
+
   UDPTransport transport(0.0, 0.0, 0);
 
-  NodeClient client(&transport);
+  NodeClient client(&transport, config);
 
   client.SendTest();
 

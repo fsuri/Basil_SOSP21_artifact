@@ -27,14 +27,14 @@ class Slots {
   // returns true if the set succeeded, if returns false -> suspect primary
   bool setVerifiedPreprepare(uint64_t primary_id, const proto::Preprepare &preprepare);
 
-  // returns true if the set succeeded, if returns false -> suspect replica
-  bool setVerifiedPrepare(const proto::Prepare &prepare, uint64_t replica_id);
+  // add replica_id to the set of replicas attesting to have sent the prepare
+  void setVerifiedPrepare(const proto::Prepare &prepare, uint64_t replica_id);
 
   // returns true if this replica is prepared for the given view
   bool Prepared(uint64_t slot_num, uint64_t view, uint64_t f);
 
-  // returns true if the set succeeded, if returns false -> suspect replica
-  bool setVerifiedCommit(const proto::Commit &commit, uint64_t replica_id);
+  // add replica_id to the set of replicas attesting to have sent the commit
+  void setVerifiedCommit(const proto::Commit &commit, uint64_t replica_id);
 
   // returns true if this replica is in the committed-local state for the view
   bool CommittedLocal(uint64_t slot_num, uint64_t view, uint64_t f);

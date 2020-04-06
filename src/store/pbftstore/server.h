@@ -11,7 +11,7 @@ public:
   Server();
   ~Server();
 
-  void Execute(std::string& type, std::string& msg);
+  void Execute(const std::string& type, const std::string& msg);
 
 
   void Load(const std::string &key, const std::string &value,

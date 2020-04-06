@@ -12,7 +12,7 @@ public:
     virtual ~App();
 
     // upcall to execute the message
-    virtual void Execute(std::string& type, std::string& msg);
+    virtual void Execute(const std::string& type, const std::string& msg);
 };
 
 }

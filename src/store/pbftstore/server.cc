@@ -8,7 +8,7 @@ Server::Server() {
 
 Server::~Server() {}
 
-void Server::Execute(std::string& type, std::string& msg) {
+void Server::Execute(const std::string& type, const std::string& msg) {
 
 }
 

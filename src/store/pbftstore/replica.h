@@ -47,6 +47,14 @@ public:
   int view;
   int seqnum;
 
+  // map from seqnum to set of views that we have sent the commit for
+  std::unordered_map<uint64_t, std::unordered_set<uint64_t>> sentCommits;
+
+  // the next sequence number to be executed
+  int execSeqNum;
+  // map from pending executed message to (view, digest)
+  std::unordered_map<uint64_t, std::pair<uint64_t, std::string>> pendingSeqNum;
+
   int getPrimaryForView(int view);
 
   Slots slots;

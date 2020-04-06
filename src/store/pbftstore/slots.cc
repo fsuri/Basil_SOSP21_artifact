@@ -1,4 +1,5 @@
 #include "store/pbftstore/slots.h"
+#include "store/pbftstore/common.h"
 #include "lib/crypto.h"
 
 namespace pbftstore {
@@ -7,15 +8,13 @@ Slots::Slots() {}
 Slots::~Slots() {}
 
 bool Slots::requestExists(const proto::Request &request) {
-  std::string serialized = request.SerializeAsString();
-  std::string digest = crypto::Hash(serialized);
+  std::string digest = RequestDigest(request);
 
   return requests.find(digest) != requests.end();
 }
 
 void Slots::addVerifiedRequest(const proto::Request &request) {
-  std::string serialized = request.SerializeAsString();
-  std::string digest = crypto::Hash(serialized);
+  std::string digest = RequestDigest(request);
 
   requests[digest] = request;
 }
@@ -43,14 +42,12 @@ bool Slots::setVerifiedPreprepare(uint64_t primary_id,
   return false;
 }
 
-bool Slots::setVerifiedPrepare(const proto::Prepare &prepare, uint64_t replica_id) {
+void Slots::setVerifiedPrepare(const proto::Prepare &prepare, uint64_t replica_id) {
   uint64_t view = prepare.viewnum();
   uint64_t seq_num = prepare.seqnum();
   std::string digest = prepare.digest();
 
   prepares[seq_num][view][digest].insert(replica_id);
-
-  return true;
 }
 
 bool Slots::Prepared(uint64_t slot_num, uint64_t view, uint64_t f) {
@@ -65,14 +62,12 @@ bool Slots::Prepared(uint64_t slot_num, uint64_t view, uint64_t f) {
   return false;
 }
 
-bool Slots::setVerifiedCommit(const proto::Commit &commit, uint64_t replica_id) {
+void Slots::setVerifiedCommit(const proto::Commit &commit, uint64_t replica_id) {
   uint64_t view = commit.viewnum();
   uint64_t seq_num = commit.seqnum();
   std::string digest = commit.digest();
 
   commits[seq_num][view][digest].insert(replica_id);
-
-  return true;
 }
 
 bool Slots::CommittedLocal(uint64_t slot_num, uint64_t view, uint64_t f) {

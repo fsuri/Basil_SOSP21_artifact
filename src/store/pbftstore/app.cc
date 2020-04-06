@@ -11,7 +11,7 @@ App::~App() {
 
 }
 
-void App::Execute(std::string &msg, std::string &type) {
+void App::Execute(const std::string &msg, const std::string &type) {
   Panic("Unimplemented");
 }
 
