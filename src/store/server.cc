@@ -198,7 +198,7 @@ DEFINE_uint64(prepare_batch_period, 0, "length of batches for deterministic prep
 /**
  * Indicus settings.
  */
-DEFINE_uint64(indicus_time_delta, 100, "max clock skew allowed for concurrency"
+DEFINE_uint64(indicus_time_delta, 2ULL << 32, "max clock skew allowed for concurrency"
     " control (for Indicus)");
 DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
     " necessary to prevent impersonation (for Indicus)");

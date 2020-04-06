@@ -57,7 +57,7 @@ namespace indicusstore {
 
 class Client : public ::Client {
  public:
-  Client(transport::Configuration *config, int nShards, int nGroups,
+  Client(transport::Configuration *config, uint64_t id, int nShards, int nGroups,
       int closestReplica, Transport *transport, partitioner part,
       bool syncCommit, uint64_t readQuorumSize, bool signedMessages,
       bool validateProofs, KeyManager *keyManager,

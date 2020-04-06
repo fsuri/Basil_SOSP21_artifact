@@ -31,6 +31,8 @@
 
 #include "store/indicusstore/server.h"
 
+#include <bitset>
+
 #include "lib/tcptransport.h"
 #include "store/indicusstore/common.h"
 
@@ -107,16 +109,24 @@ void Server::Load(const string &key, const string &value,
   val.proof.mutable_txn()->mutable_timestamp()->set_timestamp(0);
   val.proof.mutable_txn()->mutable_timestamp()->set_id(0);
   store.put(key, val, timestamp);
+  if (key.length() == 5 && key[0] == 0) {
+    std::cerr << std::bitset<8>(key[0]) << ' '
+              << std::bitset<8>(key[1]) << ' '
+              << std::bitset<8>(key[2]) << ' '
+              << std::bitset<8>(key[3]) << ' '
+              << std::bitset<8>(key[4]) << ' '
+              << std::endl;
+  }
 }
 
 void Server::HandleRead(const TransportAddress &remote,
     const proto::Read &msg) {
   Debug("READ[%lu] for key %s.", msg.req_id(), msg.key().c_str());
   Timestamp ts(msg.timestamp());
-  if (CheckHighWatermark(ts)) {
+  /*if (CheckHighWatermark(ts)) {
     // ignore request if beyond high watermark
     return;
-  }
+  }*/
 
   std::pair<Timestamp, Server::Value> tsVal;
   bool exists = store.get(msg.key(), ts, tsVal);

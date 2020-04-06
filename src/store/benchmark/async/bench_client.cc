@@ -53,7 +53,9 @@ BenchmarkClient::BenchmarkClient(Transport &transport, uint32_t clientId,
     latencyFilename(latencyFilename) {
 	if (delay != 0) {
 		Notice("Delay between requests: %ld ms", delay);
-	}
+	} else {
+    Notice("No delay between requests.");
+  }
 	started = false;
 	done = false;
   cooldownStarted = false;
@@ -166,6 +168,11 @@ void BenchmarkClient::IncrementSent() {
       uint64_t ns = Latency_End(&latency);
       std::cout << GetLastOp() << ',' << ns << std::endl;
       latencies.push_back(ns);
+      if (latencies.size() == 1UL) {
+        struct timeval currTime;
+        gettimeofday(&currTime, NULL);
+        std::cout << "#start," << currTime.tv_usec << std::endl;
+      }
     }
 
     if (numRequests == -1) {
@@ -188,6 +195,7 @@ void BenchmarkClient::IncrementSent() {
 
 void BenchmarkClient::Finish() {
   gettimeofday(&endTime, NULL);
+  std::cout << "#end," << endTime.tv_usec << std::endl;
 
   struct timeval diff = timeval_sub(endTime, startTime);
 

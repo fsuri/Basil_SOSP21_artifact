@@ -396,8 +396,8 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
                        sizeof(totalLen) +
                        sizeof(uint32_t));
 
-    // Debug("Sending %ld byte %s message over TCP to %s:%d",
-          // totalLen, type.c_str(), inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
+    Debug("Sending %ld byte %s message over TCP to %s:%d", totalLen,
+        type.c_str(), inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
     
     char buf[totalLen];
     char *ptr = buf;

@@ -595,7 +595,8 @@ int main(int argc, char **argv) {
             NOT_REACHABLE();
         }
 
-        client = new indicusstore::Client(config, FLAGS_num_shards,
+        client = new indicusstore::Client(config, (FLAGS_client_id << 3),
+            FLAGS_num_shards,
             FLAGS_num_groups, FLAGS_closest_replica, transport, part,
             FLAGS_tapir_sync_commit, readQuorumSize,
             FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,

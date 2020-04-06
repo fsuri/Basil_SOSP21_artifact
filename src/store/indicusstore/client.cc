@@ -37,24 +37,16 @@ namespace indicusstore {
 
 using namespace std;
 
-Client::Client(transport::Configuration *config, int nShards, int nGroups,
+Client::Client(transport::Configuration *config, uint64_t id, int nShards,
+    int nGroups,
     int closestReplica, Transport *transport, partitioner part, bool syncCommit,
     uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
     KeyManager *keyManager, TrueTime timeServer) : config(config),
+    client_id(id),
     nshards(nShards), ngroups(nGroups), transport(transport), part(part),
     syncCommit(syncCommit), signedMessages(signedMessages),
     validateProofs(validateProofs), keyManager(keyManager),
-    timeServer(timeServer), lastReqId(0UL) {
-  // Initialize all state here;
-  client_id = 0;
-  while (client_id == 0) {
-    random_device rd;
-    mt19937_64 gen(rd());
-    uniform_int_distribution<uint64_t> dis;
-    client_id = dis(gen);
-  }
-  client_seq_num = 0;
-
+    timeServer(timeServer), client_seq_num(0UL), lastReqId(0UL) {
   bclient.reserve(nshards);
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
