@@ -43,49 +43,50 @@ Repeated entry---line 21980 of file refs.bib
  : @article{gueta2018sbft
  :                       ,
 I'm skipping whatever remains of this entry
+Warning--I didn't find a database entry for ""
 Warning--empty school in buchman2016tendermint
 Warning--can't use both volume and number fields in castro1999practical
 Warning--empty publisher in lamport2019byzantine
 Warning--empty year in padilha2013augustus
-You've used 51 entries,
+You've used 58 entries,
             2118 wiz_defined-function locations,
-            971 strings with 17011 characters,
-and the built_in function-call counts, 20060 in all, are:
-= -- 1979
-> -- 930
-< -- 30
-+ -- 371
-- -- 316
-* -- 1278
-:= -- 3071
-add.period$ -- 152
-call.type$ -- 51
-change.case$ -- 310
+            1010 strings with 18301 characters,
+and the built_in function-call counts, 22990 in all, are:
+= -- 2273
+> -- 1081
+< -- 32
++ -- 431
+- -- 368
+* -- 1505
+:= -- 3553
+add.period$ -- 174
+call.type$ -- 58
+change.case$ -- 356
 chr.to.int$ -- 0
-cite$ -- 55
-duplicate$ -- 831
-empty$ -- 1602
-format.name$ -- 316
-if$ -- 4396
+cite$ -- 62
+duplicate$ -- 937
+empty$ -- 1809
+format.name$ -- 368
+if$ -- 4999
 int.to.chr$ -- 0
-int.to.str$ -- 51
-missing$ -- 41
-newline$ -- 249
-num.names$ -- 100
-pop$ -- 418
+int.to.str$ -- 58
+missing$ -- 49
+newline$ -- 285
+num.names$ -- 116
+pop$ -- 455
 preamble$ -- 1
-purify$ -- 260
+purify$ -- 299
 quote$ -- 0
-skip$ -- 698
+skip$ -- 776
 stack$ -- 0
-substring$ -- 1218
-swap$ -- 314
-text.length$ -- 30
+substring$ -- 1430
+swap$ -- 343
+text.length$ -- 32
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 204
+type$ -- 232
 warning$ -- 4
-while$ -- 194
-width$ -- 53
-write$ -- 537
+while$ -- 226
+width$ -- 60
+write$ -- 618
 (There were 10 error messages)

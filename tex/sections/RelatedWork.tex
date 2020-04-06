@@ -2,19 +2,80 @@
 %-------------------------------------------------------------------------------
 \section{Related Work/Comparison}  
 %-------------------------------------------------------------------------------
+
+\paragraph{Consistent Replication}
+Indicus offers a replicated, byzantine fault tolerant database that leverages concurrency control and quorum based agreement to maintain isolation guarantees despite its unordered/inconsistent replication layer. 
+The majority of prior work instead maintains consistent replication by means of the State Machine Replication (SMR) approach \cite{schneider1990implementing}. Existing solutions for the crash failure fault model (Paxos based: \cite{Li2007, Lampson2001, Lamport98Paxos, Lamport2005a, Lamport2005, Lamport01Paxos, Chandra2007} , Zab: \cite{junqueira2011zab}  VR: \cite{oki1988viewstampeda, liskov2012viewstamped}, \cite{van2014vive}) as well as the byzantine fault model \cite{lamport2011byzantizing, pires2018generalized, Guerraoui08Next, Kotla04High, bessani2014state, liskov2010viewstamped} (most notably PBFT \cite{castro1999practical}) achieve consistency by achieving consensus on a totally ordered log of requests. 
+
+The seminal \textit{practical} Byzantine Fault Tolerance (PBFT) protocol and its adaptations form the cornerstone of most Permissioned Blockchains \cite{Hyperledger, EthereumQuorum, buchman2016tendermint, al2017chainspace, kokoris2018omniledger,  gilad2017algorand, baudet2019state} (Algorand and Omniledger both not permissioned, but lots of PoS blockchains elect validator set that runs pbft basically, mention some traditional blockchains? Bitcoibn, Ehtereum, also total order).
+
+\fs{mention zyzzyva explicitly because of Fast path concept and speculative execution of replicas. Difference: still leaderbased and clients EXPECT replicas to process in order.}
+
+
+\paragraph{Enforcing Partial Order}
+Totally ordered ledgers solve the problem of consistent transaction replication but enforce unecessary coordination/serialization between commutative operations. 
+Approaches to reconciling this scalability limitation can be broadly categorized in three ways:
+\textbf{1. Fine-grained ordering}: One class of approaches attempts to only order conflicting operations by examining transaction semantics. Existing work however (cite all CF) targets almost exlusively the crash failure model. The the best of our knowledge, Bilbos/Clairvoyant is the only BFT system that offers SMR for commutative transactions, but limits TX model and is "blocking" (i.e. no progress until all concurrent - potentially conflicting - TX that could be ordered before are finished). Other Quorum based systems exist (Q/U, H/Q, Liskov rendering harmless) but they do not offer transactions. Q/U resembles Logging in Indicus - but has no liveness on its own.
+
+\textbf{2. Sharding} Omniledger, Chainspace explore sharding for BFT. We point out that sharding just for partial order is a hack.
+Tapir/Janus points out that layering sharding on top of rpelication is inefficient in Crash Failure. Indicus is first to do this for BFT.
+
+\textbf{3. DAGs} Iota, Byteball, Ava, all do DAGs which allows to parallelize some agreement. Existing work is all for permissionless systems. Unclear how to map this to permissioned and also whether it is practical.
+
+All of these improve upon total order by inducing only a partial order. Indicus does so too.
+
+-Commutativity approaches (CF and BFT - Bilbos, Q/U,)
+-Sharding; replication and cc/atomic commit are layered. 
+-DAGs
+
+\paragraph{Byzantine Databases}
+In indicus we argue that blockchain functionality should be though of as DB, transactional store. 
+Series of work that offer explicite Byz DBs: Byzantium, Augustus, Callinicios, HRDB, BFT Dur,
+Databasify Fabric
+
+
+\paragraph{Byzantine Clients}
+As part of reformulating the Blockchain problem we reformulate correctness guarantees in a byzantine setting. Specifically we address byzantine clients since Indicus aims to be leaderless. Other systems that explore byz clients (quorum systems): \cite{Liskov06Tolerating}, The DBS above only talk about how to tolerate.
+Other work that explores fairness/correctness (Herlihy paper)
+
+
+\iffalse
+
+
+For ex: Both CF SMR [cite a gazillion] and BFT SMR [cite a gazillion] focus on maintaining a totally ordered log of requests
+Permission blockchains, as they rely primarily on BFT constructs similarly maintain this total order
+[cite a gazillion]
+
+There is some work that recognizes that this is not scalable and instead tries to only order conflicting ops [Epaxos, Generalised Paxos, Ava, Iota, CPPaxos or whatever it's called], or add sharding [OmniLedger, Herlihy's paper]
+In the CF context, layering sharding on top of  replication has been shown to be inefficient [Tapir, Janus]
+We argue that we should think of blockchains as a DB. There is some work that does that already [the series of five papers that we talked about]. (one sentence for each on how they build on one other). We expand on that research to be 1) leaderless, scalable, etc
+And then maybe after this, as part of reformulating this as a DB problem also need to reformulate the correctness guarantees (cite all work that talks about byzantine clients) 
+
+\fi
+
+
+
+
+
+
+
+\subsection{details}
+
+
 Indicus is the first to do blablabla. This section describes related work...
 
 \textbf{Distributed Transactions for benign faults}
-A lot of recent effort has gone into designing high throughput and low latency databases that leverage synergies between transaction and replication layer to squeeze out any last performance. The recently proposed TAPIR transaction protocol leverages redundancy between transaction ordering and replication ordering to reduce total roundtrips, thus reducing latency in wide area networks. TAPIR shares several similarities with our system, most notably the absence of a leader and the resulting unordered validation structure. TAPIR too, leverages optimistic concurrency control to allow for concurrency among commutative transactions. When congestion is high however, throughput and tail latency worsen as abort rate grows. Janus avoids transaction aborts by dynamically re-ordering conflicting transactions \cite{mu2016consolidating}. This however, is made possible by assuming one-shot transactions, i.e. fixed read/write keys, and thus reduces the application generality. Another key-value store, Carousel, similarly assumes a restricted Transaction model in order to parallelize execution and validation \cite{yan2018carousel}. CURP too, leverages commutativity in order to reduces replication costs by making requests durable first, and only ordering them later \cite{park2019exploiting}. 
+A lot of recent effort has gone into designing high throughput and low latency databases that leverage synergies between transaction and replication layer to improve performance. The recently proposed TAPIR transaction protocol leverages redundancy between transaction ordering and replication ordering to reduce total roundtrips, thus reducing latency in wide area networks. TAPIR shares several similarities with our system, most notably the absence of a leader and the resulting unordered validation structure. Like Indicus, TAPIR utilizes optimistic concurrency control to allow for concurrency among commutative transactions while minimizing coordination. When congestion is high however, throughput and tail latency worsen as abort rate grows. Janus avoids transaction aborts by dynamically re-ordering conflicting transactions \cite{mu2016consolidating}. This however, is made possible by assuming one-shot transactions, i.e. fixed read/write keys, and thus reduces the application generality. Another key-value store, Carousel, similarly assumes a restricted Transaction model in order to parallelize execution and validation \cite{yan2018carousel}. CURP too, leverages commutativity in order to reduces replication costs by making requests durable first, and only ordering them later \cite{park2019exploiting}. 
 
-While all of these databases offer low latency replication, they are fundamentally limited to tolerating crash-failures. This strong failure assumption makes them less secure and not suitable for storing mission-critical, financial or highly sensitive data.
+While all of these databases offer low latency replication, they are fundamentally limited to tolerating crash-failures. This strong failure assumption makes them less robust and not suitable for mission-critical services \cite{Abdollah2007}, finance or otherwise highly sensitive data.
 
 \textbf{Byzantine Fault Tolerant Replication} 
- The problem of tolerating arbitrary failures was originally formalized as \textit{Byzantine Generals Problem} \cite{lamport2019byzantine}, paving the way for countless Byzantine Fault Tolerant (BFT) protocols and implementations \cite{castro1999practical, martin2006fast, kotla2007zyzzyva, pires2018generalized, bessani2014state, lamport2011byzantizing, arun2019ezbft, malkhi2019flexible, duan2014hbft, yin2003separating}. Such protocols have a reputation of being are both notoriously difficult to understand and design correctly \cite{abraham2017revisiting, abraham2018revisiting, shrestha2019revisiting}, and in practice often impose significant overhead compared to its crash-failure tolerant counterparts, hence limiting frequent industrial adoption.
+\fs{Really not necessary to explain all the different SMR protocols that exists. Rather: Should explain how they could be used to solve the same problem with total order?}
+ The problem of tolerating arbitrary failures was originally formalized as \textit{Byzantine Generals Problem} \cite{lamport2019byzantine}, paving the way for countless Byzantine Fault Tolerant (BFT) protocols and implementations \cite{castro1999practical, martin2006fast, kotla2007zyzzyva, pires2018generalized, bessani2014state, lamport2011byzantizing, arun2019ezbft, malkhi2019flexible, duan2014hbft, yin2003separating}. Such protocols have a reputation of being  both notoriously difficult to understand and design correctly \cite{abraham2017revisiting, abraham2018revisiting, shrestha2019revisiting}, and in practice often impose significant overhead compared to its crash-failure tolerant counterparts, hence limiting frequent industrial adoption.
 Recently however, with the surge in Blockchain interest, BFT protocols are experiencing a second Spring. While originally developed to tolerate arbitrary bugs, these protocols find increasing importance in settings where participants are untrusted or malicious. Permissioned Blockchains, organized by a consortium of registered participants can use traditional BFT State Machine Replication (SMR) protocols in order to achieve agreement. 
 \fs{mention basic BFT first? pBFT is the first "practical", not the first BFT}
 The seminal practical BFT (PBFT) protocol \cite{castro1999practical} implements a primary backup scheme that achieves consensus in three broadcast rounds, maintaining safety as long as the number of faulty participants is $<1/3$ (i.e. $n\geq 3f+1$), and offering liveness during synchronous operation. When primaries misbehave, a dedicated \textit{view-change protocol} allows for safe reconciliation. There have been numerous adaptations that aim to speed up common case and failure free execution such as FaB \cite{martin2006fast}, and most notably Zyzzyva \cite{kotla2007zyzzyva} which leverages speculative execution and a semi-client driven protocol to reduce latency. Akin to Indicus, replicas in Zyzzyva speculatively execute requests out-of-order, and rely on honest clients for reconciliation. Zyzzyva replicas however, \textit{expect} to process requests in-order, and diverge only temporarily as result of a byzantine leader. hBFT builds on Zyzzyva and attempts to improve faulty case behavior by returning the client responsibility of detecting inconsistencies to a dedicated replica checkpointing protocol. 
-UpRight explores efforts to tolerate both byzantine and crash failures in order to make the overhead of deplyoing a BFT system practical
+UpRight explores efforts to tolerate both byzantine and crash failures in order to make the overhead of deplyoing a BFT system practical.
 SBFT \cite{gueta2018sbft} pursues the goal of scaling to scale to large replication degrees, while offering light clients and high throughput under benign faults. It adopts the UpRight replication model, and modifies PBFT by utilizing collectors, threshold signatures and a fast path akin to Zyzzyva. 
 Aardvark \cite{clement2009making} emphasizes the importance of robust performance under byzantine failures by adding increased client and replica checks and imposing frequent leader rotation by steadily increasing throughput requirements. Tendermint \cite{buchman2016tendermint} pushes this idea to the extreme by rotating leaders continuously, at the cost of assuming a synchronous network. Herlihy and Mor attempt to rigorize fairness properties for permissioned Blockchains and propose techniques to increase accountability for Tendermint specifically \cite{herlihy2016enhancing}.
 
@@ -26,9 +87,9 @@ The Quorum/Update (Q/U) protocol too, offers leaderless agreement by leveraging 
 All of the above systems, including Indicus, guarantee Liveness only under the assumption of some degree of synchrony. This is consistent with the well known FLP impossibility result stating that no deterministic consensus solution may exist in the presence of asynchrony \cite{fischer1985impossibility}. Protocols such as Ben-Or's algorithm \cite{ben1983another}, HoneybadgerBFT \cite{miller2016honey} or BEAT \cite{duan2018beat} sidestep this result by introducing randomization, thus enabling probabilistic agreement even during asynchrony.
 
 \textbf{BFT distributed transactions}
-While the literature on BFT state machine replication is extensive, the efforts to offer a transactional interface for BFT are scarce. SMR itself can be utilized as a straw-man system to implement pre-defined Transactions (one-shot or stored procedures) by enforcing a common total order  in which replicas will execute the transactions. 
+While the literature on BFT state machine replication is extensive, the efforts to offer a transactional interface for BFT are scarce. SMR itself can be utilized as a straw-man system to implement pre-defined Transactions (one-shot or stored procedures) by enforcing a common total order in which replicas will execute the transactions. \fs{Byz agreement apps for DB \cite{garcia1986applications}}
 HRDB offers a dedicated BFT Database, but assumes a trusted shepheard layer, thus not being truly BF resilient \cite{vandiver2007tolerating}.
-Byantium offers Snapshot Isolation for Transactions by re-purposing PBFT as atomic broadcast. It executes requests only at a primary and uses replicas to validate results in the total order defined by the SMR protocol \cite{garcia2011efficient}. Augustus implements short-transactions, a limited, comparison/query/update transaction model that declares all operations before execution \cite{padilha2013augustus}. It offers scalability via partitioning and achieves consistency within partitions by utilizing atomic broadcast. While Augustus assumes an optimistic execution model that allows for aborts under concurrency, its follow up work Callinicos implements a locking scheme in order to avoid Transaction aborts \cite{padilha2016callinicos}. To do so efficiently it resorts to a limited transaction model that requires knowledge of read/write sets and otherwise locks an entire partition in order to guarantee mutual exclusion, thus voiding any concurrency. BFT Deferred Update Replication adopts an interactive OCC transaction model comparable to ours, allowing execution to be speculative at clients \cite{pedone2012byzantine}. However, it uses PBFT as atomic broadcast implementation to enforce SMR on validation, thus resorting to both a leader, and a total order on all requests. It moreover does not extend to multiple shards.
+Byantium \fs{middleware stuff} offers Snapshot Isolation for Transactions by re-purposing PBFT as atomic broadcast. It executes requests only at a primary and uses replicas to validate results in the total order defined by the SMR protocol \cite{garcia2011efficient}. Augustus implements short-transactions, a limited, comparison/query/update transaction model that declares all operations before execution \cite{padilha2013augustus}. It offers scalability via partitioning and achieves consistency within partitions by utilizing atomic broadcast. While Augustus assumes an optimistic execution model that allows for aborts under concurrency, its follow up work Callinicos implements a locking scheme in order to avoid Transaction aborts \cite{padilha2016callinicos}. To do so efficiently it resorts to a limited transaction model that requires knowledge of read/write sets and otherwise locks an entire partition in order to guarantee mutual exclusion, thus voiding any concurrency. BFT Deferred Update Replication adopts an interactive OCC transaction model comparable to ours, allowing execution to be speculative at clients \cite{pedone2012byzantine}. However, it uses PBFT as atomic broadcast implementation to enforce SMR on validation, thus resorting to both a leader, and a total order on all requests. It moreover does not extend to multiple shards.
 
 \textbf{Blockchains and Sharding}
 In the Blockchain world, Chainspace \cite{al2017chainspace} and Omniledger \cite{kokoris2018omniledger} implement sharding by layering 2PC and atomic broadcast (within shards) for the UTXO transaction model. Rapidchain \cite{zamani2018rapidchain} offers efficient sharding for a permissionless system (what else? didnt read much, not so relevant). Hyperledger provides an enterprise-ready permissioned blockchain solution that simulates optimistic transaction processing by letting replicas speculatively execute Smart Contracts. While Hyperledger \cite{Hyperledger} describes itself as a shared database, it relies on a dedicated SMR ordering service that enforces a total order, and, in practice, only tolerates crash failures (Hyperledger uses Raft \cite{ongaro2014search}, a consensus protocol for the Crash-Failure model,  but can be extended to use PBFT). Sharma et al. attempt to \textit{databaseify} Hyperledger by adding database techniques such as transaction re-ordering in order to reduce aborts, but fundamentally maintains the totally ordered (Hyper-) ledger design \cite{sharma2018databasify}. \fs{Databasify paper: tries to add some bandaid db techniques to hyperledger. Transaction re-ordering (still total order), and early aborts.} 

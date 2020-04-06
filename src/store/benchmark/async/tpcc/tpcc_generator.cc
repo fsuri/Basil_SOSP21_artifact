@@ -23,7 +23,7 @@ class Queue {
     while (IsFull()) {
       cond.wait(lock);
     }
-    q.push(t);
+    q.push(t); //need to notify pop too?
   }
 
   void Pop(T &t) {
@@ -88,10 +88,10 @@ void GenerateItemTable(Queue<std::pair<std::string, std::string>> &q) {
     i_row.set_name(RandomAString(14, 24, gen));
     i_row.set_price(std::uniform_int_distribution<uint32_t>(100, 10000)(gen));
     std::string data = RandomAString(26, 50, gen);
-    int original = std::uniform_int_distribution<uint32_t>(1, 10)(gen); 
+    int original = std::uniform_int_distribution<uint32_t>(1, 10)(gen);
     if (original == 1) {
       int startIdx = std::uniform_int_distribution<int>(0, data.length() - sizeof(ORIGINAL_CHARS))(gen);
-      data.replace(startIdx, sizeof(ORIGINAL_CHARS), ORIGINAL_CHARS); 
+      data.replace(startIdx, sizeof(ORIGINAL_CHARS), ORIGINAL_CHARS);
     }
     i_row.set_data(data);
     i_row.SerializeToString(&i_row_out);
@@ -117,7 +117,7 @@ void GenerateWarehouseTable(uint32_t num_warehouses,
     w_row.set_ytd(30000000);
     w_row.SerializeToString(&w_row_out);
     std::string w_key = tpcc::WarehouseRowKey(w_id);
-    q.Push(std::make_pair(w_key, w_row_out));    
+    q.Push(std::make_pair(w_key, w_row_out));
   }
 }
 
@@ -144,15 +144,15 @@ void GenerateStockTableForWarehouse(uint32_t w_id,
     s_row.set_order_cnt(0);
     s_row.set_remote_cnt(0);
     std::string data = RandomAString(26, 50, gen);
-    int original = std::uniform_int_distribution<uint32_t>(1, 10)(gen); 
+    int original = std::uniform_int_distribution<uint32_t>(1, 10)(gen);
     if (original == 1) {
       int startIdx = std::uniform_int_distribution<int>(0, data.length() - sizeof(ORIGINAL_CHARS))(gen);
-      data.replace(startIdx, sizeof(ORIGINAL_CHARS), ORIGINAL_CHARS); 
+      data.replace(startIdx, sizeof(ORIGINAL_CHARS), ORIGINAL_CHARS);
     }
     s_row.set_data(data);
     s_row.SerializeToString(&s_row_out);
     std::string s_key = tpcc::StockRowKey(w_id, s_i_id);
-    q.Push(std::make_pair(s_key, s_row_out));    
+    q.Push(std::make_pair(s_key, s_row_out));
   }
 }
 
@@ -182,7 +182,7 @@ void GenerateDistrictTableForWarehouse(uint32_t w_id,
     d_row.set_next_o_id(3001);
     d_row.SerializeToString(&d_row_out);
     std::string d_key = tpcc::DistrictRowKey(w_id, d_id);
-    q.Push(std::make_pair(d_key, d_row_out));    
+    q.Push(std::make_pair(d_key, d_row_out));
   }
 }
 
@@ -208,7 +208,7 @@ void GenerateCustomerTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
     if (c_id <= 1000) {
       last = c_id - 1;
     } else {
-      last = tpcc::NURand(255, 0, 999, static_cast<int>(c_last), gen); 
+      last = tpcc::NURand(255, 0, 999, static_cast<int>(c_last), gen);
     }
     c_row.set_last(tpcc::GenerateCustomerLastName(last));
     c_row.set_middle("OE");
@@ -236,7 +236,7 @@ void GenerateCustomerTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
     c_row.set_data(RandomAString(300, 500, gen));
     c_row.SerializeToString(&c_row_out);
     std::string c_key = tpcc::CustomerRowKey(w_id, d_id, c_id);
-    q.Push(std::make_pair(c_key, c_row_out));    
+    q.Push(std::make_pair(c_key, c_row_out));
   }
 
   tpcc::CustomerByNameRow cbn_row;
@@ -266,7 +266,7 @@ void GenerateCustomerTable(uint32_t num_warehouses, uint32_t c_load_c_last,
   }
 }
 
-void GenerateHistoryTable(uint32_t num_warehouses, 
+void GenerateHistoryTable(uint32_t num_warehouses,
     Queue<std::pair<std::string, std::string>> &q) {
   std::mt19937 gen;
   tpcc::HistoryRow h_row;
@@ -282,7 +282,7 @@ void GenerateHistoryTable(uint32_t num_warehouses,
         h_row.set_data(RandomAString(12, 24, gen));
         h_row.SerializeToString(&h_row_out);
         std::string h_key = tpcc::HistoryRowKey(w_id, d_id, c_id);
-        q.Push(std::make_pair(h_key, h_row_out));    
+        q.Push(std::make_pair(h_key, h_row_out));
       }
     }
   }
@@ -317,8 +317,8 @@ void GenerateOrderTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
     o_row.set_all_local(true);
     o_row.SerializeToString(&o_row_out);
     std::string o_key = tpcc::OrderRowKey(w_id, d_id, c_id);
-    q.Push(std::make_pair(o_key, o_row_out));    
-    
+    q.Push(std::make_pair(o_key, o_row_out));
+
     // initially, there is exactly one order per customer, so we do not need to
     // worry about writing multiple OrderByCustomerRow with the same key.
     obc_row.set_w_id(w_id);
@@ -355,7 +355,7 @@ void GenerateOrderTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
   }
 }
 
-void GenerateOrderTable(uint32_t num_warehouses, uint32_t c_load_ol_i_id, 
+void GenerateOrderTable(uint32_t num_warehouses, uint32_t c_load_ol_i_id,
     Queue<std::pair<std::string, std::string>> &q) {
   for (uint32_t w_id = 1; w_id <= num_warehouses; ++w_id) {
     for (uint32_t d_id = 1; d_id <= 10; ++d_id) {
@@ -375,7 +375,7 @@ void GenerateNewOrderTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
     no_row.set_w_id(w_id);
     no_row.SerializeToString(&no_row_out);
     std::string no_key = tpcc::NewOrderRowKey(w_id, d_id, o_id);
-    q.Push(std::make_pair(no_key, no_row_out));    
+    q.Push(std::make_pair(no_key, no_row_out));
   }
 }
 
