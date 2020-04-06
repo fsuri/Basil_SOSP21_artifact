@@ -384,20 +384,28 @@ int main(int argc, char **argv) {
       return 1;
     }
     size_t loaded = 0;
+    size_t stored = 0;
+    size_t sharded[] = {0, 0, 0};
     while (!in.eof()) {
       std::string key;
       std::string value;
       int i = ReadBytesFromStream(&in, key);
       if (i == 0) {
         ReadBytesFromStream(&in, value);
+        sharded[part(key, FLAGS_num_shards)]++;
         if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
           server->Load(key, value, Timestamp());
+          ++stored;
         }
+        ++loaded;
       }
-      ++loaded;
     }
-    Debug("Loaded %lu key-value pairs from file %s.", loaded,
-        FLAGS_data_file_path.c_str());
+    for (int i = 0; i < 3; ++i) {
+      std::cerr << sharded[i] << ' ';
+    }
+    std::cerr << std::endl;
+    Debug("Stored %lu out of %lu key-value pairs from file %s.", stored,
+        loaded, FLAGS_data_file_path.c_str());
   } else {
     std::ifstream in;
     in.open(FLAGS_keys_path);
