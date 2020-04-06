@@ -1,0 +1,37 @@
+syntax = "proto2";
+
+package pbftstore.proto;
+
+message PackedMessage {
+  required bytes msg = 1;
+  required string type = 2;
+}
+
+message SignedMessage {
+  required bytes packed_msg = 1;
+  required uint64 replica_id = 2;
+  required bytes signature = 3;
+}
+
+// a request is simply a message with a type
+message Request {
+  required PackedMessage packed_msg = 1;
+}
+
+message Preprepare {
+  required uint64 seqnum = 1;
+  required uint64 viewnum = 2;
+  required bytes digest = 3;
+}
+
+message Prepare {
+  required uint64 seqnum = 1;
+  required uint64 viewnum = 2;
+  required bytes digest = 3;
+}
+
+message Commit {
+  required uint64 seqnum = 1;
+  required uint64 viewnum = 2;
+  required bytes digest = 3;
+}
