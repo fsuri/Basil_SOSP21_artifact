@@ -1,57 +1,38 @@
 
 %-------------------------------------------------------------------------------
-\section{Related Work/Comparison}  
+\section{Related Work}  
 %-------------------------------------------------------------------------------
 
 \paragraph{Consistent Replication}
 Indicus offers a replicated, byzantine fault tolerant database that leverages concurrency control and quorum based agreement to maintain isolation guarantees despite its unordered/inconsistent replication layer. 
-The majority of prior work instead maintains consistent replication by means of the State Machine Replication (SMR) approach \cite{schneider1990implementing}. Existing solutions for the crash failure fault model (Paxos based: \cite{Li2007, Lampson2001, Lamport98Paxos, Lamport2005a, Lamport2005, Lamport01Paxos, Chandra2007} , Zab: \cite{junqueira2011zab}  VR: \cite{oki1988viewstampeda, liskov2012viewstamped}, \cite{van2014vive}) as well as the byzantine fault model \cite{lamport2011byzantizing, pires2018generalized, Guerraoui08Next, Kotla04High, bessani2014state, liskov2010viewstamped} (most notably PBFT \cite{castro1999practical}) achieve consistency by achieving consensus on a totally ordered log of requests. 
+The majority of prior work instead maintains consistent replication by means of the State Machine Replication (SMR) approach \cite{schneider1990implementing}. Existing replication solutions for the crash failure fault model (Paxos based: \cite{Li2007, Lampson2001, Lamport98Paxos, Lamport2005a, Lamport2005, Lamport01Paxos, Chandra2007} , Zab: \cite{junqueira2011zab}, \cite{van2014vive}  VR: \cite{oki1988viewstampeda, liskov2012viewstamped}, Raft: \cite{ongaro2014search}) as well as the byzantine fault model \cite{lamport2011byzantizing, pires2018generalized, Guerraoui08Next, Kotla04High, bessani2014state, liskov2010viewstamped} (most notably PBFT \cite{castro1999practical}) maintain consistency by achieving consensus on a totally ordered log of requests. 
 
-The seminal \textit{practical} Byzantine Fault Tolerance (PBFT) protocol and its adaptations form the cornerstone of most Permissioned Blockchains \cite{Hyperledger, EthereumQuorum, buchman2016tendermint, al2017chainspace, kokoris2018omniledger,  gilad2017algorand, baudet2019state} (Algorand and Omniledger both not permissioned, but lots of PoS blockchains elect validator set that runs pbft basically, mention some traditional blockchains? Bitcoibn, Ehtereum, also total order).
+The seminal \textit{practical} Byzantine Fault Tolerance (PBFT) protocol and its adaptations (cite Zyzzyva, aardvark..) form the cornerstone of most Permissioned Blockchains \cite{Hyperledger, EthereumQuorum, buchman2016tendermint, al2017chainspace, kokoris2018omniledger,  gilad2017algorand, baudet2019state} (Algorand and Omniledger both not permissioned, but lots of PoS blockchains elect validator set that runs pbft basically, mention some traditional blockchains? Bitcoibn, Ehtereum, also total order).
 
 \fs{mention zyzzyva explicitly because of Fast path concept and speculative execution of replicas. Difference: still leaderbased and clients EXPECT replicas to process in order.}
 
 
 \paragraph{Enforcing Partial Order}
 Totally ordered ledgers solve the problem of consistent transaction replication but enforce unecessary coordination/serialization between commutative operations. 
-Approaches to reconciling this scalability limitation can be broadly categorized in three ways:
-\textbf{1. Fine-grained ordering}: One class of approaches attempts to only order conflicting operations by examining transaction semantics. Existing work however (cite all CF) targets almost exlusively the crash failure model. The the best of our knowledge, Bilbos/Clairvoyant is the only BFT system that offers SMR for commutative transactions, but limits TX model and is "blocking" (i.e. no progress until all concurrent - potentially conflicting - TX that could be ordered before are finished). Other Quorum based systems exist (Q/U, H/Q, Liskov rendering harmless) but they do not offer transactions. Q/U resembles Logging in Indicus - but has no liveness on its own.
+Approaches to reconcile this scalability limitation by inducing only a partial order can be broadly categorized in three ways:
+\textbf{1. Fine-grained ordering}: One class of approaches attempts to only order conflicting operations by leveraging transaction semantics. Existing work however (cite all CF: Epaxos, Generalized Paxos, \cite{sutra2011fast}, \cite{li2012redblue}, Curp, Carousel, MDCC, Tapir, Janus) targets almost exlusively the crash failure model. To the best of our knowledge, Bilbos/Clairvoyant is the only BFT system that offers SMR for commutative transactions, but unlike Indicus is limited to a static transaction model and introduces blocking, as any transaction must wait for all potentially concurrent transactions to complete. Other quorum based systems whose strucutre Indicus resembles (Q/U, H/Q, Liskov rendering harmless) allow for commutativity, but do not offer transactions. \fs{Q/U resembles Logging in Indicus - but has no liveness on its own.}
 
-\textbf{2. Sharding} Omniledger, Chainspace explore sharding for BFT. We point out that sharding just for partial order is a hack.
-Tapir/Janus points out that layering sharding on top of rpelication is inefficient in Crash Failure. Indicus is first to do this for BFT.
+\textbf{2. Sharding} In the blockchain space, sharding has been explored as mechanism to parallelize independent transactions across shards, while relying on total-order primitives within (Omniledger, Chainspace); In Indicus we argue however, that inducing a partial order via sharding is merely a limited engineering optimization. Existing work in the crash failure model (Tapir, Ordering Paper, Janus) points out that layering sharding and transactional control on top of replication (cite Spanner?) incurs redundant coordination, and improves performance by integrating both layers. Indicus is the first to adopt this rationale in the byzantine fault model.
 
-\textbf{3. DAGs} Iota, Byteball, Ava, all do DAGs which allows to parallelize some agreement. Existing work is all for permissionless systems. Unclear how to map this to permissioned and also whether it is practical.
+\textbf{3. DAGs} Lastly, the use of Directed Acyclic Graphs (DAGs) that allow to parallelize agreement instances, has been explored in several permissionless blockchain networks (Iota, Byteball, Ava, overview paper). It remains unclear whether practical applications exist for the permissioned setting - designing a BFT protocol that replicates a DAG instead of a totally ordered ledger is an interesting avenue for future work.
 
-All of these improve upon total order by inducing only a partial order. Indicus does so too.
-
--Commutativity approaches (CF and BFT - Bilbos, Q/U,)
--Sharding; replication and cc/atomic commit are layered. 
--DAGs
 
 \paragraph{Byzantine Databases}
-In indicus we argue that blockchain functionality should be though of as DB, transactional store. 
-Series of work that offer explicite Byz DBs: Byzantium, Augustus, Callinicios, HRDB, BFT Dur,
-Databasify Fabric
+In Indicus we argue that blockchain functionality, i.e. a distributed transactional system, should be captured by a BFT Database (DB). There exist a series of work offering explicit BFT DBs  
+cite( Byzantium, Augustus, Callinicios, HRDB, BFT Dur, Databasify Fabric): HRDB offers interactive transactions for a replicated DB, but relies on a trusted shepherd layer. Byzantium designs a middleware system that utilizes PBFT as atomic broadcast (AB) and provides Snapshot Isolation via a primary backup validation scheme. In cite(BFT Dur) Pedone et al. too, rely on AB to design an OCC-architecture similar to Indicus. Augustus and Callinicos leverage sharding for scalability by assuming a limited comparison/query/update transaction model and implementing an optimistic and locking based execution model respectively on top of atomic broadcast.
+We expand on existing research to 1) be leaderless and more scalable by allowing un-ordered replication rather than AB, 2) provide interactive transactions, and 3) offer sharding for horizontal scaling.
+\subparagraph{Byzantine Clients}
+Existing work concerned with byzantine clients addresses mechanisms to reduce frequency and severity of client misbehavior (BFT-dur, byzantium, agustus, callinicos, others, byz liskov). We reformulate transactional corectness guarantees in a byzantine setting to be more explicit about byzantine client behavior \fs{too vague} and extend Liskov et al.s (cite rendering byz client harmless) definition of Byz-Linearizability to transactions (Byz-Serializability). 
+Lastly, Herlihy (cite) discusses mechanisms to improve fairness in leader-based systems - In Indicus we sidestep fairness concerns by being leaderless and instead define Byzantine Independence in order to formalize byzantine influence.
 
 
-\paragraph{Byzantine Clients}
-As part of reformulating the Blockchain problem we reformulate correctness guarantees in a byzantine setting. Specifically we address byzantine clients since Indicus aims to be leaderless. Other systems that explore byz clients (quorum systems): \cite{Liskov06Tolerating}, The DBS above only talk about how to tolerate.
-Other work that explores fairness/correctness (Herlihy paper)
 
 
-\iffalse
-
-
-For ex: Both CF SMR [cite a gazillion] and BFT SMR [cite a gazillion] focus on maintaining a totally ordered log of requests
-Permission blockchains, as they rely primarily on BFT constructs similarly maintain this total order
-[cite a gazillion]
-
-There is some work that recognizes that this is not scalable and instead tries to only order conflicting ops [Epaxos, Generalised Paxos, Ava, Iota, CPPaxos or whatever it's called], or add sharding [OmniLedger, Herlihy's paper]
-In the CF context, layering sharding on top of  replication has been shown to be inefficient [Tapir, Janus]
-We argue that we should think of blockchains as a DB. There is some work that does that already [the series of five papers that we talked about]. (one sentence for each on how they build on one other). We expand on that research to be 1) leaderless, scalable, etc
-And then maybe after this, as part of reformulating this as a DB problem also need to reformulate the correctness guarantees (cite all work that talks about byzantine clients) 
-
-\fi
 
 
 
