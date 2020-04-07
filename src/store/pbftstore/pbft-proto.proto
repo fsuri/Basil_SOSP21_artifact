@@ -35,3 +35,21 @@ message Commit {
   required uint64 viewnum = 2;
   required bytes digest = 3;
 }
+
+// mapping from replica id to commit messages
+message GroupedSignedCommits {
+  map<uint64, SignedMessage> commits = 1;
+}
+
+message GroupedCommits {
+  map<uint64, Commit> commits = 1;
+}
+
+message CommitProof {
+  // and there should be 2f+1 unique commit messages
+  // with the txn's digest
+  oneof commits_oneof {
+    GroupedCommits commits = 1;
+    GroupedSignedCommits signed_commits = 2;
+  }
+}

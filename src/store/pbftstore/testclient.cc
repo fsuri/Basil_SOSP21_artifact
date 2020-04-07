@@ -11,15 +11,18 @@ class NodeClient : TransportReceiver {
   // Message handlers.
   void ReceiveMessage(const TransportAddress &remote, const std::string &type,
                       const std::string &data, void *meta_data) {
-
+                        printf("OMG\n");
                       }
   void SendTest() {
+    pbftstore::proto::Transaction transaction;
+    transaction.mutable_timestamp()->set_id(0);
+    transaction.mutable_timestamp()->set_timestamp(1);
     pbftstore::proto::Request request;
-    request.mutable_packed_msg()->set_msg("Hi there");
-    request.mutable_packed_msg()->set_type("a type");
+    request.mutable_packed_msg()->set_type(transaction.GetTypeName());
+    request.mutable_packed_msg()->set_msg(transaction.SerializeAsString());
 
     // send to everyone and to me
-    transport->SendMessageToReplica(this, 0, 0, request);
+    transport->SendMessageToGroup(this, 0, request);
 
     transport->Timer(1000, [=]() {
       printf("Callback!!\n");

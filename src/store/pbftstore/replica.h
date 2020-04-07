@@ -55,6 +55,13 @@ public:
   // map from pending executed message to (view, digest)
   std::unordered_map<uint64_t, std::pair<uint64_t, std::string>> pendingSeqNum;
 
+  // map from seqnum to view to digest to map from replica id to commit message
+  std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::unordered_map<std::string, std::unordered_map<uint64_t, proto::Commit>>>> commitGroups;
+  std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::unordered_map<std::string, std::unordered_map<uint64_t, proto::SignedMessage>>>> signedCommitGroups;
+
+  // map from tx digest to reply address
+  std::unordered_map<std::string, TransportAddress*> replyAddrs;
+
   int getPrimaryForView(int view);
 
   Slots slots;

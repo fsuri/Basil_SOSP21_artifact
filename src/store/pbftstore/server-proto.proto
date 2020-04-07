@@ -11,38 +11,50 @@ message Read {
   required TimestampMessage timestamp = 3;
 }
 
-message GroupedSignedCommits {
-  map<uint64, SignedMessage> commits = 1;
-}
-
-message GroupedCommits {
-  map<uint64, Commit> commits = 1;
-}
-
-message CommitProof {
-  // The key,value pair must be in the txn's write set
-  required TransactionMessage txn = 1;
-  // and there should be 2f+1 unique commit messages
-  // with the txn's digest
-  oneof commits_oneof {
-    GroupedCommits commits = 2;
-    GroupedSignedCommits signed_commits = 3;
-  }
-}
-
 message ReadReply {
   required uint64 req_id = 1;
   required int32 status = 2;
   required bytes key = 3;
   optional bytes value = 4;
+  optional TimestampMessage value_timestamp = 5;
+  // The key,value pair must be in the txn's write set
+  optional Transaction proof_txn = 6;
   // The proof that the value was actually committed
   // Could still be stale though (i.e. not most recent)
-  optional CommitProof commit_proof = 5;
+  optional CommitProof commit_proof = 7;
 }
 
 // This is the request sent to the replication layer
 message Transaction {
-    repeated ReadMessage readset = 1;
-    repeated WriteMessage writeset = 2;
-    required TimestampMessage timestamp = 3;
+  repeated ReadMessage readset = 1;
+  repeated WriteMessage writeset = 2;
+  required TimestampMessage timestamp = 3;
+  repeated uint64 participating_shards = 4;
+}
+
+message TransactionDecision {
+  required int32 status = 1;
+  required bytes txn_digest = 2;
+  required uint64 shard_id = 3;
+}
+
+message GroupedSignedDecisions {
+  map<uint64, SignedMessage>  decisions = 1;
+}
+
+message GroupedDecisions {
+  map<uint64, TransactionDecision> decisions = 1;
+}
+
+message GroupedDecision {
+  required int32 status = 1;
+  required bytes txn_digest = 2;
+  oneof decisions_oneof {
+    GroupedDecisions decisions = 3;
+    GroupedSignedDecisions signed_decisions = 4;
+  }
+}
+
+message GroupedDecisionAck {
+  required int32 status = 1;
 }

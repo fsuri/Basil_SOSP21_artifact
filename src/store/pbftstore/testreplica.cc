@@ -64,8 +64,8 @@ int main(int argc, char **argv) {
 
   UDPTransport transport(0.0, 0.0, 0);
 
-  pbftstore::Server* server = new pbftstore::Server();
   KeyManager keyManager(keyPath);
+  pbftstore::Server* server = new pbftstore::Server(&keyManager, groupIdx, myId, true, false);
   pbftstore::Replica replica(config, &keyManager, dynamic_cast<pbftstore::App *>(server), groupIdx, myId, true, &transport);
 
   transport.Run();

@@ -8,7 +8,7 @@ LD = g++
 EXPAND = lib/tmpl/expand
 
 #CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNUW_ASSERT
-CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized 
+CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized
 CXXFLAGS := -g -std=c++17
 LDFLAGS := -levent_pthreads
 ## Debian package: check
@@ -142,6 +142,7 @@ include store/weakstore/Rules.mk
 include store/janusstore/Rules.mk
 include bft_tapir/Rules.mk
 include store/indicusstore/Rules.mk
+include store/pbftstore/Rules.mk
 include store/Rules.mk
 include store/benchmark/Rules.mk
 include store/benchmark/async/common/Rules.mk
@@ -160,7 +161,7 @@ include create_keys/Rules.mk
 
 #
 # Protocols
-# 
+#
 PROTOOBJS := $(PROTOS:%.proto=.obj/%.o)
 PROTOSRCS := $(PROTOS:%.proto=.obj/gen/%.pb.cc)
 PROTOHEADERS := $(PROTOS:%.proto=%.pb.h)

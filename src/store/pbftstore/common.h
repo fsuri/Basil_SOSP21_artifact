@@ -5,6 +5,7 @@
 #include "lib/keymanager.h"
 #include "store/common/timestamp.h"
 #include "store/pbftstore/pbft-proto.pb.h"
+#include "store/pbftstore/server-proto.pb.h"
 
 #include <map>
 #include <string>
@@ -29,7 +30,7 @@ void SignMessage(const ::google::protobuf::Message &msg,
 
 std::string RequestDigest(const proto::Request &request);
 
-// std::string TransactionDigest(const proto::Transaction &txn);
+std::string TransactionDigest(const proto::Transaction &txn);
 
 } // namespace pbftstore
 

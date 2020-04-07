@@ -5,7 +5,7 @@ SRCS += $(addprefix $(d), app.cc replica.cc slots.cc common.cc server.cc testrep
 PROTOS += $(addprefix $(d), pbft-proto.proto server-proto.proto)
 
 LIB-pbft-store := $(o)server.o $(o)common.o $(o)slots.o $(o)replica.o \
-	$(o)pbft-proto.o $(o)app.o $(LIB-crypto) \
+	$(o)pbft-proto.o $(o)server-proto.o $(o)app.o $(LIB-crypto) \
 	$(LIB-configuration) $(LIB-store-common) $(LIB-transport)
 
 # LIB-pbft-client := $(LIB-udptransport) \

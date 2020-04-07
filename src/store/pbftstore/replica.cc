@@ -37,6 +37,7 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   view = 0;
   // initial seqnum
   seqnum = 0;
+  execSeqNum = 0;
 }
 
 Replica::~Replica() {}
@@ -81,9 +82,31 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     HandlePrepare(remote, prepare, replica_id);
   } else if (type == commit.GetTypeName()) {
     commit.ParseFromString(data);
+    uint64_t seqnum = commit.seqnum();
+    uint64_t viewnum = commit.viewnum();
+    string digest = commit.digest();
+
+    if (replica_id == (uint64_t) -1) {
+      replica_id = slots.getNumCommitted(seqnum, viewnum, digest);
+    }
+
+    if (t == signedMessage.GetTypeName()) {
+      signedCommitGroups[seqnum][viewnum][digest][replica_id] = signedMessage;
+    } else {
+      commitGroups[seqnum][viewnum][digest][replica_id] = commit;
+    }
+
     HandleCommit(remote, commit, replica_id);
   } else {
-    Panic("Received unexpected message type in IR proto: %s", type.c_str());
+    cout << "Sending request to app" << endl;
+    ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+    if (reply != nullptr) {
+      transport->SendMessage(this, remote, *msg);
+      delete msg;
+    } else {
+      cout << "Invalid request of type " << type << endl;
+    }
+
   }
 }
 
@@ -96,16 +119,17 @@ void Replica::HandleRequest(const TransportAddress &remote,
 
     slots.addVerifiedRequest(request);
 
+    // clone remote mapped to request for reply
+    std::string digest = RequestDigest(request);
+    replyAddrs[digest] = remote.clone();
+
     int currentPrimary = config.GetLeaderIndex(view);
     if (currentPrimary == myId) {
-      // forward the message to everyone
-      transport->SendMessageToGroup(this, groupIdx, request);
-
       // If I am the primary, send preprepare to everyone
       proto::Preprepare preprepare;
       preprepare.set_seqnum(seqnum++);
       preprepare.set_viewnum(view);
-      preprepare.set_digest(RequestDigest(request));
+      preprepare.set_digest(digest);
 
       if (signMessages) {
         proto::SignedMessage signedMessage;
@@ -118,10 +142,6 @@ void Replica::HandleRequest(const TransportAddress &remote,
         transport->SendMessageToGroup(this, groupIdx, preprepare);
         transport->SendMessageToReplica(this, groupIdx, myId, preprepare);
       }
-    } else {
-      // Otherwise, forward to current primary
-      transport->SendMessageToReplica(this, groupIdx, currentPrimary, request);
-      // TODO start a timer for preprepare
     }
   }
 }
@@ -216,9 +236,6 @@ void Replica::HandleCommit(const TransportAddress &remote,
   uint64_t viewnum = commit.viewnum();
   string digest = commit.digest();
 
-  if (replica_id == (uint64_t) -1) {
-    replica_id = slots.getNumCommitted(seqnum, viewnum, digest);
-  }
   slots.setVerifiedCommit(commit, replica_id);
 
   // wait for 2f+1 matching commit messages, then mark message as committed,
@@ -229,10 +246,32 @@ void Replica::HandleCommit(const TransportAddress &remote,
     std::pair<uint64_t, std::string> view_and_digest(viewnum, digest);
     pendingSeqNum[seqnum] = view_and_digest;
 
+    cout << execSeqNum << " " << seqnum << endl;
+
     while(pendingSeqNum.find(execSeqNum) != pendingSeqNum.end()) {
       std::string digest = pendingSeqNum[execSeqNum].second;
       proto::PackedMessage* msg = slots.getRequestMessage(digest);
-      app->Execute(msg->type(), msg->msg());
+      proto::CommitProof commitProof;
+      if (signMessages) {
+        auto& map = *commitProof.mutable_signed_commits()->mutable_commits();
+        for (auto const& x : signedCommitGroups[seqnum][viewnum][digest]) {
+          map[x.first] = x.second;
+        }
+      } else {
+        auto& map = *commitProof.mutable_commits()->mutable_commits();
+        for (auto const& x : commitGroups[seqnum][viewnum][digest]) {
+          map[x.first] = x.second;
+        }
+      }
+      ::google::protobuf::Message* reply = app->Execute(msg->type(), msg->msg(), std::move(commitProof));
+      if (reply != nullptr) {
+        cout << "Sending reply" << endl;
+        transport->SendMessage(this, *replyAddrs[digest], *reply);
+        delete reply;
+      } else {
+        cout << "Invalid execution" << endl;
+      }
+
       execSeqNum++;
     }
   }
