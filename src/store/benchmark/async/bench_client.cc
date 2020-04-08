@@ -166,13 +166,15 @@ void BenchmarkClient::IncrementSent() {
     // record latency
     if (!cooldownStarted) {
       uint64_t ns = Latency_End(&latency);
-      std::cout << GetLastOp() << ',' << ns << std::endl;
-      latencies.push_back(ns);
-      if (latencies.size() == 1UL) {
+      if (latencies.size() == 0UL) {
         struct timeval currTime;
         gettimeofday(&currTime, NULL);
-        std::cout << "#start," << currTime.tv_usec << std::endl;
+        currTime.tv_sec -= ns / 1000000000ULL;
+        currTime.tv_usec -= (ns % 1000000000ULL) / 1000ULL;
+        std::cout << "#start," << currTime.tv_sec << "," << currTime.tv_usec << std::endl;
       }
+      std::cout << GetLastOp() << ',' << ns << std::endl;
+      latencies.push_back(ns);
     }
 
     if (numRequests == -1) {
@@ -195,7 +197,7 @@ void BenchmarkClient::IncrementSent() {
 
 void BenchmarkClient::Finish() {
   gettimeofday(&endTime, NULL);
-  std::cout << "#end," << endTime.tv_usec << std::endl;
+  std::cout << "#end," << endTime.tv_sec << "," << endTime.tv_usec << std::endl;
 
   struct timeval diff = timeval_sub(endTime, startTime);
 
