@@ -11,7 +11,7 @@ public:
     AsyncTransactionBenchClient(AsyncClient &client, Transport &transport,
         uint32_t clientId, int numRequests, int expDuration, uint64_t delay,
         int warmupSec, int cooldownSec, int tputInterval, uint32_t abortBackoff,
-        bool retryAborted, int32_t maxAttempts,
+        bool retryAborted, int32_t maxAttempts, uint32_t seed,
         const std::string &latencyFilename = "");
 
     virtual ~AsyncTransactionBenchClient();
@@ -24,13 +24,13 @@ protected:
                          std::map<std::string, std::string> readValues);
 
     AsyncClient &client;
+    std::mt19937 gen;
 private:
     uint32_t abortBackoff;
     bool retryAborted;
     int32_t maxAttempts;
     AsyncTransaction *currTxn;
     int32_t currTxnAttempts;
-    std::mt19937 gen;
 
 };
 

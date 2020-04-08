@@ -30,6 +30,7 @@ SmallbankClient::SmallbankClient(
     SyncClient &client, Transport &transport, uint32_t clientId,
     int numRequests, int expDuration, uint64_t delay, int warmupSec,
     int cooldownSec, int tputInterval, uint32_t abortBackoff, bool retryAborted,
+    int32_t maxAttempts, uint32_t seed,
     const uint32_t timeout, const uint32_t balance_ratio,
     const uint32_t deposit_checking_ratio, const uint32_t transact_saving_ratio,
     const uint32_t amalgamate_ratio, const uint32_t num_hotspot_keys,
@@ -38,8 +39,8 @@ SmallbankClient::SmallbankClient(
     const std::string &latencyFilename)
     : SyncTransactionBenchClient(client, transport, clientId, numRequests,
                                  expDuration, delay, warmupSec, cooldownSec,
-                                 tputInterval, abortBackoff, retryAborted,
-                                 latencyFilename),
+                                 tputInterval, abortBackoff, retryAborted, maxAttempts,
+                                 seed, latencyFilename),
       timeout_(timeout),
       balance_ratio_(balance_ratio),
       deposit_checking_ratio_(deposit_checking_ratio),

@@ -10,13 +10,10 @@
 
 class SyncTransaction {
  public:
-  SyncTransaction(uint64_t tid) : tid(tid) { }
+  SyncTransaction() { }
   virtual ~SyncTransaction() { }
 
   virtual int Execute(SyncClient &client) = 0;
-
- private:
-  uint64_t tid;
 
 };
 

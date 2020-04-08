@@ -24,7 +24,7 @@
 #include "store/benchmark/async/common/uniform_key_selector.h"
 #include "store/benchmark/async/retwis/retwis_client.h"
 #include "store/benchmark/async/rw/rw_client.h"
-#include "store/benchmark/async/tpcc/tpcc_client.h"
+#include "store/benchmark/async/tpcc/async/tpcc_client.h"
 #include "store/mortystore/client.h"
 #include "store/benchmark/async/smallbank/smallbank_client.h"
 #include "store/janusstore/client.h"
@@ -626,6 +626,7 @@ int main(int argc, char **argv) {
         NOT_REACHABLE();
     }
 
+    uint32_t seed = (FLAGS_client_id << 4) | i;
 	  BenchmarkClient *bench;
 	  switch (benchMode) {
       case BENCH_RETWIS:
@@ -634,11 +635,11 @@ int main(int argc, char **argv) {
             (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
-            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_attempts);
+            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_attempts, seed);
         break;
       case BENCH_TPCC:
         UW_ASSERT(asyncClient != nullptr);
-        bench = new tpcc::TPCCClient(*asyncClient, *transport,
+        bench = new tpcc::AsyncTPCCClient(*asyncClient, *transport,
             (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
@@ -646,7 +647,7 @@ int main(int argc, char **argv) {
             FLAGS_tpcc_C_c_last, FLAGS_tpcc_new_order_ratio,
             FLAGS_tpcc_delivery_ratio, FLAGS_tpcc_payment_ratio,
             FLAGS_tpcc_order_status_ratio, FLAGS_tpcc_stock_level_ratio,
-            FLAGS_static_w_id, (FLAGS_client_id << 4) | i, FLAGS_abort_backoff,
+            FLAGS_static_w_id, seed, FLAGS_abort_backoff,
             FLAGS_retry_aborted, FLAGS_max_attempts);
         break;
       case BENCH_SMALLBANK_SYNC:
@@ -655,7 +656,7 @@ int main(int argc, char **argv) {
             (FLAGS_client_id << 3) | i,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
-            FLAGS_abort_backoff, FLAGS_retry_aborted,
+            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_attempts, seed,
             FLAGS_timeout, FLAGS_balance_ratio, FLAGS_deposit_checking_ratio,
             FLAGS_transact_saving_ratio, FLAGS_amalgamate_ratio,
             FLAGS_num_hotspots, FLAGS_num_customers - FLAGS_num_hotspots, FLAGS_hotspot_probability,
@@ -668,7 +669,7 @@ int main(int argc, char **argv) {
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
             FLAGS_abort_backoff, FLAGS_retry_aborted,
-            FLAGS_max_attempts);
+            FLAGS_max_attempts, seed);
         break;
       default:
         NOT_REACHABLE();

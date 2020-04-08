@@ -9,63 +9,56 @@
 
 namespace tpcc {
 
-TPCCClient::TPCCClient(AsyncClient &client, Transport &transport, uint32_t clientId,
-    int numRequests, int expDuration, uint64_t delay, int warmupSec,
-    int cooldownSec, int tputInterval,  uint32_t num_warehouses, uint32_t w_id,
+TPCCClient::TPCCClient(uint32_t num_warehouses, uint32_t w_id,
     uint32_t C_c_id, uint32_t C_c_last, uint32_t new_order_ratio,
     uint32_t delivery_ratio, uint32_t payment_ratio, uint32_t order_status_ratio,
-    uint32_t stock_level_ratio, bool static_w_id, uint32_t seed,
-    uint32_t abortBackoff, bool retryAborted, int32_t maxAttempts,
-    const std::string &latencyFilename) :
-      AsyncTransactionBenchClient(client, transport, clientId, numRequests, expDuration,
-          delay, warmupSec, cooldownSec, tputInterval, abortBackoff,
-          retryAborted, maxAttempts, latencyFilename),
+    uint32_t stock_level_ratio, bool static_w_id, std::mt19937 &gen) :
       num_warehouses(num_warehouses), w_id(w_id), C_c_id(C_c_id),
       C_c_last(C_c_last), new_order_ratio(new_order_ratio),
       delivery_ratio(delivery_ratio), payment_ratio(payment_ratio),
       order_status_ratio(order_status_ratio), stock_level_ratio(stock_level_ratio),
-      static_w_id(static_w_id), gen(seed) {
+      static_w_id(static_w_id) {
   stockLevelDId = std::uniform_int_distribution<uint32_t>(1, 10)(gen);
+  Debug("num_warehouses: %u", num_warehouses);
 }
 
 TPCCClient::~TPCCClient() {
 }
 
-AsyncTransaction* TPCCClient::GetNextTransaction() {
+TPCCTransactionType TPCCClient::GetNextTransaction(uint32_t *wid,
+    uint32_t *did, std::mt19937 &gen) {
   uint32_t total = new_order_ratio + delivery_ratio + payment_ratio
       + order_status_ratio + stock_level_ratio;
   uint32_t ttype = std::uniform_int_distribution<uint32_t>(0, total - 1)(gen);
-  uint32_t wid;
   if (static_w_id) {
-    wid = w_id;
+    *wid = w_id;
   } else {
-    wid = std::uniform_int_distribution<uint32_t>(1, num_warehouses)(gen);
+    *wid = std::uniform_int_distribution<uint32_t>(1, num_warehouses)(gen);
   }
   if (ttype < new_order_ratio) {
     lastOp = "new_order";
-    return new NewOrder(wid, C_c_id, num_warehouses, gen);
+    return TXN_NEW_ORDER; //new NewOrder(wid, C_c_id, num_warehouses, gen);
   } else if (ttype < new_order_ratio + payment_ratio) {
     lastOp = "payment";
-    return new Payment(wid, C_c_last, C_c_id, num_warehouses, gen);
+    return TXN_PAYMENT; //new Payment(wid, C_c_last, C_c_id, num_warehouses, gen);
   } else if (ttype < new_order_ratio + payment_ratio + order_status_ratio) {
     lastOp = "order_status";
-    return new OrderStatus(wid, C_c_last, C_c_id, gen);
+    return TXN_ORDER_STATUS; //new OrderStatus(wid, C_c_last, C_c_id, gen);
   } else if (ttype < new_order_ratio + payment_ratio + order_status_ratio
       + stock_level_ratio) {
-    uint32_t did;
     if (static_w_id) {
-      did = stockLevelDId;
+      *did = stockLevelDId;
     } else {
-      did = std::uniform_int_distribution<uint32_t>(1, num_warehouses)(gen);
+      *did = std::uniform_int_distribution<uint32_t>(1, num_warehouses)(gen);
     }
     lastOp = "stock_level";
-    return new StockLevel(wid, did, gen);
+    return TXN_STOCK_LEVEL; //new StockLevel(wid, did, gen);
   } else {
-    return nullptr;
+    return TXN_DELIVERY;
   }
 }
 
-std::string TPCCClient::GetLastOp() const {
+std::string TPCCClient::GetLastTransaction() const {
   return lastOp;
 }
 

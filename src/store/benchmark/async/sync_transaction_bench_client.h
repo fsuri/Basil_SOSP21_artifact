@@ -12,7 +12,8 @@ class SyncTransactionBenchClient : public BenchmarkClient {
   SyncTransactionBenchClient(SyncClient &client, Transport &transport,
       uint32_t clientId, int numRequests, int expDuration, uint64_t delay, int warmupSec,
       int cooldownSec, int tputInterval, uint32_t abortBackoff,
-      bool retryAborted, const std::string &latencyFilename = "");
+      bool retryAborted, int32_t maxAttempts, uint32_t seed,
+      const std::string &latencyFilename = "");
 
   virtual ~SyncTransactionBenchClient();
 
@@ -21,12 +22,13 @@ class SyncTransactionBenchClient : public BenchmarkClient {
   virtual void SendNext();
 
   SyncClient &client;
+  std::mt19937 gen;
  private:
   uint32_t abortBackoff;
   bool retryAborted;
+  int32_t maxAttempts;
   SyncTransaction *currTxn;
   size_t currTxnAttempts;
-  std::mt19937 gen;
 
 };
 

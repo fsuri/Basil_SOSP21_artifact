@@ -13,13 +13,11 @@ namespace tpcc {
 
 class Payment : public TPCCTransaction {
  public:
-  Payment(uint32_t w_id, uint32_t c_c_last, uint32_t c_c_id, uint32_t num_warehouses, std::mt19937 &gen);
+  Payment(uint32_t w_id, uint32_t c_c_last, uint32_t c_c_id,
+      uint32_t num_warehouses, std::mt19937 &gen);
   virtual ~Payment();
 
-  Operation GetNextOperation(size_t opCount,
-      std::map<std::string, std::string> readValues);
-
- private:
+ protected:
   uint32_t w_id;
   uint32_t d_id;
   uint32_t d_w_id;
@@ -30,11 +28,6 @@ class Payment : public TPCCTransaction {
   uint32_t h_date;
   bool c_by_last_name;
   std::string c_last;
-
-  WarehouseRow w_row;
-  DistrictRow d_row;
-  CustomerRow c_row;
-  CustomerByNameRow cbn_row;
 };
 
 } // namespace tpcc
