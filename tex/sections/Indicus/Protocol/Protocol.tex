@@ -1,3 +1,4 @@
+
 %\input{sections/Indicus/Protocol/subsections/Execution.tex}
 %\input{sections/Indicus/Protocol/subsections/Validation.tex}
 %\input{sections/Indicus/Protocol/subsections/ConcurrencyControl.tex}
@@ -682,7 +683,7 @@ An interested client waits for $\geq 4f+1$ $Phase2R$ replies up to a time-out. I
 A client \textit{expects} to receive $4f+1$ matching decisions and will continue to wait for decisions from the same view if the first $4f+1$ messages received match in $\geq 3f+1$ cases. Upon time-out, a client proactively starts a new election (keeps waiting regardless) in case the past \textit{Fallback} was byzantine or did not succeed in timely reconciliation. Eventually a logged decision must exist and time-outs grow enough to guarantee a client will receive $4f+1$ matching. In section X (optimization) we discuss a practical optimization.
  \\
 
-
+\fs{ALTERNATIVE: Clients do not do the p1/p2 themselves, but do invocation of fallback election directly (i.e. without receiving p1r and sending p2 first). In this case replicas that elect may be missing p2 decisions and the reconciliation rule might have to issue p2 decisions based on the p1 replies included. This requires replicas to actively ignore all requests to write p2 from views < current. For seperate shard logging this is staightforward. For single shard logging however, the p2 decision requires p1 from every shard and hence every shard would need to partake in election of a fallback replica - that is messy: easier if the clients just handle it seperately.}
 %%%%%%%
 Any honest client that follows the Fallback protocol experiences \textit{Liv}. This follows straightforward from the eventual existance of an honest Fallback replica that reconciles all honest replicas. Concretely, if an honest client is interested, and the network is synchronous, at most $f+1$ fallback elections are necessary in order for a decision to be logged and for an interested client to receive a shard-decision.
 
