@@ -463,8 +463,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     proto::CommittedProof &conflict) {
   Timestamp ts(txn.timestamp());
   if (CheckHighWatermark(ts)) {
-    Debug("[%s] ABORT ts %lu.%lu beyond high watermark.", txnDigest.c_str(),
-        ts.getTimestamp(), ts.getID());
+    Debug("[%s] ABORT ts %lu beyond high watermark.", txnDigest.c_str(),
+        ts.getTimestamp());
     return proto::Phase1Reply::ABSTAIN;
   }
 
@@ -771,6 +771,7 @@ bool Server::CheckHighWatermark(const Timestamp &ts) {
   Timestamp highWatermark(timeServer.GetTime());
   // add delta to current local time
   highWatermark.setTimestamp(highWatermark.getTimestamp() + timeDelta);
+  Debug("High watermark: %lu.", highWatermark.getTimestamp());
   return ts > highWatermark;
 }
 
