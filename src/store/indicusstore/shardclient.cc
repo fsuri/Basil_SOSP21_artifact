@@ -168,7 +168,7 @@ void ShardClient::Phase2(uint64_t id, const proto::Transaction &transaction,
     const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
     proto::CommitDecision decision, phase2_callback pcb,
     phase2_timeout_callback ptcb, uint32_t timeout) {
-  Debug("[group %i] Sending PHASE1 [%lu]", group, id);
+  Debug("[group %i] Sending PHASE2 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
   PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);
   pendingPhase2s[reqId] = pendingPhase2;

@@ -191,6 +191,12 @@ void Client::Phase1Callback(uint64_t reqId, int group,
   }
   PendingRequest *req = itr->second;
 
+  if (req->startedPhase2) {
+    Debug("Already started Phase2 for request id %lu. Ignoring Phase1 response "
+        "from group %d.", reqId, group);
+    return;
+  }
+
   if (validateProofs) {
     req->phase1RepliesGrouped[group] = phase1Replies;
     if (signedMessages) {
@@ -206,7 +212,7 @@ void Client::Phase1Callback(uint64_t reqId, int group,
       break;
     case proto::ABORT:
       // abort!
-      Debug("PREPARE [%lu] ABORT %d", client_seq_num, group);
+      Debug("PHASE1 [%lu] ABORT %d", client_seq_num, group);
       req->decision = proto::ABORT;
       req->outstandingPhase1s = 0;
       break;
@@ -236,6 +242,7 @@ void Client::Phase2(PendingRequest *req, uint32_t timeout) {
   Debug("PHASE2 [%lu]", client_seq_num);
 
   int logGroup = TransactionDigest(txn)[0] % ngroups;
+  req->startedPhase2 = true;
   bclient[logGroup]->Phase2(client_seq_num, txn, req->phase1RepliesGrouped,
       req->signedPhase1RepliesGrouped, req->decision,
       std::bind(&Client::Phase2Callback, this, req->id,

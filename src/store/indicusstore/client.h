@@ -90,7 +90,8 @@ class Client : public ::Client {
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), outstandingPhase1s(0),
         outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
-        decision(proto::COMMIT), fast(true), prepareTimestamp(nullptr) {
+        decision(proto::COMMIT), fast(true), prepareTimestamp(nullptr),
+        startedPhase2(false), callbackInvoked(false) {
     }
 
     ~PendingRequest() {
@@ -109,6 +110,7 @@ class Client : public ::Client {
     proto::CommitDecision decision;
     bool fast;
     Timestamp *prepareTimestamp;
+    bool startedPhase2;
     bool callbackInvoked;
     std::map<int, std::vector<proto::Phase1Reply>> phase1RepliesGrouped;
     std::map<int, std::vector<proto::SignedMessage>> signedPhase1RepliesGrouped;
