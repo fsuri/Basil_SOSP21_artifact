@@ -152,9 +152,8 @@ void Client::Put(const std::string &key, const std::string &value,
 
 void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     uint32_t timeout) {
-  uint64_t reqId = lastReqId++;
-  PendingRequest *req = new PendingRequest(reqId);
-  pendingReqs[reqId] = req;
+  PendingRequest *req = new PendingRequest(client_seq_num);
+  pendingReqs[client_seq_num] = req;
   req->ccb = ccb;
   req->ctcb = ctcb;
   req->prepareTimestamp = new Timestamp(timeServer.GetTime(), client_id);
@@ -177,23 +176,23 @@ void Client::Phase1(PendingRequest *req, uint32_t timeout) {
   }
 }
 
-void Client::Phase1Callback(uint64_t reqId, int group,
+void Client::Phase1Callback(uint64_t txnId, int group,
     proto::CommitDecision decision, bool fast,
     const std::vector<proto::Phase1Reply> &phase1Replies,
     const std::vector<proto::SignedMessage> &signedPhase1Replies) {
   Debug("PHASE1 [%lu] callback decision %d from group %d", client_seq_num,
       decision, group);
-  auto itr = this->pendingReqs.find(reqId);
+  auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
-    Debug("Phase1Callback for terminated request id %lu (txn already committed"
-        " or aborted.", reqId);
+    Debug("Phase1Callback for terminated request %lu (txn already committed"
+        " or aborted.", txnId);
     return;
   }
   PendingRequest *req = itr->second;
 
   if (req->startedPhase2) {
     Debug("Already started Phase2 for request id %lu. Ignoring Phase1 response "
-        "from group %d.", reqId, group);
+        "from group %d.", txnId, group);
     return;
   }
 
@@ -225,7 +224,7 @@ void Client::Phase1Callback(uint64_t reqId, int group,
   }
 }
 
-void Client::Phase1TimeoutCallback(uint64_t reqId, int status) {
+void Client::Phase1TimeoutCallback(uint64_t txnId, int status) {
 }
 
 void Client::HandleAllPhase1Received(PendingRequest *req) {
@@ -251,14 +250,14 @@ void Client::Phase2(PendingRequest *req, uint32_t timeout) {
         std::placeholders::_1), timeout);
 }
 
-void Client::Phase2Callback(uint64_t reqId,
+void Client::Phase2Callback(uint64_t txnId,
     const std::vector<proto::Phase2Reply> &phase2Replies,
     const std::vector<proto::SignedMessage> &signedPhase2Replies) {
-  Debug("PHASE2 [%lu] callback", client_seq_num);
+  Debug("PHASE2 [%lu] callback", txnId);
 
-  auto itr = this->pendingReqs.find(reqId);
+  auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
-    Debug("Phase2Callback for terminated request id %lu (txn already committed or aborted.", reqId);
+    Debug("Phase2Callback for terminated request id %lu (txn already committed or aborted.", txnId);
     return;
   }
 
@@ -272,16 +271,16 @@ void Client::Phase2Callback(uint64_t reqId,
   Writeback(itr->second, 3000);
 }
 
-void Client::Phase2TimeoutCallback(uint64_t reqId, int status) {
+void Client::Phase2TimeoutCallback(uint64_t txnId, int status) {
 }
 
 void Client::Writeback(PendingRequest *req, uint32_t timeout) {
-  Debug("WRITEBACK [%lu]", client_seq_num);
+  Debug("WRITEBACK [%lu]", req->id);
 
   int result;
   switch (req->decision) {
     case proto::COMMIT: {
-      Debug("COMMIT [%lu]", client_seq_num);
+      Debug("COMMIT [%lu]", req->id);
       result = RESULT_COMMITTED;
       break;
     }

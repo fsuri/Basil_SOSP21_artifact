@@ -194,8 +194,10 @@ void Server::HandleRead(const TransportAddress &remote,
 
 void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
-  Debug("PHASE1[%s,%lu] with ts %lu.", msg.txn_digest().c_str(), msg.req_id(),
-      msg.txn().timestamp().timestamp());
+  Debug("PHASE1[%lu:%lu:%lu] with ts %lu.",
+      msg.txn().client_id(),
+      msg.txn().client_seq_num(),
+      msg.req_id(), msg.txn().timestamp().timestamp());
 
   if (validateProofs) {
     for (const auto &dep : msg.txn().deps()) {
@@ -222,40 +224,49 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
-  Debug("PHASE1[%s,%lu].", msg.txn_digest().c_str(), msg.req_id());
-
-  std::map<int, std::vector<proto::Phase1Reply>> groupedPhase1Replies;
-  bool validated = true;
-  if (signedMessages) {
-    proto::Phase1Reply phase1Reply;
-    for (const auto &group : msg.signed_p1_replies().replies()) {
-      std::vector<proto::Phase1Reply> phase1Replies;
-      for (const auto &signedPhase1Reply : group.second.msgs()) {
-        if (ValidateSignedMessage(signedPhase1Reply, keyManager, phase1Reply)) {
-          phase1Replies.push_back(phase1Reply);
-        } else {
-          validated = false;
-          break;
-        }
-      }
-      groupedPhase1Replies.insert(std::make_pair(group.first, phase1Replies));
-    }
-  } else {
-    for (const auto &group : msg.p1_replies().replies()) {
-      std::vector<proto::Phase1Reply> phase1Replies;
-      for (const auto &phase1Reply : group.second.replies()) {
-        phase1Replies.push_back(phase1Reply);
-      }
-      groupedPhase1Replies.insert(std::make_pair(group.first, phase1Replies));
-    }
-  }
+  Debug("PHASE2[%lu].", msg.req_id());
 
   proto::CommitDecision decision;
-  if (validated) {
-    decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs,
-        signedMessages, keyManager);
+  if (validateProofs) {
+    std::map<int, std::vector<proto::Phase1Reply>> groupedPhase1Replies;
+    bool repliesValid = true;
+    if (signedMessages) {
+      proto::Phase1Reply phase1Reply;
+      for (const auto &group : msg.signed_p1_replies().replies()) {
+        std::vector<proto::Phase1Reply> phase1Replies;
+        for (const auto &signedPhase1Reply : group.second.msgs()) {
+          if (ValidateSignedMessage(signedPhase1Reply, keyManager, phase1Reply)) {
+            phase1Replies.push_back(phase1Reply);
+          } else {
+            repliesValid = false;
+            break;
+          }
+        }
+        groupedPhase1Replies.insert(std::make_pair(group.first, phase1Replies));
+      }
+    } else {
+      for (const auto &group : msg.p1_replies().replies()) {
+        std::vector<proto::Phase1Reply> phase1Replies;
+        for (const auto &phase1Reply : group.second.replies()) {
+          phase1Replies.push_back(phase1Reply);
+        }
+        groupedPhase1Replies.insert(std::make_pair(group.first, phase1Replies));
+      }
+    }
+    
+    if (repliesValid) {
+      decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs,
+          signedMessages, keyManager);
+      if (decision != msg.decision()) {
+        // ignore Byzantine clients
+        return;
+      }
+    } else {
+      // ignore Byzantine clients
+      return;
+    }
   } else {
-    decision = proto::CommitDecision::ABORT;
+    decision = msg.decision();
   }
 
   proto::Phase2Reply reply;
