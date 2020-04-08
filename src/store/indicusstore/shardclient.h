@@ -53,7 +53,7 @@ namespace indicusstore {
 
 typedef std::function<void(int, const std::string &,
     const std::string &, const Timestamp &, const proto::Dependency &,
-    bool)> read_callback;
+    bool, bool)> read_callback;
 typedef std::function<void(int, const std::string &)> read_timeout_callback;
 
 typedef std::function<void(proto::CommitDecision, bool,
@@ -238,6 +238,8 @@ class ShardClient : public TransportReceiver {
 
   uint64_t lastReqId;
   proto::Transaction txn;
+  std::map<std::string, std::string> readValues;
+
   std::unordered_map<uint64_t, PendingQuorumGet *> pendingGets;
   std::unordered_map<uint64_t, PendingPhase1 *> pendingPhase1s;
   std::unordered_map<uint64_t, PendingPhase2 *> pendingPhase2s;

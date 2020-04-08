@@ -99,18 +99,17 @@ void Client::Get(const std::string &key, get_callback gcb,
 
   read_callback rcb = [gcb, this](int status, const std::string &key,
       const std::string &val, const Timestamp &ts, const proto::Dependency &dep,
-      bool hasDep) {
+      bool hasDep, bool addReadSet) {
     if (Message_DebugEnabled(__FILE__)) {
-      uint64_t intValue = 0;
-      for (int i = 0; i < 4; ++i) {
-        intValue = intValue | (static_cast<uint64_t>(val[i]) << ((3 - i) * 8));
-      }
-      Debug("GET CALLBACK [%lu : %s] Read int value %lu (%lu total bytes).",
-          client_seq_num, key.c_str(), intValue, val.length());
+      Debug("GET[%lu] Callback for key %s with %lu bytes and ts %lu.%lu.",
+          client_seq_num, BytesToHex(key, 16).c_str(), val.length(),
+          ts.getTimestamp(), ts.getID());
     }
-    ReadMessage *read = txn.add_read_set();
-    read->set_key(key);
-    ts.serialize(read->mutable_readtime());
+    if (addReadSet) {
+      ReadMessage *read = txn.add_read_set();
+      read->set_key(key);
+      ts.serialize(read->mutable_readtime());
+    }
     if (hasDep) {
       *txn.add_deps() = dep;
     }

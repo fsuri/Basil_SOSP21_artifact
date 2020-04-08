@@ -67,6 +67,8 @@ bool operator!=(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2
 
 std::string TransactionDigest(const proto::Transaction &txn);
 
+std::string BytesToHex(const std::string &bytes, size_t maxLength);
+
 } // namespace indicusstore
 
 #endif /* INDICUS_COMMON_H */

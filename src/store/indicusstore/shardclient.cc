@@ -98,6 +98,7 @@ void ShardClient::Begin(uint64_t id) {
   Debug("[group %i] BEGIN: %lu", group, id);
 
   txn = proto::Transaction();
+  readValues.clear();
 }
 
 void ShardClient::Get(uint64_t id, const std::string &key,
@@ -249,17 +250,18 @@ bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
   for (const auto &write : txn.write_set()) {
     if (write.key() == key) {
       rcb(REPLY_OK, key, write.value(), Timestamp(), proto::Dependency(),
-          false);
+          false, false);
       return true;
     }
   }
 
-  /* TODO: cache value already read by txn
   for (const auto &read : txn.read_set()) {
     if (read.key() == key) {
-      
+      rcb(REPLY_OK, key, readValues[key], read.readtime(), proto::Dependency(),
+          false, false);
+      return true;
     }
-  }*/
+  }
 
   return false;
 }
@@ -296,9 +298,10 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   itr->second->numReplies++;
   if (reply.status() == REPLY_OK) {
     itr->second->numOKReplies++;
-    Debug("[group %i] ReadReply %lu for %lu byte value.", group, reply.req_id(),
-      itr->second->maxValue.length());
     Timestamp replyTs(reply.committed().timestamp());
+    Debug("[group %i] ReadReply for %lu with %lu byte value and ts %lu.%lu.",
+        group, reply.req_id(), reply.committed().value().length(),
+        replyTs.getTimestamp(), replyTs.getID());
     if (itr->second->numOKReplies == 1 || itr->second->maxTs < replyTs) {
       itr->second->maxTs = replyTs;
       itr->second->maxValue = reply.committed().value();
@@ -373,7 +376,8 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     Debug("[group %i] GET callback [%d]", group, status);
     // TODO: there is probably a more efficient way to pass signedPrepared
     //   back to top-level client
-    gcb(status, key, req->maxValue, req->maxTs, req->dep, req->hasDep);
+    readValues[key] = req->maxValue;
+    gcb(status, key, req->maxValue, req->maxTs, req->dep, req->hasDep, true);
     delete req;
   }
 }
