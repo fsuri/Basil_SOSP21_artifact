@@ -198,7 +198,7 @@ DEFINE_uint64(prepare_batch_period, 0, "length of batches for deterministic prep
 /**
  * Indicus settings.
  */
-DEFINE_uint64(indicus_time_delta, 2ULL << 32, "max clock skew allowed for concurrency"
+DEFINE_uint64(indicus_time_delta, 2000, "max clock skew allowed for concurrency"
     " control (for Indicus)");
 DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
     " necessary to prevent impersonation (for Indicus)");
@@ -351,10 +351,12 @@ int main(int argc, char **argv) {
       break;
     }
     case PROTO_INDICUS: {
+      uint64_t timeDelta = (FLAGS_indicus_time_delta / 1000) << 32;
+      timeDelta = timeDelta | (FLAGS_indicus_time_delta % 1000) * 1000;
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
           tport, &keyManager, FLAGS_indicus_sign_messages,
-          FLAGS_indicus_validate_proofs, FLAGS_indicus_time_delta,
+          FLAGS_indicus_validate_proofs, timeDelta,
           indicusstore::MVTSO, part);
       break;
     }
