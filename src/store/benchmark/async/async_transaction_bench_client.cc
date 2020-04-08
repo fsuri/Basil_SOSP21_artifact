@@ -27,6 +27,7 @@ void AsyncTransactionBenchClient::SendNext() {
 
 void AsyncTransactionBenchClient::ExecuteCallback(int result,
     std::map<std::string, std::string> readValues) {
+  Debug("ExecuteCallback with result %d.", result);
   stats.Increment(GetLastOp() + "_attempts", 1);
   ++currTxnAttempts;
   if (result == SUCCESS ||
@@ -40,6 +41,7 @@ void AsyncTransactionBenchClient::ExecuteCallback(int result,
     }
     delete currTxn;
     currTxn = nullptr;
+    Debug("Moving on to next.");
     OnReply(result);
   } else {
     stats.Increment(GetLastOp() + "_" + std::to_string(result), 1);
@@ -50,6 +52,7 @@ void AsyncTransactionBenchClient::ExecuteCallback(int result,
           (1 << (currTxnAttempts - 1)) * abortBackoff)(gen);
       stats.Increment(GetLastOp() + "_backoff", backoff);
     }
+    Debug("Retrying after %d ms.", backoff);
     transport.Timer(backoff, [this]() {
         client.Execute(currTxn,
             std::bind(&AsyncTransactionBenchClient::ExecuteCallback, this,
