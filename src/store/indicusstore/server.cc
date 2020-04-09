@@ -736,6 +736,7 @@ void Server::Commit(const std::string &txnDigest,
   prepared.erase(txnDigest);
   committed.insert(txnDigest);
   CheckDependents(txnDigest);
+  dependents.erase(txnDigest);
 }
 
 void Server::Abort(const std::string &txnDigest) {
@@ -743,23 +744,26 @@ void Server::Abort(const std::string &txnDigest) {
   prepared.erase(txnDigest);
   aborted.insert(txnDigest);
   CheckDependents(txnDigest);
+  dependents.erase(txnDigest);
 }
 
 void Server::CheckDependents(const std::string &txnDigest) {
   auto dependentsItr = dependents.find(txnDigest);
   if (dependentsItr != dependents.end()) {
     for (const auto &dependent : dependentsItr->second) {
-      auto dependenciesItr = waitingDependencies.find(dependent);
-      UW_ASSERT(dependenciesItr != waitingDependencies.end());
+      if (aborted.find(dependent) == aborted.end()) {
+        auto dependenciesItr = waitingDependencies.find(dependent);
+        UW_ASSERT(dependenciesItr != waitingDependencies.end());
 
-      dependenciesItr->second.deps.erase(txnDigest);
-      if (dependenciesItr->second.deps.size() == 0) {
-        proto::Phase1Reply::ConcurrencyControlResult result = CheckDependencies(
-            dependent);
-        waitingDependencies.erase(dependent);
-        proto::CommittedProof conflict;
-        SendPhase1Reply(dependenciesItr->second.reqId, result, conflict,
-            *dependenciesItr->second.remote);
+        dependenciesItr->second.deps.erase(txnDigest);
+        if (dependenciesItr->second.deps.size() == 0) {
+          proto::Phase1Reply::ConcurrencyControlResult result = CheckDependencies(
+              dependent);
+          waitingDependencies.erase(dependent);
+          proto::CommittedProof conflict;
+          SendPhase1Reply(dependenciesItr->second.reqId, result, conflict,
+              *dependenciesItr->second.remote);
+        }
       }
     }
   }
