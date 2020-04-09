@@ -8,13 +8,13 @@ Slots::Slots() {}
 Slots::~Slots() {}
 
 bool Slots::requestExists(const proto::Request &request) {
-  std::string digest = RequestDigest(request);
+  std::string digest = request.digest();
 
   return requests.find(digest) != requests.end();
 }
 
 void Slots::addVerifiedRequest(const proto::Request &request) {
-  std::string digest = RequestDigest(request);
+  std::string digest = request.digest();
 
   requests[digest] = request;
 }

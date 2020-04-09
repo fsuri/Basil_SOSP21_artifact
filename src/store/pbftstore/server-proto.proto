@@ -17,11 +17,11 @@ message ReadReply {
   required bytes key = 3;
   optional bytes value = 4;
   optional TimestampMessage value_timestamp = 5;
-  // The key,value pair must be in the txn's write set
-  optional Transaction proof_txn = 6;
+  // The commit proof packed message will contain the
+  // txn bytes and the key,value pair must be in the txn's write set
   // The proof that the value was actually committed
   // Could still be stale though (i.e. not most recent)
-  optional CommitProof commit_proof = 7;
+  optional CommitProof commit_proof = 6;
 }
 
 // This is the request sent to the replication layer
@@ -39,19 +39,31 @@ message TransactionDecision {
 }
 
 message GroupedSignedDecisions {
-  map<uint64, SignedMessage>  decisions = 1;
+  // f+1 decisions
+  repeated SignedMessage decisions = 1;
+}
+
+message ShardSignedDecisions {
+  // Map from shard id to the f+1 decisions
+  map<uint64, GroupedSignedDecisions> grouped_decisions = 1;
 }
 
 message GroupedDecisions {
-  map<uint64, TransactionDecision> decisions = 1;
+  // f+1 decisions
+  repeated TransactionDecision decisions = 1;
+}
+
+message ShardDecisions {
+  // Map from shard id to the f+1 decisions
+  map<uint64, GroupedDecisions> grouped_decisions = 1;
 }
 
 message GroupedDecision {
   required int32 status = 1;
   required bytes txn_digest = 2;
   oneof decisions_oneof {
-    GroupedDecisions decisions = 3;
-    GroupedSignedDecisions signed_decisions = 4;
+    ShardDecisions decisions = 3;
+    ShardSignedDecisions signed_decisions = 4;
   }
 }
 

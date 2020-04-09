@@ -101,8 +101,8 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     cout << "Sending request to app" << endl;
     ::google::protobuf::Message* reply = app->HandleMessage(type, data);
     if (reply != nullptr) {
-      transport->SendMessage(this, remote, *msg);
-      delete msg;
+      transport->SendMessage(this, remote, *reply);
+      delete reply;
     } else {
       cout << "Invalid request of type " << type << endl;
     }
@@ -120,7 +120,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
     slots.addVerifiedRequest(request);
 
     // clone remote mapped to request for reply
-    std::string digest = RequestDigest(request);
+    std::string digest = request.digest();
     replyAddrs[digest] = remote.clone();
 
     int currentPrimary = config.GetLeaderIndex(view);
@@ -252,6 +252,7 @@ void Replica::HandleCommit(const TransportAddress &remote,
       std::string digest = pendingSeqNum[execSeqNum].second;
       proto::PackedMessage* msg = slots.getRequestMessage(digest);
       proto::CommitProof commitProof;
+      *commitProof.mutable_message() = *msg;
       if (signMessages) {
         auto& map = *commitProof.mutable_signed_commits()->mutable_commits();
         for (auto const& x : signedCommitGroups[seqnum][viewnum][digest]) {

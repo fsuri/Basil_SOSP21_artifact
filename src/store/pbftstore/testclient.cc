@@ -20,6 +20,7 @@ class NodeClient : TransportReceiver {
     pbftstore::proto::Request request;
     request.mutable_packed_msg()->set_type(transaction.GetTypeName());
     request.mutable_packed_msg()->set_msg(transaction.SerializeAsString());
+    request.set_digest(pbftstore::TransactionDigest(transaction));
 
     // send to everyone and to me
     transport->SendMessageToGroup(this, 0, request);

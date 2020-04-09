@@ -49,50 +49,17 @@ class Client : public ::Client {
   virtual std::vector<int> Stats();
 
  private:
-  struct PendingRequest {
-    PendingRequest(uint64_t id) : id(id), outstandingConfirms(0),
-        commitTries(0), decision(proto::COMMIT), prepareTimestamp(nullptr) {
-    }
-
-    ~PendingRequest() {}
-
-    commit_callback ccb;
-    commit_timeout_callback ctcb;
-    uint64_t id;
-    int outstandingConfirms;
-    int commitTries;
-    proto::CommitDecision decision;
-    Timestamp *prepareTimestamp;
-    bool callbackInvoked;
-    std::map<int, std::vector<proto::Phase1Reply>> phase1RepliesGrouped;
-  };
-
-  // Prepare function
-  void Phase1(PendingRequest *req, uint32_t timeout);
-  void Phase1Callback(uint64_t reqId, int group, proto::CommitDecision decision,
-      bool fast, const std::vector<proto::Phase1Reply> &phase1Replies,
-      const std::vector<proto::SignedMessage> &signedPhase1Replies);
-  void Phase1TimeoutCallback(uint64_t reqId, int status);
-  void HandleAllPhase1Received(PendingRequest *req);
-
-  void Phase2(PendingRequest *req, uint32_t timeout);
-  void Phase2Callback(uint64_t reqId,
-      const std::vector<proto::Phase2Reply> &phase2Replies,
-      const std::vector<proto::SignedMessage> &signedPhase2Replies);
-  void Phase2TimeoutCallback(uint64_t reqId, int status);
-
-  void Writeback(PendingRequest *req, uint32_t timeout);
-
+   uint64_t client_id;
   /* Configuration State */
   transport::Configuration *config;
-  // Unique ID for this client.
-  uint64_t client_id;
   // Number of shards.
   uint64_t nshards;
   // Number of replica groups.
   uint64_t ngroups;
   // Transport used by shard clients.
   Transport *transport;
+  // Client for each shard
+  std::vector<ShardClient *> bclient;
   partitioner part;
   bool syncCommit;
   uint64_t readQuorumSize;
@@ -115,7 +82,9 @@ class Client : public ::Client {
   // Current transaction.
   proto::Transaction txn;
   // Outstanding requests.
-  std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
+  std::unordered_map<uint64_t, PendingRead *> pendingReads;
+  //
+  std::unordered_map<uint64_t, ShardCommitMessage* > gatheredCommits;
 
   /* Debug State */
   std::unordered_map<std::string, uint32_t> statInts;

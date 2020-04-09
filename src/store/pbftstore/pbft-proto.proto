@@ -16,6 +16,9 @@ message SignedMessage {
 // a request is simply a message with a type
 message Request {
   required PackedMessage packed_msg = 1;
+  // digest should correspond to an application specific digest of
+  // the message in the packed message
+  required bytes digest = 2;
 }
 
 message Preprepare {
@@ -46,10 +49,11 @@ message GroupedCommits {
 }
 
 message CommitProof {
+  required PackedMessage message = 1;
   // and there should be 2f+1 unique commit messages
   // with the txn's digest
   oneof commits_oneof {
-    GroupedCommits commits = 1;
-    GroupedSignedCommits signed_commits = 2;
+    GroupedCommits commits = 2;
+    GroupedSignedCommits signed_commits = 3;
   }
 }

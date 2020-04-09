@@ -65,7 +65,9 @@ int main(int argc, char **argv) {
   UDPTransport transport(0.0, 0.0, 0);
 
   KeyManager keyManager(keyPath);
-  pbftstore::Server* server = new pbftstore::Server(&keyManager, groupIdx, myId, true, false);
+  int numShards = 1;
+  int numGroups = 1;
+  pbftstore::Server* server = new pbftstore::Server(&keyManager, groupIdx, myId, numShards, numGroups, true, false, 10, default_partitioner);
   pbftstore::Replica replica(config, &keyManager, dynamic_cast<pbftstore::App *>(server), groupIdx, myId, true, &transport);
 
   transport.Run();
