@@ -6,6 +6,11 @@ Michael Abd-El-Malek, Gregory~R Ganger, Garth~R Goodson, Michael~K Reiter, and
 \newblock Fault-scalable byzantine fault-tolerant services.
 \newblock {\em ACM SIGOPS Operating Systems Review}, 39(5):59--74, 2005.
 
+\bibitem{Abdollah2007}
+T.~Abdollah.
+\newblock {LAX} outage is blamed on 1 computer.
+\newblock {\em Los Angeles Times}, August 2007.
+
 \bibitem{abraham2017revisiting}
 Ittai Abraham, Guy Gueta, Dahlia Malkhi, Lorenzo Alvisi, Rama Kotla, and
   Jean-Philippe Martin.
@@ -49,6 +54,12 @@ Soumya Basu, Alin Tomescu, Ittai Abraham, Dahlia Malkhi, Michael~K Reiter, and
 \newblock In {\em Proceedings of the 2019 ACM SIGSAC Conference on Computer and
   Communications Security}, pages 2387--2402, 2019.
 
+\bibitem{baudet2019state}
+Mathieu Baudet, Avery Ching, Andrey Chursin, George Danezis, Fran{\c{c}}ois
+  Garillot, Zekun Li, Dahlia Malkhi, Oded Naor, Dmitri Perelman, and Alberto
+  Sonnino.
+\newblock State machine replication in the libra blockchain, 2019.
+
 \bibitem{bazzi2018clairvoyant}
 Rida Bazzi and Maurice Herlihy.
 \newblock Clairvoyant state machine replications.
@@ -84,6 +95,18 @@ Ethan Buchman.
 Miguel Castro, Barbara Liskov, et~al.
 \newblock Practical byzantine fault tolerance.
 \newblock In {\em OSDI}, volume~99, pages 173--186, 1999.
+
+\bibitem{Chandra2007}
+T.~Chandra, R.~Griesmer, and J.~Redstone.
+\newblock Paxos made live -- an engineering perspective.
+\newblock In {\em Proc. 26th PODC}, June 2007.
+
+\bibitem{Clement09Upright}
+Allen Clement, Manos Kapritsos, Sangmin Lee, Yang Wang, Lorenzo Alvisi, Mike
+  Dahlin, and Taylor Riche.
+\newblock Upright cluster services.
+\newblock In {\em SOSP '09: Proceedings of the ACM SIGOPS 22nd symposium on
+  Operating systems principles}, pages 277--290, New York, NY, USA, 2009. ACM.
 
 \bibitem{clement2009making}
 Allen Clement, Edmund~L Wong, Lorenzo Alvisi, Michael Dahlin, and Mirco
@@ -158,6 +181,19 @@ Hector Garcia~Molina, Frank Pittelli, and Susan Davidson.
 \newblock {\em ACM Transactions on Database Systems (TODS)}, 11(1):27--47,
   1986.
 
+\bibitem{gilad2017algorand}
+Yossi Gilad, Rotem Hemo, Silvio Micali, Georgios Vlachos, and Nickolai
+  Zeldovich.
+\newblock Algorand: Scaling byzantine agreements for cryptocurrencies.
+\newblock In {\em Proceedings of the 26th Symposium on Operating Systems
+  Principles}, pages 51--68, 2017.
+
+\bibitem{Guerraoui08Next}
+Rachid Guerraoui.
+\newblock The next 700 bft protocols.
+\newblock In Theodore~P. Baker, Alain Bui, and S{\'e}bastien Tixeuil, editors,
+  {\em OPODIS}, volume 5401, page~1. Springer, 2008.
+
 \bibitem{gueta2018sbft}
 Guy~Golan Gueta, Ittai Abraham, Shelly Grossman, Dahlia Malkhi, Benny Pinkas,
   Michael~K Reiter, Dragos-Adrian Seredinschi, Orr Tamir, and Alin Tomescu.
@@ -169,6 +205,12 @@ Maurice Herlihy and Mark Moir.
 \newblock Enhancing accountability and trust in distributed ledgers.
 \newblock {\em arXiv preprint arXiv:1606.07490}, 2016.
 
+\bibitem{junqueira2011zab}
+Flavio~P Junqueira, Benjamin~C Reed, and Marco Serafini.
+\newblock Zab: High-performance broadcast for primary-backup systems.
+\newblock In {\em 2011 IEEE/IFIP 41st International Conference on Dependable
+  Systems \& Networks (DSN)}, pages 245--256. IEEE, 2011.
+
 \bibitem{kokoris2018omniledger}
 Eleftherios Kokoris-Kogias, Philipp Jovanovic, Linus Gasser, Nicolas Gailly,
   Ewa Syta, and Bryan Ford.
@@ -176,10 +218,48 @@ Eleftherios Kokoris-Kogias, Philipp Jovanovic, Linus Gasser, Nicolas Gailly,
 \newblock In {\em 2018 IEEE Symposium on Security and Privacy (SP)}, pages
   583--598. IEEE, 2018.
 
+\bibitem{Kotla04High}
+R.~Kotla and M.~Dahlin.
+\newblock High throughput {B}yzantine fault tolerance.
+\newblock In {\em Conference on Dependable Systems and Networks, DSN'04}, June
+  2004.
+
 \bibitem{kotla2007zyzzyva}
 Ramakrishna Kotla, Lorenzo Alvisi, Mike Dahlin, Allen Clement, and Edmund Wong.
 \newblock Zyzzyva: speculative byzantine fault tolerance.
 \newblock {\em ACM SIGOPS Operating Systems Review}, 41(6):45--58, 2007.
+
+\bibitem{kraska2013mdcc}
+Tim Kraska, Gene Pang, Michael~J. Franklin, Samuel Madden, and Alan Fekete.
+\newblock Mdcc: multi-data center consistency.
+\newblock In {\em Proceedings of the 8th ACM European Conference on Computer
+  Systems}, EuroSys '13, pages 113--126.
+
+\bibitem{Lamport01Paxos}
+L.~Lamport.
+\newblock Paxos made simple.
+\newblock {\em ACM SIGACT News (Distributed Computing Column)}, 32(4):51--58,
+  December 2001.
+
+\bibitem{Lamport98Paxos}
+Leslie Lamport.
+\newblock The part-time parliament.
+\newblock {\em ACM Trans. Comput. Syst.}, 1998.
+
+\bibitem{Lamport2005}
+Leslie Lamport.
+\newblock Fast {P}axos.
+\newblock Technical Report MSR-TR-2005-112, Microsoft Research, July 2005.
+
+\bibitem{Lamport2005a}
+Leslie Lamport.
+\newblock Generalized consensus and paxos.
+\newblock Technical Report MSR-TR-2005-33, March 2005.
+
+\bibitem{lamport2005generalized}
+Leslie Lamport.
+\newblock Generalized consensus and paxos.
+\newblock 2005.
 
 \bibitem{lamport2011byzantizing}
 Leslie Lamport.
@@ -193,17 +273,61 @@ Leslie Lamport, Robert Shostak, and Marshall Pease.
 \newblock In {\em Concurrency: the Works of Leslie Lamport}, pages 203--226.
   2019.
 
+\bibitem{Lampson2001}
+Butler Lampson.
+\newblock The abcd's of paxos.
+\newblock In {\em PODC '01: Proceedings of the twentieth annual ACM symposium
+  on Principles of distributed computing}, page~13, New York, NY, USA, 2001.
+  ACM.
+
+\bibitem{li2012redblue}
+Cheng Li, Daniel Porto, Allen Clement, Johannes Gehrke, Nuno Pregui\c{c}a, and
+  Rodrigo Rodrigues.
+\newblock Making geo-replicated systems fast as possible, consistent when
+  necessary.
+\newblock In {\em Proceedings of the 10th USENIX Symposium on Operating Systems
+  Design and Implementation}, OSDI '12, pages 265--278.
+
+\bibitem{Li2007}
+Harry~C. Li, Allen Clement, Amitanand~S. Aiyer, and Lorenzo Alvisi.
+\newblock The paxos register.
+\newblock In {\em SRDS '07: Proceedings of the 26th IEEE International
+  Symposium on Reliable Distributed Systems}, pages 114--126, Washington, DC,
+  USA, 2007. IEEE Computer Society.
+
+\bibitem{liskov2010viewstamped}
+Barbara Liskov.
+\newblock From viewstamped replication to byzantine fault tolerance.
+\newblock In {\em Replication}, pages 121--149. Springer, 2010.
+
+\bibitem{liskov2012viewstamped}
+Barbara Liskov and James Cowling.
+\newblock Viewstamped replication revisited.
+\newblock 2012.
+
 \bibitem{liskov2006tolerating}
 Barbara Liskov and Rodrigo Rodrigues.
 \newblock Tolerating byzantine faulty clients in a quorum system.
 \newblock In {\em 26th IEEE International Conference on Distributed Computing
   Systems (ICDCS'06)}, pages 34--34. IEEE, 2006.
 
+\bibitem{luiz2011byzantine}
+Aldelir~Fernando Luiz, Lau~Cheuk Lung, and Miguel Correia.
+\newblock Byzantine fault-tolerant transaction processing for replicated
+  databases.
+\newblock In {\em 2011 IEEE 10th International Symposium on Network Computing
+  and Applications}, pages 83--90. IEEE, 2011.
+
 \bibitem{malkhi2019flexible}
 Dahlia Malkhi, Kartik Nayak, and Ling Ren.
 \newblock Flexible byzantine fault tolerance.
 \newblock In {\em Proceedings of the 2019 ACM SIGSAC Conference on Computer and
   Communications Security}, pages 1041--1053, 2019.
+
+\bibitem{malkhi1998byzantine}
+Dahlia Malkhi and Michael Reiter.
+\newblock Byzantine quorum systems.
+\newblock {\em Distributed computing}, 11(4):203--213, 1998.
 
 \bibitem{martin2006fast}
 J-P Martin and Lorenzo Alvisi.
@@ -217,6 +341,12 @@ Andrew Miller, Yu~Xia, Kyle Croman, Elaine Shi, and Dawn Song.
 \newblock In {\em Proceedings of the 2016 ACM SIGSAC Conference on Computer and
   Communications Security}, pages 31--42, 2016.
 
+\bibitem{moraru2013there}
+Iulian Moraru, David~G Andersen, and Michael Kaminsky.
+\newblock There is more consensus in egalitarian parliaments.
+\newblock In {\em Proceedings of the Twenty-Fourth ACM Symposium on Operating
+  Systems Principles}, pages 358--372, 2013.
+
 \bibitem{EthereumQuorum}
 JP~Morgan.
 \newblock Quorum, 2020.
@@ -227,6 +357,13 @@ Shuai Mu, Lamont Nelson, Wyatt Lloyd, and Jinyang Li.
   conflicts.
 \newblock In {\em 12th $\{$USENIX$\}$ Symposium on Operating Systems Design and
   Implementation ($\{$OSDI$\}$ 16)}, pages 517--532, 2016.
+
+\bibitem{oki1988viewstampeda}
+Brian~M Oki and Barbara~H Liskov.
+\newblock Viewstamped replication: A new primary copy method to support
+  highly-available distributed systems.
+\newblock In {\em Proceedings of the seventh annual ACM Symposium on Principles
+  of distributed computing}, pages 8--17, 1988.
 
 \bibitem{ongaro2014search}
 Diego Ongaro and John Ousterhout.
@@ -269,10 +406,26 @@ Miguel Pires, Srivatsan Ravi, and Rodrigo Rodrigues.
 \newblock Generalized paxos made byzantine (and less complex).
 \newblock {\em Algorithms}, 11(9):141, 2018.
 
+\bibitem{popov2016tangle}
+Serguei Popov.
+\newblock The tangle.
+\newblock {\em cit. on}, page 131, 2016.
+
 \bibitem{reed1983implementing}
 David~P Reed.
 \newblock Implementing atomic actions on decentralized data.
 \newblock {\em ACM Transactions on Computer Systems (TOCS)}, 1(1):3--23, 1983.
+
+\bibitem{rocket2018snowflake}
+Team Rocket.
+\newblock Snowflake to avalanche: A novel metastable consensus protocol family
+  for cryptocurrencies, 2018.
+
+\bibitem{schneider1990implementing}
+Fred~B Schneider.
+\newblock Implementing fault-tolerant services using the state machine
+  approach: A tutorial.
+\newblock {\em ACM Computing Surveys (CSUR)}, 22(4):299--319, 1990.
 
 \bibitem{sharma2018databasify}
 Ankur Sharma, Felix~Martin Schuhknecht, Divya Agrawal, and Jens Dittrich.
@@ -295,12 +448,24 @@ Chrysoula Stathakopoulou, Tudor David, and Marko Vukoli{\'c}.
 \newblock Mir-bft: High-throughput bft for blockchains.
 \newblock {\em arXiv preprint arXiv:1906.05552}, 2019.
 
+\bibitem{sutra2011fast}
+Pierre Sutra and Marc Shapiro.
+\newblock Fast genuine generalized consensus.
+\newblock In {\em 2011 IEEE 30th International Symposium on Reliable
+  Distributed Systems}, pages 255--264. IEEE, 2011.
+
 \bibitem{thomas1979majority}
 Robert~H Thomas.
 \newblock A majority consensus approach to concurrency control for multiple
   copy databases.
 \newblock {\em ACM Transactions on Database Systems (TODS)}, 4(2):180--209,
   1979.
+
+\bibitem{van2014vive}
+Robbert Van~Renesse, Nicolas Schiper, and Fred~B Schneider.
+\newblock Vive la diff{\'e}rence: Paxos vs. viewstamped replication vs. zab.
+\newblock {\em IEEE Transactions on Dependable and Secure Computing},
+  12(4):472--484, 2014.
 
 \bibitem{vandiver2007tolerating}
 Ben Vandiver, Hari Balakrishnan, Barbara Liskov, and Sam Madden.
@@ -334,7 +499,7 @@ Maofan Yin, Dahlia Malkhi, Michael~K Reiter, Guy~Golan Gueta, and Ittai
 
 \bibitem{zamani2018rapidchain}
 Mahdi Zamani, Mahnush Movahedi, and Mariana Raykova.
-\newblock Rapidchain: Scaling blockchain via full sharding.
+\newblock Rapidchain: Scaling blockchain via full.
 \newblock In {\em Proceedings of the 2018 ACM SIGSAC Conference on Computer and
   Communications Security}, pages 931--948, 2018.
 
@@ -344,5 +509,19 @@ Irene Zhang, Naveen~Kr. Sharma, Adriana Szekeres, Arvind Krishnamurthy, and Dan
 \newblock Building consistent transactions with inconsistent replication.
 \newblock In {\em Proceedings of the 25th Symposium on Operating Systems
   Principles}, SOSP '15, pages 263--278, 2015.
+
+\bibitem{zhang2015tapir}
+Irene Zhang, Naveen~Kr. Sharma, Adriana Szekeres, Arvind Krishnamurthy, and Dan
+  R.~K. Ports.
+\newblock Building consistent transactions with inconsistent replication.
+\newblock In {\em Proceedings of the 25th Symposium on Operating Systems
+  Principles}, SOSP '15, pages 263--278, New York, NY, USA, 2015. ACM.
+
+\bibitem{zhang2016operation}
+Irene Zhang, Naveen~Kr Sharma, Adriana Szekeres, Arvind Krishnamurthy, and
+  Dan~RK Ports.
+\newblock When is operation ordering required in replicated transactional
+  storage?
+\newblock {\em IEEE Data Eng. Bull.}, 39(1):27--38, 2016.
 
 \end{thebibliography}

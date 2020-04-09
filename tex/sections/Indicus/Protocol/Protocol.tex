@@ -49,8 +49,8 @@ For the simplicity of exposition we discuss Indicus5 for the remainder of the pa
  	\item Ongoing:
  	\subitem OngoingTX = \{(TxID, [TX, val state])\}
  	\subitem PreparedDB = \{(key, [writes:\{(val, version, TxID)\},  reads: \{TS, rversion, dep, TxID\}])\}
- 	\subitem WaitingDeps = \{(TxID, dependents\}
- 	\subitem Deps = \{(TxID, dependencies\}
+ 	\subitem Dependents = \{(TxID, dependents\}
+ 	\subitem WaitingDeps = \{(TxID, dependencies\}
  	\item DB = \{(key, [w: \{(val, ver, TxID)\}, r: \{(TS, rv, TxID)\}])\}
  	\subitem CommitLog = \{(TxID, CommitCert)\}
  	\subitem AbortLog = \{(TxID, AbortCert)\}
@@ -90,7 +90,7 @@ Client execution conducts as follows:
 \textbf{1: C} $\rightarrow$ \textbf{R}: Client sends read request to Replicas
 \end{minipage}}
 
-Given hyperparameter Read Quorum Size (RQS), a Client performs a read on given key at timestamp TS by reading from RQS different replicas. To do so, a Client sends $Read \coloneqq (key, TS)$  to the respective replicas.
+Given hyperparameter Read Quorum Size (RQS), a Client performs a read on given key at timestamp TS by reading from RQS different replicas. To do so, a Client sends $Read \coloneqq (key, TS)$  to $\geq RQS+f$ respective replicas, in order to guarantee $\geq RQS$ replies.
 \fs{CID is part of TS, does not need to be signed if not implementing access control}\\
 
 \fbox{\begin{minipage}{21em}
@@ -175,7 +175,7 @@ Next, we discuss the concurrency control necessary to maintain Byzantine-Seriali
 
 
 The goal of the concurrency control mechanism is to maximize the legal commutativity between transactions (i.e. maximize commit rate for concurrent transactions) while maintaining our desired Isolation level, Byzantine-Serializability. A naive Optimistic Concurrency Control (OCC) mechanism pairwise evaluates any two concurrent transactions and classifies any concurrent read/write, write/read, write/write as a conflict. Aborting every conflict preserves safety but is often overly pessimistic and could be avoided by a simple re-ordering of transactions. Such could either be achieved in hindsight, i.e. by forming and evaluating a DAG of transactions \cite{sharma2018databasify}, or by optimistically pre-defining an order \cite{adya1995efficient, Zhang2015}.
-Our starting point is a traditional Timestamp Ordering approach (TSO) in which each transaction is assigned a speculative timestamp \textit{before} Validation. This allows us to a) evaluate read/write conflicts on the basis of their pre-defined order, i.e. only classify them as conflict if their arrival order violates the timestamp order, and b) avoid write/write conflicts alltogether by simply ignoring obsolete writes \cite{thomas1979majority}(Thomas Write Rule). Figure \ref{fig:TSO} depicts a simple TSO decision example for four different cases.
+Our starting point is a traditional Timestamp Ordering approach (TSO) \cite{zhang2015tapir, adya1995efficient} in which each transaction is assigned a speculative timestamp \textit{before} Validation. This allows us to a) evaluate read/write conflicts on the basis of their pre-defined order, i.e. only classify them as conflict if their arrival order violates the timestamp order, and b) avoid write/write conflicts alltogether by simply ignoring obsolete writes \cite{thomas1979majority}(Thomas Write Rule). Figure \ref{fig:TSO} depicts a simple TSO decision example for four different cases.
 
 \begin{figure}
 \begin{center}
@@ -289,7 +289,7 @@ If all dependencies resolve do so successfully the check returns Commit, and oth
 In order to perform the MVTSO-check (efficiently), a replica maintains several data strucutres as seen in Figure \ref{fig:RS}): It keeps track of its \textit{Database}, of \textit{Ongoing} transactions, and \textit{Completed} transactions. The Database is manifested as multi-versioned key value store. It contains both the writes and reads of all committed transactions.
 Further, completed transactions are logged in respective Commit and Abort Logs, that effectively represent the ledger of all processed transactions. Since replicas process transactions out of order, we store this log as a set. This allows us to perform swift lookups for dependencies as transactions can be identified by their TxID. 
 Replicas keep track of ongoing transactions and their respective validation protocol state (see section Y). Additionally, it maintains a temporary key-value store $PreparedDB$ of tentatively committing (prepared) transactions to service both optimistic reads and check for conflicts. 
-When a transaction performs the MVTSO-check, its dependencies may not yet be present in either Commit or Abort logs. To avoid busy waiting, a replica temporarily suspends the MVTSO-check for the current transaction until all dependencies are resolved, allowing it to process other transactions pending validation. To facilitate this, a replica keeps track of two additional datastrucutres, \textit{WaitingDeps} and \textit{Deps}. WaitingDeps maps a transaction to all its known dependents, i.e. for a transaction TX1 with dependencies \{TX2, TX3\} WaitingDeps contains two entries (TX2: \{TX1\}) and (TX3: \{TX1\}). Vice versa, Deps, contains all unresolved dependencies for a given transaction, i.e. (TX1: \{TX2, TX3\} in the given example. When a transaction (e.g. TX2 completes) a replica can search Waiting Deps to find all of its dependents, and update the dependents Deps set accordingly. A replica may then resume a suspended MVTSO-check for transaction TX by either Abstaining/Aborting if a dependency was added to the AbortLog, or returning Commit if $Deps[TX]$ is empty.
+When a transaction performs the MVTSO-check, its dependencies may not yet be present in either Commit or Abort logs. To avoid busy waiting, a replica temporarily suspends the MVTSO-check for the current transaction until all dependencies are resolved, allowing it to process other transactions pending validation. To facilitate this, a replica keeps track of two additional datastrucutres, \textit{Dependents} and \textit{WaitingDeps}. Dependents maps a transaction to all its known dependents, i.e. for a transaction TX1 with dependencies \{TX2, TX3\} Dependents contains two entries (TX2: \{TX1\}) and (TX3: \{TX1\}). Vice versa, WaitingDeps, contains all unresolved dependencies for a given transaction, i.e. (TX1: \{TX2, TX3\} in the given example. When a transaction (e.g. TX2 completes) a replica can search Dependents to find all of its dependents, and update the dependents WaitingDeps set accordingly. A replica may then resume a suspended MVTSO-check for transaction TX by either Abstaining/Aborting if a dependency was added to the AbortLog, or returning Commit if $Deps[TX]$ is empty.
 In section X (Writeback) and Y (Garbage Collection) we discuss how to garbage collect ongoing transaction state and completed transaction state respectively. 
 
 
@@ -546,7 +546,7 @@ A coordinator waits for all shard decisions, including certificates. The coordin
 \end{minipage}}
 Upon reception of a \textit{Writeback} messgage, a replica validates whether a) there exist a single Abort shard-certificate, or b) Commit shard-certificates for all involved shards, and whether its own shard is involved. If not, a replica rejects the request. If the request is valid a replica does the following:\\
 
-\textbf{Abort:} A replica removes the transaction from its OngoingTX set and PreparedDB, and adds the transaction, along with the shard-certificates to its AbortLog. Furthermore, if a set of dependents existed in the WaitingDeps set, the replica resumes the blocked MVTSO checks for the dependents and votes Abort. It clears the WaitingDeps set and all corresponding Dep[dependent] entries in the Deps set.
+\textbf{Abort:} A replica removes the transaction from its OngoingTX set and PreparedDB, and adds the transaction, along with the shard-certificates to its AbortLog. Furthermore, if a set of dependents existed in the Dependents set, the replica resumes the blocked MVTSO checks for the dependents and votes Abort. It clears the WaitingDeps set and all corresponding WaitingDeps[dependent] entries in the WaitingDeps set.
 \fs{this abort log somehow needs to be able to be garbage collected. abort certs are necessary to prove a dependency abort is legitimate - could be replaced by voting abstain}\\
 
 

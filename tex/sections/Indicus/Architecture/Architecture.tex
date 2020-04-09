@@ -1,6 +1,10 @@
 %-------------------------------------------------------------------------------
 \subsection{Architecture}
 %-------------------------------------------------------------------------------
+\iffalse
+Indicus is designed to be scalable and leaderless. Our architecture reflects this ethos. We briefly summarise it here before going into more detail in the later sections
+\fi
+
 Indicus is a transactional database, offering clients the interface of interactive transactions with ACID guarantees. It is replicated for fault tolerance and can be sharded, in which case every shard is replicated. 
 
 In Indicus, Clients are more than external participants who propose Transactions to be executed. Instead, Clients are first class citizens that rejoice in the fair treatment of democracy and take part in everyday system activities. Of course, such priviledge comes at the cost of added responsibilities. Concretely, Indicus does not provide a continuously and mysteriously operating black box Transaction machine, but implements a Quorum system, offering Clients the tools to operate the system itself. One the one hand, the simple paradigm of letting clients work for themselves is more scalable as replicas need to do less work and can service more clients. On the other hand, it naturally incentivises clients to be industrious, as they hold the keys to their own liveness. Clients that do not meet a certain standard for productivity may be excluded by the system; The joys of being permissioned.

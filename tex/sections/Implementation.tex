@@ -6,15 +6,42 @@
 \section{Evaluation}
 %-------------------------------------------------------------------------------
 \iffalse
-like you should be able to write everything except for the actual numbers
-I normally have most of the text written down with \TODO{X} for the raw numbers to appear in red
-and by writing an eval I don't mean just listening a list of questions, but bullet pointing it in detail so that it looks like the obladi/tapir/zyzyvva eval.
-as a first draft I wouldn't necessarily worry about text
-but I would say writing something like the 3 questions that we want to answer
+
+write something like the 3 questions that we want to answer
 followed by subsections that say what the goal of this section is, the setup of the experiment, and the results
-it can be bullets
-And you can probably iterate with matt on that too 
+
+obladi/zyzzyva/tapir eval structure:
+1. Questions: What advantage does PO replication bring. What price does Indicus pay for BFT. How does it perform under contention. How does it perform under failures.
+2. Experiment setup and Testbed setting
+3. Implementation (what protobuf, Use Sha256 for hash, ECDSA for scheme (256 bit prikey, crypopp library https://www.cryptopp.com/) and baselines: NoPO (uses same spec execution and TSO, but AB for validation ordering)
+4. Workloads
+5. Q1 impact of partial order
+6. Q2 comparison to crash failure (overhead of bft
+7. Q3 abort rates
+8. Q4 performance under failures
+
+Indicus3 eval missing. We do not include it because it violates to byzn independence when using dependencies. We could in theory eval it without deps to just show partial order impact. If clients are not byzantine it doesnt matter.
+
+
+- this section aims to
+- we implement Indicus in TODO lines of C++ and use CloudLab machines (what specs). 
+- WAN setting with distribution as follows: (2 each in usa, asia, europe each --> f+1 reads will still read in national locality)
+- Compare against a crash Failure baseline: Tapir. Use the same transport layer etc for a fair comparison. We also implement a stawman totally ordered replication scheme to evaluate the impact of partially ordering and concurrency control:
+
+PBFt baseline variations:
+- Do MVTSO or OCC with deferred structure like Indicus
+- 2Pl where every read must go to the leader for ordering? (Tapir already does this, so we omit because it should be the same?)
+
+This also simulates BFT Dur.
+
+Lastly, we compare against Hyperledger as real-world system.
+
 \fi
+
+
+
+
+
 
 
 Our evaluation seeks to answer the following questions:
@@ -22,19 +49,22 @@ Our evaluation seeks to answer the following questions:
   \item How do the throughput and latency of \sys{} compare to the
     state-of-the-art distributed replicated transactional key-value
     stores?
-  \item What are the overheads of providing Byzantine fault tolerance over
+  \item What are the overheads of providing byzantine fault tolerance over
     crash fault tolerance?
   \item How is the commit rate affected by the choice of concurrency control?
   \item What is the tradeoff between leader-based replication and quorum-based
-    replication?
+    replication? CHANGE TO: total order vs no-order/partial order. Gain of abolishing TO
   \item How does \sys{} perform when clients or replicas exhibit Byzantine
     behavior?
 \end{itemize}
 
-\paragraph{Baselines.} TAPIR, OCC+PBFT, Hyperledger.
-\paragraph{Setup.} Use CloudLab machines, add WAN latency with \texttt{tc}.
-\paragraph{Methodology.} Run experiments for several minutes, exclude results
-from beginning and end, closed loop clients.
+\paragraph{Implementation and Baselines.} We implemented our prototype of \sys in TODO lines of C++ code. To evaluate the overheads of byzantine fault tolerance, we compare against TAPIR\cite{zhang2015tapir}, a state of the art distributed transaction system for the crash failure model, that like \sys sidesteps total-order replication. In order to facilitate a fair comparison we build \sys atop TAPIR communication layer, and extend it to provide authentication. We use SHA256 Hash functions and ECDSA signatures provided by the cryptopp library (https://www.cryptopp.com/). Further, we implement a strawman BFT baseline NoPO that, unlike \sys, (optionally) uses naive Optimistic Concurrency control, and relies on PBFT cite() to provide totally ordered broadcast for the Validation layer. NoPO maintains \sys 's speculative Execution structure in order to offer interactive transactions. fs{if we moved the speculative execution to a single replica that processes reads and buffers writes then it would simulate BFT-DUR }. \fs{Lastly, we modify Hyperledger Fabric, a popular enterprise-ready permissioned Blockchain solution, to process Online Transactional Processing (OLTP) workloads (instead of smart contracts) in order to facilitate a comparison with a state of the art blockchain. To do so, we replace the Simulation layer with NoPO's speculative execution.}
+
+\paragraph{Workloads.} We evaluate the performance of \sys using the TPC-C and Smallbank workloads to simulate realistic Online Transaction Processing (OLTP) applications. TPC-C simulates the business logic of an e-commerce vendor operating multiple warehouses, while Smallbank simulates a small-scale banking application that allows for transfers, deposits, and withdrawals. Additionally, we use the YCSB workload generator for our microbenchmarks in order to simulate random distributions of read/write requests.
+
+\paragraph{Setup.} We run all our experiments using CloudLab machines (TODO: specs), in both in-datacenter (LAN) and cross-datacenter (WAN) environments. For WAN settings, we respectively place 1/3 of replicas in geographic regions USA, Europe, and Asia; Figure X. shows single-hop message-delays. (TODO: latencies in LAN and WAN - maybe do only WAN).
+
+\paragraph{Methodology.} Our reported results are based on experiments run by closed loop clients for several minutes, and exclude measurements during warm-up (first X fraction) and cool-down (last X fraction).
 
 \subsection{Applications}
 
@@ -78,7 +108,11 @@ better throughput than Hyperledger and OCC+PBFT because no single replica handle
 every transaction for a group as is the case with the leader replicas in Hyperledger
 and OCC+PBFT.
 
+
+
 \subsection{Microbenchmarks}
+
+- compare impact of RQS
 
 \begin{figure}
   Bar Graph\\
