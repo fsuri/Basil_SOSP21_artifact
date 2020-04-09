@@ -125,6 +125,7 @@ class Server : public TransportReceiver, public ::Server {
   void SendPhase1Reply(uint64_t reqId,
     proto::Phase1Reply::ConcurrencyControlResult result,
     const proto::CommittedProof &conflict, const TransportAddress &remote);
+  void CleanDependencies(const std::string &txnDigest);
 
   inline bool IsKeyOwned(const std::string &key) const {
     return static_cast<int>(part(key, numShards) % numGroups) == groupIdx;
