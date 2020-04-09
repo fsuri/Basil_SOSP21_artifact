@@ -58,7 +58,7 @@ namespace indicusstore {
 class Client : public ::Client {
  public:
   Client(transport::Configuration *config, uint64_t id, int nShards, int nGroups,
-      int closestReplica, Transport *transport, partitioner part,
+      const std::vector<int> &closestReplicas, Transport *transport, partitioner part,
       bool syncCommit, uint64_t readQuorumSize, bool signedMessages,
       bool validateProofs, KeyManager *keyManager,
       TrueTime timeserver = TrueTime(0,0));

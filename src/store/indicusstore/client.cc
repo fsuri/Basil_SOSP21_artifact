@@ -39,14 +39,16 @@ using namespace std;
 
 Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     int nGroups,
-    int closestReplica, Transport *transport, partitioner part, bool syncCommit,
+    const std::vector<int> &closestReplicas, Transport *transport,
+    partitioner part, bool syncCommit,
     uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
     KeyManager *keyManager, TrueTime timeServer) : config(config),
     client_id(id),
     nshards(nShards), ngroups(nGroups), transport(transport), part(part),
-    syncCommit(syncCommit), signedMessages(signedMessages),
-    validateProofs(validateProofs), keyManager(keyManager),
-    timeServer(timeServer), client_seq_num(0UL), lastReqId(0UL) {
+    syncCommit(syncCommit), readQuorumSize(readQuorumSize),
+    signedMessages(signedMessages), validateProofs(validateProofs),
+    keyManager(keyManager), timeServer(timeServer), client_seq_num(0UL),
+    lastReqId(0UL) {
   bclient.reserve(nshards);
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
@@ -54,7 +56,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
     bclient[i] = new ShardClient(config, transport, client_id, i,
-        closestReplica, signedMessages, validateProofs,
+        closestReplicas, signedMessages, validateProofs,
         keyManager, timeServer);
   }
 

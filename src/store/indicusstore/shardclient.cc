@@ -38,7 +38,7 @@
 namespace indicusstore {
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
-    uint64_t client_id, int group, int closestReplica,
+    uint64_t client_id, int group, const std::vector<int> &closestReplicas_,
     bool signedMessages, bool validateProofs,
     KeyManager *keyManager, TrueTime &timeServer) :
     client_id(client_id), transport(transport), config(config), group(group),
@@ -47,10 +47,12 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     keyManager(keyManager), phase1DecisionTimeout(1000UL), lastReqId(0UL) {
   transport->Register(this, *config, -1, -1);
 
-  if (closestReplica == -1) {
-    replica = client_id % config->n;
+  if (closestReplicas_.size() == 0) {
+    for  (int i = 0; i < config->n; ++i) {
+      closestReplicas.push_back((i + client_id) % config->n);
+    }
   } else {
-    replica = closestReplica;
+    closestReplicas = closestReplicas;
   }
 }
 
@@ -121,7 +123,11 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   read.set_key(key);
   *read.mutable_timestamp() = ts;
 
-  transport->SendMessageToGroup(this, group, read);
+  Debug("%lu %lu", closestReplicas.size(), rqs);
+  UW_ASSERT(rqs <= closestReplicas.size());
+  for (size_t i = 0; i < rqs; ++i) {
+    transport->SendMessageToReplica(this, group, closestReplicas[i], read);
+  }
 
   Debug("[group %i] Sent GET [%lu : %lu]", group, id, reqId);
 }
@@ -342,8 +348,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     }
   }
 
-  if (itr->second->numOKReplies >= itr->second->rqs ||
-      itr->second->numReplies == static_cast<uint64_t>(config->n)) {
+  if (itr->second->numReplies >= itr->second->rqs) {
     PendingQuorumGet *req = itr->second;
     for (auto preparedItr = req->prepared.rbegin();
         preparedItr != req->prepared.rend(); ++preparedItr) {

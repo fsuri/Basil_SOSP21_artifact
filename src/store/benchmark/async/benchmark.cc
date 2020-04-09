@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -237,6 +238,8 @@ DEFINE_uint64(num_clients, 1, "number of clients to run in this process");
 DEFINE_uint64(num_requests, -1, "number of requests (transactions) per"
     " client");
 DEFINE_int32(closest_replica, -1, "index of the replica closest to the client");
+DEFINE_string(closest_replicas, "", "space-separated list of replica indices in"
+    " order of proximity to client(s)");
 DEFINE_uint64(delay, 0, "simulated communication delay");
 DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
 DEFINE_int32(clock_error, 0, "maximum error for clock");
@@ -430,6 +433,16 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // parse closest replicas
+  std::vector<int> closestReplicas;
+  std::stringstream iss(FLAGS_closest_replicas);
+  int replica;
+  iss >> replica;
+  while (!iss.fail()) {
+    closestReplicas.push_back(replica);
+    iss >> replica;
+  }
+
   // parse retwis settings
   std::vector<std::string> keys;
   if (benchMode == BENCH_RETWIS || benchMode == BENCH_RW) {
@@ -544,6 +557,13 @@ int main(int argc, char **argv) {
   transport::Configuration *config = new transport::Configuration(configStream);
   KeyManager *keyManager = new KeyManager(FLAGS_indicus_key_path);
 
+  if (closestReplicas.size() > 0 && closestReplicas.size() != static_cast<size_t>(config->n)) {
+    std::cerr << "If specifying closest replicas, must specify all "
+               << config->n << "; only specified "
+               << closestReplicas.size() << std::endl;
+    return 1;
+  }
+
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
     Client *client = nullptr;
     AsyncClient *asyncClient = nullptr;
@@ -597,7 +617,7 @@ int main(int argc, char **argv) {
 
         client = new indicusstore::Client(config, (FLAGS_client_id << 3),
             FLAGS_num_shards,
-            FLAGS_num_groups, FLAGS_closest_replica, transport, part,
+            FLAGS_num_groups, closestReplicas, transport, part,
             FLAGS_tapir_sync_commit, readQuorumSize,
             FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
             keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));

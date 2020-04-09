@@ -48,6 +48,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 namespace indicusstore {
 
@@ -72,7 +73,7 @@ typedef std::function<void(int)> writeback_timeout_callback;
 class ShardClient : public TransportReceiver {
  public:
   ShardClient(transport::Configuration *config, Transport *transport,
-      uint64_t client_id, int group, int closestReplica,
+      uint64_t client_id, int group, const std::vector<int> &closestReplicas,
       bool signedMessages, bool validateProofs,
       KeyManager *keyManager, TrueTime &timeServer);
   virtual ~ShardClient();
@@ -235,6 +236,7 @@ class ShardClient : public TransportReceiver {
   bool validateProofs;
   KeyManager *keyManager;
   uint64_t phase1DecisionTimeout;
+  std::vector<int> closestReplicas;
 
   uint64_t lastReqId;
   proto::Transaction txn;
