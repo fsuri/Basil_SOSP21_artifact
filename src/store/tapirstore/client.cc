@@ -244,9 +244,12 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         if (now > req->maxRepliedTs) {
           req->prepareTimestamp.setTimestamp(now);
         } else {
-          req->prepareTimestamp.setTimestamp(req->maxRepliedTs);
+          // !!! important that the retry timestamp is larger than the max reply
+          //   otherwise we will continue retrying with a smaller timestamp for some
+          //   small number of rounds when clocks are not tightly synchronized
+          req->prepareTimestamp.setTimestamp(req->maxRepliedTs + 1);
         }
-        Debug("RETRY [%lu] at [%lu,%lu]", t_id, req->prepareTimestamp.getTimestamp(),
+        Debug("RETRY [%lu] at [%lu.%lu]", t_id, req->prepareTimestamp.getTimestamp(),
             req->prepareTimestamp.getID());
         Prepare(req, req->timeout); // this timeout should probably be the same as 
         // the timeout passed to Client::Commit, or maybe that timeout / COMMIT_RETRIES
