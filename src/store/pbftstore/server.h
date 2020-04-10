@@ -56,8 +56,8 @@ private:
   // map from tx digest to commit proof ptr
   std::unordered_map<std::string, std::shared_ptr<proto::CommitProof>> commitProofs;
 
-  // map from key to ordered map of read timestamp to committed timestamps
-  // so if a transaction with timestamp 5 reads version 3 of key A, we have A -> 3 -> 5
+  // map from key to ordered map of committed timestamps to read timestamp
+  // so if a transaction with timestamp 5 reads version 3 of key A, we have A -> 5 -> 3
   std::unordered_map<std::string, std::map<Timestamp, Timestamp>> committedReads;
 
   bool CCC(const proto::Transaction& txn);

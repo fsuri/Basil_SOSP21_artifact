@@ -20,6 +20,7 @@ ShardClient::~ShardClient() {}
 bool ShardClient::validateReadProof(const proto::CommitProof& commitProof, const std::string& key,
   const std::string& value, const Timestamp& timestamp) {
 
+    //TODO
     return true;
   }
 

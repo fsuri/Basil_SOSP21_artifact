@@ -15,20 +15,74 @@ config(config), keyManager(keyManager), groupIdx(groupIdx), myId(myId), numShard
 Server::~Server() {}
 
 bool Server::CCC(const proto::Transaction& txn) {
+  Timestamp txTs(txn.timestamp());
+  // TODO actually do OCC check and add to prepared list
   for (const auto &read : txn.readset()) {
     if(!IsKeyOwned(read.key())) {
       continue;
     }
 
-    Timestamp readTs(read.readtime());
-    std::pair<Timestamp, Timestamp>result;
-    // while(commitStore.getRange(key, readTs, result)) {
-    //   // result.second holds the timestamp of the
-    //   if ()
-    // }
+    // we want to make sure that our reads don't span any
+    // committed/prepared writes
 
+    // check the committed writes
+    Timestamp rts(read.readtime());
+    Timestamp upper;
+    // this is equivalent to checking if there is a write with a timestamp t
+    // such that t > rts and t < txTs
+    if (commitStore.getUpperBound(read.key(), rts, upper)) {
+      if (upper < txTs) {
+        return false;
+      }
+    }
+
+    // check the prepared writes
+    for (const auto& pair : pendingTransactions) {
+      for (const auto& write : pair.second.writeset()) {
+        if (write.key() == read.key()) {
+          Timestamp wts(pair.second.timestamp());
+          if (wts > rts && wts < txTs) {
+            return false;
+          }
+        }
+      }
+    }
   }
-  // TODO actually do OCC check and add to prepared list
+
+  for (const auto &write : txn.writeset()) {
+    if(!IsKeyOwned(write.key())) {
+      continue;
+    }
+
+    // we want to make sure that no prepared/committed read spans
+    // our writes
+
+    // check commited reads
+    // get a pointer to the first read that commits after this tx
+    auto it = committedReads[write.key()].lower_bound(txTs);
+    it++;
+    // all iterator pairs committed after txTs (commit ts > txTs)
+    // so we just need to check if they returned a version before txTs (read ts < txTs)
+    while(it != committedReads[write.key()].end()) {
+      if ((*it).second < txTs) {
+        return false;
+      }
+      it++;
+    }
+
+    // next, check the prepared tx's read sets
+    for (const auto& pair : pendingTransactions) {
+      for (const auto& read : pair.second.readset()) {
+        if (read.key() == write.key()) {
+          Timestamp pendingTxTs(pair.second.timestamp());
+          Timestamp rts(read.readtime());
+          if (txTs > rts && txTs < pendingTxTs) {
+            return false;
+          }
+        }
+      }
+    }
+  }
   return true;
 
 }
@@ -110,7 +164,7 @@ bool Server::CCC(const proto::Transaction& txn) {
           if(!IsKeyOwned(read.key())) {
             continue;
           }
-          committedReads[read.key()][read.readtime()] = ts;
+          committedReads[read.key()][ts] = read.readtime();
         }
 
         ValueAndProof valProof;
