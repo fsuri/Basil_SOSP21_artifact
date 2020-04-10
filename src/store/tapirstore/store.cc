@@ -72,7 +72,8 @@ int
 Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
     Timestamp &proposedTimestamp)
 {   
-    Debug("[%lu] START PREPARE", id);
+    Debug("[%lu] PREPARE with ts %lu.%lu", id, timestamp.getTimestamp(),
+        timestamp.getID());
 
     Debug("[%lu] Active transactions: %lu.", id, active.size());
     active.erase(id);
@@ -125,12 +126,12 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
              * proposed timestamp not within validity range, then
              * conflict and abort
              */
-          if (timestamp <= range.first) {
+          /*if (timestamp <= range.first) {
             Warning("timestamp %lu <= range.first %lu (range.second %lu)",
                 timestamp.getTimestamp(), range.first.getTimestamp(),
                 range.second.getTimestamp());
-          }
-          //UW_ASSERT(timestamp > range.first);
+          }*/
+          // UW_ASSERT(timestamp > range.first);
           Debug("[%lu] ABORT rw conflict: %lu > %lu", id,
               timestamp.getTimestamp(), range.second.getTimestamp());
           std::string s = std::to_string((uint32_t) read.first[0]); 
