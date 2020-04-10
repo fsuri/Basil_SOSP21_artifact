@@ -363,9 +363,10 @@ int main(int argc, char **argv) {
       break;
     }
 		case PROTO_PBFT: {
-			server = new pbftstore::Server(&keyManager,
-				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
-			 	FLAGS_indicus_validate_proofs);
+			server = new pbftstore::Server(config, &keyManager,
+				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
+				FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs, FLAGS_indicus_time_delta,
+				part);
 			replica = new pbftstore::Replica(config, &keyManager,
 				dynamic_cast<pbftstore::App *>(server),
 				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,

@@ -7,8 +7,8 @@ namespace pbftstore {
 
 using namespace std;
 
-Server::Server(KeyManager *keyManager, int groupIdx, int myId, int numShards, int numGroups, bool signMessages, bool validateReads, uint64_t timeDelta, partitioner part, TrueTime timeServer) :
-keyManager(keyManager), groupIdx(groupIdx), myId(myId), numShards(numShards), numGroups(numGroups), signMessages(signMessages), validateReads(validateReads),  timeDelta(timeDelta), part(part), timeServer(timeServer){
+Server::Server(const transport::Configuration& config, KeyManager *keyManager, int groupIdx, int myId, int numShards, int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, partitioner part, TrueTime timeServer) :
+config(config), keyManager(keyManager), groupIdx(groupIdx), myId(myId), numShards(numShards), numGroups(numGroups), signMessages(signMessages), validateProofs(validateProofs),  timeDelta(timeDelta), part(part), timeServer(timeServer){
 
 }
 
@@ -22,10 +22,10 @@ bool Server::CCC(const proto::Transaction& txn) {
 
     Timestamp readTs(read.readtime());
     std::pair<Timestamp, Timestamp>result;
-    while(commitStore.getRange(key, readTs, result)) {
-      // result.second holds the timestamp of the
-      if ()
-    }
+    // while(commitStore.getRange(key, readTs, result)) {
+    //   // result.second holds the timestamp of the
+    //   if ()
+    // }
 
   }
   // TODO actually do OCC check and add to prepared list
@@ -78,7 +78,7 @@ bool Server::CCC(const proto::Transaction& txn) {
       readReply->set_status(REPLY_OK);
       readReply->set_value(result.second.value);
       result.first.serialize(readReply->mutable_value_timestamp());
-      if (validateReads) {
+      if (validateProofs) {
         *readReply->mutable_commit_proof() = *result.second.commitProof;
       }
     } else {
@@ -99,6 +99,7 @@ bool Server::CCC(const proto::Transaction& txn) {
     proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
 
     std::string digest = gdecision.txn_digest();
+    groupedDecisionAck->set_txn_digest(digest);
     if (gdecision.status() == REPLY_OK) {
       // verify gdecision
       if (verifyGDecision(gdecision) && pendingTransactions.find(digest) != pendingTransactions.end()) {
@@ -176,8 +177,6 @@ bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
     remaining_shards.insert(id);
   }
 
-  uint64_t f = 1;
-
   if (signMessages) {
     for (auto& decisions : gdecision.signed_decisions().grouped_decisions()) {
       if (remaining_shards.find(decisions.first) != remaining_shards.end()) {
@@ -195,7 +194,7 @@ bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
             }
           }
         }
-        if (valid_decisions.size() >= f + 1) {
+        if (valid_decisions.size() >= (uint64_t) config.f + 1) {
           remaining_shards.erase(decisions.first);
         }
       }
@@ -209,7 +208,7 @@ bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
             valid_decisions.insert(valid_decisions.size());
           }
         }
-        if (valid_decisions.size() >= f + 1) {
+        if (valid_decisions.size() >= (uint64_t) config.f + 1) {
           remaining_shards.erase(decisions.first);
         }
       }

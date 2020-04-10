@@ -9,6 +9,7 @@
 #include "store/pbftstore/server-proto.pb.h"
 #include "store/server.h"
 #include "lib/keymanager.h"
+#include "lib/configuration.h"
 #include "store/common/backend/versionstore.h"
 #include "store/common/partitioner.h"
 #include "store/common/truetime.h"
@@ -17,7 +18,7 @@ namespace pbftstore {
 
 class Server : public App, public ::Server {
 public:
-  Server(KeyManager *keyManager, int groupIdx, int myId, int numShards, int numGroups, bool signMessages, bool validateReads, uint64_t timeDelta, partitioner part, TrueTime timeServer = TrueTime(0, 0));
+  Server(const transport::Configuration& config, KeyManager *keyManager, int groupIdx, int myId, int numShards, int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, partitioner part, TrueTime timeServer = TrueTime(0, 0));
   ~Server();
 
   ::google::protobuf::Message* Execute(const std::string& type, const std::string& msg, proto::CommitProof &&commitProof);
@@ -30,13 +31,14 @@ public:
 
 private:
   Stats stats;
+  transport::Configuration config;
   KeyManager* keyManager;
   int groupIdx;
   int myId;
   int numShards;
   int numGroups;
   bool signMessages;
-  bool validateReads;
+  bool validateProofs;
   uint64_t timeDelta;
   partitioner part;
   TrueTime timeServer;
