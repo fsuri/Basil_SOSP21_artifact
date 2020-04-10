@@ -69,7 +69,8 @@ Store::Get(uint64_t id, const string &key, const Timestamp &timestamp, pair<Time
 }
 
 int
-Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, Timestamp &proposedTimestamp)
+Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
+    Timestamp &proposedTimestamp)
 {   
     Debug("[%lu] START PREPARE", id);
 

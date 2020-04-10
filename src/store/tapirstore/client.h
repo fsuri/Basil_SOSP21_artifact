@@ -86,14 +86,11 @@ class Client : public ::Client {
  private:
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), outstandingPrepares(0), commitTries(0),
-        maxRepliedTs(0UL), prepareStatus(REPLY_OK), prepareTimestamp(nullptr),
+        maxRepliedTs(0UL), prepareStatus(REPLY_OK),
         callbackInvoked(false), timeout(0UL) {
     }
 
     ~PendingRequest() {
-      if (prepareTimestamp != nullptr) {
-        delete prepareTimestamp;
-      }
     }
 
     commit_callback ccb;
@@ -103,7 +100,7 @@ class Client : public ::Client {
     int commitTries;
     uint64_t maxRepliedTs;
     int prepareStatus;
-    Timestamp *prepareTimestamp;
+    Timestamp prepareTimestamp;
     bool callbackInvoked;
     uint32_t timeout;
   };
