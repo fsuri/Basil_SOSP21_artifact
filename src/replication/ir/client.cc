@@ -87,6 +87,7 @@ IRClient::InvokeInconsistent(const string &request,
                                    continuation,
                                    std::move(timer),
                                    config.QuorumSize());
+
     pendingReqs[reqId] = req;
     SendInconsistent(req);
 }
