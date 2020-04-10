@@ -131,6 +131,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
   req->ctcb = ctcb;
   req->prepareTimestamp = new Timestamp(timeServer.GetTime(), client_id);
   req->callbackInvoked = false;
+  req->timeout = timeout;
   
   Prepare(req, timeout);
 }
@@ -212,7 +213,9 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
           delete itr->second;
         }
       };
-      commit_timeout_callback ctcb = [](int status){};
+      commit_timeout_callback ctcb = [txnId = this->t_id](int status){
+        Warning("COMMIT[%lu] timeout.", txnId);
+      };
       for (auto p : participants) {
           bclient[p]->Commit(req->prepareTimestamp->getTimestamp(), ccb, ctcb,
               1000); // we don't really care about the timeout here
@@ -236,7 +239,7 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
           req->prepareTimestamp->setTimestamp(req->maxRepliedTs);
         }
         Debug("RETRY [%lu] at [%lu]", t_id, req->prepareTimestamp->getTimestamp());
-        Prepare(req, 1000); // this timeout should probably be the same as 
+        Prepare(req, req->timeout); // this timeout should probably be the same as 
         // the timeout passed to Client::Commit, or maybe that timeout / COMMIT_RETRIES
         break;
       } 
@@ -263,7 +266,9 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         delete itr->second;
       }
     };
-    abort_timeout_callback atcb = [](int status){};
+    abort_timeout_callback atcb = [txnId = this->t_id](int status){
+      Warning("ABORT[%lu] timeout.", txnId);
+    };
     Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
     if (!req->callbackInvoked) {
       req->ccb(abortResult);

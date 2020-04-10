@@ -86,7 +86,8 @@ class Client : public ::Client {
  private:
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), outstandingPrepares(0), commitTries(0),
-        maxRepliedTs(0UL), prepareStatus(REPLY_OK), prepareTimestamp(nullptr) {
+        maxRepliedTs(0UL), prepareStatus(REPLY_OK), prepareTimestamp(nullptr),
+        callbackInvoked(false), timeout(0UL) {
     }
 
     ~PendingRequest() {
@@ -104,6 +105,7 @@ class Client : public ::Client {
     int prepareStatus;
     Timestamp *prepareTimestamp;
     bool callbackInvoked;
+    uint32_t timeout;
   };
 
   // Prepare function
