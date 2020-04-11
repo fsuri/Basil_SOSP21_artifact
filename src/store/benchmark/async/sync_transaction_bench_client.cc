@@ -20,19 +20,24 @@ SyncTransactionBenchClient::~SyncTransactionBenchClient() {
 }
 
 void SyncTransactionBenchClient::SendNext() {
+  int result;
+  SendNext(&result);
+}
+
+void SyncTransactionBenchClient::SendNext(int *result) {
   currTxn = GetNextTransaction();
   currTxnAttempts = 0;
-  int result = -1;
+  *result = 1; // default to failure
   while (true) {
-    result = currTxn->Execute(client);
+    *result = currTxn->Execute(client);
     stats.Increment(GetLastOp() + "_attempts", 1);
     ++currTxnAttempts;
-    if (result == SUCCESS || !retryAborted) {
-      if (result == SUCCESS) {
+    if (*result == SUCCESS || !retryAborted) {
+      if (*result == SUCCESS) {
         stats.Increment(GetLastOp() + "_committed", 1);
       }
-      if (result == 1) { // RESULT_USER_ABORTED in morty-tapir/store/tapirstore/client.h
-        stats.Increment(GetLastOp() +  "_" + std::to_string(result), 1);
+      if (*result == 1) { // RESULT_USER_ABORTED in morty-tapir/store/tapirstore/client.h
+        stats.Increment(GetLastOp() +  "_" + std::to_string(*result), 1);
       }
       if (retryAborted) {
         stats.Add(GetLastOp() + "_attempts_list", currTxnAttempts);
@@ -40,13 +45,13 @@ void SyncTransactionBenchClient::SendNext() {
       delete currTxn;
       currTxn = nullptr;
       break;
-    } else if (result == 1) { // RESULT_USER_ABORTED in morty-tapir/store/tapirstore/client.h
-      stats.Increment(GetLastOp() +  "_" + std::to_string(result), 1);
+    } else if (*result == 1) { // RESULT_USER_ABORTED in morty-tapir/store/tapirstore/client.h
+      stats.Increment(GetLastOp() +  "_" + std::to_string(*result), 1);
       delete currTxn;
       currTxn = nullptr;
       break;
     } else {
-      stats.Increment(GetLastOp() + "_" + std::to_string(result), 1);
+      stats.Increment(GetLastOp() + "_" + std::to_string(*result), 1);
       // stats.Increment(GetLastOp() + "_attempts", 1);
       int backoff = 0;
       if (abortBackoff > 0) {

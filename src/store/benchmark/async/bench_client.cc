@@ -142,7 +142,7 @@ void BenchmarkClient::CooldownDone() {
 }
 
 void BenchmarkClient::OnReply(int result) {
-  IncrementSent();
+  IncrementSent(result);
 
   if (done) {
     return;
@@ -161,20 +161,23 @@ void BenchmarkClient::StartLatency() {
   Latency_Start(&latency);
 }
 
-void BenchmarkClient::IncrementSent() {
+void BenchmarkClient::IncrementSent(int result) {
   if (started) {
     // record latency
     if (!cooldownStarted) {
       uint64_t ns = Latency_End(&latency);
-      if (latencies.size() == 0UL) {
-        struct timeval currTime;
-        gettimeofday(&currTime, NULL);
-        currTime.tv_sec -= ns / 1000000000ULL;
-        currTime.tv_usec -= (ns % 1000000000ULL) / 1000ULL;
-        std::cout << "#start," << currTime.tv_sec << "," << currTime.tv_usec << std::endl;
+      // TODO: use standard definitions across all clients for success/commit and failure/abort
+      if (result == 0) { // only record result if success
+        if (latencies.size() == 0UL) {
+          struct timeval currTime;
+          gettimeofday(&currTime, NULL);
+          currTime.tv_sec -= ns / 1000000000ULL;
+          currTime.tv_usec -= (ns % 1000000000ULL) / 1000ULL;
+          std::cout << "#start," << currTime.tv_sec << "," << currTime.tv_usec << std::endl;
+        }
+        std::cout << GetLastOp() << ',' << ns << std::endl;
+        latencies.push_back(ns);
       }
-      std::cout << GetLastOp() << ',' << ns << std::endl;
-      latencies.push_back(ns);
     }
 
     if (numRequests == -1) {

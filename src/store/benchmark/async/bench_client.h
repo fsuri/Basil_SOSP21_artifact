@@ -50,7 +50,7 @@ class BenchmarkClient {
 
   void StartLatency();
   virtual void SendNext() = 0;
-  void IncrementSent();
+  void IncrementSent(int result);
   inline bool IsFullyDone() { return done; }
 
   struct Latency_t latency;

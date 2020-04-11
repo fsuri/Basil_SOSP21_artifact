@@ -17,9 +17,10 @@ class SyncTransactionBenchClient : public BenchmarkClient {
 
   virtual ~SyncTransactionBenchClient();
 
+  void SendNext(int *result);
  protected:
   virtual SyncTransaction *GetNextTransaction() = 0;
-  virtual void SendNext();
+  virtual void SendNext() override;
 
   SyncClient &client;
   std::mt19937 gen;

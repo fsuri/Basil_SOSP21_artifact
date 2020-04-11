@@ -702,17 +702,21 @@ int main(int argc, char **argv) {
         // async benchmarks
 	      transport->Timer(0, [bench, bdcb]() { bench->Start(bdcb); });
         break;
-      case BENCH_SMALLBANK_SYNC:
-        threads.push_back(new std::thread([bench, bdcb](){
-            bench->Start([](){});
-            while (!bench->IsFullyDone()) {
-              bench->StartLatency();
-              bench->SendNext();
-              bench->IncrementSent();
+      case BENCH_SMALLBANK_SYNC: {
+        SyncTransactionBenchClient *syncBench = dynamic_cast<SyncTransactionBenchClient *>(bench);
+        UW_ASSERT(syncBench != nullptr);
+        threads.push_back(new std::thread([syncBench, bdcb](){
+            syncBench->Start([](){});
+            while (!syncBench->IsFullyDone()) {
+              syncBench->StartLatency();
+              int result;
+              syncBench->SendNext(&result);
+              syncBench->IncrementSent(result);
             }
             bdcb();
         }));
         break;
+      }
       default:
         NOT_REACHABLE();
     }
