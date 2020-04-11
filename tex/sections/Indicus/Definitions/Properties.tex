@@ -5,6 +5,17 @@ Specifically, we guarantee to Clients that the Database is \textit{byzantine Ser
 
 Let $Op =  \{r, w\} \times K \times V $ and $Dec = \{Commit, \,Abort\}$ be the sets of possible operations and decisions respectively, where $K$ is the set of existing data items (keys) and $V$ the range of possible values. A \textit{request} $req \in (Op \cup Dec) \times C$ maps any such operation or decision to the issuing Client from set $C$. We denote with $Hon \subseteq C$ the subset of honest Clients. 
 
+\fs{ALTERNATIVE:
+A transaction $T \coloneqq (REQ, <_T)$ is a set $REQ \coloneqq \{req_1, \dots, req_t \}$ of requests, and a partial order $<_T$ such that a) $REQ$ contains an arbitrary number of operations, and exactly one decision $req_t = (Dec, c) \in REQ$, b) for every read and write operation on a shared object $r[x]$ and $w[x]$, either $r[x] <_T w[x]$ or $w[x] <_T r[x]$ (but not both), and c) for all read and write operations $r/w <_T dec$.
+\textbf{History H.} A History represents the interleaving on concurrently executed transactions. Concretely, we define a \textit{history} $H \coloneqq (R, <)$ where $R$ is finite sequence of
+requests, such that $R \supseteq \bigcup_i T_i$, and $< \supseteq \bigcup_i <_{T_i}$ .
+Let $Committed(H)$ be the subsequence of all Transactions with $req_{t} = Commit$. A History H is legal if every read request $(r, k, v)$ is preceded by a matching write request $(w, k, v)$ and there is no other write $(w, k, v')$ inbetween. A history is serial if all transactions are executed sequentially: $\forall T_i, T_j: T_i < T_j \lor T_j < T_i$.
+\textbf{Serializable} 
+A history H is serializable if there exists a serial permutation H' of Committed(H) such that H' is legal.
+\textbf{Byz-A}: All $req = (w, k, v) \in T$ are committed atomically, i.e. all of them are committed, or none. Moreover, for all T from honest clients, T is committed atomically in total (i.e. its reads and writes). -> Is this something you need per-se? Is it fine if it is just the writes and we provide something slightly stronger?)
+(The writeback check must be improved then: need to check that involved shards match all write keys)}
+
+
 \textbf{History H.} We define a \textit{history H} as a finite sequence of requests. Informally, a \textit{H} contains the operations (read/write) and decisions (commit/abort) of every transaction issued in the system.
 
 
@@ -12,7 +23,7 @@ Let $Op =  \{r, w\} \times K \times V $ and $Dec = \{Commit, \,Abort\}$ be the s
 
 
 We define a projection $H|_c$ as the subsequence of requests in $H$ that were issued by Client $c$. A sequence of requests $s = req_i \dots req_{i+t}$ in $H|_c$ form a \textit{Transaction} if $req_i$ is the first request by Client $c$ or $req_{i-1} \in Dec \times c$, and if $req_{i+t} \in Dec \times c$. Let $Committed(H)$ be the subsequence of all Transactions with $req_{i+t} = Commit$. A History H is legal if every read request $(r, k, v)$ is preceded by a matching write request $(w, k, v)$ and there is no other write $(w, k, v')$ inbetween.\\
-\textbf{Serializable} Let Committed(H) be the subsequence 
+\textbf{Serializable}  
 A history H is serializable if there exists a serial permutation H' of Committed(H) such that H' is legal.
 
 We further define:\\

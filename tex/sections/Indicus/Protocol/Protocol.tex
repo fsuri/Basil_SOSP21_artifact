@@ -461,7 +461,7 @@ Figure \ref{fig:FigureSP} summarizes the relevant nomenclature.
 \subsubsection{Correctness}
 We show, that a \textit{logged} decision is final:
 \begin{theorem}[Saf]
-A logged decision is persistant, and there can ever exist \textbf{at most one} logged decision.
+A logged decision is durable, and there can ever exist \textbf{at most one} logged decision.
 \end{theorem}
 \begin{proof}
 We show this by case distinction. Slow-Path: A Slow-Path decision is \textit{logged} if $\frac{n+f+1}{2} = 3f+1$ ($LoggedQuorum$) honest replicas have adopted the decision, since $n-f = 4f+1$ votes suffice to form a Shard-Certificate and $f$ byzantine participants may decide arbitrarily. Thus it is impossible for two logged decisions to co-exist, as any two $LoggedQuorums$ must intersect in $f+1$ honest replicas that will only ever accept one decision - a contradiction. Furthermore, honest replicas do not change their decision, and hence a slow-path logged decision persists. Fast-Path: We distinguish three sub-cases. The existance of $4f+1$ Phase1 honest commit votes, implies that any Slow-Path decision must result in a commit decision, since any Quorum ($n-f = 4f+1$) is bound to include $3f+1$ commit votes. Vice versa, the existance of $3f+1$ honest Phase1 abstain votes, implies the impossibility of any Slow-Path commit decision. Moreover, both the above cases mutually exclude each other. Lastly, 1 valid Abort vote implies the existance of a logged decision for the conflicting Transaction. By Induction \fs{that TXs logged decision never changes}, and Quorum intersection, this implies that at least $3f+1$ honest replicas will vote to Abstain the ongoing transaction and hence it is impossible to ever log a commit decision for the ongoing Transaction.
@@ -828,6 +828,8 @@ Whether to opt into the availability of retries need not be a global system deci
 
 
 \paragraph{Single shard logging}
+\fs{This does not work for Atomic Broadcast!}
+
 When transaction execution touches multiple shards validation can incur redundant explicit logging overhead. When a Slow-Path is necessary to arrive at a logged decision on S different shards, bandwith is wasted. Consider an example in which $S-1$ shards attempt to log the decision Commit, while a single shard attempts to log an Abort decision. If the latter shard succeeds, the effort of the remaining shards was in vain. 
 The culprit of this phenomenon is the delayal of Two-Phase-Commit (2PC) until the Writeback phase. By preemptively making a 2PC decision \textbf{before} logging we can avoid this redundancy. We remark, that even when when all shards agree on a decision, this saves redundant coordination.
 Concretely, we designate \textbf{one} involved shard as \textit{logging Shard}, while all other shards remain responsible only for Validation. Figure \ref{fig:SingleShardOpt} shows the revised structure. In order to log a decision, voting quorums from all involved shards are required. We modify step 3 of the Validation protocol accordingly:
