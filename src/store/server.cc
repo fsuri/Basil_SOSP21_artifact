@@ -368,7 +368,7 @@ int main(int argc, char **argv) {
   // parse keys
   std::vector<std::string> keys;
   if (FLAGS_data_file_path.empty() && FLAGS_keys_path.empty()) {
-    if (FLAGS_num_keys > 0) {
+    /*if (FLAGS_num_keys > 0) {
       for (size_t i = 0; i < FLAGS_num_keys; ++i) {
         keys.push_back(std::to_string(i));
       }
@@ -376,7 +376,7 @@ int main(int argc, char **argv) {
       std::cerr << "Specified neither keys file nor number of keys."
                 << std::endl;
       return 1;
-    }
+    }*/
   } else if (FLAGS_data_file_path.length() > 0 && FLAGS_keys_path.empty()) {
     std::ifstream in;
     in.open(FLAGS_data_file_path);
