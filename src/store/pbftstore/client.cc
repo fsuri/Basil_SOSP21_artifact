@@ -6,14 +6,19 @@ namespace pbftstore {
 
 using namespace std;
 
-Client::Client(transport::Configuration *config, int nShards, int nGroups,
-    int closestReplica, Transport *transport, partitioner part, bool syncCommit,
-    uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
-    KeyManager *keyManager, TrueTime timeServer) : config(config),
-    nshards(nShards), ngroups(nGroups), transport(transport), part(part),
-    syncCommit(syncCommit), signedMessages(signedMessages),
+Client::Client(const transport::Configuration& config, int nGroups, int nShards,
+      Transport *transport, partitioner part,
+      uint64_t readQuorumSize, bool signMessages,
+      bool validateProofs, KeyManager *keyManager,
+      TrueTime timeserver) : config(config), nshards(nShards),
+    ngroups(nGroups), transport(transport), part(part),
+    signMessages(signMessages),
     validateProofs(validateProofs), keyManager(keyManager),
-    timeServer(timeServer), lastReqId(0UL) {
+    timeServer(timeserver) {
+  // just an invariant for now for everything to work ok
+  assert(nGroups == nShards);
+
+  // generate a random client uuid
   client_id = 0;
   while (client_id == 0) {
     random_device rd;
@@ -21,21 +26,18 @@ Client::Client(transport::Configuration *config, int nShards, int nGroups,
     uniform_int_distribution<uint64_t> dis;
     client_id = dis(gen);
   }
-  // Initialize all state here;
-  client_seq_num = 0;
 
-  bclient.reserve(nshards);
+  bclient.reserve(ngroups);
 
-  Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
+  Debug("Initializing Indicus client with id [%lu] %lu", client_id, ngroups);
 
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
-    bclient[i] = new ShardClient(config, transport, client_id, i,
-        closestReplica, signedMessages, validateProofs,
-        keyManager, timeServer);
+    bclient[i] = new ShardClient(config, transport, i,
+        signMessages, validateProofs, keyManager);
   }
 
-  Debug("Indicus client [%lu] created! %lu %lu", client_id, nshards,
+  Debug("Indicus client [%lu] created! %lu %lu", client_id, ngroups,
       bclient.size());
 }
 
@@ -50,91 +52,184 @@ Client::~Client()
  * abort() are part of this transaction.
  */
 void Client::Begin() {
-  client_seq_num++;
-  Debug("BEGIN [%lu]", client_seq_num);
+  Debug("BEGIN tx");
 
   txn = proto::Transaction();
-  txn.set_client_id(client_id);
-  txn.set_client_seq_num(client_seq_num);
   // Optimistically choose a read timestamp for all reads in this transaction
   txn.mutable_timestamp()->set_timestamp(timeServer.GetTime());
   txn.mutable_timestamp()->set_id(client_id);
+  txnInProgress = true;
+  groupedDecision.clear();
+  groupedSignedDecision.clear();
+  writebackAcks.clear();
 }
 
 void Client::Get(const std::string &key, get_callback gcb,
     get_timeout_callback gtcb, uint32_t timeout) {
-  Debug("GET [%lu : %s]", client_seq_num, key.c_str());
+  Debug("GET [%s]", key.c_str());
 
   // Contact the appropriate shard to get the value.
   int i = part(key, nshards) % ngroups;
 
   // If needed, add this shard to set of participants and send BEGIN.
   if (!IsParticipant(i)) {
-    txn.add_involved_groups(i);
-    bclient[i]->Begin(client_seq_num);
+    txn.add_participating_shards(i);
   }
 
   read_callback rcb = [gcb, this](int status, const std::string &key,
-      const std::string &val, const Timestamp &ts, const proto::Transaction &dep,
-      bool hasDep) {
-    if (Message_DebugEnabled(__FILE__)) {
-      uint64_t intValue = 0;
-      for (int i = 0; i < 4; ++i) {
-        intValue = intValue | (static_cast<uint64_t>(val[i]) << ((3 - i) * 8));
-      }
-      Debug("GET CALLBACK [%lu : %s] Read value %lu.", client_seq_num, key.c_str(), intValue);
-    }
-    ReadMessage *read = txn.add_read_set();
-    read->set_key(key);
-    ts.serialize(read->mutable_readtime());
-    if (hasDep) {
-      *txn.add_deps() = dep;
+      const std::string &val, const Timestamp &ts) {
+    if (status == REPLY_OK) {
+      ReadMessage *read = txn.add_readset();
+      read->set_key(key);
+      ts.serialize(read->mutable_readtime());
     }
     gcb(status, key, val, ts);
   };
   read_timeout_callback rtcb = gtcb;
 
   // Send the GET operation to appropriate shard.
-  bclient[i]->Get(client_seq_num, key, txn.timestamp(), readQuorumSize, rcb,
+  bclient[i]->Get(key, txn.timestamp(), readQuorumSize, rcb,
       rtcb, timeout);
 }
 
 void Client::Put(const std::string &key, const std::string &value,
     put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
-  if (Message_DebugEnabled(__FILE__)) {
-    uint64_t intValue = 0;
-    for (int i = 0; i < 4; ++i) {
-      intValue = intValue | (static_cast<uint64_t>(value[i]) << ((3 - i) * 8));
-    }
-    Debug("PUT [%lu : %s : %lu]", client_seq_num, key.c_str(), intValue);
-  }
-
   // Contact the appropriate shard to set the value.
   int i = part(key, nshards) % ngroups;
 
   // If needed, add this shard to set of participants and send BEGIN.
   if (!IsParticipant(i)) {
-    txn.add_involved_groups(i);
-    bclient[i]->Begin(client_seq_num);
+    txn.add_participating_shards(i);
   }
 
-  WriteMessage *write = txn.add_write_set();
+  WriteMessage *write = txn.add_writeset();
   write->set_key(key);
   write->set_value(value);
-
   // Buffering, so no need to wait.
-  bclient[i]->Put(client_seq_num, key, value, pcb, ptcb, timeout);
+  pcb(REPLY_OK, key, value);
 }
 
 void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     uint32_t timeout) {
-  uint64_t reqId = lastReqId++;
-  PendingRequest *req = new PendingRequest(reqId);
-  pendingReqs[reqId] = req;
-  req->ccb = ccb;
-  req->ctcb = ctcb;
-  req->prepareTimestamp = new Timestamp(timeServer.GetTime(), client_id);
-  req->callbackInvoked = false;
+  for (const auto& shard_id : txn.participating_shards()) {
+    if (signMessages) {
+      signed_prepare_callback pcb = [ccb, ctcb, timeout, shard_id, this](int status, const proto::GroupedSignedDecisions& gsd) {
+        if (this->groupedSignedDecision.find(shard_id) != this->groupedSignedDecision.end()) {
+          this->groupedSignedDecision[shard_id] = gsd;
+          if (status != REPLY_OK) {
+            this->txnInProgress = false;
+          }
+          if (this->groupedSignedDecision.size() == (uint64_t) this->txn.participating_shards_size()) {
+            if (this->txnInProgress) {
+              proto::ShardSignedDecisions dec;
+              for (const auto& pair : this->groupedSignedDecision) {
+                (*dec.mutable_grouped_decisions())[pair.first] = pair.second;
+              }
+              this->WriteBackSigned(dec, ccb, ctcb, timeout);
+            } else {
+              ccb(REPLY_FAIL);
+            }
+          }
+        }
+      };
 
-  Phase1(req, timeout);
+      prepare_timeout_callback pcbt = [](int s) {
+        Debug("timeout called");
+      };
+
+      bclient[shard_id]->SignedPrepare(txn, pcb, pcbt, timeout);
+    } else {
+      prepare_callback pcb = [ccb, ctcb, timeout, shard_id, this](int status, const proto::GroupedDecisions& gd) {
+        // make sure we haven't marked this shard's decision yet
+        if (this->groupedDecision.find(shard_id) != this->groupedDecision.end()) {
+          // add this shard to the list of replies
+          this->groupedDecision[shard_id] = gd;
+          // if we got an abort, tx no longer in progress
+          if (status != REPLY_OK) {
+            this->txnInProgress = false;
+          }
+          // wait for all callbacks to complete
+          if (this->groupedDecision.size() == (uint64_t) this->txn.participating_shards_size()) {
+            // if we didn't abort, go to the writeback stage
+            if (this->txnInProgress) {
+              proto::ShardDecisions dec;
+              for (const auto& pair : this->groupedDecision) {
+                (*dec.mutable_grouped_decisions())[pair.first] = pair.second;
+              }
+              this->WriteBack(dec, ccb, ctcb, timeout);
+            } else {
+              // otherwise, report a failure
+              ccb(REPLY_FAIL);
+            }
+          }
+        }
+      };
+
+      prepare_timeout_callback pcbt = [](int s) {
+        Debug("timeout called");
+      };
+
+      bclient[shard_id]->Prepare(txn, pcb, pcbt, timeout);
+    }
+  }
+}
+
+void Client::WriteBack(const proto::ShardDecisions& dec, commit_callback ccb, commit_timeout_callback ctcb,
+    uint32_t timeout) {
+  std::string txnDig = TransactionDigest(txn);
+  for (const auto& shard_id : txn.participating_shards()) {
+    writeback_callback wcb = [this, shard_id, ccb]() {
+      this->writebackAcks.insert(shard_id);
+      if (this->writebackAcks.size() == (uint64_t) this->txn.participating_shards_size()) {
+        ccb(REPLY_OK);
+      }
+    };
+    writeback_timeout_callback wcbt = [](int s) {
+        Debug("timeout called");
+    };
+
+    bclient[shard_id]->Commit(txnDig, dec, wcb, wcbt, timeout);
+  }
+}
+
+void Client::WriteBackSigned(const proto::ShardSignedDecisions& dec, commit_callback ccb, commit_timeout_callback ctcb,
+    uint32_t timeout) {
+  std::string txnDig = TransactionDigest(txn);
+  for (const auto& shard_id : txn.participating_shards()) {
+    writeback_callback wcb = [this, shard_id, ccb]() {
+      this->writebackAcks.insert(shard_id);
+      if (this->writebackAcks.size() == (uint64_t) this->txn.participating_shards_size()) {
+        ccb(REPLY_OK);
+      }
+    };
+    writeback_timeout_callback wcbt = [](int s) {
+        Debug("timeout called");
+    };
+
+    bclient[shard_id]->CommitSigned(txnDig, dec, wcb, wcbt, timeout);
+  }
+
+}
+
+void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
+    uint32_t timeout) {
+
+      Panic("Implement");
+}
+
+vector<int> Client::Stats() {
+    vector<int> v;
+    return v;
+}
+
+bool Client::IsParticipant(int g) {
+  for (const auto &participant : txn.participating_shards()) {
+    if (participant == (uint64_t) g) {
+      return true;
+    }
+  }
+  return false;
+}
+
+
 }
