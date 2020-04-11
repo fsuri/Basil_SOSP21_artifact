@@ -45,7 +45,6 @@ void AsyncTransactionBenchClient::ExecuteCallback(int result,
     OnReply(result);
   } else {
     stats.Increment(GetLastOp() + "_" + std::to_string(result), 1);
-    stats.Increment(GetLastOp() + "_attempts", 1);
     int backoff = 0;
     if (abortBackoff > 0) {
       backoff = std::uniform_int_distribution<int>(0,
