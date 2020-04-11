@@ -15,6 +15,7 @@ config(config), keyManager(keyManager), groupIdx(groupIdx), myId(myId), numShard
 Server::~Server() {}
 
 bool Server::CCC(const proto::Transaction& txn) {
+  printf("Starting ccc check\n");
   Timestamp txTs(txn.timestamp());
   // TODO actually do OCC check and add to prepared list
   for (const auto &read : txn.readset()) {
@@ -32,6 +33,7 @@ bool Server::CCC(const proto::Transaction& txn) {
     // such that t > rts and t < txTs
     if (commitStore.getUpperBound(read.key(), rts, upper)) {
       if (upper < txTs) {
+        cout << "found committed conflict with read for key: " << read.key() << endl;
         return false;
       }
     }
@@ -42,12 +44,15 @@ bool Server::CCC(const proto::Transaction& txn) {
         if (write.key() == read.key()) {
           Timestamp wts(pair.second.timestamp());
           if (wts > rts && wts < txTs) {
+            cout << "found prepared conflict with read for key: " << read.key() << endl;
             return false;
           }
         }
       }
     }
   }
+
+  printf("checked all reads\n");
 
   for (const auto &write : txn.writeset()) {
     if(!IsKeyOwned(write.key())) {
@@ -60,14 +65,19 @@ bool Server::CCC(const proto::Transaction& txn) {
     // check commited reads
     // get a pointer to the first read that commits after this tx
     auto it = committedReads[write.key()].lower_bound(txTs);
-    it++;
-    // all iterator pairs committed after txTs (commit ts > txTs)
-    // so we just need to check if they returned a version before txTs (read ts < txTs)
-    while(it != committedReads[write.key()].end()) {
-      if ((*it).second < txTs) {
-        return false;
-      }
+    if (it != committedReads[write.key()].end()) {
+      // if the iterator is at the end, then that means there are no committed reads
+      // before this tx
       it++;
+      // all iterator pairs committed after txTs (commit ts > txTs)
+      // so we just need to check if they returned a version before txTs (read ts < txTs)
+      while(it != committedReads[write.key()].end()) {
+        if ((*it).second < txTs) {
+          cout << "found committed conflict with write for key: " << write.key() << endl;
+          return false;
+        }
+        it++;
+      }
     }
 
     // next, check the prepared tx's read sets
@@ -77,6 +87,7 @@ bool Server::CCC(const proto::Transaction& txn) {
           Timestamp pendingTxTs(pair.second.timestamp());
           Timestamp rts(read.readtime());
           if (txTs > rts && txTs < pendingTxTs) {
+            cout << "found prepared conflict with write for key: " << write.key() << endl;
             return false;
           }
         }
@@ -87,7 +98,7 @@ bool Server::CCC(const proto::Transaction& txn) {
 
 }
 
-::google::protobuf::Message* Server::Execute(const std::string& type, const std::string& msg, proto::CommitProof &&commitProof) {
+::google::protobuf::Message* Server::Execute(const string& type, const string& msg, proto::CommitProof &&commitProof) {
   cout << "Execute: " << type << endl;
 
   proto::Transaction transaction;
@@ -95,24 +106,33 @@ bool Server::CCC(const proto::Transaction& txn) {
     transaction.ParseFromString(msg);
 
     proto::TransactionDecision* decision = new proto::TransactionDecision();
-    std::string digest = TransactionDigest(transaction);
+    string digest = TransactionDigest(transaction);
     decision->set_txn_digest(digest);
     decision->set_shard_id(groupIdx);
     // OCC check
     if (CCC(transaction)) {
+      printf("ccc succeeded\n");
       decision->set_status(REPLY_OK);
-      commitProofs[digest] = make_shared<proto::CommitProof>(std::move(commitProof));
+      commitProofs[digest] = make_shared<proto::CommitProof>(move(commitProof));
       pendingTransactions[digest] = transaction;
     } else {
+      printf("ccc failed\n");
       decision->set_status(REPLY_FAIL);
     }
     // Send decision to client
-    return decision;
+    if (signMessages) {
+      proto::SignedMessage *signedMessage = new proto::SignedMessage();
+      SignMessage(*decision, keyManager->GetPrivateKey(myId), myId, *signedMessage);
+      delete decision;
+      return signedMessage;
+    } else {
+      return decision;
+    }
   }
   return nullptr;
 }
 
-::google::protobuf::Message* Server::HandleMessage(const std::string& type, const std::string& msg) {
+::google::protobuf::Message* Server::HandleMessage(const string& type, const string& msg) {
   cout << "Handle" << type << endl;
 
   proto::Read read;
@@ -122,13 +142,15 @@ bool Server::CCC(const proto::Transaction& txn) {
     read.ParseFromString(msg);
 
     Timestamp ts(read.timestamp());
-    std::pair<Timestamp, ValueAndProof> result;
+    pair<Timestamp, ValueAndProof> result;
     bool exists = commitStore.get(read.key(), ts, result);
 
     proto::ReadReply* readReply = new proto::ReadReply();
     readReply->set_req_id(read.req_id());
     readReply->set_key(read.key());
     if (exists) {
+      printf("Read exists f\n");
+      cout << "Read exits for key: " << read.key() << " value: " << result.second.value << endl;
       readReply->set_status(REPLY_OK);
       readReply->set_value(result.second.value);
       result.first.serialize(readReply->mutable_value_timestamp());
@@ -136,6 +158,7 @@ bool Server::CCC(const proto::Transaction& txn) {
         *readReply->mutable_commit_proof() = *result.second.commitProof;
       }
     } else {
+      cout << "Read dones not exit for key: " << read.key() << endl;
       readReply->set_status(REPLY_FAIL);
     }
 
@@ -152,7 +175,7 @@ bool Server::CCC(const proto::Transaction& txn) {
 
     proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
 
-    std::string digest = gdecision.txn_digest();
+    string digest = gdecision.txn_digest();
     groupedDecisionAck->set_txn_digest(digest);
     if (gdecision.status() == REPLY_OK) {
       // verify gdecision
@@ -160,15 +183,17 @@ bool Server::CCC(const proto::Transaction& txn) {
         proto::Transaction txn = pendingTransactions[digest];
         Timestamp ts(txn.timestamp());
         // apply tx
+        cout << "applying tx" << endl;
         for (const auto &read : txn.readset()) {
           if(!IsKeyOwned(read.key())) {
             continue;
           }
+          cout << "applying read to key " << read.key() << endl;
           committedReads[read.key()][ts] = read.readtime();
         }
 
         ValueAndProof valProof;
-        std::shared_ptr<proto::CommitProof> commitProofPtr = commitProofs[digest];
+        shared_ptr<proto::CommitProof> commitProofPtr = commitProofs[digest];
         for (const auto &write : txn.writeset()) {
           if(!IsKeyOwned(write.key())) {
             continue;
@@ -176,6 +201,7 @@ bool Server::CCC(const proto::Transaction& txn) {
 
           valProof.value = write.value();
           valProof.commitProof = commitProofPtr;
+          cout << "applying write to key " << write.key() << endl;
           commitStore.put(write.key(), valProof, ts);
 
           // GC stuff?
@@ -203,6 +229,7 @@ bool Server::CCC(const proto::Transaction& txn) {
       }
       groupedDecisionAck->set_status(REPLY_FAIL);
     }
+    printf("decision ack status: %d\n", groupedDecisionAck->status());
 
     if (signMessages) {
       proto::SignedMessage *signedMessage = new proto::SignedMessage();
@@ -218,7 +245,7 @@ bool Server::CCC(const proto::Transaction& txn) {
 }
 
 bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
-  std::string digest = gdecision.txn_digest();
+  string digest = gdecision.txn_digest();
   proto::Transaction txn = pendingTransactions[digest];
 
   // We will go through the grouped decisions and make sure that each
@@ -226,18 +253,20 @@ bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
   // as valid. We return true if all participating shard decisions are valid
 
   // This will hold the remaining shards that we need to verify
-  std::unordered_set<uint64_t> remaining_shards;
+  unordered_set<uint64_t> remaining_shards;
   for (auto id : txn.participating_shards()) {
+    cout << "requiring " << id << endl;
     remaining_shards.insert(id);
   }
 
   if (signMessages) {
     for (auto& decisions : gdecision.signed_decisions().grouped_decisions()) {
+      cout << "decision for shard " << decisions.first << endl;
       if (remaining_shards.find(decisions.first) != remaining_shards.end()) {
-        std::unordered_set<uint64_t> valid_decisions;
+        unordered_set<uint64_t> valid_decisions;
         for (auto& decision : decisions.second.decisions()) {
-          std::string data;
-          std::string type;
+          string data;
+          string type;
           if (ValidateSignedMessage(decision, keyManager, data, type)) {
             proto::TransactionDecision txnDecision;
             if (type == txnDecision.GetTypeName()) {
@@ -249,30 +278,39 @@ bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
           }
         }
         if (valid_decisions.size() >= (uint64_t) config.f + 1) {
+          cout << "signed: verified shard " << decisions.first << endl;
           remaining_shards.erase(decisions.first);
         }
       }
     }
   } else {
+    // iterate over all shards
     for (auto& decisions : gdecision.decisions().grouped_decisions()) {
+      // check if we are looking for a grouped decision from the current shard
       if (remaining_shards.find(decisions.first) != remaining_shards.end()) {
-        std::unordered_set<uint64_t> valid_decisions;
+        unordered_set<uint64_t> valid_decisions;
+        // make sure the shard has the correct number of valid decisions for the transaction
         for (auto& decision : decisions.second.decisions()) {
           if (decision.status() == REPLY_OK && decision.txn_digest() == digest && decision.shard_id() == decisions.first) {
             valid_decisions.insert(valid_decisions.size());
           }
         }
+        // f+1 means that there was at least 1 correct node that can attest that
+        // the transaction should be applied, implying that the transaction
+        // will eventually be applied at every honest node
         if (valid_decisions.size() >= (uint64_t) config.f + 1) {
+          cout << "verified shard " << decisions.first << endl;
           remaining_shards.erase(decisions.first);
         }
       }
     }
   }
 
+  // the grouped decision should have a proof for all of the participating shards
   return remaining_shards.size() == 0;
 }
 
-void Server::Load(const std::string &key, const std::string &value,
+void Server::Load(const string &key, const string &value,
     const Timestamp timestamp) {
       Panic("Unimplemented");
 }

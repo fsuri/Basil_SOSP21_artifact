@@ -19,11 +19,11 @@
 namespace pbftstore {
 
 // status, key, value
-typedef std::function<void(int, const std::string, const std::string &)> read_callback;
-typedef std::function<void(int, const std::string &)> read_timeout_callback;
+typedef std::function<void(int, const std::string&, const std::string &, const Timestamp&)> read_callback;
+typedef std::function<void(int, const std::string&)> read_timeout_callback;
 
-typedef std::function<void(const proto::GroupedDecisions&)> prepare_callback;
-typedef std::function<void(const proto::GroupedSignedDecisions&)> signed_prepare_callback;
+typedef std::function<void(int, const proto::GroupedDecisions&)> prepare_callback;
+typedef std::function<void(int, const proto::GroupedSignedDecisions&)> signed_prepare_callback;
 typedef std::function<void(int)> prepare_timeout_callback;
 
 typedef std::function<void()> writeback_callback;
@@ -51,7 +51,7 @@ class ShardClient : public TransportReceiver {
   void Prepare(const proto::Transaction& txn, prepare_callback pcb,
       prepare_timeout_callback ptcb, uint32_t timeout);
   void SignedPrepare(const proto::Transaction& txn, signed_prepare_callback pcb,
-      signed_prepare_callback ptcb, uint32_t timeout);
+      prepare_timeout_callback ptcb, uint32_t timeout);
 
   void Commit(const std::string& txn_digest, const proto::ShardDecisions& dec,
       writeback_callback wcb, writeback_timeout_callback wtcp, uint32_t timeout);
@@ -83,14 +83,18 @@ class ShardClient : public TransportReceiver {
   };
 
   struct PendingPrepare {
-    // map from recv number to decision
-    // must be valid for the txn
-    proto::GroupedDecisions receivedDecs;
+    // if we get f+1 valid decs -> return ok
+    // else, once we get 2f+1 decs -> return failed
+    // all the ids that we have received a decision from
+    std::unordered_set<uint64_t> receivedDecs;
+    // all the ones that had status ok
+    std::unordered_map<uint64_t, proto::TransactionDecision> receivedValidDecs;
     prepare_callback pcb;
   };
 
   struct PendingSignedPrepare {
-    std::unordered_map<uint64_t, proto::SignedMessage> receivedDecs;
+    std::unordered_set<uint64_t> receivedDecs;
+    std::unordered_map<uint64_t, proto::SignedMessage> receivedValidDecs;
     signed_prepare_callback pcb;
   };
 
