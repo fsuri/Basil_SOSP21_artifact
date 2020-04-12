@@ -84,7 +84,8 @@ const std::string protocol_args[] = {
   "strong",
   "janus",
   "morty",
-  "indicus"
+  "indicus",
+	"pbft"
 };
 const protocol_t protos[] {
   PROTO_TAPIR,

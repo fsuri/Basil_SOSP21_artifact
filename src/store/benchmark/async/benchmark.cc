@@ -158,7 +158,8 @@ const std::string protocol_args[] = {
   "span-lock",
   "janus",
   "morty",
-  "indicus"
+  "indicus",
+	"pbft"
 };
 const protomode_t protomodes[] {
   PROTO_TAPIR,

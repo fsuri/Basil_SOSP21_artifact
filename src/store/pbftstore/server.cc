@@ -15,7 +15,7 @@ config(config), keyManager(keyManager), groupIdx(groupIdx), myId(myId), numShard
 Server::~Server() {}
 
 bool Server::CCC(const proto::Transaction& txn) {
-  printf("Starting ccc check\n");
+  Debug("Starting ccc check");
   Timestamp txTs(txn.timestamp());
   // TODO actually do OCC check and add to prepared list
   for (const auto &read : txn.readset()) {
@@ -33,7 +33,7 @@ bool Server::CCC(const proto::Transaction& txn) {
     // such that t > rts and t < txTs
     if (commitStore.getUpperBound(read.key(), rts, upper)) {
       if (upper < txTs) {
-        cout << "found committed conflict with read for key: " << read.key() << endl;
+        Debug("found committed conflict with read for key: %s", read.key().c_str());
         return false;
       }
     }
@@ -44,7 +44,7 @@ bool Server::CCC(const proto::Transaction& txn) {
         if (write.key() == read.key()) {
           Timestamp wts(pair.second.timestamp());
           if (wts > rts && wts < txTs) {
-            cout << "found prepared conflict with read for key: " << read.key() << endl;
+            Debug("found prepared conflict with read for key: %s", read.key().c_str());
             return false;
           }
         }
@@ -52,7 +52,7 @@ bool Server::CCC(const proto::Transaction& txn) {
     }
   }
 
-  printf("checked all reads\n");
+  Debug("checked all reads");
 
   for (const auto &write : txn.writeset()) {
     if(!IsKeyOwned(write.key())) {
@@ -73,7 +73,7 @@ bool Server::CCC(const proto::Transaction& txn) {
       // so we just need to check if they returned a version before txTs (read ts < txTs)
       while(it != committedReads[write.key()].end()) {
         if ((*it).second < txTs) {
-          cout << "found committed conflict with write for key: " << write.key() << endl;
+          Debug("found committed conflict with write for key: %s", write.key().c_str());
           return false;
         }
         it++;
@@ -87,7 +87,7 @@ bool Server::CCC(const proto::Transaction& txn) {
           Timestamp pendingTxTs(pair.second.timestamp());
           Timestamp rts(read.readtime());
           if (txTs > rts && txTs < pendingTxTs) {
-            cout << "found prepared conflict with write for key: " << write.key() << endl;
+            Debug("found prepared conflict with write for key: %s", write.key().c_str());
             return false;
           }
         }
@@ -99,7 +99,7 @@ bool Server::CCC(const proto::Transaction& txn) {
 }
 
 ::google::protobuf::Message* Server::Execute(const string& type, const string& msg, proto::CommitProof &&commitProof) {
-  cout << "Execute: " << type << endl;
+  Debug("Execute: %s", type.c_str());
 
   proto::Transaction transaction;
   if (type == transaction.GetTypeName()) {
@@ -111,12 +111,12 @@ bool Server::CCC(const proto::Transaction& txn) {
     decision->set_shard_id(groupIdx);
     // OCC check
     if (CCC(transaction)) {
-      printf("ccc succeeded\n");
+      Debug("ccc succeeded");
       decision->set_status(REPLY_OK);
       commitProofs[digest] = make_shared<proto::CommitProof>(move(commitProof));
       pendingTransactions[digest] = transaction;
     } else {
-      printf("ccc failed\n");
+      Debug("ccc failed");
       decision->set_status(REPLY_FAIL);
     }
     // Send decision to client
@@ -133,7 +133,7 @@ bool Server::CCC(const proto::Transaction& txn) {
 }
 
 ::google::protobuf::Message* Server::HandleMessage(const string& type, const string& msg) {
-  cout << "Handle" << type << endl;
+  Debug("Handle %s", type.c_str());
 
   proto::Read read;
   proto::GroupedDecision gdecision;
@@ -149,8 +149,8 @@ bool Server::CCC(const proto::Transaction& txn) {
     readReply->set_req_id(read.req_id());
     readReply->set_key(read.key());
     if (exists) {
-      printf("Read exists f\n");
-      cout << "Read exits for key: " << read.key() << " value: " << result.second.value << endl;
+      Debug("Read exists f");
+      Debug("Read exits for key: %s  value: %s", read.key().c_str(), result.second.value.c_str());
       readReply->set_status(REPLY_OK);
       readReply->set_value(result.second.value);
       result.first.serialize(readReply->mutable_value_timestamp());
@@ -158,7 +158,7 @@ bool Server::CCC(const proto::Transaction& txn) {
         *readReply->mutable_commit_proof() = *result.second.commitProof;
       }
     } else {
-      cout << "Read dones not exit for key: " << read.key() << endl;
+      Debug("Read dones not exit for key: %s", read.key().c_str());
       readReply->set_status(REPLY_FAIL);
     }
 
@@ -183,12 +183,12 @@ bool Server::CCC(const proto::Transaction& txn) {
         proto::Transaction txn = pendingTransactions[digest];
         Timestamp ts(txn.timestamp());
         // apply tx
-        cout << "applying tx" << endl;
+        Debug("applying tx");
         for (const auto &read : txn.readset()) {
           if(!IsKeyOwned(read.key())) {
             continue;
           }
-          cout << "applying read to key " << read.key() << endl;
+          Debug("applying read to key %s", read.key().c_str());
           committedReads[read.key()][ts] = read.readtime();
         }
 
@@ -201,7 +201,7 @@ bool Server::CCC(const proto::Transaction& txn) {
 
           valProof.value = write.value();
           valProof.commitProof = commitProofPtr;
-          cout << "applying write to key " << write.key() << endl;
+          Debug("applying write to key %s", write.key().c_str());
           commitStore.put(write.key(), valProof, ts);
 
           // GC stuff?
@@ -229,7 +229,7 @@ bool Server::CCC(const proto::Transaction& txn) {
       }
       groupedDecisionAck->set_status(REPLY_FAIL);
     }
-    printf("decision ack status: %d\n", groupedDecisionAck->status());
+    Debug("decision ack status: %d", groupedDecisionAck->status());
 
     if (signMessages) {
       proto::SignedMessage *signedMessage = new proto::SignedMessage();
@@ -255,13 +255,13 @@ bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
   // This will hold the remaining shards that we need to verify
   unordered_set<uint64_t> remaining_shards;
   for (auto id : txn.participating_shards()) {
-    cout << "requiring " << id << endl;
+    Debug("requiring %d", id);
     remaining_shards.insert(id);
   }
 
   if (signMessages) {
     for (auto& decisions : gdecision.signed_decisions().grouped_decisions()) {
-      cout << "decision for shard " << decisions.first << endl;
+      Debug("decision for shard %d", decisions.first);
       if (remaining_shards.find(decisions.first) != remaining_shards.end()) {
         unordered_set<uint64_t> valid_decisions;
         for (auto& decision : decisions.second.decisions()) {
@@ -278,7 +278,7 @@ bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
           }
         }
         if (valid_decisions.size() >= (uint64_t) config.f + 1) {
-          cout << "signed: verified shard " << decisions.first << endl;
+          Debug("signed: verified shard %d", decisions.first);
           remaining_shards.erase(decisions.first);
         }
       }
@@ -299,7 +299,7 @@ bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
         // the transaction should be applied, implying that the transaction
         // will eventually be applied at every honest node
         if (valid_decisions.size() >= (uint64_t) config.f + 1) {
-          cout << "verified shard " << decisions.first << endl;
+          Debug("verified shard %d", decisions.first);
           remaining_shards.erase(decisions.first);
         }
       }

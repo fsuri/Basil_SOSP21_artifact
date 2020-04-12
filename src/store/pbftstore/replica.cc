@@ -44,14 +44,14 @@ Replica::~Replica() {}
 
 void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
                           const string &d, void *meta_data) {
-  // printf("Received a message\n");
+  // Debug("Received a message");
   proto::SignedMessage signedMessage;
   string type;
   string data;
   uint64_t replica_id = -1;
 
   if (t == signedMessage.GetTypeName()) {
-    printf("Received signed message\n");
+    Debug("Received signed message");
     if (!signedMessage.ParseFromString(d)) {
       return;
     }
@@ -60,7 +60,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
       return;
     }
     replica_id = signedMessage.replica_id();
-    printf("Message is valid!\n");
+    Debug("Message is valid!");
   } else {
     type = t;
     data = d;
@@ -98,13 +98,13 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 
     HandleCommit(remote, commit, replica_id);
   } else {
-    cout << "Sending request to app" << endl;
+    Debug("Sending request to app");
     ::google::protobuf::Message* reply = app->HandleMessage(type, data);
     if (reply != nullptr) {
       transport->SendMessage(this, remote, *reply);
       delete reply;
     } else {
-      cout << "Invalid request of type " << type << endl;
+      Debug("Invalid request of type %s", type.c_str());
     }
 
   }
@@ -112,10 +112,10 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 
 void Replica::HandleRequest(const TransportAddress &remote,
                                const proto::Request &request) {
-  printf("Handling request message\n");
+  Debug("Handling request message");
 
   if (!slots.requestExists(request)) {
-    cout << "new request: " << request.packed_msg().type() << endl;
+    Debug("new request: %s", request.packed_msg().type().c_str());
 
     slots.addVerifiedRequest(request);
 
@@ -148,7 +148,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
 
 void Replica::HandlePreprepare(const TransportAddress &remote,
                                   const proto::Preprepare &preprepare, uint64_t replica_id) {
-  printf("Handling preprepare message\n");
+  Debug("Handling preprepare message");
 
   uint64_t primaryId = config.GetLeaderIndex(view);
 
@@ -190,7 +190,7 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
 
 void Replica::HandlePrepare(const TransportAddress &remote,
                                const proto::Prepare &prepare, uint64_t replica_id) {
-  printf("Handling prepare message\n");
+  Debug("Handling prepare message");
 
   uint64_t seqnum = prepare.seqnum();
   uint64_t viewnum = prepare.viewnum();
@@ -204,7 +204,7 @@ void Replica::HandlePrepare(const TransportAddress &remote,
   // wait for 2f prepare + preprepare all matching and then send commit to
   // everyone start timer for 2f+1 commits
   if (slots.Prepared(seqnum, viewnum, config.f) && sentCommits[seqnum].find(viewnum) == sentCommits[seqnum].end()) {
-    cout << "Sending commit to everyone" << endl;
+    Debug("Sending commit to everyone");
 
     sentCommits[seqnum].insert(viewnum);
 
@@ -230,7 +230,7 @@ void Replica::HandlePrepare(const TransportAddress &remote,
 
 void Replica::HandleCommit(const TransportAddress &remote,
                               const proto::Commit &commit, uint64_t replica_id) {
-  printf("Handling commit message\n");
+  Debug("Handling commit message");
 
   uint64_t seqnum = commit.seqnum();
   uint64_t viewnum = commit.viewnum();
@@ -240,13 +240,13 @@ void Replica::HandleCommit(const TransportAddress &remote,
 
   // wait for 2f+1 matching commit messages, then mark message as committed,
   // clear timer
-  cout << config.f << endl;
+  Debug("f: %d", config.f);
   if (slots.CommittedLocal(seqnum, viewnum, config.f)) {
-    cout << "Committed message with type: " << slots.getRequestMessage(digest)->type() << endl;
+    Debug("Committed message with type: %s", slots.getRequestMessage(digest)->type().c_str());
     std::pair<uint64_t, std::string> view_and_digest(viewnum, digest);
     pendingSeqNum[seqnum] = view_and_digest;
 
-    cout << execSeqNum << " " << seqnum << endl;
+    Debug("exec seq num: %d    seq num: %d", execSeqNum, seqnum);
 
     while(pendingSeqNum.find(execSeqNum) != pendingSeqNum.end()) {
       std::string digest = pendingSeqNum[execSeqNum].second;
@@ -266,11 +266,11 @@ void Replica::HandleCommit(const TransportAddress &remote,
       }
       ::google::protobuf::Message* reply = app->Execute(msg->type(), msg->msg(), std::move(commitProof));
       if (reply != nullptr) {
-        cout << "Sending reply" << endl;
+        Debug("Sending reply");
         transport->SendMessage(this, *replyAddrs[digest], *reply);
         delete reply;
       } else {
-        cout << "Invalid execution" << endl;
+        Debug("Invalid execution");
       }
 
       execSeqNum++;

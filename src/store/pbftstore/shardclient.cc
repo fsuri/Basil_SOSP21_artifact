@@ -28,7 +28,7 @@ bool ShardClient::validateReadProof(const proto::CommitProof& commitProof, const
 void ShardClient::ReceiveMessage(const TransportAddress &remote,
     const std::string &t, const std::string &d,
     void *meta_data) {
-      std::cout << "handling message of type " << t << std::endl;
+      Debug("handling message of type %s", t.c_str());
   proto::SignedMessage signedMessage;
   std::string type;
   std::string data;
@@ -52,7 +52,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
     readReply.ParseFromString(data);
     // get the read request id from the reply
     uint64_t reqId = readReply.req_id();
-    printf("got a read reply\n");
+    Debug("got a read reply");
 
     // try and find a matching pending read based on the request
     if (pendingReads.find(reqId) != pendingReads.end()) {
@@ -87,7 +87,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
         }
       }
 
-      printf("reply size: %d\n", pendingRead->receivedReplies.size());
+      Debug("reply size: %d", pendingRead->receivedReplies.size());
       if (pendingRead->receivedReplies.size() >= pendingRead->numResultsRequired) {
         read_callback rcb = pendingRead->rcb;
         std::string value = pendingRead->maxValue;
@@ -109,7 +109,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
         // make sure the message was signed
         if (t == signedMessage.GetTypeName()) {
           if (pendingSignedPrepares.find(digest) != pendingSignedPrepares.end()) {
-            printf("Adding signed id to set: %d\n", signedMessage.replica_id());
+            Debug("Adding signed id to set: %d", signedMessage.replica_id());
 
             PendingSignedPrepare* psp = &pendingSignedPrepares[digest];
             uint64_t add_id = signedMessage.replica_id();
@@ -187,7 +187,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
       // add the replica id that sent to ack to the list
       if (signMessages) {
         if (t == signedMessage.GetTypeName()) {
-          printf("got a decision ack from %d\n", signedMessage.replica_id());
+          Debug("got a decision ack from %d", signedMessage.replica_id());
           receivedAcks->insert(signedMessage.replica_id());
         }
       } else {
