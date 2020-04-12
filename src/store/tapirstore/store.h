@@ -70,13 +70,12 @@ private:
 
     // TODO: comment this.
     std::unordered_map<uint64_t, std::pair<Timestamp, Transaction>> prepared;
+    std::unordered_map<std::string, std::set<Timestamp>> preparedWrites;
 
     void GetPreparedWrites(std::unordered_map< std::string, std::set<Timestamp> > &writes);
     void GetPreparedReads(std::unordered_map< std::string, std::set<Timestamp> > &reads);
     void Commit(const Timestamp &timestamp, const Transaction &txn);
-
-    // Debug state
-    std::unordered_set<uint64_t> active;
+    void Cleanup(uint64_t txnId);
 };
 
 } // namespace tapirstore
