@@ -29,6 +29,7 @@
 #include "store/benchmark/async/smallbank/smallbank_client.h"
 #include "store/janusstore/client.h"
 #include "store/indicusstore/client.h"
+#include "store/pbftstore/client.h"
 #include "store/common/frontend/one_shot_client.h"
 #include "store/common/frontend/async_one_shot_adapter_client.h"
 #include "store/benchmark/async/common/zipf_key_selector.h"
@@ -47,7 +48,8 @@ enum protomode_t {
 	PROTO_STRONG,
   PROTO_JANUS,
   PROTO_MORTY,
-  PROTO_INDICUS
+  PROTO_INDICUS,
+	PROTO_PBFT,
 };
 
 enum benchmode_t {
@@ -168,7 +170,8 @@ const protomode_t protomodes[] {
   PROTO_STRONG,
   PROTO_JANUS,
   PROTO_MORTY,
-  PROTO_INDICUS
+  PROTO_INDICUS,
+	PROTO_PBFT
 };
 const strongstore::Mode strongmodes[] {
   strongstore::Mode::MODE_UNKNOWN,
@@ -281,7 +284,7 @@ DEFINE_double(zipf_coefficient, 0.5, "the coefficient of the zipf distribution "
 /**
  * RW settings.
  */
-DEFINE_uint64(num_ops_txn, 1, "number of ops in each txn" 
+DEFINE_uint64(num_ops_txn, 1, "number of ops in each txn"
     " (for rw)");
 // RW benchmark also uses same config parameters as Retwis.
 
@@ -602,6 +605,29 @@ int main(int argc, char **argv) {
             keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
       }
+			case PROTO_PBFT: {
+				uint64_t readQuorumSize = 0;
+        switch (read_quorum) {
+          case READ_QUORUM_ONE:
+            readQuorumSize = 1;
+            break;
+          case READ_QUORUM_ONE_HONEST:
+            readQuorumSize = config->f + 1;
+            break;
+          case READ_QUORUM_MAJORITY_HONEST:
+            readQuorumSize = config->f * 2 + 1;
+            break;
+          default:
+            NOT_REACHABLE();
+        }
+
+        client = new pbftstore::Client(*config, FLAGS_num_shards,
+            FLAGS_num_groups, transport, part,
+            readQuorumSize,
+            FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+            keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+        break;
+			}
       default:
         NOT_REACHABLE();
     }
@@ -742,4 +768,3 @@ int main(int argc, char **argv) {
   delete transport;
 	return 0;
 }
-

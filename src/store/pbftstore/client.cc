@@ -11,7 +11,7 @@ Client::Client(const transport::Configuration& config, int nGroups, int nShards,
       uint64_t readQuorumSize, bool signMessages,
       bool validateProofs, KeyManager *keyManager,
       TrueTime timeserver) : config(config), nshards(nShards),
-    ngroups(nGroups), transport(transport), part(part),
+    ngroups(nGroups), transport(transport), part(part), readQuorumSize(readQuorumSize),
     signMessages(signMessages),
     validateProofs(validateProofs), keyManager(keyManager),
     timeServer(timeserver) {
@@ -114,7 +114,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
   for (const auto& shard_id : txn.participating_shards()) {
     if (signMessages) {
       signed_prepare_callback pcb = [ccb, ctcb, timeout, shard_id, this](int status, const proto::GroupedSignedDecisions& gsd) {
-        if (this->groupedSignedDecision.find(shard_id) != this->groupedSignedDecision.end()) {
+        if (this->groupedSignedDecision.find(shard_id) == this->groupedSignedDecision.end()) {
           this->groupedSignedDecision[shard_id] = gsd;
           if (status != REPLY_OK) {
             this->txnInProgress = false;
@@ -141,7 +141,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     } else {
       prepare_callback pcb = [ccb, ctcb, timeout, shard_id, this](int status, const proto::GroupedDecisions& gd) {
         // make sure we haven't marked this shard's decision yet
-        if (this->groupedDecision.find(shard_id) != this->groupedDecision.end()) {
+        if (this->groupedDecision.find(shard_id) == this->groupedDecision.end()) {
           // add this shard to the list of replies
           this->groupedDecision[shard_id] = gd;
           // if we got an abort, tx no longer in progress
