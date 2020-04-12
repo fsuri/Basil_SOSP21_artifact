@@ -96,6 +96,7 @@ void
 IRClient::SendInconsistent(const PendingInconsistentRequest *req)
 {
 
+  Debug("%lu:%lu Sending inconsistent op.", clientid, req->clientReqId);
     proto::ProposeInconsistentMessage reqMsg;
     reqMsg.mutable_req()->set_op(req->request);
     reqMsg.mutable_req()->set_clientid(clientid);
@@ -143,6 +144,7 @@ IRClient::InvokeConsensus(const string &request,
 void
 IRClient::SendConsensus(const PendingConsensusRequest *req)
 {
+  Debug("%lu:%lu Sending consensus op.", clientid, req->clientReqId);
     proto::ProposeConsensusMessage reqMsg;
     reqMsg.mutable_req()->set_op(req->request);
     reqMsg.mutable_req()->set_clientid(clientid);
@@ -292,12 +294,12 @@ void IRClient::HandleSlowPathConsensus(
         }));
 
     // Send finalize message.
+    Debug("%lu:%lu Sending finalize consensus op", clientid, reqid);
     proto::FinalizeConsensusMessage response;
     response.mutable_opid()->set_clientid(clientid);
     response.mutable_opid()->set_clientreqid(reqid);
     response.set_result(req->decideResult);
     if (transport->SendMessageToGroup(this, group, response)) {
-        Debug("FinalizeConsensusMessages sent for request %lu.", reqid);
         req->sent_confirms = true;
         req->timer->Start();
     } else {
@@ -339,6 +341,7 @@ void IRClient::HandleFastPathConsensus(
             [this, reqid]() { ResendConfirmation(reqid, true); }));
 
         // Asynchronously send the finalize message.
+        Debug("%lu:%lu Sending finalize consensus op", clientid, reqid);
         proto::FinalizeConsensusMessage response;
         response.mutable_opid()->set_clientid(clientid);
         response.mutable_opid()->set_clientreqid(reqid);
@@ -384,6 +387,7 @@ IRClient::ResendConfirmation(const uint64_t reqId, bool isConsensus)
 	PendingConsensusRequest *req = static_cast<PendingConsensusRequest *>(pendingReqs[reqId]);
 	UW_ASSERT(req != NULL);
 
+        Debug("%lu:%lu Sending finalize consensus op", clientid, req->clientReqId);
         proto::FinalizeConsensusMessage response;
         response.mutable_opid()->set_clientid(clientid);
         response.mutable_opid()->set_clientreqid(req->clientReqId);
@@ -401,6 +405,7 @@ IRClient::ResendConfirmation(const uint64_t reqId, bool isConsensus)
 	PendingInconsistentRequest *req = static_cast<PendingInconsistentRequest *>(pendingReqs[reqId]);
 	UW_ASSERT(req != NULL);
 
+  Debug("%lu:%lu Sending finalize inconsistent op.", clientid, req->clientReqId);
 	proto::FinalizeInconsistentMessage response;
         response.mutable_opid()->set_clientid(clientid);
         response.mutable_opid()->set_clientreqid(req->clientReqId);
@@ -451,7 +456,8 @@ IRClient::HandleInconsistentReply(const TransportAddress &remote,
     uint64_t reqId = msg.opid().clientreqid();
     auto it = pendingReqs.find(reqId);
     if (it == pendingReqs.end()) {
-        Debug("Received reply when no request was pending");
+        Debug("Received reply %lu:%lu when no request was pending",
+            msg.opid().clientid(), reqId);
         return;
     }
 
@@ -460,7 +466,7 @@ IRClient::HandleInconsistentReply(const TransportAddress &remote,
     // Make sure the dynamic cast worked
     UW_ASSERT(req != NULL);
 
-    Debug("Client received reply: %lu %i", reqId,
+    Debug("Client received reply: %lu:%lu %i", msg.opid().clientid(), reqId,
           req->inconsistentReplyQuorum.NumRequired());
 
     // Record replies
@@ -479,6 +485,8 @@ IRClient::HandleInconsistentReply(const TransportAddress &remote,
                 [this, reqId]() { ResendConfirmation(reqId, false); }));
 
             // asynchronously send the finalize message
+            Debug("%lu:%lu Sending finalize inconsistent op.", msg.opid().clientid(),
+                msg.opid().clientreqid());
             proto::FinalizeInconsistentMessage response;
             *(response.mutable_opid()) = msg.opid();
 

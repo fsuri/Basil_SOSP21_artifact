@@ -127,6 +127,7 @@ IRReplica::HandleProposeInconsistent(const TransportAddress &remote,
     RecordEntry *entry = record.Find(opid);
     ReplyInconsistentMessage reply;
     if (entry != NULL) {
+        Debug("Already have op %lu:%lu in record.", clientid, clientreqid);
         // If we already have this op in our record, then just return it
         reply.set_view(entry->view);
         reply.set_replicaidx(myIdx);
@@ -134,6 +135,7 @@ IRReplica::HandleProposeInconsistent(const TransportAddress &remote,
         reply.mutable_opid()->set_clientreqid(clientreqid);
         reply.set_finalized(entry->state == RECORD_STATE_FINALIZED);
     } else {
+        Debug("Adding op %lu:%lu to record as tentative.", clientid, clientreqid);
         // Otherwise, put it in our record as tentative
         record.Add(view, opid, msg.req(), RECORD_STATE_TENTATIVE,
                    RECORD_TYPE_INCONSISTENT);

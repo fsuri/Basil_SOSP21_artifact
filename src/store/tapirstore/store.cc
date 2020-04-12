@@ -78,6 +78,10 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
     Debug("[%lu] Active transactions: %lu.", id, active.size());
     active.erase(id);
 
+    for (const auto &prep : prepared) {
+      Debug("Prepared transaction %lu", prep.first);
+    }
+
     if (prepared.find(id) != prepared.end()) {
         if (prepared[id].first == timestamp) {
             Warning("[%lu] Already Prepared!", id);
