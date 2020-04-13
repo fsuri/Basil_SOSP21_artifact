@@ -3,29 +3,30 @@ We offer Clients an interactive transaction interface that implements ACID trans
 
 Specifically, we guarantee to Clients that the Database is \textit{byzantine Serializable} as defined below. Intuitively this Isolation level guarantees that all honest Clients experience the Database as if there serializable. In order to formally capture this we lay some ground work: \footnote{We modify and expand on definitions for BFT-linearizability from \cite{liskov2006tolerating}. \fs{ Defs for commands etc in accordance with BFT DUr. cite. They can easily do "full" serializability because byz client fake reads will never commit. Trivial, since all honest replicas are consistent due to total broadcast.}}\\
 
-Let $Op =  \{r, w\} \times K \times V $ and $Dec = \{Commit, \,Abort\}$ be the sets of possible operations and decisions respectively, where $K$ is the set of existing data items (keys) and $V$ the range of possible values. A \textit{request} $req \in (Op \cup Dec) \times C$ maps any such operation or decision to the issuing Client from set $C$. We denote with $Hon \subseteq C$ the subset of honest Clients. 
+Let $Op =  \{r, w\} \times K \times V $ and $Dec = \{Commit, \,Abort\}$ be the sets of possible operations and decisions respectively, where $K$ is the set of existing data items (keys) and $V$ the range of possible values. A \textit{request} $req \in (Op \cup Dec) \times C$ maps any such operation or decision to the issuing Client from set $C$. We denote with $Hon \subseteq C$ the subset of honest Clients. \fs{could alternatively define ops as functions r[x] and w[x]}
 
-\fs{ALTERNATIVE:
-A transaction $T \coloneqq (REQ, <_T)$ is a set $REQ \coloneqq \{req_1, \dots, req_t \}$ of requests, and a partial order $<_T$ such that a) $REQ$ contains an arbitrary number of operations, and exactly one decision $req_t = (Dec, c) \in REQ$, b) for every read and write operation on a shared object $r[x]$ and $w[x]$, either $r[x] <_T w[x]$ or $w[x] <_T r[x]$ (but not both), and c) for all read and write operations $r/w <_T dec$.
+\fs{NEW ALTERNATIVE: Def from \cite{bernstein1987concurrency}:}
+ 
+A transaction $T \coloneqq (REQ, <_T)$ is a set $REQ \coloneqq \{req_1, \dots, req_t \}$ of requests issued by the same client $c$, and a partial order $<_T$ such that a) $REQ$ contains an arbitrary number of operations, and exactly one decision $req_t = (Dec, c) \in REQ$, b) for every read and write operation on a shared key $k$, either $(r, k, v_r) <_T (w, k, v_w)$ or $(w, k, v_w) <_T (r, k, v_r)$ \fs{(but not both) - trivial by asymmetry property of partial order}, and c) for all read and write operations $({r,w} \times k \times v) <_T dec$.
 \textbf{History H.} A History represents the interleaving on concurrently executed transactions. Concretely, we define a \textit{history} $H \coloneqq (R, <)$ where $R$ is finite sequence of
 requests, such that $R \supseteq \bigcup_i T_i$, and $< \supseteq \bigcup_i <_{T_i}$ .
-Let $Committed(H)$ be the subsequence of all Transactions with $req_{t} = Commit$. A History H is legal if every read request $(r, k, v)$ is preceded by a matching write request $(w, k, v)$ and there is no other write $(w, k, v')$ inbetween. A history is serial if all transactions are executed sequentially: $\forall T_i, T_j: T_i < T_j \lor T_j < T_i$.
+Let $Committed(H)$ be the subsequence of all Transactions with $req_{t} = Commit$. A History H is legal if every read request $(r, k, v)$ is preceded by a matching write request $(w, k, v)$ and there is no other write $(w, k, v')$ inbetween \fs{could formalize this with order:} $\forall (r, k, v).\exists (w, k v). (w,k,v) < (r,k,v) \land \neg \exists (w, k, v'). v\neq v' \land (w, k,v) < (w,k, v') < (r, k, v)$. For two transactions $T_i$ and $T_j$, we denote $T_i < T_j$ iff $\forall req_i, req_j \in T_i, T_j. req_i < req_j$. A history is serial if all transactions are executed sequentially: $\forall T_i, T_j: T_i < T_j \lor T_j < T_i$.
+
 \textbf{Serializable} 
 A history H is serializable if there exists a serial permutation H' of Committed(H) such that H' is legal.
+
 \textbf{Byz-A}: All $req = (w, k, v) \in T$ are committed atomically, i.e. all of them are committed, or none. Moreover, for all T from honest clients, T is committed atomically in total (i.e. its reads and writes). -> Is this something you need per-se? Is it fine if it is just the writes and we provide something slightly stronger?)
-(The writeback check must be improved then: need to check that involved shards match all write keys)}
+(The writeback check must be improved then: need to check that involved shards match all write keys)
 
-
+\iffalse
 \textbf{History H.} We define a \textit{history H} as a finite sequence of requests. Informally, a \textit{H} contains the operations (read/write) and decisions (commit/abort) of every transaction issued in the system.
-
-
-
-
 
 We define a projection $H|_c$ as the subsequence of requests in $H$ that were issued by Client $c$. A sequence of requests $s = req_i \dots req_{i+t}$ in $H|_c$ form a \textit{Transaction} if $req_i$ is the first request by Client $c$ or $req_{i-1} \in Dec \times c$, and if $req_{i+t} \in Dec \times c$. Let $Committed(H)$ be the subsequence of all Transactions with $req_{i+t} = Commit$. A History H is legal if every read request $(r, k, v)$ is preceded by a matching write request $(w, k, v)$ and there is no other write $(w, k, v')$ inbetween.\\
 \textbf{Serializable}  
 A history H is serializable if there exists a serial permutation H' of Committed(H) such that H' is legal.
+\fi
 
+We define a projection $H|_c$ as the subsequence of requests in $H$ that were issued by Client $c$.
 We further define:\\
 \textbf{Honest History H(P).} Given protocol P, A \textit{history H} is \textit{honest} if it was generated by participants who all follow P, i.e: $H(P) \equiv H = H|_{Hon}$.\\
 \textbf{Honest-View Equivalent.} A \textit{history H} is honest-view equivalent to a \textit{history H'} if the Operations and Decisions of all honest Clients are the same and if the final writes are the same.\\
@@ -50,9 +51,10 @@ Given a protocol $P$ and an honest Client $c$. The result of a request $r$ issue
 If the network is controlled by an adversary, this property is unattainable for Indicus. 
 In order to offer this property we must strengthen our assumption on the network. Concretely, while the network may be asynchronous, we assume the adversary does not control the network, and hence, may not reliably impact results \footnote{An exception to this are wide-ranged flooding attacks (ddos) which are beyond the scope of this work.}. \\
 
-We point out, that a strawman system offering interactive transactions and speculative execution while relying on Atomic Broadcast for Validation ordering suffers the same fallacy: A byzantine leader may always frontrun requests. In fact, even with strengthened network assumptions, such a a system could not offer Byzantine Independence.\\
+We point out, that a strawman system offering interactive transactions and speculative execution while relying on Atomic Broadcast for Validation ordering suffers the same fallacy: A byzantine leader may always frontrun requests. In fact, even with strengthened network assumptions, such a a system could not offer Byzantine Independence. \fs{simplify: no byz indep for leaderbased}\\
 %We point out, that in fact no system that speculates on execution, and hence may incur aborts, can enjoy \textit{Byzantine Independence}. NOT TRUE: since in theory one could imagine a scheme that uses "committment certification", but this is impractical
 
+\iffalse
 \fs{omit this next part. gracious potentially useful to talk about Fast Path. Uncivil not really}
 We adapt and define gracious and uncivil executions based on cite(aardvark) to match our model. (i.e. network not sync either).
 \textbf{Gracious Execution}
@@ -60,7 +62,7 @@ An execution is gracious iff (a) the execution is synchronous with some
 implementation-dependent short bound on message delay (b) all clients and servers behave correctly and (c) there is no contention on the objects relevant to the execution.
 \textbf{Uncivil}
 An execution is uncivil iff (a) there is no bound on message delay (asynchrony) and (b) up to f servers and an arbitrary number of clients are Byzantine 
-
+\fi
 
 \subsection{Practical Assumptions on Behaviors}
 While we allow clients to act arbitrarily and maintain safety unconditionally, in practice, we do not expect clients to intentfully attempt to circumvent other clients progress via targeted congestion. This is reasonable to assume as a byzantine client requires prior knowledge on honest client transaction patterns and relevant access control \fs{unlikely that a Client can lock out a lot of the system, would mean he has total access control.} in order to artificially increase object contention. \fs{Moreover, in Indicus, any transaction with external effect will be recorded in the system without a clients ability to "chicken" out and redact its transaction. It might abort but be recorded. OR: It might commit and thus the consequences are active. Imagine a bank account: withdrawing probably illegal, only paying allowed by arbitrary party. now a client is paying in order to stop the real user from being able to withdraw }
