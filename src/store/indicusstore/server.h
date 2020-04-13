@@ -125,6 +125,7 @@ class Server : public TransportReceiver, public ::Server {
   void SendPhase1Reply(uint64_t reqId,
     proto::Phase1Reply::ConcurrencyControlResult result,
     const proto::CommittedProof &conflict, const TransportAddress &remote);
+  void Clean(const std::string &txnDigest);
   void CleanDependencies(const std::string &txnDigest);
 
   inline bool IsKeyOwned(const std::string &key) const {
@@ -155,6 +156,10 @@ class Server : public TransportReceiver, public ::Server {
   // Digest -> V
   std::unordered_map<std::string, proto::Transaction> ongoing;
   std::unordered_map<std::string, std::pair<Timestamp, proto::Transaction>> prepared;
+  std::unordered_map<std::string, std::set<const proto::Transaction *>> preparedReads;
+  std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
+
+
   std::unordered_map<std::string, proto::Phase1Reply::ConcurrencyControlResult> p1Decisions;
   std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
   std::unordered_set<std::string> committed;

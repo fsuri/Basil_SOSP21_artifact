@@ -153,16 +153,14 @@ void Server::HandleRead(const TransportAddress &remote,
     rts[msg.key()].insert(ts);
 
     /* add prepared deps */
-    std::unordered_map<std::string, std::vector<proto::Transaction>> writes;
-    GetPreparedWrites(writes);
-    auto itr = writes.find(msg.key());
-    if (itr != writes.end()) {
+    auto itr = preparedWrites.find(msg.key());
+    if (itr != preparedWrites.end()) {
       // there is a prepared write for the key being read
       proto::PreparedWrite preparedWrite;
       proto::Transaction mostRecent;
       for (const auto &t : itr->second) {
-        if (Timestamp(t.timestamp()) > Timestamp(mostRecent.timestamp())) {
-          mostRecent = t;
+        if (t.first > Timestamp(mostRecent.timestamp())) {
+          mostRecent = *t.second;
         }
       }
 
@@ -470,8 +468,6 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     return proto::Phase1Reply::ABSTAIN;
   }
 
-  std::unordered_map<std::string, std::set<Timestamp>> preparedWrites;
-  GetPreparedWriteTimestamps(preparedWrites);
   for (const auto &read : txn.read_set()) {
     // TODO: remove this check when txns only contain read set/write set for the
     //   shards stored at this replica
@@ -503,23 +499,21 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     const auto preparedWritesItr = preparedWrites.find(read.key());
     if (preparedWritesItr != preparedWrites.end()) {
       for (const auto &preparedTs : preparedWritesItr->second) {
-        if (Timestamp(read.readtime()) < preparedTs && preparedTs < ts) {
+        if (Timestamp(read.readtime()) < preparedTs.first && preparedTs.first < ts) {
           Debug("[%lu,%lu] ABSTAIN wr conflict prepared write for key %s:"
             " this txn's read ts %lu.%lu < prepared ts %lu.%lu < this txn's ts %lu.%lu.",
               txn.client_id(),
               txn.client_seq_num(),
               BytesToHex(read.key(), 16).c_str(),
               read.readtime().timestamp(),
-              read.readtime().id(), preparedTs.getTimestamp(),
-              preparedTs.getID(), ts.getTimestamp(), ts.getID());
+              read.readtime().id(), preparedTs.first.getTimestamp(),
+              preparedTs.first.getID(), ts.getTimestamp(), ts.getID());
           return proto::Phase1Reply::ABSTAIN; // TODO: return conflicting txn
         }
       }
     }
   }
   
-  std::unordered_map<std::string, std::vector<proto::Transaction>> preparedReads;
-  GetPreparedReads(preparedReads);
   for (const auto &write : txn.write_set()) {
     if (!IsKeyOwned(write.key())) {
       continue;
@@ -546,9 +540,9 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
 
     const auto preparedReadsItr = preparedReads.find(write.key());
     if (preparedReadsItr != preparedReads.end()) {
-      for (const auto &preparedReadTxn : preparedReadsItr->second) {
+      for (const auto preparedReadTxn : preparedReadsItr->second) {
         bool isDep = false;
-        for (const auto &dep : preparedReadTxn.deps()) {
+        for (const auto &dep : preparedReadTxn->deps()) {
           if (txnDigest == dep.prepared().txn_digest()) {
             isDep = true;
             break;
@@ -557,7 +551,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
 
         bool isReadVersionEarlier = false;
         Timestamp readTs;
-        for (const auto &read : preparedReadTxn.read_set()) {
+        for (const auto &read : preparedReadTxn->read_set()) {
           if (read.key() == write.key()) {
             readTs = Timestamp(read.readtime());
             isReadVersionEarlier = readTs < ts;
@@ -565,7 +559,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
           }
         }
         if (!isDep && isReadVersionEarlier &&
-            ts < Timestamp(preparedReadTxn.timestamp())) {
+            ts < Timestamp(preparedReadTxn->timestamp())) {
           Debug("[%lu,%lu] ABSTAIN rw conflict prepared read for key %s: prepared"
               " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
               txn.client_id(),
@@ -573,8 +567,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
               BytesToHex(write.key(), 16).c_str(),
               readTs.getTimestamp(),
               readTs.getID(), ts.getTimestamp(),
-              ts.getID(), preparedReadTxn.timestamp().timestamp(),
-              preparedReadTxn.timestamp().id());
+              ts.getID(), preparedReadTxn->timestamp().timestamp(),
+              preparedReadTxn->timestamp().id());
           return proto::Phase1Reply::ABSTAIN;
         }
       }
@@ -675,7 +669,19 @@ void Server::GetPreparedReads(
 
 void Server::Prepare(const std::string &txnDigest,
     const proto::Transaction &txn) {
-  prepared[txnDigest] = std::make_pair(Timestamp(txn.timestamp()), txn);
+  auto p = prepared.insert(std::make_pair(txnDigest, std::make_pair(
+          Timestamp(txn.timestamp()), txn)));
+  for (const auto &read : txn.read_set()) {
+    if (IsKeyOwned(read.key())) {
+      preparedReads[read.key()].insert(&p.first->second.second);
+    }
+  }
+  for (const auto &write : txn.write_set()) {
+    if (IsKeyOwned(write.key())) {
+      preparedWrites[write.key()].insert(std::make_pair(p.first->second.first,
+            &p.first->second.second));
+    }
+  }
 }
 
 void Server::GetCommittedWrites(const std::string &key, const Timestamp &ts,
@@ -731,26 +737,31 @@ void Server::Commit(const std::string &txnDigest,
     }
   }
 
-
-  ongoing.erase(txnDigest);
-  prepared.erase(txnDigest);
   committed.insert(txnDigest);
-  Debug("CheckDependents");
+  Clean(txnDigest);
   CheckDependents(txnDigest);
-  Debug("CheckDependencies");
   CleanDependencies(txnDigest);
-  Debug("Done");
 }
 
 void Server::Abort(const std::string &txnDigest) {
-  ongoing.erase(txnDigest);
-  prepared.erase(txnDigest);
   aborted.insert(txnDigest);
-  Debug("CheckDependents");
+  Clean(txnDigest);
   CheckDependents(txnDigest);
-  Debug("CheckDependencies");
   CleanDependencies(txnDigest);
-  Debug("Done");
+}
+
+void Server::Clean(const std::string &txnDigest) {
+  ongoing.erase(txnDigest);
+  auto itr = prepared.find(txnDigest);
+  if (itr != prepared.end()) {
+    for (const auto &read : itr->second.second.read_set()) {
+      preparedReads[read.key()].erase(&itr->second.second);
+    }
+    for (const auto &write : itr->second.second.write_set()) {
+      preparedWrites[write.key()].erase(itr->second.first);
+    }
+    prepared.erase(itr);
+  }
 }
 
 void Server::CheckDependents(const std::string &txnDigest) {
