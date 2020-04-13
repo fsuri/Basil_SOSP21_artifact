@@ -154,7 +154,7 @@ void Server::HandleRead(const TransportAddress &remote,
 
     /* add prepared deps */
     auto itr = preparedWrites.find(msg.key());
-    if (itr != preparedWrites.end()) {
+    if (itr != preparedWrites.end() && itr->second.size() > 0) {
       // there is a prepared write for the key being read
       proto::PreparedWrite preparedWrite;
       proto::Transaction mostRecent;
@@ -171,6 +171,9 @@ void Server::HandleRead(const TransportAddress &remote,
           break;
         }
       }
+
+      Debug("Prepared write with most recent ts %lu.%lu.", mostRecent.timestamp().timestamp(),
+          mostRecent.timestamp().id());
 
       preparedWrite.set_value(preparedValue);
       *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
@@ -461,6 +464,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
     proto::CommittedProof &conflict) {
+  Debug("PREPARE[%s] with ts %lu.%lu.", BytesToHex(txnDigest, 16).c_str(),
+      txn.timestamp().timestamp(), txn.timestamp().id());
   Timestamp ts(txn.timestamp());
   if (CheckHighWatermark(ts)) {
     Debug("[%s] ABORT ts %lu beyond high watermark.", txnDigest.c_str(),
@@ -669,6 +674,8 @@ void Server::GetPreparedReads(
 
 void Server::Prepare(const std::string &txnDigest,
     const proto::Transaction &txn) {
+  Debug("PREPARE[%s] agreed to commit with ts %lu.%lu.",
+      BytesToHex(txnDigest, 16).c_str(), txn.timestamp().timestamp(), txn.timestamp().id());
   auto p = prepared.insert(std::make_pair(txnDigest, std::make_pair(
           Timestamp(txn.timestamp()), txn)));
   for (const auto &read : txn.read_set()) {

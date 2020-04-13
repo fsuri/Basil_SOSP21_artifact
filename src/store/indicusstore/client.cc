@@ -106,6 +106,12 @@ void Client::Get(const std::string &key, get_callback gcb,
       Debug("GET[%lu] Callback for key %s with %lu bytes and ts %lu.%lu.",
           client_seq_num, BytesToHex(key, 16).c_str(), val.length(),
           ts.getTimestamp(), ts.getID());
+      if (hasDep) {
+        Debug("GET[%lu] Callback for key %s with dep ts %lu.%lu.",
+            client_seq_num, BytesToHex(key, 16).c_str(),
+            dep.prepared().timestamp().timestamp(),
+            dep.prepared().timestamp().id());
+      }
     }
     if (addReadSet) {
       ReadMessage *read = txn.add_read_set();
