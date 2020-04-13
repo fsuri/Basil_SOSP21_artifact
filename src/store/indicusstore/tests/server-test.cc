@@ -153,8 +153,8 @@ TEST_F(ServerTest, ReadCommittedData) {
   expectedReply.set_req_id(3);
   expectedReply.set_status(REPLY_OK);
   expectedReply.set_key("key0");
-  expectedReply.set_committed_value("val0");
-  wts.serialize(expectedReply.mutable_committed_timestamp());
+  expectedReply.mutable_committed()->set_value("val0");
+  wts.serialize(expectedReply.mutable_committed()->mutable_timestamp());
 
   EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
         ExpectedMessage(expectedReply)));
@@ -180,7 +180,7 @@ TEST_F(ServerTest, ReadPreparedData) {
   expectedReply.set_key("key0");
   expectedReply.mutable_prepared()->set_value("val0");
   wts.serialize(expectedReply.mutable_prepared()->mutable_timestamp());
-  *expectedReply.mutable_prepared()->mutable_txn() = txn;
+  *expectedReply.mutable_prepared()->mutable_txn_digest() = TransactionDigest(txn);
 
   EXPECT_CALL(*transport, SendMessage(server, ::testing::_,
         ExpectedMessage(expectedReply)));
@@ -612,7 +612,10 @@ TEST_F(ServerTest, Phase1DepWait) {
   proto::Transaction txn;
   Timestamp ts(100, 1);
   PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, {0}, txn);
-  *txn.add_deps() = preparedTxn;
+  proto::Dependency *dep = txn.add_deps();
+  dep->mutable_prepared()->set_value("val0");
+  preparedTs.serialize(dep->mutable_prepared()->mutable_timestamp());
+  *dep->mutable_prepared()->mutable_txn_digest() = TransactionDigest(preparedTxn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -634,7 +637,10 @@ TEST_F(ServerTest, Phase1DepCommit) {
   proto::Transaction txn;
   Timestamp ts(100, 1);
   PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, {0}, txn);
-  *txn.add_deps() = preparedTxn;
+  proto::Dependency *dep = txn.add_deps();
+  dep->mutable_prepared()->set_value("val0");
+  preparedTs.serialize(dep->mutable_prepared()->mutable_timestamp());
+  *dep->mutable_prepared()->mutable_txn_digest() = TransactionDigest(preparedTxn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
@@ -662,7 +668,10 @@ TEST_F(ServerTest, Phase1DepAbort) {
   proto::Transaction txn;
   Timestamp ts(100, 1);
   PopulateTransaction({{"key0", Timestamp(50, 2)}}, {}, ts, {0}, txn);
-  *txn.add_deps() = preparedTxn;
+  proto::Dependency *dep = txn.add_deps();
+  dep->mutable_prepared()->set_value("val0");
+  preparedTs.serialize(dep->mutable_prepared()->mutable_timestamp());
+  *dep->mutable_prepared()->mutable_txn_digest() = TransactionDigest(preparedTxn);
 
   proto::Phase1 phase1;
   phase1.set_req_id(3);
