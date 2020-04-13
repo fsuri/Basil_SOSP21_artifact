@@ -683,10 +683,11 @@ void Server::Prepare(const std::string &txnDigest,
       preparedReads[read.key()].insert(&p.first->second.second);
     }
   }
+  std::pair<Timestamp, const proto::Transaction *> pWrite =
+    std::make_pair(p.first->second.first, &p.first->second.second);
   for (const auto &write : txn.write_set()) {
     if (IsKeyOwned(write.key())) {
-      preparedWrites[write.key()].insert(std::make_pair(p.first->second.first,
-            &p.first->second.second));
+      preparedWrites[write.key()].insert(pWrite);
     }
   }
 }
