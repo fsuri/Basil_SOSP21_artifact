@@ -11,7 +11,7 @@
 
 namespace indicusstore {
 
-class CommonTest : public ::testing::TestWithParam<std::tuple<int, int>> {
+class CommonTest : public ::testing::TestWithParam<std::tuple<int, int, bool>> {
  public:
   CommonTest() { }
   virtual ~CommonTest() { }
@@ -30,6 +30,7 @@ class CommonTest : public ::testing::TestWithParam<std::tuple<int, int>> {
  protected:
   inline int GetNumGroups() const { return std::get<0>(GetParam()); }
   inline int GetF() const { return std::get<1>(GetParam()); }
+  inline int IsValidatingProofs() const { return std::get<2>(GetParam()); }
   inline int GetN() const { return n; }
 
   transport::Configuration *config;
@@ -39,8 +40,6 @@ class CommonTest : public ::testing::TestWithParam<std::tuple<int, int>> {
 };
 
 TEST_P(CommonTest, IndicusShardDecideAllCommit) {
-  bool validateProofs = false;
-
   std::vector<proto::Phase1Reply> replies;
   proto::Phase1Reply reply;
   for (int i = 0; i < GetN(); ++i) {
@@ -52,14 +51,12 @@ TEST_P(CommonTest, IndicusShardDecideAllCommit) {
 
   bool fast;
   proto::CommitDecision decision = IndicusShardDecide(replies, config,
-      validateProofs, false, nullptr, fast);
+      IsValidatingProofs(), false, nullptr, fast);
 
   EXPECT_EQ(decision, proto::COMMIT);
 }
 
 TEST_P(CommonTest, IndicusShardDecideOneAbort) {
-  bool validateProofs = false;
-
   std::vector<proto::Phase1Reply> replies;
   proto::Phase1Reply reply;
   for (int i = 0; i < GetN() - 1; ++i) {
@@ -68,20 +65,21 @@ TEST_P(CommonTest, IndicusShardDecideOneAbort) {
   }
   
   reply.set_ccr(proto::Phase1Reply::ABORT);
+  if (IsValidatingProofs()) {
+    PopulateCommitProof(*reply.mutable_committed_conflict(), GetN());
+  }
   replies.push_back(reply);
 
   UW_ASSERT(replies.size() == static_cast<size_t>(GetN())); 
 
   bool fast;
   proto::CommitDecision decision = IndicusShardDecide(replies, config,
-      validateProofs, false, nullptr, fast);
+      IsValidatingProofs(), false, nullptr, fast);
 
   EXPECT_EQ(decision, proto::ABORT);
 }
 
 TEST_P(CommonTest, IndicusShardDecideAbstainCommit) {
-  bool validateProofs = false;
-
   std::vector<proto::Phase1Reply> replies;
   proto::Phase1Reply reply;
   for (int i = 0; i < 3 * GetF() + 1; ++i) {
@@ -97,14 +95,12 @@ TEST_P(CommonTest, IndicusShardDecideAbstainCommit) {
 
   bool fast;
   proto::CommitDecision decision = IndicusShardDecide(replies, config,
-      validateProofs, false, nullptr, fast);
+      IsValidatingProofs(), false, nullptr, fast);
 
-  EXPECT_EQ(decision, proto::ABORT);
+  EXPECT_EQ(decision, proto::COMMIT);
 }
 
 TEST_P(CommonTest, IndicusShardDecideAbstainAbort) {
-  bool validateProofs = false;
-
   std::vector<proto::Phase1Reply> replies;
   proto::Phase1Reply reply;
   for (int i = 0; i < 3 * GetF() + 1; ++i) {
@@ -120,14 +116,12 @@ TEST_P(CommonTest, IndicusShardDecideAbstainAbort) {
 
   bool fast;
   proto::CommitDecision decision = IndicusShardDecide(replies, config,
-      validateProofs, false, nullptr, fast);
+      IsValidatingProofs(), false, nullptr, fast);
 
   EXPECT_EQ(decision, proto::ABORT);
 }
 
 TEST_P(CommonTest, IndicusDecideAllCommit) {
-  bool validateProofs = false;
-
   std::map<int, std::vector<proto::Phase1Reply>> replies;
   proto::Phase1Reply reply;
   for (int i = 0; i < GetNumGroups(); ++i) {
@@ -139,20 +133,21 @@ TEST_P(CommonTest, IndicusDecideAllCommit) {
   }
 
   proto::CommitDecision decision = IndicusDecide(replies, config,
-      validateProofs, false, nullptr);
+      IsValidatingProofs(), false, nullptr);
 
   EXPECT_EQ(decision, proto::COMMIT);
 }
 
 TEST_P(CommonTest, IndicusDecideOneAbort) {
-  bool validateProofs = false;
-
   std::map<int, std::vector<proto::Phase1Reply>> replies;
   proto::Phase1Reply reply;
   for (int i = 0; i < GetNumGroups(); ++i) {
     int commits;
     if (i == GetNumGroups() / 2) {
       reply.set_ccr(proto::Phase1Reply::ABORT);
+      if (IsValidatingProofs()) {
+        PopulateCommitProof(*reply.mutable_committed_conflict(), GetN());
+      }
       replies[i].push_back(reply);
       commits = GetN() - 1;
     } else {
@@ -166,7 +161,7 @@ TEST_P(CommonTest, IndicusDecideOneAbort) {
   }
 
   proto::CommitDecision decision = IndicusDecide(replies, config,
-      validateProofs, false, nullptr);
+      IsValidatingProofs(), false, nullptr);
   EXPECT_EQ(decision, proto::ABORT);
 }
 
@@ -463,7 +458,9 @@ TEST_P(CommonTest, ValidateTransactionWriteInvalidWrongTimestamp) {
 }
 
 INSTANTIATE_TEST_SUITE_P(CommonTests, CommonTest, ::testing::Values(
-	std::make_tuple(1, 1), std::make_tuple(2, 1), std::make_tuple(3, 1),
-	std::make_tuple(2, 2), std::make_tuple(3, 2)));
+	std::make_tuple(1, 1, false), std::make_tuple(2, 1, false), std::make_tuple(3, 1, false),
+	std::make_tuple(2, 2, false), std::make_tuple(3, 2, false),
+  std::make_tuple(1, 1, true), std::make_tuple(2, 1, true), std::make_tuple(3, 1, true),
+	std::make_tuple(2, 2, true), std::make_tuple(3, 2, true)));
 
 }

@@ -107,10 +107,10 @@ proto::CommitDecision IndicusShardDecide(
   if (commits == config->n) {
     decision = proto::CommitDecision::COMMIT;
     fast = true;
-  } else if (abstains >= config->QuorumSize()) { // 3f + 1
+  } else if (abstains >= 3 * config->f + 1) {
     decision = proto::CommitDecision::ABORT;
     fast = true;
-  } else if (commits >= config->QuorumSize()) { // 3f + 1
+  } else if (commits >= 3 * config->f + 1) {
     decision = proto::CommitDecision::COMMIT;
     fast = false;
   } else {

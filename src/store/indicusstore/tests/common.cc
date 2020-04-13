@@ -1,5 +1,7 @@
 #include "store/indicusstore/tests/common.h"
 
+#include "store/indicusstore/common.h"
+
 namespace indicusstore {
 
 void GenerateTestConfig(int g, int f, std::stringstream &ss) {
@@ -32,6 +34,24 @@ void PopulateTransaction(const std::map<std::string, Timestamp> &readSet,
     writeMsg->set_value(write.second);
   }
   ts.serialize(txn.mutable_timestamp());
+}
+
+void PopulateCommitProof(proto::CommittedProof &proof, int n) {
+  proof.mutable_txn()->set_client_id(1);
+  proof.mutable_txn()->set_client_seq_num(1);
+  proof.mutable_txn()->add_involved_groups(0);
+  ReadMessage *read = proof.mutable_txn()->add_read_set();
+  read->set_key("1");
+  read->mutable_readtime()->set_timestamp(50);
+  read->mutable_readtime()->set_id(2);
+  proof.mutable_txn()->mutable_timestamp()->set_timestamp(100);
+  proof.mutable_txn()->mutable_timestamp()->set_id(1);
+  for (int i = 0; i < n; ++i) {
+    proto::Phase2Reply *p2Reply = proof.mutable_p2_replies()->add_replies();
+    p2Reply->set_req_id(3);
+    p2Reply->set_decision(proto::COMMIT);
+    *p2Reply->mutable_txn_digest() = TransactionDigest(proof.txn());
+  }
 }
 
 } // namespace indicusstore

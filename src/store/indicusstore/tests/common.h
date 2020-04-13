@@ -19,6 +19,8 @@ void PopulateTransaction(const std::map<std::string, Timestamp> &readSet,
     const std::map<std::string, std::string> &writeSet, const Timestamp &ts,
     const std::set<int> &involvedGroups, proto::Transaction &txn);
 
+void PopulateCommitProof(proto::CommittedProof &proof, int n);
+
 } // namespace indicusstore
 
 #endif /* INDICUS_TESTS_COMMON_H */
