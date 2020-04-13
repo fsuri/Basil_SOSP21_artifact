@@ -23,7 +23,7 @@ Existing blockchain technologies \fs{such as Hyperledger Fabric} often consider 
 
 \subsection{A shard of truth}
 To combat this scalability bottleneck many systems rely on sharding. Orignially a database technique, sharding partitions the datastore into smaller and faster \textit{shards} that are easier to manage. While sharding approaches in practice \fs{(often)} can induce partial ordering and increase parallelism, this is not a principled property as, in this case, the application of sharding conflates two objectives:
-At its core, sharding horizontally scales hardware resources, reducing memory overheads such as storage cost or lookup time. In order to maintain a consistenct database, sharding requires coordination across shards, typically in the form of a joint two-phase commit and concurrency control protocol. 
+At its core, sharding horizontally scales hardware resources, reducing memory overheads such as storage cost or lookup time \fs{, and general CPU load, such as messages and agreement instances to manage}. In order to maintain a consistenct database, sharding requires coordination across shards, typically in the form of a joint two-phase commit and concurrency control protocol. 
 When there exist exploitable spacial locality within the data, i.e. transaction access patterns are limited to a subset of shards coordination across all shards is not necessary and a partial order on transactions may manifest. Note however, that chosing a suitable partition data mapping is highly workload dependent and hence \fs{from a system design perspective} is not agnostic to the application.
 Partial order execution and replication is therefore not an inherent property of sharding, but rather a by-product of the desired "share-nothing" partition architecture. \fs{super awkward sentence, replace}
 
@@ -59,6 +59,11 @@ Most BFT SMR, Blockchains or existing transactional systems (cite callinicos) su
 
 \fs{"A TX can be whatever it wants to be. Its parent DB doesnt prescribe its career."}
 
+Other TX models:\\
+- mini transactions \cite{aguilera2007sinfonia}. Read/write keys and values pre-defined\\
+- one-shot/stored procedures \cite{mu2016consolidating, mu2014extracting}. Can only touch one partition\\
+- 2FI (2 round fixed set interactive) \cite{yan2018carousel}. Keys fixed, write keys fixed, but values may depend\\
+Most database systems (54\%) use interactive transaction \cite{meng2010database}, only 16\% use one-shot for more than half the workload
 
 \subsection{Linearity}
 \fs{Maybe dont have this section. }\\
