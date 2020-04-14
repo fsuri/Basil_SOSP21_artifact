@@ -63,7 +63,7 @@ Other TX models:\\
 - mini transactions \cite{aguilera2007sinfonia}. Read/write keys and values pre-defined\\
 - one-shot/stored procedures \cite{mu2016consolidating, mu2014extracting}. Can only touch one partition\\
 - 2FI (2 round fixed set interactive) \cite{yan2018carousel}. Keys fixed, write keys fixed, but values may depend\\
-Most database systems (54\%) use interactive transaction \cite{meng2010database}, only 16\% use one-shot for more than half the workload
+Most database systems (54\%) use interactive transaction \cite{pavlo2017we}, only 16\% use one-shot for more than half the workload. (However, this citation also argues that most DBs do not use serializable, but instead read committed - allows for non-repeatable reads, write skew, inconsistent snapshots)
 
 \subsection{Linearity}
 \fs{Maybe dont have this section. }\\
