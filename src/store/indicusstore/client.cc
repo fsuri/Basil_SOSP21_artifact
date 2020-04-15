@@ -170,7 +170,8 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
 }
 
 void Client::Phase1(PendingRequest *req, uint32_t timeout) {
-  Debug("PHASE1 [%lu] at %lu", client_seq_num, req->prepareTimestamp->getTimestamp());
+  Debug("PHASE1 [%lu:%lu] at %lu", client_id, client_seq_num,
+      req->prepareTimestamp->getTimestamp());
   UW_ASSERT(txn.involved_groups().size() > 0);
 
   for (auto group : txn.involved_groups()) {

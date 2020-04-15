@@ -135,8 +135,9 @@ void Server::HandleRead(const TransportAddress &remote,
   reply.set_req_id(msg.req_id());
   reply.set_key(msg.key());
   if (exists) {
-    Debug("READ[%lu] Committed value of length %lu bytes with ts %lu.%lu.", msg.req_id(),
-        tsVal.second.val.length(), tsVal.first.getTimestamp(), tsVal.first.getID());
+    Debug("READ[%lu] Committed value of length %lu bytes with ts %lu.%lu.",
+        msg.req_id(), tsVal.second.val.length(), tsVal.first.getTimestamp(),
+        tsVal.first.getID());
     reply.set_status(REPLY_OK);
     reply.mutable_committed()->set_value(tsVal.second.val);
     tsVal.first.serialize(reply.mutable_committed()->mutable_timestamp());
@@ -196,10 +197,11 @@ void Server::HandleRead(const TransportAddress &remote,
 
 void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
-  Debug("PHASE1[%lu:%lu:%lu] with ts %lu.",
+  Debug("PHASE1[%lu:%lu][%s] with ts %lu.",
       msg.txn().client_id(),
       msg.txn().client_seq_num(),
-      msg.req_id(), msg.txn().timestamp().timestamp());
+      BytesToHex(msg.txn_digest(), 16).c_str(),
+      msg.txn().timestamp().timestamp());
 
   if (validateProofs) {
     for (const auto &dep : msg.txn().deps()) {
@@ -226,7 +228,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
-  Debug("PHASE2[%lu].", msg.req_id());
+  Debug("PHASE2[%s].", BytesToHex(msg.txn_digest(), 16).c_str());
 
   proto::CommitDecision decision;
   if (validateProofs) {
@@ -298,7 +300,8 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
 void Server::HandleWriteback(const TransportAddress &remote,
     const proto::Writeback &msg) {
-  Debug("WRITEBACK[%lu]  with decision %d.", msg.req_id(), msg.decision());
+  Debug("WRITEBACK[%s]  with decision %d.",
+      BytesToHex(msg.txn_digest(), 16).c_str(), msg.decision());
 
   if (validateProofs) {
     if (!ValidateProof(msg.proof(), &config, signedMessages, keyManager)) {
@@ -473,11 +476,15 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
     proto::CommittedProof &conflict) {
-  Debug("PREPARE[%s] with ts %lu.%lu.", BytesToHex(txnDigest, 16).c_str(),
+  Debug("PREPARE[%lu:%lu][%s] with ts %lu.%lu.",
+      txn.client_id(), txn.client_seq_num(),
+      BytesToHex(txnDigest, 16).c_str(),
       txn.timestamp().timestamp(), txn.timestamp().id());
   Timestamp ts(txn.timestamp());
   if (CheckHighWatermark(ts)) {
-    Debug("[%s] ABORT ts %lu beyond high watermark.", txnDigest.c_str(),
+    Debug("[%lu:%lu][%s] ABORT ts %lu beyond high watermark.",
+        txn.client_id(), txn.client_seq_num(),
+        BytesToHex(txnDigest, 16).c_str(),
         ts.getTimestamp());
     return proto::Phase1Reply::ABSTAIN;
   }
@@ -498,10 +505,11 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
         if (validateProofs) {
           conflict = committedWrite.second.proof;
         } 
-        Debug("[%lu,%lu] ABORT wr conflict committed write for key %s:"
+        Debug("[%lu:%lu][%s] ABORT wr conflict committed write for key %s:"
             " this txn's read ts %lu.%lu < committed ts %lu.%lu < this txn's ts %lu.%lu.",
             txn.client_id(),
             txn.client_seq_num(),
+            BytesToHex(txnDigest, 16).c_str(),
             BytesToHex(read.key(), 16).c_str(),
             read.readtime().timestamp(),
             read.readtime().id(), committedWrite.first.getTimestamp(),
@@ -514,10 +522,11 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     if (preparedWritesItr != preparedWrites.end()) {
       for (const auto &preparedTs : preparedWritesItr->second) {
         if (Timestamp(read.readtime()) < preparedTs.first && preparedTs.first < ts) {
-          Debug("[%lu,%lu] ABSTAIN wr conflict prepared write for key %s:"
+          Debug("[%lu:%lu][%s] ABSTAIN wr conflict prepared write for key %s:"
             " this txn's read ts %lu.%lu < prepared ts %lu.%lu < this txn's ts %lu.%lu.",
               txn.client_id(),
               txn.client_seq_num(),
+              BytesToHex(txnDigest, 16).c_str(),
               BytesToHex(read.key(), 16).c_str(),
               read.readtime().timestamp(),
               read.readtime().id(), preparedTs.first.getTimestamp(),
@@ -539,10 +548,11 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     if (committedReads.size() > 0) {
       for (const auto &committedReadTs : committedReads) {
         if (committedReadTs.second < ts && ts < committedReadTs.first) {
-          Debug("[%lu,%lu] ABORT rw conflict committed read for key %s: committed"
+          Debug("[%lu:%lu][%s] ABORT rw conflict committed read for key %s: committed"
               " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
               txn.client_id(),
               txn.client_seq_num(),
+              BytesToHex(txnDigest, 16).c_str(),
               BytesToHex(write.key(), 16).c_str(),
               committedReadTs.second.getTimestamp(),
               committedReadTs.second.getID(), ts.getTimestamp(),
@@ -574,10 +584,11 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
         }
         if (!isDep && isReadVersionEarlier &&
             ts < Timestamp(preparedReadTxn->timestamp())) {
-          Debug("[%lu,%lu] ABSTAIN rw conflict prepared read for key %s: prepared"
+          Debug("[%lu:%lu][%s] ABSTAIN rw conflict prepared read for key %s: prepared"
               " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
               txn.client_id(),
               txn.client_seq_num(),
+              BytesToHex(txnDigest, 16).c_str(),
               BytesToHex(write.key(), 16).c_str(),
               readTs.getTimestamp(),
               readTs.getID(), ts.getTimestamp(),
@@ -592,10 +603,11 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     if (rtsItr != rts.end()) {
       auto rtsLB = rtsItr->second.lower_bound(ts);
       if (rtsLB != rtsItr->second.end() && *rtsLB > ts) {
-        Debug("[%lu,%lu] ABSTAIN larger rts acquired for key %s: rts %lu.%lu >"
+        Debug("[%lu:%lu][%s] ABSTAIN larger rts acquired for key %s: rts %lu.%lu >"
             " this txn's ts %lu.%lu.",
             txn.client_id(),
             txn.client_seq_num(),
+            BytesToHex(txnDigest, 16).c_str(),
             BytesToHex(write.key(), 16).c_str(),
             rtsLB->getTimestamp(),
             rtsLB->getID(), ts.getTimestamp(), ts.getID());
@@ -612,6 +624,10 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
   for (const auto &dep : txn.deps()) {
     if (committed.find(dep.prepared().txn_digest()) == committed.end() &&
         aborted.find(dep.prepared().txn_digest()) == aborted.end()) {
+      Debug("[%lu:%lu][%s] WAIT for dependency %s to finish.",
+          txn.client_id(), txn.client_seq_num(),
+          BytesToHex(txnDigest, 16).c_str(),
+          BytesToHex(dep.prepared().txn_digest(), 16).c_str());
       allFinished = false;
       dependents[dep.prepared().txn_digest()].insert(txnDigest);
       auto dependenciesItr = waitingDependencies.find(txnDigest);
