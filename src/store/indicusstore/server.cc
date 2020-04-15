@@ -363,9 +363,6 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
     Timestamp &retryTs) {
   Debug("[%s] START PREPARE", txnDigest.c_str());
 
-  Debug("[%s] Active transactions: %lu.", txnDigest.c_str(), active.size());
-  active.erase(txnDigest);
-
   if (prepared.find(txnDigest) != prepared.end()) {
     if (prepared[txnDigest].first == txn.timestamp()) {
       Warning("[%s] Already Prepared!", txnDigest.c_str());
@@ -377,8 +374,6 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
   }
 
   // do OCC checks
-  std::unordered_map<string, std::set<Timestamp>> pWrites;
-  GetPreparedWriteTimestamps(pWrites);
   std::unordered_map<string, std::set<Timestamp>> pReads;
   GetPreparedReadTimestamps(pReads);
 
@@ -403,7 +398,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
     // if the value is still valid
     if (!range.second.isValid()) {
       // check pending writes.
-      if (pWrites.find(read.key()) != pWrites.end()) {
+      if (preparedWrites.find(read.key()) != preparedWrites.end()) {
         Debug("[%lu,%lu] ABSTAIN rw conflict w/ prepared key %s.",
             txn.client_id(),
             txn.client_seq_num(),
@@ -414,11 +409,11 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
       }
     } else {
       // if value is not still valtxnDigest, then abort.
-      if (Timestamp(txn.timestamp()) <= range.first) {
+      /*if (Timestamp(txn.timestamp()) <= range.first) {
         Warning("timestamp %lu <= range.first %lu (range.second %lu)",
             txn.timestamp().timestamp(), range.first.getTimestamp(),
             range.second.getTimestamp());
-      }
+      }*/
       //UW_ASSERT(timestamp > range.first);
       Debug("[%s] ABORT rw conflict: %lu > %lu", txnDigest.c_str(),
           txn.timestamp().timestamp(), range.second.getTimestamp());
@@ -443,7 +438,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
             write.key().c_str());
         retryTs = val.first;
         stats.Increment("cc_retries_committed_write", 1);
-        return proto::Phase1Reply::RETRY;
+        return proto::Phase1Reply::ABSTAIN;
       }
 
       // if last committed read is bigger than the timestamp, can't
@@ -457,21 +452,21 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
         Debug("[%s] RETRY wr conflict w/ prepared key:%s", txnDigest.c_str(),
             write.key().c_str());
         retryTs = lastRead;
-        return proto::Phase1Reply::RETRY;
+        return proto::Phase1Reply::ABSTAIN;
       }
     }
 
     // if there is a pending write for this key, greater than the
     // proposed timestamp, retry
-    if (pWrites.find(write.key()) != pWrites.end()) {
-      std::set<Timestamp>::iterator it =
-          pWrites[write.key()].upper_bound(txn.timestamp());
-      if ( it != pWrites[write.key()].end() ) {
+    if (preparedWrites.find(write.key()) != preparedWrites.end()) {
+      std::map<Timestamp, const proto::Transaction *>::iterator it =
+          preparedWrites[write.key()].upper_bound(txn.timestamp());
+      if (it != preparedWrites[write.key()].end() ) {
         Debug("[%s] RETRY ww conflict w/ prepared key:%s", txnDigest.c_str(),
             write.key().c_str());
-        retryTs = *it;
+        retryTs = it->first;
         stats.Increment("cc_retries_prepared_write", 1);
-        return proto::Phase1Reply::RETRY;
+        return proto::Phase1Reply::ABSTAIN;
       }
     }
 

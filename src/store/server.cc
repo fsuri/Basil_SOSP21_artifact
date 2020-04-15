@@ -65,6 +65,12 @@ enum transmode_t {
   TRANS_TCP,
 };
 
+enum occ_type_t {
+  OCC_TYPE_UNKNOWN,
+  OCC_TYPE_TAPIR,
+  OCC_TYPE_MVTSO
+};
+
 /**
  * System settings.
  */
@@ -206,6 +212,29 @@ DEFINE_bool(indicus_validate_proofs, false, "send and validate proofs as"
     " necessary to check Byzantine behavior (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
+const std::string occ_type_args[] = {
+	"tapir",
+  "mvtso"
+};
+const occ_type_t occ_types[] {
+	OCC_TYPE_TAPIR,
+  OCC_TYPE_MVTSO
+};
+static bool ValidateOCCType(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(occ_type_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == occ_type_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+
+DEFINE_string(indicus_occ_type, occ_type_args[0], "Type of OCC for validating"
+    " transactions (for Indicus)");
+DEFINE_validator(indicus_occ_type, &ValidateOCCType);
 
 /**
  * Experiment settings.
@@ -320,6 +349,20 @@ int main(int argc, char **argv) {
       NOT_REACHABLE();
   }
 
+  // parse occ type
+  //  TODO: default is MVTSO; more consistently define as default
+  occ_type_t occ_type = OCC_TYPE_MVTSO;
+  int numOCCTypes = sizeof(occ_type_args);
+  for (int i = 0; i < numOCCTypes; ++i) {
+    if (FLAGS_indicus_occ_type == occ_type_args[i]) {
+      occ_type = occ_types[i];
+      break;
+    }
+  }
+  if (proto == PROTO_INDICUS && occ_type == OCC_TYPE_UNKNOWN) {
+    std::cerr << "Unknown occ type." << std::endl;
+    return 1;
+  }
 
   KeyManager keyManager(FLAGS_indicus_key_path);
 
@@ -351,13 +394,24 @@ int main(int argc, char **argv) {
       break;
     }
     case PROTO_INDICUS: {
+      indicusstore::OCCType indicusOCCType;
+      switch (occ_type) {
+        case OCC_TYPE_TAPIR:
+          indicusOCCType = indicusstore::TAPIR;
+          break;
+        case OCC_TYPE_MVTSO:
+          indicusOCCType = indicusstore::MVTSO;
+          break;
+        default:
+          NOT_REACHABLE();
+      }
       uint64_t timeDelta = (FLAGS_indicus_time_delta / 1000) << 32;
       timeDelta = timeDelta | (FLAGS_indicus_time_delta % 1000) * 1000;
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
           tport, &keyManager, FLAGS_indicus_sign_messages,
           FLAGS_indicus_validate_proofs, timeDelta,
-          indicusstore::MVTSO, part);
+          indicusOCCType, part);
       break;
     }
     default: {
