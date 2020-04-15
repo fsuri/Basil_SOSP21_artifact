@@ -65,11 +65,12 @@ void SignMessage(const ::google::protobuf::Message &msg,
 proto::CommitDecision IndicusDecide(
     const std::map<int, std::vector<proto::Phase1Reply>> &replies,
     const transport::Configuration *config, bool validateProofs,
+    const proto::Transaction &transaction,
     bool signedMessages, KeyManager *keyManager) {
   bool fast;
   for (const auto &groupReplies : replies) {
     proto::CommitDecision groupDecision = IndicusShardDecide(groupReplies.second,
-        config, validateProofs, signedMessages, keyManager, fast);
+        config, validateProofs, transaction, signedMessages, keyManager, fast);
     if (groupDecision == proto::ABORT) {
       return proto::ABORT;
     }
@@ -80,6 +81,7 @@ proto::CommitDecision IndicusDecide(
 proto::CommitDecision IndicusShardDecide(
     const std::vector<proto::Phase1Reply> &replies,
     const transport::Configuration *config, bool validateProofs,
+    const proto::Transaction &txn,
     bool signedMessages, KeyManager *keyManager, bool &fast) {
   int commits = 0;
   int abstains = 0;
@@ -92,6 +94,13 @@ proto::CommitDecision IndicusShardDecide(
       if (validateProofs) {
         if (!ValidateProof(reply.committed_conflict(), config, signedMessages,
               keyManager)) {
+          abstains++;
+          continue;
+        }
+
+        // TODO: this should be MVTSO conflict, not generic conflict
+        if (!TransactionsConflict(txn,
+              reply.committed_conflict().txn())) {
           abstains++;
           continue;
         }
@@ -359,6 +368,32 @@ std::string BytesToHex(const std::string &bytes, size_t maxLength) {
     hex.push_back(digits[bytes[i] & 0xF]);
   }
   return hex;
+}
+
+bool TransactionsConflict(const proto::Transaction &a,
+    const proto::Transaction &b) {
+  for (const auto &ra : a.read_set()) {
+    for (const auto &wb : b.write_set()) {
+      if (ra.key() == wb.key()) {
+        return true;
+      }
+    }
+  }
+  for (const auto &rb : b.read_set()) {
+    for (const auto &wa : a.write_set()) {
+      if (rb.key() == wa.key()) {
+        return true;
+      }
+    }
+  }
+  for (const auto &wa : a.write_set()) {
+    for (const auto &wb : b.write_set()) {
+      if (wa.key() == wb.key()) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 } // namespace indicusstore

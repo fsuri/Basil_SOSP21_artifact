@@ -147,6 +147,7 @@ class ShardClient : public TransportReceiver {
     std::vector<proto::SignedMessage> signedPhase1Replies;
     phase1_callback pcb;
     phase1_timeout_callback ptcb;
+    proto::Transaction transaction;
   };
 
   struct PendingPhase2 {

@@ -79,6 +79,60 @@ TEST_P(CommonTest, IndicusShardDecideOneAbort) {
   EXPECT_EQ(decision, proto::ABORT);
 }
 
+TEST_P(CommonTest, IndicusShardDecideOneInvalidAbortNotCommitted) {
+  if (!IsValidatingProofs()) {
+    // aborts can only be invalid if we validate proofs
+    return;
+  }
+
+  std::vector<proto::Phase1Reply> replies;
+  proto::Phase1Reply reply;
+  for (int i = 0; i < GetN() - 1; ++i) {
+    reply.set_ccr(proto::Phase1Reply::COMMIT);
+    replies.push_back(reply);
+  }
+  
+  reply.set_ccr(proto::Phase1Reply::ABORT);
+  PopulateCommitProof(*reply.mutable_committed_conflict(), GetN());
+  replies.push_back(reply);
+
+  UW_ASSERT(replies.size() == static_cast<size_t>(GetN())); 
+
+  bool fast;
+  proto::CommitDecision decision = IndicusShardDecide(replies, config,
+      IsValidatingProofs(), false, nullptr, fast);
+
+  EXPECT_EQ(decision, proto::COMMIT);
+}
+
+TEST_P(CommonTest, IndicusShardDecideOneInvalidAbortNoConflict) {
+  if (!IsValidatingProofs()) {
+    // aborts can only be invalid if we validate proofs
+    return;
+  }
+
+  std::vector<proto::Phase1Reply> replies;
+  proto::Phase1Reply reply;
+  for (int i = 0; i < GetN() - 1; ++i) {
+    reply.set_ccr(proto::Phase1Reply::COMMIT);
+    replies.push_back(reply);
+  }
+  
+  reply.set_ccr(proto::Phase1Reply::ABORT);
+  PopulateCommitProof(*reply.mutable_committed_conflict(), GetN());
+  replies.push_back(reply);
+
+  UW_ASSERT(replies.size() == static_cast<size_t>(GetN())); 
+
+  bool fast;
+  proto::CommitDecision decision = IndicusShardDecide(replies, config,
+      IsValidatingProofs(), false, nullptr, fast);
+
+  EXPECT_EQ(decision, proto::COMMIT);
+}
+
+
+
 TEST_P(CommonTest, IndicusShardDecideAbstainCommit) {
   std::vector<proto::Phase1Reply> replies;
   proto::Phase1Reply reply;

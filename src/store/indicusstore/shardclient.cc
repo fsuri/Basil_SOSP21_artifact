@@ -149,6 +149,7 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
   pendingPhase1s[reqId] = pendingPhase1;
   pendingPhase1->pcb = pcb;
   pendingPhase1->ptcb = ptcb;
+  pendingPhase1->transaction = transaction;
   pendingPhase1->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase1]() {
       phase1_timeout_callback ptcb = pendingPhase1->ptcb;
       auto itr = this->pendingPhase1s.find(pendingPhase1->reqId);
@@ -492,7 +493,8 @@ void ShardClient::Phase1Decision(
     std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr) {
   bool fast = false;
   proto::CommitDecision decision = IndicusShardDecide(itr->second->phase1Replies,
-      config, validateProofs, signedMessages, keyManager, fast);
+      config, validateProofs, itr->second->transaction, signedMessages,
+      keyManager, fast);
   phase1_callback pcb = itr->second->pcb;
   pcb(decision, fast, itr->second->phase1Replies,
       itr->second->signedPhase1Replies);

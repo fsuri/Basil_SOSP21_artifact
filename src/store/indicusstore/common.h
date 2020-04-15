@@ -30,11 +30,13 @@ void SignMessage(const ::google::protobuf::Message &msg,
 proto::CommitDecision IndicusDecide(
     const std::map<int, std::vector<proto::Phase1Reply>> &replies,
     const transport::Configuration *config, bool validateProofs,
+    const proto::Transaction &transaction,
     bool signedMessages, KeyManager *keyManager);
 
 proto::CommitDecision IndicusShardDecide(
     const std::vector<proto::Phase1Reply> &replies,
     const transport::Configuration *config, bool validateProofs,
+    const proto::Transaction &txn,
     bool signedMessages, KeyManager *keyManager, bool &fast);
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,
@@ -68,6 +70,9 @@ bool operator!=(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2
 std::string TransactionDigest(const proto::Transaction &txn);
 
 std::string BytesToHex(const std::string &bytes, size_t maxLength);
+
+bool TransactionsConflict(const proto::Transaction &a,
+    const proto::Transaction &b);
 
 } // namespace indicusstore
 

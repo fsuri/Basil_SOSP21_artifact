@@ -257,7 +257,16 @@ void Server::HandlePhase2(const TransportAddress &remote,
     }
     
     if (repliesValid) {
+      auto txnItr = ongoing.find(msg.txn_digest());
+      if (txnItr == ongoing.end()) {
+        // TODO: what to do if we receive a Phase2 msg without a Phase1 msg
+        //    we need to know the transaction content to validate the Phase1
+        //    decision
+        //  for now, drop the message?
+        return;
+      }
       decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs,
+          txnItr->second,
           signedMessages, keyManager);
       if (decision != msg.decision()) {
         // ignore Byzantine clients
