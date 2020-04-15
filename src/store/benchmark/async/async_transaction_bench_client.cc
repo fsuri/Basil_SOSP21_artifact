@@ -4,12 +4,12 @@
 #include <random>
 
 AsyncTransactionBenchClient::AsyncTransactionBenchClient(AsyncClient &client,
-    Transport &transport, uint32_t clientId, int numRequests, int expDuration,
+    Transport &transport, uint32_t seed, int numRequests, int expDuration,
     uint64_t delay, int warmupSec, int cooldownSec, int tputInterval,
-    uint32_t abortBackoff, bool retryAborted, int32_t maxAttempts, uint32_t seed,
-    const std::string &latencyFilename) : BenchmarkClient(transport, clientId,
+    uint32_t abortBackoff, bool retryAborted, int32_t maxAttempts,
+    const std::string &latencyFilename) : BenchmarkClient(transport, seed,
       numRequests, expDuration, delay, warmupSec, cooldownSec, tputInterval,
-      latencyFilename), client(client), gen(seed), abortBackoff(abortBackoff),
+      latencyFilename), client(client), abortBackoff(abortBackoff),
       retryAborted(retryAborted), maxAttempts(maxAttempts), currTxn(nullptr),
       currTxnAttempts(0UL) {
 }
@@ -48,7 +48,7 @@ void AsyncTransactionBenchClient::ExecuteCallback(int result,
     int backoff = 0;
     if (abortBackoff > 0) {
       backoff = std::uniform_int_distribution<int>(0,
-          (1 << (currTxnAttempts - 1)) * abortBackoff)(gen);
+          (1 << (currTxnAttempts - 1)) * abortBackoff)(GetRand());
       stats.Increment(GetLastOp() + "_backoff", backoff);
     }
     Debug("Retrying after %d ms.", backoff);

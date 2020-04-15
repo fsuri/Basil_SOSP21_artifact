@@ -10,12 +10,12 @@ namespace tpcc {
 
 class SyncTPCCClient : public SyncTransactionBenchClient, public TPCCClient {
  public:
-  SyncTPCCClient(SyncClient &client, Transport &transport, uint32_t clientId,
+  SyncTPCCClient(SyncClient &client, Transport &transport, uint32_t seed,
       int numRequests, int expDuration, uint64_t delay, int warmupSec,
       int cooldownSec, int tputInterval, uint32_t num_warehouses, uint32_t w_id,
       uint32_t C_c_id, uint32_t C_c_last, uint32_t new_order_ratio,
       uint32_t delivery_ratio, uint32_t payment_ratio, uint32_t order_status_ratio,
-      uint32_t stock_level_ratio, bool static_w_id, uint32_t seed,
+      uint32_t stock_level_ratio, bool static_w_id,
       uint32_t abortBackoff, bool retryAborted, int32_t maxAttempts,
       const std::string &latencyFilename = "");
 

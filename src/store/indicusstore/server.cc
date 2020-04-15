@@ -408,7 +408,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
             txn.client_id(),
             txn.client_seq_num(),
             BytesToHex(read.key(), 16).c_str());
-        stats.Increment("abstains", 1);
+        stats.Increment("cc_abstains", 1);
+        stats.Increment("cc_abstains_rw_conflict", 1);
         return proto::Phase1Reply::ABSTAIN;
       }
     } else {
@@ -421,7 +422,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
       //UW_ASSERT(timestamp > range.first);
       Debug("[%s] ABORT rw conflict: %lu > %lu", txnDigest.c_str(),
           txn.timestamp().timestamp(), range.second.getTimestamp());
-      stats.Increment("aborts", 1);
+      stats.Increment("cc_aborts", 1);
+      stats.Increment("cc_aborts_rw_conflict", 1);
       return proto::Phase1Reply::ABORT;
     }
   }
@@ -440,7 +442,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
         Debug("[%s] RETRY ww conflict w/ prepared key:%s", txnDigest.c_str(),
             write.key().c_str());
         retryTs = val.first;
-        stats.Increment("retries_committed_write", 1);
+        stats.Increment("cc_retries_committed_write", 1);
         return proto::Phase1Reply::RETRY;
       }
 
@@ -468,7 +470,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
         Debug("[%s] RETRY ww conflict w/ prepared key:%s", txnDigest.c_str(),
             write.key().c_str());
         retryTs = *it;
-        stats.Increment("retries_prepared_write", 1);
+        stats.Increment("cc_retries_prepared_write", 1);
         return proto::Phase1Reply::RETRY;
       }
     }
@@ -480,7 +482,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
         pReads[write.key()].end()) {
       Debug("[%s] ABSTAIN wr conflict w/ prepared key: %s",
             txnDigest.c_str(), write.key().c_str());
-      stats.Increment("abstains", 1);
+      stats.Increment("cc_abstains", 1);
       return proto::Phase1Reply::ABSTAIN;
     }
   }
@@ -503,10 +505,12 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
       txn.timestamp().timestamp(), txn.timestamp().id());
   Timestamp ts(txn.timestamp());
   if (CheckHighWatermark(ts)) {
-    Debug("[%lu:%lu][%s] ABORT ts %lu beyond high watermark.",
+    Debug("[%lu:%lu][%s] ABSTAIN ts %lu beyond high watermark.",
         txn.client_id(), txn.client_seq_num(),
         BytesToHex(txnDigest, 16).c_str(),
         ts.getTimestamp());
+    stats.Increment("cc_abstains", 1);
+    stats.Increment("cc_abstains_watermark", 1);
     return proto::Phase1Reply::ABSTAIN;
   }
 
@@ -535,7 +539,9 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
             read.readtime().timestamp(),
             read.readtime().id(), committedWrite.first.getTimestamp(),
             committedWrite.first.getID(), ts.getTimestamp(), ts.getID());
-        return proto::Phase1Reply::ABORT; // TODO: return conflicting txn
+        stats.Increment("cc_aborts", 1);
+        stats.Increment("cc_aborts_wr_conflict", 1);
+        return proto::Phase1Reply::ABORT;
       }
     }
 
@@ -552,7 +558,9 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
               read.readtime().timestamp(),
               read.readtime().id(), preparedTs.first.getTimestamp(),
               preparedTs.first.getID(), ts.getTimestamp(), ts.getID());
-          return proto::Phase1Reply::ABSTAIN; // TODO: return conflicting txn
+          stats.Increment("cc_abstains", 1);
+          stats.Increment("cc_abstains_wr_conflict", 1);
+          return proto::Phase1Reply::ABSTAIN;
         }
       }
     }
@@ -578,6 +586,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
               committedReadTs.second.getTimestamp(),
               committedReadTs.second.getID(), ts.getTimestamp(),
               ts.getID(), committedReadTs.first.getTimestamp(), committedReadTs.first.getID());
+          stats.Increment("cc_aborts", 1);
+          stats.Increment("cc_aborts_rw_conflict", 1);
           return proto::Phase1Reply::ABORT;
         }
       }
@@ -615,6 +625,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
               readTs.getID(), ts.getTimestamp(),
               ts.getID(), preparedReadTxn->timestamp().timestamp(),
               preparedReadTxn->timestamp().id());
+          stats.Increment("cc_abstains", 1);
+          stats.Increment("cc_abstains_rw_conflict", 1);
           return proto::Phase1Reply::ABSTAIN;
         }
       }
@@ -632,6 +644,8 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
             BytesToHex(write.key(), 16).c_str(),
             rtsLB->getTimestamp(),
             rtsLB->getID(), ts.getTimestamp(), ts.getID());
+        stats.Increment("cc_abstains", 1);
+        stats.Increment("cc_abstains_rts", 1);
         return proto::Phase1Reply::ABSTAIN;
       }
     }
@@ -665,6 +679,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
   }
 
   if (!allFinished) {
+    stats.Increment("cc_waits", 1);
     return proto::Phase1Reply::WAIT;
   } else {
     return CheckDependencies(txn);
@@ -850,9 +865,13 @@ proto::Phase1Reply::ConcurrencyControlResult Server::CheckDependencies(
   for (const auto &dep : txn.deps()) {
     if (committed.find(dep.prepared().txn_digest()) != committed.end()) {
       if (Timestamp(dep.prepared().timestamp()) > Timestamp(txn.timestamp())) {
+        stats.Increment("cc_aborts", 1);
+        stats.Increment("cc_aborts_dep_ts", 1);
         return proto::Phase1Reply::ABORT;
       }
     } else {
+      stats.Increment("cc_aborts", 1);
+      stats.Increment("cc_aborts_dep_aborted", 1);
       return proto::Phase1Reply::ABORT;
     }
   } 

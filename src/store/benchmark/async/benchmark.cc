@@ -652,31 +652,31 @@ int main(int argc, char **argv) {
       case BENCH_RETWIS:
         UW_ASSERT(asyncClient != nullptr);
         bench = new retwis::RetwisClient(keySelector, *asyncClient, *transport,
-            (FLAGS_client_id << 3) | i,
+            seed,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
-            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_attempts, seed);
+            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_attempts);
         break;
       case BENCH_TPCC:
         UW_ASSERT(asyncClient != nullptr);
         bench = new tpcc::AsyncTPCCClient(*asyncClient, *transport,
-            (FLAGS_client_id << 3) | i,
+            seed,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
             FLAGS_tpcc_num_warehouses, FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id,
             FLAGS_tpcc_C_c_last, FLAGS_tpcc_new_order_ratio,
             FLAGS_tpcc_delivery_ratio, FLAGS_tpcc_payment_ratio,
             FLAGS_tpcc_order_status_ratio, FLAGS_tpcc_stock_level_ratio,
-            FLAGS_static_w_id, seed, FLAGS_abort_backoff,
+            FLAGS_static_w_id, FLAGS_abort_backoff,
             FLAGS_retry_aborted, FLAGS_max_attempts);
         break;
       case BENCH_SMALLBANK_SYNC:
         UW_ASSERT(syncClient != nullptr);
         bench = new smallbank::SmallbankClient(*syncClient, *transport,
-            (FLAGS_client_id << 3) | i,
+            seed,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
-            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_attempts, seed,
+            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_attempts,
             FLAGS_timeout, FLAGS_balance_ratio, FLAGS_deposit_checking_ratio,
             FLAGS_transact_saving_ratio, FLAGS_amalgamate_ratio,
             FLAGS_num_hotspots, FLAGS_num_customers - FLAGS_num_hotspots, FLAGS_hotspot_probability,
@@ -685,11 +685,11 @@ int main(int argc, char **argv) {
       case BENCH_RW:
         UW_ASSERT(asyncClient != nullptr);
         bench = new rw::RWClient(keySelector, FLAGS_num_ops_txn,
-            *asyncClient, *transport, (FLAGS_client_id << 3) | i,
+            *asyncClient, *transport, seed,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
             FLAGS_abort_backoff, FLAGS_retry_aborted,
-            FLAGS_max_attempts, seed);
+            FLAGS_max_attempts);
         break;
       default:
         NOT_REACHABLE();
