@@ -163,7 +163,6 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
   // create prepare request
   proto::Phase1 phase1;
   phase1.set_req_id(reqId);
-  phase1.set_txn_digest(TransactionDigest(transaction));
   *phase1.mutable_txn() = transaction;
 
   transport->SendMessageToGroup(this, group, phase1);
@@ -171,7 +170,7 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
   pendingPhase1->requestTimeout->Reset();
 }
 
-void ShardClient::Phase2(uint64_t id, const proto::Transaction &transaction,
+void ShardClient::Phase2(uint64_t id, const std::string &txnDigest,
     const std::map<int, std::vector<proto::Phase1Reply>> &groupedPhase1Replies,
     const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
     proto::CommitDecision decision, phase2_callback pcb,
@@ -196,7 +195,7 @@ void ShardClient::Phase2(uint64_t id, const proto::Transaction &transaction,
   // create prepare request
   proto::Phase2 phase2;
   phase2.set_req_id(reqId);
-  phase2.set_txn_digest(TransactionDigest(transaction));
+  phase2.set_txn_digest(txnDigest);
   if (validateProofs) {
     if (signedMessages) {
       for (const auto &group : groupedSignedPhase1Replies) {
@@ -222,6 +221,7 @@ void ShardClient::Phase2(uint64_t id, const proto::Transaction &transaction,
 }
 
 void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
+    const std::string &txnDigest,
     proto::CommitDecision decision, const proto::CommittedProof &proof,
     writeback_callback wcb, writeback_timeout_callback wtcb, uint32_t timeout) {
   uint64_t reqId = lastReqId++;
@@ -243,9 +243,12 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
   // create commit request
   proto::Writeback writeback;
   writeback.set_req_id(reqId);
-  writeback.set_txn_digest(TransactionDigest(transaction));
-  *writeback.mutable_txn() = transaction;
   writeback.set_decision(decision);
+  if (decision == proto::COMMIT) {
+    *writeback.mutable_txn() = transaction;
+  } else {
+    writeback.set_txn_digest(txnDigest);
+  }
 
   transport->SendMessageToGroup(this, group, writeback);
   Debug("[group %i] Sent WRITEBACK [%lu]", group, id);

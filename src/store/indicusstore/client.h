@@ -90,14 +90,11 @@ class Client : public ::Client {
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), outstandingPhase1s(0),
         outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
-        decision(proto::COMMIT), fast(true), prepareTimestamp(nullptr),
+        decision(proto::COMMIT), fast(true),
         startedPhase2(false), callbackInvoked(false) {
     }
 
     ~PendingRequest() {
-      if (prepareTimestamp != nullptr) {
-        delete prepareTimestamp;
-      }
     }
 
     commit_callback ccb;
@@ -109,13 +106,13 @@ class Client : public ::Client {
     uint64_t maxRepliedTs;
     proto::CommitDecision decision;
     bool fast;
-    Timestamp *prepareTimestamp;
     bool startedPhase2;
     bool callbackInvoked;
     std::map<int, std::vector<proto::Phase1Reply>> phase1RepliesGrouped;
     std::map<int, std::vector<proto::SignedMessage>> signedPhase1RepliesGrouped;
     std::vector<proto::Phase2Reply> phase2Replies;
     std::vector<proto::SignedMessage> signedPhase2Replies;
+    std::string txnDigest;
   };
 
   // Prepare function

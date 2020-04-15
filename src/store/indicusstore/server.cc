@@ -197,10 +197,11 @@ void Server::HandleRead(const TransportAddress &remote,
 
 void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
+  std::string txnDigest = TransactionDigest(msg.txn());
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.",
       msg.txn().client_id(),
       msg.txn().client_seq_num(),
-      BytesToHex(msg.txn_digest(), 16).c_str(),
+      BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
 
   if (validateProofs) {
@@ -212,14 +213,14 @@ void Server::HandlePhase1(const TransportAddress &remote,
     }
   }
   
-  ongoing[msg.txn_digest()] = msg.txn();
+  ongoing[txnDigest] = msg.txn();
 
   Timestamp retryTs;
   proto::CommittedProof conflict;
   proto::Phase1Reply::ConcurrencyControlResult result = DoOCCCheck(
       msg.req_id(), remote,
-      msg.txn_digest(), msg.txn(), retryTs, conflict);
-  p1Decisions[msg.txn_digest()] = result;
+      txnDigest, msg.txn(), retryTs, conflict);
+  p1Decisions[txnDigest] = result;
 
   if (result != proto::Phase1Reply::WAIT) {
     SendPhase1Reply(msg.req_id(), result, conflict, remote);
@@ -311,8 +312,19 @@ void Server::HandleWriteback(const TransportAddress &remote,
   }
 
   if (msg.decision() == proto::COMMIT) {
-    Commit(msg.txn_digest(), msg.txn());
+    if (!msg.has_txn()) {
+      Warning("Malformed Writeback: commit must contain txn.");
+      return;
+    }
+
+    std::string txnDigest = TransactionDigest(msg.txn());
+    Commit(txnDigest, msg.txn());
   } else {
+    if (!msg.has_txn_digest()) {
+      Warning("Malformed Writeback: abort must contain txn_digest.");
+      return;
+    }
+
     Abort(msg.txn_digest());
   }
 }

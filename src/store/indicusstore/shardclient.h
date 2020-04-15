@@ -97,12 +97,13 @@ class ShardClient : public TransportReceiver {
 
   virtual void Phase1(uint64_t id, const proto::Transaction &transaction,
       phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout);
-  virtual void Phase2(uint64_t id, const proto::Transaction &transaction,
+  virtual void Phase2(uint64_t id, const std::string &txnDigest,
       const std::map<int, std::vector<proto::Phase1Reply>> &groupedPhase1Replies,
       const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
       proto::CommitDecision decision, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout);
   virtual void Writeback(uint64_t id, const proto::Transaction &transaction,
+      const std::string &txnDigest,
       proto::CommitDecision decision, const proto::CommittedProof &proof,
       writeback_callback wcb, writeback_timeout_callback wtcb, uint32_t timeout);
 

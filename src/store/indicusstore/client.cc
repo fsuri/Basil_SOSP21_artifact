@@ -163,7 +163,6 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
   pendingReqs[client_seq_num] = req;
   req->ccb = ccb;
   req->ctcb = ctcb;
-  req->prepareTimestamp = new Timestamp(timeServer.GetTime(), client_id);
   req->callbackInvoked = false;
   
   Phase1(req, timeout);
@@ -171,7 +170,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
 
 void Client::Phase1(PendingRequest *req, uint32_t timeout) {
   Debug("PHASE1 [%lu:%lu] at %lu", client_id, client_seq_num,
-      req->prepareTimestamp->getTimestamp());
+      txn.timestamp().timestamp());
   UW_ASSERT(txn.involved_groups().size() > 0);
 
   for (auto group : txn.involved_groups()) {
@@ -248,9 +247,12 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
 void Client::Phase2(PendingRequest *req, uint32_t timeout) {
   Debug("PHASE2 [%lu]", client_seq_num);
 
+  req->txnDigest = TransactionDigest(txn);
+
   int logGroup = TransactionDigest(txn)[0] % ngroups;
   req->startedPhase2 = true;
-  bclient[logGroup]->Phase2(client_seq_num, txn, req->phase1RepliesGrouped,
+  bclient[logGroup]->Phase2(client_seq_num, req->txnDigest,
+      req->phase1RepliesGrouped,
       req->signedPhase1RepliesGrouped, req->decision,
       std::bind(&Client::Phase2Callback, this, req->id,
         std::placeholders::_1, std::placeholders::_2),
@@ -348,8 +350,8 @@ void Client::Writeback(PendingRequest *req, uint32_t timeout) {
   // TODO: what to do when Writeback times out
   writeback_timeout_callback wtcb = [](int status){};
   for (auto group : txn.involved_groups()) {
-    bclient[group]->Writeback(client_seq_num, txn, req->decision, proof, wcb,
-        wtcb, timeout);
+    bclient[group]->Writeback(client_seq_num, txn, req->txnDigest,
+        req->decision, proof, wcb, wtcb, timeout);
   }
 
   if (!req->callbackInvoked) {
@@ -377,10 +379,12 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
 
   proto::CommittedProof proof;
   writeback_callback wcb = []() {};
-
+  
+  std::string txnDigest = TransactionDigest(txn);
   writeback_timeout_callback wtcb = [](int status){};
   for (auto group : txn.involved_groups()) {
-    bclient[group]->Writeback(client_seq_num, txn, proto::ABORT, proof, wcb, wtcb, timeout);
+    bclient[group]->Writeback(client_seq_num, txn, txnDigest,
+        proto::ABORT, proof, wcb, wtcb, timeout);
   }
   // TODO: can we just call callback immediately?
   acb();

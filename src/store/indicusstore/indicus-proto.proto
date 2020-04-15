@@ -100,8 +100,7 @@ message Transaction {
 
 message Phase1 {
   required uint64 req_id = 1;
-  required bytes txn_digest = 2;
-  required Transaction txn = 3;
+  required Transaction txn = 2;
 }
 
 message Phase1Reply {
@@ -145,8 +144,8 @@ message Phase2Replies {
 
 message Writeback {
   required uint64 req_id = 1;
-  required bytes txn_digest = 2;
-  required Transaction txn = 3;
+  optional bytes txn_digest = 2;
+  optional Transaction txn = 3;
   required CommitDecision decision = 4;
   optional CommittedProof proof = 5;
 }
