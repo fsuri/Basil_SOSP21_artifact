@@ -187,7 +187,7 @@ void Client::Phase1Callback(uint64_t txnId, int group,
     proto::CommitDecision decision, bool fast,
     const std::vector<proto::Phase1Reply> &phase1Replies,
     const std::vector<proto::SignedMessage> &signedPhase1Replies) {
-  Debug("PHASE1 [%lu] callback decision %d from group %d", client_seq_num,
+  Debug("PHASE1[%lu] callback decision %d from group %d", client_seq_num,
       decision, group);
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
@@ -214,11 +214,11 @@ void Client::Phase1Callback(uint64_t txnId, int group,
   --req->outstandingPhase1s;
   switch(decision) {
     case proto::COMMIT:
-      Debug("PHASE1 [%lu] COMMIT %d", client_seq_num, group);
+      Debug("PHASE1[%lu] COMMIT %d", client_seq_num, group);
       break;
     case proto::ABORT:
       // abort!
-      Debug("PHASE1 [%lu] ABORT %d", client_seq_num, group);
+      Debug("PHASE1[%lu] ABORT %d", client_seq_num, group);
       req->decision = proto::ABORT;
       req->outstandingPhase1s = 0;
       break;
@@ -245,9 +245,10 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
 }
 
 void Client::Phase2(PendingRequest *req, uint32_t timeout) {
-  Debug("PHASE2 [%lu]", client_seq_num);
-
   req->txnDigest = TransactionDigest(txn);
+
+  Debug("PHASE2[%lu][%s]", client_seq_num,
+      BytesToHex(req->txnDigest, 16).c_str());
 
   int logGroup = TransactionDigest(txn)[0] % ngroups;
   req->startedPhase2 = true;
@@ -263,7 +264,7 @@ void Client::Phase2(PendingRequest *req, uint32_t timeout) {
 void Client::Phase2Callback(uint64_t txnId,
     const std::vector<proto::Phase2Reply> &phase2Replies,
     const std::vector<proto::SignedMessage> &signedPhase2Replies) {
-  Debug("PHASE2 [%lu] callback", txnId);
+  Debug("PHASE2[%lu] callback", txnId);
 
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
@@ -285,17 +286,18 @@ void Client::Phase2TimeoutCallback(uint64_t txnId, int status) {
 }
 
 void Client::Writeback(PendingRequest *req, uint32_t timeout) {
-  Debug("WRITEBACK [%lu]", req->id);
+  Debug("WRITEBACK[%lu]", req->id);
 
   int result;
   switch (req->decision) {
     case proto::COMMIT: {
-      Debug("COMMIT [%lu]", req->id);
+      Debug("COMMIT[%lu]", req->id);
       result = RESULT_COMMITTED;
       break;
     }
     case proto::ABORT: {
       result = RESULT_SYSTEM_ABORTED;
+      req->txnDigest = TransactionDigest(txn);
       break;
     }
     default: {
@@ -374,7 +376,7 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
   // presumably this will be called with empty callbacks as the application can
   // immediately move on to its next transaction without waiting for confirmation
   // that this transaction was aborted
-  Debug("ABORT [%lu]", client_seq_num);
+  Debug("ABORT[%lu]", client_seq_num);
 
 
   proto::CommittedProof proof;

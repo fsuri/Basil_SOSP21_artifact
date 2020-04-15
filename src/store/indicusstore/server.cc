@@ -301,8 +301,25 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
 void Server::HandleWriteback(const TransportAddress &remote,
     const proto::Writeback &msg) {
-  Debug("WRITEBACK[%s]  with decision %d.",
-      BytesToHex(msg.txn_digest(), 16).c_str(), msg.decision());
+  std::string computedTxnDigest;
+  const std::string *txnDigest;
+  if (msg.decision() == proto::COMMIT) {
+    if (!msg.has_txn()) {
+      Warning("Malformed Writeback: commit must contain txn.");
+      return;
+    }
+    computedTxnDigest = TransactionDigest(msg.txn());
+    txnDigest = &computedTxnDigest;
+  } else {
+    if (!msg.has_txn_digest()) {
+      Warning("Malformed Writeback: abort must contain txn_digest.");
+      return;
+    }
+    txnDigest = &msg.txn_digest();
+  }
+
+  Debug("WRITEBACK[%s] with decision %d.",
+      BytesToHex(*txnDigest, 16).c_str(), msg.decision());
 
   if (validateProofs) {
     if (!ValidateProof(msg.proof(), &config, signedMessages, keyManager)) {
@@ -312,20 +329,9 @@ void Server::HandleWriteback(const TransportAddress &remote,
   }
 
   if (msg.decision() == proto::COMMIT) {
-    if (!msg.has_txn()) {
-      Warning("Malformed Writeback: commit must contain txn.");
-      return;
-    }
-
-    std::string txnDigest = TransactionDigest(msg.txn());
-    Commit(txnDigest, msg.txn());
+    Commit(*txnDigest, msg.txn());
   } else {
-    if (!msg.has_txn_digest()) {
-      Warning("Malformed Writeback: abort must contain txn_digest.");
-      return;
-    }
-
-    Abort(msg.txn_digest());
+    Abort(*txnDigest);
   }
 }
 

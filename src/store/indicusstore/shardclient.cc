@@ -123,7 +123,6 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   read.set_key(key);
   *read.mutable_timestamp() = ts;
 
-  Debug("%lu %lu", closestReplicas.size(), rqs);
   UW_ASSERT(rqs <= closestReplicas.size());
   for (size_t i = 0; i < rqs; ++i) {
     transport->SendMessageToReplica(this, group, closestReplicas[i], read);
