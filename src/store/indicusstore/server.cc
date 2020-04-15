@@ -176,18 +176,21 @@ void Server::HandleRead(const TransportAddress &remote,
       Debug("Prepared write with most recent ts %lu.%lu.", mostRecent.timestamp().timestamp(),
           mostRecent.timestamp().id());
 
-      preparedWrite.set_value(preparedValue);
-      *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
-      *preparedWrite.mutable_txn_digest() = TransactionDigest(mostRecent);
+      // TODO: currently limit depth of deps to 1 (no chains of dependencies)
+      if (mostRecent.deps_size() == 0) {
+        preparedWrite.set_value(preparedValue);
+        *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
+        *preparedWrite.mutable_txn_digest() = TransactionDigest(mostRecent);
 
-      if (signedMessages) {
-        proto::SignedMessage signedMessage;
-        SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id, signedMessage);
-        *reply.mutable_signed_prepared() = signedMessage;
-      } else {
-        *reply.mutable_prepared() = preparedWrite;
+        if (signedMessages) {
+          proto::SignedMessage signedMessage;
+          SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id, signedMessage);
+          *reply.mutable_signed_prepared() = signedMessage;
+        } else {
+          *reply.mutable_prepared() = preparedWrite;
+        }
+        reply.set_status(REPLY_OK);
       }
-      reply.set_status(REPLY_OK);
     }
   }
 
