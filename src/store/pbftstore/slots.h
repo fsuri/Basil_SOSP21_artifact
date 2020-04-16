@@ -14,46 +14,43 @@ class Slots {
   Slots();
   ~Slots();
 
-  bool requestExists(const proto::Request &request);
-
-  // All of the verified ones should have their signatures verified
-  void addVerifiedRequest(const proto::Request &request);
-
-  // return the message associated with the request digest
-  proto::PackedMessage* getRequestMessage(std::string digest);
-
   // Primary id is the replica id that is currently the primary (the preprepare should have
   // been validated against this replica)
   // returns true if the set succeeded, if returns false -> suspect primary
-  bool setVerifiedPreprepare(uint64_t primary_id, const proto::Preprepare &preprepare);
+  bool setPreprepare(const proto::Preprepare &preprepare, uint64_t replica_id, const std::string& sig);
+  bool setPreprepare(const proto::Preprepare &preprepare);
 
   // add replica_id to the set of replicas attesting to have sent the prepare
-  void setVerifiedPrepare(const proto::Prepare &prepare, uint64_t replica_id);
+  bool addPrepare(const proto::Prepare &prepare, uint64_t replica_id, const std::string& sig);
+  bool addPrepare(const proto::Prepare &prepare);
 
   // returns true if this replica is prepared for the given view
-  bool Prepared(uint64_t slot_num, uint64_t view, uint64_t f);
+  bool Prepared(uint64_t seq_num, uint64_t view, uint64_t f);
 
   // add replica_id to the set of replicas attesting to have sent the commit
-  void setVerifiedCommit(const proto::Commit &commit, uint64_t replica_id);
+  bool addCommit(const proto::Commit &commit, uint64_t replica_id, const std::string& sig);
+  bool addCommit(const proto::Commit &commit);
 
   // returns true if this replica is in the committed-local state for the view
-  bool CommittedLocal(uint64_t slot_num, uint64_t view, uint64_t f);
+  bool CommittedLocal(uint64_t seq_num, uint64_t view, uint64_t f);
 
-  int getNumPrepared(uint64_t slot_num, uint64_t view, std::string &digest);
-  int getNumCommitted(uint64_t slot_num, uint64_t view, std::string &digest);
+  std::string getSlotDigest(uint64_t seq_num, uint64_t view);
 
  private:
-  // digest to request
-  std::unordered_map<std::string, proto::Request> requests;
-  // slot number to view number to (digest,primary id) (techincally implied by the view but we don't have n here)
-  std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::pair<uint64_t, std::string>>> preprepares;
-  // slot number to view number to digest to set of replica ids that we got a prepare from for that digest
-  // When we get a preprepare, we should add the primary to the set
-  // We include the digest map because we could get prepares before we receive the preprepare (async system)
-  std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::unordered_map<std::string, std::unordered_set<uint64_t>>>> prepares;
-  // slot number to view number to set of replica ids that we got a commit for
-  // We include the digest map because we could get commits before we receive the preprepare (async system)
-  std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::unordered_map<std::string, std::unordered_set<uint64_t>>>> commits;
+
+    struct Slot {
+      // slot number to view number to (digest,primary id) (techincally implied by the view but we don't have n here)
+      std::string preprepare_digest;
+      // map from digest to replica id to signature (may be empty)
+      // we keep around multiple digests because we could received prepares before the preprepare
+      // and we don't know which ones to keep
+      std::unordered_map<std::string, std::unordered_map<uint64_t, std::string>> prepares;
+      // map from digest to replica id to signature (may be empty)
+      // these commits can be used to reconstruct commit proofs for committed digests
+      std::unordered_map<std::string, std::unordered_map<uint64_t, std::string>> commits;
+    };
+
+    std::unordered_map<uint64_t, std::unordered_map<uint64_t, Slot>> slots;
 };
 
 }  // namespace pbftstore

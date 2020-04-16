@@ -15,7 +15,7 @@ public:
 
     virtual ::google::protobuf::Message* HandleMessage(const std::string& type, const std::string& msg);
     // upcall to execute the message
-    virtual ::google::protobuf::Message* Execute(const std::string& type, const std::string& msg, proto::CommitProof &&commitProof);
+    virtual ::google::protobuf::Message* Execute(const std::string& type, const std::string& msg);
 };
 
 }

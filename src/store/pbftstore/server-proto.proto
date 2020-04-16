@@ -11,16 +11,24 @@ message Read {
   required TimestampMessage timestamp = 3;
 }
 
+message CommitProof {
+  // The commit proof will be a writeback message containing proof that
+  // all participating shards committed the tx
+  required GroupedDecision writeback_message = 1;
+  // the commit proof only contains the tx  txn bytes and the key,value pair must be in the txn's write set
+  // The proof that the value was actually committed
+  // Could still be stale though (i.e. not most recent)
+  required Transaction commit_proof_tx = 2;
+}
+
 message ReadReply {
   required uint64 req_id = 1;
   required int32 status = 2;
   required bytes key = 3;
   optional bytes value = 4;
+  // this is the timestamp at which the returned value was assigned to the key
   optional TimestampMessage value_timestamp = 5;
-  // The commit proof packed message will contain the
-  // txn bytes and the key,value pair must be in the txn's write set
-  // The proof that the value was actually committed
-  // Could still be stale though (i.e. not most recent)
+  // if validating reads, include a commit proof
   optional CommitProof commit_proof = 6;
 }
 
@@ -32,33 +40,32 @@ message Transaction {
   repeated uint64 participating_shards = 4;
 }
 
+// This is the reply that a shard sends to the client after it finished its
+// CCC
 message TransactionDecision {
+  // the status of the CCC (Commit/Abort)
   required int32 status = 1;
+  // the digest of the transaction that was checked
   required bytes txn_digest = 2;
+  // the id of the shard that sent the request
   required uint64 shard_id = 3;
 }
 
-message GroupedSignedDecisions {
-  // f+1 decisions
-  repeated SignedMessage decisions = 1;
-}
-
 message ShardSignedDecisions {
-  // Map from shard id to the f+1 decisions
-  map<uint64, GroupedSignedDecisions> grouped_decisions = 1;
-}
-
-message GroupedDecisions {
-  // f+1 decisions
-  repeated TransactionDecision decisions = 1;
+  // Map from shard id to the shard decsion along with f+1 signatures for that decision
+  map<uint64, GroupedSignedMessage> grouped_decisions = 1;
 }
 
 message ShardDecisions {
-  // Map from shard id to the f+1 decisions
-  map<uint64, GroupedDecisions> grouped_decisions = 1;
+  // when we don't have signatures it doesn't make sense to
+  // send f+1 copies of the transaction decision
+  // Map from shard id to the transaction decision (should have gotten f+1 of these)
+  map<uint64, TransactionDecision> grouped_decisions = 1;
 }
 
+// The collected decisions from all shards
 message GroupedDecision {
+  // the status of the collective decision (Commit/Abort)
   required int32 status = 1;
   required bytes txn_digest = 2;
   oneof decisions_oneof {
@@ -67,6 +74,7 @@ message GroupedDecision {
   }
 }
 
+// shards can acknowledge the writeback proof
 message GroupedDecisionAck {
   required int32 status = 1;
   required bytes txn_digest = 2;

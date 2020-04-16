@@ -48,7 +48,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   proto::SignedMessage signedMessage;
   string type;
   string data;
-  uint64_t replica_id = -1;
+  bool recvSignedMessage = false;
 
   if (t == signedMessage.GetTypeName()) {
     Debug("Received signed message");
@@ -59,7 +59,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
       return;
     }
-    replica_id = signedMessage.replica_id();
+    recvSignedMessage = true;
     Debug("Message is valid!");
   } else {
     type = t;
@@ -75,28 +75,26 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     request.ParseFromString(data);
     HandleRequest(remote, request);
   } else if (type == preprepare.GetTypeName()) {
+    if (signMessages && !recvSignedMessage) {
+      return;
+    }
+
     preprepare.ParseFromString(data);
-    HandlePreprepare(remote, preprepare, replica_id);
+    HandlePreprepare(remote, preprepare, signedMessage);
   } else if (type == prepare.GetTypeName()) {
     prepare.ParseFromString(data);
-    HandlePrepare(remote, prepare, replica_id);
+    if (signMessages && !recvSignedMessage) {
+      return;
+    }
+
+    HandlePrepare(remote, prepare, signedMessage);
   } else if (type == commit.GetTypeName()) {
     commit.ParseFromString(data);
-    uint64_t seqnum = commit.seqnum();
-    uint64_t viewnum = commit.viewnum();
-    string digest = commit.digest();
-
-    if (replica_id == (uint64_t) -1) {
-      replica_id = slots.getNumCommitted(seqnum, viewnum, digest);
+    if (signMessages && !recvSignedMessage) {
+      return;
     }
-
-    if (t == signedMessage.GetTypeName()) {
-      signedCommitGroups[seqnum][viewnum][digest][replica_id] = signedMessage;
-    } else {
-      commitGroups[seqnum][viewnum][digest][replica_id] = commit;
-    }
-
-    HandleCommit(remote, commit, replica_id);
+    
+    HandleCommit(remote, commit, signedMessage);
   } else {
     Debug("Sending request to app");
     ::google::protobuf::Message* reply = app->HandleMessage(type, data);
@@ -110,17 +108,32 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   }
 }
 
+void Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
+  if (signMessages) {
+    proto::SignedMessage signedMessage;
+    SignMessage(msg, keyManager->GetPrivateKey(myId), myId, signedMessage);
+    // send to everyone and to me
+    transport->SendMessageToGroup(this, groupIdx, signedMessage);
+    transport->SendMessageToReplica(this, groupIdx, myId, signedMessage);
+  } else {
+    // send to everyone and to me
+    transport->SendMessageToGroup(this, groupIdx, msg);
+    transport->SendMessageToReplica(this, groupIdx, myId, msg);
+  }
+}
+
 void Replica::HandleRequest(const TransportAddress &remote,
                                const proto::Request &request) {
   Debug("Handling request message");
 
-  if (!slots.requestExists(request)) {
+  std::string digest = request.digest();
+
+  if (requests.find(digest) == requests.end()) {
     Debug("new request: %s", request.packed_msg().type().c_str());
 
-    slots.addVerifiedRequest(request);
+    requests[digest] = request.packed_msg();
 
     // clone remote mapped to request for reply
-    std::string digest = request.digest();
     replyAddrs[digest] = remote.clone();
 
     int currentPrimary = config.GetLeaderIndex(view);
@@ -131,43 +144,39 @@ void Replica::HandleRequest(const TransportAddress &remote,
       preprepare.set_viewnum(view);
       preprepare.set_digest(digest);
 
-      if (signMessages) {
-        proto::SignedMessage signedMessage;
-        SignMessage(preprepare, keyManager->GetPrivateKey(myId), myId, signedMessage);
-        // send to everyone and to me
-        transport->SendMessageToGroup(this, groupIdx, signedMessage);
-        transport->SendMessageToReplica(this, groupIdx, myId, signedMessage);
-      } else {
-        // send to everyone and to me
-        transport->SendMessageToGroup(this, groupIdx, preprepare);
-        transport->SendMessageToReplica(this, groupIdx, myId, preprepare);
-      }
+      sendMessageToAll(preprepare);
     }
   }
 }
 
+void Replica::HandleBatchedRequest(const TransportAddress &remote,
+                               const proto::BatchedRequest &request) {
+  Debug("Handling batched request message");
+}
+
 void Replica::HandlePreprepare(const TransportAddress &remote,
-                                  const proto::Preprepare &preprepare, uint64_t replica_id) {
+                                  const proto::Preprepare &preprepare,
+                                const proto::SignedMessage& signedMsg) {
   Debug("Handling preprepare message");
 
   uint64_t primaryId = config.GetLeaderIndex(view);
 
-  uint64_t seqnum = preprepare.seqnum();
-  uint64_t viewnum = preprepare.viewnum();
-  string digest = preprepare.digest();
-
-  if (replica_id == (uint64_t) -1) {
-    replica_id = slots.getNumPrepared(seqnum, viewnum, digest);
+  if (signMessages) {
+    // make sure id is good
+    if (signedMsg.replica_id() != primaryId ||
+        !slots.setPreprepare(preprepare, signedMsg.replica_id(), signedMsg.signature())) {
+      return;
+    }
   } else {
-    if (replica_id != primaryId) {
-      // only accept preprepares from the current primary
+    if (!slots.setPreprepare(preprepare)) {
       return;
     }
   }
-  if(!slots.setVerifiedPreprepare(primaryId, preprepare)) {
-    // The primary is equivocating, don't accept the preprepare
-    return;
-  }
+
+
+  uint64_t seqnum = preprepare.seqnum();
+  uint64_t viewnum = preprepare.viewnum();
+  string digest = preprepare.digest();
 
   // Multicast prepare to everyone
   proto::Prepare prepare;
@@ -175,31 +184,26 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
   prepare.set_viewnum(viewnum);
   prepare.set_digest(digest);
 
-  if (signMessages) {
-    proto::SignedMessage signedMessage;
-    SignMessage(prepare, keyManager->GetPrivateKey(myId), myId, signedMessage);
-    // send to everyone and to me
-    transport->SendMessageToGroup(this, groupIdx, signedMessage);
-    transport->SendMessageToReplica(this, groupIdx, myId, signedMessage);
-  } else {
-    // send to everyone and to me
-    transport->SendMessageToGroup(this, groupIdx, prepare);
-    transport->SendMessageToReplica(this, groupIdx, myId, prepare);
-  }
+  sendMessageToAll(prepare);
 }
 
 void Replica::HandlePrepare(const TransportAddress &remote,
-                               const proto::Prepare &prepare, uint64_t replica_id) {
+                               const proto::Prepare &prepare,
+                             const proto::SignedMessage& signedMsg) {
   Debug("Handling prepare message");
+  if (signMessages) {
+    if (!slots.addPrepare(prepare, signedMsg.replica_id(), signedMsg.signature())) {
+      return;
+    }
+  } else {
+    if (!slots.addPrepare(prepare)) {
+      return;
+    }
+  }
 
   uint64_t seqnum = prepare.seqnum();
   uint64_t viewnum = prepare.viewnum();
   string digest = prepare.digest();
-
-  if (replica_id == (uint64_t) -1) {
-    replica_id = slots.getNumPrepared(seqnum, viewnum, digest);
-  }
-  slots.setVerifiedPrepare(prepare, replica_id);
 
   // wait for 2f prepare + preprepare all matching and then send commit to
   // everyone start timer for 2f+1 commits
@@ -214,57 +218,44 @@ void Replica::HandlePrepare(const TransportAddress &remote,
     commit.set_viewnum(viewnum);
     commit.set_digest(digest);
 
-    if (signMessages) {
-      proto::SignedMessage signedMessage;
-      SignMessage(commit, keyManager->GetPrivateKey(myId), myId, signedMessage);
-      // send to everyone and to me
-      transport->SendMessageToGroup(this, groupIdx, signedMessage);
-      transport->SendMessageToReplica(this, groupIdx, myId, signedMessage);
-    } else {
-      // send to everyone and to me
-      transport->SendMessageToGroup(this, groupIdx, commit);
-      transport->SendMessageToReplica(this, groupIdx, myId, commit);
-    }
+    sendMessageToAll(commit);
   }
 }
 
 void Replica::HandleCommit(const TransportAddress &remote,
-                              const proto::Commit &commit, uint64_t replica_id) {
+                              const proto::Commit &commit,
+                            const proto::SignedMessage& signedMsg) {
   Debug("Handling commit message");
+
+  if (signMessages) {
+    if (!slots.addCommit(commit, signedMsg.replica_id(), signedMsg.signature())) {
+      return;
+    }
+  } else {
+    if (!slots.addCommit(commit)) {
+      return;
+    }
+  }
+
 
   uint64_t seqnum = commit.seqnum();
   uint64_t viewnum = commit.viewnum();
   string digest = commit.digest();
 
-  slots.setVerifiedCommit(commit, replica_id);
-
   // wait for 2f+1 matching commit messages, then mark message as committed,
   // clear timer
-  Debug("f: %d", config.f);
   if (slots.CommittedLocal(seqnum, viewnum, config.f)) {
-    Debug("Committed message with type: %s", slots.getRequestMessage(digest)->type().c_str());
-    std::pair<uint64_t, std::string> view_and_digest(viewnum, digest);
-    pendingSeqNum[seqnum] = view_and_digest;
+    Debug("Committed message with type: %s", requests[digest].type().c_str());
 
-    Debug("exec seq num: %d    seq num: %d", execSeqNum, seqnum);
+    pendingExecutions[seqnum] = digest;
 
-    while(pendingSeqNum.find(execSeqNum) != pendingSeqNum.end()) {
-      std::string digest = pendingSeqNum[execSeqNum].second;
-      proto::PackedMessage* msg = slots.getRequestMessage(digest);
-      proto::CommitProof commitProof;
-      *commitProof.mutable_message() = *msg;
-      if (signMessages) {
-        auto& map = *commitProof.mutable_signed_commits()->mutable_commits();
-        for (auto const& x : signedCommitGroups[seqnum][viewnum][digest]) {
-          map[x.first] = x.second;
-        }
-      } else {
-        auto& map = *commitProof.mutable_commits()->mutable_commits();
-        for (auto const& x : commitGroups[seqnum][viewnum][digest]) {
-          map[x.first] = x.second;
-        }
-      }
-      ::google::protobuf::Message* reply = app->Execute(msg->type(), msg->msg(), std::move(commitProof));
+    Debug("exec seq num: %lu   seq num: %lu", execSeqNum, seqnum);
+
+    while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
+      Debug("executing seq num: %lu", execSeqNum);
+      std::string digest = pendingExecutions[execSeqNum];
+      proto::PackedMessage packedMsg = requests[digest];
+      ::google::protobuf::Message* reply = app->Execute(packedMsg.type(), packedMsg.msg());
       if (reply != nullptr) {
         Debug("Sending reply");
         transport->SendMessage(this, *replyAddrs[digest], *reply);

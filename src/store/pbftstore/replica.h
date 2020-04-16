@@ -29,12 +29,17 @@ public:
                       const std::string &data, void *meta_data);
   void HandleRequest(const TransportAddress &remote,
                            const proto::Request &msg);
+  void HandleBatchedRequest(const TransportAddress &remote,
+                           const proto::BatchedRequest &msg);
   void HandlePreprepare(const TransportAddress &remote,
-                              const proto::Preprepare &msg, uint64_t replica_id);
+                              const proto::Preprepare &msg,
+                            const proto::SignedMessage& signedMsg);
   void HandlePrepare(const TransportAddress &remote,
-                           const proto::Prepare &msg, uint64_t replica_id);
+                           const proto::Prepare &msg,
+                         const proto::SignedMessage& signedMsg);
   void HandleCommit(const TransportAddress &remote,
-                          const proto::Commit &msg, uint64_t replica_id);
+                          const proto::Commit &msg,
+                        const proto::SignedMessage& signedMsg);
 
  private:
   const transport::Configuration &config;
@@ -47,24 +52,30 @@ public:
   int view;
   int seqnum;
 
-  // map from seqnum to set of views that we have sent the commit for
-  std::unordered_map<uint64_t, std::unordered_set<uint64_t>> sentCommits;
+  Slots slots;
+
+  void sendMessageToAll(const ::google::protobuf::Message& msg);
+
+  // map from digest to packed message
+  std::unordered_map<std::string, proto::PackedMessage> requests;
 
   // the next sequence number to be executed
-  int execSeqNum;
-  // map from pending executed message to (view, digest)
-  std::unordered_map<uint64_t, std::pair<uint64_t, std::string>> pendingSeqNum;
-
-  // map from seqnum to view to digest to map from replica id to commit message
-  std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::unordered_map<std::string, std::unordered_map<uint64_t, proto::Commit>>>> commitGroups;
-  std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::unordered_map<std::string, std::unordered_map<uint64_t, proto::SignedMessage>>>> signedCommitGroups;
+  uint64_t execSeqNum;
+  // map from seqnum to the digest pending execution at that sequence number
+  std::unordered_map<uint64_t, std::string> pendingExecutions;
 
   // map from tx digest to reply address
   std::unordered_map<std::string, TransportAddress*> replyAddrs;
 
-  int getPrimaryForView(int view);
+  // TODO
+  // tests to see if we are ready to send prepares or commits or executute the slot
+  void testSlot(uint64_t seqnum, uint64_t view);
 
-  Slots slots;
+  // map from seqnum to set of view that we have sent the prepare for
+  std::unordered_map<uint64_t, std::unordered_set<uint64_t>> sentPrepares;
+
+  // map from seqnum to set of views that we have sent the commit for
+  std::unordered_map<uint64_t, std::unordered_set<uint64_t>> sentCommits;
 };
 
 } // namespace pbftstore

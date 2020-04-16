@@ -11,7 +11,7 @@ App::~App() {
 
 }
 
-::google::protobuf::Message* App::Execute(const std::string &msg, const std::string &type, proto::CommitProof &&commitProof) {
+::google::protobuf::Message* App::Execute(const std::string &msg, const std::string &type) {
   Panic("Unimplemented");
 }
 
