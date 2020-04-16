@@ -119,4 +119,12 @@ std::string OrderByCustomerRowKey(uint32_t w_id, uint32_t d_id, uint32_t c_id) {
   return std::string(keyC, sizeof(keyC));
 }
 
+std::string EarliestNewOrderRowKey(uint32_t w_id, uint32_t d_id) {
+  char keyC[9];
+  keyC[0] = static_cast<char>(Tables::EARLIEST_NEW_ORDER);
+  *reinterpret_cast<uint32_t*>(keyC + 1) = w_id; 
+  *reinterpret_cast<uint32_t*>(keyC + 5) = d_id; 
+  return std::string(keyC, sizeof(keyC));
+}
+
 }
