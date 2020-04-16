@@ -207,7 +207,7 @@ Note, that for write heavy workloads, or workloads without read/write conflicts 
 
 Algorithm \ref{mvtso} shows the necessary validation check to preserve Byzantine-Serializability. 
 Given a transaction TX finalized execution state, i.e. its read-set, write-set and dependencies, and a proposed timestamp, the validation check returns \textit{Abstain/Abort} (we discuss the distinction further in section X (validation)) if a conflict has been detected. Otherwise, a replica tentatively \textit{Prepares} a transaction by adding its reads and writes to the $PreparedDB$, making its writes visible and evaluating future transactions against it for conflicts. Regardless of the outcome, a replica garbage collects all Read Timestmaps (RTS) associated with the transactions reads (indexable by matching TS).
-It then waits for necessary dependencies (uncommited writes that were read) to be resolved. \fs{should unprepare if dep aborts; this avoids more dependencies to be formed unecessarily}
+It then waits for necessary dependencies (uncommited writes that were read) to be resolved. \fs{(ADD note: dependency blocking only needs to happen at the shard where the dep came from)} \fs{should unprepare if dep aborts; this avoids more dependencies to be formed unecessarily}
 If all dependencies resolve do so successfully the check returns Commit, and otherwise un-prepares the transaction and returns Abstain/Abort. We remark, that the concurrency control check is serialized and executed atomically for each transaction.
 
 
@@ -386,7 +386,7 @@ A replica validates Timestamp and Dependency integrity of the request. It then e
 
 
 
-\underline{Additional subtlelties}: A replica validates whether all entries in the dependency set are legal, i.e. whether f+1 matching signatures exist. If this is not the case, a replica rejects the request and submits a Proof of Misbheavior (PoM) to expel the client from the system. A byzantine client may neither match read set and dependency set, nor match read set to the involved shards. This is tolerated, as a byzantine client chooses whether to experience Isolation and Atomicity. Illegal reads, or un-committed writes do not have external effect, but are auditable in the committed ledger to trace misbehavior. \fs{can just make it a PoM too and ignore, probably simpler and for the better}
+\underline{Additional subtlelties}: A replica validates whether all read versions are legal, i.e. whether the $version < TS$, and whether all entries in the dependency set are legal, i.e. whether f+1 matching signatures exist. If this is not the case, a replica rejects the request and submits a Proof of Misbheavior (PoM) to expel the client from the system. A byzantine client may neither match read set and dependency set, nor match read set to the involved shards. This is tolerated, as a byzantine client chooses whether to experience Isolation and Atomicity. Illegal reads, or un-committed writes do not have external effect, but are auditable in the committed ledger to trace misbehavior. \fs{can just make it a PoM too and ignore, probably simpler and for the better}
 \fs{ In effect, any claimed deps implies a client did those reads, but he does not necessarily have to include them} 
 A replica updates its $OngoingTX$ set by adding a pair $(TxID, state)$, where $state$ is an object containing relevant protocol metadata, such as the Client Phase1 request or the MVTSO Check decision (to service replays and avoid re-execution). Importantly, a replica never changes its Voting decision, because re-execution could leave to different results. In section X we discuss an optimization to allow this behavior. If voting Abort, a replica additionally returns the transaction causing the conflict and a respective CommitCertificate to prove that transactions finality. If voting Abstain, a replica instead returns the signed Phase1 request of the conflicting Transaction. \fs{For the best "progress" guarantee a replica would need to return ALL conflicting TX, in order to allow a client to finish all of them. However, this a) often needlessly costly (check cannot stop on first conflict + sending more message content), and b) does not guarantee that there will be no new conflicts by the time the TX tries again.} \fs{if we dont want to allow to commit a conflicting TX, then they could just reply with the TxID, and the TxID could be used to vote default abstain once the timeout has expired.}
 Lastly, a replica starts a timer to monitor the clients progress.
@@ -946,13 +946,52 @@ currently a certificate is a signature for a committed TX. this means that a rea
 Replicas sign not only the TX, but also a Merkle Hash Root of all the Writes. Then only log(|writes|) writes or intermediate hashes are necessary to prove legitimacy of write value.
 --> Result: smaller read reply messages, but bigger protocol messages because double sigs required. Probably not worth it.
 
+\iffalse
 \textbf{Reduce tx object content per shard.}
 \fs{Each shard should only store the objects necessary for its shard: changes ID.
 keep track of not just involved shards, but of involved sub TXIDS: Each shard involved has a different TXID: Each sub TX object includes a list of the other TXIDS. An honest client experiences atomicity by bundling - doesnt work straightforward because cyclic. Need 2 levels of ID. Problem still remains: Byzantine client could fake which sub IDs to wait for. These may not exist and hence liveness would be impossible.}
 \fs{can reduce lookup time by splitting into per shard read/write sets. But full info still necessary for recovery}
-\fs{In order to facilitate recovery just based on IDs, replicas must be allowed to vote abstain. In this case, they may only vote after a timeout to provide the orignial client with a window of immunity. If the TX does exist, and a replica has it, it can forward it to the client who can use it to attempt to commit. It is still undesirable because a byz client can claim limitless false components. If an interested client cannot acquire the Tx contents after the timeout (and a replica has not seen it) it can try to convince the replica that the orignial client was faulty. So when this happens too often, a client can be expelled. A byz client can abuse this by always saying this about any honest client; but if that client was timely, then the replica would have known about the TX!}
+\fs{In order to facilitate recovery just based on IDs, replicas must be allowed to vote abstain. In this case, they may only vote after a timeout to provide the orignial client with a window of immunity. If the TX does exist, and a replica has it, it can forward it to the client who can use it to attempt to commit. It is still undesirable because a byz client can claim limitless false components (and hence always make its TX abort). If an interested client cannot acquire the Tx contents after the timeout (and a replica has not seen it) it can try to convince the replica that the orignial client was faulty. So when this happens too often, a client can be expelled. A byz client can abuse this by always saying this about any honest client; but if that client was timely, then the replica would have known about the TX!}
+\fi
+
+TODO:
+
+\textbf{Fallback less load for single sharded logging}
+
+\paragraph{Hierarchical transaction IDs.}
+When transactions span multiple shards, the resulting transaction object includes ReadSet, WriteSet and dependencies from different involved shards. Consequently, every involved shards must validate, and store keys/values from all shards (potentially the whole database) instead of only keys assigned to the respective shard. To circumvent this, we split the transaction object into multiple sub-objects that pertain only to the respective shard, shown in Figure \ref{fig:FigureTxId}. Each sub-object $TxS_j$ has an individual identifier $id_j = H(TxS_j)$ that represents the involved shards of a transaction. A $TxID = H(involvedShards, TS)$ serves as common identifier of the transaction across all shards.
+
+\begin{figure}
+\begin{center}
+\includegraphics[width= 0.5\textwidth]{./figures/TxIDs.png}
+\end{center}
+\caption{Logging}
+\label{fig:FigureTxId}
+\end{figure}
+
+During Validation, client send the entire transaction object to each involved shard. This allows replicas from any shard to aid recovery, in case a malicious client never sends the request to every involved shard. \fs{If we didnt have the full TX, we would be forced to abort sub transactions that have never been sent which would allow byz clients to always abort themselves}
+ A replica in shard $S_1$ checks, whether all $TxS_j$ match their digest $id_j$, whether every $TxS_j$ maps to an involved shard, and whether all involved Shards match the $TxID$. It then performs the MVTSO-check only for $TxS_1$. If $TxS_1$ contains a key that does not belong to $S_1$ this serves as PoM \fs{a byz client messed up}. 
+For Writeback, it suffices for clients to send only the sub-object $TxS_j$ relevant to shard $S_j$. Since a valid Writeback message must include a shard-decision for each involved shard, it is implied that every shard has durably replicated the Validation transaction object. Thus, it is no longer necessary for shard $S_j$ to keep track of $TxS_i$ ($i \neq j$) for liveness purposes \fs{the other shards contain the info themselves}, and it may store only the objects relevant to its shard. A replica can validate the legitimacy of $TxS_j$ by recomputing $id_j$ and comparing to the signed instance in the shard-decision.\\
+ 
 
 
+
+\textbf{Strict Serializability}
+Read Latest
+
+\textbf{Retries v2}
+Retries for different ID:
+
+Protocol:
+Client receives 3f+1 Abstain/Retry votes. If 2f+1 of those are retry (implying that there could be 3f+1 commit votes) a client retries:
+1. Aborts the orignial slot on the fast path
+2. Commits new version with new timestamp. New ID must be old ID, bar timestamp change. (Other TX are rejected - this avoid multiple TX per client)
+
+Comments:
+1. Byz client may just commit same TX twice. That is safe, since Tx needs to pass validation check at 2 times. The higher TX strictly dominates the lower TS. Conflicts are from read.version up to TS.
+(Abstains never change? Only retries and commit do)
+
+2. Dependent will be aborted. (TS does not match dep read version anymore) This is fine, since the dependent would have been aborted anyways. Is there a way to "save" the dependents too?
 
 %-------------------------------------------------------------------------------
 \subsection{Indicus3}
