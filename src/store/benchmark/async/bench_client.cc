@@ -42,18 +42,20 @@
 
 DEFINE_LATENCY(op);
 
-BenchmarkClient::BenchmarkClient(Transport &transport, uint32_t clientId,
+BenchmarkClient::BenchmarkClient(Transport &transport, uint32_t seed,
 		int numRequests, int expDuration, uint64_t delay, int warmupSec,
     int cooldownSec, int tputInterval, const std::string &latencyFilename) :
     tputInterval(tputInterval),
     transport(transport),
-    rand(clientId),
+    rand(seed),
     numRequests(numRequests), expDuration(expDuration),	delay(delay),
     warmupSec(warmupSec), cooldownSec(cooldownSec),
     latencyFilename(latencyFilename) {
 	if (delay != 0) {
 		Notice("Delay between requests: %ld ms", delay);
-	}
+	} else {
+    Notice("No delay between requests.");
+  }
 	started = false;
 	done = false;
   cooldownStarted = false;
@@ -140,7 +142,7 @@ void BenchmarkClient::CooldownDone() {
 }
 
 void BenchmarkClient::OnReply(int result) {
-  IncrementSent();
+  IncrementSent(result);
 
   if (done) {
     return;
@@ -159,13 +161,23 @@ void BenchmarkClient::StartLatency() {
   Latency_Start(&latency);
 }
 
-void BenchmarkClient::IncrementSent() {
+void BenchmarkClient::IncrementSent(int result) {
   if (started) {
     // record latency
     if (!cooldownStarted) {
       uint64_t ns = Latency_End(&latency);
-      std::cout << GetLastOp() << ',' << ns << std::endl;
-      latencies.push_back(ns);
+      // TODO: use standard definitions across all clients for success/commit and failure/abort
+      if (result == 0) { // only record result if success
+        if (latencies.size() == 0UL) {
+          struct timeval currTime;
+          gettimeofday(&currTime, NULL);
+          currTime.tv_sec -= ns / 1000000000ULL;
+          currTime.tv_usec -= (ns % 1000000000ULL) / 1000ULL;
+          std::cout << "#start," << currTime.tv_sec << "," << currTime.tv_usec << std::endl;
+        }
+        std::cout << GetLastOp() << ',' << ns << std::endl;
+        latencies.push_back(ns);
+      }
     }
 
     if (numRequests == -1) {
@@ -188,6 +200,7 @@ void BenchmarkClient::IncrementSent() {
 
 void BenchmarkClient::Finish() {
   gettimeofday(&endTime, NULL);
+  std::cout << "#end," << endTime.tv_sec << "," << endTime.tv_usec << std::endl;
 
   struct timeval diff = timeval_sub(endTime, startTime);
 

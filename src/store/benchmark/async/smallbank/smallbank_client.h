@@ -27,10 +27,10 @@ constexpr int num_customers_ = 18000;
 
 class SmallbankClient : public SyncTransactionBenchClient {
  public:
-  SmallbankClient(SyncClient &client, Transport &transport, uint32_t clientId,
+  SmallbankClient(SyncClient &client, Transport &transport, uint32_t seed,
                   int numRequests, int expDuration, uint64_t delay,
                   int warmupSec, int cooldownSec, int tputInterval,
-                  uint32_t abortBackoff, bool retryAborted,
+                  uint32_t abortBackoff, bool retryAborted, int32_t maxAttempts,
                   const uint32_t timeout, const uint32_t balance_ratio,
                   const uint32_t deposit_checking_ratio,
                   const uint32_t transact_saving_ratio,
@@ -63,7 +63,6 @@ class SmallbankClient : public SyncTransactionBenchClient {
   uint32_t num_hotspot_keys_;
   uint32_t num_non_hotspot_keys_;
   double hotspot_probability_;
-  std::mt19937 gen_;
   std::vector<std::string> all_keys_;
   std::string last_op_;
 };

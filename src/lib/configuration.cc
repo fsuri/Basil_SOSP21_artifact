@@ -93,7 +93,7 @@ Configuration::Configuration(int g, int n, int f,
     }
 }
 
-Configuration::Configuration(std::ifstream &file)
+Configuration::Configuration(std::istream &file)
 {
     f = -1;
     hasMulticast = false;

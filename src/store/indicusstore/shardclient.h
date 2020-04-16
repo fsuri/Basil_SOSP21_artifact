@@ -32,7 +32,7 @@
 #ifndef _INDICUS_SHARDCLIENT_H_
 #define _INDICUS_SHARDCLIENT_H_
 
-#include "bft_tapir/config.h"
+#include "lib/keymanager.h"
 #include "lib/assert.h"
 #include "lib/configuration.h"
 #include "lib/crypto.h"
@@ -40,6 +40,7 @@
 #include "lib/transport.h"
 #include "replication/ir/client.h"
 #include "store/common/timestamp.h"
+#include "store/common/truetime.h"
 #include "store/common/transaction.h"
 #include "store/common/frontend/txnclient.h"
 #include "store/common/common-proto.pb.h"
@@ -47,15 +48,34 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 namespace indicusstore {
 
-class ShardClient : public TxnClient, public TransportReceiver {
+typedef std::function<void(int, const std::string &,
+    const std::string &, const Timestamp &, const proto::Dependency &,
+    bool, bool)> read_callback;
+typedef std::function<void(int, const std::string &)> read_timeout_callback;
+
+typedef std::function<void(proto::CommitDecision, bool,
+    const std::vector<proto::Phase1Reply> &,
+    const std::vector<proto::SignedMessage> &)> phase1_callback;
+typedef std::function<void(int)> phase1_timeout_callback;
+
+typedef std::function<void(
+    const std::vector<proto::Phase2Reply> &,
+    const std::vector<proto::SignedMessage> &)> phase2_callback;
+typedef std::function<void(int)> phase2_timeout_callback;
+
+typedef std::function<void()> writeback_callback;
+typedef std::function<void(int)> writeback_timeout_callback;
+
+class ShardClient : public TransportReceiver {
  public:
-  /* Constructor needs path to shard config. */
   ShardClient(transport::Configuration *config, Transport *transport,
-      uint64_t client_id, int shard, int closestReplica,
-      uint64_t readQuorumSize);
+      uint64_t client_id, int group, const std::vector<int> &closestReplicas,
+      bool signedMessages, bool validateProofs,
+      KeyManager *keyManager, TrueTime &timeServer);
   virtual ~ShardClient();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
@@ -63,113 +83,143 @@ class ShardClient : public TxnClient, public TransportReceiver {
       void *meta_data) override;
 
   // Begin a transaction.
-  virtual void Begin(uint64_t id) override;
+  virtual void Begin(uint64_t id);
 
   // Get the value corresponding to key.
-  virtual void Get(uint64_t id, const std::string &key, get_callback gcb,
-      get_timeout_callback gtcb, uint32_t timeout) override;
-  virtual void Get(uint64_t id, const std::string &key,
-      const Timestamp &timestamp, get_callback gcb, get_timeout_callback gtcb,
-      uint32_t timeout) override;
+  virtual void Get(uint64_t id, const std::string &key, const TimestampMessage &ts,
+      uint64_t rqs, read_callback gcb, read_timeout_callback gtcb,
+      uint32_t timeout);
 
   // Set the value for the given key.
   virtual void Put(uint64_t id, const std::string &key,
       const std::string &value, put_callback pcb, put_timeout_callback ptcb,
-      uint32_t timeout) override;
+      uint32_t timeout);
 
-  // Commit all Get(s) and Put(s) since Begin().
-  virtual void Commit(uint64_t id, const Transaction & txn,
-      uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
-      uint32_t timeout) override;
-
-  // Abort all Get(s) and Put(s) since Begin().
-  virtual void Abort(uint64_t id, const Transaction &txn,
-      abort_callback acb, abort_timeout_callback atcb,
-      uint32_t timeout) override;
-
-  // Prepare the transaction.
-  virtual void Prepare(uint64_t id, const Transaction &txn,
-      const Timestamp &timestamp, prepare_callback pcb,
-      prepare_timeout_callback ptcb, uint32_t timeout) override;
+  virtual void Phase1(uint64_t id, const proto::Transaction &transaction,
+      phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout);
+  virtual void Phase2(uint64_t id, const std::string &txnDigest,
+      const std::map<int, std::vector<proto::Phase1Reply>> &groupedPhase1Replies,
+      const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
+      proto::CommitDecision decision, phase2_callback pcb,
+      phase2_timeout_callback ptcb, uint32_t timeout);
+  virtual void Writeback(uint64_t id, const proto::Transaction &transaction,
+      const std::string &txnDigest,
+      proto::CommitDecision decision, const proto::CommittedProof &proof,
+      writeback_callback wcb, writeback_timeout_callback wtcb, uint32_t timeout);
 
  private:
-  struct PendingQuorumGet : public TxnClient::PendingGet {
-    PendingQuorumGet(uint64_t reqId) : TxnClient::PendingGet(reqId),
-        numReplies(0UL), numOKReplies(0UL) { }
+  struct PendingQuorumGet {
+    PendingQuorumGet(uint64_t reqId) : reqId(reqId),
+        numReplies(0UL), numOKReplies(0UL), hasDep(false) { }
     ~PendingQuorumGet() { }
+    uint64_t reqId;
+    std::string key;
+    Timestamp rts;
+    uint64_t rqs;
     Timestamp maxTs;
     std::string maxValue;
     uint64_t numReplies;
     uint64_t numOKReplies;
+    std::map<Timestamp, std::pair<proto::PreparedWrite, uint64_t>> prepared;
+    std::map<Timestamp, std::vector<proto::SignedMessage>> signedPrepared;
+    proto::Dependency dep;
+    bool hasDep;
+    read_callback gcb;
+    read_timeout_callback gtcb;
   };
 
-  struct PendingPrepare : public TxnClient::PendingPrepare {
-    PendingPrepare(uint64_t reqId) : TxnClient::PendingPrepare(reqId),
-        requestTimeout(nullptr) { }
-    ~PendingPrepare() {
+  struct PendingPhase1 {
+    PendingPhase1(uint64_t reqId) : reqId(reqId),
+        requestTimeout(nullptr), decisionTimeout(nullptr),
+        decisionTimeoutStarted(false) { }
+    ~PendingPhase1() {
+      if (requestTimeout != nullptr) {
+        delete requestTimeout;
+      }
+      if (decisionTimeout != nullptr) {
+        delete decisionTimeout;
+      }
+    }
+    uint64_t reqId;
+    Timeout *requestTimeout;
+    Timeout *decisionTimeout;
+    bool decisionTimeoutStarted;
+    std::vector<proto::Phase1Reply> phase1Replies;
+    std::vector<proto::SignedMessage> signedPhase1Replies;
+    phase1_callback pcb;
+    phase1_timeout_callback ptcb;
+    proto::Transaction transaction;
+  };
+
+  struct PendingPhase2 {
+    PendingPhase2(uint64_t reqId, proto::CommitDecision decision) : reqId(reqId),
+        decision(decision), requestTimeout(nullptr) { }
+    ~PendingPhase2() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
       }
     }
-    Timestamp ts;
-    Transaction txn;
+    uint64_t reqId;
+    proto::CommitDecision decision;
     Timeout *requestTimeout;
+
+    std::vector<proto::Phase2Reply> phase2Replies;
+    std::vector<proto::SignedMessage> signedPhase2Replies;
+    uint64_t matchingReplies;
+    phase2_callback pcb;
+    phase2_timeout_callback ptcb;
   };
-  struct PendingCommit : public TxnClient::PendingCommit {
-    PendingCommit(uint64_t reqId) : TxnClient::PendingCommit(reqId),
+
+  struct PendingCommit {
+    PendingCommit(uint64_t reqId) : reqId(reqId),
         requestTimeout(nullptr) { }
     ~PendingCommit() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
       }
     }
+    uint64_t reqId;
     uint64_t ts;
-    Transaction txn;
+    proto::Transaction txn;
     Timeout *requestTimeout;
+    writeback_callback ccb;
+    writeback_timeout_callback ctcb;
   };
-  struct PendingAbort : public TxnClient::PendingAbort {
-    PendingAbort(uint64_t reqId) : TxnClient::PendingAbort(reqId),
+  struct PendingAbort {
+    PendingAbort(uint64_t reqId) : reqId(reqId),
         requestTimeout(nullptr) { }
     ~PendingAbort() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
       }
     }
-    Transaction txn;
+    uint64_t reqId;
+    proto::Transaction txn;
     Timeout *requestTimeout;
+    abort_callback acb;
+    abort_timeout_callback atcb;
   };
 
-  uint64_t client_id; // Unique ID for this client.
-  Transport *transport; // Transport layer.
-  transport::Configuration *config;
-  int shard; // which shard this client accesses
-  int replica; // which replica to use for reads
-  uint64_t readQuorumSize;
-  bool signedMessages;
-  bool validateProofs;
-  bft_tapir::NodeConfig *cryptoConfig;
-
-  std::unordered_map<uint64_t, PendingQuorumGet *> pendingGets;
-  std::unordered_map<uint64_t, PendingPrepare *> pendingPrepares;
-  std::unordered_map<uint64_t, PendingCommit *> pendingCommits;
-  std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
-
+  bool BufferGet(const std::string &key, read_callback rcb);
 
   /* Timeout for Get requests, which only go to one replica. */
   void GetTimeout(uint64_t reqId);
 
   /* Callbacks for hearing back from a shard for an operation. */
   void HandleReadReply(const proto::ReadReply &readReply);
-  void HandlePrepare1Reply(const proto::Prepare1Reply &prepare1Reply);
+  void HandlePhase1Reply(const proto::Phase1Reply &phase1Reply,
+      const proto::SignedMessage &signedPhase1Reply);
+  void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply,
+      const proto::SignedMessage &signedPhase2Reply);
   bool CommitCallback(uint64_t reqId, const std::string &,
       const std::string &);
   bool AbortCallback(uint64_t reqId, const std::string &,
       const std::string &);
 
-  bool VerifyP3Commit(const Transaction &transaction, const proto::Writeback &p3);
-  bool TxWritesKey(const Transaction &tx, const std::string &key);
-  bool TimestampsEqual(const TimestampMessage &v1, const TimestampMessage &v2);
-  bool TimestampsGT(const TimestampMessage &v1, const TimestampMessage &v2);
+  inline uint64_t QuorumSize() const { return 4 * config->f + 1; } 
+  void Phase1Decision(uint64_t reqId);
+  void Phase1Decision(
+      std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
 
   /* Helper Functions for starting and finishing requests */
   void StartRequest();
@@ -177,6 +227,28 @@ class ShardClient : public TxnClient, public TransportReceiver {
   void FinishRequest(const std::string &reply_str);
   void FinishRequest();
   int SendGet(const std::string &request_str);
+
+  uint64_t client_id; // Unique ID for this client.
+  Transport *transport; // Transport layer.
+  transport::Configuration *config;
+  int group; // which shard this client accesses
+  int replica; // which replica to use for reads
+  TrueTime &timeServer;
+  bool signedMessages;
+  bool validateProofs;
+  KeyManager *keyManager;
+  uint64_t phase1DecisionTimeout;
+  std::vector<int> closestReplicas;
+
+  uint64_t lastReqId;
+  proto::Transaction txn;
+  std::map<std::string, std::string> readValues;
+
+  std::unordered_map<uint64_t, PendingQuorumGet *> pendingGets;
+  std::unordered_map<uint64_t, PendingPhase1 *> pendingPhase1s;
+  std::unordered_map<uint64_t, PendingPhase2 *> pendingPhase2s;
+  std::unordered_map<uint64_t, PendingCommit *> pendingCommits;
+  std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
 };
 
 } // namespace indicusstore

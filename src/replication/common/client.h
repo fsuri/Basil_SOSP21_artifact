@@ -68,7 +68,7 @@ public:
     static const uint32_t DEFAULT_UNLOGGED_OP_TIMEOUT = 1000; // milliseconds
 
     Client(const transport::Configuration &config, Transport *transport,
-           uint64_t clientid = 0);
+          int group, uint64_t clientid = 0);
     virtual ~Client();
 
     virtual void Invoke(
@@ -94,7 +94,7 @@ public:
 protected:
     transport::Configuration config;
     Transport *transport;
-
+    const int group;
     uint64_t clientid;
 };
 

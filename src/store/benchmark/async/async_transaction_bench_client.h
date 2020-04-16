@@ -9,7 +9,7 @@
 class AsyncTransactionBenchClient : public BenchmarkClient {
 public:
     AsyncTransactionBenchClient(AsyncClient &client, Transport &transport,
-        uint32_t clientId, int numRequests, int expDuration, uint64_t delay,
+        uint32_t seed, int numRequests, int expDuration, uint64_t delay,
         int warmupSec, int cooldownSec, int tputInterval, uint32_t abortBackoff,
         bool retryAborted, int32_t maxAttempts,
         const std::string &latencyFilename = "");
@@ -30,7 +30,6 @@ private:
     int32_t maxAttempts;
     AsyncTransaction *currTxn;
     int32_t currTxnAttempts;
-    std::mt19937 gen;
 
 };
 

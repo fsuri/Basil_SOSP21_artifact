@@ -410,11 +410,14 @@ int main(int argc, char *argv[]) {
   GenerateNewOrderTable(FLAGS_num_warehouses, q);
   std::pair<std::string, std::string> out;
   size_t count = 0;
-//  while (!q.IsEmpty()) {
-//    q.Pop(out);
-//    count += WriteBytesToStream(&std::cout, out.first);
-//    count += WriteBytesToStream(&std::cout, out.second);
-//  }
-  std::cerr << "Wrote " << count / 1024 / 1024 << "MB." << std::endl;
+  size_t rows = 0;
+  while (!q.IsEmpty()) {
+    q.Pop(out);
+    count += WriteBytesToStream(&std::cout, out.first);
+    count += WriteBytesToStream(&std::cout, out.second);
+    rows++;
+  }
+  std::cerr << "Wrote " << count / 1024 / 1024 << "MB (" << rows << "rows)."
+            << std::endl;
   return 0;
 }

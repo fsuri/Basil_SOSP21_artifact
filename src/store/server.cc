@@ -31,6 +31,7 @@
 
 #include <csignal>
 
+#include "lib/keymanager.h"
 #include "lib/transport.h"
 #include "lib/tcptransport.h"
 #include "lib/udptransport.h"
@@ -44,6 +45,7 @@
 #include "store/weakstore/server.h"
 #include "store/janusstore/server.h"
 #include "store/mortystore/server.h"
+#include "store/indicusstore/server.h"
 
 #include <gflags/gflags.h>
 
@@ -53,13 +55,20 @@ enum protocol_t {
 	PROTO_WEAK,
 	PROTO_STRONG,
   PROTO_JANUS,
-  PROTO_MORTY
+  PROTO_MORTY,
+  PROTO_INDICUS
 };
 
 enum transmode_t {
 	TRANS_UNKNOWN,
   TRANS_UDP,
   TRANS_TCP,
+};
+
+enum occ_type_t {
+  OCC_TYPE_UNKNOWN,
+  OCC_TYPE_MVTSO,
+  OCC_TYPE_TAPIR
 };
 
 /**
@@ -77,14 +86,16 @@ const std::string protocol_args[] = {
   "weak",
   "strong",
   "janus",
-  "morty"
+  "morty",
+  "indicus"
 };
 const protocol_t protos[] {
   PROTO_TAPIR,
   PROTO_WEAK,
   PROTO_STRONG,
   PROTO_JANUS,
-  PROTO_MORTY
+  PROTO_MORTY,
+  PROTO_INDICUS
 };
 static bool ValidateProtocol(const char* flagname,
     const std::string &value) {
@@ -102,13 +113,13 @@ DEFINE_string(protocol, protocol_args[0],	"the protocol to use during this"
 DEFINE_validator(protocol, &ValidateProtocol);
 
 const std::string trans_args[] = {
-	"tcp",
-  "udp"
+  "udp",
+	"tcp"
 };
 
 const transmode_t transmodes[] {
-	TRANS_TCP,
-  TRANS_UDP
+  TRANS_UDP,
+	TRANS_TCP
 };
 static bool ValidateTransMode(const char* flagname,
     const std::string &value) {
@@ -189,6 +200,41 @@ DEFINE_validator(strongmode, &ValidateStrongMode);
  */
 DEFINE_uint64(prepare_batch_period, 0, "length of batches for deterministic prepare message"
     " processing.");
+
+/**
+ * Indicus settings.
+ */
+DEFINE_uint64(indicus_time_delta, 2000, "max clock skew allowed for concurrency"
+    " control (for Indicus)");
+DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
+    " necessary to prevent impersonation (for Indicus)");
+DEFINE_bool(indicus_validate_proofs, false, "send and validate proofs as"
+    " necessary to check Byzantine behavior (for Indicus)");
+DEFINE_string(indicus_key_path, "", "path to directory containing public and"
+    " private keys (for Indicus)");
+const std::string occ_type_args[] = {
+	"tapir",
+  "mvtso"
+};
+const occ_type_t occ_types[] {
+  OCC_TYPE_MVTSO,
+	OCC_TYPE_TAPIR
+};
+static bool ValidateOCCType(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(occ_type_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == occ_type_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+
+DEFINE_string(indicus_occ_type, occ_type_args[0], "Type of OCC for validating"
+    " transactions (for Indicus)");
+DEFINE_validator(indicus_occ_type, &ValidateOCCType);
 
 /**
  * Experiment settings.
@@ -281,6 +327,44 @@ int main(int argc, char **argv) {
       NOT_REACHABLE();
   }
 
+  // parse protocol and mode
+  Partitioner partType = DEFAULT;
+  int numParts = sizeof(partitioner_args);
+  for (int i = 0; i < numParts; ++i) {
+    if (FLAGS_partitioner == partitioner_args[i]) {
+      partType = parts[i];
+      break;
+    }
+  }
+
+  partitioner part;
+  switch (partType) {
+    case DEFAULT:
+      part = default_partitioner;
+      break;
+    case WAREHOUSE:
+      part = warehouse_partitioner;
+      break;
+    default:
+      NOT_REACHABLE();
+  }
+
+  // parse occ type
+  occ_type_t occ_type = OCC_TYPE_UNKNOWN;
+  int numOCCTypes = sizeof(occ_type_args);
+  for (int i = 0; i < numOCCTypes; ++i) {
+    if (FLAGS_indicus_occ_type == occ_type_args[i]) {
+      occ_type = occ_types[i];
+      break;
+    }
+  }
+  if (proto == PROTO_INDICUS && occ_type == OCC_TYPE_UNKNOWN) {
+    std::cerr << "Unknown occ type." << std::endl;
+    return 1;
+  }
+
+  KeyManager keyManager(FLAGS_indicus_key_path);
+
   switch (proto) {
     case PROTO_TAPIR: {
       server = new tapirstore::Server(FLAGS_linearizable);
@@ -308,37 +392,36 @@ int main(int argc, char **argv) {
           tport, FLAGS_debug_stats, FLAGS_prepare_batch_period);
       break;
     }
+    case PROTO_INDICUS: {
+      indicusstore::OCCType indicusOCCType;
+      switch (occ_type) {
+        case OCC_TYPE_TAPIR:
+          indicusOCCType = indicusstore::TAPIR;
+          break;
+        case OCC_TYPE_MVTSO:
+          indicusOCCType = indicusstore::MVTSO;
+          break;
+        default:
+          NOT_REACHABLE();
+      }
+      uint64_t timeDelta = (FLAGS_indicus_time_delta / 1000) << 32;
+      timeDelta = timeDelta | (FLAGS_indicus_time_delta % 1000) * 1000;
+      server = new indicusstore::Server(config, FLAGS_group_idx,
+          FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
+          tport, &keyManager, FLAGS_indicus_sign_messages,
+          FLAGS_indicus_validate_proofs, timeDelta,
+          indicusOCCType, part);
+      break;
+    }
     default: {
       NOT_REACHABLE();
     }
   }
 
-  // parse protocol and mode
-  Partitioner partType = DEFAULT;
-  int numParts = sizeof(partitioner_args);
-  for (int i = 0; i < numParts; ++i) {
-    if (FLAGS_partitioner == partitioner_args[i]) {
-      partType = parts[i];
-      break;
-    }
-  }
-
-  partitioner part;
-  switch (partType) {
-    case DEFAULT:
-      part = default_partitioner;
-      break;
-    case WAREHOUSE:
-      part = warehouse_partitioner;
-      break;
-    default:
-      NOT_REACHABLE();
-  }
-
   // parse keys
   std::vector<std::string> keys;
   if (FLAGS_data_file_path.empty() && FLAGS_keys_path.empty()) {
-    if (FLAGS_num_keys > 0) {
+    /*if (FLAGS_num_keys > 0) {
       for (size_t i = 0; i < FLAGS_num_keys; ++i) {
         keys.push_back(std::to_string(i));
       }
@@ -346,7 +429,7 @@ int main(int argc, char **argv) {
       std::cerr << "Specified neither keys file nor number of keys."
                 << std::endl;
       return 1;
-    }
+    }*/
   } else if (FLAGS_data_file_path.length() > 0 && FLAGS_keys_path.empty()) {
     std::ifstream in;
     in.open(FLAGS_data_file_path);
@@ -356,20 +439,28 @@ int main(int argc, char **argv) {
       return 1;
     }
     size_t loaded = 0;
+    size_t stored = 0;
+    size_t sharded[] = {0, 0, 0};
     while (!in.eof()) {
       std::string key;
       std::string value;
       int i = ReadBytesFromStream(&in, key);
       if (i == 0) {
         ReadBytesFromStream(&in, value);
+        sharded[part(key, FLAGS_num_shards)]++;
         if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
           server->Load(key, value, Timestamp());
+          ++stored;
         }
+        ++loaded;
       }
-      ++loaded;
     }
-    Debug("Loaded %lu key-value pairs from file %s.", loaded,
-        FLAGS_data_file_path.c_str());
+    for (int i = 0; i < 3; ++i) {
+      std::cerr << sharded[i] << ' ';
+    }
+    std::cerr << std::endl;
+    Debug("Stored %lu out of %lu key-value pairs from file %s.", stored,
+        loaded, FLAGS_data_file_path.c_str());
   } else {
     std::ifstream in;
     in.open(FLAGS_keys_path);

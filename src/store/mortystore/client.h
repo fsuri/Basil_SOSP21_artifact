@@ -28,7 +28,7 @@ struct ClientBranch {
 
 class Client : public ::AsyncClient {
  public:
-  Client(const std::string configPath, uint64_t client_id, int nShards,
+  Client(transport::Configuration *config, uint64_t client_id, int nShards,
       int nGroups, int closestReplica, Transport *transport, partitioner part,
       bool debugStats);
   virtual ~Client();
@@ -85,6 +85,7 @@ class Client : public ::AsyncClient {
 
   void RecordBranch(const proto::Branch &branch);
 
+  transport::Configuration *config;
   // Unique ID for this client.
   uint64_t client_id;
 
@@ -105,7 +106,6 @@ class Client : public ::AsyncClient {
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
   std::vector<ShardClient *> sclients;
   uint64_t prepareBranchIds;
-  transport::Configuration *config;
   Latency_t opLat;
   std::unordered_set<proto::Branch, BranchHasher, BranchComparer> sent_branches;
 };

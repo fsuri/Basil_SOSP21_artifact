@@ -44,8 +44,6 @@ Store::Get(uint64_t id, const string &key, pair<Timestamp,string> &value)
 {
     Debug("[%lu] GET %s", id, key.c_str());
 
-    active.insert(id);
-
     bool ret = store.get(key, value);
     if (ret) {
         Debug("Value: %s at <%lu, %lu>", value.second.c_str(), value.first.getTimestamp(), value.first.getID());
@@ -69,12 +67,11 @@ Store::Get(uint64_t id, const string &key, const Timestamp &timestamp, pair<Time
 }
 
 int
-Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, Timestamp &proposedTimestamp)
+Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
+    Timestamp &proposedTimestamp)
 {   
-    Debug("[%lu] START PREPARE", id);
-
-    Debug("[%lu] Active transactions: %lu.", id, active.size());
-    active.erase(id);
+    Debug("[%lu] PREPARE with ts %lu.%lu", id, timestamp.getTimestamp(),
+        timestamp.getID());
 
     if (prepared.find(id) != prepared.end()) {
         if (prepared[id].first == timestamp) {
@@ -82,13 +79,11 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
             return REPLY_OK;
         } else {
             // run the checks again for a new timestamp
-            prepared.erase(id);
+            Cleanup(id);
         }
     }
 
     // do OCC checks
-    unordered_map<string, set<Timestamp>> pWrites;
-    GetPreparedWrites(pWrites);
     unordered_map<string, set<Timestamp>> pReads;
     GetPreparedReads(pReads);
 
@@ -109,12 +104,14 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
         // if the value is still valid
         if (!range.second.isValid()) {
             // check pending writes.
-            if ( pWrites.find(read.first) != pWrites.end() && 
-                 (linearizable || 
-                  pWrites[read.first].upper_bound(timestamp) != pWrites[read.first].begin()) ) {
+            if (preparedWrites.find(read.first) != preparedWrites.end() && 
+                (linearizable || 
+                 preparedWrites[read.first].upper_bound(timestamp) !=
+                  preparedWrites[read.first].begin()) ) {
                 Debug("[%lu] ABSTAIN rw conflict w/ prepared key:%s",
                       id, read.first.c_str());
-                stats.Increment("abstains", 1);
+                stats.Increment("cc_abstains", 1);
+                stats.Increment("cc_abstains_rw_conflict", 1);
                 return REPLY_ABSTAIN;
             }
 
@@ -124,12 +121,12 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
              * proposed timestamp not within validity range, then
              * conflict and abort
              */
-          if (timestamp <= range.first) {
+          /*if (timestamp <= range.first) {
             Warning("timestamp %lu <= range.first %lu (range.second %lu)",
                 timestamp.getTimestamp(), range.first.getTimestamp(),
                 range.second.getTimestamp());
-          }
-          //UW_ASSERT(timestamp > range.first);
+          }*/
+          // UW_ASSERT(timestamp > range.first);
           Debug("[%lu] ABORT rw conflict: %lu > %lu", id,
               timestamp.getTimestamp(), range.second.getTimestamp());
           std::string s = std::to_string((uint32_t) read.first[0]); 
@@ -149,21 +146,23 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
             s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
                 read.first.c_str() + 13));
           }
-          stats.Increment("aborts", 1);
-          stats.Increment("aborts_" + s, 1);
+          stats.Increment("cc_aborts", 1);
+          stats.Increment("cc_aborts_rw_conflict", 1);
+          stats.Increment("cc_aborts_" + s, 1);
           return REPLY_FAIL;
         } else {
             /* there may be a pending write in the past.  check
              * pending writes again.  If proposed transaction is
              * earlier, abstain
              */
-            if (pWrites.find(read.first) != pWrites.end()) {
-                for (auto &writeTime : pWrites[read.first]) {
+            if (preparedWrites.find(read.first) != preparedWrites.end()) {
+                for (auto &writeTime : preparedWrites[read.first]) {
                     if (writeTime > range.first && 
                         writeTime < timestamp) {
                         Debug("[%lu] ABSTAIN rw conflict w/ prepared key:%s",
                               id, read.first.c_str());
-                        stats.Increment("abstains", 1);
+                        stats.Increment("cc_abstains", 1);
+                        stats.Increment("cc_abstains_rw_conflict", 1);
                         return REPLY_ABSTAIN;
                     }
                 }
@@ -185,7 +184,8 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                 Debug("[%lu] RETRY ww conflict w/ prepared key:%s", 
                       id, write.first.c_str());
                 proposedTimestamp = val.first;
-                stats.Increment("retries_committed_write", 1);
+                stats.Increment("cc_retries", 1);
+                stats.Increment("cc_retries_ww_conflict", 1);
                 return REPLY_RETRY;	                    
             }
 
@@ -206,6 +206,8 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
                 Debug("[%lu] RETRY wr conflict w/ prepared key:%s", 
                       id, write.first.c_str());
                 proposedTimestamp = lastRead;
+                stats.Increment("cc_retries", 1);
+                stats.Increment("cc_retries_wr_conflict", 1);
                 return REPLY_RETRY; 
             }
         }
@@ -214,13 +216,14 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
         // if there is a pending write for this key, greater than the
         // proposed timestamp, retry
         if ( linearizable &&
-             pWrites.find(write.first) != pWrites.end()) {
-            set<Timestamp>::iterator it = pWrites[write.first].upper_bound(timestamp);
-            if ( it != pWrites[write.first].end() ) {
+             preparedWrites.find(write.first) != preparedWrites.end()) {
+            set<Timestamp>::iterator it = preparedWrites[write.first].upper_bound(timestamp);
+            if ( it != preparedWrites[write.first].end() ) {
                 Debug("[%lu] RETRY ww conflict w/ prepared key:%s",
                       id, write.first.c_str());
                 proposedTimestamp = *it;
-                stats.Increment("retries_prepared_write", 1);
+                stats.Increment("cc_retries", 1);
+                stats.Increment("cc_retries_ww_conflict", 1);
                 return REPLY_RETRY;
             }
         }
@@ -232,13 +235,17 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, 
              pReads[write.first].upper_bound(timestamp) != pReads[write.first].end() ) {
             Debug("[%lu] ABSTAIN wr conflict w/ prepared key:%s", 
                   id, write.first.c_str());
-            stats.Increment("abstains", 1);
+            stats.Increment("cc_abstains", 1);
+            stats.Increment("cc_abstains_wr_conflict", 1);
             return REPLY_ABSTAIN;
         }
     }
 
     // Otherwise, prepare this transaction for commit
     prepared[id] = make_pair(timestamp, txn);
+    for (const auto &write : txn.getWriteSet()) {
+      preparedWrites[write.first].insert(timestamp);
+    }
     Debug("[%lu] PREPARED TO COMMIT", id);
 
     return REPLY_OK;
@@ -257,7 +264,7 @@ Store::Commit(uint64_t id, uint64_t timestamp)
 
     Commit(p.first, p.second);
 
-    prepared.erase(id);
+    Cleanup(id);
 }
 
 void
@@ -284,7 +291,7 @@ Store::Abort(uint64_t id, const Transaction &txn)
     Debug("[%lu] ABORT", id);
     
     if (prepared.find(id) != prepared.end()) {
-        prepared.erase(id);
+      Cleanup(id);
     }
 }
 
@@ -314,6 +321,14 @@ Store::GetPreparedReads(unordered_map<string, set<Timestamp>> &reads)
             reads[read.first].insert(t.second.first);
         }
     }
+}
+
+void Store::Cleanup(uint64_t txnId) {
+  const auto &txn = prepared[txnId];
+  for (const auto &write : txn.second.getWriteSet()) {
+    preparedWrites[write.first].erase(txn.first);
+  }
+  prepared.erase(txnId);
 }
 
 } // namespace tapirstore

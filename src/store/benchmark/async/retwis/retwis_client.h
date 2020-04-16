@@ -15,9 +15,9 @@ enum KeySelection {
 class RetwisClient : public AsyncTransactionBenchClient {
  public:
   RetwisClient(KeySelector *keySelector, AsyncClient &client,
-      Transport &transport, uint32_t clientId, int numRequests, int expDuration,
-      uint64_t delay,
-      int warmupSec, int cooldownSec, int tputInterval, uint32_t abortBackoff,
+      Transport &transport, uint32_t seed, int numRequests, int expDuration,
+      uint64_t delay, int warmupSec, int cooldownSec, int tputInterval,
+      uint32_t abortBackoff,
       bool retryAborted, int32_t maxAttempts,
       const std::string &latencyFilename = "");
 

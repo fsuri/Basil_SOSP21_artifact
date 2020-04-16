@@ -42,7 +42,7 @@ using namespace proto;
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int shard, int closestReplica) : client_id(client_id),
     transport(transport), config(config), shard(shard) {
-  client = new replication::ir::IRClient(*config, transport, client_id);
+  client = new replication::ir::IRClient(*config, transport, shard, client_id);
 
   if (closestReplica == -1) {
     replica = client_id % config->n;
@@ -81,7 +81,7 @@ void ShardClient::Get(uint64_t id, const std::string &key, get_callback gcb,
 
   client->InvokeUnlogged(replica, request_str, bind(&ShardClient::GetCallback,
       this, pendingGet->reqId, placeholders::_1, placeholders::_2),
-      bind(&ShardClient::GetTimeout, this, pendingGet->reqId), timeout);
+      bind(&ShardClient::GetTimeout, this, id, pendingGet->reqId), timeout);
 
   Debug("[shard %i] Sent GET [%lu : %s]", shard, id, key.c_str());
 }
@@ -111,7 +111,7 @@ void ShardClient::Get(uint64_t id, const std::string &key,
 
   client->InvokeUnlogged(replica, request_str, bind(&ShardClient::GetCallback,
       this, pendingGet->reqId, placeholders::_1, placeholders::_2),
-      bind(&ShardClient::GetTimeout, this, pendingGet->reqId), timeout);
+      bind(&ShardClient::GetTimeout, this, id, pendingGet->reqId), timeout);
 }
 
 void ShardClient::Put(uint64_t id, const std::string &key,
@@ -142,17 +142,19 @@ void ShardClient::Prepare(uint64_t id, const Transaction &txn,
   pendingPrepare->txn = txn;
   pendingPrepare->pcb = pcb;
   pendingPrepare->ptcb = ptcb;
-  pendingPrepare->requestTimeout = new Timeout(transport, timeout, [this, pendingPrepare]() {
-      Timestamp ts = pendingPrepare->ts;
-      prepare_timeout_callback ptcb = pendingPrepare->ptcb;
-      auto itr = this->pendingPrepares.find(pendingPrepare->reqId);
-      if (itr != this->pendingPrepares.end()) {
-        this->pendingPrepares.erase(itr);
-        delete itr->second;
-      }
+  pendingPrepare->requestTimeout = new Timeout(transport, timeout,
+      [this, id, pendingPrepare]() {
+        Warning("[shard %i] PREPARE[%lu] timeout.", shard, id);
+        Timestamp ts = pendingPrepare->ts;
+        prepare_timeout_callback ptcb = pendingPrepare->ptcb;
+        auto itr = this->pendingPrepares.find(pendingPrepare->reqId);
+        if (itr != this->pendingPrepares.end()) {
+          this->pendingPrepares.erase(itr);
+          delete itr->second;
+        }
 
-      ptcb(REPLY_TIMEOUT, ts);
-  });
+        ptcb(REPLY_TIMEOUT, ts);
+      });
 
   client->InvokeConsensus(request_str, std::bind(&ShardClient::TapirDecide, this,
       placeholders::_1), std::bind(&ShardClient::PrepareCallback, this,
@@ -181,7 +183,8 @@ void ShardClient::Commit(uint64_t id, const Transaction & txn,
   pendingCommit->txn = txn;
   pendingCommit->ccb = ccb;
   pendingCommit->ctcb = ctcb;
-  pendingCommit->requestTimeout = new Timeout(transport, timeout, [this, reqId]() {
+  pendingCommit->requestTimeout = new Timeout(transport, timeout, [this, id, reqId]() {
+      Warning("[shard %i] COMMIT[%lu] timeout.", shard, id);
       auto itr = this->pendingCommits.find(reqId);
       if (itr != this->pendingCommits.end()) {
         commit_timeout_callback ctcb = itr->second->ctcb;
@@ -217,7 +220,8 @@ void ShardClient::Abort(uint64_t id, const Transaction &txn,
   pendingAbort->txn = txn;
   pendingAbort->acb = acb;
   pendingAbort->atcb = atcb;
-  pendingAbort->requestTimeout = new Timeout(transport, timeout, [this, reqId]() {
+  pendingAbort->requestTimeout = new Timeout(transport, timeout, [this, id, reqId]() {
+      Warning("[shard %i] ABORT[%lu] timeout.", shard, id);
       auto itr = this->pendingAborts.find(reqId);
       if (itr != this->pendingAborts.end()) {
         abort_timeout_callback atcb = itr->second->atcb;
@@ -269,7 +273,8 @@ std::string ShardClient::TapirDecide(const std::map<std::string,std::size_t> &re
   return final_reply_str;
 }
 
-void ShardClient::GetTimeout(uint64_t reqId) {
+void ShardClient::GetTimeout(uint64_t id, uint64_t reqId) {
+  Warning("[shard %i] GET[%lu] timeout.", shard, reqId);
   auto itr = this->pendingGets.find(reqId);
   if (itr != this->pendingGets.end()) {
     get_timeout_callback gtcb = itr->second->gtcb;

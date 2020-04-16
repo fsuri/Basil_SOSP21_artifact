@@ -40,7 +40,7 @@ typedef std::function<void()> bench_done_callback;
 
 class BenchmarkClient {
  public:
-  BenchmarkClient(Transport &transport, uint32_t clientId, int numRequests,
+  BenchmarkClient(Transport &transport, uint32_t seed, int numRequests,
       int expDuration, uint64_t delay, int warmupSec, int cooldownSec,
       int tputInterval, const std::string &latencyFilename = "");
   virtual ~BenchmarkClient();
@@ -50,7 +50,7 @@ class BenchmarkClient {
 
   void StartLatency();
   virtual void SendNext() = 0;
-  void IncrementSent();
+  void IncrementSent(int result);
   inline bool IsFullyDone() { return done; }
 
   struct Latency_t latency;

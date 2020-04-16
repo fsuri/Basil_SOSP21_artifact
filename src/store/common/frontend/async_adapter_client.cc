@@ -66,7 +66,7 @@ void AsyncAdapterClient::GetCallback(int status, const std::string &key,
 }
 
 void AsyncAdapterClient::GetTimeout(int status, const std::string &key) {
-  Debug("Get(%s) timed out :(", key.c_str());
+  Warning("Get(%s) timed out :(", key.c_str());
 }
 
 void AsyncAdapterClient::PutCallback(int status, const std::string &key,
@@ -78,7 +78,7 @@ void AsyncAdapterClient::PutCallback(int status, const std::string &key,
 
 void AsyncAdapterClient::PutTimeout(int status, const std::string &key,
     const std::string &val) {
-  Debug("Put(%s,%s) timed out :(", key.c_str(), val.c_str());
+  Warning("Put(%s,%s) timed out :(", key.c_str(), val.c_str());
 }
 
 void AsyncAdapterClient::CommitCallback(int result) {
@@ -87,7 +87,7 @@ void AsyncAdapterClient::CommitCallback(int result) {
 }
 
 void AsyncAdapterClient::CommitTimeout(int status) {
-  Debug("Commit timed out :(");
+  Warning("Commit timed out :(");
 }
 
 void AsyncAdapterClient::AbortCallback() {
@@ -95,6 +95,6 @@ void AsyncAdapterClient::AbortCallback() {
 }
 
 void AsyncAdapterClient::AbortTimeout(int status) {
-  Debug("Abort timed out :(");
+  Warning("Abort timed out :(");
 }
 

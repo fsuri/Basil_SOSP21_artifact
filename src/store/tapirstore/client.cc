@@ -35,12 +35,11 @@ namespace tapirstore {
 
 using namespace std;
 
-Client::Client(const string configPath, int nShards, int nGroups,
+Client::Client(transport::Configuration *config, int nShards, int nGroups,
                 int closestReplica, Transport *transport, partitioner part,
                 bool syncCommit, TrueTime timeServer)
-    : nshards(nShards), ngroups(nGroups), transport(transport), part(part),
-    syncCommit(syncCommit), timeServer(timeServer),
-    lastReqId(0UL), config(nullptr) {
+    : config(config), nshards(nShards), ngroups(nGroups), transport(transport),
+    part(part), syncCommit(syncCommit), timeServer(timeServer), lastReqId(0UL) {
     // Initialize all state here;
     client_id = 0;
     while (client_id == 0) {
@@ -54,13 +53,6 @@ Client::Client(const string configPath, int nShards, int nGroups,
     bclient.reserve(nshards);
 
     Debug("Initializing Tapir client with id [%lu] %lu", client_id, nshards);
-
-
-    std::ifstream configStream(configPath);
-    if (configStream.fail()) {
-      Panic("Unable to read configuration file: %s\n", configPath.c_str());
-    }
-    config = new transport::Configuration(configStream);
 
     /* Start a client for each shard. */
     for (uint64_t i = 0; i < ngroups; i++) {
@@ -77,7 +69,6 @@ Client::~Client()
     for (auto b : bclient) {
         delete b;
     }
-    delete config;
 }
 
 /* Begins a transaction. All subsequent operations before a commit() or
@@ -138,18 +129,24 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
   pendingReqs[reqId] = req;
   req->ccb = ccb;
   req->ctcb = ctcb;
-  req->prepareTimestamp = new Timestamp(timeServer.GetTime(), client_id);
+  req->prepareTimestamp = Timestamp(timeServer.GetTime(), client_id);
   req->callbackInvoked = false;
+  req->timeout = timeout;
   
   Prepare(req, timeout);
 }
 
 void Client::Prepare(PendingRequest *req, uint32_t timeout) {
-  Debug("PREPARE [%lu] at %lu", t_id, req->prepareTimestamp->getTimestamp());
+  Debug("PREPARE [%lu] at %lu.%lu", t_id, req->prepareTimestamp.getTimestamp(),
+      req->prepareTimestamp.getID());
   UW_ASSERT(participants.size() > 0);
 
+  req->outstandingPrepares = 0;
+  req->prepareStatus = REPLY_OK;
+  req->maxRepliedTs = 0UL;
+
   for (auto p : participants) {
-    bclient[p]->Prepare(*req->prepareTimestamp, std::bind(
+    bclient[p]->Prepare(req->prepareTimestamp, std::bind(
           &Client::PrepareCallback, this, req->id, std::placeholders::_1,
           std::placeholders::_2), std::bind(&Client::PrepareCallback, this,
             req->id, std::placeholders::_1, std::placeholders::_2), timeout);
@@ -158,7 +155,8 @@ void Client::Prepare(PendingRequest *req, uint32_t timeout) {
 }
 
 void Client::PrepareCallback(uint64_t reqId, int status, Timestamp ts) {
-  Debug("PREPARE [%lu] callback %d,%lu", t_id, status, ts.getTimestamp());
+  Debug("PREPARE [%lu] callback status %d and ts %lu.%lu", t_id, status,
+      ts.getTimestamp(), ts.getID());
   auto itr = this->pendingReqs.find(reqId);
   if (itr == this->pendingReqs.end()) {
     Debug("PrepareCallback for terminated request id %lu (txn already committed or aborted.", reqId);
@@ -182,6 +180,8 @@ void Client::PrepareCallback(uint64_t reqId, int status, Timestamp ts) {
     case REPLY_RETRY:
       req->prepareStatus = REPLY_RETRY;
       if (proposed > req->maxRepliedTs) {
+        Debug("PREPARE [%lu] update max reply ts from %lu to %lu.", t_id,
+            req->maxRepliedTs, proposed);
         req->maxRepliedTs = proposed;
       }
       break;
@@ -221,9 +221,11 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
           delete itr->second;
         }
       };
-      commit_timeout_callback ctcb = [](int status){};
+      commit_timeout_callback ctcb = [txnId = this->t_id](int status){
+        Warning("COMMIT[%lu] timeout.", txnId);
+      };
       for (auto p : participants) {
-          bclient[p]->Commit(req->prepareTimestamp->getTimestamp(), ccb, ctcb,
+          bclient[p]->Commit(req->prepareTimestamp.getTimestamp(), ccb, ctcb,
               1000); // we don't really care about the timeout here
       }
       if (!syncCommit) {
@@ -240,12 +242,16 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         statInts["retries"] += 1;
         uint64_t now = timeServer.GetTime();
         if (now > req->maxRepliedTs) {
-          req->prepareTimestamp->setTimestamp(now);
+          req->prepareTimestamp.setTimestamp(now);
         } else {
-          req->prepareTimestamp->setTimestamp(req->maxRepliedTs);
+          // !!! important that the retry timestamp is larger than the max reply
+          //   otherwise we will continue retrying with a smaller timestamp for some
+          //   small number of rounds when clocks are not tightly synchronized
+          req->prepareTimestamp.setTimestamp(req->maxRepliedTs + 1);
         }
-        Debug("RETRY [%lu] at [%lu]", t_id, req->prepareTimestamp->getTimestamp());
-        Prepare(req, 1000); // this timeout should probably be the same as 
+        Debug("RETRY [%lu] at [%lu.%lu]", t_id, req->prepareTimestamp.getTimestamp(),
+            req->prepareTimestamp.getID());
+        Prepare(req, req->timeout); // this timeout should probably be the same as 
         // the timeout passed to Client::Commit, or maybe that timeout / COMMIT_RETRIES
         break;
       } 
@@ -272,7 +278,9 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         delete itr->second;
       }
     };
-    abort_timeout_callback atcb = [](int status){};
+    abort_timeout_callback atcb = [txnId = this->t_id](int status){
+      Warning("ABORT[%lu] timeout.", txnId);
+    };
     Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
     if (!req->callbackInvoked) {
       req->ccb(abortResult);

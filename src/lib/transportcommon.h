@@ -138,10 +138,10 @@ public:
             LookupAddresses();
         }
 
-        const ADDR &srcAddr = dynamic_cast<const ADDR &>(src->GetAddress());
+        const ADDR *srcAddr = dynamic_cast<const ADDR *>(src->GetAddress());
         for (auto & kv : replicaAddresses[cfg]) {
             for (auto & kv2 : kv.second) {
-                if (srcAddr == kv2.second) {
+                if (*srcAddr == kv2.second) {
                     continue;
                 }
                 if (!SendMessageInternal(src, kv2.second, m)) {
@@ -171,11 +171,21 @@ public:
         if (!replicaAddressesInitialized) {
             LookupAddresses();
         }
+        
+        int srcGroup = -1;
+        auto replicaGroupsItr = replicaGroups.find(src);
+        if (replicaGroupsItr != replicaGroups.end()) {
+          srcGroup = replicaGroupsItr->second;
+        }
 
-        const ADDR &srcAddr = dynamic_cast<const ADDR &>(src->GetAddress());
+        const ADDR *srcAddr;
+        if (srcGroup != -1) {
+          srcAddr = dynamic_cast<const ADDR *>(src->GetAddress());
+        }
+
         for (int groupIdx : groups) {
             for (auto & kv : replicaAddresses[cfg][groupIdx]) {
-                if (srcAddr == kv.second) {
+                if (srcGroup != -1 && *srcAddr == kv.second) {
                     continue;
                 }
                 if (!SendMessageInternal(src, kv.second, m)) {

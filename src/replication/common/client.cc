@@ -50,10 +50,9 @@ std::string ErrorCodeToString(ErrorCode err) {
 }
 
 Client::Client(const transport::Configuration &config, Transport *transport,
-               uint64_t clientid)
-    : config(config), transport(transport)
+               int group, uint64_t clientid)
+    : config(config), transport(transport), group(group), clientid(clientid)
 {
-    this->clientid = clientid;
 
     // Randomly generate a client ID
     // This is surely not the fastest way to get a random 64-bit int,
@@ -63,7 +62,6 @@ Client::Client(const transport::Configuration &config, Transport *transport,
         std::mt19937_64 gen(rd());
         std::uniform_int_distribution<uint64_t> dis;
         this->clientid = dis(gen);
-        Debug("VRClient ID: %lu", this->clientid);
     }
 
     transport->Register(this, config, -1, -1);

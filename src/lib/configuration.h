@@ -64,7 +64,7 @@ public:
                   ReplicaAddress *multicastAddress = nullptr,
                   ReplicaAddress *fcAddress = nullptr,
                   std::map<int, std::vector<std::string> > interfaces = std::map<int, std::vector<std::string> >());
-    Configuration(std::ifstream &file);
+    Configuration(std::istream &file);
     virtual ~Configuration();
     ReplicaAddress replica(int group, int idx) const;
     const ReplicaAddress *multicast() const;

@@ -33,6 +33,7 @@
 #define _INDICUS_CLIENT_H_
 
 #include "lib/assert.h"
+#include "lib/keymanager.h"
 #include "lib/message.h"
 #include "lib/configuration.h"
 #include "lib/udptransport.h"
@@ -56,9 +57,10 @@ namespace indicusstore {
 
 class Client : public ::Client {
  public:
-  Client(const std::string configPath, int nShards, int nGroups,
-      int closestReplica, Transport *transport, partitioner part,
-      bool syncCommit, uint64_t readQuorumSize,
+  Client(transport::Configuration *config, uint64_t id, int nShards, int nGroups,
+      const std::vector<int> &closestReplicas, Transport *transport, partitioner part,
+      bool syncCommit, uint64_t readQuorumSize, bool signedMessages,
+      bool validateProofs, KeyManager *keyManager,
       TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 
@@ -86,65 +88,89 @@ class Client : public ::Client {
 
  private:
   struct PendingRequest {
-    PendingRequest(uint64_t id) : id(id), outstandingPrepares(0), commitTries(0),
-        maxRepliedTs(0UL), prepareStatus(REPLY_OK), prepareTimestamp(nullptr) {
+    PendingRequest(uint64_t id) : id(id), outstandingPhase1s(0),
+        outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
+        decision(proto::COMMIT), fast(true),
+        startedPhase2(false), callbackInvoked(false) {
     }
 
     ~PendingRequest() {
-      if (prepareTimestamp != nullptr) {
-        delete prepareTimestamp;
-      }
     }
 
     commit_callback ccb;
     commit_timeout_callback ctcb;
     uint64_t id;
-    int outstandingPrepares;
+    int outstandingPhase1s;
+    int outstandingPhase2s;
     int commitTries;
     uint64_t maxRepliedTs;
-    int prepareStatus;
-    Timestamp *prepareTimestamp;
+    proto::CommitDecision decision;
+    bool fast;
+    bool startedPhase2;
     bool callbackInvoked;
+    std::map<int, std::vector<proto::Phase1Reply>> phase1RepliesGrouped;
+    std::map<int, std::vector<proto::SignedMessage>> signedPhase1RepliesGrouped;
+    std::vector<proto::Phase2Reply> phase2Replies;
+    std::vector<proto::SignedMessage> signedPhase2Replies;
+    std::string txnDigest;
   };
 
   // Prepare function
-  void Prepare(PendingRequest *req, uint32_t timeout);
-  void PrepareCallback(uint64_t reqId, int status, Timestamp ts);
-  void HandleAllPreparesReceived(PendingRequest *req);
+  void Phase1(PendingRequest *req, uint32_t timeout);
+  void Phase1Callback(uint64_t reqId, int group, proto::CommitDecision decision,
+      bool fast, const std::vector<proto::Phase1Reply> &phase1Replies,
+      const std::vector<proto::SignedMessage> &signedPhase1Replies);
+  void Phase1TimeoutCallback(uint64_t reqId, int status);
+  void HandleAllPhase1Received(PendingRequest *req);
 
+  void Phase2(PendingRequest *req, uint32_t timeout);
+  void Phase2Callback(uint64_t reqId,
+      const std::vector<proto::Phase2Reply> &phase2Replies,
+      const std::vector<proto::SignedMessage> &signedPhase2Replies);
+  void Phase2TimeoutCallback(uint64_t reqId, int status);
+
+  void Writeback(PendingRequest *req, uint32_t timeout);
+
+  bool IsParticipant(int g) const;
+
+  /* Configuration State */
+  transport::Configuration *config;
   // Unique ID for this client.
   uint64_t client_id;
-
-  // Ongoing transaction ID.
-  uint64_t t_id;
-
   // Number of shards.
   uint64_t nshards;
+  // Number of replica groups.
   uint64_t ngroups;
-
-  // Number of retries for current transaction.
-  long retries;
-
-  // List of participants in the ongoing transaction.
-  std::set<int> participants;
-
-  // Transport used by IR client proxies.
+  // Transport used by shard clients.
   Transport *transport;
-  
-  // Buffering client for each shard.
-  std::vector<BufferClient *> bclient;
-
+  // Client for each shard
+  std::vector<ShardClient *> bclient;
   partitioner part;
-  
   bool syncCommit;
-
+  uint64_t readQuorumSize;
+  bool signedMessages;
+  bool validateProofs;
+  KeyManager *keyManager;
   // TrueTime server.
   TrueTime timeServer;
-  
+
+
+  /* Transaction Execution State */
+  // Ongoing transaction ID.
+  uint64_t client_seq_num;
+  // Read timestamp for transaction.
+  Timestamp rts;
+  // Last request ID.
   uint64_t lastReqId;
+  // Number of retries for current transaction.
+  long retries;
+  // Current transaction.
+  proto::Transaction txn;
+  // Outstanding requests.
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
+
+  /* Debug State */
   std::unordered_map<std::string, uint32_t> statInts;
-  transport::Configuration *config;
 };
 
 } // namespace indicusstore

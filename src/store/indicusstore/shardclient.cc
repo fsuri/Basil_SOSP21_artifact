@@ -1,8 +1,8 @@
 // -*- mode: c++; c-file-style: "k&r"; c-basic-offset: 4 -*-
 /***********************************************************************
  *
- * store/indicusstore/shardclient.cc:
- *   Single shard indicus transactional client.
+ * store/indicusstore/groupclient.cc:
+ *   Single group indicus transactional client.
  *
  * Copyright 2015 Irene Zhang <iyzhang@cs.washington.edu>
  *                Naveen Kr. Sharma <naveenks@cs.washington.edu>
@@ -31,22 +31,28 @@
 
 #include "store/indicusstore/shardclient.h"
 
+#include <google/protobuf/util/message_differencer.h>
+
 #include "store/indicusstore/common.h"
 
 namespace indicusstore {
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
-    uint64_t client_id, int shard, int closestReplica,
-    uint64_t readQuorumSize) : client_id(client_id),
-    transport(transport), config(config), shard(shard),
-    readQuorumSize(readQuorumSize), signedMessages(false),
-    validateProofs(false), cryptoConfig(nullptr) {
+    uint64_t client_id, int group, const std::vector<int> &closestReplicas_,
+    bool signedMessages, bool validateProofs,
+    KeyManager *keyManager, TrueTime &timeServer) :
+    client_id(client_id), transport(transport), config(config), group(group),
+    timeServer(timeServer),
+    signedMessages(signedMessages), validateProofs(validateProofs),
+    keyManager(keyManager), phase1DecisionTimeout(1000UL), lastReqId(0UL) {
   transport->Register(this, *config, -1, -1);
 
-  if (closestReplica == -1) {
-    replica = client_id % config->n;
+  if (closestReplicas_.size() == 0) {
+    for  (int i = 0; i < config->n; ++i) {
+      closestReplicas.push_back((i + client_id) % config->n);
+    }
   } else {
-    replica = closestReplica;
+    closestReplicas = closestReplicas;
   }
 }
 
@@ -56,17 +62,19 @@ ShardClient::~ShardClient() {
 void ShardClient::ReceiveMessage(const TransportAddress &remote,
       const std::string &t, const std::string &d, void *meta_data) {
   proto::SignedMessage signedMessage;
+  proto::PackedMessage packedMessage;
   proto::ReadReply readReply;
-  proto::Prepare1Reply prepare1Reply;
+  proto::Phase1Reply phase1Reply;
+  proto::Phase2Reply phase2Reply;
   
   std::string type;
   std::string data;
   if (t == signedMessage.GetTypeName()) {
-    signedMessage.ParseFromString(d);
-    if (ValidateSignedMessage(signedMessage, cryptoConfig)) {
-      type = signedMessage.type();
-      data = signedMessage.msg();
-    } else {
+    if (!signedMessage.ParseFromString(d)) {
+      return;
+    }
+
+    if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
       return;
     }
   } else {
@@ -77,98 +85,149 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   if (type == readReply.GetTypeName()) {
     readReply.ParseFromString(data);
     HandleReadReply(readReply);
-  } else if (type == prepare1Reply.GetTypeName()) {
-    prepare1Reply.ParseFromString(data);
-    HandlePrepare1Reply(prepare1Reply);
+  } else if (type == phase1Reply.GetTypeName()) {
+    phase1Reply.ParseFromString(data);
+    HandlePhase1Reply(phase1Reply, signedMessage);
+  } else if (type == phase2Reply.GetTypeName()) {
+    phase2Reply.ParseFromString(data);
+    HandlePhase2Reply(phase2Reply, signedMessage);
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
 }
 
 void ShardClient::Begin(uint64_t id) {
-  Debug("[shard %i] BEGIN: %lu", shard, id);
+  Debug("[group %i] BEGIN: %lu", group, id);
+
+  txn = proto::Transaction();
+  readValues.clear();
 }
 
-void ShardClient::Get(uint64_t id, const std::string &key, get_callback gcb,
-      get_timeout_callback gtcb, uint32_t timeout) {
-  // Send the GET operation to appropriate shard.
+void ShardClient::Get(uint64_t id, const std::string &key,
+    const TimestampMessage &ts, uint64_t rqs, read_callback gcb,
+    read_timeout_callback gtcb, uint32_t timeout) {
+  if (BufferGet(key, gcb)) {
+    return;
+  }
 
   uint64_t reqId = lastReqId++;
   PendingQuorumGet *pendingGet = new PendingQuorumGet(reqId);
   pendingGets[reqId] = pendingGet;
   pendingGet->key = key;
+  pendingGet->rqs = rqs;
   pendingGet->gcb = gcb;
   pendingGet->gtcb = gtcb;
 
   proto::Read read;
   read.set_req_id(reqId);
   read.set_key(key);
+  *read.mutable_timestamp() = ts;
 
-  transport->SendMessageToAll(this, read);
+  UW_ASSERT(rqs <= closestReplicas.size());
+  for (size_t i = 0; i < rqs; ++i) {
+    transport->SendMessageToReplica(this, group, closestReplicas[i], read);
+  }
 
-  Debug("[shard %i] Sent GET [%lu : %s]", shard, id, key.c_str());
-}
-
-void ShardClient::Get(uint64_t id, const std::string &key,
-    const Timestamp &timestamp, get_callback gcb, get_timeout_callback gtcb,
-    uint32_t timeout) {
-  Get(id, key, gcb, gtcb, timeout);
+  Debug("[group %i] Sent GET [%lu : %lu]", group, id, reqId);
 }
 
 void ShardClient::Put(uint64_t id, const std::string &key,
       const std::string &value, put_callback pcb, put_timeout_callback ptcb,
       uint32_t timeout) {
-  Panic("Unimplemented PUT");
-  return;
+  WriteMessage *writeMsg = txn.add_write_set();
+  writeMsg->set_key(key);
+  writeMsg->set_value(value);
+  pcb(REPLY_OK, key, value);
 }
 
-void ShardClient::Prepare(uint64_t id, const Transaction &txn,
-      const Timestamp &timestamp, prepare_callback pcb,
-      prepare_timeout_callback ptcb, uint32_t timeout) {
-  Debug("[shard %i] Sending PREPARE [%lu]", shard, id);
-
+void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
+    phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout) {
+  Debug("[group %i] Sending PHASE1 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
-  PendingPrepare *pendingPrepare = new PendingPrepare(reqId);
-  pendingPrepares[reqId] = pendingPrepare;
-  pendingPrepare->ts = timestamp;
-  pendingPrepare->txn = txn;
-  pendingPrepare->pcb = pcb;
-  pendingPrepare->ptcb = ptcb;
-  pendingPrepare->requestTimeout = new Timeout(transport, timeout, [this, pendingPrepare]() {
-      Timestamp ts = pendingPrepare->ts;
-      prepare_timeout_callback ptcb = pendingPrepare->ptcb;
-      auto itr = this->pendingPrepares.find(pendingPrepare->reqId);
-      if (itr != this->pendingPrepares.end()) {
-        this->pendingPrepares.erase(itr);
+  PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId);
+  pendingPhase1s[reqId] = pendingPhase1;
+  pendingPhase1->pcb = pcb;
+  pendingPhase1->ptcb = ptcb;
+  pendingPhase1->transaction = transaction;
+  pendingPhase1->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase1]() {
+      phase1_timeout_callback ptcb = pendingPhase1->ptcb;
+      auto itr = this->pendingPhase1s.find(pendingPhase1->reqId);
+      if (itr != this->pendingPhase1s.end()) {
+        this->pendingPhase1s.erase(itr);
         delete itr->second;
       }
-
-      ptcb(REPLY_TIMEOUT, ts);
+      ptcb(REPLY_TIMEOUT);
   });
 
   // create prepare request
-  proto::Prepare1 prepare;
-  prepare.set_req_id(reqId);
-  prepare.set_txn_id(id);
-  txn.serialize(prepare.mutable_txn());
-  timestamp.serialize(prepare.mutable_timestamp());
+  proto::Phase1 phase1;
+  phase1.set_req_id(reqId);
+  *phase1.mutable_txn() = transaction;
 
-  transport->SendMessageToAll(this, prepare);
+  transport->SendMessageToGroup(this, group, phase1);
 
-  pendingPrepare->requestTimeout->Reset();
+  pendingPhase1->requestTimeout->Reset();
 }
 
-void ShardClient::Commit(uint64_t id, const Transaction & txn,
-      uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
-      uint32_t timeout) {
+void ShardClient::Phase2(uint64_t id, const std::string &txnDigest,
+    const std::map<int, std::vector<proto::Phase1Reply>> &groupedPhase1Replies,
+    const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
+    proto::CommitDecision decision, phase2_callback pcb,
+    phase2_timeout_callback ptcb, uint32_t timeout) {
+  Debug("[group %i] Sending PHASE2 [%lu]", group, id);
+  uint64_t reqId = lastReqId++;
+  PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);
+  pendingPhase2s[reqId] = pendingPhase2;
+  pendingPhase2->pcb = pcb;
+  pendingPhase2->ptcb = ptcb;
+  pendingPhase2->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase2]() {
+      phase2_timeout_callback ptcb = pendingPhase2->ptcb;
+      auto itr = this->pendingPhase2s.find(pendingPhase2->reqId);
+      if (itr != this->pendingPhase2s.end()) {
+        this->pendingPhase2s.erase(itr);
+        delete itr->second;
+      }
 
+      ptcb(REPLY_TIMEOUT);
+  });
+
+  // create prepare request
+  proto::Phase2 phase2;
+  phase2.set_req_id(reqId);
+  phase2.set_txn_digest(txnDigest);
+  if (validateProofs) {
+    if (signedMessages) {
+      for (const auto &group : groupedSignedPhase1Replies) {
+        for (const auto &reply : group.second) {
+          *(*phase2.mutable_signed_p1_replies()->mutable_replies())[group.first].add_msgs() = reply;
+        }
+
+      }
+    } else {
+      for (const auto &group : groupedPhase1Replies) {
+        for (const auto &reply : group.second) {
+          *(*phase2.mutable_p1_replies()->mutable_replies())[group.first].add_replies() = reply;
+        }
+      }
+    }
+  } else {
+    phase2.set_decision(decision);
+  }
+
+  transport->SendMessageToGroup(this, group, phase2);
+
+  pendingPhase2->requestTimeout->Reset();
+}
+
+void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
+    const std::string &txnDigest,
+    proto::CommitDecision decision, const proto::CommittedProof &proof,
+    writeback_callback wcb, writeback_timeout_callback wtcb, uint32_t timeout) {
   uint64_t reqId = lastReqId++;
   PendingCommit *pendingCommit = new PendingCommit(reqId);
   pendingCommits[reqId] = pendingCommit;
-  pendingCommit->ts = timestamp;
-  pendingCommit->txn = txn;
-  pendingCommit->ccb = ccb;
-  pendingCommit->ctcb = ctcb;
+  pendingCommit->ccb = wcb;
+  pendingCommit->ctcb = wtcb;
   pendingCommit->requestTimeout = new Timeout(transport, timeout, [this, reqId]() {
       auto itr = this->pendingCommits.find(reqId);
       if (itr != this->pendingCommits.end()) {
@@ -181,44 +240,39 @@ void ShardClient::Commit(uint64_t id, const Transaction & txn,
   });
 
   // create commit request
-  proto::Commit commit;
-  commit.set_req_id(reqId);
-  commit.set_timestamp(timestamp);
+  proto::Writeback writeback;
+  writeback.set_req_id(reqId);
+  writeback.set_decision(decision);
+  if (decision == proto::COMMIT) {
+    *writeback.mutable_txn() = transaction;
+  } else {
+    writeback.set_txn_digest(txnDigest);
+  }
 
-  transport->SendMessageToAll(this, commit);
-  Debug("[shard %i] Sent COMMIT [%lu]", shard, id);
+  transport->SendMessageToGroup(this, group, writeback);
+  Debug("[group %i] Sent WRITEBACK [%lu]", group, id);
 
   pendingCommit->requestTimeout->Reset();
 }
 
-void ShardClient::Abort(uint64_t id, const Transaction &txn,
-      abort_callback acb, abort_timeout_callback atcb, uint32_t timeout) {
-  Debug("[shard %i] Sending ABORT [%lu]", shard, id);
+bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
+  for (const auto &write : txn.write_set()) {
+    if (write.key() == key) {
+      rcb(REPLY_OK, key, write.value(), Timestamp(), proto::Dependency(),
+          false, false);
+      return true;
+    }
+  }
 
-  uint64_t reqId = lastReqId++;
-  PendingAbort *pendingAbort = new PendingAbort(reqId);
-  pendingAborts[reqId] = pendingAbort;
-  pendingAbort->txn = txn;
-  pendingAbort->acb = acb;
-  pendingAbort->atcb = atcb;
-  pendingAbort->requestTimeout = new Timeout(transport, timeout, [this, reqId]() {
-      auto itr = this->pendingAborts.find(reqId);
-      if (itr != this->pendingAborts.end()) {
-        abort_timeout_callback atcb = itr->second->atcb;
-        this->pendingAborts.erase(itr);
-        delete itr->second;
-        atcb(REPLY_TIMEOUT);
-      }
-  });
+  for (const auto &read : txn.read_set()) {
+    if (read.key() == key) {
+      rcb(REPLY_OK, key, readValues[key], read.readtime(), proto::Dependency(),
+          false, false);
+      return true;
+    }
+  }
 
-  // create abort request
-  proto::Abort abort;
-  abort.set_req_id(reqId);
-  txn.serialize(abort.mutable_txn());
-
-  transport->SendMessageToAll(this, abort);
-
-  pendingAbort->requestTimeout->Reset();
+  return false;
 }
 
 void ShardClient::GetTimeout(uint64_t reqId) {
@@ -232,24 +286,19 @@ void ShardClient::GetTimeout(uint64_t reqId) {
   }
 }
 
-/* Callback from a shard replica on get operation completion. */
+/* Callback from a group replica on get operation completion. */
 void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
-  // reply has already been validated as sent by the expected replica
   auto itr = this->pendingGets.find(reply.req_id());
   if (itr == this->pendingGets.end()) {
     return; // this is a stale request
   }
 
   if (validateProofs) {
-    // Verify the the p3 commits the given tx, that the tx version matches the
-    // read version, and that the tx writes the key
-    if (!VerifyP3Commit(reply.proof().write_txn(), reply.proof().tx_writeback())) {
-      return;
-    }
-    if (!TimestampsEqual(reply.proof().write_txn_timestamp(), reply.timestamp())) {
-      return;
-    }
-    if (!TxWritesKey(reply.proof().write_txn(), reply.key())) {
+    if (!ValidateTransactionWrite(reply.committed().proof(), itr->second->key,
+          reply.committed().value(), reply.committed().timestamp(), config,
+          signedMessages, keyManager)) {
+      // invalid replies can be treated as if we never received a reply from
+      //     a crashed replica
       return;
     }
   }
@@ -258,90 +307,163 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   itr->second->numReplies++;
   if (reply.status() == REPLY_OK) {
     itr->second->numOKReplies++;
-    Timestamp replyTs(reply.timestamp());
-    if (itr->second->maxTs < replyTs) {
+    Timestamp replyTs(reply.committed().timestamp());
+    Debug("[group %i] ReadReply for %lu with %lu byte value and ts %lu.%lu.",
+        group, reply.req_id(), reply.committed().value().length(),
+        replyTs.getTimestamp(), replyTs.getID());
+    if (itr->second->numOKReplies == 1 || itr->second->maxTs < replyTs) {
       itr->second->maxTs = replyTs;
-      itr->second->maxValue = reply.value();
+      itr->second->maxValue = reply.committed().value();
     }
   }
 
-  if (itr->second->numOKReplies >= readQuorumSize ||
-      itr->second->numReplies == static_cast<uint64_t>(config->n)) {
+  proto::PreparedWrite prepared;
+  bool hasPrepared = false;
+  if (signedMessages) {
+    if (reply.has_signed_prepared()) {
+      if (ValidateSignedMessage(reply.signed_prepared(), keyManager, prepared)) {
+        hasPrepared = true;
+      } else {
+        // TODO: should we continue with the committed value?
+        return;
+      }
+    }
+  } else {
+    if (reply.has_prepared()) {
+      hasPrepared = true;
+      prepared = reply.prepared();
+    }
+  }
+
+  if (hasPrepared) {
+    Timestamp preparedTs(prepared.timestamp());
+    auto preparedItr = itr->second->prepared.find(preparedTs);
+    if (preparedItr == itr->second->prepared.end()) {
+      itr->second->prepared.insert(std::make_pair(preparedTs,
+            std::make_pair(prepared, 1)));
+    } else if (::google::protobuf::util::MessageDifferencer::Equals(preparedItr->second.first, prepared)) {
+      // TODO: MessageDifferencer::Equals is too slow. Need custom implementation
+      preparedItr->second.second += 1;
+    }
+
+    if (signedMessages) {
+      itr->second->signedPrepared[preparedTs].push_back(reply.signed_prepared());
+    }
+  }
+
+  if (itr->second->numReplies >= itr->second->rqs) {
     PendingQuorumGet *req = itr->second;
-    get_callback gcb = req->gcb;
+    for (auto preparedItr = req->prepared.rbegin();
+        preparedItr != req->prepared.rend(); ++preparedItr) {
+      if (preparedItr->first < req->maxTs) {
+        break;
+      }
+
+      if (preparedItr->second.second >= static_cast<uint64_t>(config->f + 1)) {
+        req->maxTs = preparedItr->first;
+        req->maxValue = preparedItr->second.first.value();
+        *req->dep.mutable_prepared() = preparedItr->second.first;
+        if (signedMessages) {
+          for (const auto &signedWrite : req->signedPrepared[preparedItr->first]) {
+            *req->dep.mutable_proof()->mutable_signed_prepared()->add_msgs() = signedWrite;
+          }
+        } else {
+          // TODO: do we want to validate unsigned messages? seems overly redundant
+        }
+        req->dep.set_involved_group(group);
+        req->hasDep = true;
+        break;
+      }
+    }
+    read_callback gcb = req->gcb;
     std::string key = req->key;
     pendingGets.erase(itr);
     int32_t status = REPLY_FAIL;
-    if (req->numOKReplies >= readQuorumSize) {
+    if (req->numOKReplies >= itr->second->rqs) {
       status = REPLY_OK;
     }
-    Debug("[shard %lu:%i] GET callback [%d]", client_id, shard, status);
-    gcb(status, key, req->maxValue, req->maxTs);
+    Debug("[group %i] GET callback [%d]", group, status);
+    // TODO: there is probably a more efficient way to pass signedPrepared
+    //   back to top-level client
+    readValues[key] = req->maxValue;
+    gcb(status, key, req->maxValue, req->maxTs, req->dep, req->hasDep, true);
     delete req;
   }
 }
 
-<<<<<<< HEAD
-void ShardClient::HandleSignedReadReply(
-    const proto::SignedReadReply &signedReadReply) {
-  if (!cryptoConfig->isValidReplicaId(signedReadReply.replica_id())) {
-    return;
-  }
-
-  crypto::PubKey replicaPublicKey = cryptoConfig->getReplicaPublicKey(
-      signedReadReply.replica_id());
-  // verify that the replica actually sent this reply and that we are expecting
-  // this reply
-  if (!crypto::IsMessageValid(replicaPublicKey, &signedReadReply.read_reply(),
-        &signedReadReply)) {
-    return;
-  }
-
-  Debug("Message is valid! key=%s -> val=%s",
-      signedReadReply.read_reply().key().c_str(),
-      signedReadReply.read_reply().value().c_str());
-  HandleReadReply(signedReadReply.read_reply());
-}
-
-=======
->>>>>>> server
-/* Callback from a shard replica on prepare operation completion. */
-void ShardClient::HandlePrepare1Reply(const proto::Prepare1Reply &reply) {
-  auto itr = this->pendingPrepares.find(reply.req_id());
-  if (itr == this->pendingPrepares.end()) {
+void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
+    const proto::SignedMessage &signedReply) {
+  auto itr = this->pendingPhase1s.find(reply.req_id());
+  if (itr == this->pendingPhase1s.end()) {
     return; // this is a stale request
   }
 
-  Debug("[shard %lu:%i] PREPARE callback [%d]", client_id, shard,
-      reply.status());
+  Debug("[group %i] PHASE1 callback [%d] ccr=%d", group,
+      reply.status(), reply.ccr());
 
-  prepare_callback pcb = itr->second->pcb;
-  this->pendingPrepares.erase(itr);
-  delete itr->second;
-  if (reply.has_timestamp()) {
-    pcb(reply.status(), Timestamp(reply.timestamp()));
-  } else {
-    pcb(reply.status(), Timestamp());
+  if (signedMessages) {
+    itr->second->signedPhase1Replies.push_back(signedReply);
+  }
+  itr->second->phase1Replies.push_back(reply);
+
+  if (itr->second->phase1Replies.size() == static_cast<size_t>(config->n)) {
+    Phase1Decision(itr);
+  } else if (itr->second->phase1Replies.size() >= QuorumSize() &&
+      !itr->second->decisionTimeoutStarted) {
+    uint64_t reqId = reply.req_id();
+    itr->second->decisionTimeout = new Timeout(transport,
+        phase1DecisionTimeout, [this, reqId]() {
+          Phase1Decision(reqId);      
+        }
+      );
+    itr->second->decisionTimeout->Reset();
+    itr->second->decisionTimeoutStarted = true;
   }
 }
 
-/* Callback from a shard replica on commit operation completion. */
+void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply,
+    const proto::SignedMessage &signedReply) {
+  auto itr = this->pendingPhase2s.find(reply.req_id());
+  if (itr == this->pendingPhase2s.end()) {
+    return; // this is a stale request
+  }
+
+  if (validateProofs) {
+    itr->second->phase2Replies.push_back(reply);
+    if (signedMessages) {
+      itr->second->signedPhase2Replies.push_back(signedReply);
+    }
+  }
+
+  if (reply.decision() == itr->second->decision) {
+    itr->second->matchingReplies++;
+  }
+
+  if (itr->second->matchingReplies >= 4 * static_cast<uint64_t>(config->f) + 1) {
+    phase2_callback pcb = itr->second->pcb;
+    pcb(itr->second->phase2Replies, itr->second->signedPhase2Replies);
+    this->pendingPhase2s.erase(itr);
+    delete itr->second;
+  }
+}
+
+/* Callback from a group replica on commit operation completion. */
 bool ShardClient::CommitCallback(uint64_t reqId,
     const string &request_str, const string &reply_str) {
   // COMMITs always succeed.
-  Debug("[shard %lu:%i] COMMIT callback", client_id, shard);
+  Debug("[group %i] COMMIT callback", group);
 
   auto itr = this->pendingCommits.find(reqId);
   if (itr != this->pendingCommits.end()) {
-    commit_callback ccb = itr->second->ccb;
+    writeback_callback ccb = itr->second->ccb;
     this->pendingCommits.erase(itr);
     delete itr->second;
-    ccb(true);
+    ccb();
   }
   return true;
 }
 
-/* Callback from a shard replica on abort operation completion. */
+/* Callback from a group replica on abort operation completion. */
 bool ShardClient::AbortCallback(uint64_t reqId,
     const string &request_str, const string &reply_str) {
   // ABORTs always succeed.
@@ -349,7 +471,7 @@ bool ShardClient::AbortCallback(uint64_t reqId,
   // UW_ASSERT(blockingBegin != NULL);
   // blockingBegin->Reply(0);
 
-  Debug("[shard %lu:%i] ABORT callback", client_id, shard);
+  Debug("[group %i] ABORT callback", group);
 
   auto itr = this->pendingAborts.find(reqId);
   if (itr != this->pendingAborts.end()) {
@@ -361,41 +483,26 @@ bool ShardClient::AbortCallback(uint64_t reqId,
   return true;
 }
 
-bool ShardClient::VerifyP3Commit(const Transaction &transaction,
-    const Writeback &p3) {
-  TransactionMessage txn_msg;
-  transaction.serialize(&txn_msg);
-  std::string serialized = txn_msg.SerializeAsString();
-  std::string txdigest = crypto::Hash(serialized);
-
-  for (int i = 0; i < p3.p2_replies_size(); i++) {
-    proto::SignedPrepare2Reply signedPrepare2Reply = p3.p2_replies(i);
-    proto::Prepare2Reply prepare2Reply = signedPrepare2Reply.p2_reply();
-    std::string prepare2ReplySerialized = prepare2Reply.SerializeAsString();
-    uint64_t replicaId = signedPrepare2Reply.replica_id();
-    crypto::PubKey replicaPublicKey = cryptoConfig->getReplicaPublicKey(replicaId);
-    if (crypto::IsMessageValid(replicaPublicKey, prepare2ReplySerialized,
-          &signedPrepare2Reply) && prepare2Reply.txdigest() == txdigest &&
-        prepare2Reply.action() == proto::TxnAction::COMMIT) {
-      // pass
-    } else {
-      return false;
-    }
-
+void ShardClient::Phase1Decision(uint64_t reqId) {
+  auto itr = this->pendingPhase1s.find(reqId);
+  if (itr == this->pendingPhase1s.end()) {
+    return; // this is a stale request
   }
-  return true;
+
+  Phase1Decision(itr);
 }
 
-bool ShardClient::TxWritesKey(const Transaction &tx, const std::string &key) {
-  return tx.getWriteSet().find(key) != tx.getWriteSet().end();
-}
-
-bool ShardClient::TimestampsEqual(const TimestampMessage &v1, const TimestampMessage &v2) {
-  return Timestamp(v1.timestamp()) == Timestamp(v2.timestamp()) && v1.id() == v2.id();
-}
-
-bool ShardClient::TimestampsGT(const TimestampMessage &v1, const TimestampMessage &v2) {
-  return Timestamp(v1.timestamp()) > Timestamp(v2.timestamp()) || (Timestamp(v1.timestamp()) == Timestamp(v2.timestamp()) && v1.id() > v2.id());
+void ShardClient::Phase1Decision(
+    std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr) {
+  bool fast = false;
+  proto::CommitDecision decision = IndicusShardDecide(itr->second->phase1Replies,
+      config, validateProofs, itr->second->transaction, signedMessages,
+      keyManager, fast);
+  phase1_callback pcb = itr->second->pcb;
+  pcb(decision, fast, itr->second->phase1Replies,
+      itr->second->signedPhase1Replies);
+  this->pendingPhase1s.erase(itr);
+  delete itr->second;
 }
 
 } // namespace indicus

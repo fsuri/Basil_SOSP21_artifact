@@ -34,13 +34,16 @@ lib/tests/simtransport-test
 lockserver/tests/lockserver-test
 replication/ir/tests/ir-test
 replication/vr/tests/vr-test
+store/benchmark/async/common/tests/key-selector-test
 store/common/backend/tests/kvstore-test
 store/common/backend/tests/lockserver-test
 store/common/backend/tests/versionstore-test
+store/indicusstore/tests/common-test
+store/indicusstore/tests/server-test
+store/janusstore/tests/janus-client-test
 store/janusstore/tests/janus-server-test
 store/mortystore/tests/branch-generator-test
 store/mortystore/tests/branch-compatible-test
-store/janusstore/tests/janus-client-test
 
 bft_tapir/replica
 bft_tapir/client

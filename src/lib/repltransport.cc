@@ -144,7 +144,7 @@ bool ReplTransport::DeliverMessage(const ReplTransportAddress &addr,
     const QueuedMessage &m = state.msgs.at(index);
     string data;
     m.msg->SerializeToString(&data);
-    state.receiver->ReceiveMessage(m.src, m.msg->GetTypeName(), data, nullptr);
+    state.receiver->ReceiveMessage(*m.src, m.msg->GetTypeName(), data, nullptr);
     return true;
 }
 
@@ -252,8 +252,8 @@ void ReplTransport::Stop() {
 bool ReplTransport::SendMessageInternal(TransportReceiver *src,
                                         const ReplTransportAddress &dst,
                                         const Message &m) {
-    const ReplTransportAddress &repl_addr =
-        dynamic_cast<const ReplTransportAddress &>(src->GetAddress());
+    const ReplTransportAddress *repl_addr =
+        dynamic_cast<const ReplTransportAddress *>(src->GetAddress());
     std::unique_ptr<Message> msg(m.New());
     msg->CheckTypeAndMergeFrom(m);
     receivers_[dst].msgs.push_back(QueuedMessage(repl_addr, std::move(msg)));

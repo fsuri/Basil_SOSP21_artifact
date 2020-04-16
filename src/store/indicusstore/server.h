@@ -35,6 +35,7 @@
 #include "bft_tapir/config.h"
 #include "replication/ir/replica.h"
 #include "store/server.h"
+#include "store/common/partitioner.h"
 #include "store/common/timestamp.h"
 #include "store/common/truetime.h"
 #include "store/indicusstore/common.h"
@@ -47,15 +48,20 @@
 
 namespace indicusstore {
 
+class ServerTest;
+
 enum OCCType {
-  TAPIR = 0,
-  MVTSO = 1
+  MVTSO = 0,
+  TAPIR = 1
 };
 
 class Server : public TransportReceiver, public ::Server {
  public:
   Server(const transport::Configuration &config, int groupIdx, int idx,
-      Transport *transport, TrueTime timeServer = TrueTime(0, 0));
+      int numShards, int numGroups,
+      Transport *transport, KeyManager *keyManager, bool signedMessages,
+      bool validateProofs, uint64_t timeDelta, OCCType occType, partitioner part,
+      TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
@@ -68,6 +74,12 @@ class Server : public TransportReceiver, public ::Server {
   virtual inline Stats &GetStats() override { return stats; }
 
  private:
+  friend class ServerTest;
+  struct Value {
+    std::string val;
+    proto::CommittedProof proof;
+  };
+
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
       const proto::Phase1 &msg);
@@ -77,12 +89,17 @@ class Server : public TransportReceiver, public ::Server {
       const proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
-  proto::Phase1Reply::ConcurrencyControlResult DoOCCCheck(uint64_t id, const proto::Transaction &txn,
-      const Timestamp &proposedTs, Timestamp &retryTs);
-  proto::Phase1Reply::ConcurrencyControlResult DoTAPIROCCCheck(uint64_t id, const proto::Transaction &txn,
-      const Timestamp &proposedTs, Timestamp &retryTs);
-  proto::Phase1Reply::ConcurrencyControlResult DoMVTSOOCCCheck(uint64_t id, const proto::Transaction &txn,
-      const Timestamp &ts);
+  proto::Phase1Reply::ConcurrencyControlResult DoOCCCheck(
+      uint64_t reqId, const TransportAddress &remote,
+      const std::string &txnDigest, const proto::Transaction &txn,
+      Timestamp &retryTs, proto::CommittedProof &conflict);
+  proto::Phase1Reply::ConcurrencyControlResult DoTAPIROCCCheck(
+      const std::string &txnDigest, const proto::Transaction &txn,
+      Timestamp &retryTs);
+  proto::Phase1Reply::ConcurrencyControlResult DoMVTSOOCCCheck(
+      uint64_t reqId, const TransportAddress &remote,
+      const std::string &txnDigest, const proto::Transaction &txn,
+      proto::CommittedProof &conflict);
 
   void GetPreparedWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
@@ -92,40 +109,71 @@ class Server : public TransportReceiver, public ::Server {
       std::unordered_map<std::string, std::set<Timestamp>> &reads);
   void GetPreparedReads(
       std::unordered_map<std::string, std::vector<proto::Transaction>> &reads);
+  void Prepare(const std::string &txnDigest, const proto::Transaction &txn);
   void GetCommittedWrites(const std::string &key, const Timestamp &ts,
-      std::set<Timestamp> &writes);
-  void GetCommittedReads(const std::string &key, const Timestamp &ts,
-      std::set<Timestamp> &reads);
-  void Commit(uint64_t txnId, const proto::Transaction &txn,
-      const Timestamp &timestamp);
+      std::vector<std::pair<Timestamp, Value>> &writes);
+  void GetCommittedReads(const std::string &key,
+      std::set<std::pair<Timestamp, Timestamp>> &reads);
+  void Commit(const std::string &txnDigest, const proto::Transaction &txn);
+  void Abort(const std::string &txnDigest);
+  void CheckDependents(const std::string &txnDigest);
+  proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(
+      const std::string &txnDigest);
+  proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(
+      const proto::Transaction &txn);
+  bool CheckHighWatermark(const Timestamp &ts);
+  void SendPhase1Reply(uint64_t reqId,
+    proto::Phase1Reply::ConcurrencyControlResult result,
+    const proto::CommittedProof &conflict, const TransportAddress &remote);
+  void Clean(const std::string &txnDigest);
+  void CleanDependencies(const std::string &txnDigest);
+
+  inline bool IsKeyOwned(const std::string &key) const {
+    return static_cast<int>(part(key, numShards) % numGroups) == groupIdx;
+  }
+
 
   const transport::Configuration &config;
   const int groupIdx;
   const int idx;
+  const int numShards;
+  const int numGroups;
   const int id;
   Transport *transport;
   const OCCType occType;
+  partitioner part;
   const bool signedMessages;
   const bool validateProofs;
-  bft_tapir::NodeConfig *cryptoConfig;
+  KeyManager *keyManager;
   const uint64_t timeDelta;
   TrueTime timeServer;
-  crypto::PrivKey privateKey;
-
-  struct Value {
-    std::string val;
-  };
 
   VersionedKVStore<Timestamp, Value> store;
-  std::unordered_map<std::string, std::map<uint64_t, std::set<Timestamp>>> rts;
-  std::unordered_map<uint64_t, std::pair<Timestamp, proto::Transaction>> prepared;
-  std::unordered_map<uint64_t, proto::Phase1Reply::ConcurrencyControlResult> p1Decisions;
-  std::unordered_map<uint64_t, proto::CommitDecision> p2Decisions;
-  std::unordered_set<uint64_t> committed;
-  std::unordered_set<uint64_t> aborted;
+  // Key -> V
+  std::unordered_map<std::string, std::set<std::pair<Timestamp, Timestamp>>> committedReads;
+  std::unordered_map<std::string, std::set<Timestamp>> rts;
+
+  // Digest -> V
+  std::unordered_map<std::string, proto::Transaction> ongoing;
+  std::unordered_map<std::string, std::pair<Timestamp, proto::Transaction>> prepared;
+  std::unordered_map<std::string, std::set<const proto::Transaction *>> preparedReads;
+  std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
+
+
+  std::unordered_map<std::string, proto::Phase1Reply::ConcurrencyControlResult> p1Decisions;
+  std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
+  std::unordered_set<std::string> committed;
+  std::unordered_set<std::string> aborted;
+  std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
+  struct WaitingDependency {
+    uint64_t reqId;
+    const TransportAddress *remote;
+    std::unordered_set<std::string> deps;
+  };
+  std::unordered_map<std::string, WaitingDependency> waitingDependencies; // K depends on each V
 
   Stats stats;
-  std::unordered_set<uint64_t> active;
+  std::unordered_set<std::string> active;
 };
 
 } // namespace indicusstore

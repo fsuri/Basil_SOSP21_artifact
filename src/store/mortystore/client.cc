@@ -8,20 +8,14 @@
 
 namespace mortystore {
 
-Client::Client(const std::string configPath, uint64_t client_id, int nShards,
+Client::Client(transport::Configuration *config, uint64_t client_id, int nShards,
     int nGroups, int closestReplica, Transport *transport, partitioner part,
-    bool debugStats) : client_id(client_id), nshards(nShards), ngroups(nGroups),
-    transport(transport), part(part), debugStats(debugStats), lastReqId(0UL),
-    prepareBranchIds(0UL), config(nullptr) {
+    bool debugStats) : config(config), client_id(client_id), nshards(nShards),
+    ngroups(nGroups), transport(transport), part(part), debugStats(debugStats),
+    lastReqId(0UL), prepareBranchIds(0UL) {
   t_id = client_id << TXN_ID_SHIFT; 
 
   Debug("Initializing Morty client with id [%lu] %lu", client_id, nshards);
-
-  std::ifstream configStream(configPath);
-  if (configStream.fail()) {
-    Panic("Unable to read configuration file: %s\n", configPath.c_str());
-  }
-  config = new transport::Configuration(configStream);
 
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < nshards; i++) {
@@ -37,7 +31,6 @@ Client::~Client() {
   for (auto sclient : sclients) {
     delete sclient;
   }
-  delete config;
 }
 
 void Client::Execute(AsyncTransaction *txn, execute_callback ecb) {
