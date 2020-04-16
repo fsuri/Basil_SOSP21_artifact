@@ -51,8 +51,8 @@ namespace indicusstore {
 class ServerTest;
 
 enum OCCType {
-  TAPIR = 0,
-  MVTSO = 1
+  MVTSO = 0,
+  TAPIR = 1
 };
 
 class Server : public TransportReceiver, public ::Server {

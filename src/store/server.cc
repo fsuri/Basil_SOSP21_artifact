@@ -67,8 +67,8 @@ enum transmode_t {
 
 enum occ_type_t {
   OCC_TYPE_UNKNOWN,
-  OCC_TYPE_TAPIR,
-  OCC_TYPE_MVTSO
+  OCC_TYPE_MVTSO,
+  OCC_TYPE_TAPIR
 };
 
 /**
@@ -217,8 +217,8 @@ const std::string occ_type_args[] = {
   "mvtso"
 };
 const occ_type_t occ_types[] {
-	OCC_TYPE_TAPIR,
-  OCC_TYPE_MVTSO
+  OCC_TYPE_MVTSO,
+	OCC_TYPE_TAPIR
 };
 static bool ValidateOCCType(const char* flagname,
     const std::string &value) {
@@ -350,8 +350,7 @@ int main(int argc, char **argv) {
   }
 
   // parse occ type
-  //  TODO: default is MVTSO; more consistently define as default
-  occ_type_t occ_type = OCC_TYPE_MVTSO;
+  occ_type_t occ_type = OCC_TYPE_UNKNOWN;
   int numOCCTypes = sizeof(occ_type_args);
   for (int i = 0; i < numOCCTypes; ++i) {
     if (FLAGS_indicus_occ_type == occ_type_args[i]) {
