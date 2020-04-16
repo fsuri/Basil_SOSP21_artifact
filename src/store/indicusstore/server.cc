@@ -652,6 +652,9 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
 
   bool allFinished = true;
   for (const auto &dep : txn.deps()) {
+    if (dep.involved_group() != groupIdx) {
+      continue;
+    }
     if (committed.find(dep.prepared().txn_digest()) == committed.end() &&
         aborted.find(dep.prepared().txn_digest()) == aborted.end()) {
       Debug("[%lu:%lu][%s] WAIT for dependency %s to finish.",
@@ -858,6 +861,9 @@ proto::Phase1Reply::ConcurrencyControlResult Server::CheckDependencies(
 proto::Phase1Reply::ConcurrencyControlResult Server::CheckDependencies(
     const proto::Transaction &txn) {
   for (const auto &dep : txn.deps()) {
+    if (dep.involved_group() != groupIdx) {
+      continue;
+    }
     if (committed.find(dep.prepared().txn_digest()) != committed.end()) {
       if (Timestamp(dep.prepared().timestamp()) > Timestamp(txn.timestamp())) {
         stats.Increment("cc_aborts", 1);

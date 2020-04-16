@@ -57,6 +57,7 @@ message CommittedWrite {
 message Dependency {
   required PreparedWrite prepared = 1;
   optional PreparedProof proof = 2;
+  required int64 involved_group = 3;
 }
 
 message PreparedWrite {

@@ -370,6 +370,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
         } else {
           // TODO: do we want to validate unsigned messages? seems overly redundant
         }
+        req->dep.set_involved_group(group);
         req->hasDep = true;
         break;
       }
