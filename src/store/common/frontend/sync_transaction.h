@@ -10,11 +10,13 @@
 
 class SyncTransaction {
  public:
-  SyncTransaction() { }
+  SyncTransaction() : timeout(10000) { }
   virtual ~SyncTransaction() { }
 
   virtual int Execute(SyncClient &client) = 0;
 
+ protected:
+  const uint32_t timeout;
 };
 
 #endif
