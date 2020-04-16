@@ -19,20 +19,18 @@ Maintaining a totally ordered log of requests, inspite of its appealing simplici
 
 Existing research recognises this opportunity and attempt to mitigate the aforementioned scalability bottleneck through a combination of sharding~\cite{omniledger,chainspace,callinicos}, cross-shard atomic commit protocols and centralised ordering services~\cite{}. These systems suffer from three primary drawbacks 1) they limit the expressivity of the transactions tthey support~\cite{} 2) they introduce unnecessary coordination across replicas~\cite{} which affects throughput and finally, 3) they often centralises the ordering of requests at a single leader, which raises fairness concerns. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness.
  
-In reality, building \textit{the abstraction} of a total order is sufficient, and distributed databases have long recognised this fact. Serializability, the gold-standard database criterion, defines a correct execution as one that is \textit{equivalent} to a correct schedule. This definition allows concurrent operations to execute in parallel, restricting any ordering to conflicting operations only.  Byzantine systems need be no different.
+In reality, building \textit{the abstraction} of a total order is sufficient, and distributed databases have long recognised this fact. Serializability, the gold-standard database criterion, defines a correct execution as one that is \textit{equivalent} to a correct schedule. This definition allows concurrent operations to execute in parallel, restricting any ordering to conflicting operations only.  Byzantine systems need be no different. This paper consequently argues for a paradigm "flip". The right way to build data-sharing systems for distrustful parties is not to layer database-like transactions and sharding on top of the reality of byzantine fault tolerant log, but instead to do the opposite and build out the abstraction of a BFT log atop a partially ordered distributed database.
 
-This paper consequently argues for a paradigm "flip". The right way to build data-sharing systems for distrustful parties is not to layer database-like transactions and sharding on top of the reality of byzantine fault tolerant log, but instead to build out the abstraction of a BFT log on top of a partially ordered distributed database.
-To this effect, we design \sys{}, the first leaderless and scalable BFT key-value store
-and provide the first formal definition of byzantine serializabililty. \sys{} provides three main benefits.
+To this effect, we design \sys{}, the first leaderless and scalable key-value store that is resilient against
+Byzantine faults. We specifically formalise the notion of \textit{byzantine isolation}, the correctness
+guarantee that any BFT distributed database should enforce.  \sys{} provides three main benefits.
 
  First, it overcomes the scalability bottleneck of a low-level
 implementation based on a totally ordered BFT log. \sys uses a
 client-driven protocol that bypasses the ordering bottleneck and
-leverages databases' ability, honed over decades of research in
-concurrency control, to support highly concurrent transaction
-processing over a sharded database while retaining, to ease reasoning
-about correctness, the capacity to generate executions equivalent to a
-total order of commmitted transaction.
+leverages databases' ability to support highly concurrent transaction
+processing over a sharded database while maintaining the abstraction
+of a serial execution.
 
 % an explicit ordering service 
 
@@ -46,8 +44,8 @@ rotate the leader's responsibility, thus reducing, but not
 eliminating, the skew it can introduce. In contrast, \sys leaves the
 responsibility of driving the replication and distributed commit of a
 transaction to the client that proposes it, and allows different
-shards to order transactions in different orders, as long asways, as
-long as serializability can be maintained.
+shards to order transactions in different orders as
+long as the total order abstraction affored by byzantine serializability can be maintained.
 
 Third, it avoids the duplicate ordering costs of transactional systems
 built on top of state machine replication. As Tapir noted~\cite{},
@@ -86,7 +84,8 @@ In summary, we make the following three contributions:
 \item system?
 \end{itemize}
 
-Nonetheless, our system has the following limitations ...
+Nonetheless, our system has the following limitations. Limitation 1 goes here. Limitation 2 goes here.
 
-The rest of the paper is structured as follows ...
+The rest of the paper is structured as follows. Section~\sec{sec:model} formalises \sys{}'s correctness guarantees.
+Section~\sec{sec:}. Finally, we summarise related work (\S\sec{sec:rel}) and conclude (\S\sec{sec:conc}).
 
