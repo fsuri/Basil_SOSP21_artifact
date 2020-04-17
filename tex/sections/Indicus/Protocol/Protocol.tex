@@ -417,7 +417,7 @@ Any of such Quorums forms a \textit{Shard-Certificate} and proves the decision. 
 \end{minipage}}
 If a client does not receive the necessary thresholds of votes to return, it must continue on the \textit{Slow-Path}. To do so, it aggregates the votes according to a conservative \fs{not really} decison rule:
 If there exists a $CommitQuorum \coloneqq \frac{n+f+1}{2}$ ($3f+1$/$2f+1$ in Indicus5 and Indicus3 respectively) of Commit Votes, the Slow-Path decision is Commit, otherwise it is Abort.
-A client broadcasts a message $Phase2 \coloneqq (TxID, decision, \{\langle votes \rangle_r\}$.
+A client broadcasts a message $Phase2 \coloneqq (TxID, decision)_c, \{\langle votes \rangle_r\}$.
 
 \underline{Additional subtlelties}: A client forwards a Quorum of $\geq n-f$ votes to the replicas. This is necessary to prove the Slow-Path decision is consistent with Isolation guarantees. Effectively, replicas make the decision for themselves. Note, that a byzantine client may equivocate the decision by relaying different Quorums.
 
@@ -741,7 +741,7 @@ This is the price they pay in order to experience liveness independently from th
 %-------------------------------------------------------------------------------
 \subsection{Garbage Collection}
 %-------------------------------------------------------------------------------
-In section X (Writeback) we previously discussed how replicas garbage collect finalized \textit{Ongoing Transaction State}. \fs{A replica will eventually become an interested client in order to promote garbage collection}
+In section X (Writeback) we previously discussed how replicas garbage collect finalized \textit{Ongoing Transaction State}. \fs{A replica will eventually become an interested client in order to promote garbage collection for ongoing but incomplete Txs: I.e. if a byz only ever sent to a couple replicas, and it never caused a conflict or a fallback to be started by another client}
 We now briefly allude to garbage collecting unecessary certificates as well as outdated versions.
 
 
@@ -801,14 +801,17 @@ In theory the whole db could be stalled on any given replica and thus that garba
 %-------------------------------------------------------------------------------
 \subsection{Optional Modifications}
 %-------------------------------------------------------------------------------
-Next, we discuss a series of optional modifications: \fs{not necessarily optimizations: Retries, Single shard logging, speeding up shard certificates, read leases}
+Next, we discuss a series of optional modifications: \fs{not necessarily optimizations: Retries, Single shard logging, speeding up shard certificates, read leases, splitting tx objects}
 
-\fs{we could also implement "promises" for read/write tx, in order to reduce write aborts: Delay read exec until after write happens. Can also do this on a per-client basis based on past timeliness. probably impractical though since we delay writes until validation}
+
 
 \fs{Retries are a mess currently and might not be worth to include}
 \fs{retries come at the cost of no fast path and having to store proofs for the transaction. These proofs are only necessary for the fallback. Moreover, it can create multiple dependencies since multi p1 remain.}
 
-\textbf{Retries:} MVTSO, by design, favors read requests, at the cost of potentially aborting concurrent write transactions. This is intuitively sensible, as reads require additional WAN roundtrips in order to execute. 
+
+
+
+\paragraph{SINGLE SLOT Retries:} MVTSO, by design, favors read requests, at the cost of potentially aborting concurrent write transactions. This is intuitively sensible, as reads require additional WAN roundtrips in order to execute. 
 However, when a transaction includes both reads and writes, and execution spans several reads, it becomes increasingly suceptible to abort as consequence of a conflicting read request. Observe, that aborts due a write-read conflict are a consequence of a read having failed to observe a relevant write with smaller timestamp. Thus, such an abort could have been avoided by simply choosing a larger timestamp. In order to faciliate this, we offer write transactions the option to Retry (with a larger timestamp), rather than abort. This however, comes at a tradeoff: Clients may not utilize the validation Fast-Path when opting into the availability of Retries. We outline the Retry protocol and implication for Fast-Paths as follows:
 
 In order to be able to change the timestamp for the same transaction we must make the Transaction ID independent from it. Otherwise, it would not be possible to map retries to the same transaction in order to avoid double-commits and enable garbage collection.
@@ -839,11 +842,28 @@ Enabling retries retries two modifications of the MVTSO-Check:
 First, replicas must return $RETRY, (suggestedTS)$ instead of Abstain/Abort for conflicting writes in order to allow a client to distinguish the cause of conflict. If a conflict was caused by a write, it may be resolved by attempting to commit the transaction at a higher timestamp. Naturally, this comes at the risk of additional potential read conflicts; this however, is a sensible drawback, as the transaction would have aborted in the first place. Replicas may include a \textit{suggested Timestamp} that side-steps the detected conflict. An honest client retries only, if both an insufficient number of Commit votes, but at least one Retry vote was received. \fs{Previous Abstain votes for read conflicts can potentially turn into commits, if those transactions ended up aborting}
 \fs{We can keep the abort fast path with certificate for reads. This must be disallowed for writes in order to distinguish: In general, aborts with certificates require you to validate the conflict.}
 
-Second, a transaction, whose dependencies retried, might no longer be valid. The integrity of an honest clients read transaction is violated when its dependency retries with a timestamp higher than the read. To detect this, we add additional requirement to the MVTSO-Check: $If dep \in CommitLog \land dep.TS > TX.TS:$ Return Abort/Abstain \fs{Abort with cert, Abstain without}.
+Second, a transaction, whose dependencies retried, might no longer be valid. The integrity of an honest clients read transaction is violated when its dependency retries with a timestamp higher than the read. To detect this, we add additional requirement to the MVTSO-Check: $If dep \in CommitLog \land dep.TS > TX.TS:$ Return Abort/Abstain \fs{Abort with cert, Abstain without}
+fs{This is currently unsafe?: Makes dependent look like byz client because read version does not match write version}.
 
 
 
 Whether to opt into the availability of retries need not be a global system decision, but can be decided on a per-transaction basis. By signaling a flag within the transaction object (this changes the ID) a client can decide whether to allow for the possibility of retries which incurs the trade-off of sacrificing the opportunity of using a Fast-Path (attempts to go Fast-Path will be ignored by honest replicas if the flag is set), and additonal replica storage and bandwidth overhead (vote quorums to justify decisions) to enable live reconciliation.
+
+
+\paragraph{MULTI-SLOT Retries v2}
+
+Retries for different ID:
+
+Protocol:
+Client receives 3f+1 Abstain/Retry votes. If 2f+1 of those are retry (implying that there could be 3f+1 commit votes) a client retries:
+1. Aborts the orignial slot on the fast path
+2. Commits new version with new timestamp. New ID must be old ID, bar timestamp change. (Other TX are rejected - this avoid multiple TX per client). Do this redefining TxID = (digest, TS). \fs{if we go with this, then change orignial def to this right away.}
+
+Comments:
+1. Byz client may just commit same TX twice. That is safe, since Tx needs to pass validation check at 2 times. The higher TX strictly dominates the lower TS. Conflicts are from read.version up to TS.
+ 
+
+2. Dependent will be aborted. (TS does not match dep read version anymore) This is fine, since the dependent would have been aborted anyways. Is there a way to "save" the dependents too?
 
 
 
@@ -871,6 +891,7 @@ The remaining Validation protocol proceeds identically to the multi-shard versio
 A coordinator waits for the logging shard decision, including shard-certificate, and broadcasts a $Writeback \coloneqq (TX, decision, certificate_loggingS )$ message to all replicas in all relevant shards.
 
 The Fallback protocol is adjusted accordingly: A fallback replica need (and can) only be elected on the logging Shard, simplifying reconciliation and reducing the cost for interested clients. 
+To further reduce unecessary load, a client may attempt to first inquire whether decisions exists at the logging shard (Fallback protocol step 1 & 2), before sending $Rec-Phase1$ messages to all shards in order to gather votes itself (Fallback protocol step 1). 
 
 
 \begin{figure*}
@@ -880,6 +901,7 @@ The Fallback protocol is adjusted accordingly: A fallback replica need (and can)
 \caption{Single Shard Optimization}
 \label{fig:SingleShardOpt}
 \end{figure*}
+
 
 
 
@@ -924,27 +946,7 @@ Since Read Timestamps are not necessary for safety, they can be granted both as 
 
 
 
-%%%%% OTHER
-\textbf{Tolerating High Skew}
-Use Waits at replicas to re-order in timestamp order
-Use write promises (replicas wait for certain writes to arrive before processing reads).
 
-
-\textbf{Exponential Backoff}
-When there is contention one might need exponential backoff in order for one transaction to eventually succeed. Cannot rely on clients to enforce this because they may be byzantine. Replicas must keep backoff list for each client.
-Open question: When to reset to 0? Upon success? This would mean that a single client could get lucky many times in a row. More likely: reset after some k amount of tx have passed? But then those could be byzantine and never attempt to commit. --> Reset after some timeout.
-
-
-\textbf{Limit concurrent transactions}
-Would like for byz clients to only do k transactions concurrently (probably k=1). We could either enforce this pro-actively using a ticket granting service (like the timestamp generation phase), but that would induce additional overhead. Or: we could make it an incentive. If replicas receive another request from the same client before the last one has finished they abstain from it and report the client (just like multi retries). An honest client is going the be an interested client for its own transaction if it loses control. Hence it is reasonable to assume a client only starts another TX after it has finished its last one. Can use per client sequence number to enforce FIFO on its own transactions.
-
-\textbf{Threshold signatures}
-Can use threshold signatures to reduce message sizes and replica validation overhead. This however induces significant additional client overhead to compute TH sigs. Only worth it when replication degrees are high (see SBFT)
-
-\textbf{Merkle trees for smaller write certificates}
-currently a certificate is a signature for a committed TX. this means that a read must return the whole TX that wrote the value instead of just the value. Could reduce this by using a merkle tree for signatures that reduces cost.
-Replicas sign not only the TX, but also a Merkle Hash Root of all the Writes. Then only log(|writes|) writes or intermediate hashes are necessary to prove legitimacy of write value.
---> Result: smaller read reply messages, but bigger protocol messages because double sigs required. Probably not worth it.
 
 \iffalse
 \textbf{Reduce tx object content per shard.}
@@ -954,9 +956,7 @@ keep track of not just involved shards, but of involved sub TXIDS: Each shard in
 \fs{In order to facilitate recovery just based on IDs, replicas must be allowed to vote abstain. In this case, they may only vote after a timeout to provide the orignial client with a window of immunity. If the TX does exist, and a replica has it, it can forward it to the client who can use it to attempt to commit. It is still undesirable because a byz client can claim limitless false components (and hence always make its TX abort). If an interested client cannot acquire the Tx contents after the timeout (and a replica has not seen it) it can try to convince the replica that the orignial client was faulty. So when this happens too often, a client can be expelled. A byz client can abuse this by always saying this about any honest client; but if that client was timely, then the replica would have known about the TX!}
 \fi
 
-TODO:
 
-\textbf{Fallback less load for single sharded logging}
 
 \paragraph{Hierarchical transaction IDs.}
 When transactions span multiple shards, the resulting transaction object includes ReadSet, WriteSet and dependencies from different involved shards. Consequently, every involved shards must validate, and store keys/values from all shards (potentially the whole database) instead of only keys assigned to the respective shard. To circumvent this, we split the transaction object into multiple sub-objects that pertain only to the respective shard, shown in Figure \ref{fig:FigureTxId}. Each sub-object $TxS_j$ has an individual identifier $id_j = H(TxS_j)$ that represents the involved shards of a transaction. A $TxID = H(involvedShards, TS)$ serves as common identifier of the transaction across all shards.
@@ -976,22 +976,32 @@ For Writeback, it suffices for clients to send only the sub-object $TxS_j$ relev
 
 
 
-\textbf{Strict Serializability}
-Read Latest
 
-\textbf{Retries v2}
-Retries for different ID:
+\subsection{Other things: not worth mentioning}
+%%%%% OTHER
 
-Protocol:
-Client receives 3f+1 Abstain/Retry votes. If 2f+1 of those are retry (implying that there could be 3f+1 commit votes) a client retries:
-1. Aborts the orignial slot on the fast path
-2. Commits new version with new timestamp. New ID must be old ID, bar timestamp change. (Other TX are rejected - this avoid multiple TX per client)
+\paragraph{Strict Serializability}
+Read Latest like Tapir. Do not read from timestamp. Choose timestamp to be larger than all read seen. 
 
-Comments:
-1. Byz client may just commit same TX twice. That is safe, since Tx needs to pass validation check at 2 times. The higher TX strictly dominates the lower TS. Conflicts are from read.version up to TS.
-(Abstains never change? Only retries and commit do)
+\paragraph{High Skew}
+A) Use Waits at replicas to re-order in timestamp order. \\
+B) we could also implement "promises" for read/write tx, in order to reduce write aborts: Delay read exec until after write happens. Can also do this on a per-client basis based on past timeliness. probably impractical though since we delay writes until validation
 
-2. Dependent will be aborted. (TS does not match dep read version anymore) This is fine, since the dependent would have been aborted anyways. Is there a way to "save" the dependents too?
+\paragraph{Exponential Backoff}
+When there is contention one might need exponential backoff in order for one transaction to eventually succeed. Cannot rely on clients to enforce this because they may be byzantine. Replicas must keep backoff list for each client.
+Open question: When to reset to 0? Upon success? This would mean that a single client could get lucky many times in a row. More likely: reset after some k amount of tx have passed? But then those could be byzantine and never attempt to commit. --> Reset after some timeout.
+
+
+\paragraph{Per Client Limit on concurrent transactions}
+Would like for byz clients to only do k transactions concurrently (probably k=1). We could either enforce this pro-actively using a ticket granting service (like the timestamp generation phase), but that would induce additional overhead. Or: we could make it an incentive. If replicas receive another request from the same client before the last one has finished they abstain from it and report the client (just like multi retries). An honest client is going the be an interested client for its own transaction if it loses control. Hence it is reasonable to assume a client only starts another TX after it has finished its last one. Can use per client sequence number to enforce FIFO on its own transactions.
+
+\paragraph{Threshold signatures}
+Can use threshold signatures to reduce message sizes and replica validation overhead. This however induces significant additional client overhead to compute TH sigs. Only worth it when replication degrees are high (see SBFT)
+
+\paragraph{Merkle trees for smaller write certificates}
+currently a certificate is a signature for a committed TX. this means that a read must return the whole TX that wrote the value instead of just the value. Could reduce this by using a merkle tree for signatures that reduces cost.
+Replicas sign not only the TX, but also a Merkle Hash Root of all the Writes. Then only log(|writes|) writes or intermediate hashes are necessary to prove legitimacy of write value.
+--> Result: smaller read reply messages, but bigger protocol messages because double sigs required. Probably not worth it.
 
 %-------------------------------------------------------------------------------
 \subsection{Indicus3}
