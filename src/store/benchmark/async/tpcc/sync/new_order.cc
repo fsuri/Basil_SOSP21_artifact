@@ -158,6 +158,7 @@ int SyncNewOrder::Execute(SyncClient &client) {
     }
   }
 
+  Debug("COMMIT");
   return client.Commit(timeout);
 }
 

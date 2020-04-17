@@ -377,6 +377,14 @@ void GenerateNewOrderTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
     std::string no_key = tpcc::NewOrderRowKey(w_id, d_id, o_id);
     q.Push(std::make_pair(no_key, no_row_out));
   }
+
+  tpcc::EarliestNewOrderRow eno_row;
+  eno_row.set_w_id(w_id);
+  eno_row.set_d_id(d_id);
+  eno_row.set_o_id(2101UL);
+  std::string eno_row_out;
+  eno_row.SerializeToString(&eno_row_out);
+  q.Push(std::make_pair(tpcc::EarliestNewOrderRowKey(w_id, d_id), eno_row_out));
 }
 
 void GenerateNewOrderTable(uint32_t num_warehouses,
