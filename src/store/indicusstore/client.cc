@@ -88,7 +88,7 @@ void Client::Begin() {
 
 void Client::Get(const std::string &key, get_callback gcb,
     get_timeout_callback gtcb, uint32_t timeout) {
-  Debug("GET [%lu : %s]", client_seq_num, key.c_str());
+  Debug("GET[%lu] for key %s]", client_seq_num, BytesToHex(key, 16).c_str());
 
   // Contact the appropriate shard to get the value.
   int i = part(key, nshards) % ngroups;

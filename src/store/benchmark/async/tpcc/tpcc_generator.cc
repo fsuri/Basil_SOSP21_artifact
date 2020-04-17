@@ -316,9 +316,9 @@ void GenerateOrderTableForWarehouseDistrict(uint32_t w_id, uint32_t d_id,
     o_row.set_ol_cnt(std::uniform_int_distribution<uint32_t>(5, 15)(gen));
     o_row.set_all_local(true);
     o_row.SerializeToString(&o_row_out);
-    std::string o_key = tpcc::OrderRowKey(w_id, d_id, c_id);
-    q.Push(std::make_pair(o_key, o_row_out));
-
+    std::string o_key = tpcc::OrderRowKey(w_id, d_id, o_id);
+    q.Push(std::make_pair(o_key, o_row_out));    
+    
     // initially, there is exactly one order per customer, so we do not need to
     // worry about writing multiple OrderByCustomerRow with the same key.
     obc_row.set_w_id(w_id);
@@ -387,6 +387,7 @@ void GenerateNewOrderTable(uint32_t num_warehouses,
     }
   }
 }
+
 
 DEFINE_int32(c_load_c_last, 0, "Run-time constant C used for generating C_LAST.");
 //DEFINE_int32(c_load_c_id, 0, "Run-time constant C used for generating C_ID.");
