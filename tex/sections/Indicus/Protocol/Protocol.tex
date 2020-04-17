@@ -203,6 +203,15 @@ To mititage the frequency of read aborts we add three mechanisms on top of TSO, 
 \end{itemize}
 
 
+\begin{figure*}
+\begin{center}
+\includegraphics[width= \textwidth]{./figures/MVTSOExample.png}
+\end{center}
+\caption{\emph{MVTSO behavior for different replica processing orders}. $r_x(C : a_y ,P : a_z)$ denotes that transaction $T_x$ (x being the timestamp of a transaction in this example) reads the version of object a written by committed transaction $T_y$ and version from tentative prepared transaction $T_z$. $P_x$ denotes a transaction $T_x$'s prepare request (i.e. the validation check), and $\rightarrow C / A$ denotes the local validation outcome (Commit/Abort). 1. Read largest committed. 2. Read uncommitted from f+1 matching and claim dependency. 3. Acquire Read Timestamp (RTS), causing successive writes with smaller TS to abort.  4. Ordering affects result only when requests conflict. 5. Read from TS; unaffected by new write. 6. Wait on dependency to complete.}
+\label{fig:MVTSOEX}
+\end{figure*}
+
+
 Note, that for write heavy workloads, or workloads without read/write conflicts MVTSO degenerates to TSO.
 
 Algorithm \ref{mvtso} shows the necessary validation check to preserve Byzantine-Serializability. 
