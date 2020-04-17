@@ -8,7 +8,10 @@ SyncClient::~SyncClient() {
 }
 
 void SyncClient::Begin() {
-  client->Begin();
+  Promise promise(10000);
+  client->Begin([promisePtr = &promise](uint64_t id){ promisePtr->Reply(0); },
+      [](){}, 10000);
+  promise.GetReply();
 }
 
 void SyncClient::Get(const std::string &key, std::string &value,
@@ -87,7 +90,7 @@ void SyncClient::CommitTimeoutCallback(Promise *promise, int status) {
 }
 
 void SyncClient::AbortCallback(Promise *promise) {
-  promise->Reply(REPLY_OK);
+  promise->Reply(REPLY_FAIL);
 }
 
 void SyncClient::AbortTimeoutCallback(Promise *promise, int status) {

@@ -154,8 +154,9 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
       phase1_timeout_callback ptcb = pendingPhase1->ptcb;
       auto itr = this->pendingPhase1s.find(pendingPhase1->reqId);
       if (itr != this->pendingPhase1s.end()) {
+        PendingPhase1 *pendingPhase1 = itr->second;
         this->pendingPhase1s.erase(itr);
-        delete itr->second;
+        delete pendingPhase1;
       }
       ptcb(REPLY_TIMEOUT);
   });
@@ -185,8 +186,9 @@ void ShardClient::Phase2(uint64_t id, const std::string &txnDigest,
       phase2_timeout_callback ptcb = pendingPhase2->ptcb;
       auto itr = this->pendingPhase2s.find(pendingPhase2->reqId);
       if (itr != this->pendingPhase2s.end()) {
+        PendingPhase2 *pendingPhase2 = itr->second;
         this->pendingPhase2s.erase(itr);
-        delete itr->second;
+        delete pendingPhase2;
       }
 
       ptcb(REPLY_TIMEOUT);
@@ -232,9 +234,10 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
   pendingCommit->requestTimeout = new Timeout(transport, timeout, [this, reqId]() {
       auto itr = this->pendingCommits.find(reqId);
       if (itr != this->pendingCommits.end()) {
-        commit_timeout_callback ctcb = itr->second->ctcb;
+        PendingCommit *pendingCommit = itr->second;
+        commit_timeout_callback ctcb = pendingCommit->ctcb;
         this->pendingCommits.erase(itr);
-        delete itr->second;
+        delete pendingCommit;
         ctcb(REPLY_TIMEOUT);
       }
 
@@ -279,10 +282,11 @@ bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
 void ShardClient::GetTimeout(uint64_t reqId) {
   auto itr = this->pendingGets.find(reqId);
   if (itr != this->pendingGets.end()) {
-    get_timeout_callback gtcb = itr->second->gtcb;
-    std::string key = itr->second->key;
+    PendingQuorumGet *pendingGet = itr->second;
+    get_timeout_callback gtcb = pendingGet->gtcb;
+    std::string key = pendingGet->key;
     this->pendingGets.erase(itr);
-    delete itr->second;
+    delete pendingGet;
     gtcb(REPLY_TIMEOUT, key);
   }
 }
@@ -293,9 +297,10 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   if (itr == this->pendingGets.end()) {
     return; // this is a stale request
   }
+  PendingQuorumGet *req = itr->second;
 
   if (validateProofs) {
-    if (!ValidateTransactionWrite(reply.committed().proof(), itr->second->key,
+    if (!ValidateTransactionWrite(reply.committed().proof(), req->key,
           reply.committed().value(), reply.committed().timestamp(), config,
           signedMessages, keyManager)) {
       // invalid replies can be treated as if we never received a reply from
@@ -305,16 +310,16 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   }
 
   // value and timestamp are valid
-  itr->second->numReplies++;
+  req->numReplies++;
   if (reply.status() == REPLY_OK) {
-    itr->second->numOKReplies++;
+    req->numOKReplies++;
     Timestamp replyTs(reply.committed().timestamp());
     Debug("[group %i] ReadReply for %lu with %lu byte value and ts %lu.%lu.",
         group, reply.req_id(), reply.committed().value().length(),
         replyTs.getTimestamp(), replyTs.getID());
-    if (itr->second->numOKReplies == 1 || itr->second->maxTs < replyTs) {
-      itr->second->maxTs = replyTs;
-      itr->second->maxValue = reply.committed().value();
+    if (req->numOKReplies == 1 || req->maxTs < replyTs) {
+      req->maxTs = replyTs;
+      req->maxValue = reply.committed().value();
     }
   }
 
@@ -338,9 +343,9 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
 
   if (hasPrepared) {
     Timestamp preparedTs(prepared.timestamp());
-    auto preparedItr = itr->second->prepared.find(preparedTs);
-    if (preparedItr == itr->second->prepared.end()) {
-      itr->second->prepared.insert(std::make_pair(preparedTs,
+    auto preparedItr = req->prepared.find(preparedTs);
+    if (preparedItr == req->prepared.end()) {
+      req->prepared.insert(std::make_pair(preparedTs,
             std::make_pair(prepared, 1)));
     } else if (::google::protobuf::util::MessageDifferencer::Equals(preparedItr->second.first, prepared)) {
       // TODO: MessageDifferencer::Equals is too slow. Need custom implementation
@@ -348,12 +353,11 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     }
 
     if (signedMessages) {
-      itr->second->signedPrepared[preparedTs].push_back(reply.signed_prepared());
+      req->signedPrepared[preparedTs].push_back(reply.signed_prepared());
     }
   }
 
-  if (itr->second->numReplies >= itr->second->rqs) {
-    PendingQuorumGet *req = itr->second;
+  if (req->numReplies >= req->rqs) {
     for (auto preparedItr = req->prepared.rbegin();
         preparedItr != req->prepared.rend(); ++preparedItr) {
       if (preparedItr->first < req->maxTs) {
@@ -380,7 +384,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     std::string key = req->key;
     pendingGets.erase(itr);
     int32_t status = REPLY_FAIL;
-    if (req->numOKReplies >= itr->second->rqs) {
+    if (req->numOKReplies >= req->rqs) {
       status = REPLY_OK;
     }
     Debug("[group %i] GET callback [%d]", group, status);
@@ -441,10 +445,11 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply,
   }
 
   if (itr->second->matchingReplies >= 4 * static_cast<uint64_t>(config->f) + 1) {
-    phase2_callback pcb = itr->second->pcb;
-    pcb(itr->second->phase2Replies, itr->second->signedPhase2Replies);
+    PendingPhase2 *pendingPhase2 = itr->second;
+    phase2_callback pcb = pendingPhase2->pcb;
+    pcb(pendingPhase2->phase2Replies, pendingPhase2->signedPhase2Replies);
     this->pendingPhase2s.erase(itr);
-    delete itr->second;
+    delete pendingPhase2;
   }
 }
 
@@ -456,9 +461,10 @@ bool ShardClient::CommitCallback(uint64_t reqId,
 
   auto itr = this->pendingCommits.find(reqId);
   if (itr != this->pendingCommits.end()) {
-    writeback_callback ccb = itr->second->ccb;
+    PendingCommit *pendingCommit = itr->second;
+    writeback_callback ccb = pendingCommit->ccb;
     this->pendingCommits.erase(itr);
-    delete itr->second;
+    delete pendingCommit;
     ccb();
   }
   return true;
@@ -476,9 +482,10 @@ bool ShardClient::AbortCallback(uint64_t reqId,
 
   auto itr = this->pendingAborts.find(reqId);
   if (itr != this->pendingAborts.end()) {
-    abort_callback acb = itr->second->acb;
+    PendingAbort *pendingAbort = itr->second;
+    abort_callback acb = pendingAbort->acb;
     this->pendingAborts.erase(itr);
-    delete itr->second;
+    delete pendingAbort;
     acb();
   }
   return true;
@@ -495,15 +502,16 @@ void ShardClient::Phase1Decision(uint64_t reqId) {
 
 void ShardClient::Phase1Decision(
     std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr) {
+  PendingPhase1 *pendingPhase1 = itr->second;
   bool fast = false;
-  proto::CommitDecision decision = IndicusShardDecide(itr->second->phase1Replies,
-      config, validateProofs, itr->second->transaction, signedMessages,
+  proto::CommitDecision decision = IndicusShardDecide(pendingPhase1->phase1Replies,
+      config, validateProofs, pendingPhase1->transaction, signedMessages,
       keyManager, fast);
-  phase1_callback pcb = itr->second->pcb;
-  pcb(decision, fast, itr->second->phase1Replies,
-      itr->second->signedPhase1Replies);
+  phase1_callback pcb = pendingPhase1->pcb;
+  pcb(decision, fast, pendingPhase1->phase1Replies,
+      pendingPhase1->signedPhase1Replies);
   this->pendingPhase1s.erase(itr);
-  delete itr->second;
+  delete pendingPhase1;
 }
 
 } // namespace indicus

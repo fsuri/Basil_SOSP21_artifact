@@ -65,26 +65,27 @@ class Client : public ::Client {
   virtual ~Client();
 
   // Begin a transaction.
-  virtual void Begin();
+  virtual void Begin(begin_callback bcb, begin_timeout_callback btcb,
+      uint32_t timeout) override;
 
   // Get the value corresponding to key.
   virtual void Get(const std::string &key, get_callback gcb,
-      get_timeout_callback gtcb, uint32_t timeout = GET_TIMEOUT);
+      get_timeout_callback gtcb, uint32_t timeout = GET_TIMEOUT) override;
 
   // Set the value for the given key.
   virtual void Put(const std::string &key, const std::string &value,
       put_callback pcb, put_timeout_callback ptcb,
-      uint32_t timeout = PUT_TIMEOUT);
+      uint32_t timeout = PUT_TIMEOUT) override;
 
   // Commit all Get(s) and Put(s) since Begin().
   virtual void Commit(commit_callback ccb, commit_timeout_callback ctcb,
-      uint32_t timeout);
+      uint32_t timeout) override;
   
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
-      uint32_t timeout);
+      uint32_t timeout) override;
 
-  virtual std::vector<int> Stats();
+  virtual std::vector<int> Stats() override;
 
  private:
   struct PendingRequest {

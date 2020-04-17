@@ -459,6 +459,7 @@ int main(int argc, char **argv) {
     }
     size_t loaded = 0;
     size_t stored = 0;
+    Debug("Populating with data from %s.", FLAGS_data_file_path.c_str());
     while (!in.eof()) {
       std::string key;
       std::string value;
