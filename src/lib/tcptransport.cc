@@ -245,15 +245,28 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
     struct bufferevent *bev =
         bufferevent_socket_new(libeventBase, fd,
                                BEV_OPT_CLOSE_ON_FREE);
+
+    // mtx.lock();
+    tcpOutgoing[dst] = bev;
+    tcpAddresses.insert(pair<struct bufferevent*, TCPTransportAddress>(bev,dst));
+    // mtx.unlock();
+
     bufferevent_setcb(bev, TCPReadableCallback, NULL,
                       TCPOutgoingEventCallback, info);
     if (bufferevent_socket_connect(bev,
                                    (struct sockaddr *)&(dst.addr),
                                    sizeof(dst.addr)) < 0) {
         bufferevent_free(bev);
+
+        // mtx.lock();
+        tcpOutgoing.erase(dst);
+        tcpAddresses.erase(bev);
+        // mtx.unlock();
+
         Warning("Failed to connect to server via TCP");
         return;
     }
+
     if (bufferevent_enable(bev, EV_READ|EV_WRITE) < 0) {
         Panic("Failed to enable bufferevent");
     }
@@ -267,8 +280,6 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
     TCPTransportAddress *addr = new TCPTransportAddress(sin);
     src->SetAddress(addr);
 
-    tcpOutgoing[dst] = bev;
-    tcpAddresses.insert(pair<struct bufferevent*, TCPTransportAddress>(bev,dst));
 
     Debug("Opened TCP connection to %s:%d",
 	  inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
@@ -617,9 +628,13 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
         }
     info->connectionEvents.push_back(bev);
 	TCPTransportAddress client = TCPTransportAddress(sin);
+
+  //transport->mtx.lock();
 	transport->tcpOutgoing[client] = bev;
 	transport->tcpAddresses.insert(pair<struct bufferevent*,
         TCPTransportAddress>(bev,client));
+  //transport->mtx.unlock();
+
     Debug("Opened incoming TCP connection from %s:%d",
                inet_ntoa(sin.sin_addr), htons(sin.sin_port));
     }
@@ -680,7 +695,9 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         string msg(ptr, msgLen);
         ptr += msgLen;
 
+        //transport->mtx.lock();
         auto addr = transport->tcpAddresses.find(bev);
+        //transport->mtx.unlock();
         UW_ASSERT(addr != transport->tcpAddresses.end());
         
         // Dispatch
@@ -711,7 +728,9 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
 {
     TCPTransportTCPListener *info = (TCPTransportTCPListener *)arg;
     TCPTransport *transport = info->transport;
+    //transport->mtx.lock();
     auto it = transport->tcpAddresses.find(bev);    
+    //transport->mtx.unlock();
     UW_ASSERT(it != transport->tcpAddresses.end());
     TCPTransportAddress addr = it->second;
 
@@ -721,16 +740,24 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
         Warning("Error on outgoing TCP connection to server: %s",
                 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
         bufferevent_free(bev);
+
+        //transport->mtx.lock();
         auto it2 = transport->tcpOutgoing.find(addr);
         transport->tcpOutgoing.erase(it2);
         transport->tcpAddresses.erase(bev);
+        //transport->mtx.unlock();
+
         return;
     } else if (what & BEV_EVENT_EOF) {
         Warning("EOF on outgoing TCP connection to server");
         bufferevent_free(bev);
+        
+        //transport->mtx.lock();
         auto it2 = transport->tcpOutgoing.find(addr);
         transport->tcpOutgoing.erase(it2);
         transport->tcpAddresses.erase(bev);
+        //transport->mtx.unlock();
+
         return;
     }
 }

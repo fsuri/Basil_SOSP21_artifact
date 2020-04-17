@@ -35,20 +35,12 @@ namespace tapirstore {
 
 using namespace std;
 
-Client::Client(transport::Configuration *config, int nShards, int nGroups,
-                int closestReplica, Transport *transport, partitioner part,
-                bool syncCommit, TrueTime timeServer)
-    : config(config), nshards(nShards), ngroups(nGroups), transport(transport),
-    part(part), syncCommit(syncCommit), timeServer(timeServer), lastReqId(0UL) {
-    // Initialize all state here;
-    client_id = 0;
-    while (client_id == 0) {
-        random_device rd;
-        mt19937_64 gen(rd());
-        uniform_int_distribution<uint64_t> dis;
-        client_id = dis(gen);
-    }
-    t_id = (client_id/10000)*10000;
+Client::Client(transport::Configuration *config, uint64_t id, int nShards,
+    int nGroups, int closestReplica, Transport *transport, partitioner part,
+    bool syncCommit, TrueTime timeServer) : config(config), client_id(id),
+    nshards(nShards), ngroups(nGroups), transport(transport), part(part),
+    syncCommit(syncCommit), timeServer(timeServer), lastReqId(0UL) {
+    t_id = client_id << 32;
 
     bclient.reserve(nshards);
 
@@ -76,64 +68,67 @@ Client::~Client()
  *
  * Return a TID for the transaction.
  */
-void
-Client::Begin()
-{
+void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
+      uint32_t timeout) {
+  transport->Timer(0, [this, bcb, btcb, timeout]() {
     Debug("BEGIN [%lu]", t_id + 1);
     t_id++;
     participants.clear();
+    bcb(t_id);
+  });
 }
 
 void Client::Get(const std::string &key, get_callback gcb,
     get_timeout_callback gtcb, uint32_t timeout) {
-  Debug("GET [%lu : %s]", t_id, key.c_str());
 
-  // Contact the appropriate shard to get the value.
-  int i = part(key, nshards) % ngroups;
+  transport->Timer(0, [this, key, gcb, gtcb, timeout]() {
+    Debug("GET [%lu : %s]", t_id, key.c_str());
+    // Contact the appropriate shard to get the value.
+    int i = part(key, nshards) % ngroups;
 
-  // If needed, add this shard to set of participants and send BEGIN.
-  if (participants.find(i) == participants.end()) {
-    participants.insert(i);
-    bclient[i]->Begin(t_id);
-  }
+    // If needed, add this shard to set of participants and send BEGIN.
+    if (participants.find(i) == participants.end()) {
+      participants.insert(i);
+      bclient[i]->Begin(t_id);
+    }
 
-  // Send the GET operation to appropriate shard.
-  bclient[i]->Get(key, gcb, gtcb, timeout);
+    // Send the GET operation to appropriate shard.
+    bclient[i]->Get(key, gcb, gtcb, timeout);
+  });
 }
 
 void Client::Put(const std::string &key, const std::string &value,
     put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
+  transport->Timer(0, [this, key, value, pcb, ptcb, timeout]() {
+    Debug("PUT [%lu : %s]", t_id, key.c_str());
+    // Contact the appropriate shard to set the value.
+    int i = part(key, nshards) % ngroups;
 
-  Debug("PUT [%lu : %s]", t_id, key.c_str());
+    // If needed, add this shard to set of participants and send BEGIN.
+    if (participants.find(i) == participants.end()) {
+      participants.insert(i);
+      bclient[i]->Begin(t_id);
+    }
 
-  // Contact the appropriate shard to set the value.
-  int i = part(key, nshards) % ngroups;
-
-  // If needed, add this shard to set of participants and send BEGIN.
-  if (participants.find(i) == participants.end()) {
-    participants.insert(i);
-    bclient[i]->Begin(t_id);
-  }
-
-  // Buffering, so no need to wait.
-  bclient[i]->Put(key, value, pcb, ptcb, timeout);
+    // Buffering, so no need to wait.
+    bclient[i]->Put(key, value, pcb, ptcb, timeout);
+  });
 }
 
 void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     uint32_t timeout) {
-  // TODO: this codepath is sketchy and probably has a bug (especially in the
-  // failure cases)
-
-  uint64_t reqId = lastReqId++;
-  PendingRequest *req = new PendingRequest(reqId);
-  pendingReqs[reqId] = req;
-  req->ccb = ccb;
-  req->ctcb = ctcb;
-  req->prepareTimestamp = Timestamp(timeServer.GetTime(), client_id);
-  req->callbackInvoked = false;
-  req->timeout = timeout;
-  
-  Prepare(req, timeout);
+  transport->Timer(0, [this, ccb, ctcb, timeout]() {
+    uint64_t reqId = lastReqId++;
+    PendingRequest *req = new PendingRequest(reqId);
+    pendingReqs[reqId] = req;
+    req->ccb = ccb;
+    req->ctcb = ctcb;
+    req->prepareTimestamp = Timestamp(timeServer.GetTime(), client_id);
+    req->callbackInvoked = false;
+    req->timeout = timeout;
+    
+    Prepare(req, timeout);
+  });
 }
 
 void Client::Prepare(PendingRequest *req, uint32_t timeout) {
@@ -213,12 +208,13 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
       commit_callback ccb = [this, reqId](bool committed) {
         auto itr = this->pendingReqs.find(reqId);
         if (itr != this->pendingReqs.end()) {
-          if (!itr->second->callbackInvoked) {
-            itr->second->ccb(RESULT_COMMITTED);
-            itr->second->callbackInvoked = true;
+          PendingRequest *req = itr->second;
+          if (!req->callbackInvoked) {
+            req->ccb(RESULT_COMMITTED);
+            req->callbackInvoked = true;
           }
           this->pendingReqs.erase(itr);
-          delete itr->second;
+          delete req;
         }
       };
       commit_timeout_callback ctcb = [txnId = this->t_id](int status){
@@ -274,14 +270,15 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
     abort_callback acb = [this, reqId]() {
       auto itr = this->pendingReqs.find(reqId);
       if (itr != this->pendingReqs.end()) {
+        PendingRequest *req = itr->second;
         this->pendingReqs.erase(itr);
-        delete itr->second;
+        delete req;
       }
     };
     abort_timeout_callback atcb = [txnId = this->t_id](int status){
       Warning("ABORT[%lu] timeout.", txnId);
     };
-    Abort(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
+    AbortInternal(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
     if (!req->callbackInvoked) {
       req->ccb(abortResult);
       req->callbackInvoked = true;
@@ -294,8 +291,15 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
   // presumably this will be called with empty callbacks as the application can
   // immediately move on to its next transaction without waiting for confirmation
   // that this transaction was aborted
-  Debug("ABORT [%lu]", t_id);
+  transport->Timer(0, [this, acb, atcb, timeout]() {
+      AbortInternal([](){}, [](int status){}, timeout);
+      acb();
+  });
+}
 
+void Client::AbortInternal(abort_callback acb, abort_timeout_callback atcb,
+    uint32_t timeout) {
+  Debug("ABORT [%lu]", t_id);
   for (auto p : participants) {
     bclient[p]->Abort(acb, atcb, timeout);
   }

@@ -42,7 +42,7 @@ using namespace proto;
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int shard, int closestReplica) : client_id(client_id),
     transport(transport), config(config), shard(shard) {
-  client = new replication::ir::IRClient(*config, transport, shard, client_id);
+  client = new replication::ir::IRClient(*config, transport, shard, client_id << 3 | shard);
 
   if (closestReplica == -1) {
     replica = client_id % config->n;
@@ -143,17 +143,18 @@ void ShardClient::Prepare(uint64_t id, const Transaction &txn,
   pendingPrepare->pcb = pcb;
   pendingPrepare->ptcb = ptcb;
   pendingPrepare->requestTimeout = new Timeout(transport, timeout,
-      [this, id, pendingPrepare]() {
+      [this, id, reqId]() {
         Warning("[shard %i] PREPARE[%lu] timeout.", shard, id);
-        Timestamp ts = pendingPrepare->ts;
-        prepare_timeout_callback ptcb = pendingPrepare->ptcb;
-        auto itr = this->pendingPrepares.find(pendingPrepare->reqId);
+        auto itr = this->pendingPrepares.find(reqId);
         if (itr != this->pendingPrepares.end()) {
+          PendingPrepare *pendingPrepare = itr->second;
+          Timestamp ts = pendingPrepare->ts;
+          prepare_timeout_callback ptcb = pendingPrepare->ptcb;
           this->pendingPrepares.erase(itr);
-          delete itr->second;
+          delete pendingPrepare;
+          ptcb(REPLY_TIMEOUT, ts);
         }
 
-        ptcb(REPLY_TIMEOUT, ts);
       });
 
   client->InvokeConsensus(request_str, std::bind(&ShardClient::TapirDecide, this,
@@ -187,9 +188,10 @@ void ShardClient::Commit(uint64_t id, const Transaction & txn,
       Warning("[shard %i] COMMIT[%lu] timeout.", shard, id);
       auto itr = this->pendingCommits.find(reqId);
       if (itr != this->pendingCommits.end()) {
-        commit_timeout_callback ctcb = itr->second->ctcb;
+        PendingCommit *pendingCommit = itr->second;
+        commit_timeout_callback ctcb = pendingCommit->ctcb;
         this->pendingCommits.erase(itr);
-        delete itr->second;
+        delete pendingCommit;
         ctcb(REPLY_TIMEOUT);
       }
 
@@ -224,9 +226,10 @@ void ShardClient::Abort(uint64_t id, const Transaction &txn,
       Warning("[shard %i] ABORT[%lu] timeout.", shard, id);
       auto itr = this->pendingAborts.find(reqId);
       if (itr != this->pendingAborts.end()) {
-        abort_timeout_callback atcb = itr->second->atcb;
+        PendingAbort *pendingAbort = itr->second;
+        abort_timeout_callback atcb = pendingAbort->atcb;
         this->pendingAborts.erase(itr);
-        delete itr->second;
+        delete pendingAbort;
         atcb(REPLY_TIMEOUT);
       }
   });
@@ -277,10 +280,11 @@ void ShardClient::GetTimeout(uint64_t id, uint64_t reqId) {
   Warning("[shard %i] GET[%lu] timeout.", shard, reqId);
   auto itr = this->pendingGets.find(reqId);
   if (itr != this->pendingGets.end()) {
-    get_timeout_callback gtcb = itr->second->gtcb;
-    std::string key = itr->second->key;
+    PendingGet *pendingGet = itr->second;
+    get_timeout_callback gtcb = pendingGet->gtcb;
+    std::string key = pendingGet->key;
     this->pendingGets.erase(itr);
-    delete itr->second;
+    delete pendingGet;
     gtcb(REPLY_TIMEOUT, key);
   }
 }
@@ -294,10 +298,11 @@ bool ShardClient::GetCallback(uint64_t reqId, const string &request_str,
 
   auto itr = this->pendingGets.find(reqId);
   if (itr != this->pendingGets.end()) {
-    get_callback gcb = itr->second->gcb;
-    std::string key = itr->second->key;
+    PendingGet *pendingGet = itr->second;
+    get_callback gcb = pendingGet->gcb;
+    std::string key = pendingGet->key;
     this->pendingGets.erase(itr);
-    delete itr->second;
+    delete pendingGet;
     Debug("[shard %lu:%i] GET callback [%d]", client_id, shard, reply.status());
     if (reply.has_timestamp()) {
       gcb(reply.status(), key, reply.value(), Timestamp(reply.timestamp()));
@@ -318,9 +323,10 @@ bool ShardClient::PrepareCallback(uint64_t reqId,
 
   auto itr = this->pendingPrepares.find(reqId);
   if (itr != this->pendingPrepares.end()) {
-    prepare_callback pcb = itr->second->pcb;
+    PendingPrepare *pendingPrepare = itr->second;
+    prepare_callback pcb = pendingPrepare->pcb;
     this->pendingPrepares.erase(itr);
-    delete itr->second;
+    delete pendingPrepare;
     if (reply.has_timestamp()) {
       pcb(reply.status(), Timestamp(reply.timestamp()));
     } else {
@@ -338,9 +344,10 @@ bool ShardClient::CommitCallback(uint64_t reqId,
 
   auto itr = this->pendingCommits.find(reqId);
   if (itr != this->pendingCommits.end()) {
-    commit_callback ccb = itr->second->ccb;
+    PendingCommit *pendingCommit = itr->second;
+    commit_callback ccb = pendingCommit->ccb;
     this->pendingCommits.erase(itr);
-    delete itr->second;
+    delete pendingCommit;
     ccb(true);
   }
   return true;
@@ -358,9 +365,10 @@ bool ShardClient::AbortCallback(uint64_t reqId,
 
   auto itr = this->pendingAborts.find(reqId);
   if (itr != this->pendingAborts.end()) {
-    abort_callback acb = itr->second->acb;
+    PendingAbort *pendingAbort = itr->second;
+    abort_callback acb = pendingAbort->acb;
     this->pendingAborts.erase(itr);
-    delete itr->second;
+    delete pendingAbort;
     acb();
   }
   return true;

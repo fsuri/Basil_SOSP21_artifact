@@ -514,6 +514,7 @@ int main(int argc, char **argv) {
   partitioner part;
   switch (benchMode) {
     case BENCH_TPCC:
+    case BENCH_TPCC_SYNC:
       part = warehouse_partitioner;
       break;
     default:
@@ -580,9 +581,9 @@ int main(int argc, char **argv) {
 
     switch (mode) {
       case PROTO_TAPIR: {
-        client = new tapirstore::Client(config, FLAGS_num_shards,
-            FLAGS_num_groups, FLAGS_closest_replica, transport, part,
-            FLAGS_tapir_sync_commit, TrueTime(FLAGS_clock_skew,
+        client = new tapirstore::Client(config, (FLAGS_client_id << 3) | i,
+            FLAGS_num_shards, FLAGS_num_groups, FLAGS_closest_replica,
+            transport, part, FLAGS_tapir_sync_commit, TrueTime(FLAGS_clock_skew,
               FLAGS_clock_error));
         break;
       }
