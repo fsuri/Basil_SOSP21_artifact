@@ -646,7 +646,7 @@ b) Alternatively, if a client receives enough matching (in decision and view) $P
 \end{minipage}}
 
 If a client receives $\geq f+1$ matching decision values and views ($Phase2R$ messages; favors Commit if two matching sets exist) it forwards those to the replicas as proof for a new $Phase2$ message (with the same decision) that it broadcasts to all replicas. If it instead receives $< f+1$ matching decisions it uses the received $Phase1R$ messages to iniate its own $Phase2$ message (identical to validation step, but signed by this client). 
-Additionally, if the client received inconsistent decisions (i.e. both Commit and Abort) or $<f+1$ total decision messages that differ from its own proposed decision, it initiates a \textit{Fallback election}. To do so, it broadcasts a message $InvokeFB \coloneqq (TxID, CID, \{view\}_R$. It attaches a set of $4f+1$ signed view messages.  
+Additionally, if the client received inconsistent decisions (i.e. both Commit and Abort) \fs{If they were signed by the same client, this constitutes a PoM} or $<f+1$ total decision messages that differ from its own proposed decision, it initiates a \textit{Fallback election}. To do so, it broadcasts a message $InvokeFB \coloneqq (TxID, CID, \{view\}_R$. It attaches a set of $4f+1$ signed view messages.  
 
 \fs{refine this}
 \underline{Additonal subtlelties}: A client may treat a $Phase2R$ decision as $Phase1R$ vote for the sake of making a new decision. This is safe: If the replica was honest, then this reflects that there existed enough matching votes, and if it was byzantine, it could have voted arbitrarily regardless. \fs{maybe just simpler if replicas include their phase1r as well, but this adds overhead}
@@ -690,7 +690,7 @@ The Fallback replica considers itself elected upon receiving a Quorum of $4f+1$ 
 \underline{Additional subtlelties:} A byzantine Fallback may equivocate Elect Quorums. However, after at most $f+1$ fallback elections a consistent result will be derived (given Synchrony).
 \textbf{Decision Reconciliation Rule:} The reconciliation rule is straightforward: $dec_{new} = majority(\{Elect.decision\})$. If a logged decision exists (implies that a shard-decision might exist), any Quorum of $4f+1$ Elect messages is guaranteed to contain $2f+1$ matching decisions (a majority). Vice versa, if $<2f+1$ replicas agree on a decision, then it is impossible for this decision to have been logged. Thus it is guaranteed that logged decisions persists and otherwise an arbitrary decision qualifies since at least one honest replica must have proposed it (and hence the decision is based on a legal $Phase2$ Quorum).
 \fs{optional: If a Fallback receives $>4f+1$ Elect messages, he may choose a Quorum that favors Commit (maximizes dependencies commit chance, but gives byz clients benefit of the doubt).}
-
+\fs{If a replica receives inconsistent decisions that were signed by the same client, this constitutes a PoM for the client}
 
 
 \fbox{\begin{minipage}{21em}
@@ -804,14 +804,45 @@ In theory the whole db could be stalled on any given replica and thus that garba
 Next, we discuss a series of optional modifications: \fs{not necessarily optimizations: Retries, Single shard logging, speeding up shard certificates, read leases, splitting tx objects}
 
 
+\paragraph{MULTI-SLOT Retries}
+Clients whose initial transaction must abort due to write/read conflicts may retry their transaction without re-executing by re-submitting the same transaction object under a new timestamp. In order to avoid conflicts with their own original transaction, clients will fully abort the first transaction before issuing a new transaction. (Note, that if a client cannot abort the transaction, then no retry was necessary anyways. A client can achieve FIFO ordering by piggybacking the retrying transaction request onto the Abort Writeback message of the orginal Tx.
+A byzantine client issuing pointless retries creates no additional external effects, as no new read timestamps are acquired, and all retries are aborted). In order to guarantee, that a byzantine client does not re-issue the same transaction repeatedly (to cause processing load) replicas drop all transactions whose digest (TxID without Timestamp ) matches a previously committed (in this case just reply with stored result -its a replay after all if seq no matches) or pending transaction \fs{in general we only allow one active TX at a time - A client can of course re-execute the same Tx procedure multiple times, but it will presumably result in different read versions .. but technically it doesnt need to, so we would need to accept duplicate TX: imagine example where you try to read from higher TS, read the same old verions, but now SHOULD have seen newer)}. \fs{Enforce retry limit on same TX seq no.}  \fs{Since these retries only look like retries from the clients perspective - from the replicas perspective it is simply a new TX (byz client just changes seq no...) - we cannot stop byz clients from re-issuing as often as they want; this is NO different however, than them just inventing read sets, so its no additional damage}
 
-\fs{Retries are a mess currently and might not be worth to include}
+\fs{Just dont evaluate conflicts against own ID? (Treat TXid = (hash, TS)) In this case a byz client may do double commits, but that is fine: does not mess with database state + is a soft PoM (could have lost control mid-retry) The TX will look illegal in the log?. Up to a limit of retries - dont accept past it. If its the same with diff seq no. then we dont protect against it. Replicas will reject multiple concurrent TX request unless they are for the same ID} 
+
+Can I maintain abstains somehow to avoid double commits? -> This would still not avoid, it would just make the retry harder.
+
+For write conflicts (line 9-10 in \ref{mvtso}) replicas return Retry and a suggested Timestamp (bigger than all conflicts) instead of Abstain. If a client receives $|Retries| + |Commit| \geq 3f+1$ (but $|Commit| < 3f+1$) votes, it retries as explained above.
+
+\fs{(If a TX is not in conflict with the same TX at smaller TS, then one technically does not need to wait for the abort to happen before the retry. However, this does allow byz clients to issue multiple committing instances at the same time, and we might want to avoid that).}
+
+Note, that dependents of the original transaction do not carry over to the retry version as they differ in transaction ID. \fs{otherwise retries could violate legality of dependents reads}
+
+\iffalse
+Retries for different ID:
+
+Protocol:
+Client receives 3f+1 Abstain/Retry votes. If 2f+1 of those are retry (implying that there could be 3f+1 commit votes) a client retries:
+1. Aborts the orignial slot on the fast path
+2. Commits new version with new timestamp. New ID must be old ID, bar timestamp change. (Other TX are rejected - this avoid multiple TX per client). Do this redefining TxID = (digest, TS). \fs{if we go with this, then change orignial def to this right away.}
+
+Comments:
+1. Byz client may just commit same TX twice. That is safe, since Tx needs to pass validation check at 2 times. The higher TX strictly dominates the lower TS. Conflicts are from read.version up to TS.
+ 
+
+2. Dependent will be aborted. (TS does not match dep read version anymore) This is fine, since the dependent would have been aborted anyways. Is there a way to "save" the dependents too?
+
+\fi
+
+
+
+
+\paragraph{SINGLE SLOT Retries:} 
+
+\fs{Single Slot Retries are a mess currently and might not be worth to include}
 \fs{retries come at the cost of no fast path and having to store proofs for the transaction. These proofs are only necessary for the fallback. Moreover, it can create multiple dependencies since multi p1 remain.}
 
-
-
-
-\paragraph{SINGLE SLOT Retries:} MVTSO, by design, favors read requests, at the cost of potentially aborting concurrent write transactions. This is intuitively sensible, as reads require additional WAN roundtrips in order to execute. 
+MVTSO, by design, favors read requests, at the cost of potentially aborting concurrent write transactions. This is intuitively sensible, as reads require additional WAN roundtrips in order to execute. 
 However, when a transaction includes both reads and writes, and execution spans several reads, it becomes increasingly suceptible to abort as consequence of a conflicting read request. Observe, that aborts due a write-read conflict are a consequence of a read having failed to observe a relevant write with smaller timestamp. Thus, such an abort could have been avoided by simply choosing a larger timestamp. In order to faciliate this, we offer write transactions the option to Retry (with a larger timestamp), rather than abort. This however, comes at a tradeoff: Clients may not utilize the validation Fast-Path when opting into the availability of Retries. We outline the Retry protocol and implication for Fast-Paths as follows:
 
 In order to be able to change the timestamp for the same transaction we must make the Transaction ID independent from it. Otherwise, it would not be possible to map retries to the same transaction in order to avoid double-commits and enable garbage collection.
@@ -850,20 +881,6 @@ fs{This is currently unsafe?: Makes dependent look like byz client because read 
 Whether to opt into the availability of retries need not be a global system decision, but can be decided on a per-transaction basis. By signaling a flag within the transaction object (this changes the ID) a client can decide whether to allow for the possibility of retries which incurs the trade-off of sacrificing the opportunity of using a Fast-Path (attempts to go Fast-Path will be ignored by honest replicas if the flag is set), and additonal replica storage and bandwidth overhead (vote quorums to justify decisions) to enable live reconciliation.
 
 
-\paragraph{MULTI-SLOT Retries v2}
-
-Retries for different ID:
-
-Protocol:
-Client receives 3f+1 Abstain/Retry votes. If 2f+1 of those are retry (implying that there could be 3f+1 commit votes) a client retries:
-1. Aborts the orignial slot on the fast path
-2. Commits new version with new timestamp. New ID must be old ID, bar timestamp change. (Other TX are rejected - this avoid multiple TX per client). Do this redefining TxID = (digest, TS). \fs{if we go with this, then change orignial def to this right away.}
-
-Comments:
-1. Byz client may just commit same TX twice. That is safe, since Tx needs to pass validation check at 2 times. The higher TX strictly dominates the lower TS. Conflicts are from read.version up to TS.
- 
-
-2. Dependent will be aborted. (TS does not match dep read version anymore) This is fine, since the dependent would have been aborted anyways. Is there a way to "save" the dependents too?
 
 
 
