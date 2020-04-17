@@ -22,7 +22,7 @@ class Replica : public TransportReceiver {
 public:
   Replica(const transport::Configuration &config, KeyManager *keyManager,
     App *app, int groupIdx, int myId, bool signMessages, uint64_t maxBatchSize,
-    Transport *transport);
+    bool primaryCoordinator, Transport *transport);
   ~Replica();
 
   // Message handlers.
@@ -41,6 +41,8 @@ public:
   void HandleCommit(const TransportAddress &remote,
                           const proto::Commit &msg,
                         const proto::SignedMessage& signedMsg);
+  void HandleGrouped(const TransportAddress &remote,
+                          const proto::GroupedSignedMessage &msg);
 
  private:
   const transport::Configuration &config;
@@ -50,6 +52,7 @@ public:
   int myId;  // Replica index into config.
   bool signMessages;
   uint64_t maxBatchSize;
+  bool primaryCoordinator;
   Transport *transport;
   int currentView;
   int nextSeqNum;
@@ -64,9 +67,11 @@ public:
   void sendBatchedPreprepare();
 
   bool sendMessageToAll(const ::google::protobuf::Message& msg);
+  bool sendMessageToPrimary(const ::google::protobuf::Message& msg);
 
+  // map from batched digest to received batched requests
   std::unordered_map<std::string, proto::BatchedRequest> batchedRequests;
-  // map from digest to packed message
+  // map from digest to received requests
   std::unordered_map<std::string, proto::PackedMessage> requests;
 
   // the next sequence number to be executed

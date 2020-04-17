@@ -36,16 +36,21 @@ bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
 
 bool __PreValidateSignedMessage(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager, proto::PackedMessage &packedMessage) {
-  crypto::PubKey replicaPublicKey = keyManager->GetPublicKey(
-      signedMessage.replica_id());
-  // verify that the replica actually sent this reply and that we are expecting
-  // this reply
-  if (!crypto::IsMessageValid(replicaPublicKey, signedMessage.packed_msg(),
-        &signedMessage)) {
+  if (!CheckSignature(signedMessage, keyManager)) {
     return false;
   }
 
   return packedMessage.ParseFromString(signedMessage.packed_msg());
+}
+
+bool CheckSignature(const proto::SignedMessage &signedMessage,
+    KeyManager *keyManager) {
+    crypto::PubKey replicaPublicKey = keyManager->GetPublicKey(
+        signedMessage.replica_id());
+    // verify that the replica actually sent this reply and that we are expecting
+    // this reply
+    return crypto::IsMessageValid(replicaPublicKey, signedMessage.packed_msg(),
+          &signedMessage);
 }
 
 void SignMessage(const ::google::protobuf::Message &msg,
@@ -54,6 +59,8 @@ void SignMessage(const ::google::protobuf::Message &msg,
   proto::PackedMessage packedMsg;
   *packedMsg.mutable_msg() = msg.SerializeAsString();
   *packedMsg.mutable_type() = msg.GetTypeName();
+  // TODO this is not portable. SerializeAsString may not return the same
+  // result every time
   std::string msgData = packedMsg.SerializeAsString();
   crypto::SignMessage(privateKey, msgData, signedMessage);
   signedMessage.set_packed_msg(msgData);

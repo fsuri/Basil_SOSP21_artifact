@@ -36,11 +36,21 @@ class Slots {
 
   std::string getSlotDigest(uint64_t seq_num, uint64_t view);
 
+  proto::GroupedSignedMessage getPrepareProof(uint64_t seq_num, uint64_t view, const std::string& digest);
+
+  proto::GroupedSignedMessage getCommitProof(uint64_t seq_num, uint64_t view, const std::string& digest);
+
  private:
+
+    struct digest_and_sig {
+      std::string digest;
+      uint64_t replica_id;
+      std::string sig;
+    };
 
     struct Slot {
       // slot number to view number to (digest,primary id) (techincally implied by the view but we don't have n here)
-      std::string preprepare_digest;
+      digest_and_sig preprepare;
       // map from digest to replica id to signature (may be empty)
       // we keep around multiple digests because we could received prepares before the preprepare
       // and we don't know which ones to keep

@@ -24,6 +24,9 @@ bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
 bool __PreValidateSignedMessage(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager, proto::PackedMessage &packedMessage);
 
+bool CheckSignature(const proto::SignedMessage &signedMessage,
+    KeyManager *keyManager);
+
 void SignMessage(const ::google::protobuf::Message &msg,
     const crypto::PrivKey &privateKey, uint64_t processId,
     proto::SignedMessage &signedMessage);
