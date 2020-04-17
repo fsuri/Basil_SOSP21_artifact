@@ -125,6 +125,7 @@ void ShardClient::Get(uint64_t id, const std::string &key,
 
   UW_ASSERT(rqs <= closestReplicas.size());
   for (size_t i = 0; i < rqs; ++i) {
+    Debug("[group %i] Sending GET to replica %d", group, closestReplicas[i]);
     transport->SendMessageToReplica(this, group, closestReplicas[i], read);
   }
 
