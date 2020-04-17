@@ -202,6 +202,8 @@ To mititage the frequency of read aborts we add three mechanisms on top of TSO, 
 \item Read Timestamps: We allow read operations to claim \textit{Read Timestamps} by signaling replicas to abort out-of-order writes (writes with smaller timestamps). This fairness policy implements a bias towards read operations, by aborting writes instead of reads. Since most workloads are read dominated and write-only transactions can re-execute more swiftly, this is an intuitively sensible trade-off. In section Y (Retries) 	we discuss an optional modification to support read-modify-write transactions. \fs{retries}
 \end{itemize}
 
+Note, that for write heavy workloads, or workloads without read/write conflicts MVTSO degenerates to TSO.
+Figure \ref{fig:MVTSOEX} shows an example trace of all MVTSO behaviors under different request processing orders.
 
 \begin{figure*}
 \begin{center}
@@ -212,7 +214,7 @@ To mititage the frequency of read aborts we add three mechanisms on top of TSO, 
 \end{figure*}
 
 
-Note, that for write heavy workloads, or workloads without read/write conflicts MVTSO degenerates to TSO.
+
 
 Algorithm \ref{mvtso} shows the necessary validation check to preserve Byzantine-Serializability. 
 Given a transaction TX finalized execution state, i.e. its read-set, write-set and dependencies, and a proposed timestamp, the validation check returns \textit{Abstain/Abort} (we discuss the distinction further in section X (validation)) if a conflict has been detected. Otherwise, a replica tentatively \textit{Prepares} a transaction by adding its reads and writes to the $PreparedDB$, making its writes visible and evaluating future transactions against it for conflicts. Regardless of the outcome, a replica garbage collects all Read Timestmaps (RTS) associated with the transactions reads (indexable by matching TS).
