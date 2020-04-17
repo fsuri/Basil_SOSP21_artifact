@@ -24,6 +24,7 @@
 #include "store/benchmark/async/common/uniform_key_selector.h"
 #include "store/benchmark/async/retwis/retwis_client.h"
 #include "store/benchmark/async/rw/rw_client.h"
+#include "store/benchmark/async/tpcc/sync/tpcc_client.h"
 #include "store/benchmark/async/tpcc/async/tpcc_client.h"
 #include "store/mortystore/client.h"
 #include "store/benchmark/async/smallbank/smallbank_client.h"
@@ -59,6 +60,7 @@ enum benchmode_t {
   BENCH_TPCC,
   BENCH_SMALLBANK_SYNC,
   BENCH_RW,
+  BENCH_TPCC_SYNC
 };
 
 enum keysmode_t {
@@ -206,13 +208,15 @@ const std::string benchmark_args[] = {
 	"retwis",
   "tpcc",
   "smallbank",
-  "rw"
+  "rw",
+  "tpcc-sync"
 };
 const benchmode_t benchmodes[] {
   BENCH_RETWIS,
   BENCH_TPCC,
   BENCH_SMALLBANK_SYNC,
-  BENCH_RW
+  BENCH_RW,
+  BENCH_TPCC_SYNC
 };
 static bool ValidateBenchmark(const char* flagname, const std::string &value) {
   int n = sizeof(benchmark_args);
@@ -664,6 +668,7 @@ int main(int argc, char **argv) {
         }
         break;
       case BENCH_SMALLBANK_SYNC:
+      case BENCH_TPCC_SYNC:
         if (syncClient == nullptr) {
           UW_ASSERT(client != nullptr);
           syncClient = new SyncClient(client);
@@ -687,6 +692,19 @@ int main(int argc, char **argv) {
       case BENCH_TPCC:
         UW_ASSERT(asyncClient != nullptr);
         bench = new tpcc::AsyncTPCCClient(*asyncClient, *transport,
+            seed,
+            FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
+            FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
+            FLAGS_tpcc_num_warehouses, FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id,
+            FLAGS_tpcc_C_c_last, FLAGS_tpcc_new_order_ratio,
+            FLAGS_tpcc_delivery_ratio, FLAGS_tpcc_payment_ratio,
+            FLAGS_tpcc_order_status_ratio, FLAGS_tpcc_stock_level_ratio,
+            FLAGS_static_w_id, FLAGS_abort_backoff,
+            FLAGS_retry_aborted, FLAGS_max_attempts);
+        break;
+      case BENCH_TPCC_SYNC:
+        UW_ASSERT(syncClient != nullptr);
+        bench = new tpcc::SyncTPCCClient(*syncClient, *transport,
             seed,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
@@ -729,7 +747,8 @@ int main(int argc, char **argv) {
         // async benchmarks
 	      transport->Timer(0, [bench, bdcb]() { bench->Start(bdcb); });
         break;
-      case BENCH_SMALLBANK_SYNC: {
+      case BENCH_SMALLBANK_SYNC:
+      case BENCH_TPCC_SYNC: {
         SyncTransactionBenchClient *syncBench = dynamic_cast<SyncTransactionBenchClient *>(bench);
         UW_ASSERT(syncBench != nullptr);
         threads.push_back(new std::thread([syncBench, bdcb](){

@@ -1,5 +1,5 @@
-#ifndef ASYNC_TPCC_CLIENT_H
-#define ASYNC_TPCC_CLIENT_H
+#ifndef SYNC_TPCC_CLIENT_H
+#define SYNC_TPCC_CLIENT_H
 
 #include <random>
 
@@ -29,4 +29,4 @@ class SyncTPCCClient : public SyncTransactionBenchClient, public TPCCClient {
 
 } //namespace tpcc
 
-#endif /* ASYNC_TPCC_CLIENT_H */
+#endif /* SYNC_TPCC_CLIENT_H */
