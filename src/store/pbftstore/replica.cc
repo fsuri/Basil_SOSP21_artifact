@@ -205,14 +205,23 @@ void Replica::sendBatchedPreprepare() {
   // send a preprepare for the batched request
   proto::Preprepare preprepare;
   string digest = BatchedDigest(batchedRequest);
-  preprepare.set_seqnum(nextSeqNum++);
+  uint64_t seqnum = nextSeqNum++;
+  preprepare.set_seqnum(seqnum);
   preprepare.set_viewnum(currentView);
   preprepare.set_digest(digest);
 
+  SendPreprepare(seqnum, preprepare);
+}
+
+void Replica::SendPreprepare(uint64_t seqnum, const proto::Preprepare& preprepare) {
   // send preprepare to everyone
-  // TODO, mabe have a timeout to resend preprepare if you don't commit the
-  // digest after 100ms
   sendMessageToAll(preprepare);
+
+  // wait 300 ms for tx to complete
+  seqnumCommitTimers[seqnum] = transport->Timer(300, [this, seqnum, preprepare]() {
+    Debug("Primary commit timer expired, resending preprepare");
+    this->SendPreprepare(seqnum, preprepare);
+  });
 }
 
 void Replica::HandleBatchedRequest(const TransportAddress &remote,
@@ -427,6 +436,10 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest) {
 void Replica::executeSlots() {
   Debug("exec seq num: %lu", execSeqNum);
   while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
+    // cancel the commit timer
+    transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
+    seqnumCommitTimers.erase(execSeqNum);
+
     string batchDigest = pendingExecutions[execSeqNum];
     // only execute when we have the batched request
     if (batchedRequests.find(batchDigest) != batchedRequests.end()) {

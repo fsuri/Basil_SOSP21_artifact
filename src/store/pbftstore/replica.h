@@ -80,6 +80,11 @@ public:
   // map from seqnum to the digest pending execution at that sequence number
   std::unordered_map<uint64_t, std::string> pendingExecutions;
 
+  void SendPreprepare(uint64_t seqnum, const proto::Preprepare& preprepare);
+  // map from seqnum to timer ids. If the primary commits the sequence number
+  // before the timer expires, then it cancels the timer
+  std::unordered_map<uint64_t, int> seqnumCommitTimers;
+
   // map from tx digest to reply address
   std::unordered_map<std::string, TransportAddress*> replyAddrs;
 
