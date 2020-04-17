@@ -19,6 +19,8 @@ int SyncStockLevel::Execute(SyncClient &client) {
   Debug("Warehouse: %u", w_id);
   Debug("District: %u", d_id);
   
+  client.Begin();
+
   std::string d_key = DistrictRowKey(w_id, d_id);
   client.Get(d_key, str, timeout);
   DistrictRow d_row;

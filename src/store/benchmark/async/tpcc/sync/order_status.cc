@@ -18,6 +18,9 @@ int SyncOrderStatus::Execute(SyncClient &client) {
   Debug("ORDER_STATUS");
   Debug("Warehouse: %u", c_w_id);
   Debug("District: %u", c_d_id);
+
+  client.Begin();
+
   if (c_by_last_name) { // access customer by last name
     Debug("Customer: %s", c_last.c_str());
     std::string cbn_key = CustomerByNameRowKey(c_w_id, c_d_id, c_last);
