@@ -19,6 +19,8 @@ int SyncPayment::Execute(SyncClient &client) {
 
   Debug("Amount: %u", h_amount);
   Debug("Warehouse: %u", w_id);
+
+  client.Begin();
   
   std::string w_key = WarehouseRowKey(w_id);
   client.Get(w_key, str, timeout);
