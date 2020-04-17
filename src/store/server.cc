@@ -50,6 +50,7 @@
 #include "store/pbftstore/server.h"
 
 #include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
+#include "store/indicusstore/common.h"
 
 #include <gflags/gflags.h>
 
@@ -475,6 +476,7 @@ int main(int argc, char **argv) {
           o_row.ParseFromString(value);
           std::cerr << "O:" << o_row.w_id() << ' ' << o_row.d_id() << ' ' << o_row.id()
                     << ' ' << o_row.ol_cnt() << std::endl;
+          std::cerr << indicusstore::BytesToHex(key, 20) << std::endl;
         }
         if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
           server->Load(key, value, Timestamp());
