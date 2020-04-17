@@ -17,6 +17,7 @@ SyncPayment::~SyncPayment() {
 int SyncPayment::Execute(SyncClient &client) {
   std::string str;
 
+  Debug("PAYMENT");
   Debug("Amount: %u", h_amount);
   Debug("Warehouse: %u", w_id);
 

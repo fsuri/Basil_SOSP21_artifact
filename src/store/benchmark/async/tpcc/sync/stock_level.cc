@@ -52,6 +52,7 @@ int SyncStockLevel::Execute(SyncClient &client) {
       }
     }
   }
+  Debug("COMMIT");
   return client.Commit(timeout);
 }
 

@@ -465,19 +465,6 @@ int main(int argc, char **argv) {
       int i = ReadBytesFromStream(&in, key);
       if (i == 0) {
         ReadBytesFromStream(&in, value);
-        if (key[0] == 6) {
-          std::cerr << *reinterpret_cast<const uint32_t*>(key.c_str() + 1) << ' '
-                    << *reinterpret_cast<const uint32_t*>(key.c_str() + 5) << ' '
-                    << *reinterpret_cast<const uint32_t*>(key.c_str() + 9) << ' '
-                    << *reinterpret_cast<const uint32_t*>(key.c_str() + 13) << ' '
-                    << std::endl;
-        } else if (key[0] == 5) {
-          tpcc::OrderRow o_row;
-          o_row.ParseFromString(value);
-          std::cerr << "O:" << o_row.w_id() << ' ' << o_row.d_id() << ' ' << o_row.id()
-                    << ' ' << o_row.ol_cnt() << std::endl;
-          std::cerr << indicusstore::BytesToHex(key, 20) << std::endl;
-        }
         if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
           server->Load(key, value, Timestamp());
           ++stored;
