@@ -1,4 +1,5 @@
 #include "store/pbftstore/replica.h"
+#include "store/pbftstore/common.h"
 
 namespace pbftstore {
 
@@ -27,31 +28,38 @@ using namespace std;
 //      commit messages
 
 Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
-  App *app, int groupIdx, int myId, bool signMessages, Transport *transport)
+  App *app, int groupIdx, int myId, bool signMessages, uint64_t maxBatchSize,
+  Transport *transport)
     : config(config), keyManager(keyManager), app(app),
     groupIdx(groupIdx), myId(myId), signMessages(signMessages),
-    transport(transport) {
+    maxBatchSize(maxBatchSize), transport(transport) {
   transport->Register(this, config, groupIdx, myId);
 
   // intial view
-  view = 0;
+  currentView = 0;
   // initial seqnum
-  seqnum = 0;
+  nextSeqNum = 0;
   execSeqNum = 0;
+  execBatchNum = 0;
+
+  batchTimerRunning = false;
+  nextBatchNum = 0;
+
+  Debug("Initialized replica at %d %d", groupIdx, myId);
 }
 
 Replica::~Replica() {}
 
 void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
                           const string &d, void *meta_data) {
-  // Debug("Received a message");
   proto::SignedMessage signedMessage;
   string type;
   string data;
   bool recvSignedMessage = false;
 
+  Debug("Received message of type %s", t.c_str());
+
   if (t == signedMessage.GetTypeName()) {
-    Debug("Received signed message");
     if (!signedMessage.ParseFromString(d)) {
       return;
     }
@@ -70,10 +78,14 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   proto::Preprepare preprepare;
   proto::Prepare prepare;
   proto::Commit commit;
+  proto::BatchedRequest batchedRequest;
 
   if (type == request.GetTypeName()) {
     request.ParseFromString(data);
     HandleRequest(remote, request);
+  } else if (type == batchedRequest.GetTypeName()) {
+    batchedRequest.ParseFromString(data);
+    HandleBatchedRequest(remote, batchedRequest);
   } else if (type == preprepare.GetTypeName()) {
     if (signMessages && !recvSignedMessage) {
       return;
@@ -93,7 +105,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     if (signMessages && !recvSignedMessage) {
       return;
     }
-    
+
     HandleCommit(remote, commit, signedMessage);
   } else {
     Debug("Sending request to app");
@@ -108,17 +120,17 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   }
 }
 
-void Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
+bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
   if (signMessages) {
-    proto::SignedMessage signedMessage;
-    SignMessage(msg, keyManager->GetPrivateKey(myId), myId, signedMessage);
+    proto::SignedMessage signedMsg;
+    SignMessage(msg, keyManager->GetPrivateKey(myId), myId, signedMsg);
     // send to everyone and to me
-    transport->SendMessageToGroup(this, groupIdx, signedMessage);
-    transport->SendMessageToReplica(this, groupIdx, myId, signedMessage);
+    return transport->SendMessageToGroup(this, groupIdx, signedMsg) &&
+           transport->SendMessageToReplica(this, groupIdx, myId, signedMsg);
   } else {
     // send to everyone and to me
-    transport->SendMessageToGroup(this, groupIdx, msg);
-    transport->SendMessageToReplica(this, groupIdx, myId, msg);
+    return transport->SendMessageToGroup(this, groupIdx, msg) &&
+           transport->SendMessageToReplica(this, groupIdx, myId, msg);
   }
 }
 
@@ -126,7 +138,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
                                const proto::Request &request) {
   Debug("Handling request message");
 
-  std::string digest = request.digest();
+  string digest = request.digest();
 
   if (requests.find(digest) == requests.end()) {
     Debug("new request: %s", request.packed_msg().type().c_str());
@@ -136,22 +148,63 @@ void Replica::HandleRequest(const TransportAddress &remote,
     // clone remote mapped to request for reply
     replyAddrs[digest] = remote.clone();
 
-    int currentPrimary = config.GetLeaderIndex(view);
+    int currentPrimary = config.GetLeaderIndex(currentView);
     if (currentPrimary == myId) {
-      // If I am the primary, send preprepare to everyone
-      proto::Preprepare preprepare;
-      preprepare.set_seqnum(seqnum++);
-      preprepare.set_viewnum(view);
-      preprepare.set_digest(digest);
-
-      sendMessageToAll(preprepare);
+      pendingBatchedDigests[nextBatchNum++] = digest;
+      if (pendingBatchedDigests.size() >= maxBatchSize) {
+        Debug("Batch is full, sending");
+        if (batchTimerRunning) {
+          transport->CancelTimer(batchTimerId);
+          batchTimerRunning = false;
+        }
+        sendBatchedPreprepare();
+      } else if (!batchTimerRunning) {
+        // start the timer, 10ms should be a good amount
+        batchTimerRunning = true;
+        Debug("Starting batch timer");
+        batchTimerId = transport->Timer(10, [this]() {
+          Debug("Batch timer expired, sending");
+          this->batchTimerRunning = false;
+          this->sendBatchedPreprepare();
+        });
+      }
     }
+
+    // this could be the message that allows us to execute a slot
+    executeSlots();
   }
 }
 
+void Replica::sendBatchedPreprepare() {
+  proto::BatchedRequest batchedRequest;
+  for (const auto& pair : pendingBatchedDigests) {
+    (*batchedRequest.mutable_digests())[pair.first] = pair.second;
+  }
+  pendingBatchedDigests.clear();
+  nextBatchNum = 0;
+  // send the batched preprepare to everyone
+  sendMessageToAll(batchedRequest);
+
+  // send a preprepare for the batched request
+  proto::Preprepare preprepare;
+  string digest = BatchedDigest(batchedRequest);
+  preprepare.set_seqnum(nextSeqNum++);
+  preprepare.set_viewnum(currentView);
+  preprepare.set_digest(digest);
+
+  // send preprepare to everyone
+  sendMessageToAll(preprepare);
+}
+
 void Replica::HandleBatchedRequest(const TransportAddress &remote,
-                               const proto::BatchedRequest &request) {
+                               proto::BatchedRequest &request) {
   Debug("Handling batched request message");
+
+  string digest = BatchedDigest(request);
+  batchedRequests[digest] = request;
+
+  // this could be the message that allows us to execute a slot
+  executeSlots();
 }
 
 void Replica::HandlePreprepare(const TransportAddress &remote,
@@ -159,12 +212,15 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
                                 const proto::SignedMessage& signedMsg) {
   Debug("Handling preprepare message");
 
-  uint64_t primaryId = config.GetLeaderIndex(view);
+  uint64_t primaryId = config.GetLeaderIndex(currentView);
 
   if (signMessages) {
     // make sure id is good
-    if (signedMsg.replica_id() != primaryId ||
-        !slots.setPreprepare(preprepare, signedMsg.replica_id(), signedMsg.signature())) {
+    if (signedMsg.replica_id() != primaryId) {
+      return;
+    }
+    // make sure the primary isn't equivocating
+    if (!slots.setPreprepare(preprepare, signedMsg.replica_id(), signedMsg.signature())) {
       return;
     }
   } else {
@@ -172,7 +228,6 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
       return;
     }
   }
-
 
   uint64_t seqnum = preprepare.seqnum();
   uint64_t viewnum = preprepare.viewnum();
@@ -185,6 +240,8 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
   prepare.set_digest(digest);
 
   sendMessageToAll(prepare);
+
+  testSlot(seqnum, viewnum, digest);
 }
 
 void Replica::HandlePrepare(const TransportAddress &remote,
@@ -205,21 +262,7 @@ void Replica::HandlePrepare(const TransportAddress &remote,
   uint64_t viewnum = prepare.viewnum();
   string digest = prepare.digest();
 
-  // wait for 2f prepare + preprepare all matching and then send commit to
-  // everyone start timer for 2f+1 commits
-  if (slots.Prepared(seqnum, viewnum, config.f) && sentCommits[seqnum].find(viewnum) == sentCommits[seqnum].end()) {
-    Debug("Sending commit to everyone");
-
-    sentCommits[seqnum].insert(viewnum);
-
-    // Multicast commit to everyone
-    proto::Commit commit;
-    commit.set_seqnum(seqnum);
-    commit.set_viewnum(viewnum);
-    commit.set_digest(digest);
-
-    sendMessageToAll(commit);
-  }
+  testSlot(seqnum, viewnum, digest);
 }
 
 void Replica::HandleCommit(const TransportAddress &remote,
@@ -237,35 +280,85 @@ void Replica::HandleCommit(const TransportAddress &remote,
     }
   }
 
-
   uint64_t seqnum = commit.seqnum();
   uint64_t viewnum = commit.viewnum();
   string digest = commit.digest();
 
+  testSlot(seqnum, viewnum, digest);
+}
+
+// tests to see if slot can be executed. Called after receiving preprepare
+// prepare, and commit because these messages can arrive in arbitrary order
+// and commit messages may be received before preprepares on a sufficiently
+// odd network
+void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest) {
+  // for simplicity, make sure we haven't already sent the commit
+  if (sentCommits[seqnum].find(viewnum) == sentCommits[seqnum].end()) {
+    // wait for 2f prepare + preprepare all matching and then send commit to
+    // everyone start timer for 2f+1 commits
+    if (slots.Prepared(seqnum, viewnum, config.f)) {
+      Debug("Sending commit to everyone");
+
+      sentCommits[seqnum].insert(viewnum);
+
+      // Multicast commit to everyone
+      proto::Commit commit;
+      commit.set_seqnum(seqnum);
+      commit.set_viewnum(viewnum);
+      commit.set_digest(digest);
+
+      sendMessageToAll(commit);
+    }
+  }
+
   // wait for 2f+1 matching commit messages, then mark message as committed,
   // clear timer
   if (slots.CommittedLocal(seqnum, viewnum, config.f)) {
-    Debug("Committed message with type: %s", requests[digest].type().c_str());
+    Debug("Committed message");
 
     pendingExecutions[seqnum] = digest;
 
-    Debug("exec seq num: %lu   seq num: %lu", execSeqNum, seqnum);
+    Debug("seqnum: %lu", seqnum);
 
-    while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
-      Debug("executing seq num: %lu", execSeqNum);
-      std::string digest = pendingExecutions[execSeqNum];
-      proto::PackedMessage packedMsg = requests[digest];
-      ::google::protobuf::Message* reply = app->Execute(packedMsg.type(), packedMsg.msg());
-      if (reply != nullptr) {
-        Debug("Sending reply");
-        transport->SendMessage(this, *replyAddrs[digest], *reply);
-        delete reply;
+    executeSlots();
+  }
+}
+
+void Replica::executeSlots() {
+  Debug("exec seq num: %lu", execSeqNum);
+  while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
+    string batchDigest = pendingExecutions[execSeqNum];
+    // only execute when we have the batched request
+    if (batchedRequests.find(batchDigest) != batchedRequests.end()) {
+      string digest = (*batchedRequests[batchDigest].mutable_digests())[execBatchNum];
+      // only execute if we have the full request
+      if (requests.find(digest) != requests.end()) {
+        Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
+        proto::PackedMessage packedMsg = requests[digest];
+        ::google::protobuf::Message* reply = app->Execute(packedMsg.type(), packedMsg.msg());
+        if (reply != nullptr) {
+          Debug("Sending reply");
+          transport->SendMessage(this, *replyAddrs[digest], *reply);
+          delete reply;
+        } else {
+          Debug("Invalid execution");
+        }
+
+        execBatchNum++;
+        if ((int) execBatchNum >= batchedRequests[batchDigest].digests_size()) {
+          Debug("Done executing batch");
+          execBatchNum = 0;
+          execSeqNum++;
+        }
       } else {
-        Debug("Invalid execution");
+        Debug("request from batch %lu not yet received", execSeqNum);
+        break;
       }
-
-      execSeqNum++;
+    } else {
+      Debug("Batch request not yet received");
+      break;
     }
   }
 }
+
 }  // namespace pbftstore

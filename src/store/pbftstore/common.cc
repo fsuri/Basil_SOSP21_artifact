@@ -112,4 +112,20 @@ std::string TransactionDigest(const proto::Transaction &txn) {
   return digest;
 }
 
+std::string BatchedDigest(proto::BatchedRequest& breq) {
+
+  CryptoPP::SHA256 hash;
+  std::string digest;
+
+  for (int i = 0; i < breq.digests_size(); i++) {
+    std::string dig = (*breq.mutable_digests())[i];
+    hash.Update((byte*) &dig[0], dig.length());
+  }
+
+  digest.resize(hash.DigestSize());
+  hash.Final((byte*) &digest[0]);
+
+  return digest;
+}
+
 } // namespace indicusstore

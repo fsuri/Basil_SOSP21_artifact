@@ -32,6 +32,8 @@ void SignMessage(const ::google::protobuf::Message &msg,
 
 std::string TransactionDigest(const proto::Transaction &txn);
 
+std::string BatchedDigest(proto::BatchedRequest& breq);
+
 } // namespace pbftstore
 
 #endif /* PBFT_COMMON_H */
