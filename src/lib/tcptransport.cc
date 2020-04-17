@@ -203,6 +203,9 @@ TCPTransport::~TCPTransport()
 void
 TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
 {
+  Debug("Opening new TCP connection to %s:%d", inet_ntoa(dst.addr.sin_addr),
+        htons(dst.addr.sin_port));
+
     // Create socket
     int fd;
     if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -375,6 +378,10 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
                                   const TCPTransportAddress &dst,
                                   const Message &m)
 {
+  
+    Debug("Sending %s message over TCP to %s:%d",
+        m.GetTypeName().c_str(), inet_ntoa(dst.addr.sin_addr),
+        htons(dst.addr.sin_port));
     auto kv = tcpOutgoing.find(dst);
     // See if we have a connection open
     if (kv == tcpOutgoing.end()) {
@@ -396,9 +403,8 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
                        sizeof(totalLen) +
                        sizeof(uint32_t));
 
-    Debug("Sending %ld byte %s message over TCP to %s:%d", totalLen,
-        type.c_str(), inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
-    
+    Debug("Message is %lu total bytes", totalLen);
+
     char buf[totalLen];
     char *ptr = buf;
 
