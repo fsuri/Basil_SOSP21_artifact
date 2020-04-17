@@ -18,7 +18,7 @@ message CommitProof {
   // the commit proof only contains the tx  txn bytes and the key,value pair must be in the txn's write set
   // The proof that the value was actually committed
   // Could still be stale though (i.e. not most recent)
-  required Transaction commit_proof_tx = 2;
+  required Transaction txn = 2;
 }
 
 message ReadReply {

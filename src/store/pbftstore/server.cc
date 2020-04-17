@@ -17,7 +17,7 @@ Server::~Server() {}
 bool Server::CCC(const proto::Transaction& txn) {
   Debug("Starting ccc check");
   Timestamp txTs(txn.timestamp());
-  // TODO actually do OCC check and add to prepared list
+  // TODO do the iterative version
   for (const auto &read : txn.readset()) {
     if(!IsKeyOwned(read.key())) {
       continue;
@@ -98,7 +98,7 @@ bool Server::CCC(const proto::Transaction& txn) {
 
 }
 
-::google::protobuf::Message* Server::Execute(const string& type, const string& msg, proto::CommitProof &&commitProof) {
+::google::protobuf::Message* Server::Execute(const string& type, const string& msg) {
   Debug("Execute: %s", type.c_str());
 
   proto::Transaction transaction;
@@ -113,7 +113,6 @@ bool Server::CCC(const proto::Transaction& txn) {
     if (CCC(transaction)) {
       Debug("ccc succeeded");
       decision->set_status(REPLY_OK);
-      commitProofs[digest] = make_shared<proto::CommitProof>(move(commitProof));
       pendingTransactions[digest] = transaction;
     } else {
       Debug("ccc failed");
@@ -192,12 +191,17 @@ bool Server::CCC(const proto::Transaction& txn) {
           committedReads[read.key()][ts] = read.readtime();
         }
 
-        ValueAndProof valProof;
-        shared_ptr<proto::CommitProof> commitProofPtr = commitProofs[digest];
+        proto::CommitProof proof;
+        *proof.mutable_writeback_message() = gdecision;
+        *proof.mutable_txn() = txn;
+        shared_ptr<proto::CommitProof> commitProofPtr = make_shared<proto::CommitProof>(move(proof));
+
         for (const auto &write : txn.writeset()) {
           if(!IsKeyOwned(write.key())) {
             continue;
           }
+
+          ValueAndProof valProof;
 
           valProof.value = write.value();
           valProof.commitProof = commitProofPtr;
@@ -214,7 +218,6 @@ bool Server::CCC(const proto::Transaction& txn) {
           //   }
           // }
         }
-        // TODO maybe remove commit proof
 
         // mark txn as commited
         pendingTransactions.erase(digest);
@@ -255,52 +258,66 @@ bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
   // This will hold the remaining shards that we need to verify
   unordered_set<uint64_t> remaining_shards;
   for (auto id : txn.participating_shards()) {
-    Debug("requiring %d", id);
+    Debug("requiring %lu", id);
     remaining_shards.insert(id);
   }
 
   if (signMessages) {
-    for (auto& decisions : gdecision.signed_decisions().grouped_decisions()) {
-      Debug("decision for shard %d", decisions.first);
-      if (remaining_shards.find(decisions.first) != remaining_shards.end()) {
-        unordered_set<uint64_t> valid_decisions;
-        for (auto& decision : decisions.second.decisions()) {
-          string data;
-          string type;
-          if (ValidateSignedMessage(decision, keyManager, data, type)) {
-            proto::TransactionDecision txnDecision;
-            if (type == txnDecision.GetTypeName()) {
-              txnDecision.ParseFromString(data);
-              if (txnDecision.status() == REPLY_OK && txnDecision.txn_digest() == digest && txnDecision.shard_id() == decisions.first) {
-                valid_decisions.insert(valid_decisions.size());
+    // iterate over all shards
+    for (const auto& pair : gdecision.signed_decisions().grouped_decisions()) {
+      uint64_t shard_id = pair.first;
+      proto::GroupedSignedMessage grouped = pair.second;
+      // check if we are still looking for a grouped decision from this shard
+      if (remaining_shards.find(shard_id) != remaining_shards.end()) {
+        // unpack the message in the grouped signed message
+        proto::PackedMessage packedMsg;
+        if (packedMsg.ParseFromString(grouped.packed_msg())) {
+          // make sure the packed message is a Transaction Decision
+          proto::TransactionDecision decision;
+          if (decision.ParseFromString(packedMsg.msg())) {
+            // verify that the transaction decision is valid
+            if (decision.status() == REPLY_OK &&
+                decision.txn_digest() == digest &&
+                decision.shard_id() == shard_id) {
+              proto::SignedMessage signedMsg;
+              // use this to keep track of the replicas for whom we have gotten
+              // a valid signature.
+              unordered_set<uint64_t> valid_signatures;
+
+              // now verify all of the signatures
+              for (const auto& id_sig_pair: grouped.signatures()) {
+                Debug("ungrouped transaction decision for %lu", id_sig_pair.first);
+                // recreate the signed message for the given replica id
+                signedMsg.set_replica_id(id_sig_pair.first);
+                signedMsg.set_signature(id_sig_pair.second);
+
+                if (CheckSignature(signedMsg, keyManager)) {
+                  valid_signatures.insert(id_sig_pair.first);
+                } else {
+                  Debug("Failed to validate transaction decision signature for %lu", id_sig_pair.first);
+                }
+              }
+
+              // If we have confirmed f+1 signatures, then we mark this shard
+              // as verifying the decision
+              if (valid_signatures.size() >= (uint64_t) config.f + 1) {
+                Debug("signed: verified shard %lu", shard_id);
+                remaining_shards.erase(shard_id);
               }
             }
           }
         }
-        if (valid_decisions.size() >= (uint64_t) config.f + 1) {
-          Debug("signed: verified shard %d", decisions.first);
-          remaining_shards.erase(decisions.first);
-        }
       }
     }
   } else {
-    // iterate over all shards
-    for (auto& decisions : gdecision.decisions().grouped_decisions()) {
-      // check if we are looking for a grouped decision from the current shard
-      if (remaining_shards.find(decisions.first) != remaining_shards.end()) {
-        unordered_set<uint64_t> valid_decisions;
-        // make sure the shard has the correct number of valid decisions for the transaction
-        for (auto& decision : decisions.second.decisions()) {
-          if (decision.status() == REPLY_OK && decision.txn_digest() == digest && decision.shard_id() == decisions.first) {
-            valid_decisions.insert(valid_decisions.size());
-          }
-        }
-        // f+1 means that there was at least 1 correct node that can attest that
-        // the transaction should be applied, implying that the transaction
-        // will eventually be applied at every honest node
-        if (valid_decisions.size() >= (uint64_t) config.f + 1) {
-          Debug("verified shard %d", decisions.first);
-          remaining_shards.erase(decisions.first);
+    for (const auto& pair : gdecision.decisions().grouped_decisions()) {
+      uint64_t shard_id = pair.first;
+      proto::TransactionDecision decision = pair.second;
+      if (remaining_shards.find(shard_id) != remaining_shards.end()) {
+        if (decision.status() == REPLY_OK &&
+            decision.txn_digest() == digest &&
+            decision.shard_id() == shard_id) {
+          remaining_shards.erase(shard_id);
         }
       }
     }
