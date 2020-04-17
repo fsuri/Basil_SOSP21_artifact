@@ -49,6 +49,8 @@
 #include "store/pbftstore/replica.h"
 #include "store/pbftstore/server.h"
 
+#include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
+
 #include <gflags/gflags.h>
 
 enum protocol_t {
@@ -456,14 +458,24 @@ int main(int argc, char **argv) {
     }
     size_t loaded = 0;
     size_t stored = 0;
-    size_t sharded[] = {0, 0, 0};
     while (!in.eof()) {
       std::string key;
       std::string value;
       int i = ReadBytesFromStream(&in, key);
       if (i == 0) {
         ReadBytesFromStream(&in, value);
-        sharded[part(key, FLAGS_num_shards)]++;
+        if (key[0] == 6) {
+          std::cerr << *reinterpret_cast<const uint32_t*>(key.c_str() + 1) << ' '
+                    << *reinterpret_cast<const uint32_t*>(key.c_str() + 5) << ' '
+                    << *reinterpret_cast<const uint32_t*>(key.c_str() + 9) << ' '
+                    << *reinterpret_cast<const uint32_t*>(key.c_str() + 13) << ' '
+                    << std::endl;
+        } else if (key[0] == 5) {
+          tpcc::OrderRow o_row;
+          o_row.ParseFromString(value);
+          std::cerr << "O:" << o_row.w_id() << ' ' << o_row.d_id() << ' ' << o_row.id()
+                    << ' ' << o_row.ol_cnt() << std::endl;
+        }
         if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
           server->Load(key, value, Timestamp());
           ++stored;
@@ -471,10 +483,6 @@ int main(int argc, char **argv) {
         ++loaded;
       }
     }
-    for (int i = 0; i < 3; ++i) {
-      std::cerr << sharded[i] << ' ';
-    }
-    std::cerr << std::endl;
     Debug("Stored %lu out of %lu key-value pairs from file %s.", stored,
         loaded, FLAGS_data_file_path.c_str());
   } else {

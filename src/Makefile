@@ -142,13 +142,13 @@ include store/weakstore/Rules.mk
 include store/janusstore/Rules.mk
 include store/indicusstore/Rules.mk
 include store/pbftstore/Rules.mk
+include store/benchmark/async/tpcc/Rules.mk
 include store/Rules.mk
 include store/benchmark/Rules.mk
 include store/benchmark/async/common/Rules.mk
 include store/benchmark/async/rw/Rules.mk
 include store/benchmark/async/retwis/Rules.mk
 include store/benchmark/async/smallbank/Rules.mk
-include store/benchmark/async/tpcc/Rules.mk
 include store/benchmark/async/Rules.mk
 include lockserver/Rules.mk
 include timeserver/Rules.mk
