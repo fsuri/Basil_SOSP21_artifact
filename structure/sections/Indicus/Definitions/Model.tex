@@ -1,0 +1,15 @@
+%-------------------------------------------------------------------------------
+\subsection{Model and Definitions}
+%-------------------------------------------------------------------------------
+
+\subsubsection{System Model}
+We assume a partitioned Database where data objects are spread uniformly across shards. Shards are replicated, and tolerate a fixed fraction of arbitrarily misbehaving replicas. We further assume that there may exist a finite but unbounded number of malicious/faulty Clients that may deviate from the protocol arbitrarily, and the existance of a strong, but static adversary that can freely coordinate all faulty participants. We denote any participant (replica or client) that follows the protocol as \textit{correct}, while faulty participants are dubbed \textit{byzantine}.  
+ 
+We assume the existance of sufficiently hard cryptographic primitives that allow for private/public key signatures and collision-resistant hashes that cannot be compromised by byzantine participants. We denote a signed message $m$, signed by principal $p$ as $\langle m \rangle_p$. 
+ 
+We make no assumption on network synchrony in order to maintain safety, but in some cases may provide liveness  only when the network is synchronous and messages are delayed by no more than a fixed but potentially unknown window \fs{whats a window}. This is consistent with known impossibility results \cite{fischer1985impossibility}.
+However, unlike traditional State Machine Replication protocols in which the liveness of all Clients is correlated with the fate of the system (or often more specifically a leader), our system guarantees liveness not on a system basis, but on a per client basis. Concretely, we only guarantee liveness to clients that follow the protocol. Conversely, an honest client only loses liveness when it intertwines its fate with byzantine clients.\\
+
+Application services may restrict the influence of Byzantine Clients on the Database state by authentication and enforcing access control. While potential damage to the Database state by authenticated clients cannot be avoided, it can be re-traced by auditing the transaction logs.\\
+
+

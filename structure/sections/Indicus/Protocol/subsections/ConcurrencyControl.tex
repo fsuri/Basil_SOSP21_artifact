@@ -1,0 +1,10 @@
+%-------------------------------------------------------------------------------
+\subsection{Concurrency Control}
+%-------------------------------------------------------------------------------
+ - Optimization: retries - heights
+ - Dependency resolution tree
+ 		- Equivocation not possible if TXidentifier a function with dep as argument
+ 		- Cannot claim dep if not f+1 times (If you want to, you would require proofs again, which we try to avoid because dep trees can grow exponentially). More reads also more likely to commit --> f+1 guarantees 1 honest thinks it is legit.
+ - Exception for depedency and early async read response to inform of exceptions
+ - Read leases instead of unlimited locks - in practice only grant to timely clients (not a safety measure, but an increased progress guarantee)
+ - 

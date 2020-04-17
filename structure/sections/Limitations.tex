@@ -1,0 +1,19 @@
+%-------------------------------------------------------------------------------
+\section{Limitations}
+%-------------------------------------------------------------------------------
+Shifting responsibilites from replicas to clients comes at the cost of higher computational requirements for clients. This may not be tolerable for some applications, and other existing systems (i.e cite sbft) structure their design explicitly to be compatible with lightweight clients. In practice, we envision Indicus clients to be dedicated transaction managers, that provide an interface for light-weight end-users. For example, in a distributed stock market, brokers may act as transaction managers in lieu of their clients.
+
+As is inherent to any Optimistic Execution and Concurrency Control, Indicus is vulnerable to highly congested workloads. When contention on select objects is high, concurrent execution of Transactions must yield the abort of some Transactions during Validation in order to maintain the Database Isolation guarantees. 
+\fs{When contention is very high, it can be desirable to in fact have a total order. Doing just validation in total order wont reduce aborts though. Requires transactions to be pre-defined }
+
+Note however, that when clients are in charge of execution, a pessimistic concurrency control solution such as two-phase-locking would incur an equal amount of deadlocks which would require resolution. The observation to make is that any system that conducts execution at the client application side speculates on concurrency. This however we stipulate, is unavoidable when trying to scale a system to the number of users rather than replica processing power. The traditonal ways to avoid the abort rate conundrum is to either restrict the transaction model, which in turn weakens the general applicability of the protocol, or to delegate execution to replicas and utilize State Machine Replication to serialize Transactions. SMR protocols with a single leader do not inquire any congestion based aborts as a single sequencer naturally eliminates concurrency.
+Indicus does not make these concessions in order to offer interactive Transactions and remain scalable. A workload that exhibits low commutativity and high contention should therefore refrain from adopting our system.
+
+Similarly, as is the case in any transaction protocol, Indicus is vulnerable to ddos attacks by byzantine participants. A byzantine clients only opportunity at subverting progress for honest users is to artificially increase congestion. When such a client has unrestricted access control it may do so strategically iff it has control over the network. If it does not, it cannot reliably gain knowledge about concurrent transactions before they pass the validation step and must resort to flooding based attacks. Defense against such attacks is out of scope in our work, but is disincentivised as participants can be held accountable for their actions in a closed membership setting.
+
+\iffalse
+\fs{technical limitations: We require more replicas to avoid certificate signature overheads. Since in 3f+1 one decision needs to be enough to recover. byzantine replicas/clients have more power to vote arbitrarily, because they cannot be held accountable for it. In total order protocols (SMR), deviation from the "common" vote signals misbehavior, whereas for us that is not the case. --> this should go as a challenge somewhere.}
+
+\fs{Clients are more heavyweight. Not suitable for settings where clients just have minimal processing capacity. In practice we envision clients to be dedicated transaction maangers.
+Also, Clients need to be registered in system with a sig - necessary to enforce access control in any system however}
+\fi

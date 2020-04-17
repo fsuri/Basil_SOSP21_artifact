@@ -1,0 +1,131 @@
+
+\documentclass[letterpaper,twocolumn,10pt]{article}
+\usepackage{usenix2019_v3}
+%\usepackage{preamble}
+
+
+% to be able to draw some self-contained figs
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{xspace}
+% inlined bib file
+\usepackage{filecontents}
+\usepackage{algorithm}
+\usepackage{amsthm}
+\usepackage[noend]{algpseudocode}
+\usepackage{mathtools}
+%\usepackage[ruled, vlined, linesnumbered]{algorithm2e}
+\usepackage{mdframed}
+\usepackage{enumitem}
+\usepackage{xcolor}
+
+% Define person specific grumblers
+\newcommand{\nc}[1]{{\textcolor{cyan}{NC: #1}}}
+\newcommand{\mb}[1]{{\textcolor{green}{MB: #1}}}
+\newcommand{\fs}[1]{{\textcolor{blue}{FS: #1}}}
+\newcommand{\la}[1]{{\textcolor{red}{LA: #1}}}
+\newcommand{\sys}{Indicus\xspace}
+\setlist{itemsep=0pt,parsep=0pt}             % more compact lists
+\newtheorem{theorem}{Theorem}
+%-------------------------------------------------------------------------------
+\begin{document}
+%-------------------------------------------------------------------------------
+
+%don't want date printed
+\date{}
+
+% make title bold and 14 pt font (Latex default is non-bold, 16 pt)
+\title{\Large \bf Indicus: Unchaining Byzantine Databases\\
+ }
+
+%for single author (just remove % characters)
+\author{
+{\rm Your N.\ Here}\\
+Your Institution
+\and
+{\rm Second Name}\\
+Second Institution
+% copy the following lines to add more authors
+% \and
+% {\rm Name}\\
+%Name Institution
+} % end author
+
+\maketitle
+
+%-------------------------------------------------------------------------------
+\begin{abstract}
+%-------------------------------------------------------------------------------
+Your abstract text goes here. Just a few facts. Whet our appetites.
+Not more than 200 words, if possible, and preferably closer to 150.
+\end{abstract}
+
+
+%-------------------------------------------------------------------------------
+\section{Introduction} 
+%-------------------------------------------------------------------------------
+intro
+\newpage
+Independent operability: No order enforced - each request is processed independently. But also each client can have progress independently.
+\newpage
+%-------------------------------------------------------------------------------
+\section{Quest} 
+%-------------------------------------------------------------------------------
+\newpage
+content
+\newpage
+%-------------------------------------------------------------------------------
+\section{Model} 
+%-------------------------------------------------------------------------------
+hello
+\newpage
+%-------------------------------------------------------------------------------
+\section{Indicus} 
+%-------------------------------------------------------------------------------
+\subsection{Preamble}
+\newpage
+\subsection{Architecture}
+\newpage
+\subsection{Properties}
+\newpage
+\subsection{Protocol}
+
+Protocol: 
+Speculative Execution \newpage, Concurrency Control \newpage
+
+Unordered Validation \newpage, Consistent Logging, \newpage Proofs \newpage
+
+Granting liveness \newpage more \newpage
+
+Cross-shard commit, Garbage Collection \newpage
+
+\subsection{Modifications}: Optimizations, Indicus3 \newpage
+
+%-------------------------------------------------------------------------------
+\section{Implementation} 
+%-------------------------------------------------------------------------------
+Evaluation \newpage
+Eval \newpage
+eval \newpage
+%-------------------------------------------------------------------------------
+\section{Limitations} 
+%-------------------------------------------------------------------------------
+\newpage
+%-------------------------------------------------------------------------------
+\section{Related Work} 
+%-------------------------------------------------------------------------------
+\newpage
+%-------------------------------------------------------------------------------
+\section{Conclusion} 
+%-------------------------------------------------------------------------------
+%-------------------------------------------------------------------------------
+\bibliographystyle{plain}
+%\bibliography{ref}
+\bibliography{refs}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{document}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%  LocalWords:  endnotes includegraphics fread ptr nobj noindent
+%%  LocalWords:  pdflatex acks
