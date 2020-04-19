@@ -24,7 +24,7 @@ int DepositChecking::Execute(SyncClient &client) {
   proto::AccountRow accountRow;
   proto::CheckingRow checkingRow;
 
-  client.Begin();
+  client.Begin(timeout);
   if (!ReadAccountRow(client, cust, accountRow, timeout)) {
     client.Abort(timeout);
     Debug("Aborted DepositChecking (AccountRow)");

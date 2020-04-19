@@ -39,7 +39,7 @@ SmallbankClient::SmallbankClient(
     const std::string &latencyFilename)
     : SyncTransactionBenchClient(client, transport, seed, numRequests,
                                  expDuration, delay, warmupSec, cooldownSec,
-                                 tputInterval, abortBackoff, retryAborted, maxAttempts,
+                                 tputInterval, abortBackoff, retryAborted, maxAttempts, timeout,
                                  latencyFilename),
       timeout_(timeout),
       balance_ratio_(balance_ratio),

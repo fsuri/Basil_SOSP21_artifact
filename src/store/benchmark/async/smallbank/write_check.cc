@@ -12,7 +12,7 @@ int WriteCheck::Execute(SyncClient &client) {
     proto::CheckingRow checkingRow;
     proto::SavingRow savingRow;
 
-    client.Begin();
+    client.Begin(timeout);
     Debug("WriteCheck for name %s with value %d", cust.c_str(), value);
     if (!ReadAccountRow(client, cust, accountRow, timeout)) {
         client.Abort(timeout);

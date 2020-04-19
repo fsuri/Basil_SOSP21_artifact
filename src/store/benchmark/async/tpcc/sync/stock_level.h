@@ -8,7 +8,8 @@ namespace tpcc {
 
 class SyncStockLevel : public SyncTPCCTransaction, public StockLevel {
  public:
-  SyncStockLevel(uint32_t w_id, uint32_t d_id, std::mt19937 &gen);
+  SyncStockLevel(uint32_t timeout, uint32_t w_id, uint32_t d_id,
+      std::mt19937 &gen);
   virtual ~SyncStockLevel();
   virtual int Execute(SyncClient &client);
 

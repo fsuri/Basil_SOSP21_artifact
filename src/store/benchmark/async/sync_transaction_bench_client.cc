@@ -9,11 +9,13 @@ SyncTransactionBenchClient::SyncTransactionBenchClient(SyncClient &client,
     Transport &transport, uint32_t seed, int numRequests, int expDuration,
     uint64_t delay, int warmupSec, int cooldownSec, int tputInterval,
     uint32_t abortBackoff, bool retryAborted, int32_t maxAttempts,
+    uint32_t timeout,
     const std::string &latencyFilename)
     : BenchmarkClient(transport, seed, numRequests, expDuration, delay,
         warmupSec, cooldownSec, tputInterval, latencyFilename), client(client),
     abortBackoff(abortBackoff), retryAborted(retryAborted),
-    maxAttempts(maxAttempts), currTxn(nullptr), currTxnAttempts(0UL) {
+    maxAttempts(maxAttempts), timeout(timeout), currTxn(nullptr),
+    currTxnAttempts(0UL) {
 }
 
 SyncTransactionBenchClient::~SyncTransactionBenchClient() {

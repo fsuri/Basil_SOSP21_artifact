@@ -5,7 +5,7 @@
 
 class AsyncAdapterClient : public AsyncClient {
  public:
-  AsyncAdapterClient(Client *client);
+  AsyncAdapterClient(Client *client, uint32_t timeout);
   virtual ~AsyncAdapterClient();
 
   // Begin a transaction.
@@ -24,6 +24,7 @@ class AsyncAdapterClient : public AsyncClient {
   void AbortTimeout(int status);
 
   Client *client;
+  uint32_t timeout;
   size_t opCount;
   std::map<std::string, std::string> readValues;
   execute_callback currEcb;

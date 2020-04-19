@@ -1,9 +1,7 @@
 #include "store/common/frontend/async_adapter_client.h"
 
-#define TIMEOUT 30000
-
-AsyncAdapterClient::AsyncAdapterClient(Client *client) : client(client),
-    opCount(0UL) {
+AsyncAdapterClient::AsyncAdapterClient(Client *client, uint32_t timeout) :
+    client(client), timeout(timeout), opCount(0UL) {
 }
 
 AsyncAdapterClient::~AsyncAdapterClient() {
@@ -17,7 +15,7 @@ void AsyncAdapterClient::Execute(AsyncTransaction *txn,
   readValues.clear();
   client->Begin([this](uint64_t id) {
     ExecuteNextOperation();
-  }, []{}, TIMEOUT);
+  }, []{}, timeout);
 }
 
 void AsyncAdapterClient::ExecuteNextOperation() {
@@ -27,7 +25,7 @@ void AsyncAdapterClient::ExecuteNextOperation() {
       client->Get(op.key, std::bind(&AsyncAdapterClient::GetCallback, this,
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
         std::placeholders::_4), std::bind(&AsyncAdapterClient::GetTimeout, this,
-          std::placeholders::_1, std::placeholders::_2), TIMEOUT);
+          std::placeholders::_1, std::placeholders::_2), timeout);
       // timeout doesn't really matter?
       break;
     }
@@ -36,21 +34,21 @@ void AsyncAdapterClient::ExecuteNextOperation() {
             this, std::placeholders::_1, std::placeholders::_2,
             std::placeholders::_3), std::bind(&AsyncAdapterClient::PutTimeout,
               this, std::placeholders::_1, std::placeholders::_2,
-              std::placeholders::_3), TIMEOUT);
+              std::placeholders::_3), timeout);
       // timeout doesn't really matter?
       break;
     }
     case COMMIT: {
       client->Commit(std::bind(&AsyncAdapterClient::CommitCallback, this,
         std::placeholders::_1), std::bind(&AsyncAdapterClient::CommitTimeout,
-          this, std::placeholders::_1), TIMEOUT);
+          this, std::placeholders::_1), timeout);
       // timeout doesn't really matter?
       break;
     }
     case ABORT: {
       client->Abort(std::bind(&AsyncAdapterClient::AbortCallback, this),
           std::bind(&AsyncAdapterClient::AbortTimeout, this,
-            std::placeholders::_1), TIMEOUT);
+            std::placeholders::_1), timeout);
       // timeout doesn't really matter?
       currEcb(false, std::map<std::string, std::string>());
       break;
