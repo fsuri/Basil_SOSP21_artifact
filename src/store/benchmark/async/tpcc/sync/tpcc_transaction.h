@@ -10,7 +10,7 @@ namespace tpcc {
 
 class SyncTPCCTransaction : public SyncTransaction {
  public:
-  SyncTPCCTransaction();
+  SyncTPCCTransaction(uint32_t timeout);
   virtual ~SyncTPCCTransaction();
 
 };

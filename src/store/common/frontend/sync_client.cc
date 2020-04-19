@@ -7,10 +7,10 @@ SyncClient::SyncClient(Client *client) : client(client) {
 SyncClient::~SyncClient() {
 }
 
-void SyncClient::Begin() {
-  Promise promise(10000);
+void SyncClient::Begin(uint32_t timeout) {
+  Promise promise(timeout);
   client->Begin([promisePtr = &promise](uint64_t id){ promisePtr->Reply(0); },
-      [](){}, 10000);
+      [](){}, timeout);
   promise.GetReply();
 }
 

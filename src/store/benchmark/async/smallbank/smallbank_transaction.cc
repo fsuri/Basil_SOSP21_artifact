@@ -13,7 +13,7 @@
 namespace smallbank {
 
 SmallbankTransaction::SmallbankTransaction(SmallbankTransactionType type)
-    : type(type) {}
+    : SyncTransaction(10000), type(type) {}
 
 int SmallbankTransaction::Execute(SyncClient &client) { return -1; }
 

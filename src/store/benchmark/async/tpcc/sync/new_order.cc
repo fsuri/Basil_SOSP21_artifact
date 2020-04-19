@@ -4,8 +4,10 @@
 
 namespace tpcc {
 
-SyncNewOrder::SyncNewOrder(uint32_t w_id, uint32_t C, uint32_t num_warehouses,
-      std::mt19937 &gen) : NewOrder(w_id, C, num_warehouses, gen) {
+SyncNewOrder::SyncNewOrder(uint32_t timeout, uint32_t w_id, uint32_t C,
+    uint32_t num_warehouses, std::mt19937 &gen) :
+    SyncTPCCTransaction(timeout),
+    NewOrder(w_id, C, num_warehouses, gen) {
 }
 
 SyncNewOrder::~SyncNewOrder() {
@@ -17,7 +19,7 @@ int SyncNewOrder::Execute(SyncClient &client) {
   Debug("NEW_ORDER");
   Debug("Warehouse: %u", w_id);
 
-  client.Begin();
+  client.Begin(timeout);
 
   client.Get(WarehouseRowKey(w_id), str, timeout);
   WarehouseRow w_row;

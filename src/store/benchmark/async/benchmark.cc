@@ -256,6 +256,7 @@ DEFINE_int32(abort_backoff, 100, "sleep exponentially increasing amount after ab
 DEFINE_bool(retry_aborted, true, "retry aborted transactions.");
 DEFINE_int32(max_attempts, -1, "max number of attempts per transaction (or -1"
     " for unlimited).");
+DEFINE_int32(message_timeout, 10000, "length of timeout for messages in ms.");
 
 /**
  * Retwis settings.
@@ -665,7 +666,7 @@ int main(int argc, char **argv) {
       case BENCH_RW:
         if (asyncClient == nullptr) {
           UW_ASSERT(client != nullptr);
-          asyncClient = new AsyncAdapterClient(client);
+          asyncClient = new AsyncAdapterClient(client, FLAGS_message_timeout);
         }
         break;
       case BENCH_SMALLBANK_SYNC:
@@ -714,7 +715,7 @@ int main(int argc, char **argv) {
             FLAGS_tpcc_delivery_ratio, FLAGS_tpcc_payment_ratio,
             FLAGS_tpcc_order_status_ratio, FLAGS_tpcc_stock_level_ratio,
             FLAGS_static_w_id, FLAGS_abort_backoff,
-            FLAGS_retry_aborted, FLAGS_max_attempts);
+            FLAGS_retry_aborted, FLAGS_max_attempts, FLAGS_message_timeout);
         break;
       case BENCH_SMALLBANK_SYNC:
         UW_ASSERT(syncClient != nullptr);

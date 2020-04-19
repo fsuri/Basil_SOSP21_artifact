@@ -14,7 +14,7 @@ int Bal::Execute(SyncClient &client) {
   proto::AccountRow accountRow;
   proto::SavingRow savingRow;
   proto::CheckingRow checkingRow;
-  client.Begin();
+  client.Begin(timeout);
   Debug("Balance for customer %s", cust.c_str());
   if (!ReadAccountRow(client, cust, accountRow, timeout) ||
       !ReadSavingRow(client, accountRow.customer_id(), savingRow, timeout) ||

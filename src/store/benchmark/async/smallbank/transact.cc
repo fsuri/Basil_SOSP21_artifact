@@ -11,7 +11,7 @@ int TransactSaving::Execute(SyncClient &client) {
 	proto::SavingRow savingRow;
     proto::AccountRow accountRow;
 
-    client.Begin();
+    client.Begin(timeout);
     Debug("TransactSaving for name %s with val %d", cust.c_str(), value);
     if (!ReadAccountRow(client, cust, accountRow, timeout)) {
         client.Abort(timeout);

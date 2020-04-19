@@ -5,8 +5,9 @@
 #include "store/benchmark/async/tpcc/tpcc_utils.h"
 namespace tpcc {
 
-SyncStockLevel::SyncStockLevel(uint32_t w_id, uint32_t d_id, std::mt19937 &gen)
-    : StockLevel(w_id, d_id, gen) {
+SyncStockLevel::SyncStockLevel(uint32_t timeout, uint32_t w_id, uint32_t d_id,
+    std::mt19937 &gen) : SyncTPCCTransaction(timeout),
+    StockLevel(w_id, d_id, gen) {
 }
 
 SyncStockLevel::~SyncStockLevel() {
@@ -19,7 +20,7 @@ int SyncStockLevel::Execute(SyncClient &client) {
   Debug("Warehouse: %u", w_id);
   Debug("District: %u", d_id);
   
-  client.Begin();
+  client.Begin(timeout);
 
   std::string d_key = DistrictRowKey(w_id, d_id);
   client.Get(d_key, str, timeout);

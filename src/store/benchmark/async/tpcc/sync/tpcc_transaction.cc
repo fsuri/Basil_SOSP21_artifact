@@ -2,7 +2,7 @@
 
 namespace tpcc {
 
-SyncTPCCTransaction::SyncTPCCTransaction() {
+SyncTPCCTransaction::SyncTPCCTransaction(uint32_t timeout) : SyncTransaction(timeout) {
 }
 
 SyncTPCCTransaction::~SyncTPCCTransaction() {

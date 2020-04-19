@@ -8,8 +8,8 @@ namespace tpcc {
 
 class SyncNewOrder : public SyncTPCCTransaction, public NewOrder {
  public:
-  SyncNewOrder(uint32_t w_id, uint32_t C, uint32_t num_warehouses,
-      std::mt19937 &gen);
+  SyncNewOrder(uint32_t timeout, uint32_t w_id, uint32_t C,
+      uint32_t num_warehouses, std::mt19937 &gen);
   virtual ~SyncNewOrder();
   virtual int Execute(SyncClient &client);
 

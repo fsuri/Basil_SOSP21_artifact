@@ -4,9 +4,10 @@
 
 namespace tpcc {
 
-SyncOrderStatus::SyncOrderStatus(uint32_t w_id, uint32_t c_c_last,
-    uint32_t c_c_id, std::mt19937 &gen) : OrderStatus(w_id, c_c_last,
-      c_c_id, gen) {
+SyncOrderStatus::SyncOrderStatus(uint32_t timeout, uint32_t w_id,
+    uint32_t c_c_last, uint32_t c_c_id, std::mt19937 &gen) :
+    SyncTPCCTransaction(timeout),
+    OrderStatus(w_id, c_c_last, c_c_id, gen) {
 }
 
 SyncOrderStatus::~SyncOrderStatus() {
@@ -19,7 +20,7 @@ int SyncOrderStatus::Execute(SyncClient &client) {
   Debug("Warehouse: %u", c_w_id);
   Debug("District: %u", c_d_id);
 
-  client.Begin();
+  client.Begin(timeout);
 
   if (c_by_last_name) { // access customer by last name
     Debug("Customer: %s", c_last.c_str());

@@ -17,6 +17,7 @@ class SyncTPCCClient : public SyncTransactionBenchClient, public TPCCClient {
       uint32_t delivery_ratio, uint32_t payment_ratio, uint32_t order_status_ratio,
       uint32_t stock_level_ratio, bool static_w_id,
       uint32_t abortBackoff, bool retryAborted, int32_t maxAttempts,
+      uint32_t timeout,
       const std::string &latencyFilename = "");
 
   virtual ~SyncTPCCClient();

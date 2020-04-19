@@ -26,7 +26,7 @@ class SyncClient {
   virtual ~SyncClient();
 
   // Begin a transaction.
-  virtual void Begin();
+  virtual void Begin(uint32_t timeout);
 
   // Get the value corresponding to key.
   virtual void Get(const std::string &key, std::string &value,

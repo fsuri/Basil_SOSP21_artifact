@@ -4,8 +4,9 @@
 
 namespace tpcc {
 
-SyncDelivery::SyncDelivery(uint32_t w_id, uint32_t d_id, std::mt19937 &gen)
-    : Delivery(w_id, d_id, gen) {
+SyncDelivery::SyncDelivery(uint32_t timeout, uint32_t w_id, uint32_t d_id,
+    std::mt19937 &gen)
+    : SyncTPCCTransaction(timeout), Delivery(w_id, d_id, gen) {
 }
 
 SyncDelivery::~SyncDelivery() {
@@ -18,7 +19,7 @@ int SyncDelivery::Execute(SyncClient &client) {
   Debug("Warehouse: %u", w_id);
   Debug("District: %u", d_id);
 
-  client.Begin();
+  client.Begin(timeout);
   
   std::string eno_key = EarliestNewOrderRowKey(w_id, d_id);
   client.Get(eno_key, str, timeout);

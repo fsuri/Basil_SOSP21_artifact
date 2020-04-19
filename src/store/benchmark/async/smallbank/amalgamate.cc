@@ -22,7 +22,7 @@ int Amalgamate::Execute(SyncClient &client) {
   proto::SavingRow savingRow1;
   proto::CheckingRow checkingRow2;
 
-  client.Begin();
+  client.Begin(timeout);
   Debug("Amalgamate for names %s %s", cust1.c_str(), cust2.c_str());
   if (!ReadAccountRow(client, cust1, accountRow1, timeout) ||
       !ReadAccountRow(client, cust2, accountRow2, timeout)) {
