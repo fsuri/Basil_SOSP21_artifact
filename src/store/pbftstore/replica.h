@@ -21,7 +21,7 @@ namespace pbftstore {
 class Replica : public TransportReceiver {
 public:
   Replica(const transport::Configuration &config, KeyManager *keyManager,
-    App *app, int groupIdx, int myId, bool signMessages, uint64_t maxBatchSize,
+    App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
     bool primaryCoordinator, Transport *transport);
   ~Replica();
 
@@ -49,7 +49,8 @@ public:
   KeyManager *keyManager;
   App *app;
   int groupIdx;
-  int myId;  // Replica index into config.
+  int idx; // the replica index within the group
+  int id; // unique replica id (across all shards)
   bool signMessages;
   uint64_t maxBatchSize;
   bool primaryCoordinator;

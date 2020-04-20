@@ -28,12 +28,12 @@ using namespace std;
 //      commit messages
 
 Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
-  App *app, int groupIdx, int myId, bool signMessages, uint64_t maxBatchSize,
+  App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
   bool primaryCoordinator, Transport *transport)
-    : config(config), keyManager(keyManager), app(app), groupIdx(groupIdx),
-    myId(myId), signMessages(signMessages), maxBatchSize(maxBatchSize),
+    : config(config), keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
+    id(groupIdx * config.n + idx), signMessages(signMessages), maxBatchSize(maxBatchSize),
     primaryCoordinator(primaryCoordinator), transport(transport) {
-  transport->Register(this, config, groupIdx, myId);
+  transport->Register(this, config, groupIdx, idx);
 
   // intial view
   currentView = 0;
@@ -45,7 +45,7 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   batchTimerRunning = false;
   nextBatchNum = 0;
 
-  Debug("Initialized replica at %d %d", groupIdx, myId);
+  Debug("Initialized replica at %d %d", groupIdx, idx);
 }
 
 Replica::~Replica() {}
@@ -127,27 +127,27 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 }
 
 bool Replica::sendMessageToPrimary(const ::google::protobuf::Message& msg) {
-  int primaryId = config.GetLeaderIndex(currentView);
+  int primaryIdx = config.GetLeaderIndex(currentView);
   if (signMessages) {
     proto::SignedMessage signedMsg;
-    SignMessage(msg, keyManager->GetPrivateKey(myId), myId, signedMsg);
-    return transport->SendMessageToReplica(this, groupIdx, primaryId, signedMsg);
+    SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMsg);
+    return transport->SendMessageToReplica(this, groupIdx, primaryIdx, signedMsg);
   } else {
-    return transport->SendMessageToReplica(this, groupIdx, primaryId, msg);
+    return transport->SendMessageToReplica(this, groupIdx, primaryIdx, msg);
   }
 }
 
 bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
   if (signMessages) {
     proto::SignedMessage signedMsg;
-    SignMessage(msg, keyManager->GetPrivateKey(myId), myId, signedMsg);
+    SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMsg);
     // send to everyone and to me
     return transport->SendMessageToGroup(this, groupIdx, signedMsg) &&
-           transport->SendMessageToReplica(this, groupIdx, myId, signedMsg);
+           transport->SendMessageToReplica(this, groupIdx, idx, signedMsg);
   } else {
     // send to everyone and to me
     return transport->SendMessageToGroup(this, groupIdx, msg) &&
-           transport->SendMessageToReplica(this, groupIdx, myId, msg);
+           transport->SendMessageToReplica(this, groupIdx, idx, msg);
   }
 }
 
@@ -165,8 +165,8 @@ void Replica::HandleRequest(const TransportAddress &remote,
     // clone remote mapped to request for reply
     replyAddrs[digest] = remote.clone();
 
-    int currentPrimary = config.GetLeaderIndex(currentView);
-    if (currentPrimary == myId) {
+    int currentPrimaryIdx = config.GetLeaderIndex(currentView);
+    if (currentPrimaryIdx == idx) {
       pendingBatchedDigests[nextBatchNum++] = digest;
       if (pendingBatchedDigests.size() >= maxBatchSize) {
         Debug("Batch is full, sending");
@@ -240,9 +240,14 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
                                 const proto::SignedMessage& signedMsg) {
   Debug("Handling preprepare message");
 
-  int primaryId = config.GetLeaderIndex(currentView);
+  int primaryIdx = config.GetLeaderIndex(currentView);
+  int primaryId = groupIdx * config.n + primaryIdx;
 
   if (signMessages) {
+    // make sure this message is from this shard
+    if (signedMsg.replica_id() / config.n != (uint64_t) groupIdx) {
+      return;
+    }
     // make sure id is good
     if ((int) signedMsg.replica_id() != primaryId) {
       return;
@@ -252,7 +257,7 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
       return;
     }
   } else {
-    if (!slots.setPreprepare(preprepare)) {
+    if (!slots.setPreprepare(preprepare, primaryId)) {
       return;
     }
   }
@@ -262,7 +267,7 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
   string digest = preprepare.digest();
 
   // if I am the primary, I shouldn't be sending a prepare
-  if (myId != primaryId) {
+  if (idx != primaryIdx) {
     // Multicast prepare to everyone
     proto::Prepare prepare;
     prepare.set_seqnum(seqnum);
@@ -284,6 +289,10 @@ void Replica::HandlePrepare(const TransportAddress &remote,
                              const proto::SignedMessage& signedMsg) {
   Debug("Handling prepare message");
   if (signMessages) {
+    // make sure this message is from this shard
+    if (signedMsg.replica_id() / config.n != (uint64_t) groupIdx) {
+      return;
+    }
     if (!slots.addPrepare(prepare, signedMsg.replica_id(), signedMsg.signature())) {
       return;
     }
@@ -306,6 +315,10 @@ void Replica::HandleCommit(const TransportAddress &remote,
   Debug("Handling commit message");
 
   if (signMessages) {
+    // make sure this message is from this shard
+    if (signedMsg.replica_id() / config.n != (uint64_t) groupIdx) {
+      return;
+    }
     if (!slots.addCommit(commit, signedMsg.replica_id(), signedMsg.signature())) {
       return;
     }
@@ -327,9 +340,9 @@ void Replica::HandleGrouped(const TransportAddress &remote,
 
   Debug("Handling grouped message");
 
-  int primaryId = config.GetLeaderIndex(currentView);
+  int primaryIdx = config.GetLeaderIndex(currentView);
   // primary should be the one that sent the grouped message
-  if (myId != primaryId) {
+  if (idx != primaryIdx) {
     proto::PackedMessage packedMsg;
     if (packedMsg.ParseFromString(msg.packed_msg())) {
       proto::Prepare prepare;
@@ -395,8 +408,8 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest) {
       commit.set_digest(digest);
 
       if (primaryCoordinator) {
-        int primaryId = config.GetLeaderIndex(currentView);
-        if (myId == primaryId) {
+        int primaryIdx = config.GetLeaderIndex(currentView);
+        if (idx == primaryIdx) {
           Debug("Sending prepare proof");
           // send prepare proof to all replicas
           proto::GroupedSignedMessage proof = slots.getPrepareProof(seqnum, viewnum, digest);
@@ -416,8 +429,8 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest) {
     Debug("Committed message");
 
     if (primaryCoordinator) {
-      int primaryId = config.GetLeaderIndex(currentView);
-      if (myId == primaryId) {
+      int primaryIdx = config.GetLeaderIndex(currentView);
+      if (idx == primaryIdx) {
         Debug("Sending commit proof");
         // send commit proof to all replicas
         proto::GroupedSignedMessage proof = slots.getCommitProof(seqnum, viewnum, digest);

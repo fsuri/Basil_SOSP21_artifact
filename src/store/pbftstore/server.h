@@ -18,7 +18,7 @@ namespace pbftstore {
 
 class Server : public App, public ::Server {
 public:
-  Server(const transport::Configuration& config, KeyManager *keyManager, int groupIdx, int myId, int numShards, int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, partitioner part, TrueTime timeServer = TrueTime(0, 0));
+  Server(const transport::Configuration& config, KeyManager *keyManager, int groupIdx, int idx, int numShards, int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, partitioner part, TrueTime timeServer = TrueTime(0, 0));
   ~Server();
 
   ::google::protobuf::Message* Execute(const std::string& type, const std::string& msg);
@@ -34,7 +34,8 @@ private:
   transport::Configuration config;
   KeyManager* keyManager;
   int groupIdx;
-  int myId;
+  int idx;
+  int id;
   int numShards;
   int numGroups;
   bool signMessages;
@@ -49,6 +50,8 @@ private:
   };
 
   VersionedKVStore<Timestamp, ValueAndProof> commitStore;
+
+  ::google::protobuf::Message* returnMessage(::google::protobuf::Message* msg);
 
   // map from tx digest to transaction
   std::unordered_map<std::string, proto::Transaction> pendingTransactions;

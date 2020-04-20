@@ -7,10 +7,14 @@ namespace pbftstore {
 
 using namespace std;
 
-Server::Server(const transport::Configuration& config, KeyManager *keyManager, int groupIdx, int myId, int numShards, int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, partitioner part, TrueTime timeServer) :
-config(config), keyManager(keyManager), groupIdx(groupIdx), myId(myId), numShards(numShards), numGroups(numGroups), signMessages(signMessages), validateProofs(validateProofs),  timeDelta(timeDelta), part(part), timeServer(timeServer){
-
-}
+Server::Server(const transport::Configuration& config, KeyManager *keyManager,
+  int groupIdx, int idx, int numShards, int numGroups, bool signMessages,
+  bool validateProofs, uint64_t timeDelta, partitioner part,
+  TrueTime timeServer) : config(config), keyManager(keyManager),
+  groupIdx(groupIdx), idx(idx), id(groupIdx * config.n + idx),
+  numShards(numShards), numGroups(numGroups), signMessages(signMessages),
+  validateProofs(validateProofs),  timeDelta(timeDelta), part(part),
+  timeServer(timeServer) {}
 
 Server::~Server() {}
 
@@ -98,6 +102,18 @@ bool Server::CCC(const proto::Transaction& txn) {
 
 }
 
+::google::protobuf::Message* Server::returnMessage(::google::protobuf::Message* msg) {
+  // Send decision to client
+  if (signMessages) {
+    proto::SignedMessage *signedMessage = new proto::SignedMessage();
+    SignMessage(*msg, keyManager->GetPrivateKey(id), id, *signedMessage);
+    delete msg;
+    return signedMessage;
+  } else {
+    return msg;
+  }
+}
+
 ::google::protobuf::Message* Server::Execute(const string& type, const string& msg) {
   Debug("Execute: %s", type.c_str());
 
@@ -118,15 +134,8 @@ bool Server::CCC(const proto::Transaction& txn) {
       Debug("ccc failed");
       decision->set_status(REPLY_FAIL);
     }
-    // Send decision to client
-    if (signMessages) {
-      proto::SignedMessage *signedMessage = new proto::SignedMessage();
-      SignMessage(*decision, keyManager->GetPrivateKey(myId), myId, *signedMessage);
-      delete decision;
-      return signedMessage;
-    } else {
-      return decision;
-    }
+
+    return returnMessage(decision);
   }
   return nullptr;
 }
@@ -161,14 +170,7 @@ bool Server::CCC(const proto::Transaction& txn) {
       readReply->set_status(REPLY_FAIL);
     }
 
-    if (signMessages) {
-      proto::SignedMessage *signedMessage = new proto::SignedMessage();
-      SignMessage(*readReply, keyManager->GetPrivateKey(myId), myId, *signedMessage);
-      delete readReply;
-      return signedMessage;
-    } else {
-      return readReply;
-    }
+    return returnMessage(readReply);
   } else if (type == gdecision.GetTypeName()) {
     gdecision.ParseFromString(msg);
 
@@ -234,14 +236,7 @@ bool Server::CCC(const proto::Transaction& txn) {
     }
     Debug("decision ack status: %d", groupedDecisionAck->status());
 
-    if (signMessages) {
-      proto::SignedMessage *signedMessage = new proto::SignedMessage();
-      SignMessage(*groupedDecisionAck, keyManager->GetPrivateKey(myId), myId, *signedMessage);
-      delete groupedDecisionAck;
-      return signedMessage;
-    } else {
-      return groupedDecisionAck;
-    }
+    return returnMessage(groupedDecisionAck);
   }
 
   return nullptr;
