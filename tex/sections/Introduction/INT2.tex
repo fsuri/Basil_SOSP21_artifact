@@ -13,8 +13,8 @@ participants.
 
 Maintaining a totally ordered log of requests, inspite of its appealing simplicity, is problematic as such an approach is hard to scale and costly to implement. This total order is in fact often unnecessary; modern distributed applications primarily consist of independent operations that could be executed concurrently. Supply chains for instance, despite their name, are actually complex networks that generate and process logically concurrent transactions.
 
-Existing research attempts to mitigate the aforementioned scalability bottleneck through a combination of sharding, cross-shard atomic commit protocols and centralised ordering services~\cite{kokoris2018omniledger,al2017chainspace,padilha2016callinicos}. These systems suffer from three primary drawbacks \one~they limit the expressivity of the transactions they support \two~they introduce unnecessary coordination across replicas and finally,
-\three~they often centralise the ordering of requests at a single leader, which raises fairness concerns. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness.
+Existing research attempts to mitigate the aforementioned scalability bottleneck through a combination of sharding, cross-shard atomic commit protocols and centralised ordering services~\cite{kokoris2018omniledger,al2017chainspace,padilha2016callinicos}. These systems suffer from three primary drawbacks \one ~ they limit the expressivity of the transactions they support \two ~ they introduce unnecessary coordination across replicas and finally,
+\three ~ they often centralise the ordering of requests at a single leader, which raises fairness concerns. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness.
  
 In reality, building \textit{the abstraction} of a total order is sufficient, and distributed databases have long recognised this fact~\cite{crooks2018obladi,bernstein1979fas,Papadimitriou1979serializability,adya99weakconsis}. Serializability, the gold-standard database criterion, defines a correct execution as one that is \textit{equivalent} to a correct schedule~\cite{bernstein1979fas,Papadimitriou1979serializability,bernstein1979fas}. This definition allows concurrent operations to execute in parallel and orders conflicting operations only.  Byzantine systems need be no different. This paper consequently argues for a paradigm "flip". The
 right way to build BFT data-sharing systems is not to layer database-like transactions and sharding on top of a BFT log, but instead to do the opposite and build out the abstraction of a BFT log atop a partially ordered distributed database.
@@ -36,10 +36,10 @@ order transactions fairly. Though the notion of fairness in this
 context has not been rigorously defined, leaving the ordering to the
 whim of a potentially Byzantine leader, as some protocols do~\cite{
 Kotla07Zyzzyva,castro1999practical}
-is intuitively problematic. In contrast, \sys leaves the
+is intuitively problematic \cite{herlihy2016enhancing}. In contrast, \sys leaves the
 responsibility of driving the replication and distributed commit of a
-transaction to the client that proposes it and allows separate 
-shards to order transactions independently as the total order abstraction afforded by byzantine serializability can be maintained.
+transaction to the client that proposes it \changebars{fs: cut imo}{and allows separate 
+shards to order transactions independently as the total order abstraction afforded by byzantine serializability can be maintained. }  \fs{Limitation of client computation can come here}
 
 Third, \sys{} avoids the duplicate ordering costs of transactional systems
 built on top of state machine replication. As Tapir noted~\cite{zhang2015tapir,mu2016consolidating},
@@ -56,7 +56,7 @@ is vulnerable to aborts if transactions interleave unfavorably during
 validation---but these concerns are compounded in a Byzantine
 setting. First, since reading from a single local replica can no
 longer guarantee integrity, it becomes necessary to read remotely,
-thus increasing the window of time during which unfortunate
+thus increasing the window of time during which \changebars{unfavorable}{unfortunate}
 interleavings may occur. Second, Byzantine clients and replicas may
 collude to actively sabotage the commit chances of transactions issued
 by correct clients. 
@@ -64,13 +64,15 @@ by correct clients.
 Byzantine behaviour in effect introduces a tension that is not present in non-byzantine
 distributed databases: optimistic and aggressive concurrency control mechanisms known
 to improve performance (~\cite{kung1981occ,bernstein1983mcc,reed1983atomic,xie2015callas,zhang2015tapir}) in failure-free executions also increase the system's vulnerability to byzantine faults. Consider for instance runtime pipelining~\cite{xie2015callas,su2017tebaldi} or multiversioned timestamp ordering (MVTSO)~\cite{bernstein1983mcc,reed1983atomic}: both allow writes to become visible to other operations before a transaction commits. While early write visibility helps reduce abort rates for
-contended workload, it can cause transactions to stall on uncommitted operations whose writes they have observed. To mitigate this tension, we design \sys{} to follow the ethos of \textit{independent operability}: both safety (serializability) and liveness (the ability to issue and complete transactions) are \textit{local} properties. They remain, at all times, per client and per-object. Specifically, we develop a variant of multiversion timestamp ordering that precludes byzantine clients from
-aborting honest clients' transactions. We additionally develop a novel \textit{fallback} mechanism that allows clients to finish others' pending transactions when stalled. Importantly, this fallback mechanism is per-object, and can thus take place concurrently with other non-conflicting operations. This is in contrast with traditional BFT view-changes which fully preclude normal operation processing.  Finally, we remain, at all times, fully leaderless.
+contended workload, it can cause transactions to stall on uncommitted operations whose writes they have observed. To mitigate this tension, we design \sys{} to follow the ethos of \textit{independent operability}: both safety (serializability) and liveness (the ability to issue and complete transactions) are \textit{local} properties. They remain, at all times, per client and per-object. Specifically, we develop a variant of multiversion timestamp ordering that \changebars{limits byzantine clients ability to strategically abort honest clients' transactions}{ precludes byzantine clients from
+aborting honest clients' transactions}. \fs{This is currently too strong. Can we be more clear about how our MVTSO achieves this? Only thing that comes to mind is that writes are delayed and do not have external effect early, and dependencies are only on f+1 matching reads}
+ We additionally develop a novel \textit{fallback} mechanism that allows clients to finish others' pending transactions when stalled. Importantly, this fallback mechanism is per-object, and can thus take place concurrently with other non-conflicting operations. This is in contrast with traditional BFT view-changes which fully preclude normal operation processing.  Finally, we remain, at all times, fully leaderless. \fs{not true for the fallback, where we intentionally elect a leader. The difference is, that in Indicus each Tx has its own leader (which is usually the client, but can become a replica). We do not want to mislead.}
 
 Naturally, \sys{} also has limitations. First, it shifts some
 responsibilities from replicas to clients, which increases a client's computation load. Second, \sys{} is optimistic: it greedily allows transactions to read uncommitted data and allows replicas to process operations out of order. This approach can lead to high abort rates under heavy contention.
 \nc{while i think we should include
 limitations because that's a good thing to do, it's not obvious to me that the above paragraph is useful. Those limitations seem kinda obvious?}
+\fs{agree, the interleaving vulnerability part is also mentioned already. The client cost can be moved up - see earlier comment}
 
 In summary, we make the following three contributions: 
 \begin{itemize}
