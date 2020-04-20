@@ -10,26 +10,25 @@ including healthcare~\cite{}, financial services~\cite{}, supply chain
 management~~\cite{} and more~\cite{}. \nc{I understand that you want to move 
 to the main point quickly but I think that one example might be useful here still, just
 one}. Byzantine fault tolerant (BFT)
-systems~\cite{} and permissioned blockchains~\cite{}
-are at the center of these new services. These protocols are guaranteed to
+systems~\cite{castro1999practical, martin2006fast, kotla2007zyzzyva,  gueta2018sbft, clement2009making, buchman2016tendermint, yin2019hotstuff, Clement09Upright, duan2014hbft    , pires2018generalized, bessani2014state, lamport2011byzantizing, arun2019ezbft, malkhi2019flexible, duan2014hbft, yin2003separating, Guerraoui08Next, Kotla04High,  liskov2010viewstamped} and permissioned blockchains~\cite{Hyperledger, EthereumQuorum, buchman2016tendermint, al2017chainspace, kokoris2018omniledger,  gilad2017algorand, baudet2019state} are at the center of these new services. These protocols are guaranteed to
 produce the same totally ordered log of operations across mutually distrustful
 participants. 
 
-Maintaining a totally ordered log of requests, inspite of its appealing simplicity, is problematic. Such an approach is hard to scale and costly to implement. It is, moreover, often unnecessary. Modern distributed applications primarily consist of independent operations that could be executed concurrently. Supply chains for instance, despite their name, are actually complex networks that generate and process logically concurrent transactions.
+Maintaining a totally ordered log of requests, inspite of its appealing simplicity, is problematic as such an approach is hard to scale and costly to implement. This total order is in fact often unnecessary; modern distributed applications primarily consist of independent operations that could be executed concurrently. Supply chains for instance, despite their name, are actually complex networks that generate and process logically concurrent transactions.
 
-Existing research recognises this opportunity and attempt to mitigate the aforementioned scalability bottleneck through a combination of sharding~\cite{omniledger,chainspace,callinicos}, cross-shard atomic commit protocols and centralised ordering services~\cite{}. These systems suffer from three primary drawbacks 1) they limit the expressivity of the transactions tthey support~\cite{} 2) they introduce unnecessary coordination across replicas~\cite{} which affects throughput and finally, 3) they often centralises the ordering of requests at a single leader, which raises fairness concerns. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness.
+Existing research attempts to mitigate the aforementioned scalability bottleneck through a combination of sharding, cross-shard atomic commit protocols and centralised ordering services~\cite{kokoris2019omniledger,al2017chainspace,padilha2016callinicos}. These systems suffer from three primary drawbacks \one~they limit the expressivity of the transactions they support \two~they introduce unnecessary coordination across replicas and finally,
+\three~they often centralise the ordering of requests at a single leader, which raises fairness concerns. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness.
  
-In reality, building \textit{the abstraction} of a total order is sufficient, and distributed databases have long recognised this fact. Serializability, the gold-standard database criterion, defines a correct execution as one that is \textit{equivalent} to a correct schedule. This definition allows concurrent operations to execute in parallel, restricting any ordering to conflicting operations only.  Byzantine systems need be no different. This paper consequently argues for a paradigm "flip". The right way to build data-sharing systems for distrustful parties is not to layer database-like transactions and sharding on top of the reality of byzantine fault tolerant log, but instead to do the opposite and build out the abstraction of a BFT log atop a partially ordered distributed database.
+In reality, building \textit{the abstraction} of a total order is sufficient, and distributed databases have long recognised this fact~\cite{}. Serializability, the gold-standard database criterion, defines a correct execution as one that is \textit{equivalent} to a correct schedule~\cite{}. This definition allows concurrent operations to execute in parallel and orders conflicting operations only.  Byzantine systems need be no different. This paper consequently argues for a paradigm "flip". The
+right way to build BFT data-sharing systems is not to layer database-like transactions and sharding on top of a BFT log, but instead to do the opposite and build out the abstraction of a BFT log atop a partially ordered distributed database.
 
 To this effect, we design \sys{}, the first leaderless and scalable key-value store that is resilient against
 Byzantine faults. We specifically formalise the notion of \textit{byzantine isolation}, the correctness
 guarantee that any BFT distributed database should enforce.  \sys{} provides three main benefits.
 
  First, it overcomes the scalability bottleneck of a low-level
-implementation based on a totally ordered BFT log. \sys uses a
-client-driven protocol that bypasses the ordering bottleneck and
-leverages databases' ability to support highly concurrent transaction
-processing over a sharded database while maintaining the abstraction
+implementation based on a totally ordered BFT log. \sys instead leverages databases' ability to support highly concurrent transaction
+processing while maintaining the abstraction
 of a serial execution.
 
 % an explicit ordering service 
@@ -39,24 +38,19 @@ sidestep the growing concerns~\cite{} about whether blockchains
 order transactions fairly. Though the notion of fairness in this
 context has not been rigorously defined, leaving the ordering to the
 whim of a potentially Byzantine leader, as some protocols do~\cite{}
-is intuitively problematic; to limit its discretion, other protocols
-rotate the leader's responsibility, thus reducing, but not
-eliminating, the skew it can introduce. In contrast, \sys leaves the
+is intuitively problematic. In contrast, \sys leaves the
 responsibility of driving the replication and distributed commit of a
-transaction to the client that proposes it, and allows different
-shards to order transactions in different orders as
-long as the total order abstraction affored by byzantine serializability can be maintained.
+transaction to the client that proposes it and allows separate 
+shards to order transactions independently as the total order abstraction afforded by byzantine serializability can be maintained.
 
-Third, it avoids the duplicate ordering costs of transactional systems
-built on top of state machine replication. As Tapir noted~\cite{},
-these systems require, for replication, a consistent ordering of
-operations within each shard, and additionally enforce, for
-distributed commit, a serial order of transactions across
-shards~\cite{}. In contrast, \sys{} integrates distributed commit and
-replication through an optimistic concurrency control (OCC)~\cite{} protocol, to
-limit coordination only to the validation step of the distributed commit
-protocol---and does so in in a setting where clients, as well as a
-fraction of the replicas in each shard, can behave maliciously.
+Third, \sys{} avoids the duplicate ordering costs of transactional systems
+built on top of state machine replication. As Tapir noted~\cite{zhang2015tapir},
+these systems require a consistent ordering of
+operations within each shard for replication, and additionally enforce a serial order of transactions across
+shards for distributed commit. In contrast, \sys{} integrates distributed commit with 
+replication and
+limits coordination to the validation step of the distributed commit
+protocol.
 
 In practice, reaping these benefits requires us to address several
 technical obstacles. As in any OCC-based protocol, \sys
@@ -71,21 +65,27 @@ by correct clients.
 
 Byzantine behaviour in effect introduces a tension that is not present in non-byzantine
 distributed databases: optimistic and aggressive concurrency control mechanisms known
-to improve performance (~\cite{occ,mvtso,pipeline,tapir}) in failure-free executions also increase the system's vulnerability to byzantine faults \nc{give example?}. To mitigate this tension, we design \sys{} to follow the ethos of \textit{independent operability}: both safety (namely, serializability) (the ability to issue and complete tranactions)
-are \textit{local} properties. They remain, at all times, per clients and per-object.
- 
-\nc{Things to mention: we design a version of mvtso that still allows writes to be made visible early but allows clients to finish each other's transactions if a byz client tries to stall the system. If a Byz client tries to stall the system, the fallback is per objet only.
-We are leaderless, we have linear cost everywhere}
+to improve performance (~\cite{occ,mvtso,pipeline,tapir}) in failure-free executions also increase the system's vulnerability to byzantine faults. Consider for instance runtime pipelining~\cite{callas,mcc} or multiversioned timestamp ordering (MVTSO)~\cite{}: both allow writes to become visible to other operations before a transaction commits. While early write visibility helps reduce abort rates for
+contended workload, it can cause transactions to stall on uncommitted operations whose writes they have observed. To mitigate this tension, we design \sys{} to follow the ethos of \textit{independent operability}: both safety (serializability) and liveness (the ability to issue and complete transactions) are \textit{local} properties. They remain, at all times, per client and per-object. Specifically, we develop a variant of multiversion timestamp ordering that precludes byzantine clients from
+aborting honest clients' transactions. We additionally develop a novel \textit{fallback} mechanism that allows clients to finish others' pending transactions when stalled. Importantly, this fallback mechanism is per-object, and can thus take place concurrently with other non-conflicting operations. This is in contrast with traditional BFT view-changes which fully preclude normal operation processing.  Finally, we remain, at all times, fully leaderless.
+
+Naturally, \sys{} also has limitations. First, it shifts some
+responsibilities from replicas to clients, which increases a client's computation load. Second, \sys{} is optimistic: it greedily allows transactions to read uncommitted data and allows replicas to process operations out of order. This approach can lead to high abort rates under heavy contention.
+\nc{while i think we should include
+limitations because that's a good thing to do, it's not obvious to me that the above paragraph is useful. Those limitations seem kinda obvious?}
 
 In summary, we make the following three contributions: 
 \begin{itemize}
-\item definition of byzantine serializability
-\item  byzantine mvtso + per-object concurrent view change?
-\item system?
+\item We introduce the notion of Byzantine Isolation and prove that \sys guarantees
+Byzantine Serializability.
+\item We introduce a novel concurrency control and recovery mechanism that balance the need for high-throughput in
+the common case with resilience to Byzantine attacks.
+\item Our system remains leaderless and exhibits linear communication complexity, unlike prior BFT systems.
 \end{itemize}
 
-Nonetheless, our system has the following limitations. Limitation 1 goes here. Limitation 2 goes here.
 
 The rest of the paper is structured as follows. Section~\ref{sec:model} formalises \sys{}'s correctness guarantees.
-Section~\ref{sec:}. Finally, we summarise related work (\S\ref{sec:rel}) and conclude (\S\ref{sec:conc}).
+Section~\ref{sec:overview} outlines
+\sys's architecture; we summarise our concurrency control control protocols and recovery protocols in \S\ref{sec:cc} and \S\ref{sec:fallback}. We
+prove correctness in \S\ref{sec::fallback} and evaluate \sys in \S\ref{sec:}. Finally, we summarise related work (\S\ref{sec:rel}) and conclude (\S\ref{sec:conc}).
 
