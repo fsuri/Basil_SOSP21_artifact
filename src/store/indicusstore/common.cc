@@ -133,6 +133,12 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     const std::string &key, const std::string &val, const Timestamp &timestamp,
     const transport::Configuration *config, bool signedMessages,
     KeyManager *keyManager) {
+  if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
+    // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
+    //    without needing to write all existing data with transactions
+    return true;
+  }
+
   if (!ValidateProof(proof, config, signedMessages, keyManager)) {
     return false;
   }
@@ -168,6 +174,8 @@ bool ValidateProof(const proto::CommittedProof &proof,
   }
 
   std::string txnDigest = TransactionDigest(proof.txn());
+  Debug("Validate proof for transaction %lu.%lu (%s).", proof.txn().client_id(),
+      proof.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str());
   if (signedMessages) {
     if (proof.has_signed_p1_replies()) {
       std::map<int, std::vector<proto::Phase1Reply>> groupedP1Replies;
@@ -176,6 +184,7 @@ bool ValidateProof(const proto::CommittedProof &proof,
         for (const auto &signedP1Reply : signedP1Replies.second.msgs()) {
           proto::Phase1Reply reply;
           if (!ValidateSignedMessage(signedP1Reply, keyManager, reply)) {
+            Debug("Signed P1 reply is not valid.");
             return false;
           }
           
@@ -190,6 +199,7 @@ bool ValidateProof(const proto::CommittedProof &proof,
       for (const auto &signedP2Reply : proof.signed_p2_replies().msgs()) {
         proto::Phase2Reply reply;
         if (!ValidateSignedMessage(signedP2Reply, keyManager, reply)) {
+          Debug("Signed P2 reply is not valid.");
           return false;
         }
           
@@ -197,6 +207,7 @@ bool ValidateProof(const proto::CommittedProof &proof,
       }   
       return ValidateP2RepliesCommit(p2Replies, txnDigest, proof.txn(), config);
     } else {
+      Debug("Has no signed replies.");
       return false;
     }
   } else {
@@ -218,6 +229,7 @@ bool ValidateProof(const proto::CommittedProof &proof,
       }
       return ValidateP2RepliesCommit(p2Replies, txnDigest, proof.txn(), config);
     } else {
+      Debug("Has no replies.");
       return false;
     }
   }
@@ -234,20 +246,26 @@ bool ValidateP1RepliesCommit(
     auto repliesItr = groupedP1Replies.find(group);
     if (repliesItr == groupedP1Replies.end()) {
       // missing P1 replies from involved group
+      Debug("No P1 replies for group %d", group);
       return false;
     }
 
     if (repliesItr->second.size() < config->n) {
+      Debug("Not enough P1 replies for group %d", group);
       return false;
     }
 
     for (const auto &p1Reply : repliesItr->second) {
       if (p1Reply.ccr() != proto::Phase1Reply::COMMIT) {
+        Debug("Not all COMMIT P1 replies for group %d.", group);
         return false;
       }
       
       if (p1Reply.txn_digest() != txnDigest) {
         // P1 reply is for different transaction
+        Debug("P1 reply digest %s does not match this txn digest %s in group %d.",
+            BytesToHex(p1Reply.txn_digest(), 16).c_str(), BytesToHex(txnDigest, 16).c_str(),
+            group);
         return false;
       }
     }
@@ -261,15 +279,20 @@ bool ValidateP2RepliesCommit(
     const std::string &txnDigest, const proto::Transaction &txn,
     const transport::Configuration *config) {
   if (p2Replies.size() < 4 * config->f + 1) {
+    Debug("Not enough P2 replies.");
     return false;
   }
 
   for (const auto &p2Reply : p2Replies) {
     if (p2Reply.decision() != proto::COMMIT) {
+      Debug("Not all P2 COMMIT replies.");
       return false;
     }
     
     if (p2Reply.txn_digest() != txnDigest) {
+      Debug("P2 reply digest %s does not match this txn digest %s.",
+          BytesToHex(p2Reply.txn_digest(), 16).c_str(),
+          BytesToHex(txnDigest, 16).c_str());
       return false;
     }
   }
