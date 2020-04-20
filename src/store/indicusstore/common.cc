@@ -161,6 +161,12 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
 bool ValidateProof(const proto::CommittedProof &proof,
     const transport::Configuration *config, bool signedMessages,
     KeyManager *keyManager) {
+  if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
+    // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
+    //    without needing to write all existing data with transactions
+    return true;
+  }
+
   std::string txnDigest = TransactionDigest(proof.txn());
   if (signedMessages) {
     if (proof.has_signed_p1_replies()) {
