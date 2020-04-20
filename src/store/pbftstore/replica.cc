@@ -400,6 +400,10 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest) {
       Debug("Sending commit to everyone");
 
       sentCommits[seqnum].insert(viewnum);
+      transport->Timer(200, [this, seqnum, viewnum]() {
+        Debug("erased sent commit");
+        this->sentCommits[seqnum].erase(viewnum);
+      });
 
       // Multicast commit to everyone
       proto::Commit commit;
