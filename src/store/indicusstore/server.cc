@@ -138,14 +138,11 @@ void Server::HandleRead(const TransportAddress &remote,
     Debug("READ[%lu] Committed value of length %lu bytes with ts %lu.%lu.",
         msg.req_id(), tsVal.second.val.length(), tsVal.first.getTimestamp(),
         tsVal.first.getID());
-    reply.set_status(REPLY_OK);
     reply.mutable_committed()->set_value(tsVal.second.val);
     tsVal.first.serialize(reply.mutable_committed()->mutable_timestamp());
     if (validateProofs) {
       *reply.mutable_committed()->mutable_proof() = tsVal.second.proof;
     }
-  } else {
-    reply.set_status(REPLY_FAIL);
   }
 
   if (occType == MVTSO) {
@@ -189,7 +186,6 @@ void Server::HandleRead(const TransportAddress &remote,
         } else {
           *reply.mutable_prepared() = preparedWrite;
         }
-        reply.set_status(REPLY_OK);
       }
     }
   }
@@ -892,7 +888,6 @@ void Server::SendPhase1Reply(uint64_t reqId,
     const proto::CommittedProof &conflict, const TransportAddress &remote) {
   proto::Phase1Reply reply;
   reply.set_req_id(reqId);
-  reply.set_status(REPLY_OK);
   reply.set_ccr(result);
   /* TODO: are retries a thing?
   if (result == proto::Phase1Reply::RETRY) {
