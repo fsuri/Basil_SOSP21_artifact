@@ -51,6 +51,13 @@ private:
 
   VersionedKVStore<Timestamp, ValueAndProof> commitStore;
 
+
+  ::google::protobuf::Message* HandleTransaction(const proto::Transaction& transaction);
+
+  ::google::protobuf::Message* HandleRead(const proto::Read& read);
+
+  ::google::protobuf::Message* HandleGroupedDecision(const proto::GroupedDecision& gdecision);
+
   ::google::protobuf::Message* returnMessage(::google::protobuf::Message* msg);
 
   // map from tx digest to transaction
