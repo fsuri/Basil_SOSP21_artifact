@@ -299,25 +299,26 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   }
   PendingQuorumGet *req = itr->second;
 
-  if (validateProofs) {
-    if (!ValidateTransactionWrite(reply.committed().proof(), req->key,
-          reply.committed().value(), reply.committed().timestamp(), config,
-          signedMessages, keyManager)) {
-      // invalid replies can be treated as if we never received a reply from
-      //     a crashed replica
-      return;
-    }
-  }
-
   // value and timestamp are valid
   req->numReplies++;
-  if (reply.status() == REPLY_OK) {
-    req->numOKReplies++;
+  if (reply.has_committed()) {
+    if (validateProofs) {
+      if (!ValidateTransactionWrite(reply.committed().proof(), req->key,
+            reply.committed().value(), reply.committed().timestamp(), config,
+            signedMessages, keyManager)) {
+        Debug("[group %i] Failed to validate committed value for read %lu.",
+            group, reply.req_id());
+        // invalid replies can be treated as if we never received a reply from
+        //     a crashed replica
+        return;
+      }
+    }
+
     Timestamp replyTs(reply.committed().timestamp());
     Debug("[group %i] ReadReply for %lu with %lu byte value and ts %lu.%lu.",
         group, reply.req_id(), reply.committed().value().length(),
         replyTs.getTimestamp(), replyTs.getID());
-    if (req->numOKReplies == 1 || req->maxTs < replyTs) {
+    if (req->numReplies == 1 || req->maxTs < replyTs) {
       req->maxTs = replyTs;
       req->maxValue = reply.committed().value();
     }
@@ -383,15 +384,10 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     read_callback gcb = req->gcb;
     std::string key = req->key;
     pendingGets.erase(itr);
-    int32_t status = REPLY_FAIL;
-    if (req->numOKReplies >= req->rqs) {
-      status = REPLY_OK;
-    }
-    Debug("[group %i] GET callback [%d]", group, status);
     // TODO: there is probably a more efficient way to pass signedPrepared
     //   back to top-level client
     readValues[key] = req->maxValue;
-    gcb(status, key, req->maxValue, req->maxTs, req->dep, req->hasDep, true);
+    gcb(REPLY_OK, key, req->maxValue, req->maxTs, req->dep, req->hasDep, true);
     delete req;
   }
 }
@@ -403,8 +399,7 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
     return; // this is a stale request
   }
 
-  Debug("[group %i] PHASE1 callback [%d] ccr=%d", group,
-      reply.status(), reply.ccr());
+  Debug("[group %i] PHASE1 callback ccr=%d", group, reply.ccr());
 
   if (signedMessages) {
     itr->second->signedPhase1Replies.push_back(signedReply);
