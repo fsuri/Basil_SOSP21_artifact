@@ -894,7 +894,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
     retryTs.serialize(reply.mutable_retry_timestamp());
   }*/
 
-  if (validateProofs) {
+  if (conflict.has_txn() && validateProofs) {
     *reply.mutable_committed_conflict() = conflict;
   }
 
