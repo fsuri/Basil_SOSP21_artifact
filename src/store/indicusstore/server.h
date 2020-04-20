@@ -113,7 +113,8 @@ class Server : public TransportReceiver, public ::Server {
       std::vector<std::pair<Timestamp, Value>> &writes);
   void GetCommittedReads(const std::string &key,
       std::set<std::pair<Timestamp, Timestamp>> &reads);
-  void Commit(const std::string &txnDigest, const proto::Transaction &txn);
+  void Commit(const std::string &txnDigest, const proto::Transaction &txn,
+      const proto::CommittedProof &proof);
   void Abort(const std::string &txnDigest);
   void CheckDependents(const std::string &txnDigest);
   proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(

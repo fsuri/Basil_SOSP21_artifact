@@ -328,7 +328,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
   }
 
   if (msg.decision() == proto::COMMIT) {
-    Commit(*txnDigest, msg.txn());
+    Commit(*txnDigest, msg.txn(), msg.proof());
   } else {
     Abort(*txnDigest);
   }
@@ -766,7 +766,7 @@ void Server::GetCommittedReads(const std::string &key,
 }
 
 void Server::Commit(const std::string &txnDigest,
-    const proto::Transaction &txn) {
+    const proto::Transaction &txn, const proto::CommittedProof &proof) {
   Timestamp ts(txn.timestamp());
   for (const auto &read : txn.read_set()) {
     if (!IsKeyOwned(read.key())) {
@@ -778,6 +778,7 @@ void Server::Commit(const std::string &txnDigest,
   
   Value val;
   if (validateProofs) {
+    val.proof = proof;
   }
 
   for (const auto &write : txn.write_set()) {
