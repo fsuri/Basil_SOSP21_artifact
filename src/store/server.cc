@@ -370,7 +370,7 @@ int main(int argc, char **argv) {
 				part);
 			replica = new pbftstore::Replica(config, &keyManager,
 				dynamic_cast<pbftstore::App *>(server),
-				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, 1,
+				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, 1, false,
 			 	tport);
 			break;
 		}

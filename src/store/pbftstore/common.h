@@ -35,6 +35,8 @@ std::string TransactionDigest(const proto::Transaction &txn);
 
 std::string BatchedDigest(proto::BatchedRequest& breq);
 
+std::string string_to_hex(const std::string& input);
+
 } // namespace pbftstore
 
 #endif /* PBFT_COMMON_H */

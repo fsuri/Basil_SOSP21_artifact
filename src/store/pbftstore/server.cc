@@ -287,6 +287,7 @@ bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
                 decision.txn_digest() == digest &&
                 decision.shard_id() == shard_id) {
               proto::SignedMessage signedMsg;
+              signedMsg.set_packed_msg(grouped.packed_msg());
               // use this to keep track of the replicas for whom we have gotten
               // a valid signature.
               unordered_set<uint64_t> valid_signatures;
@@ -297,6 +298,7 @@ bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
                 // recreate the signed message for the given replica id
                 signedMsg.set_replica_id(id_sig_pair.first);
                 signedMsg.set_signature(id_sig_pair.second);
+                // Debug("signature for %lu: %s", id_sig_pair.first, string_to_hex(id_sig_pair.second).c_str());
 
                 if (CheckSignature(signedMsg, keyManager)) {
                   valid_signatures.insert(id_sig_pair.first);

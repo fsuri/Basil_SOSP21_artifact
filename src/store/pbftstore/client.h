@@ -68,25 +68,48 @@ class Client : public ::Client {
   // TrueTime server.
   TrueTime timeServer;
 
+  struct PendingPrepare {
+    proto::Transaction txn;
+    // collected decisions from each shard
+    std::unordered_map<uint64_t, proto::TransactionDecision> shardDecisions;
+    std::unordered_map<uint64_t, proto::GroupedSignedMessage> signedShardDecisions;
 
-  /* Transaction Execution State */
+    commit_callback ccb;
+    commit_timeout_callback ctcb;
+    uint32_t timeout;
+  };
+
+  struct PendingWriteback {
+    proto::Transaction txn;
+    // set of replicas we got a writeback from
+    std::unordered_set<uint64_t> writebackAcks;
+
+    commit_callback ccb;
+  };
+
+  void HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int status, const proto::GroupedSignedMessage& gsm);
+
+  void HandlePrepareReply(std::string digest, uint64_t shard_id, int status, const proto::TransactionDecision& txndec);
+
+  void HandleWritebackReply(std::string digest, uint64_t shard_id);
+
   // Current transaction.
-  proto::Transaction txn;
-  bool txnInProgress;
-  // collected decisions
-  std::unordered_map<uint64_t, proto::GroupedDecisions> groupedDecision;
-  std::unordered_map<uint64_t, proto::GroupedSignedDecisions> groupedSignedDecision;
-  
-  std::unordered_set<uint64_t> writebackAcks;
+  proto::Transaction currentTxn;
+
+  // map from txn digest to pending prepare state
+  std::unordered_map<std::string, PendingPrepare> pendingPrepares;
+
+  // map from txn digest to pending writeback state
+  std::unordered_map<std::string, PendingWriteback> pendingWritebacks;
 
   /* Debug State */
   std::unordered_map<std::string, uint32_t> statInts;
 
-  void WriteBack(const proto::ShardDecisions& dec, commit_callback ccb, commit_timeout_callback ctcb,
-    uint32_t timeout);
+  void WriteBackSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn,
+    commit_callback ccb, commit_timeout_callback ctcb, uint32_t timeout);
 
-  void WriteBackSigned(const proto::ShardSignedDecisions& dec, commit_callback ccb, commit_timeout_callback ctcb,
-    uint32_t timeout);
+  void WriteBack(const proto::ShardDecisions& dec, const proto::Transaction& txn,
+    commit_callback ccb, commit_timeout_callback ctcb, uint32_t timeout);
 
   bool IsParticipant(int g);
 };
