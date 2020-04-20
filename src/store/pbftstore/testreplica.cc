@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
   int numGroups = 1;
   uint64_t maxBatchSize = 3;
   bool primaryCoordinator = false;
-  bool signMessages = false;
+  bool signMessages = true;
   bool validateProofs = true;
   pbftstore::Server* server = new pbftstore::Server(config, &keyManager, groupIdx, myId, numShards, numGroups, signMessages, validateProofs, 10, default_partitioner);
   pbftstore::Replica replica(config, &keyManager, dynamic_cast<pbftstore::App *>(server), groupIdx, myId, signMessages, maxBatchSize, primaryCoordinator, &transport);
