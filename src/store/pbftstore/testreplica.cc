@@ -67,9 +67,14 @@ int main(int argc, char **argv) {
   KeyManager keyManager(keyPath);
   int numShards = 1;
   int numGroups = 1;
-  pbftstore::Server* server = new pbftstore::Server(config, &keyManager, groupIdx, myId, numShards, numGroups, true, false, 10, default_partitioner);
-  pbftstore::Replica replica(config, &keyManager, dynamic_cast<pbftstore::App *>(server), groupIdx, myId, true, &transport);
+  uint64_t maxBatchSize = 3;
+  bool primaryCoordinator = false;
+  bool signMessages = false;
+  bool validateProofs = true;
+  pbftstore::Server* server = new pbftstore::Server(config, &keyManager, groupIdx, myId, numShards, numGroups, signMessages, validateProofs, 10, default_partitioner);
+  pbftstore::Replica replica(config, &keyManager, dynamic_cast<pbftstore::App *>(server), groupIdx, myId, signMessages, maxBatchSize, primaryCoordinator, &transport);
 
+  printf("Running transport\n");
   transport.Run();
 
   return 0;

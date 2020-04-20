@@ -1,8 +1,52 @@
 #include "lib/udptransport.h"
 #include "store/pbftstore/common.h"
-#include "store/pbftstore/client.h"
+// #include "store/pbftstore/client.h"
 #include "store/common/common-proto.pb.h"
 #include "store/common/partitioner.h"
+
+class NodeClient : TransportReceiver {
+ public:
+  NodeClient(UDPTransport *transport, const transport::Configuration &config) : transport(transport) {
+    transport->Register(this, config, -1, -1);
+
+  }
+  ~NodeClient() {}
+
+  // Message handlers.
+  void ReceiveMessage(const TransportAddress &remote, const std::string &type,
+                      const std::string &data, void *meta_data) {
+
+                        std::cout << "got message" << std::endl;
+                      }
+  void SendTest() {
+    pbftstore::proto::Request request;
+    request.mutable_packed_msg()->set_msg("Hi there");
+    request.mutable_packed_msg()->set_type("a type");
+    request.set_digest("aaa");
+
+    printf("sending message 1\n");
+    // send to everyone and to me
+    transport->SendMessageToGroup(this, 0, request);
+
+    pbftstore::proto::Request request2;
+    request2.mutable_packed_msg()->set_msg("Hi there");
+    request2.mutable_packed_msg()->set_type("b msg");
+    request2.set_digest("bbb");
+
+    printf("sending message 2\n");
+    // send to everyone and to me
+    transport->SendMessageToGroup(this, 0, request2);
+
+    transport->Timer(1000, [=]() {
+      printf("Callback!!\n");
+      transport->Stop();
+    });
+  }
+
+private:
+  Transport *transport;
+
+};
 
 int main(int argc, char **argv) {
   std::ifstream configStream("test.config");
@@ -21,40 +65,44 @@ int main(int argc, char **argv) {
   bool signMessages = true;
   bool validateProofs = false;
 
-  pbftstore::Client* client = new pbftstore::Client(config, 1, 1, &transport,
-    default_partitioner, readQuorumSize, signMessages, validateProofs, km);
+  NodeClient client(&transport, config);
 
-  auto timeoutcb = [=](int to) {
-      printf("to\n");
-    };
-  auto puttimeoutcb = [=](int to, const std::string& key, const std::string& val) {
-      printf("to\n");
-    };
-  auto gettimeoutcb= [=](int to, const std::string& key) {
-      printf("to\n");
-    };
+  client.SendTest();
 
-
-  client->Begin();
-  client->Put("A", "123", [=](int status, const std::string& key, const std::string& val) {
-    client->Commit([=](int status) {
-      printf("Committed %d\n", status);
-      client->Begin();
-      client->Get("A", [=](int status, const std::string& key, const std::string& val,
-      const Timestamp& ts) {
-        std::cout << "Got " << val << std::endl;
-        client->Put("A", val + "fff", [=](int status, const std::string& key, const std::string& val) {
-          client->Commit([=](int status) {
-            printf("Committed2 %d\n", status);
-            client->Get("A", [=](int status, const std::string& key, const std::string& val,
-            const Timestamp& ts) {
-              std::cout << "Got2 " << val << std::endl;
-            }, gettimeoutcb, 1000);
-          }, timeoutcb, 1000);
-        }, puttimeoutcb, 1000);
-      }, gettimeoutcb, 1000);
-    }, timeoutcb, 1000);
-  }, puttimeoutcb, 1000);
+  // pbftstore::Client* client = new pbftstore::Client(config, 1, 1, &transport,
+  //   default_partitioner, readQuorumSize, signMessages, validateProofs, km);
+  //
+  // auto timeoutcb = [=](int to) {
+  //     printf("to\n");
+  //   };
+  // auto puttimeoutcb = [=](int to, const std::string& key, const std::string& val) {
+  //     printf("to\n");
+  //   };
+  // auto gettimeoutcb= [=](int to, const std::string& key) {
+  //     printf("to\n");
+  //   };
+  //
+  //
+  // client->Begin();
+  // client->Put("A", "123", [=](int status, const std::string& key, const std::string& val) {
+  //   client->Commit([=](int status) {
+  //     printf("Committed %d\n", status);
+  //     client->Begin();
+  //     client->Get("A", [=](int status, const std::string& key, const std::string& val,
+  //     const Timestamp& ts) {
+  //       std::cout << "Got " << val << std::endl;
+  //       client->Put("A", val + "fff", [=](int status, const std::string& key, const std::string& val) {
+  //         client->Commit([=](int status) {
+  //           printf("Committed2 %d\n", status);
+  //           client->Get("A", [=](int status, const std::string& key, const std::string& val,
+  //           const Timestamp& ts) {
+  //             std::cout << "Got2 " << val << std::endl;
+  //           }, gettimeoutcb, 1000);
+  //         }, timeoutcb, 1000);
+  //       }, puttimeoutcb, 1000);
+  //     }, gettimeoutcb, 1000);
+  //   }, timeoutcb, 1000);
+  // }, puttimeoutcb, 1000);
 
 
   // pbftstore::ShardClient* client = new pbftstore::ShardClient(config, &transport,
