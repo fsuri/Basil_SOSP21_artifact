@@ -18,7 +18,7 @@ class Slots {
   // been validated against this replica)
   // returns true if the set succeeded, if returns false -> suspect primary
   bool setPreprepare(const proto::Preprepare &preprepare, uint64_t replica_id, const std::string& sig);
-  bool setPreprepare(const proto::Preprepare &preprepare);
+  bool setPreprepare(const proto::Preprepare &preprepare, uint64_t primaryId);
 
   // add replica_id to the set of replicas attesting to have sent the prepare
   bool addPrepare(const proto::Prepare &prepare, uint64_t replica_id, const std::string& sig);

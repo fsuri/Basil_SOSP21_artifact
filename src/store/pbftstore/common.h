@@ -31,8 +31,6 @@ void SignMessage(const ::google::protobuf::Message &msg,
     const crypto::PrivKey &privateKey, uint64_t processId,
     proto::SignedMessage &signedMessage);
 
-// std::string RequestDigest(const proto::Request &request);
-
 std::string TransactionDigest(const proto::Transaction &txn);
 
 std::string BatchedDigest(proto::BatchedRequest& breq);

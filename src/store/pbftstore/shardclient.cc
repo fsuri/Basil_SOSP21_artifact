@@ -32,6 +32,8 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   proto::SignedMessage signedMessage;
   std::string type;
   std::string data;
+
+  bool recvSignedMessage = false;
   if (t == signedMessage.GetTypeName()) {
     if (!signedMessage.ParseFromString(d)) {
       return;
@@ -40,6 +42,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
     if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
       return;
     }
+    recvSignedMessage = true;
   } else {
     type = t;
     data = d;
@@ -50,159 +53,198 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   proto::GroupedDecisionAck groupedDecisionAck;
   if (type == readReply.GetTypeName()) {
     readReply.ParseFromString(data);
-    // get the read request id from the reply
-    uint64_t reqId = readReply.req_id();
-    Debug("got a read reply");
 
-    // try and find a matching pending read based on the request
-    if (pendingReads.find(reqId) != pendingReads.end()) {
-      PendingRead* pendingRead = &pendingReads[reqId];
-      // we always mark a reply even if it fails because the read could fail
-      if (signMessages) {
-        if (t == signedMessage.GetTypeName()) {
-          // insert the signed replica id as a received reply
-          pendingRead->receivedReplies.insert(signedMessage.replica_id());
-        } else {
-          return;
-        }
-      } else {
-        // insert a new id into the received replies
-        pendingRead->receivedReplies.insert(pendingRead->receivedReplies.size());
-      }
-      if (readReply.status() == REPLY_OK) {
-        Timestamp rts(readReply.value_timestamp());
-        if (validateProofs) {
-          // if the proof is invalid, stop processing this reply
-          if (!validateReadProof(readReply.commit_proof(), readReply.key(), readReply.value(), rts)) {
-            return;
-          }
-        }
-        // if we haven't recorded a read result yet or we have a higher read,
-        // make this reply the new max
-        if (pendingRead->status == REPLY_FAIL || rts > pendingRead->maxTs) {
-            pendingRead->maxTs = rts;
-            pendingRead->maxValue = readReply.value();
-            pendingRead->maxCommitProof = readReply.commit_proof();
-            pendingRead->status = REPLY_OK;
-        }
-      }
-
-      Debug("reply size: %d", pendingRead->receivedReplies.size());
-      if (pendingRead->receivedReplies.size() >= pendingRead->numResultsRequired) {
-        read_callback rcb = pendingRead->rcb;
-        std::string value = pendingRead->maxValue;
-        Timestamp readts = pendingRead->maxTs;
-        std::string key = readReply.key();
-        uint64_t status = pendingRead->status;
-        pendingReads.erase(reqId);
-        rcb(status, key, value, readts);
-      }
+    if (signMessages && !recvSignedMessage) {
+      return;
     }
 
-
+    HandleReadReply(readReply, signedMessage);
   } else if (type == transactionDecision.GetTypeName()) {
     transactionDecision.ParseFromString(data);
-    std::string digest = transactionDecision.txn_digest();
-    // NOTE: makes the assumption that numshards == numgroups
-    if (transactionDecision.shard_id() == group_idx) {
-      if (signMessages) {
-        // make sure the message was signed
-        if (t == signedMessage.GetTypeName()) {
-          if (pendingSignedPrepares.find(digest) != pendingSignedPrepares.end()) {
-            Debug("Adding signed id to set: %d", signedMessage.replica_id());
 
-            PendingSignedPrepare* psp = &pendingSignedPrepares[digest];
-            uint64_t add_id = signedMessage.replica_id();
-            psp->receivedDecs.insert(add_id);
-            if (transactionDecision.status() == REPLY_OK) {
-              // add the decision to the list as proof
-              psp->receivedValidDecs[add_id] = signedMessage;
-            }
-            proto::GroupedSignedDecisions groupedSD;
-            // once we have enough valid requests, construct the grouped decision
-            // and return success
-            if (psp->receivedValidDecs.size() >= (uint64_t) config.f + 1) {
-              for (const auto& pair : psp->receivedValidDecs) {
-                proto::SignedMessage* sm = groupedSD.add_decisions();
-                *sm = pair.second;
-              }
+    if (signMessages && !recvSignedMessage) {
+      return;
+    }
 
-              // invoke the callback with the signed grouped decision
-              signed_prepare_callback pcb = psp->pcb;
-              pendingSignedPrepares.erase(digest);
-              pcb(REPLY_OK, groupedSD);
-              return;
-            }
-            // once it is impossible for there to be f+1 valid responses (# invalid responses > f+1)
-            // return failure
-            if (((int) psp->receivedDecs.size()) - ((int) psp->receivedValidDecs.size()) >= config.f + 1) {
-              signed_prepare_callback pcb = psp->pcb;
-              pendingSignedPrepares.erase(digest);
-              pcb(REPLY_FAIL, groupedSD);
-              return;
-            }
-          }
+    HandleTransactionDecision(transactionDecision, signedMessage);
+  } else if (type == groupedDecisionAck.GetTypeName()) {
+    groupedDecisionAck.ParseFromString(data);
+
+    if (signMessages && !recvSignedMessage) {
+      return;
+    }
+
+    HandleWritebackReply(groupedDecisionAck, signedMessage);
+  }
+}
+
+// ================================
+// ======= MESSAGE HANDLERS =======
+// ================================
+
+void ShardClient::HandleReadReply(const proto::ReadReply& readReply, const proto::SignedMessage& signedMsg) {
+  Debug("Handling a read reply");
+
+  // get the read request id from the reply
+  uint64_t reqId = readReply.req_id();
+
+  // try and find a matching pending read based on the request
+  if (pendingReads.find(reqId) != pendingReads.end()) {
+    PendingRead* pendingRead = &pendingReads[reqId];
+    // we always mark a reply even if it fails because the read could fail
+    if (signMessages) {
+      uint64_t replica_id = signedMsg.replica_id();
+      // make sure the replica is from this shard
+      if (replica_id / config.n != (uint64_t) group_idx) {
+        return;
+      }
+      // insert the signed replica id as a received reply
+      pendingRead->receivedReplies.insert(replica_id);
+    } else {
+      // insert a new fake id into the received replies
+      pendingRead->receivedReplies.insert(pendingRead->receivedReplies.size());
+    }
+    if (readReply.status() == REPLY_OK) {
+      Timestamp rts(readReply.value_timestamp());
+      if (validateProofs) {
+        // if the proof is invalid, stop processing this reply
+        if (!validateReadProof(readReply.commit_proof(), readReply.key(), readReply.value(), rts)) {
+          return;
         }
-      } else {
-        if (pendingPrepares.find(digest) != pendingPrepares.end()) {
-          PendingPrepare* pp = &pendingPrepares[digest];
-          uint64_t add_id = pp->receivedDecs.size();
-          pp->receivedDecs.insert(add_id);
-          if (transactionDecision.status() == REPLY_OK) {
-            // add the decision to the list as proof
-            pp->receivedValidDecs[add_id] = transactionDecision;
-          }
-          proto::GroupedDecisions groupedD;
-          // once we have enough valid requests, construct the grouped decision
-          // and return success
-          if (pp->receivedValidDecs.size() >= (uint64_t) config.f + 1) {
-            // once we have enough, construct a signed grouped decision
-            for (const auto& pair : pp->receivedValidDecs) {
-              proto::TransactionDecision* td = groupedD.add_decisions();
-              *td = pair.second;
-            }
-            // invoke the callback if we have enough of the same decision
-            prepare_callback pcb = pp->pcb;
-            pendingPrepares.erase(digest);
-            pcb(REPLY_OK, groupedD);
-            return;
-          }
-          // once it is impossible for there to be f+1 valid responses (# invalid responses > f+1)
-          // return failure
-          if (((int) pp->receivedDecs.size()) - ((int) pp->receivedValidDecs.size()) >= config.f + 1) {
-            prepare_callback pcb = pendingPrepares[digest].pcb;
-            pendingPrepares.erase(digest);
-            pcb(REPLY_FAIL, groupedD);
-            return;
-          }
-        }
+      }
+      // if we haven't recorded a read result yet or we have a higher read,
+      // make this reply the new max
+      if (pendingRead->status == REPLY_FAIL || rts > pendingRead->maxTs) {
+          pendingRead->maxTs = rts;
+          pendingRead->maxValue = readReply.value();
+          pendingRead->maxCommitProof = readReply.commit_proof();
+          pendingRead->status = REPLY_OK;
       }
     }
 
-  } else if (type == groupedDecisionAck.GetTypeName()) {
-    groupedDecisionAck.ParseFromString(data);
-    std::string digest = groupedDecisionAck.txn_digest();
-    if (groupedDecisionAck.status() == REPLY_OK && pendingWritebacks.find(digest) != pendingWritebacks.end()) {
-      std::unordered_set<uint64_t> *receivedAcks = &pendingWritebacks[digest].receivedAcks;
-      // add the replica id that sent to ack to the list
-      if (signMessages) {
-        if (t == signedMessage.GetTypeName()) {
-          Debug("got a decision ack from %d", signedMessage.replica_id());
-          receivedAcks->insert(signedMessage.replica_id());
+    Debug("reply size: %lu", pendingRead->receivedReplies.size());
+    if (pendingRead->receivedReplies.size() >= pendingRead->numResultsRequired) {
+      read_callback rcb = pendingRead->rcb;
+      std::string value = pendingRead->maxValue;
+      Timestamp readts = pendingRead->maxTs;
+      std::string key = readReply.key();
+      uint64_t status = pendingRead->status;
+      pendingReads.erase(reqId);
+      rcb(status, key, value, readts);
+    }
+  }
+}
+
+
+void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& transactionDecision, const proto::SignedMessage& signedMsg) {
+  std::string digest = transactionDecision.txn_digest();
+  // only handle decisions for my shard
+  // NOTE: makes the assumption that numshards == numgroups
+  if (transactionDecision.shard_id() == (uint64_t) group_idx) {
+    if (signMessages) {
+      // get the pending signed preprepare
+      if (pendingSignedPrepares.find(digest) != pendingSignedPrepares.end()) {
+        Debug("Adding signed id to set: %lu", signedMsg.replica_id());
+
+        PendingSignedPrepare* psp = &pendingSignedPrepares[digest];
+        uint64_t add_id = signedMsg.replica_id();
+        // make sure this id is actually in the group
+        if (add_id / config.n == (uint64_t) group_idx) {
+          if (transactionDecision.status() == REPLY_OK) {
+            // add the decision to the list as proof
+            psp->receivedValidSigs[add_id] = signedMsg.signature();
+          } else {
+            psp->receivedFailedIds.insert(add_id);
+          }
         }
-      } else {
-        receivedAcks->insert(receivedAcks->size());
+
+        proto::GroupedSignedMessage groupSignedMsg;
+
+        // once we have enough valid requests, construct the grouped decision
+        // and return success
+        if (psp->receivedValidSigs.size() >= (uint64_t) config.f + 1) {
+          // set the packed decision
+          groupSignedMsg.set_packed_msg(psp->validDecisionPacked);
+
+          // add the signatures
+          for (const auto& pair : psp->receivedValidSigs) {
+            (*groupSignedMsg.mutable_signatures())[pair.first] = pair.second;
+          }
+
+          // invoke the callback with the signed grouped decision
+          signed_prepare_callback pcb = psp->pcb;
+          pendingSignedPrepares.erase(digest);
+          pcb(REPLY_OK, groupSignedMsg);
+          return;
+        }
+        // if we get f+1 failures, we can return early
+        if (psp->receivedFailedIds.size() >= (uint64_t) config.f + 1) {
+          signed_prepare_callback pcb = psp->pcb;
+          pendingSignedPrepares.erase(digest);
+          // adding sigs to the grouped signed msg would be worthless
+          pcb(REPLY_FAIL, groupSignedMsg);
+          return;
+        }
       }
-      // 2f+1 because we want a quorum of honest users to acknowledge (for fault tolerance)
-      if (receivedAcks->size() >= (uint64_t) 2*config.f + 1) {
-        // if the list has enough replicas, we can invoke the callback
-        writeback_callback wcb = pendingWritebacks[digest].wcb;
-        pendingWritebacks.erase(digest);
-        wcb();
+    } else {
+      if (pendingPrepares.find(digest) != pendingPrepares.end()) {
+        PendingPrepare* pp = &pendingPrepares[digest];
+        if (transactionDecision.status() == REPLY_OK) {
+          uint64_t add_id = pp->receivedOkIds.size();
+          // add the decision to the list as proof
+          pp->receivedOkIds.insert(add_id);
+        } else {
+          pp->numFails++;
+        }
+
+        // once we have enough valid requests, construct the grouped decision
+        // and return success
+        if (pp->receivedOkIds.size() >= (uint64_t) config.f + 1) {
+          proto::TransactionDecision validDecision = pp->validDecision;
+          // invoke the callback if we have enough of the same decision
+          prepare_callback pcb = pp->pcb;
+          pendingPrepares.erase(digest);
+          pcb(REPLY_OK, validDecision);
+          return;
+        }
+        // f+1 failures mean that we will always return fail
+        if (pp->numFails >= (uint64_t) config.f + 1) {
+          proto::TransactionDecision failedDecision;
+          failedDecision.set_status(REPLY_FAIL);
+          prepare_callback pcb = pendingPrepares[digest].pcb;
+          pendingPrepares.erase(digest);
+          pcb(REPLY_FAIL, failedDecision);
+          return;
+        }
       }
     }
   }
 }
+
+void ShardClient::HandleWritebackReply(const proto::GroupedDecisionAck& groupedDecisionAck, const proto::SignedMessage& signedMsg) {
+  std::string digest = groupedDecisionAck.txn_digest();
+  if (groupedDecisionAck.status() == REPLY_OK && pendingWritebacks.find(digest) != pendingWritebacks.end()) {
+    std::unordered_set<uint64_t> *receivedAcks = &pendingWritebacks[digest].receivedAcks;
+    // add the replica id that sent to ack to the list
+    if (signMessages) {
+      Debug("got a decision ack from %lu", signedMsg.replica_id());
+      receivedAcks->insert(signedMsg.replica_id());
+    } else {
+      receivedAcks->insert(receivedAcks->size());
+    }
+    // 2f+1 because we want a quorum of honest users to acknowledge (for fault tolerance)
+    if (receivedAcks->size() >= (uint64_t) 2*config.f + 1) {
+      // if the list has enough replicas, we can invoke the callback
+      writeback_callback wcb = pendingWritebacks[digest].wcb;
+      pendingWritebacks.erase(digest);
+      wcb();
+    }
+  }
+}
+
+// ================================
+// ==== SHARD CLIENT INTERFACE ====
+// ================================
 
 // Get the value corresponding to key.
 void ShardClient::Get(const std::string &key, const Timestamp &ts,
@@ -228,6 +270,19 @@ void ShardClient::Get(const std::string &key, const Timestamp &ts,
   // TODO timeout
 }
 
+std::string ShardClient::CreateValidPackedDecision(std::string digest) {
+  proto::TransactionDecision validDecision;
+  validDecision.set_status(REPLY_OK);
+  validDecision.set_txn_digest(digest);
+  validDecision.set_shard_id(group_idx);
+
+  proto::PackedMessage packedDecision;
+  packedDecision.set_type(packedDecision.GetTypeName());
+  packedDecision.set_msg(validDecision.SerializeAsString());
+
+  return packedDecision.SerializeAsString();
+}
+
 // send a request with this as the packed message
 void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
     prepare_timeout_callback ptcb, uint32_t timeout) {
@@ -243,6 +298,13 @@ void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
 
     PendingPrepare pp;
     pp.pcb = pcb;
+    proto::TransactionDecision validDecision;
+    validDecision.set_status(REPLY_OK);
+    validDecision.set_txn_digest(digest);
+    validDecision.set_shard_id(group_idx);
+    // this is what the tx decisions should look like for valid replies
+    pp.validDecision = validDecision;
+
     pendingPrepares[digest] = pp;
 
     // TODO timeout
@@ -253,7 +315,7 @@ void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
 
 void ShardClient::SignedPrepare(const proto::Transaction& txn, signed_prepare_callback pcb,
     prepare_timeout_callback ptcb, uint32_t timeout) {
-      std::string digest = TransactionDigest(txn);
+  std::string digest = TransactionDigest(txn);
   if (pendingSignedPrepares.find(digest) == pendingSignedPrepares.end()) {
     proto::Request request;
     request.set_digest(digest);
@@ -264,6 +326,9 @@ void ShardClient::SignedPrepare(const proto::Transaction& txn, signed_prepare_ca
 
     PendingSignedPrepare psp;
     psp.pcb = pcb;
+    // this is what the tx decisions should look like for valid replies
+    psp.validDecisionPacked = CreateValidPackedDecision(digest);
+
     pendingSignedPrepares[digest] = psp;
 
     // TODO timeout

@@ -22,12 +22,9 @@ bool Slots::setPreprepare(const proto::Preprepare &preprepare, uint64_t replica_
   return false;
 }
 
-bool Slots::setPreprepare(const proto::Preprepare &preprepare) {
-  uint64_t view = preprepare.viewnum();
-  uint64_t seq_num = preprepare.seqnum();
-  std::string digest = preprepare.digest();
-
-  return setPreprepare(preprepare, slots[seq_num][view].prepares[digest].size(), "");
+bool Slots::setPreprepare(const proto::Preprepare &preprepare, uint64_t primaryId) {
+  // with no sigs just assume the preprepare came from the primary
+  return setPreprepare(preprepare, primaryId, "");
 }
 
 bool Slots::addPrepare(const proto::Prepare &prepare, uint64_t replica_id, const std::string& sig) {
@@ -47,6 +44,7 @@ bool Slots::addPrepare(const proto::Prepare &prepare) {
   uint64_t seq_num = prepare.seqnum();
   std::string digest = prepare.digest();
 
+  // add a prepare with a fake id, don't really care because we don't have sigs
   return addPrepare(prepare, slots[seq_num][view].prepares[digest].size(), "");
 }
 
@@ -87,6 +85,7 @@ bool Slots::addCommit(const proto::Commit &commit) {
   uint64_t seq_num = commit.seqnum();
   std::string digest = commit.digest();
 
+  // add a commit with a fake id, don't really care because we don't have sigs
   return addCommit(commit, slots[seq_num][view].commits[digest].size(), "");
 }
 

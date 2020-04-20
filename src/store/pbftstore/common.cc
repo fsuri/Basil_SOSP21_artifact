@@ -73,19 +73,6 @@ void PackRequest(proto::PackedMessage &packedMsg, S &s) {
   packedMsg.set_type(s.GetTypeName());
 }
 
-// std::string RequestDigest(const proto::Request &request) {
-//   CryptoPP::SHA256 hash;
-//   std::string digest;
-//
-//   hash.Update((const byte*) &request.packed_msg().type()[0], request.packed_msg().type().length());
-//   hash.Update((const byte*) &request.packed_msg().msg()[0], request.packed_msg().msg().length());
-//
-//   digest.resize(hash.DigestSize());
-//   hash.Final((byte*) &digest[0]);
-//
-//   return digest;
-// }
-
 std::string TransactionDigest(const proto::Transaction &txn) {
   CryptoPP::SHA256 hash;
   std::string digest;

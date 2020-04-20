@@ -22,8 +22,8 @@ namespace pbftstore {
 typedef std::function<void(int, const std::string&, const std::string &, const Timestamp&)> read_callback;
 typedef std::function<void(int, const std::string&)> read_timeout_callback;
 
-typedef std::function<void(int, const proto::GroupedDecisions&)> prepare_callback;
-typedef std::function<void(int, const proto::GroupedSignedDecisions&)> signed_prepare_callback;
+typedef std::function<void(int, const proto::TransactionDecision&)> prepare_callback;
+typedef std::function<void(int, const proto::GroupedSignedMessage&)> signed_prepare_callback;
 typedef std::function<void(int)> prepare_timeout_callback;
 
 typedef std::function<void()> writeback_callback;
@@ -73,36 +73,51 @@ class ShardClient : public TransportReceiver {
   uint64_t readReq;
 
   struct PendingRead {
+    // the set of ids that we have received a read reply for
     std::unordered_set<uint64_t> receivedReplies;
+    // the max read timestamp for a valid reply
     Timestamp maxTs;
     std::string maxValue;
     proto::CommitProof maxCommitProof;
+
+    // the current status of the reply (default to fail)
     uint64_t status;
+
     read_callback rcb;
     uint64_t numResultsRequired;
   };
 
+  void HandleReadReply(const proto::ReadReply& reply, const proto::SignedMessage& signedMsg);
+
+  std::string CreateValidPackedDecision(std::string digest);
+
   struct PendingPrepare {
+    proto::TransactionDecision validDecision;
     // if we get f+1 valid decs -> return ok
-    // else, once we get 2f+1 decs -> return failed
-    // all the ids that we have received a decision from
-    std::unordered_set<uint64_t> receivedDecs;
-    // all the ones that had status ok
-    std::unordered_map<uint64_t, proto::TransactionDecision> receivedValidDecs;
+    std::unordered_set<uint64_t> receivedOkIds;
+    // else, once we get f+1 failures -> return failed
+    uint64_t numFails;
     prepare_callback pcb;
   };
 
   struct PendingSignedPrepare {
-    std::unordered_set<uint64_t> receivedDecs;
-    std::unordered_map<uint64_t, proto::SignedMessage> receivedValidDecs;
+    // the serialized packed message containing the valid transaction decision
+    std::string validDecisionPacked;
+    // map from id to valid signature
+    std::unordered_map<uint64_t, std::string> receivedValidSigs;
+    std::unordered_set<uint64_t> receivedFailedIds;
     signed_prepare_callback pcb;
   };
+
+  void HandleTransactionDecision(const proto::TransactionDecision& transactionDecision, const proto::SignedMessage& signedMsg);
 
   struct PendingWritebackReply {
     // set of processes we have received writeback acks from
     std::unordered_set<uint64_t> receivedAcks;
     writeback_callback wcb;
   };
+
+  void HandleWritebackReply(const proto::GroupedDecisionAck& groupedDecisionAck, const proto::SignedMessage& signedMsg);
 
   // req id to (read)
   std::unordered_map<uint64_t, PendingRead> pendingReads;
