@@ -1,30 +1,35 @@
-\subsubsection{System properties}
-We offer Clients an interactive transaction interface that implements ACID transactions. While Isolation guarantees may be violated by individual byzantine Replicas, Indicus maintains the view of an ACID compliant state to all honest Clients. 
+\subsection{System properties}
+Indicus offers clients an interactive transaction interface that maintains the view of an ACID compliant state to all honest participants. Byzantine clients instead, may choose whether to experience isolation guarantees, but cannot tamper with "honest observable" state.
+Concretely, Indicus defines and implements \textit{byzantine Serializability}. Intuitively this Isolation level guarantees that all honest clients perceive the database as if there serializable. In order to formally capture this we lay some ground work: \footnote{We modify and expand on definitions for BFT-linearizability from \cite{liskov2006tolerating}.} 
 
-Specifically, we guarantee to Clients that the Database is \textit{byzantine Serializable} as defined below. Intuitively this Isolation level guarantees that all honest Clients experience the Database as if there serializable. In order to formally capture this we lay some ground work: \footnote{We modify and expand on definitions for BFT-linearizability from \cite{liskov2006tolerating}.} \\
+Let $Op =  \{r, w\} \times K \times V $ and $Dec = \{Commit, \,Abort\}$ be the sets of possible read/write operations and decisions respectively, where $K$ is the set of existing data items (keys) and $V$ the range of possible values. A \textit{request} $req \in (Op \cup Dec) \times C$ maps any such operation or decision to the issuing Client from set $C$. We denote with $Hon \subseteq C$ the subset of honest Clients. 
+%\fs{could alternatively define ops as functions r[x] and w[x], and dec as c/a}
 
-Let $Op =  \{r, w\} \times K \times V $ and $Dec = \{Commit, \,Abort\}$ be the sets of possible operations and decisions respectively, where $K$ is the set of existing data items (keys) and $V$ the range of possible values. A \textit{request} $req \in (Op \cup Dec) \times C$ maps any such operation or decision to the issuing Client from set $C$. We denote with $Hon \subseteq C$ the subset of honest Clients. \fs{could alternatively define ops as functions r[x] and w[x], and dec as c/a}
+\fs{NEW ALTERNATIVE: Def from \cite{bernstein1987concurrency}: (formal details commented in tex)}
 
-\fs{NEW ALTERNATIVE: Def from \cite{bernstein1987concurrency}:}
- 
-A transaction $T \coloneqq (REQ, <_T)$ is a set $REQ \coloneqq \{req_1, \dots, req_t \}$ of requests issued by the same client $c$, and a partial order $<_T$ such that a) $REQ$ contains a finite number of operations, and exactly one decision $req_t = (Dec, c) \in REQ$, b) for every read and write operation on a shared key $k$, either $(r, k, v_r) <_T (w, k, v_w)$ or $(w, k, v_w) <_T (r, k, v_r)$ \fs{(but not both) - trivial by asymmetry property of partial order}, and c) for all read and write operations $(\{r,w\} \times k \times v) <_T dec$.
+A \textbf{transaction T}, $T \coloneqq (REQ, <_T)$, consists of a set $REQ \coloneqq \{req_1, \dots, req_t \}$ of requests issued by some client $c$, and a partial order relation $<_T$ such that a) $REQ$ contains a finite number of operations, and exactly one decision $req_t = (dec \in Dec, c)$, b) $<_T$ induces a total order for every read and write operation on a shared key $k$. 
+%\fs{, either $(r, k, v_r) <_T (w, k, v_w)$ or $(w, k, v_w) <_T (r, k, v_r)$}, and c) all read/write operations precede the decision. 
+%\fs{for all read and write operations $(\{r,w\} \times k \times v) <_T dec$.}
 
-\textbf{History H.} A History represents the interleaving on concurrently executed transactions. Concretely, we define a \textit{history} $H \coloneqq (R, <)$ where $R$ is finite sequence of
-requests, such that $R \supseteq \bigcup_i T_i$, and $< \supseteq \bigcup_i <_{T_i}$ .
-Let $Committed(H)$ be the subsequence of all Transactions with $req_{t} = Commit$. A History H is legal if every read request $(r, k, v)$ is preceded by a matching write request $(w, k, v)$ and there is no other write $(w, k, v')$ inbetween \fs{could formalize this with order:} $\forall (r, k, v).\exists (w, k v). (w,k,v) < (r,k,v) \land \neg \exists (w, k, v'). v\neq v' \land (w, k,v) < (w,k, v') < (r, k, v)$. For two transactions $T_i$ and $T_j$, we denote $T_i < T_j$ iff $\forall req_i, req_j \in T_i, T_j. req_i < req_j$. A history is serial if all transactions are executed sequentially: $\forall T_i, T_j: T_i < T_j \lor T_j < T_i$.
+\textbf{History H.} A History represents the interleaving on concurrently executed transactions. Concretely, we define a \textit{history} $H \coloneqq (R, <)$ as partial order where $R$ and $<$ are supersets of a finite set of transactions, i.e. $R \supseteq \bigcup_i T_i$, and $< \supseteq \bigcup_i <_{T_i}$ .
+Let $Committed(H)$ be the subsequence of all Transactions with $req_{t} = Commit$. A History H is legal if every read request $(r, k, v)$ is preceeded by a matching write request $(w, k, v)$
+and there is no other write $(w, k, v')$ inbetween.
+% \fs{could formalize this: $\forall (r, k, v).\exists (w, k v). (w,k,v) < (r,k,v) \land \neg \exists (w, k, v'). v\neq v' \land (w, k,v) < (w,k, v') < (r, k, v)$}
+For two transactions $T_a$ and $T_b$, we denote $T_a < T_b$ iff $\forall req^a_i, req^b_j \in T_a, T_b. req^a_i < req^b_j$. A history is serial if all transactions are executed sequentially: $\forall T_a, T_b: T_a < T_b \lor T_b < T_a$.
 
 \textbf{Serializable} 
 A history H is serializable if there exists a serial permutation H' of Committed(H) such that H' is legal.
 
 
-\fs{Old TX def}
+\fs{Old TX def in comments. It is shorter... but lorenzo prefers the berstein def}
 
+\iffalse
 \textbf{History H.} We define a \textit{history H} as a finite sequence of requests. Informally, a \textit{H} contains the operations (read/write) and decisions (commit/abort) of every transaction issued in the system.
 
 We define a projection $H|_c$ as the subsequence of requests in $H$ that were issued by Client $c$. A sequence of requests $s = req_i \dots req_{i+t}$ in $H|_c$ form a \textit{Transaction} if $req_i$ is the first request by Client $c$ or $req_{i-1} \in Dec \times c$, and if $req_{i+t} \in Dec \times c$. Let $Committed(H)$ be the subsequence of all Transactions with $req_{i+t} = Commit$. A History H is legal if every read request $(r, k, v)$ is preceded by a matching write request $(w, k, v)$ and there is no other write $(w, k, v')$ inbetween.\\
 \textbf{Serializable}  
 A history H is serializable if there exists a serial permutation H' of Committed(H) such that H' is legal.
-
+\fi
 
 We define a projection $H|_c$ as the subsequence of requests in $H$ that were issued by Client $c$.
 We further define:\\
@@ -34,24 +39,28 @@ We further define:\\
 A history H is \textit{byzantine-I} if there exists an honest history \textit{H'} such that H is honest-view equivalent to H' and H' satisfies I. \\
 
 This definition captures the requirements for any byzantine tolerant protocol that strives to maintain byzantine Isolation level I.
-Informally a byzantine Isolation level states that the state that honest Clients experience must be explicable by an execution in which all participants were honest. Note, that we make no assumptions on the state a byzantine client \textit{chooses} to experience; Byzantine client reads may be arbitrary, i.e. integrity and legality of both read values and versions need not be maintained. \\
+Informally, a byzantine Isolation level states that the state that honest clients experience must be explicable by an execution in which all participants were honest. Note, that we make no assumptions on the state a byzantine client \textit{chooses} to experience; Byzantine client reads may be arbitrary, i.e. integrity \fs{based on real commit} and legality \fs{based on latest write} of both read values and versions need not be maintained. Indicus maintains byzantine Isolation level Byz-Serializability.\\
 
 \fs{cut the next part about byzantine Atomicity: Need to mention somewhere that only writes experience atomicity. Reads from byz clients are not required to be included}
+\fs{Look at tex comments.}
+\iffalse
 We further define \textit{byzantine Atomicity}. Intuitively, only honest client transactions are guaranteed to experience Atomicity, i.e. all of its operations succeed, or fail jointly. It follows straightforward:\\
 \textbf{Byz-A} Given a protocol $P$, a history $H$ and a set of honest client $Hon$. All \textit{Transactions} in $H|_{Hon}$ experience Atomicity, i.e. either all requests are committed, or not a single request is committed.\\
 \fs{This may not be ok if validation maintains Invariants based on the assumption that a Tx is atomic or not: I.e. a bank transfer is net 0. In this case we need to enforce atomicity on writes - cannot on reads since they may not be included - replicas must include all shards for its writes (currently i made it optional so that shards reject it themselves- this makes shards oblivious to what items are in other shards).}
 
 Indicus maintains both \textit{Byz-I} for Isolation level Serializable and \textit{Byz-A}. 
 In more pragmatic terms, all honest clients experience the ACID properties, whereas byzantine clients may \textbf{choose} whether to experience Atomicity and Isolation for their transactions.
+\fi
 
-Next, we define an ideal progress property to limit the influence byzantine participants have on honest clients \fs{previously said on: system throughput. But this can be misunderstood to include livenes}. 
+Next, we define an ideal progress property to limit the influence byzantine participants have on honest clients.  \fs{Byz Indep is the liveness property, whereas Byz Serializability is the safety property. Without Byz Indep any protocol could be trivially Byz serial by just aborting all. }
 
 \fs{this paragraph might perhaps have to go somewhere later, after the protocol is explained and we discuss limitations}
+
+
 \textbf{Byzantine Independence}
 Given a protocol $P$ and an honest Client $c$. The result of a request $r$ issued by $c$ cannot be determinsistically decided by byzantine participants. \fs{in 5f+1 we can strengthen this to hold for byz client c too.} \\
 
-Intuitively, byzantine independence implies, that honest clients' transactions cannot be reliably, strategically aborted by byzantine influence.
-If the network is controlled by an adversary, this property is unattainable for Indicus.\footnote{We point out, that all leader-based protocols suffer the same fallacy: A byzantine leader may always frontrun/inject requests that influence successive transaction results. In fact, even with strengthened network assumptions, such a a system could not offer Byzantine Independence. } 
+Intuitively, byzantine independence implies, that honest clients' transactions cannot be reliably, strategically aborted by byzantine influence. If the network is controlled by an adversary, this property is unattainable for Indicus.\footnote{We point out, that all leader-based protocols suffer the same fallacy: A byzantine leader may always frontrun/inject requests that influence successive transaction results. In fact, even with strengthened network assumptions, such a a system could not offer Byzantine Independence. } 
 In order to offer this property we must strengthen our assumption on the network. Concretely, while the network may be asynchronous, we assume the adversary does not control the network, and hence, may not reliably impact results \footnote{An exception to this are wide-ranged flooding attacks (ddos) which are beyond the scope of this work.}. \fs{Not only can byz not influence results, but they cannot perform front-running - i.e. submit tx at earlier time based on knowledge of later tx. Maybe this distinction needs to be clearer in the definition}
 
 \iffalse
@@ -64,12 +73,16 @@ implementation-dependent short bound on message delay (b) all clients and server
 An execution is uncivil iff (a) there is no bound on message delay (asynchrony) and (b) up to f servers and an arbitrary number of clients are Byzantine 
 \fi
 
+
+
 \subsection{Practical Assumptions on Behaviors}
-While we allow clients to act arbitrarily and maintain safety unconditionally, in practice, we do not expect clients to intentfully attempt to circumvent other clients progress via targeted congestion. This is reasonable to assume as a byzantine client requires prior knowledge on honest client transaction patterns and relevant access control \fs{unlikely that a Client can lock out a lot of the system, would mean he has total access control.} in order to artificially increase object contention. \fs{Moreover, in Indicus, any transaction with external effect will be recorded in the system without a clients ability to "chicken" out and redact its transaction. It might abort but be recorded. OR: It might commit and thus the consequences are active. Imagine a bank account: withdrawing probably illegal, only paying allowed by arbitrary party. now a client is paying in order to stop the real user from being able to withdraw }
-In Indicus, we assume network neutrality in order to defend against explicit \textit{reactive} artificial contention and maintain Byzantine Independence.
+While we allow clients to act arbitrarily and maintain safety unconditionally, in practice, we do not expect clients to intentfully attempt to circumvent other clients progress via targeted congestion. We deem this assumption reasonable as a byzantine client requires both prior knowledge on  honest clients' transaction patterns as well as relevant access control in order to artificially increase object contention. In Indicus, we assume network neutrality in order to defend against explicit \textit{reactive} artificial contention and maintain Byzantine Independence.
 
 We assume that actively detectable byzantine behavior (such as equivocation or other protocol incoherence) is rare as clients are incentivised to maintain standing in a permissioned system.
 Moreover, we exect an appropriate level of client performance, from both honest and byzantine clients, to qualify for system participation. Untimely behavior may qualify as misbehavior and elicit client expulsion. 
+
+%%%
+
 \fs{Replicas can enforce client expulsion via access lists, i.e. via timeouts of blacklists. A strawman protocol to agree on client expulsion can look as follows: 1) If a replica has a PoM (i.e. a equivocation proof, false abort without cert) it may forward this evidence and ignore the client immediately. 2) If a client frequently times out on a client (i.e. either its read timestmap expires - we discuss lighter penalties in section Personalized Read Leases - or a fallback election is started) a replica submits a vote of untimeliness by broadcasting to all replicas. Upon reception of 2f+1 votes (this implies that there might be no progress) a replica blacklists the client and forwards the vote, guaranteeing that every correct replica will do the same. (Alternatively we could forward once f+1 are received, but only blacklist when 2f+1 are received. But this means that the client could have been making progress overall, so it is overly conservative). A honest replica may remove all tentative client associated transaction state upon blacklisting, as it is guaranteed that all other honest replicas will do the same. Waiting dependencies must be aborted.}
 
 Given these client expectancies, we design Indicus to minimize costs during gracious execution while defending and bounding the overhead accordingly when misbehavior does occur.
