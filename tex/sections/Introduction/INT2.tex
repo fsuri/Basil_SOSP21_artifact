@@ -1,8 +1,5 @@
-\section{NC's introduction}
-
 This paper presents the design and evaluation of \sys{}, the
-first leaderless and scalable key-value store that is robust
-to byzantine faults.
+first leaderless and scalable transactional key-value store that is robust to byzantine faults.
 
 Safe and efficient online data sharing among mutually distrustful
 parties offers exciting opportunities for a variety of applications,
@@ -10,7 +7,7 @@ including healthcare~\cite{}, financial services~\cite{}, supply chain
 management~~\cite{} and more~\cite{}. \nc{I understand that you want to move 
 to the main point quickly but I think that one example might be useful here still, just
 one}. Byzantine fault tolerant (BFT)
-systems~\cite{castro1999practical, martin2006fast, kotla2007zyzzyva,  gueta2018sbft, clement2009making, buchman2016tendermint, yin2019hotstuff, Clement09Upright, duan2014hbft    , pires2018generalized, bessani2014state, lamport2011byzantizing, arun2019ezbft, malkhi2019flexible, duan2014hbft, yin2003separating, Guerraoui08Next, Kotla04High,  liskov2010viewstamped} and permissioned blockchains~\cite{Hyperledger, EthereumQuorum, buchman2016tendermint, al2017chainspace, kokoris2018omniledger,  gilad2017algorand, baudet2019state} are at the center of these new services. These protocols are guaranteed to
+systems~\cite{castro1999practical, martin2006fast, kotla2007zyzzyva,  gueta2018sbft, clement2009making, buchman2016tendermint, yin2019hotstuff, Clement09Upright, duan2014hbft, pires2018generalized, bessani2014state, lamport2011byzantizing, arun2019ezbft, malkhi2019flexible, duan2014hbft, yin2003separating, Guerraoui08Next, Kotla04High,  liskov2010viewstamped} and permissioned blockchains~\cite{Hyperledger, EthereumQuorum, buchman2016tendermint, al2017chainspace, kokoris2018omniledger,  gilad2017algorand, baudet2019state} are at the center of these new services. These protocols are guaranteed to
 produce the same totally ordered log of operations across mutually distrustful
 participants. 
 
@@ -19,7 +16,7 @@ Maintaining a totally ordered log of requests, inspite of its appealing simplici
 Existing research attempts to mitigate the aforementioned scalability bottleneck through a combination of sharding, cross-shard atomic commit protocols and centralised ordering services~\cite{kokoris2019omniledger,al2017chainspace,padilha2016callinicos}. These systems suffer from three primary drawbacks \one~they limit the expressivity of the transactions they support \two~they introduce unnecessary coordination across replicas and finally,
 \three~they often centralise the ordering of requests at a single leader, which raises fairness concerns. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness.
  
-In reality, building \textit{the abstraction} of a total order is sufficient, and distributed databases have long recognised this fact~\cite{}. Serializability, the gold-standard database criterion, defines a correct execution as one that is \textit{equivalent} to a correct schedule~\cite{}. This definition allows concurrent operations to execute in parallel and orders conflicting operations only.  Byzantine systems need be no different. This paper consequently argues for a paradigm "flip". The
+In reality, building \textit{the abstraction} of a total order is sufficient, and distributed databases have long recognised this fact~\cite{crooks2017obladi,bernstein1979fas,Papadimitriou1979serializability,adya99weakconsis}. Serializability, the gold-standard database criterion, defines a correct execution as one that is \textit{equivalent} to a correct schedule~\cite{bernstein,Papadimitriou1979serializability,bernstein1979fas}. This definition allows concurrent operations to execute in parallel and orders conflicting operations only.  Byzantine systems need be no different. This paper consequently argues for a paradigm "flip". The
 right way to build BFT data-sharing systems is not to layer database-like transactions and sharding on top of a BFT log, but instead to do the opposite and build out the abstraction of a BFT log atop a partially ordered distributed database.
 
 To this effect, we design \sys{}, the first leaderless and scalable key-value store that is resilient against
@@ -37,7 +34,8 @@ Second, by doing away with an underlying totally ordered log, \sys{} can
 sidestep the growing concerns~\cite{} about whether blockchains
 order transactions fairly. Though the notion of fairness in this
 context has not been rigorously defined, leaving the ordering to the
-whim of a potentially Byzantine leader, as some protocols do~\cite{}
+whim of a potentially Byzantine leader, as some protocols do~\cite{
+Kotla07Zyzzyva,castro1999practical}
 is intuitively problematic. In contrast, \sys leaves the
 responsibility of driving the replication and distributed commit of a
 transaction to the client that proposes it and allows separate 
@@ -65,7 +63,7 @@ by correct clients.
 
 Byzantine behaviour in effect introduces a tension that is not present in non-byzantine
 distributed databases: optimistic and aggressive concurrency control mechanisms known
-to improve performance (~\cite{occ,mvtso,pipeline,tapir}) in failure-free executions also increase the system's vulnerability to byzantine faults. Consider for instance runtime pipelining~\cite{callas,mcc} or multiversioned timestamp ordering (MVTSO)~\cite{}: both allow writes to become visible to other operations before a transaction commits. While early write visibility helps reduce abort rates for
+to improve performance (~\cite{kung1981occ,bernstein1983mcc,reed93atomic,xie2015callas,zhang2015tapir}) in failure-free executions also increase the system's vulnerability to byzantine faults. Consider for instance runtime pipelining~\cite{xie2015callas,su2017tebaldi} or multiversioned timestamp ordering (MVTSO)~\cite{bernstein1983mcc,reed93atomic}: both allow writes to become visible to other operations before a transaction commits. While early write visibility helps reduce abort rates for
 contended workload, it can cause transactions to stall on uncommitted operations whose writes they have observed. To mitigate this tension, we design \sys{} to follow the ethos of \textit{independent operability}: both safety (serializability) and liveness (the ability to issue and complete transactions) are \textit{local} properties. They remain, at all times, per client and per-object. Specifically, we develop a variant of multiversion timestamp ordering that precludes byzantine clients from
 aborting honest clients' transactions. We additionally develop a novel \textit{fallback} mechanism that allows clients to finish others' pending transactions when stalled. Importantly, this fallback mechanism is per-object, and can thus take place concurrently with other non-conflicting operations. This is in contrast with traditional BFT view-changes which fully preclude normal operation processing.  Finally, we remain, at all times, fully leaderless.
 
