@@ -146,10 +146,11 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
       pp->signedShardDecisions[shard_id] = gsm;
       // abort on even a single shard abort
       if (status != REPLY_OK) {
-        // TODO send abort writeback to all shards
+        proto::Transaction txn = pp->txn;
         commit_callback ccb = pp->ccb;
         pendingPrepares.erase(digest);
         ccb(REPLY_FAIL);
+        AbortTxn(txn);
         return;
       }
 
@@ -180,10 +181,11 @@ void Client::HandlePrepareReply(std::string digest, uint64_t shard_id, int statu
 
       // if we got an abort, tx no longer in progress
       if (status != REPLY_OK) {
-        // TODO send abort writeback to all shards
+        proto::Transaction txn = pp->txn;
         commit_callback ccb = pp->ccb;
         pendingPrepares.erase(digest);
         ccb(REPLY_FAIL);
+        AbortTxn(txn);
         return;
       }
 
@@ -215,7 +217,7 @@ void Client::WriteBackSigned(const proto::ShardSignedDecisions& dec, const proto
 
     for (const auto& shard_id : txn.participating_shards()) {
       writeback_callback wcb = std::bind(&Client::HandleWritebackReply,
-        this, digest, shard_id);
+        this, digest, shard_id, std::placeholders::_1);
 
       writeback_timeout_callback wcbt = [](int s) {
           Debug("timeout called");
@@ -237,7 +239,7 @@ void Client::WriteBack(const proto::ShardDecisions& dec, const proto::Transactio
 
     for (const auto& shard_id : txn.participating_shards()) {
       writeback_callback wcb = std::bind(&Client::HandleWritebackReply,
-        this, digest, shard_id);
+        this, digest, shard_id, std::placeholders::_1);
 
       writeback_timeout_callback wcbt = [](int s) {
           Debug("timeout called");
@@ -248,23 +250,36 @@ void Client::WriteBack(const proto::ShardDecisions& dec, const proto::Transactio
   }
 }
 
-void Client::HandleWritebackReply(std::string digest, uint64_t shard_id) {
+void Client::HandleWritebackReply(std::string digest, uint64_t shard_id, int status) {
   if (pendingWritebacks.find(digest) != pendingWritebacks.end()) {
     PendingWriteback* pw = &pendingWritebacks[digest];
-    pw->writebackAcks.insert(shard_id);
-    if (pw->writebackAcks.size() == (uint64_t) pw->txn.participating_shards_size()) {
+    if (status == REPLY_FAIL) {
       commit_callback ccb = pw->ccb;
       pendingWritebacks.erase(digest);
-      ccb(REPLY_OK);
+      ccb(REPLY_FAIL);
+    } else {
+      pw->writebackAcks.insert(shard_id);
+      if (pw->writebackAcks.size() == (uint64_t) pw->txn.participating_shards_size()) {
+        commit_callback ccb = pw->ccb;
+        pendingWritebacks.erase(digest);
+        ccb(REPLY_OK);
+      }
     }
   }
 }
 
 void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
     uint32_t timeout) {
-  Panic("Unimplemented");
+  AbortTxn(currentTxn);
   // immediately invoke callback
   acb();
+}
+
+void Client::AbortTxn(const proto::Transaction& txn) {
+  std::string digest = TransactionDigest(txn);
+  for (const auto& shard_id : txn.participating_shards()) {
+    bclient[shard_id]->Abort(digest);
+  }
 }
 
 vector<int> Client::Stats() {

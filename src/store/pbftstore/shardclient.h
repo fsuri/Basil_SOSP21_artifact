@@ -26,7 +26,7 @@ typedef std::function<void(int, const proto::TransactionDecision&)> prepare_call
 typedef std::function<void(int, const proto::GroupedSignedMessage&)> signed_prepare_callback;
 typedef std::function<void(int)> prepare_timeout_callback;
 
-typedef std::function<void()> writeback_callback;
+typedef std::function<void(int)> writeback_callback;
 typedef std::function<void(int)> writeback_timeout_callback;
 
 class ShardClient : public TransportReceiver {
@@ -58,8 +58,7 @@ class ShardClient : public TransportReceiver {
   void CommitSigned(const std::string& txn_digest, const proto::ShardSignedDecisions& dec,
       writeback_callback wcb, writeback_timeout_callback wtcp, uint32_t timeout);
 
-  void Abort(std::string txn_digest, writeback_callback wcb, writeback_timeout_callback wtcp,
-      uint32_t timeout);
+  void Abort(std::string txn_digest);
 
  private:
 
@@ -96,7 +95,7 @@ class ShardClient : public TransportReceiver {
     // if we get f+1 valid decs -> return ok
     std::unordered_set<uint64_t> receivedOkIds;
     // else, once we get f+1 failures -> return failed
-    uint64_t numFails;
+    std::unordered_set<uint64_t> receivedFailedIds;
     prepare_callback pcb;
   };
 
@@ -114,6 +113,7 @@ class ShardClient : public TransportReceiver {
   struct PendingWritebackReply {
     // set of processes we have received writeback acks from
     std::unordered_set<uint64_t> receivedAcks;
+    std::unordered_set<uint64_t> receivedFails;
     writeback_callback wcb;
   };
 

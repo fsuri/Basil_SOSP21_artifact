@@ -91,7 +91,7 @@ class Client : public ::Client {
 
   void HandlePrepareReply(std::string digest, uint64_t shard_id, int status, const proto::TransactionDecision& txndec);
 
-  void HandleWritebackReply(std::string digest, uint64_t shard_id);
+  void HandleWritebackReply(std::string digest, uint64_t shard_id, int status);
 
   // Current transaction.
   proto::Transaction currentTxn;
@@ -110,6 +110,8 @@ class Client : public ::Client {
 
   void WriteBack(const proto::ShardDecisions& dec, const proto::Transaction& txn,
     commit_callback ccb, commit_timeout_callback ctcb, uint32_t timeout);
+
+  void AbortTxn(const proto::Transaction& txn);
 
   bool IsParticipant(int g);
 };

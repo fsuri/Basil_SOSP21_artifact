@@ -203,7 +203,9 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
           // add the decision to the list as proof
           pp->receivedOkIds.insert(add_id);
         } else {
-          pp->numFails++;
+          // Kinda jank but just don't use these ids
+          uint64_t add_id = pp->receivedFailedIds.size();
+          pp->receivedFailedIds.insert(add_id);
         }
 
         // once we have enough valid requests, construct the grouped decision
@@ -217,7 +219,7 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
           return;
         }
         // f+1 failures mean that we will always return fail
-        if (pp->numFails >= (uint64_t) config.f + 1) {
+        if (pp->receivedFailedIds.size() >= (uint64_t) config.f + 1) {
           proto::TransactionDecision failedDecision;
           failedDecision.set_status(REPLY_FAIL);
           prepare_callback pcb = pendingPrepares[digest].pcb;
@@ -234,22 +236,38 @@ void ShardClient::HandleWritebackReply(const proto::GroupedDecisionAck& groupedD
   Debug("Handling Writeback reply");
 
   std::string digest = groupedDecisionAck.txn_digest();
-  if (groupedDecisionAck.status() == REPLY_OK && pendingWritebacks.find(digest) != pendingWritebacks.end()) {
-    std::unordered_set<uint64_t> *receivedAcks = &pendingWritebacks[digest].receivedAcks;
-    // add the replica id that sent to ack to the list
+  if (pendingWritebacks.find(digest) != pendingWritebacks.end()) {
+    PendingWritebackReply* pw = &pendingWritebacks[digest];
+
+    uint64_t replica_id = pw->receivedAcks.size();
     if (signMessages) {
-      Debug("got a decision ack from %lu", signedMsg.replica_id());
-      receivedAcks->insert(signedMsg.replica_id());
-    } else {
-      receivedAcks->insert(receivedAcks->size());
+      replica_id = signedMsg.replica_id();
     }
+
+    if (groupedDecisionAck.status() == REPLY_OK) {
+      Debug("got a decision ack from %lu", replica_id);
+      pw->receivedAcks.insert(replica_id);
+    } else {
+      Debug("got a decision failure from %lu", replica_id);
+      pw->receivedFails.insert(replica_id);
+    }
+
     // 2f+1 because we want a quorum of honest users to acknowledge (for fault tolerance)
-    if (receivedAcks->size() >= (uint64_t) 2*config.f + 1) {
+    if (pw->receivedAcks.size() >= (uint64_t) 2*config.f + 1) {
       Debug("Got enough writeback acks");
       // if the list has enough replicas, we can invoke the callback
       writeback_callback wcb = pendingWritebacks[digest].wcb;
       pendingWritebacks.erase(digest);
-      wcb();
+      wcb(REPLY_OK);
+      return;
+    }
+
+    // once we get f + 1 fails, impossible to get 2f+1 succeeds
+    if (pw->receivedFails.size() >= (uint64_t) config.f + 1) {
+      Debug("Unable to get enough writeback acks, failing");
+      writeback_callback wcb = pendingWritebacks[digest].wcb;
+      pendingWritebacks.erase(digest);
+      wcb(REPLY_FAIL);
     }
   }
 }
@@ -394,8 +412,7 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
   }
 }
 
-void ShardClient::Abort(std::string txn_digest, writeback_callback wcb, writeback_timeout_callback wtcp,
-    uint32_t timeout) {
+void ShardClient::Abort(std::string txn_digest) {
   Debug("Handling client abort");
   if (pendingWritebacks.find(txn_digest) == pendingWritebacks.end()) {
     proto::GroupedDecision groupedDecision;
@@ -405,12 +422,6 @@ void ShardClient::Abort(std::string txn_digest, writeback_callback wcb, writebac
     *groupedDecision.mutable_decisions() = sd;
 
     transport->SendMessageToGroup(this, group_idx, groupedDecision);
-
-    PendingWritebackReply pwr;
-    pwr.wcb = wcb;
-    pendingWritebacks[txn_digest] = pwr;
-
-    // TODO timeout
   } else {
     // TODO warning
   }
