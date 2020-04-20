@@ -19,7 +19,7 @@ bool Slots::setPreprepare(const proto::Preprepare &preprepare, uint64_t replica_
     // TODO could do GC on all prepares and commits without the digest
     return true;
   }
-  return false;
+  return slots[seq_num][view].preprepare.digest == digest;
 }
 
 bool Slots::setPreprepare(const proto::Preprepare &preprepare, uint64_t primaryId) {
