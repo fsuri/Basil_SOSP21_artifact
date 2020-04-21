@@ -265,6 +265,8 @@ void Server::HandlePhase2(const TransportAddress &remote,
         //    we need to know the transaction content to validate the Phase1
         //    decision
         //  for now, drop the message?
+        Debug("Received P2 message without knowing txn %s.",
+            BytesToHex(msg.txn_digest(), 16).c_str());
         return;
       }
       decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs,
@@ -272,9 +274,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
           signedMessages, keyManager);
       if (decision != msg.decision()) {
         // ignore Byzantine clients
+        Debug("P2 message decision %lu does not match decision from replies %lu.",
+            msg.decision(), decision);
         return;
       }
     } else {
+      Debug("Not all signed P1 replies were valid.");
       // ignore Byzantine clients
       return;
     }
@@ -778,7 +783,6 @@ void Server::Commit(const std::string &txnDigest,
   
   Value val;
   if (validateProofs) {
-    val.proof = proof;
   }
 
   for (const auto &write : txn.write_set()) {
