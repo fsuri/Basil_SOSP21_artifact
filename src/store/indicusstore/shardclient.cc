@@ -171,7 +171,8 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
   pendingPhase1->requestTimeout->Reset();
 }
 
-void ShardClient::Phase2(uint64_t id, const std::string &txnDigest,
+void ShardClient::Phase2(uint64_t id,
+    const proto::Transaction &txn,
     const std::map<int, std::vector<proto::Phase1Reply>> &groupedPhase1Replies,
     const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
     proto::CommitDecision decision, phase2_callback pcb,
@@ -197,8 +198,8 @@ void ShardClient::Phase2(uint64_t id, const std::string &txnDigest,
   // create prepare request
   proto::Phase2 phase2;
   phase2.set_req_id(reqId);
-  phase2.set_txn_digest(txnDigest);
   if (validateProofs) {
+    *phase2.mutable_txn() = txn;
     if (signedMessages) {
       for (const auto &group : groupedSignedPhase1Replies) {
         for (const auto &reply : group.second) {
@@ -251,6 +252,10 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
     *writeback.mutable_txn() = transaction;
   } else {
     writeback.set_txn_digest(txnDigest);
+  }
+  
+  if (validateProofs) {
+    *writeback.mutable_proof() = proof;
   }
 
   transport->SendMessageToGroup(this, group, writeback);

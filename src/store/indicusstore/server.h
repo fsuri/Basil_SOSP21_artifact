@@ -124,7 +124,8 @@ class Server : public TransportReceiver, public ::Server {
   bool CheckHighWatermark(const Timestamp &ts);
   void SendPhase1Reply(uint64_t reqId,
     proto::Phase1Reply::ConcurrencyControlResult result,
-    const proto::CommittedProof &conflict, const TransportAddress &remote);
+    const proto::CommittedProof &conflict, const std::string &txnDigest,
+    const TransportAddress &remote);
   void Clean(const std::string &txnDigest);
   void CleanDependencies(const std::string &txnDigest);
 

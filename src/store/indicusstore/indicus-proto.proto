@@ -123,7 +123,7 @@ message Phase1Replies {
 
 message Phase2 {
   required uint64 req_id = 1;
-  required bytes txn_digest = 2;
+  optional Transaction txn = 2;
   oneof p1_replies_oneof {
     GroupedPhase1Replies p1_replies = 3;
     GroupedSignedPhase1Replies signed_p1_replies = 4;
