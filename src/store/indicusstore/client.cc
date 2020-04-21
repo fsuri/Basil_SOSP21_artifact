@@ -262,7 +262,7 @@ void Client::Phase2(PendingRequest *req, uint32_t timeout) {
 
   int logGroup = TransactionDigest(txn)[0] % ngroups;
   req->startedPhase2 = true;
-  bclient[logGroup]->Phase2(client_seq_num, req->txnDigest,
+  bclient[logGroup]->Phase2(client_seq_num, txn,
       req->phase1RepliesGrouped,
       req->signedPhase1RepliesGrouped, req->decision,
       std::bind(&Client::Phase2Callback, this, req->id,

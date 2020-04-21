@@ -222,13 +222,14 @@ void Server::HandlePhase1(const TransportAddress &remote,
   p1Decisions[txnDigest] = result;
 
   if (result != proto::Phase1Reply::WAIT) {
-    SendPhase1Reply(msg.req_id(), result, conflict, remote);
+    SendPhase1Reply(msg.req_id(), result, conflict, txnDigest, remote);
   }
 }
 
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
-  Debug("PHASE2[%s].", BytesToHex(msg.txn_digest(), 16).c_str());
+  std::string txnDigest = TransactionDigest(msg.txn());
+  Debug("PHASE2[%s].", BytesToHex(txnDigest, 16).c_str());
 
   proto::CommitDecision decision;
   if (validateProofs) {
@@ -259,40 +260,24 @@ void Server::HandlePhase2(const TransportAddress &remote,
     }
     
     if (repliesValid) {
-      auto txnItr = ongoing.find(msg.txn_digest());
-      if (txnItr == ongoing.end()) {
-        // TODO: what to do if we receive a Phase2 msg without a Phase1 msg
-        //    we need to know the transaction content to validate the Phase1
-        //    decision
-        //  for now, drop the message?
-        Debug("Received P2 message without knowing txn %s.",
-            BytesToHex(msg.txn_digest(), 16).c_str());
-        return;
-      }
       decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs,
-          txnItr->second,
-          signedMessages, keyManager);
-      if (decision != msg.decision()) {
-        // ignore Byzantine clients
-        Debug("P2 message decision %lu does not match decision from replies %lu.",
-            msg.decision(), decision);
-        return;
-      }
+          msg.txn(), signedMessages, keyManager);
     } else {
       Debug("Not all signed P1 replies were valid.");
       // ignore Byzantine clients
       return;
     }
   } else {
+    UW_ASSERT(msg.has_decision());
     decision = msg.decision();
   }
 
   proto::Phase2Reply reply;
   reply.set_req_id(msg.req_id());
   reply.set_decision(decision); 
-  *reply.mutable_txn_digest() = msg.txn_digest();
+  *reply.mutable_txn_digest() = txnDigest;
 
-  p2Decisions[msg.txn_digest()] = decision;
+  p2Decisions[reply.txn_digest()] = decision;
 
   if (signedMessages) {
     proto::SignedMessage signedMessage;
@@ -783,6 +768,7 @@ void Server::Commit(const std::string &txnDigest,
   
   Value val;
   if (validateProofs) {
+    val.proof = proof;
   }
 
   for (const auto &write : txn.write_set()) {
@@ -845,7 +831,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
             dependent);
         waitingDependencies.erase(dependent);
         proto::CommittedProof conflict;
-        SendPhase1Reply(dependenciesItr->second.reqId, result, conflict,
+        SendPhase1Reply(dependenciesItr->second.reqId, result, conflict, dependent,
             *dependenciesItr->second.remote);
       }
     }
@@ -890,7 +876,8 @@ bool Server::CheckHighWatermark(const Timestamp &ts) {
 
 void Server::SendPhase1Reply(uint64_t reqId,
     proto::Phase1Reply::ConcurrencyControlResult result,
-    const proto::CommittedProof &conflict, const TransportAddress &remote) {
+    const proto::CommittedProof &conflict, const std::string &txnDigest,
+    const TransportAddress &remote) {
   proto::Phase1Reply reply;
   reply.set_req_id(reqId);
   reply.set_ccr(result);
@@ -899,8 +886,11 @@ void Server::SendPhase1Reply(uint64_t reqId,
     retryTs.serialize(reply.mutable_retry_timestamp());
   }*/
 
-  if (conflict.has_txn() && validateProofs) {
-    *reply.mutable_committed_conflict() = conflict;
+  if (validateProofs) {
+    if (conflict.has_txn()) {
+      *reply.mutable_committed_conflict() = conflict;
+    }
+    *reply.mutable_txn_digest() = txnDigest;
   }
 
   if (signedMessages) {

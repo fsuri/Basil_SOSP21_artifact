@@ -246,24 +246,24 @@ bool ValidateP1RepliesCommit(
     auto repliesItr = groupedP1Replies.find(group);
     if (repliesItr == groupedP1Replies.end()) {
       // missing P1 replies from involved group
-      Debug("No P1 replies for group %d", group);
+      Debug("No P1 replies for group %ld", group);
       return false;
     }
 
-    if (repliesItr->second.size() < config->n) {
-      Debug("Not enough P1 replies for group %d", group);
+    if (repliesItr->second.size() < static_cast<size_t>(config->n)) {
+      Debug("Not enough P1 replies for group %ld", group);
       return false;
     }
 
     for (const auto &p1Reply : repliesItr->second) {
       if (p1Reply.ccr() != proto::Phase1Reply::COMMIT) {
-        Debug("Not all COMMIT P1 replies for group %d.", group);
+        Debug("Not all COMMIT P1 replies for group %ld.", group);
         return false;
       }
       
       if (p1Reply.txn_digest() != txnDigest) {
         // P1 reply is for different transaction
-        Debug("P1 reply digest %s does not match this txn digest %s in group %d.",
+        Debug("P1 reply digest %s does not match this txn digest %s in group %ld.",
             BytesToHex(p1Reply.txn_digest(), 16).c_str(), BytesToHex(txnDigest, 16).c_str(),
             group);
         return false;
@@ -278,7 +278,7 @@ bool ValidateP2RepliesCommit(
     const std::vector<proto::Phase2Reply> &p2Replies,
     const std::string &txnDigest, const proto::Transaction &txn,
     const transport::Configuration *config) {
-  if (p2Replies.size() < 4 * config->f + 1) {
+  if (p2Replies.size() < 4 * static_cast<size_t>(config->f) + 1) {
     Debug("Not enough P2 replies.");
     return false;
   }
