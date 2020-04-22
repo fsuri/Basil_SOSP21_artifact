@@ -154,7 +154,7 @@ class ShardClient : public TransportReceiver {
 
   struct PendingPhase2 {
     PendingPhase2(uint64_t reqId, proto::CommitDecision decision) : reqId(reqId),
-        decision(decision), requestTimeout(nullptr) { }
+        decision(decision), requestTimeout(nullptr), matchingReplies(0UL) { }
     ~PendingPhase2() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;

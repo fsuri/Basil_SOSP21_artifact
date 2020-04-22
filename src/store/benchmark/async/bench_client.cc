@@ -185,9 +185,9 @@ void BenchmarkClient::IncrementSent(int result) {
       gettimeofday(&currTime, NULL);
 
       struct timeval diff = timeval_sub(currTime, startTime);
-      if (diff.tv_sec > expDuration - warmupSec - cooldownSec && !cooldownStarted) {
+      if (diff.tv_sec > expDuration - cooldownSec && !cooldownStarted) {
         Finish();
-      } else if (diff.tv_sec > expDuration - warmupSec) {
+      } else if (diff.tv_sec > expDuration) {
         CooldownDone();
       }
     } else if (n >= numRequests){ 

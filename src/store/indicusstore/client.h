@@ -93,7 +93,7 @@ class Client : public ::Client {
         outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
         decision(proto::COMMIT), fast(true),
         startedPhase2(false), startedWriteback(false),
-        callbackInvoked(false) {
+        callbackInvoked(false), timeout(0UL) {
     }
 
     ~PendingRequest() {
@@ -111,6 +111,7 @@ class Client : public ::Client {
     bool startedPhase2;
     bool startedWriteback;
     bool callbackInvoked;
+    uint32_t timeout;
     std::map<int, std::vector<proto::Phase1Reply>> phase1RepliesGrouped;
     std::map<int, std::vector<proto::SignedMessage>> signedPhase1RepliesGrouped;
     std::vector<proto::Phase2Reply> phase2Replies;
@@ -118,21 +119,20 @@ class Client : public ::Client {
     std::string txnDigest;
   };
 
-  // Prepare function
-  void Phase1(PendingRequest *req, uint32_t timeout);
+  void Phase1(PendingRequest *req);
   void Phase1Callback(uint64_t reqId, int group, proto::CommitDecision decision,
       bool fast, const std::vector<proto::Phase1Reply> &phase1Replies,
       const std::vector<proto::SignedMessage> &signedPhase1Replies);
   void Phase1TimeoutCallback(uint64_t reqId, int status);
   void HandleAllPhase1Received(PendingRequest *req);
 
-  void Phase2(PendingRequest *req, uint32_t timeout);
+  void Phase2(PendingRequest *req);
   void Phase2Callback(uint64_t reqId,
       const std::vector<proto::Phase2Reply> &phase2Replies,
       const std::vector<proto::SignedMessage> &signedPhase2Replies);
   void Phase2TimeoutCallback(uint64_t reqId, int status);
 
-  void Writeback(PendingRequest *req, uint32_t timeout);
+  void Writeback(PendingRequest *req);
 
   bool IsParticipant(int g) const;
 
