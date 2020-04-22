@@ -92,7 +92,7 @@ proto::CommitDecision IndicusShardDecide(
   for (const auto& reply : replies) {
     if (reply.ccr() == proto::Phase1Reply::ABORT) {
       if (validateProofs) {
-        if (!ValidateProof(reply.committed_conflict(), config, signedMessages,
+        if (!ValidateProofCommit(reply.committed_conflict(), config, signedMessages,
               keyManager)) {
           abstains++;
           continue;
@@ -139,7 +139,7 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     return true;
   }
 
-  if (!ValidateProof(proof, config, signedMessages, keyManager)) {
+  if (!ValidateProofCommit(proof, config, signedMessages, keyManager)) {
     return false;
   }
 
@@ -164,7 +164,7 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
   return true;
 }
 
-bool ValidateProof(const proto::CommittedProof &proof,
+bool ValidateProofCommit(const proto::CommittedProof &proof,
     const transport::Configuration *config, bool signedMessages,
     KeyManager *keyManager) {
   if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
@@ -174,7 +174,7 @@ bool ValidateProof(const proto::CommittedProof &proof,
   }
 
   std::string txnDigest = TransactionDigest(proof.txn());
-  Debug("Validate proof for transaction %lu.%lu (%s).", proof.txn().client_id(),
+  Debug("Validate proof commit for transaction %lu.%lu (%s).", proof.txn().client_id(),
       proof.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str());
   if (signedMessages) {
     if (proof.has_signed_p1_replies()) {
@@ -228,6 +228,71 @@ bool ValidateProof(const proto::CommittedProof &proof,
         p2Replies.push_back(p2Reply);
       }
       return ValidateP2RepliesCommit(p2Replies, txnDigest, proof.txn(), config);
+    } else {
+      Debug("Has no replies.");
+      return false;
+    }
+  }
+}
+
+bool ValidateProofAbort(const proto::CommittedProof &proof,
+    const transport::Configuration *config, bool signedMessages,
+    KeyManager *keyManager) {
+  std::string txnDigest = TransactionDigest(proof.txn());
+  Debug("Validate proof abort for transaction %lu.%lu (%s).", proof.txn().client_id(),
+      proof.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str());
+  if (signedMessages) {
+    if (proof.has_signed_p1_replies()) {
+      std::map<int, std::vector<proto::Phase1Reply>> groupedP1Replies;
+      for (const auto &signedP1Replies : proof.signed_p1_replies().replies()) {
+        std::vector<proto::Phase1Reply> p1Replies;
+        for (const auto &signedP1Reply : signedP1Replies.second.msgs()) {
+          proto::Phase1Reply reply;
+          if (!ValidateSignedMessage(signedP1Reply, keyManager, reply)) {
+            Debug("Signed P1 reply is not valid.");
+            return false;
+          }
+          
+          p1Replies.push_back(reply);
+        }
+        groupedP1Replies.insert(std::make_pair(signedP1Replies.first, p1Replies));
+      }
+      return ValidateP1RepliesAbort(groupedP1Replies, txnDigest, proof.txn(),
+          config, signedMessages, keyManager);
+    } else if (proof.has_signed_p2_replies()) {
+      std::vector<proto::Phase2Reply> p2Replies;
+      for (const auto &signedP2Reply : proof.signed_p2_replies().msgs()) {
+        proto::Phase2Reply reply;
+        if (!ValidateSignedMessage(signedP2Reply, keyManager, reply)) {
+          Debug("Signed P2 reply is not valid.");
+          return false;
+        }
+          
+        p2Replies.push_back(reply);
+      }   
+      return ValidateP2RepliesAbort(p2Replies, txnDigest, proof.txn(), config);
+    } else {
+      Debug("Has no signed replies.");
+      return false;
+    }
+  } else {
+    if (proof.has_p1_replies()) {
+      std::map<int, std::vector<proto::Phase1Reply>> groupedP1Replies;
+      for (const auto &groupP1Replies : proof.p1_replies().replies()) {
+        std::vector<proto::Phase1Reply> p1Replies;
+        for (const auto &p1Reply : groupP1Replies.second.replies()) {
+          p1Replies.push_back(p1Reply);
+        }
+        groupedP1Replies.insert(std::make_pair(groupP1Replies.first, p1Replies));
+      }
+      return ValidateP1RepliesAbort(groupedP1Replies, txnDigest, proof.txn(),
+          config, signedMessages, keyManager);
+    } else if (proof.has_p2_replies()) {
+      std::vector<proto::Phase2Reply> p2Replies;
+      for (const auto &p2Reply : proof.p2_replies().replies()) {
+        p2Replies.push_back(p2Reply);
+      }
+      return ValidateP2RepliesAbort(p2Replies, txnDigest, proof.txn(), config);
     } else {
       Debug("Has no replies.");
       return false;
@@ -298,6 +363,77 @@ bool ValidateP2RepliesCommit(
   }
   return true;
 }
+
+bool ValidateP1RepliesAbort(
+    const std::map<int, std::vector<proto::Phase1Reply>> &groupedP1Replies,
+    const std::string &txnDigest, const proto::Transaction &txn,
+    const transport::Configuration *config, bool signedMessages,
+    KeyManager *keyManager) {
+  // TODO: technically only need a single Phase1Reply that says commit ->
+  //    messages will all be the same
+  for (auto group : txn.involved_groups()) {
+    auto repliesItr = groupedP1Replies.find(group);
+    if (repliesItr == groupedP1Replies.end()) {
+      Debug("No P1 replies for group %ld", group);
+      continue;
+    }
+
+    uint32_t abstains = 0;
+    for (const auto &p1Reply : repliesItr->second) {
+      if (p1Reply.txn_digest() != txnDigest ) {
+        Debug("P1 reply digest %s does not match this txn digest %s.",
+            BytesToHex(p1Reply.txn_digest(), 16).c_str(),
+            BytesToHex(txnDigest, 16).c_str());
+        return false;
+      }
+
+      if (p1Reply.ccr() == proto::Phase1Reply::ABSTAIN) {
+        abstains++;
+      } else if (p1Reply.ccr() == proto::Phase1Reply::ABORT) {
+        if (ValidateProofCommit(p1Reply.committed_conflict(), config,
+              signedMessages, keyManager)) {
+          Debug("Group %ld aborted transaction with committed conflict.", group);
+          return true;
+        } else {
+          abstains++;
+        }
+      }
+    }
+
+    if (abstains >= 3 * config->f + 1) {
+      Debug("Group %ld aborted with >= 3f+1 abstains.", group);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Assume that digest has been computed from txn
+bool ValidateP2RepliesAbort(
+    const std::vector<proto::Phase2Reply> &p2Replies,
+    const std::string &txnDigest, const proto::Transaction &txn,
+    const transport::Configuration *config) {
+  if (p2Replies.size() < 4 * static_cast<size_t>(config->f) + 1) {
+    Debug("Not enough P2 replies.");
+    return false;
+  }
+
+  for (const auto &p2Reply : p2Replies) {
+    if (p2Reply.decision() != proto::ABORT) {
+      Debug("Not all P2 ABORT replies.");
+      return false;
+    }
+    
+    if (p2Reply.txn_digest() != txnDigest) {
+      Debug("P2 reply digest %s does not match this txn digest %s.",
+          BytesToHex(p2Reply.txn_digest(), 16).c_str(),
+          BytesToHex(txnDigest, 16).c_str());
+      return false;
+    }
+  }
+  return true;
+}
+
 
 bool ValidateDependency(const proto::Dependency &dep,
     const transport::Configuration *config, bool signedMessages,

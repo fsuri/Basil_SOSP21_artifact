@@ -310,16 +310,24 @@ void Server::HandleWriteback(const TransportAddress &remote,
   Debug("WRITEBACK[%s] with decision %d.",
       BytesToHex(*txnDigest, 16).c_str(), msg.decision());
 
-  if (validateProofs) {
-    if (!ValidateProof(msg.proof(), &config, signedMessages, keyManager)) {
-      // ignore Writeback without valid proof
-      return;
-    }
-  }
 
   if (msg.decision() == proto::COMMIT) {
+    if (validateProofs) {
+      if (!ValidateProofCommit(msg.proof(), &config, signedMessages, keyManager)) {
+        // ignore Writeback without valid proof
+        return;
+      }
+    }
     Commit(*txnDigest, msg.txn(), msg.proof());
   } else {
+    if (validateProofs) {
+      if (!ValidateProofAbort(msg.proof(), &config, signedMessages,
+            keyManager)) {
+        // ignore Writeback without valid proof
+        return;
+      }
+    }
+
     Abort(*txnDigest);
   }
 }
