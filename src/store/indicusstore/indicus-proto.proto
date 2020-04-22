@@ -150,6 +150,6 @@ message Writeback {
 }
 
 message Abort {
-  required uint64 req_id = 1;
-  required bytes txn_digest = 2;
+  required TimestampMessage ts = 1;
+  repeated bytes read_set = 2;
 }

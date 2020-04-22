@@ -93,7 +93,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     HandleWriteback(remote, writeback);
   } else if (type == abort.GetTypeName()) {
     abort.ParseFromString(data);
-    HandleAbort(remote, abort);
+    HandleAbort(remote, abort, signedMessage.process_id());
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
@@ -320,21 +320,27 @@ void Server::HandleWriteback(const TransportAddress &remote,
     }
     Commit(*txnDigest, msg.txn(), msg.proof());
   } else {
-    /*if (validateProofs) {
+    if (validateProofs) {
       if (!ValidateProofAbort(msg.proof(), &config, signedMessages,
             keyManager)) {
         // ignore Writeback without valid proof
         return;
       }
-    }*/
+    }
 
     Abort(*txnDigest);
   }
 }
 
 void Server::HandleAbort(const TransportAddress &remote,
-    const proto::Abort &msg) {
-  Abort(msg.txn_digest());
+    const proto::Abort &msg, uint64_t senderId) {
+  if (signedMessages && msg.ts().id() != senderId) {
+    return;
+  }
+
+  for (const auto &read : msg.read_set()) {
+    rts[read].erase(msg.ts());
+  }
 }
 
 proto::Phase1Reply::ConcurrencyControlResult Server::DoOCCCheck(

@@ -86,7 +86,8 @@ class Server : public TransportReceiver, public ::Server {
       const proto::Phase2 &msg);
   void HandleWriteback(const TransportAddress &remote,
       const proto::Writeback &msg);
-  void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
+  void HandleAbort(const TransportAddress &remote, const proto::Abort &msg,
+      uint64_t senderId);
 
   proto::Phase1Reply::ConcurrencyControlResult DoOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
