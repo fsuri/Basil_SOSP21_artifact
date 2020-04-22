@@ -24,8 +24,6 @@ Indicus3 eval missing. We do not include it because it violates to byzn independ
 \fi
 
 
-
-
 \fs{Question: Is clock skew something we need to explicitly handle? Clock sync etc across machines?}
 
 \fs{CPU vs Network bottleneck? How does this affect our results}
@@ -45,6 +43,48 @@ Our evaluation seeks to answer the following questions:
 \end{itemize}
 
 \paragraph{Implementation and Baselines.} We implemented our prototype of \sys in TODO lines of C++ code. To evaluate the overheads of byzantine fault tolerance, we compare against TAPIR\cite{zhang2015tapir}, a state of the art distributed transaction system for the crash failure model, that like \sys sidesteps total-order replication. In order to facilitate a fair comparison we build \sys atop TAPIR communication layer, and extend it to provide authentication. We use SHA256 Hash functions and ECDSA signatures provided by the cryptopp library (https://www.cryptopp.com/). Further, we implement a strawman BFT baseline NoPO that, unlike \sys, (optionally) uses naive Optimistic Concurrency control, and relies on PBFT cite() to provide totally ordered broadcast for the Validation layer. (We use signatures instead of MAcs for PBFT. But ECDSA is much more efficent than RSA, and cpu should not be the bottleneck?) NoPO maintains \sys 's speculative Execution structure in order to offer interactive transactions. fs{if we moved the speculative execution to a single replica that processes reads and buffers writes then it would simulate BFT-DUR }. \fs{Lastly, we modify Hyperledger Fabric, a popular enterprise-ready permissioned Blockchain solution, to process Online Transactional Processing (OLTP) workloads (instead of smart contracts) in order to facilitate a comparison with a state of the art blockchain. To do so, we replace the Simulation layer with NoPO's speculative execution.}
+
+\begin{figure*}[t]
+\centering
+\begin{tabular}{r  r  r  r  r  r  r}
+  \multicolumn{1}{r|}{} & us-east-1 &  eu-west-1 &  ap-northeast-1 &  us-west-1 &  eu-central-1 & ap-southeast-2 \\
+  \hline
+  \multicolumn{1}{r|}{us-east-1}      &   0.2 \\
+  \multicolumn{1}{r|}{eu-west-1}      &  73.0 &   0.2 \\
+  \multicolumn{1}{r|}{ap-northeast-1} & 160.0 & 220.0 &   0.2 \\
+  \multicolumn{1}{r|}{us-west-1}      &  63.0 & 145.0 & 115.0 &   0.2 \\
+  \multicolumn{1}{r|}{eu-central-1}   &  87.0 &  26.0 & 243.0 & 148.0 & 0.2 \\
+  \multicolumn{1}{r|}{ap-southeast-2} & 199.0 & 255.0 & 106.0 & 139.0 & 177.0 & 0.2 \\
+\end{tabular}
+\caption{Round trip latencies in ms between machines in emulated geographic
+  regions.}
+\label{tab:latencies}
+\end{figure*}
+
+\subsection{Experimental Setup}
+\paragraph{Testbed.} We run our experiments on the CloudLab
+testbed~\cite{cloudlab} using \texttt{m510} machines for clients and replicas.
+Each machine has an 8-core 2.0 GHz CPU, 64 GB RAM, and a 10 GB NIC.
+
+All clients and replicas are interconnected by a single 45XGc switch. For our
+wide-area network experiments, we use Linux's Traffice Control utility (\texttt{tc})
+to add outgoing delays to packets between machines in different emulated
+geographic regions. Figure~\ref{tab:latencies} shows the configured round-trip
+times between machines in different regions. The regions are based off of AWS
+EC2 availability regions and represent a global distribution of replicas for
+tolerance of geographically correlated failures. Clients are distributed with
+replicas so that each client belongs to the same ``emulated LAN'' as one replica
+for each shard (as would be the case in a typical geo-distributed datacenter
+network topology).
+
+\paragraph{Measurement.} Clients execute transactions in a closed loop. If a
+transaction aborts, the issuing client retries the transaction from the
+beginning up to a maximum of 20 times. The latency of each transaction is 
+measured as the time between when \texttt{Begin()} is called for the first
+attempt and when the client is notified that the transaction committed. Each
+experiment runs for 90 seconds and we ignore measurements from the first and
+last 30 seconds to ensure that our results represent the behavior of all systems
+in a steady state.
 
 \paragraph{Workloads.} We evaluate the performance of \sys using the TPC-C and Smallbank workloads to simulate realistic Online Transaction Processing (OLTP) applications. TPC-C simulates the business logic of an e-commerce vendor operating multiple warehouses, while Smallbank simulates a small-scale banking application that allows for transfers, deposits, and withdrawals. Additionally, we use the YCSB workload generator for our microbenchmarks in order to simulate random distributions of read/write requests.
 
