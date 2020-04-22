@@ -142,11 +142,12 @@ message Phase2Replies {
 }
 
 message Writeback {
-  required uint64 req_id = 1;
+  required CommitDecision decision = 1;
   optional bytes txn_digest = 2;
-  optional Transaction txn = 3;
-  required CommitDecision decision = 4;
-  optional CommittedProof proof = 5;
+  oneof txn_proof {
+    Transaction txn = 3;
+    CommittedProof proof = 4;
+  }
 }
 
 message Abort {
