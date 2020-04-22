@@ -38,7 +38,6 @@
 #include "lib/io_utils.h"
 
 #include "store/common/partitioner.h"
-#include "store/common/frontend/client.h"
 #include "store/server.h"
 #include "store/strongstore/server.h"
 #include "store/tapirstore/server.h"

@@ -305,12 +305,4 @@ void Client::AbortInternal(abort_callback acb, abort_timeout_callback atcb,
   }
 }
 
-/* Return statistics of most recent transaction. */
-vector<int>
-Client::Stats()
-{
-    vector<int> v;
-    return v;
-}
-
 } // namespace tapirstore

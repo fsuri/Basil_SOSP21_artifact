@@ -48,7 +48,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     syncCommit(syncCommit), readQuorumSize(readQuorumSize),
     signedMessages(signedMessages), validateProofs(validateProofs),
     keyManager(keyManager), timeServer(timeServer), client_seq_num(0UL),
-    lastReqId(0UL) {
+    lastReqId(0UL), getIdx(0UL) {
   bclient.reserve(nshards);
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
@@ -62,10 +62,16 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
 
   Debug("Indicus client [%lu] created! %lu %lu", client_id, nshards,
       bclient.size());
+  _Latency_Init(&executeLatency, "execute");
+  _Latency_Init(&getLatency, "get");
+  _Latency_Init(&commitLatency, "commit");
 }
 
 Client::~Client()
 {
+  Latency_Dump(&executeLatency);
+  Latency_Dump(&getLatency);
+  Latency_Dump(&commitLatency);
     for (auto b : bclient) {
         delete b;
     }
@@ -77,6 +83,8 @@ Client::~Client()
 void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
       uint32_t timeout) {
   transport->Timer(0, [this, bcb, btcb, timeout]() {
+    Latency_Start(&executeLatency);
+
     client_seq_num++;
     Debug("BEGIN [%lu]", client_seq_num);
 
@@ -93,6 +101,8 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
 void Client::Get(const std::string &key, get_callback gcb,
     get_timeout_callback gtcb, uint32_t timeout) {
   transport->Timer(0, [this, key, gcb, gtcb, timeout]() {
+    Latency_Start(&getLatency);
+
     Debug("GET[%lu:%lu] for key %s", client_id, client_seq_num,
         BytesToHex(key, 16).c_str());
 
@@ -108,10 +118,11 @@ void Client::Get(const std::string &key, get_callback gcb,
     read_callback rcb = [gcb, this](int status, const std::string &key,
         const std::string &val, const Timestamp &ts, const proto::Dependency &dep,
         bool hasDep, bool addReadSet) {
+      uint64_t ns = Latency_End(&getLatency);
       if (Message_DebugEnabled(__FILE__)) {
-        Debug("GET[%lu:%lu] Callback for key %s with %lu bytes and ts %lu.%lu.",
+        Debug("GET[%lu:%lu] Callback for key %s with %lu bytes and ts %lu.%lu after %luus.",
             client_id, client_seq_num, BytesToHex(key, 16).c_str(), val.length(),
-            ts.getTimestamp(), ts.getID());
+            ts.getTimestamp(), ts.getID(), ns / 1000);
         if (hasDep) {
           Debug("GET[%lu:%lu] Callback for key %s with dep ts %lu.%lu.",
               client_id, client_seq_num, BytesToHex(key, 16).c_str(),
@@ -164,6 +175,9 @@ void Client::Put(const std::string &key, const std::string &value,
 void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     uint32_t timeout) {
   transport->Timer(0, [this, ccb, ctcb, timeout]() {
+    uint64_t ns = Latency_End(&executeLatency);
+    Latency_Start(&commitLatency);
+
     PendingRequest *req = new PendingRequest(client_seq_num);
     pendingReqs[client_seq_num] = req;
     req->ccb = ccb;
@@ -368,6 +382,7 @@ void Client::Writeback(PendingRequest *req) {
   }
 
   if (!req->callbackInvoked) {
+    uint64_t ns = Latency_End(&commitLatency);
     req->ccb(result);
     req->callbackInvoked = true;
   }
@@ -391,6 +406,8 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
     // immediately move on to its next transaction without waiting for confirmation
     // that this transaction was aborted
 
+    uint64_t ns = Latency_End(&executeLatency);
+
     Debug("ABORT[%lu:%lu]", client_id, client_seq_num);
 
     for (auto group : txn.involved_groups()) {
@@ -400,14 +417,6 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
     // TODO: can we just call callback immediately?
     acb();
   });
-}
-
-/* Return statistics of most recent transaction. */
-vector<int>
-Client::Stats()
-{
-    vector<int> v;
-    return v;
 }
 
 } // namespace indicusstore
