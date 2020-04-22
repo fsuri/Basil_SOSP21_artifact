@@ -248,16 +248,17 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
   proto::Writeback writeback;
   writeback.set_req_id(reqId);
   writeback.set_decision(decision);
+  if (validateProofs) {
+    *writeback.mutable_proof() = proof;
+  }
   if (decision == proto::COMMIT) {
-    *writeback.mutable_txn() = transaction;
+    if (!validateProofs) {
+      *writeback.mutable_txn() = transaction;
+    }
   } else {
     writeback.set_txn_digest(txnDigest);
   }
   
-  if (validateProofs) {
-    *writeback.mutable_proof() = proof;
-  }
-
   transport->SendMessageToGroup(this, group, writeback);
   Debug("[group %i] Sent WRITEBACK[%lu]", group, id);
 

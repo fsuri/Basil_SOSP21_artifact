@@ -290,14 +290,21 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
 void Server::HandleWriteback(const TransportAddress &remote,
     const proto::Writeback &msg) {
-  std::string computedTxnDigest;
-  const std::string *txnDigest;
-  if (msg.decision() == proto::COMMIT) {
+  const proto::Transaction *txn;
+  if (validateProofs) {
+    txn = &msg.proof().txn();
+  } else {
     if (!msg.has_txn()) {
       Warning("Malformed Writeback: commit must contain txn.");
       return;
     }
-    computedTxnDigest = TransactionDigest(msg.txn());
+    txn = &msg.txn();
+  }
+
+  std::string computedTxnDigest;
+  const std::string *txnDigest;
+  if (msg.decision() == proto::COMMIT) {
+    computedTxnDigest = TransactionDigest(*txn);
     txnDigest = &computedTxnDigest;
   } else {
     if (!msg.has_txn_digest()) {
@@ -310,7 +317,6 @@ void Server::HandleWriteback(const TransportAddress &remote,
   Debug("WRITEBACK[%s] with decision %d.",
       BytesToHex(*txnDigest, 16).c_str(), msg.decision());
 
-
   if (msg.decision() == proto::COMMIT) {
     if (validateProofs) {
       if (!ValidateProofCommit(msg.proof(), &config, signedMessages, keyManager)) {
@@ -318,7 +324,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
         return;
       }
     }
-    Commit(*txnDigest, msg.txn(), msg.proof());
+    Commit(*txnDigest, *txn, msg.proof());
   } else {
     if (validateProofs) {
       if (!ValidateProofAbort(msg.proof(), &config, signedMessages,
