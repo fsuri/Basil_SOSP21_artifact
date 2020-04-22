@@ -93,7 +93,8 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
 void Client::Get(const std::string &key, get_callback gcb,
     get_timeout_callback gtcb, uint32_t timeout) {
   transport->Timer(0, [this, key, gcb, gtcb, timeout]() {
-    Debug("GET[%lu] for key %s]", client_seq_num, BytesToHex(key, 16).c_str());
+    Debug("GET[%lu:%lu] for key %s", client_id, client_seq_num,
+        BytesToHex(key, 16).c_str());
 
     // Contact the appropriate shard to get the value.
     int i = part(key, nshards) % ngroups;
@@ -108,12 +109,12 @@ void Client::Get(const std::string &key, get_callback gcb,
         const std::string &val, const Timestamp &ts, const proto::Dependency &dep,
         bool hasDep, bool addReadSet) {
       if (Message_DebugEnabled(__FILE__)) {
-        Debug("GET[%lu] Callback for key %s with %lu bytes and ts %lu.%lu.",
-            client_seq_num, BytesToHex(key, 16).c_str(), val.length(),
+        Debug("GET[%lu:%lu] Callback for key %s with %lu bytes and ts %lu.%lu.",
+            client_id, client_seq_num, BytesToHex(key, 16).c_str(), val.length(),
             ts.getTimestamp(), ts.getID());
         if (hasDep) {
-          Debug("GET[%lu] Callback for key %s with dep ts %lu.%lu.",
-              client_seq_num, BytesToHex(key, 16).c_str(),
+          Debug("GET[%lu:%lu] Callback for key %s with dep ts %lu.%lu.",
+              client_id, client_seq_num, BytesToHex(key, 16).c_str(),
               dep.prepared().timestamp().timestamp(),
               dep.prepared().timestamp().id());
         }
@@ -139,13 +140,8 @@ void Client::Get(const std::string &key, get_callback gcb,
 void Client::Put(const std::string &key, const std::string &value,
     put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
   transport->Timer(0, [this, key, value, pcb, ptcb, timeout]() {
-    if (Message_DebugEnabled(__FILE__)) {
-      uint64_t intValue = 0;
-      for (int i = 0; i < 4 && i < value.length(); ++i) {
-        intValue = intValue | (static_cast<uint64_t>(value[i]) << ((3 - i) * 8));
-      }
-      Debug("PUT [%lu : %s : %lu]", client_seq_num, key.c_str(), intValue);
-    }
+    Debug("PUT[%lu:%lu] for key %s", client_id, client_seq_num, BytesToHex(key,
+          16).c_str());
 
     // Contact the appropriate shard to set the value.
     int i = part(key, nshards) % ngroups;
@@ -173,14 +169,17 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     req->ccb = ccb;
     req->ctcb = ctcb;
     req->callbackInvoked = false;
+    req->txnDigest = TransactionDigest(txn);
+    req->timeout = timeout;
     
-    Phase1(req, timeout);
+    Phase1(req);
   });
 }
 
-void Client::Phase1(PendingRequest *req, uint32_t timeout) {
+void Client::Phase1(PendingRequest *req) {
   Debug("PHASE1 [%lu:%lu] at %lu", client_id, client_seq_num,
       txn.timestamp().timestamp());
+
   UW_ASSERT(txn.involved_groups().size() > 0);
 
   for (auto group : txn.involved_groups()) {
@@ -188,7 +187,7 @@ void Client::Phase1(PendingRequest *req, uint32_t timeout) {
           &Client::Phase1Callback, this, req->id, group, std::placeholders::_1,
           std::placeholders::_2, std::placeholders::_3, std::placeholders::_4),
         std::bind(&Client::Phase1TimeoutCallback, this, req->id,
-          std::placeholders::_1), timeout);
+          std::placeholders::_1), req->timeout);
     req->outstandingPhase1s++;
   }
 }
@@ -197,16 +196,17 @@ void Client::Phase1Callback(uint64_t txnId, int group,
     proto::CommitDecision decision, bool fast,
     const std::vector<proto::Phase1Reply> &phase1Replies,
     const std::vector<proto::SignedMessage> &signedPhase1Replies) {
-  Debug("PHASE1[%lu] callback decision %d from group %d", client_seq_num,
-      decision, group);
+  Debug("PHASE1[%lu:%lu] callback decision %d from group %d", client_id,
+      client_seq_num, decision, group);
+
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
     Debug("Phase1Callback for terminated request %lu (txn already committed"
         " or aborted.", txnId);
     return;
   }
-  PendingRequest *req = itr->second;
 
+  PendingRequest *req = itr->second;
   if (req->startedPhase2 || req->startedWriteback) {
     Debug("Already started Phase2/Writeback for request id %lu. Ignoring Phase1"
         " response from group %d.", txnId, group);
@@ -224,11 +224,9 @@ void Client::Phase1Callback(uint64_t txnId, int group,
   --req->outstandingPhase1s;
   switch(decision) {
     case proto::COMMIT:
-      Debug("PHASE1[%lu] COMMIT %d", client_seq_num, group);
       break;
     case proto::ABORT:
       // abort!
-      Debug("PHASE1[%lu] ABORT %d", client_seq_num, group);
       req->decision = proto::ABORT;
       req->outstandingPhase1s = 0;
       break;
@@ -242,28 +240,28 @@ void Client::Phase1Callback(uint64_t txnId, int group,
 }
 
 void Client::Phase1TimeoutCallback(uint64_t txnId, int status) {
+  Warning("PHASE1[%lu:%lu] timed out.", client_id, txnId);
 }
 
 void Client::HandleAllPhase1Received(PendingRequest *req) {
   Debug("All PHASE1's [%lu] received", client_seq_num);
   if (req->fast) {
-    Writeback(req, 3000);
+    Writeback(req);
   } else {
     // slow path, must log final result to 1 group
-    Phase2(req, 3000); // todo: do we care about timeouts?
+    Phase2(req);
   }
 }
 
-void Client::Phase2(PendingRequest *req, uint32_t timeout) {
-  req->txnDigest = TransactionDigest(txn);
-
-  Debug("PHASE2[%lu][%s]", client_seq_num,
-      BytesToHex(req->txnDigest, 16).c_str());
-
+void Client::Phase2(PendingRequest *req) {
   uint8_t groupIdx = req->txnDigest[0];
   groupIdx = groupIdx % txn.involved_groups_size();
   UW_ASSERT(groupIdx < txn.involved_groups_size());
   int64_t logGroup = txn.involved_groups(groupIdx);
+
+  Debug("PHASE2[%lu:%lu][%s] logging to group %ld", client_id, client_seq_num,
+      BytesToHex(req->txnDigest, 16).c_str(), logGroup);
+
   req->startedPhase2 = true;
   bclient[logGroup]->Phase2(client_seq_num, txn,
       req->phase1RepliesGrouped,
@@ -271,13 +269,13 @@ void Client::Phase2(PendingRequest *req, uint32_t timeout) {
       std::bind(&Client::Phase2Callback, this, req->id,
         std::placeholders::_1, std::placeholders::_2),
       std::bind(&Client::Phase2TimeoutCallback, this, req->id,
-        std::placeholders::_1), timeout);
+        std::placeholders::_1), req->timeout);
 }
 
 void Client::Phase2Callback(uint64_t txnId,
     const std::vector<proto::Phase2Reply> &phase2Replies,
     const std::vector<proto::SignedMessage> &signedPhase2Replies) {
-  Debug("PHASE2[%lu] callback", txnId);
+  Debug("PHASE2[%lu:%lu] callback", client_id, txnId);
 
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
@@ -300,28 +298,30 @@ void Client::Phase2Callback(uint64_t txnId,
     }
   }
 
-  Writeback(req, 3000);
+  Writeback(req);
 }
 
 void Client::Phase2TimeoutCallback(uint64_t txnId, int status) {
+  Warning("PHASE2[%lu:%lu] timed out.", client_id, txnId);
 }
 
-void Client::Writeback(PendingRequest *req, uint32_t timeout) {
-  Debug("WRITEBACK[%lu]", req->id);
+void Client::Writeback(PendingRequest *req) {
+  Debug("WRITEBACK[%lu:%lu]", client_id, req->id);
 
   req->startedWriteback = true;
 
   int result;
   switch (req->decision) {
     case proto::COMMIT: {
-      Debug("COMMIT[%lu]", req->id);
+      Debug("WRITEBACK[%lu:%lu][%s] COMMIT.", client_id, req->id,
+          BytesToHex(req->txnDigest, 16).c_str());
       result = RESULT_COMMITTED;
       break;
     }
     case proto::ABORT: {
       result = RESULT_SYSTEM_ABORTED;
-      req->txnDigest = TransactionDigest(txn);
-      Debug("ABORT[%lu][%s]", req->id, BytesToHex(req->txnDigest, 16).c_str());
+      Debug("WRITEBACK[%lu:%lu][%s] ABORT.", client_id, req->id,
+          BytesToHex(req->txnDigest, 16).c_str());
       break;
     }
     default: {
@@ -375,10 +375,14 @@ void Client::Writeback(PendingRequest *req, uint32_t timeout) {
   }
 
   // TODO: what to do when Writeback times out
-  writeback_timeout_callback wtcb = [](int status){};
+  writeback_timeout_callback wtcb = [clientId = client_id,
+                             reqId = req->id](int status){
+    Warning("WRITEBACK[%lu:%lu] timed out.", clientId, reqId); 
+  };
+
   for (auto group : txn.involved_groups()) {
     bclient[group]->Writeback(client_seq_num, txn, req->txnDigest,
-        req->decision, proof, wcb, wtcb, timeout);
+        req->decision, proof, wcb, wtcb, req->timeout);
   }
 
   if (!req->callbackInvoked) {
@@ -403,11 +407,12 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
     // immediately move on to its next transaction without waiting for confirmation
     // that this transaction was aborted
 
-    Debug("ABORT[%lu]", client_seq_num);
+    Debug("ABORT[%lu:%lu]", client_id, client_seq_num);
 
     for (auto group : txn.involved_groups()) {
       bclient[group]->Abort(client_seq_num, txn.timestamp());
     }
+
     // TODO: can we just call callback immediately?
     acb();
   });

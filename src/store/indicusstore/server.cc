@@ -72,6 +72,8 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     }
 
     if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
+      Debug("VALIDATE failed for SignedMessage from %lu.",
+          signedMessage.process_id());
       return;
     }
   } else {
@@ -206,6 +208,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
   if (validateProofs) {
     for (const auto &dep : msg.txn().deps()) {
       if (!ValidateDependency(dep, &config, signedMessages, keyManager)) {
+        Debug("VALIDATE Dependency failed for txn %s.", BytesToHex(txnDigest,
+              16).c_str());
         // safe to ignore Byzantine client
         return;
       }
@@ -263,7 +267,8 @@ void Server::HandlePhase2(const TransportAddress &remote,
       decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs,
           msg.txn(), signedMessages, keyManager);
     } else {
-      Debug("Not all signed P1 replies were valid.");
+      Debug("VALIDATE signed Phase1Reply failed for txn %s.", BytesToHex(
+            txnDigest, 16).c_str());
       // ignore Byzantine clients
       return;
     }
@@ -294,7 +299,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
   if (validateProofs) {
     txn = &msg.proof().txn();
   } else {
-    if (!msg.has_txn()) {
+    if (msg.decision() == proto::COMMIT && !msg.has_txn()) {
       Warning("Malformed Writeback: commit must contain txn.");
       return;
     }
@@ -320,6 +325,8 @@ void Server::HandleWriteback(const TransportAddress &remote,
   if (msg.decision() == proto::COMMIT) {
     if (validateProofs) {
       if (!ValidateProofCommit(msg.proof(), &config, signedMessages, keyManager)) {
+        Debug("VALIDATE CommitProof commit failed for txn %s.", BytesToHex(
+              *txnDigest, 16).c_str());
         // ignore Writeback without valid proof
         return;
       }
@@ -329,6 +336,8 @@ void Server::HandleWriteback(const TransportAddress &remote,
     if (validateProofs) {
       if (!ValidateProofAbort(msg.proof(), &config, signedMessages,
             keyManager)) {
+        Debug("VALIDATE CommitProof abort failed for txn %s.", BytesToHex(
+              *txnDigest, 16).c_str());
         // ignore Writeback without valid proof
         return;
       }
