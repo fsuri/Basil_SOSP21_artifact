@@ -308,6 +308,7 @@ void Client::Writeback(PendingRequest *req, uint32_t timeout) {
     case proto::ABORT: {
       result = RESULT_SYSTEM_ABORTED;
       req->txnDigest = TransactionDigest(txn);
+      Debug("ABORT[%lu][%s]", req->id, BytesToHex(req->txnDigest, 16).c_str());
       break;
     }
     default: {
@@ -330,8 +331,8 @@ void Client::Writeback(PendingRequest *req, uint32_t timeout) {
 
   proto::CommittedProof proof;
   if (validateProofs) {
+    *proof.mutable_txn() = txn;
     if (req->fast) {
-      *proof.mutable_txn() = txn;
       if (signedMessages) {
         for (const auto &signedPhase1Reply : req->signedPhase1RepliesGrouped) {
           for (const auto &signedReply : signedPhase1Reply.second) {
@@ -395,6 +396,7 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
     writeback_callback wcb = []() {};
     
     std::string txnDigest = TransactionDigest(txn);
+    Debug("ABORT[%lu][%s]", client_seq_num, BytesToHex(txnDigest, 16).c_str());
     writeback_timeout_callback wtcb = [](int status){};
     for (auto group : txn.involved_groups()) {
       bclient[group]->Writeback(client_seq_num, txn, txnDigest,

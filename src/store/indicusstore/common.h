@@ -45,7 +45,11 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     KeyManager *keyManager);
 
 // check must validate that proof replies are from all involved shards
-bool ValidateProof(const proto::CommittedProof &proof,
+bool ValidateProofCommit(const proto::CommittedProof &proof,
+    const transport::Configuration *config, bool signedMessages,
+    KeyManager *keyManager);
+
+bool ValidateProofAbort(const proto::CommittedProof &proof,
     const transport::Configuration *config, bool signedMessages,
     KeyManager *keyManager);
 
@@ -58,6 +62,18 @@ bool ValidateP2RepliesCommit(
     const std::vector<proto::Phase2Reply> &p2Replies,
     const std::string &txnDigest, const proto::Transaction &txn,
     const transport::Configuration *config);
+
+bool ValidateP1RepliesAbort(
+    const std::map<int, std::vector<proto::Phase1Reply>> &groupedP1Replies,
+    const std::string &txnDigest, const proto::Transaction &txn,
+    const transport::Configuration *config, bool signedMessages,
+    KeyManager *keyManager);
+
+bool ValidateP2RepliesAbort(
+    const std::vector<proto::Phase2Reply> &p2Replies,
+    const std::string &txnDigest, const proto::Transaction &txn,
+    const transport::Configuration *config);
+
 
 bool ValidateDependency(const proto::Dependency &dep,
     const transport::Configuration *config, bool signedMessages,
