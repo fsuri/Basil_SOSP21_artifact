@@ -207,7 +207,7 @@ void Client::Phase1Callback(uint64_t txnId, int group,
   }
   PendingRequest *req = itr->second;
 
-  if (req->startedPhase2) {
+  if (req->startedPhase2 || req->startedWriteback) {
     Debug("Already started Phase2 for request id %lu. Ignoring Phase1 response "
         "from group %d.", txnId, group);
     return;
@@ -282,6 +282,15 @@ void Client::Phase2Callback(uint64_t txnId,
     return;
   }
 
+  PendingRequest *req = itr->second;
+
+  if (req->startedWriteback) {
+    Debug("Already started Writeback for request id %lu. Ignoring Phase2 response.",
+        txnId);
+    return;
+  }
+
+
   if (validateProofs) {
     itr->second->phase2Replies = phase2Replies;
     if (signedMessages) {
@@ -297,6 +306,8 @@ void Client::Phase2TimeoutCallback(uint64_t txnId, int status) {
 
 void Client::Writeback(PendingRequest *req, uint32_t timeout) {
   Debug("WRITEBACK[%lu]", req->id);
+
+  req->startedWriteback = true;
 
   int result;
   switch (req->decision) {
