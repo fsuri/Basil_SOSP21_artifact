@@ -104,8 +104,7 @@ class ShardClient : public TransportReceiver {
       phase2_timeout_callback ptcb, uint32_t timeout);
   virtual void Writeback(uint64_t id, const proto::Transaction &transaction,
       const std::string &txnDigest,
-      proto::CommitDecision decision, const proto::CommittedProof &proof,
-      writeback_callback wcb, writeback_timeout_callback wtcb, uint32_t timeout);
+      proto::CommitDecision decision, const proto::CommittedProof &proof);
   
   virtual void Abort(uint64_t id, const TimestampMessage &ts);
  private:
@@ -171,21 +170,6 @@ class ShardClient : public TransportReceiver {
     phase2_timeout_callback ptcb;
   };
 
-  struct PendingCommit {
-    PendingCommit(uint64_t reqId) : reqId(reqId),
-        requestTimeout(nullptr) { }
-    ~PendingCommit() {
-      if (requestTimeout != nullptr) {
-        delete requestTimeout;
-      }
-    }
-    uint64_t reqId;
-    uint64_t ts;
-    proto::Transaction txn;
-    Timeout *requestTimeout;
-    writeback_callback ccb;
-    writeback_timeout_callback ctcb;
-  };
   struct PendingAbort {
     PendingAbort(uint64_t reqId) : reqId(reqId),
         requestTimeout(nullptr) { }
@@ -212,10 +196,6 @@ class ShardClient : public TransportReceiver {
       const proto::SignedMessage &signedPhase1Reply);
   void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply,
       const proto::SignedMessage &signedPhase2Reply);
-  bool CommitCallback(uint64_t reqId, const std::string &,
-      const std::string &);
-  bool AbortCallback(uint64_t reqId, const std::string &,
-      const std::string &);
 
   inline uint64_t QuorumSize() const { return 4 * config->f + 1; } 
   void Phase1Decision(uint64_t reqId);
@@ -248,7 +228,6 @@ class ShardClient : public TransportReceiver {
   std::unordered_map<uint64_t, PendingQuorumGet *> pendingGets;
   std::unordered_map<uint64_t, PendingPhase1 *> pendingPhase1s;
   std::unordered_map<uint64_t, PendingPhase2 *> pendingPhase2s;
-  std::unordered_map<uint64_t, PendingCommit *> pendingCommits;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
 };
 

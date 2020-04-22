@@ -225,28 +225,10 @@ void ShardClient::Phase2(uint64_t id,
 
 void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
     const std::string &txnDigest,
-    proto::CommitDecision decision, const proto::CommittedProof &proof,
-    writeback_callback wcb, writeback_timeout_callback wtcb, uint32_t timeout) {
-  uint64_t reqId = lastReqId++;
-  PendingCommit *pendingCommit = new PendingCommit(reqId);
-  pendingCommits[reqId] = pendingCommit;
-  pendingCommit->ccb = wcb;
-  pendingCommit->ctcb = wtcb;
-  pendingCommit->requestTimeout = new Timeout(transport, timeout, [this, reqId]() {
-      auto itr = this->pendingCommits.find(reqId);
-      if (itr != this->pendingCommits.end()) {
-        PendingCommit *pendingCommit = itr->second;
-        commit_timeout_callback ctcb = pendingCommit->ctcb;
-        this->pendingCommits.erase(itr);
-        delete pendingCommit;
-        ctcb(REPLY_TIMEOUT);
-      }
-
-  });
+    proto::CommitDecision decision, const proto::CommittedProof &proof) {
 
   // create commit request
   proto::Writeback writeback;
-  writeback.set_req_id(reqId);
   writeback.set_decision(decision);
   if (validateProofs) {
     *writeback.mutable_proof() = proof;
@@ -261,8 +243,6 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
   
   transport->SendMessageToGroup(this, group, writeback);
   Debug("[group %i] Sent WRITEBACK[%lu]", group, id);
-
-  pendingCommit->requestTimeout->Reset();
 }
 
 void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
@@ -471,44 +451,6 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply,
     this->pendingPhase2s.erase(itr);
     delete pendingPhase2;
   }
-}
-
-/* Callback from a group replica on commit operation completion. */
-bool ShardClient::CommitCallback(uint64_t reqId,
-    const string &request_str, const string &reply_str) {
-  // COMMITs always succeed.
-  Debug("[group %i] COMMIT callback", group);
-
-  auto itr = this->pendingCommits.find(reqId);
-  if (itr != this->pendingCommits.end()) {
-    PendingCommit *pendingCommit = itr->second;
-    writeback_callback ccb = pendingCommit->ccb;
-    this->pendingCommits.erase(itr);
-    delete pendingCommit;
-    ccb();
-  }
-  return true;
-}
-
-/* Callback from a group replica on abort operation completion. */
-bool ShardClient::AbortCallback(uint64_t reqId,
-    const string &request_str, const string &reply_str) {
-  // ABORTs always succeed.
-
-  // UW_ASSERT(blockingBegin != NULL);
-  // blockingBegin->Reply(0);
-
-  Debug("[group %i] ABORT callback", group);
-
-  auto itr = this->pendingAborts.find(reqId);
-  if (itr != this->pendingAborts.end()) {
-    PendingAbort *pendingAbort = itr->second;
-    abort_callback acb = pendingAbort->acb;
-    this->pendingAborts.erase(itr);
-    delete pendingAbort;
-    acb();
-  }
-  return true;
 }
 
 void ShardClient::Phase1Decision(uint64_t reqId) {

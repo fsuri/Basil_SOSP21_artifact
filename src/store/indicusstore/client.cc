@@ -329,18 +329,6 @@ void Client::Writeback(PendingRequest *req) {
     }
   }
 
-  writeback_callback wcb = [this, reqId =  req->id, result]() {
-    auto itr = this->pendingReqs.find(reqId);
-    if (itr != this->pendingReqs.end()) {
-      PendingRequest *req = itr->second;
-      if (!req->callbackInvoked) {
-        req->ccb(result);
-        req->callbackInvoked = true;
-      }
-      this->pendingReqs.erase(itr);
-      delete req;
-    }
-  };
 
   proto::CommittedProof proof;
   if (validateProofs) {
@@ -374,21 +362,17 @@ void Client::Writeback(PendingRequest *req) {
     }
   }
 
-  // TODO: what to do when Writeback times out
-  writeback_timeout_callback wtcb = [clientId = client_id,
-                             reqId = req->id](int status){
-    Warning("WRITEBACK[%lu:%lu] timed out.", clientId, reqId); 
-  };
-
   for (auto group : txn.involved_groups()) {
     bclient[group]->Writeback(client_seq_num, txn, req->txnDigest,
-        req->decision, proof, wcb, wtcb, req->timeout);
+        req->decision, proof);
   }
 
   if (!req->callbackInvoked) {
     req->ccb(result);
     req->callbackInvoked = true;
   }
+  this->pendingReqs.erase(req->id);
+  delete req;
 }
 
 bool Client::IsParticipant(int g) const {
