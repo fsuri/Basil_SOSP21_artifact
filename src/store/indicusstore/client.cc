@@ -389,14 +389,13 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
     // presumably this will be called with empty callbacks as the application can
     // immediately move on to its next transaction without waiting for confirmation
     // that this transaction was aborted
-    Debug("ABORT[%lu]", client_seq_num);
 
+    std::string txnDigest = TransactionDigest(txn);
+    Debug("ABORT[%lu][%s]", client_seq_num, BytesToHex(txnDigest, 16).c_str());
 
     proto::CommittedProof proof;
     writeback_callback wcb = []() {};
     
-    std::string txnDigest = TransactionDigest(txn);
-    Debug("ABORT[%lu][%s]", client_seq_num, BytesToHex(txnDigest, 16).c_str());
     writeback_timeout_callback wtcb = [](int status){};
     for (auto group : txn.involved_groups()) {
       bclient[group]->Writeback(client_seq_num, txn, txnDigest,

@@ -320,13 +320,13 @@ void Server::HandleWriteback(const TransportAddress &remote,
     }
     Commit(*txnDigest, msg.txn(), msg.proof());
   } else {
-    if (validateProofs) {
+    /*if (validateProofs) {
       if (!ValidateProofAbort(msg.proof(), &config, signedMessages,
             keyManager)) {
         // ignore Writeback without valid proof
         return;
       }
-    }
+    }*/
 
     Abort(*txnDigest);
   }
