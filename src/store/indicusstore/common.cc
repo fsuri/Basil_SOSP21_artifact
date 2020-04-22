@@ -316,7 +316,8 @@ bool ValidateP1RepliesCommit(
     }
 
     if (repliesItr->second.size() < static_cast<size_t>(config->n)) {
-      Debug("Not enough P1 replies for group %ld", group);
+      Debug("Not enough P1 replies %lu for group %ld", repliesItr->second.size(),
+          group);
       return false;
     }
 
@@ -344,7 +345,7 @@ bool ValidateP2RepliesCommit(
     const std::string &txnDigest, const proto::Transaction &txn,
     const transport::Configuration *config) {
   if (p2Replies.size() < 4 * static_cast<size_t>(config->f) + 1) {
-    Debug("Not enough P2 replies.");
+    Debug("Not enough P2 replies %lu.", p2Replies.size());
     return false;
   }
 
