@@ -208,8 +208,8 @@ void Client::Phase1Callback(uint64_t txnId, int group,
   PendingRequest *req = itr->second;
 
   if (req->startedPhase2 || req->startedWriteback) {
-    Debug("Already started Phase2 for request id %lu. Ignoring Phase1 response "
-        "from group %d.", txnId, group);
+    Debug("Already started Phase2/Writeback for request id %lu. Ignoring Phase1"
+        " response from group %d.", txnId, group);
     return;
   }
 
@@ -260,7 +260,8 @@ void Client::Phase2(PendingRequest *req, uint32_t timeout) {
   Debug("PHASE2[%lu][%s]", client_seq_num,
       BytesToHex(req->txnDigest, 16).c_str());
 
-  int logGroup = TransactionDigest(txn)[0] % ngroups;
+  int logGroup = txn.involved_groups(
+      req->txnDigest[0] % txn.involved_groups_size());;
   req->startedPhase2 = true;
   bclient[logGroup]->Phase2(client_seq_num, txn,
       req->phase1RepliesGrouped,
@@ -290,15 +291,14 @@ void Client::Phase2Callback(uint64_t txnId,
     return;
   }
 
-
   if (validateProofs) {
-    itr->second->phase2Replies = phase2Replies;
+    req->phase2Replies = phase2Replies;
     if (signedMessages) {
-      itr->second->signedPhase2Replies = signedPhase2Replies;
+      req->signedPhase2Replies = signedPhase2Replies;
     }
   }
 
-  Writeback(itr->second, 3000);
+  Writeback(req, 3000);
 }
 
 void Client::Phase2TimeoutCallback(uint64_t txnId, int status) {
@@ -401,16 +401,10 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
     // immediately move on to its next transaction without waiting for confirmation
     // that this transaction was aborted
 
-    std::string txnDigest = TransactionDigest(txn);
-    Debug("ABORT[%lu][%s]", client_seq_num, BytesToHex(txnDigest, 16).c_str());
+    Debug("ABORT[%lu]", client_seq_num);
 
-    proto::CommittedProof proof;
-    writeback_callback wcb = []() {};
-    
-    writeback_timeout_callback wtcb = [](int status){};
     for (auto group : txn.involved_groups()) {
-      bclient[group]->Writeback(client_seq_num, txn, txnDigest,
-          proto::ABORT, proof, wcb, wtcb, timeout);
+      bclient[group]->Abort(client_seq_num, txn.timestamp());
     }
     // TODO: can we just call callback immediately?
     acb();

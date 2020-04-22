@@ -259,9 +259,28 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
   }
 
   transport->SendMessageToGroup(this, group, writeback);
-  Debug("[group %i] Sent WRITEBACK [%lu]", group, id);
+  Debug("[group %i] Sent WRITEBACK[%lu]", group, id);
 
   pendingCommit->requestTimeout->Reset();
+}
+
+void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
+  proto::Abort abort;
+  *abort.mutable_ts() = ts;
+  for (const auto &read : txn.read_set()) {
+    *abort.add_read_set() = read.key();
+  }
+
+  if (signedMessages) {
+    proto::SignedMessage signedMessage;
+    SignMessage(abort, keyManager->GetPrivateKey(client_id), client_id,
+        signedMessage);
+    transport->SendMessageToGroup(this, group, signedMessage);
+  } else {
+    transport->SendMessageToGroup(this, group, abort);
+  }
+
+  Debug("[group %i] Sent ABORT[%lu]", group, id);
 }
 
 bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {

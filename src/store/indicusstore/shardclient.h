@@ -106,7 +106,8 @@ class ShardClient : public TransportReceiver {
       const std::string &txnDigest,
       proto::CommitDecision decision, const proto::CommittedProof &proof,
       writeback_callback wcb, writeback_timeout_callback wtcb, uint32_t timeout);
-
+  
+  virtual void Abort(uint64_t id, const TimestampMessage &ts);
  private:
   struct PendingQuorumGet {
     PendingQuorumGet(uint64_t reqId) : reqId(reqId),
