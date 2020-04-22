@@ -260,8 +260,10 @@ void Client::Phase2(PendingRequest *req, uint32_t timeout) {
   Debug("PHASE2[%lu][%s]", client_seq_num,
       BytesToHex(req->txnDigest, 16).c_str());
 
-  int logGroup = txn.involved_groups(
-      req->txnDigest[0] % txn.involved_groups_size());;
+  uint8_t groupIdx = req->txnDigest[0];
+  groupIdx = groupIdx % txn.involved_groups_size();
+  UW_ASSERT(groupIdx < txn.involved_groups_size());
+  int64_t logGroup = txn.involved_groups(groupIdx);
   req->startedPhase2 = true;
   bclient[logGroup]->Phase2(client_seq_num, txn,
       req->phase1RepliesGrouped,
