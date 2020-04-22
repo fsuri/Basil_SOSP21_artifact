@@ -82,8 +82,6 @@ class Client : public ::Client {
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
       uint32_t timeout) override;
 
-  virtual std::vector<int> Stats() override;
-
  private:
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), outstandingPrepares(0), commitTries(0),

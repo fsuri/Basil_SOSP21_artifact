@@ -11,6 +11,7 @@
 
 #include "lib/assert.h"
 #include "lib/message.h"
+#include "store/common/stats.h"
 #include "store/common/timestamp.h"
 #include "store/common/partitioner.h"
 
@@ -36,6 +37,8 @@ typedef std::function<void(int)> commit_timeout_callback;
 typedef std::function<void()> abort_callback;
 typedef std::function<void(int)> abort_timeout_callback;
 
+class Stats;
+
 class Client {
  public:
   Client() {};
@@ -60,9 +63,6 @@ class Client {
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
       uint32_t timeout) = 0;
-
-  // Returns statistics (vector of integers) about most recent transaction.
-  virtual std::vector<int> Stats() = 0;
 
 };
 

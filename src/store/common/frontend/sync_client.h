@@ -42,9 +42,6 @@ class SyncClient {
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(uint32_t timeout);
 
-  // Returns statistics (vector of integers) about most recent transaction.
-  std::vector<int> Stats();
-
  private:
   void GetCallback(Promise *promise, int status, const std::string &key, const std::string &value,
       Timestamp ts);

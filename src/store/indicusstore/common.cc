@@ -140,10 +140,16 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
   }
 
   if (!ValidateProofCommit(proof, config, signedMessages, keyManager)) {
+    Debug("VALIDATE CommitProof commit failed for txn %lu.%lu.",
+        proof.txn().client_id(), proof.txn().client_seq_num());
     return false;
   }
 
   if (Timestamp(proof.txn().timestamp()) != timestamp) {
+    Debug("VALIDATE timestamp failed for txn %lu.%lu: txn ts %lu.%lu != returned"
+        " ts %lu.%lu.", proof.txn().client_id(), proof.txn().client_seq_num(),
+        proof.txn().timestamp().timestamp(), proof.txn().timestamp().id(),
+        timestamp.getTimestamp(), timestamp.getID());
     return false;
   }
 
@@ -152,12 +158,20 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     if (write.key() == key) {
       keyInWriteSet = true;
       if (write.value() != val) {
+        Debug("VALIDATE value failed for txn %lu.%lu key %s: txn value %s != "
+            "returned value %s.", proof.txn().client_id(),
+            proof.txn().client_seq_num(), BytesToHex(key, 16).c_str(),
+            BytesToHex(write.value(), 16).c_str(), BytesToHex(val, 16).c_str());
         return false;
       }
+      break;
     }
   }
   
   if (!keyInWriteSet) {
+    Debug("VALIDATE value failed for txn %lu.%lu; key %s not written.",
+        proof.txn().client_id(), proof.txn().client_seq_num(),
+        BytesToHex(key, 16).c_str());
     return false;
   }
 
@@ -183,6 +197,7 @@ bool ValidateProofCommit(const proto::CommittedProof &proof,
         std::vector<proto::Phase1Reply> p1Replies;
         for (const auto &signedP1Reply : signedP1Replies.second.msgs()) {
           proto::Phase1Reply reply;
+          Debug("Validate %d bytes P1 reply.", signedP1Reply.ByteSize());
           if (!ValidateSignedMessage(signedP1Reply, keyManager, reply)) {
             Debug("Signed P1 reply is not valid.");
             return false;
@@ -401,7 +416,7 @@ bool ValidateP1RepliesAbort(
       }
     }
 
-    if (abstains >= 3 * config->f + 1) {
+    if (abstains >= 3 * static_cast<uint32_t>(config->f) + 1) {
       Debug("Group %ld aborted with >= 3f+1 abstains.", group);
       return true;
     }

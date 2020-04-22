@@ -58,10 +58,6 @@ void SyncClient::Abort(uint32_t timeout) {
   promise.GetReply();
 }
 
-std::vector<int> SyncClient::Stats() {
-  return client->Stats(); 
-}
-
 void SyncClient::GetCallback(Promise *promise, int status,
     const std::string &key, const std::string &value, Timestamp ts){
   promise->Reply(status, ts, value);

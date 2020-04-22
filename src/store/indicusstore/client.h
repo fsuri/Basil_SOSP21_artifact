@@ -34,6 +34,7 @@
 
 #include "lib/assert.h"
 #include "lib/keymanager.h"
+#include "lib/latency.h"
 #include "lib/message.h"
 #include "lib/configuration.h"
 #include "lib/udptransport.h"
@@ -84,8 +85,6 @@ class Client : public ::Client {
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
       uint32_t timeout) override;
-
-  virtual std::vector<int> Stats() override;
 
  private:
   struct PendingRequest {
@@ -174,6 +173,10 @@ class Client : public ::Client {
 
   /* Debug State */
   std::unordered_map<std::string, uint32_t> statInts;
+  struct Latency_t executeLatency;
+  struct Latency_t getLatency;
+  size_t getIdx;
+  struct Latency_t commitLatency;
 };
 
 } // namespace indicusstore

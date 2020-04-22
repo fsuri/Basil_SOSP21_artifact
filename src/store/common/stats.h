@@ -1,5 +1,5 @@
-#ifndef STATS_H
-#define STATS_H
+#ifndef _STATS_H_
+#define _STATS_H_
 
 #include <mutex>
 #include <ostream>
@@ -26,4 +26,4 @@ class Stats {
   std::unordered_map<std::string, std::vector<int>> statLists;
   std::unordered_map<std::string, std::vector<std::vector<uint64_t>>> statLoLs;
 };
-#endif /* STATS_H */
+#endif /* _STATS_H_ */
