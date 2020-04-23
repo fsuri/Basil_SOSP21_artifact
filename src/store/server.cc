@@ -166,6 +166,10 @@ DEFINE_string(partitioner, partitioner_args[0],	"the partitioner to use during t
     " experiment");
 DEFINE_validator(partitioner, &ValidatePartitioner);
 
+/**
+ * TPCC settings.
+ */
+DEFINE_int32(tpcc_num_warehouses, 1, "number of warehouses (for tpcc)");
 
 /**
  * TAPIR settings.
@@ -350,7 +354,7 @@ int main(int argc, char **argv) {
       part = default_partitioner;
       break;
     case WAREHOUSE:
-      part = warehouse_partitioner;
+      part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses);
       break;
     default:
       NOT_REACHABLE();
