@@ -353,8 +353,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     if (preparedItr == req->prepared.end()) {
       req->prepared.insert(std::make_pair(preparedTs,
             std::make_pair(prepared, 1)));
-    } else if (::google::protobuf::util::MessageDifferencer::Equals(preparedItr->second.first, prepared)) {
-      // TODO: MessageDifferencer::Equals is too slow. Need custom implementation
+    } else if (preparedItr->second.first == prepared) {
       preparedItr->second.second += 1;
     }
 
@@ -379,7 +378,9 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
             *req->dep.mutable_proof()->mutable_signed_prepared()->add_msgs() = signedWrite;
           }
         } else {
-          // TODO: do we want to validate unsigned messages? seems overly redundant
+          for (size_t i = 0; i < static_cast<size_t>(config->f) + 1; ++i) {
+            *req->dep.mutable_proof()->mutable_prepared()->add_writes() = req->prepared[preparedItr->first].first;
+          }
         }
         req->dep.set_involved_group(group);
         req->hasDep = true;
