@@ -1,6 +1,112 @@
 %-------------------------------------------------------------------------------
 \subsection{Execution}
 %-------------------------------------------------------------------------------
-- Read proofs required for honest client correctness. Alternatively one can read from f+1 only, but that can result in failed/older reads
-- Do not need to include read proofs in the prepare. According to Isolation definition byzantine Clients can read whatever they want. Moreover, Reads only have very limited external effect. The value does not matter for the CC check. The version has bounded effect: If it goes towards 0, then it is just a check between timestamps as normally. If it goes towards the TS, then it will never abort.
-- Fallback not just useful for dependency cleanup, but also "unclaimable" dependencies that need to finish.
+The goals of \sys{}'s execution protocol are threefold: 1) to offer clients an interactive transaction interface, 2) to be scalable, and 3) to offer honest clients independent operability.
+
+\sys{} achieves all three of these goals though the combination of optimistic client-side execution, and an aggressive, but byzantine resilient, concurrency control (CC) scheme. Rather than submitting stored procedures that must be ordered and executed by replica servers, \sys clients may execute arbitrary transactions by relying on RPC's to conduct transactions themselves. This places computational responsibility with the clients, and allows commutative transactions to execute in parallel. Since \sys clients execute optimistically concurrently, \sys must enforce CC in order to reconcile Isolation conflicts might arise.
+By relying on optimistic rather than pessimistic CC schemes such as 2-phase-locking (2PL), \sys{} forgoes costly coordination to acquire locks, and sidesteps the concern of byzantine clients refusing to relinquish locks. 
+
+Before we detail \sys{}'s transaction processing and validation mechanism, we first discuss the CC that \sys implements as the latter are functions of the precise CC requirements. 
+ 
+\subsubsection{Concurrency Control}
+
+%%% Explain MVTSO itself only briefly. Then explain how we make it for for byz
+% 1) bound timestamps, 2) make writes visible late only, 3) only allow f+1 matchin uncommitted writes, 4) read timestamps
+%Afterwards: explain execution interface. After that explain validation check. Then have overarching example
+\iffalse
+% we need to change a few things:
+0) timestmap bound
+1) Read validity
+2) deferred writes
+3) read uncommitted
+4) byz read timestamps (read lock implies you had access control, at that point it is no different than issuing a tx and completing. But we do not want to give the power to abort for no reason. It should be traceable.
+\fi
+
+Figure \ref{fig:MVTSOEX} shows an example trace of \sys operational behaviors under different request processing orders (assume f=1) that we use to guide the remaining outline.
+
+\begin{figure*}
+\begin{center}
+\includegraphics[width= \textwidth]{./figures/MVTSOLargeFont.png}
+\end{center}
+\caption{\emph{MVTSO behavior for different replica processing orders}. $r_x(C : a_y ,P : a_z)$ denotes that transaction $T_x$ (x being the timestamp of a transaction in this example) reads the version $y$ of object a written by committed transaction $T_y$ and version $z$ from tentative prepared transaction $T_z$. $P_x(RS,WS,DEP)$ denotes a transaction $T_x$'s prepare request (i.e. the validation check) for respective ReadSet (RS), WriteSet (WS) and Dependenc Set (DEP), and $\rightarrow C / A$ denotes the local replica validation outcome (Commit/Abort).} 
+\label{fig:MVTSOEX}
+\end{figure*}
+
+Our starting point is a Multiversioned Timestamp Ordering scheme (MVTSO) which prescribes a serialization order by assigning a speculative timestamp \textit{before} Execution \cite{bernstein1983multiversion, reed1983implementing, su2017tebaldi}. This allows us to a) only classify concurent transactions as conflicting if their execution results violate the timestamp order (Fig. \ref{fig:MVTSOEX}: 4 bottom), and b) avoid write/write conflicts alltogether by applying them in order. 
+When speculative execution results match the pre-defined timestamp order, no aborts are necessary (Fig. \ref{fig:MVTSOEX}: 4 top). \sys challenge is therefore to a) assign appropriate timestamps and b) coordinate execution in a way that maximizes such coherence; the presence of byzantine participants (clients/replicas) complicates this.
+
+
+In MVTSO, reads operations return the latest written version smaller than the readers' timestamps, while writers attempt to create new versions at their timestamp, but must abort if a higher timestamped read would have "missed the write" by reading a prior version. A transaction may commit only, if all read-write dependencies have committed respectively.
+
+Read operations in \sys have the following sub-goals: \one Honest clients should read valid data, i.e. experience read integrity, \two Honest clients should read fresh data, i.e. minimize staleness and hence maximize commit chance, and \three Reads must provide the context necessary to potentially complete observed write state. 
+Clients validate the integrity of reads by requiring replicas to provide a proof of validity, i.e. a set of signatures confirming the committment, or if not yet existant, trusting  only $f+1$ matching replies from discrete replicas. Moreover, in order to guarantee that clients do not read maliciously stale data from their local replica, \sys encourages clients to always read from at least $f+1$ replicas and choose the freshest version (Fig. \ref{fig:MVTSOEX}: 1,2).
+Avoiding byzantine influence comes at a cost: Read operations require a synchronous, potentially WAN, rountrip. 
+
+MVTSO intuitively synergizes well with \sys{}'s potenially WAN remote reads as reading from a fixed timestamp helps speculative readers observe consistent snapshots, even when execution is long and consequently interleavings are frequent (Fig. \ref{fig:MVTSOEX}: 6). \fs{at the price of experiencing serializability instead of strict serializability - that is only the case if your timestamps are outdated}.
+
+While we assume that clocks are loosely synchronized across honest participants, byzantine participants may diverge arbitrarily in undesirable fashion. To side-step the additional overhead that a dedicated, bounded timestamping phase \cite{Clairvoyant} incurs, we compromise by allowing clients to optimistically select their own timestamp, but rejecting request timestamps above a Threshold at all honest replicas, thus incentivising clients to select real-time timestamps. In order to facilitate a total serialization order across all clients, we define Timestamps to be tuples of the form $(Time, CID)$. 
+
+In traditional MVTSO, writes become visible to successive reads with higher timestamps immediately. In the presence of byzantine clients this however, is undesirable, as it allows clients to issue singular write operations without the intention of ever committing a transaction. Thus, any honest clients' read that observes, and consequently depends on, a byzantine clients write may be blocked indefinitely, thus compromising its liveness.
+Allowing other clients to preemtively commit outstanding write operations is infeasible, as the remaining transaction procedure is known only to the issuing client, while conceiding pessimistic abort permission empowers byzantine participants to obstruct any honest clients' writes. 
+To reconcile this dilemma, \sys{} defers all database updates until execution has finalized. Concretely, \sys clients buffer all write operations, and submit them only when attempting to commit the transaction, thereby enabling other \sys client to orderly complete Validation and Writeback steps. 
+
+Clients in \sys distinguish explicitly between \textit{committed} and tentatively, but unconfirmed \textit{prepared} writes: While clients trust and accept every verified \textit{committed} write versions, they accept tentative \textit{prepared} versions only when observing $f+1$ matching results. This ensures that a) at least one honest replica believes that the write can commit, and hence is worth observing, and b) that byzantine replicas cannot violate byzantine independence by reactively inventing transactions that are guaranteed to abort.
+
+Finally, \sys replicas abort all writes that higher timestamped reads "miss" by storing a Read Timestamps (RTS) for each locally processed read (Fig. \ref{fig:MVTSOEX}: 3). While this allows in-execution reads to elicit external effects, much like outstanding write operations discussed above, these are only limited to concurrent transactions with smaller timestamps and hence are straightforward to bypass by re-trying a transaction. To nonetheless limit repeatable abuse , we discuss a practical mechanism to limit byzantine influence in section Y.z (Optional Modifc. personalized read leases).
+
+
+
+\subsubsection{Execution interface}
+Client applications execute transactions via the following interface. A TX object \textit{TXObj $\coloneqq$ (SeqNo, ClientID, InvolvedShards, ReadSet, WriteSet, Dependencies)}, records the state necessary for Validation.
+
+\iffalse
+\begin{figure}
+\begin{center}
+\includegraphics[width= 0.5\textwidth]{./figures/TxState.png}
+\end{center}
+\caption{Transaction execution state}
+\label{fig:Txstate}
+\end{figure}
+\fi
+
+\textbf{Begin()} A client begins a transaction by optimistically choosing a timestamp \textit{TS $\coloneqq$ (Time, ClientID)}. \\
+\textbf{Write(key, value)}. A client buffers the write: \textit{WriteSet = WriteSet $\cup$ (key, value)}\\
+%%%%%%%%%Read protocol%%%%%%%%%%%
+\textbf{Read(key, TS, RQS)} 
+If \textit{key $\in$ WriteSet} a client returns the buffered write value. Otherwise, the client conducts a remote read:
+
+\fbox{\begin{minipage}{22em}
+
+\textbf{1: C} $\rightarrow$ \textbf{R}: Client sends read request to Replicas
+\end{minipage}}\\
+Given a hyperparameter Read Quorum Size (RQS), a client sends $m = (Read, key, TS)_c$  to $RQS$ different replicas. Note, that in order to guarantee $\geq RQS$ replies a client might need to send up to $f$ additional requests to compensate for unresponsive/faulty participants ($max(|Replies|) \leq n-f$). 
+
+\fbox{\begin{minipage}{22em}
+\textbf{2: R} $\rightarrow$ \textbf{C}: Replica processes client read and replies
+\end{minipage}}\\
+A replica authenticates the client\footnote{Byzantine replica may ignore read access control. Solving this problem is beyond the scope of this work; we defer to existing solutions \cite{basu2019efficient}.}, and whether the timestamp is within a local highwater mark ($HW = localClock + \delta$). It returns a signed message \text{$\langle \textit{ReadReply, Committed, Prepared} \rangle _R$}, where $Committed \coloneqq (value, version, proof)$ represents the value-version pair with largest committed write version smaller than TS and a proof of commitment,  and $Prepared \coloneqq (value, version, TxID', deps)$ the respective largest uncommitted value-version pair, the associated transaction ID, and the latter transactions potentially uncommitted read-write dependencies. Moreover, a Replica stores a new read timestamp (RTS) for the key: $RTS(key) = RTS(key) \cup TS$ (Fig. \ref{fig:MVTSOEX}: 3). 
+\fs{a replica may include a set of prepared values to increase likelihood of client receiving f+1 matching}
+
+\fbox{\begin{minipage}{22em}
+\textbf{3: C} ($\rightarrow$ \textbf{R}): Client receives read replies 
+\end{minipage}}\\
+A client waits for RQS read replies and chooses the biggest valid result \textit{(value, version) $= max_{valid}$(\{Committed\},\{Prepared\}} (Figure \ref{fig:MVTSOEX}: 1,2) . A \textit{Committed} tuple is valid, if the proof confirms commitment, wheras a \textit{Prepared} is valid iff there exist $f+1$ matching \textit{Prepared$_r$} signed by different replicas. The client adds the version to its read set \textit{ReadSet = ReadSet $\cup$ (key, version)} and additionally claims a dependency if it was a \textit{Prepared} version: \textit{Dep = Dep $\cup$ f+1 $\times$ (Prepared$_r$)} . 
+
+\textbf{Commit()} A Client terminates its execution, and computes a unique transaction identifier based on final execution object and its timestamp: $TxID \coloneqq (H(TxObj, TS)$, thus preculding byzantine participants from equivocating transaction contents. It then begins the Validation Phase by issuing a 2PC-Prepare requests to each relevant shard and waiting for all votes.
+
+\textbf{Abort()} A client terminates execution, and broadcasts a request to release all acquired Read Timestamps (RTS). Since writes in \sys are deferred, no other rollback action is necessary.
+
+
+We briefly discuss some implications of the choice of Read Quorum Size (RQS). Following cases may be distinguished: \one \textbf{$RQS = 1$} A replica may read from just 1 replica at the risk of reading maliciously stale data. If a Client trusts a local replica \textbf{and} the replica is not lagging behind, this can reduce execution latency and consequently minimize conflicting interleavings. \two \textbf{$RQS \geq f+1$} \sys{}'s recommended mode of operation. While side-stepping maliciously stale reads, it is still possible to read (arbitrarily) stale data, either due to inconsistency caused by asynchrony or a byzantine client not fully replicating its transaction. 
+\three \textbf{$RQS \geq \frac{n+f+1}{2}$} When reading from a Quorum of sufficient size to overlap with any Validation Quorum (ref section Validation) in at least one honest replica, a client guarantees, that no more \textbf{additional}, beyond previously observed, conflicting writes can be admitted, since such a Quorum of acquired RTS acts as a read-lock. 
+
+\iffalse
+Trusting only $f+1$ matching prepared writes has the beneficiary side effect of allowing us to include only transaction identifiers as dependencies, rather than the full transaction, since it is guaranteed that at least one honest replica has stored the transaction. Thus, in the failure free scenario, where clients need not complete transactions $in Dep$, \sys minimizes the meta-data overhead that the recovery protocol imposes.
+\fi
+
+We remark, that a byzantine client is not required to follow any of the protocol steps, with the exception of claiming dependencies. By our definition of Byzantine-Isolation, read integrity is only required for honest clients; Byzantine clients may \textit{choose} whether to read legal, or even real data. We do, however, require that no client can fabricate dependencies in order to preclude byzantine clients from indetectibly stalling their own transactions and consequently obstructing liveness for consecutive descendant (second degree...) dependencies.
+Trusting only $f+1$ matching prepared writes allows us to only include only transaction identifiers as dependencies, rather than the full transaction, thereby minimizing the common path overhead. When the full transaction information is required to complete potentially stalled transactions, it is guaranteed to be obtainable from an honest replica. We discuss how to complete stalled or slow transactions in section Y (Granting Liveness).
+
+
+
+

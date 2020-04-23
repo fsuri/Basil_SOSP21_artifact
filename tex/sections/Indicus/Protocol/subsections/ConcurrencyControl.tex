@@ -1,10 +1,68 @@
-%-------------------------------------------------------------------------------
-\subsection{Concurrency Control}
-%-------------------------------------------------------------------------------
- - Optimization: retries - heights
- - Dependency resolution tree
- 		- Equivocation not possible if TXidentifier a function with dep as argument
- 		- Cannot claim dep if not f+1 times (If you want to, you would require proofs again, which we try to avoid because dep trees can grow exponentially). More reads also more likely to commit --> f+1 guarantees 1 honest thinks it is legit.
- - Exception for depedency and early async read response to inform of exceptions
- - Read leases instead of unlimited locks - in practice only grant to timely clients (not a safety measure, but an increased progress guarantee)
- - 
+
+\subsection{Validation Check}
+
+Algorithm \ref{mvtso} shows the necessary validation check to preserve Byzantine-Serializability. 
+Given a transactions prepare request the validation check returns an Abort vote if a conflict has been detected, and Commit otherwise. 
+When execution results match the timestamp order, there are no conflicts (Fig. \ref{fig:MVTSOEX}: 4 top). For each read, a replica verifies that it has not voted to commit a conflicting write (Algorithm \ref{mvtso}, line 3-7). Conversely, for each write, a replica confirms that there exist no previously accepted reads (line 8-10), and no ongoing read transactions (line 11-12) that conflict. Fig. \ref{fig:MVTSOEX}: 4 shows both non-conflicting and conflicting interleavings.
+If there are no conflicts, a replica tentatively \textit{prepares} a transaction, making its writes visible and evaluating future transactions against it for conflicts. Regardless of the outcome, a replica garbage collects all Read Timestmaps (RTS) associated with the transactions reads.
+It then waits for necessary dependencies (uncommited writes that were read) to be resolved (Figure \ref{fig:MVTSOEX}: 5). We remark, that the concurrency control check is serialized and executed atomically for each transaction.
+
+\begin{theorem}
+The set of transactions for which the MVTSO-Check returns Commit is Byzantine-Serializable. 
+\end{theorem}
+\begin{proof}
+See TR.
+\end{proof}
+
+\begin{algorithm}
+\caption{MVTSO-Check(TX, TS)}\label{mvtso}
+\begin{algorithmic}[1]
+\If{\textit{$TS > localClock + \delta$}} %  || $TS < lowWM$ || $\exists d \in dep: d.TS < lowWM$} } dont mention garbage collection part here, it only confuses
+\State \Return Abort
+\EndIf
+
+\For{\textit{$\forall key,version \in \textit{TX.RS}$}}
+        \If{$ \exists TX2 \in Committed \cup Prepared: key \in \textit{TX2.WS} $ \newline
+        \hspace*{2em} $\land \, version < \textit{TX2.TS} < TS$}  
+          \State  \Return Abort, \textit{TX2, (TX2.CommitProof)}  
+         \EndIf  
+\EndFor
+
+\For{\textit{$\forall key \in \textit{TX.WS}$}}
+        \If{$\exists TX2 \in Committed \cup Prepared:$ \newline 
+        \hspace*{2em} $\textit{TX2.RS[key].version} < TS < TX2.TS$} 
+          \State  \Return Abort, \textit{TX2, (TX2.CommitProof)}
+         
+        \EndIf
+        \If{$\exists RTS \in key.RTS: RTS > TS$} 
+          \State  \Return Abort
+       \EndIf
+\EndFor
+\State Prepared.add(TX) 
+
+\While{$\exists d \in dep: d \notin CommitLog \cup AbortLog $)}
+\State Suspend
+\EndWhile
+
+%structure it in a way that is better
+\For{\textit{$\forall d \in dep$}}
+		\If{$ d \in AbortLog $}
+		\State	Prepare.remove(TX)
+		\State \Return Abort, \textit{(TX2.AbortProof)}
+		\EndIf
+\EndFor
+\State \Return Commit
+\end{algorithmic}
+
+\end{algorithm}
+
+In order to perform the MVTSO-check, a replica maintains several data strucutres: \one It stores read timestamps, read versions alongside the multiversioned write stores for committed and tenative transactions respectively, to provide efficient evaluation of conflicts.
+\two In order to confirm dependency outcomes, replicas log proofs for completed transactions in respective Commit and Abort Log sets, that together induce the ledger of all processed transactions. 
+\three To avoid busy waiting when dependencies are not yet resolved, a replica temporarily suspends the MVTSO-check for the current transaction, allowing it to process other transactions pending validation. To facilitate this, it keeps track of an additonal transaction to dependents mapping that allows to identify and resume all suspended MVTSO-checks associated with dependents of a completing transaction.
+
+\iffalse
+
+\textit{Aside:} Consistent with our definition of Byzantine-Isolation, byzantine clients may issue ficticious Read-Sets comprised of arbitrary read versions and values. However, these have only limited external effect on concurrent writes. We distinguish two extreme cases: 1) $read.version \rightarrow 0$: This case is equivalent to simply reading stale data, and effectively reduces MVTSO to TSO as conlflicts are evaluated only on basis of the transaction timestamps (i.e. Abort write if: write.TS < read.TS). 2) $read.version \rightarrow read.TS$: In this case there are no conflicts as a write is never "missed" by a previous read.
+\fi
+
+In the following section we will show how to design a replicated validation scheme that upholds Isolation guarantees and reaches a single shard decision, even when replicas within a shard validate in different orders.

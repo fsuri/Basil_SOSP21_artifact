@@ -9,7 +9,7 @@
 %\input{sections/Indicus/Protocol/subsections/Variations.tex}
 
 %-------------------------------------------------------------------------------
-\section{Protocol}
+%\section{Protocol}
 %-------------------------------------------------------------------------------
 Indicus comes in two different flavors, Indicus3 and Indicus5 respectively, relying on varying replication degrees. Indicus3 requires 3f+1 replicas per shard to guarantee consistency, the minimum bound necessary for BFT SMR. Indicus5 uses a higher replication degree of 5f+1 replicas, but in return brings down both gracious execution latency and complexity during uncivil executions. We argue, that unlike past system settings where a single authority strives to maintain the fewest amount of replicas necessary for cost considerations, consortium systems with naturally higher replication degree are willing to pay the additional price for performance. Moreover, rather than trying to reach the threshold of replicas to tolerate some number of faults, these settings may start with a fixed number of replicas and consider the ratio of faults to be tolerable. When argueing from this perspective, the perceived difference between tolerating 1/3 and 1/5 of replica failures may be negligible.
 For the simplicity of exposition we discuss Indicus5 for the remainder of the paper. In section X we briefly describe the differences in Indicus3.
@@ -137,12 +137,12 @@ A: byz client only includes dependencies to avoid direct fallback eviction. Only
 
 
 
-\item \textbf{Commit() aka Validate} A Client finalizes its execution, computes the final $TxID \coloneqq H(TX)$  and submits the Transaction for validation. \fs{Note, that this is merely a speculative request to commit, the transaction might have to abort if violated Isolation. This signals the termination of execution (client can do no more read/writes for this TX) and the beginning of the Prepare}
+\item \textbf{Commit() aka Validate} A Client finalizes its execution, computes the final $TxID \coloneqq H(TX)$  and submits the Transaction for validation. \fs{Note, that this is merely a speculative request to commit, the transaction might have to abort if violated Isolation. This signals the termination of execution (client can do no more read/writes for this TX) and the beginning of the Prepare} \fs{signed by client}
 
 
 \underline{Additonal subtlelties}: Computing the transaction identifier based on a hash of the execution object guarantees that a byzantine client may not equivocate transaction contents. The ID serves both as common identifier for remaining protocol components, and as validation tool for the integrity of a transaction object.
 
-\item \textbf{Abort() aka Withdraw} A client terminates execution, broadcasts a read-release for all potentially acquired Read Timestamps (RTS) and returns.
+\item \textbf{Abort() aka Withdraw} A client terminates execution, broadcasts a read-release for all potentially acquired Read Timestamps (RTS) and returns. \fs{signed by client}
 
 \underline{Additonal subtlelties}: A byzantine client may never release its RTS. For instance, it may perform reads just for the sake of acquiring RTS without any intention of committing. We discuss mechanisms to sidestep this in section X (Optional Modifications).
 
@@ -203,13 +203,13 @@ To mititage the frequency of read aborts we add three mechanisms on top of TSO, 
 \end{itemize}
 
 Note, that for write heavy workloads, or workloads without read/write conflicts MVTSO degenerates to TSO.
-Figure \ref{fig:MVTSOEX} shows an example trace of all MVTSO behaviors under different request processing orders.
+Figure \ref{fig:MVTSOEX} shows an example trace of all MVTSO behaviors under different request processing orders (assume f=1).
 
 \begin{figure*}
 \begin{center}
-\includegraphics[width= \textwidth]{./figures/MVTSOExample.png}
+\includegraphics[width= \textwidth]{./figures/MVTSOLargeFont.png}
 \end{center}
-\caption{\emph{MVTSO behavior for different replica processing orders}. $r_x(C : a_y ,P : a_z)$ denotes that transaction $T_x$ (x being the timestamp of a transaction in this example) reads the version of object a written by committed transaction $T_y$ and version from tentative prepared transaction $T_z$. $P_x$ denotes a transaction $T_x$'s prepare request (i.e. the validation check), and $\rightarrow C / A$ denotes the local validation outcome (Commit/Abort). 1. Read largest committed. 2. Read uncommitted from f+1 matching and claim dependency. 3. Acquire Read Timestamp (RTS), causing successive writes with smaller TS to abort.  4. Ordering affects result only when requests conflict. 5. Read from TS; unaffected by new write. 6. Wait on dependency to complete.}
+\caption{\emph{MVTSO behavior for different replica processing orders}. $r_x(C : a_y ,P : a_z)$ denotes that transaction $T_x$ (x being the timestamp of a transaction in this example) reads the version $y$ of object a written by committed transaction $T_y$ and version $z$ from tentative prepared transaction $T_z$. $P_x$ denotes a transaction $T_x$'s prepare request (i.e. the validation check), and $\rightarrow C / A$ denotes the local replica validation outcome (Commit/Abort). 1. Read largest committed. 2. Read uncommitted from f+1 matching and claim dependency. 3. Acquire Read Timestamp (RTS), causing successive writes with smaller TS to abort.  4. Ordering affects result only when requests conflict. 5. Wait on dependency to complete. 6. Read from TS; unaffected by new write.}
 \label{fig:MVTSOEX}
 \end{figure*}
 
