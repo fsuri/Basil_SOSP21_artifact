@@ -4,7 +4,8 @@ SRCS += $(addprefix $(d), \
 	lookup3.cc message.cc memory.cc \
 	latency.cc configuration.cc transport.cc \
 	udptransport.cc tcptransport.cc simtransport.cc repltransport.cc \
-	persistent_register.cc io_utils.cc crypto.cc keymanager.cc)
+	persistent_register.cc io_utils.cc crypto.cc keymanager.cc \
+	crypto_bench.cc)
 
 PROTOS += $(addprefix $(d), \
           latency-format.proto)
@@ -36,6 +37,10 @@ LIB-tcptransport := $(o)tcptransport.o $(LIB-transport)
 LIB-persistent_register := $(o)persistent_register.o $(LIB-message)
 
 LIB-crypto := $(o)crypto.o $(o)keymanager.o
+
+$(d)crypto_bench: $(LIB-latency) $(LIB-crypto) $(o)crypto_bench.o
+
+BINS += $(d)crypto_bench
 
 include $(d)tests/Rules.mk
 
