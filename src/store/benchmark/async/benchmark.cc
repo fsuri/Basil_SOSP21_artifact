@@ -516,7 +516,7 @@ int main(int argc, char **argv) {
   switch (benchMode) {
     case BENCH_TPCC:
     case BENCH_TPCC_SYNC:
-      part = warehouse_partitioner;
+      part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses);
       break;
     default:
       part = default_partitioner;
