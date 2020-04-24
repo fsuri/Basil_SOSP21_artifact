@@ -76,8 +76,8 @@ bool ValidateP2RepliesAbort(
 
 
 bool ValidateDependency(const proto::Dependency &dep,
-    const transport::Configuration *config, bool signedMessages,
-    KeyManager *keyManager);
+    const transport::Configuration *config, uint64_t readDepSize,
+    bool signedMessages, KeyManager *keyManager);
 
 bool operator==(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2);
 

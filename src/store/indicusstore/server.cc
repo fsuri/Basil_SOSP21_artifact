@@ -42,10 +42,11 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     int numShards, int numGroups, Transport *transport, KeyManager *keyManager,
     bool signedMessages,
     bool validateProofs, uint64_t timeDelta, OCCType occType, partitioner part,
+    uint64_t readDepSize,
     TrueTime timeServer) :
     config(config), groupIdx(groupIdx), idx(idx), numShards(numShards),
     numGroups(numGroups), id(groupIdx * config.n + idx),
-    transport(transport), occType(occType), part(part),
+    transport(transport), occType(occType), part(part), readDepSize(readDepSize),
     signedMessages(signedMessages), validateProofs(validateProofs), keyManager(keyManager),
     timeDelta(timeDelta), timeServer(timeServer) {
   transport->Register(this, config, groupIdx, idx);
@@ -207,7 +208,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
   if (validateProofs) {
     for (const auto &dep : msg.txn().deps()) {
-      if (!ValidateDependency(dep, &config, signedMessages, keyManager)) {
+      if (!ValidateDependency(dep, &config, readDepSize, signedMessages,
+            keyManager)) {
         Debug("VALIDATE Dependency failed for txn %s.", BytesToHex(txnDigest,
               16).c_str());
         // safe to ignore Byzantine client

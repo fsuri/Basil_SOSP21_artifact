@@ -61,6 +61,7 @@ class Server : public TransportReceiver, public ::Server {
       int numShards, int numGroups,
       Transport *transport, KeyManager *keyManager, bool signedMessages,
       bool validateProofs, uint64_t timeDelta, OCCType occType, partitioner part,
+      uint64_t readDepSize,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
@@ -145,6 +146,7 @@ class Server : public TransportReceiver, public ::Server {
   Transport *transport;
   const OCCType occType;
   partitioner part;
+  const uint64_t readDepSize;
   const bool signedMessages;
   const bool validateProofs;
   KeyManager *keyManager;

@@ -87,8 +87,8 @@ class ShardClient : public TransportReceiver {
 
   // Get the value corresponding to key.
   virtual void Get(uint64_t id, const std::string &key, const TimestampMessage &ts,
-      uint64_t rqs, read_callback gcb, read_timeout_callback gtcb,
-      uint32_t timeout);
+      uint64_t readMessages, uint64_t rqs, uint64_t rds, read_callback gcb,
+      read_timeout_callback gtcb, uint32_t timeout);
 
   // Set the value for the given key.
   virtual void Put(uint64_t id, const std::string &key,
@@ -116,6 +116,7 @@ class ShardClient : public TransportReceiver {
     std::string key;
     Timestamp rts;
     uint64_t rqs;
+    uint64_t rds;
     Timestamp maxTs;
     std::string maxValue;
     uint64_t numReplies;

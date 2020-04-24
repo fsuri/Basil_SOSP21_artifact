@@ -76,6 +76,14 @@ enum occ_type_t {
   OCC_TYPE_TAPIR
 };
 
+enum read_dep_t {
+  READ_DEP_UNKNOWN,
+  READ_DEP_ONE,
+  READ_DEP_ONE_HONEST
+};
+
+
+
 /**
  * System settings.
  */
@@ -242,10 +250,31 @@ static bool ValidateOCCType(const char* flagname,
   std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
   return false;
 }
-
 DEFINE_string(indicus_occ_type, occ_type_args[0], "Type of OCC for validating"
     " transactions (for Indicus)");
 DEFINE_validator(indicus_occ_type, &ValidateOCCType);
+const std::string read_dep_args[] = {
+  "one-honest",
+	"one"
+};
+const read_dep_t read_deps[] {
+  READ_DEP_ONE_HONEST,
+  READ_DEP_ONE
+};
+static bool ValidateReadDep(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(read_dep_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == read_dep_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(indicus_read_dep, read_dep_args[0], "number of identical prepared"
+    " to claim dependency (for Indicus)");
+DEFINE_validator(indicus_read_dep, &ValidateReadDep);
 
 /**
  * Experiment settings.
@@ -373,6 +402,20 @@ int main(int argc, char **argv) {
     std::cerr << "Unknown occ type." << std::endl;
     return 1;
   }
+  
+  // parse read dep
+  read_dep_t read_dep = READ_DEP_UNKNOWN;
+  int numReadDeps = sizeof(read_dep_args);
+  for (int i = 0; i < numReadDeps; ++i) {
+    if (FLAGS_indicus_read_dep == read_dep_args[i]) {
+      read_dep = read_deps[i];
+      break;
+    }
+  }
+  if (proto == PROTO_INDICUS && read_dep == READ_DEP_UNKNOWN) {
+    std::cerr << "Unknown read dep." << std::endl;
+    return 1;
+  }
 
   KeyManager keyManager(FLAGS_indicus_key_path);
 
@@ -404,6 +447,17 @@ int main(int argc, char **argv) {
       break;
     }
     case PROTO_INDICUS: {
+      uint64_t readDepSize = 0;
+      switch (read_dep) {
+        case READ_DEP_ONE:
+          readDepSize = 1;
+          break;
+        case READ_DEP_ONE_HONEST:
+          readDepSize = config.f + 1;
+          break;
+        default:
+          NOT_REACHABLE();
+      }
       indicusstore::OCCType indicusOCCType;
       switch (occ_type) {
         case OCC_TYPE_TAPIR:
@@ -421,7 +475,7 @@ int main(int argc, char **argv) {
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
           tport, &keyManager, FLAGS_indicus_sign_messages,
           FLAGS_indicus_validate_proofs, timeDelta,
-          indicusOCCType, part);
+          indicusOCCType, part, readDepSize);
       break;
     }
 		case PROTO_PBFT: {
