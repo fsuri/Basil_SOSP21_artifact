@@ -452,11 +452,11 @@ bool ValidateP2RepliesAbort(
 
 
 bool ValidateDependency(const proto::Dependency &dep,
-    const transport::Configuration *config, bool signedMessages,
-    KeyManager *keyManager) {
+    const transport::Configuration *config, uint64_t readDepSize,
+    bool signedMessages, KeyManager *keyManager) {
   if (signedMessages) {
     if (dep.proof().has_signed_prepared()) {
-      if (dep.proof().signed_prepared().msgs().size() < config->f + 1) {
+      if (dep.proof().signed_prepared().msgs().size() < readDepSize) {
         return false;
       }
 
@@ -475,7 +475,7 @@ bool ValidateDependency(const proto::Dependency &dep,
       return false;
     }
   } else {
-    if (dep.proof().prepared().writes().size() < config->f + 1) {
+    if (dep.proof().prepared().writes().size() < readDepSize) {
       return false;
     }
 

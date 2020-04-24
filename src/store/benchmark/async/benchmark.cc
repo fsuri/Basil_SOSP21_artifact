@@ -84,6 +84,19 @@ enum read_quorum_t {
   READ_QUORUM_ALL
 };
 
+enum read_dep_t {
+  READ_DEP_UNKNOWN,
+  READ_DEP_ONE,
+  READ_DEP_ONE_HONEST
+};
+
+enum read_messages_t {
+  READ_MESSAGES_UNKNOWN,
+  READ_MESSAGES_READ_QUORUM,
+  READ_MESSAGES_MAJORITY,
+  READ_MESSAGES_ALL
+};
+
 /**
  * System settings.
  */
@@ -123,13 +136,58 @@ static bool ValidateReadQuorum(const char* flagname,
 DEFINE_string(indicus_read_quorum, read_quorum_args[0], "size of read quorums"
     " (for Indicus)");
 DEFINE_validator(indicus_read_quorum, &ValidateReadQuorum);
+const std::string read_dep_args[] = {
+  "one-honest",
+	"one"
+};
+const read_dep_t read_deps[] {
+  READ_DEP_ONE_HONEST,
+  READ_DEP_ONE
+};
+static bool ValidateReadDep(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(read_dep_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == read_dep_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(indicus_read_dep, read_dep_args[0], "number of identical prepared"
+    " to claim dependency (for Indicus)");
+DEFINE_validator(indicus_read_dep, &ValidateReadDep);
+const std::string read_messages_args[] = {
+	"read-quorum",
+  "majority",
+  "all"
+};
+const read_messages_t read_messagess[] {
+  READ_MESSAGES_READ_QUORUM,
+  READ_MESSAGES_MAJORITY,
+  READ_MESSAGES_ALL
+};
+static bool ValidateReadMessages(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(read_messages_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == read_messages_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(indicus_read_messages, read_messages_args[0], "number of replicas"
+    " to send messages for reads (for Indicus)");
+DEFINE_validator(indicus_read_messages, &ValidateReadMessages);
 DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
     " necessary to prevent impersonation (for Indicus)");
 DEFINE_bool(indicus_validate_proofs, false, "send and validate proofs as"
     " necessary to check Byzantine behavior (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
-
 
 DEFINE_bool(debug_stats, false, "record stats related to debugging");
 
@@ -448,6 +506,34 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // parse read messages
+  read_messages_t read_messages = READ_MESSAGES_UNKNOWN;
+  int numReadMessagess = sizeof(read_messages_args);
+  for (int i = 0; i < numReadMessagess; ++i) {
+    if (FLAGS_indicus_read_messages == read_messages_args[i]) {
+      read_messages = read_messagess[i];
+      break;
+    }
+  }
+  if (mode == PROTO_INDICUS && read_messages == READ_MESSAGES_UNKNOWN) {
+    std::cerr << "Unknown read messages." << std::endl;
+    return 1;
+  }
+
+  // parse read dep
+  read_dep_t read_dep = READ_DEP_UNKNOWN;
+  int numReadDeps = sizeof(read_dep_args);
+  for (int i = 0; i < numReadDeps; ++i) {
+    if (FLAGS_indicus_read_dep == read_dep_args[i]) {
+      read_dep = read_deps[i];
+      break;
+    }
+  }
+  if (mode == PROTO_INDICUS && read_dep == READ_DEP_UNKNOWN) {
+    std::cerr << "Unknown read dep." << std::endl;
+    return 1;
+  }
+
   // parse closest replicas
   std::vector<int> closestReplicas;
   std::stringstream iss(FLAGS_closest_replicas);
@@ -628,7 +714,7 @@ int main(int argc, char **argv) {
             readQuorumSize = config->f * 2 + 1;
             break;
           case READ_QUORUM_MAJORITY:
-            readQuorumSize = (config->f * 5 + 1) / 2 + 1;
+            readQuorumSize = (config->n + 1) / 2;
             break;
           case READ_QUORUM_ALL:
             readQuorumSize = config->f * 4 + 1;
@@ -637,10 +723,38 @@ int main(int argc, char **argv) {
             NOT_REACHABLE();
         }
 
+        uint64_t readMessages = 0;
+        switch (read_messages) {
+          case READ_MESSAGES_READ_QUORUM:
+            readMessages = readQuorumSize;
+            break;
+          case READ_MESSAGES_MAJORITY:
+            readQuorumSize = (config->n + 1) / 2;
+            break;
+          case READ_MESSAGES_ALL:
+            readQuorumSize = config->n;
+            break;
+          default:
+            NOT_REACHABLE();
+        }
+        UW_ASSERT(readMessages >= readQuorumSize);
+        
+        uint64_t readDepSize = 0;
+        switch (read_dep) {
+          case READ_DEP_ONE:
+            readDepSize = 1;
+            break;
+          case READ_DEP_ONE_HONEST:
+            readDepSize = config->f + 1;
+            break;
+          default:
+            NOT_REACHABLE();
+        }
+
         client = new indicusstore::Client(config, (FLAGS_client_id << 3),
             FLAGS_num_shards,
             FLAGS_num_groups, closestReplicas, transport, part,
-            FLAGS_tapir_sync_commit, readQuorumSize,
+            FLAGS_tapir_sync_commit, readMessages, readQuorumSize, readDepSize,
             FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
             keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;

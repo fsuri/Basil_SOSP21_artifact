@@ -40,15 +40,15 @@ using namespace std;
 Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     int nGroups,
     const std::vector<int> &closestReplicas, Transport *transport,
-    partitioner part, bool syncCommit,
-    uint64_t readQuorumSize, bool signedMessages, bool validateProofs,
-    KeyManager *keyManager, TrueTime timeServer) : config(config),
-    client_id(id),
-    nshards(nShards), ngroups(nGroups), transport(transport), part(part),
-    syncCommit(syncCommit), readQuorumSize(readQuorumSize),
-    signedMessages(signedMessages), validateProofs(validateProofs),
-    keyManager(keyManager), timeServer(timeServer), client_seq_num(0UL),
-    lastReqId(0UL), getIdx(0UL) {
+    partitioner part, bool syncCommit, uint64_t readMessages,
+    uint64_t readQuorumSize, uint64_t readDepSize, bool signedMessages,
+    bool validateProofs, KeyManager *keyManager, TrueTime timeServer)
+    : config(config), client_id(id), nshards(nShards), ngroups(nGroups),
+    transport(transport), part(part), syncCommit(syncCommit),
+    readMessages(readMessages), readQuorumSize(readQuorumSize),
+    readDepSize(readDepSize), signedMessages(signedMessages),
+    validateProofs(validateProofs), keyManager(keyManager),
+    timeServer(timeServer), client_seq_num(0UL), lastReqId(0UL), getIdx(0UL) {
   bclient.reserve(nshards);
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
@@ -143,8 +143,8 @@ void Client::Get(const std::string &key, get_callback gcb,
     read_timeout_callback rtcb = gtcb;
 
     // Send the GET operation to appropriate shard.
-    bclient[i]->Get(client_seq_num, key, txn.timestamp(), readQuorumSize, rcb,
-        rtcb, timeout);
+    bclient[i]->Get(client_seq_num, key, txn.timestamp(), readMessages,
+        readQuorumSize, readDepSize, rcb, rtcb, timeout);
   });
 }
 

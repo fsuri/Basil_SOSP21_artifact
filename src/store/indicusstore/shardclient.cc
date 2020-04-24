@@ -104,8 +104,9 @@ void ShardClient::Begin(uint64_t id) {
 }
 
 void ShardClient::Get(uint64_t id, const std::string &key,
-    const TimestampMessage &ts, uint64_t rqs, read_callback gcb,
-    read_timeout_callback gtcb, uint32_t timeout) {
+    const TimestampMessage &ts, uint64_t readMessages, uint64_t rqs,
+    uint64_t rds, read_callback gcb, read_timeout_callback gtcb,
+    uint32_t timeout) {
   if (BufferGet(key, gcb)) {
     return;
   }
@@ -115,6 +116,7 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   pendingGets[reqId] = pendingGet;
   pendingGet->key = key;
   pendingGet->rqs = rqs;
+  pendingGet->rds = rds;
   pendingGet->gcb = gcb;
   pendingGet->gtcb = gtcb;
 
@@ -124,7 +126,7 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   *read.mutable_timestamp() = ts;
 
   UW_ASSERT(rqs <= closestReplicas.size());
-  for (size_t i = 0; i < rqs; ++i) {
+  for (size_t i = 0; i < readMessages; ++i) {
     Debug("[group %i] Sending GET to replica %d", group, closestReplicas[i]);
     transport->SendMessageToReplica(this, group, closestReplicas[i], read);
   }
@@ -372,7 +374,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
         break;
       }
 
-      if (preparedItr->second.second >= static_cast<uint64_t>(config->f + 1)) {
+      if (preparedItr->second.second >= req->rds) {
         req->maxTs = preparedItr->first;
         req->maxValue = preparedItr->second.first.value();
         *req->dep.mutable_prepared() = preparedItr->second.first;

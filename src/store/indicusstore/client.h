@@ -58,10 +58,11 @@ namespace indicusstore {
 
 class Client : public ::Client {
  public:
-  Client(transport::Configuration *config, uint64_t id, int nShards, int nGroups,
-      const std::vector<int> &closestReplicas, Transport *transport, partitioner part,
-      bool syncCommit, uint64_t readQuorumSize, bool signedMessages,
-      bool validateProofs, KeyManager *keyManager,
+  Client(transport::Configuration *config, uint64_t id, int nShards,
+      int nGroups, const std::vector<int> &closestReplicas,
+      Transport *transport, partitioner part, bool syncCommit,
+      uint64_t readMessages, uint64_t readQuorumSize, uint64_t readDepSize,
+      bool signedMessages, bool validateProofs, KeyManager *keyManager,
       TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 
@@ -149,7 +150,9 @@ class Client : public ::Client {
   std::vector<ShardClient *> bclient;
   partitioner part;
   bool syncCommit;
+  uint64_t readMessages;
   uint64_t readQuorumSize;
+  uint64_t readDepSize;
   bool signedMessages;
   bool validateProofs;
   KeyManager *keyManager;
