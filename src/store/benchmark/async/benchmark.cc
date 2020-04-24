@@ -79,7 +79,9 @@ enum read_quorum_t {
   READ_QUORUM_UNKNOWN,
   READ_QUORUM_ONE,
   READ_QUORUM_ONE_HONEST,
-  READ_QUORUM_MAJORITY_HONEST
+  READ_QUORUM_MAJORITY_HONEST,
+  READ_QUORUM_MAJORITY,
+  READ_QUORUM_ALL
 };
 
 /**
@@ -96,7 +98,9 @@ DEFINE_bool(tapir_sync_commit, true, "wait until commit phase completes before"
 const std::string read_quorum_args[] = {
 	"one",
   "one-honest",
-  "majority-honest"
+  "majority-honest",
+  "majority",
+  "all"
 };
 const read_quorum_t read_quorums[] {
 	READ_QUORUM_ONE,
@@ -620,6 +624,12 @@ int main(int argc, char **argv) {
             break;
           case READ_QUORUM_MAJORITY_HONEST:
             readQuorumSize = config->f * 2 + 1;
+            break;
+          case READ_QUORUM_MAJORITY:
+            readQuorumSize = (config->f * 5 + 1) / 2 + 1;
+            break;
+          case READ_QUORUM_ALL:
+            readQuorumSize = config->f * 4 + 1;
             break;
           default:
             NOT_REACHABLE();
