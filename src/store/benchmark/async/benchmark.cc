@@ -105,7 +105,9 @@ const std::string read_quorum_args[] = {
 const read_quorum_t read_quorums[] {
 	READ_QUORUM_ONE,
   READ_QUORUM_ONE_HONEST,
-  READ_QUORUM_MAJORITY_HONEST
+  READ_QUORUM_MAJORITY_HONEST,
+  READ_QUORUM_MAJORITY,
+  READ_QUORUM_ALL
 };
 static bool ValidateReadQuorum(const char* flagname,
     const std::string &value) {
