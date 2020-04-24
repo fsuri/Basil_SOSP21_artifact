@@ -95,16 +95,38 @@ in a steady state.
 \subsection{Applications}
 
 \begin{figure}
-  Scatter Plot\\
-  X-axis: throughput (committed new order transactions per second)\\
-  Y-axis: latency (median)\\
-  Series: Indicus, TAPIR, OCC+PBFT, Hyperledger\\
-  Workload: TPC-C\\
-  Setup: WAN, 3 shards / groups\\
-  \includegraphics[width=\columnwidth]{figures/eval/tpcc-tput-lat.png}
-  \caption{Throughput versus latency of \sys{} and baselines for the TPC-C
-  workload in a wide-area network deployment.}
+  \includegraphics[width=\columnwidth]{figures/eval/tpcc-lat-tput.pdf}
+  \caption{Latency versus throughput of \sys{} and baselines for the TPC-C
+  workload in a local-area network deployment.}
   \label{fig:tpcc-tput-lat}
+\end{figure}
+
+\begin{figure}
+  \includegraphics[width=\columnwidth]{figures/eval/tpcc-tput-shards.pdf}
+  \caption{Throughput versus number of shards of \sys{} and baselines for the TPC-C
+  workload in a local-area network deployment.}
+  \label{fig:tpcc-tput-shards}
+\end{figure}
+
+\begin{figure}
+  \includegraphics[width=\columnwidth]{figures/eval/retwis-lat-tput.pdf}
+  \caption{Latency versus throughput of \sys{} and baselines for the Retwis
+  workload in a local-area network deployment.}
+  \label{fig:retwis-lat-tput}
+\end{figure}
+
+\begin{figure}
+  \includegraphics[width=\columnwidth]{figures/eval/retwis-tput-shards.pdf}
+  \caption{Throughput versus number of shards of \sys{} and baselines for the Retwis
+  workload in a local-area network deployment.}
+  \label{fig:retwis-tput-shards}
+\end{figure}
+
+\begin{figure}
+  \includegraphics[width=\columnwidth]{figures/eval/retwis-tput-zipf.pdf}
+  \caption{Throughput versus contention of \sys{} and baselines for the Retwis
+  workload in a local-area network deployment.}
+  \label{fig:retwis-tput-zipf}
 \end{figure}
 
 We measure the throughput and median latency of \sys{} and all baselines with the
