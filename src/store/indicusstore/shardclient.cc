@@ -320,7 +320,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     }
 
     Timestamp replyTs(reply.committed().timestamp());
-    Debug("[group %i] ReadReply for %lu with %lu byte value and ts %lu.%lu.",
+    Debug("[group %i] ReadReply for %lu with committed %lu byte value and ts %lu.%lu.",
         group, reply.req_id(), reply.committed().value().length(),
         replyTs.getTimestamp(), replyTs.getID());
     if (req->numReplies == 1 || req->maxTs < replyTs) {
@@ -349,6 +349,9 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
 
   if (hasPrepared) {
     Timestamp preparedTs(prepared.timestamp());
+    Debug("[group %i] ReadReply for %lu with prepared %lu byte value and ts %lu.%lu.",
+        group, reply.req_id(), prepared.value().length(),
+        preparedTs.getTimestamp(), preparedTs.getID());
     auto preparedItr = req->prepared.find(preparedTs);
     if (preparedItr == req->prepared.end()) {
       req->prepared.insert(std::make_pair(preparedTs,
