@@ -43,7 +43,6 @@ int
 Store::Get(uint64_t id, const string &key, pair<Timestamp,string> &value)
 {
     Debug("[%lu] GET %s", id, key.c_str());
-
     bool ret = store.get(key, value);
     if (ret) {
         Debug("Value: %s at <%lu, %lu>", value.second.c_str(), value.first.getTimestamp(), value.first.getID());
@@ -129,7 +128,7 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
           // UW_ASSERT(timestamp > range.first);
           Debug("[%lu] ABORT wr conflict: %lu > %lu", id,
               timestamp.getTimestamp(), range.second.getTimestamp());
-          std::string s = std::to_string((uint32_t) read.first[0]); 
+          /*std::string s = std::to_string((uint32_t) read.first[0]); 
           if (read.first.length() >= 5) {
             s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
                 read.first.c_str() + 1));
@@ -146,9 +145,9 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
             s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
                 read.first.c_str() + 13));
           }
+          stats.Increment("cc_aborts_" + s, 1);*/
           stats.Increment("cc_aborts", 1);
           stats.Increment("cc_aborts_wr_conflict", 1);
-          stats.Increment("cc_aborts_" + s, 1);
           return REPLY_FAIL;
         } else {
             /* there may be a pending write in the past.  check
