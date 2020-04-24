@@ -1,7 +1,7 @@
 
-\subsection{Validation Check}
+\subsubsection{Preserving isolation}
 
-Algorithm \ref{mvtso} shows the necessary validation check to preserve Byzantine-Serializability. 
+Algorithm \ref{mvtso} shows the necessary concurrency control check to preserve Byzantine-Serializability. 
 Given a transactions prepare request the validation check returns an Abort vote if a conflict has been detected, and Commit otherwise. 
 When execution results match the timestamp order, there are no conflicts (Fig. \ref{fig:MVTSOEX}: 4 top). For each read, a replica verifies that it has not voted to commit a conflicting write (Algorithm \ref{mvtso}, line 3-7). Conversely, for each write, a replica confirms that there exist no previously accepted reads (line 8-10), and no ongoing read transactions (line 11-12) that conflict. Fig. \ref{fig:MVTSOEX}: 4 shows both non-conflicting and conflicting interleavings.
 If there are no conflicts, a replica tentatively \textit{prepares} a transaction, making its writes visible and evaluating future transactions against it for conflicts. Regardless of the outcome, a replica garbage collects all Read Timestmaps (RTS) associated with the transactions reads.
@@ -22,6 +22,8 @@ See TR.
 \EndIf
 
 \For{\textit{$\forall key,version \in \textit{TX.RS}$}}
+	\If{version > TS} \Return PoM
+	\EndIf
         \If{$ \exists TX2 \in Committed \cup Prepared: key \in \textit{TX2.WS} $ \newline
         \hspace*{2em} $\land \, version < \textit{TX2.TS} < TS$}  
           \State  \Return Abort, \textit{TX2, (TX2.CommitProof)}  
@@ -40,6 +42,8 @@ See TR.
 \EndFor
 \State Prepared.add(TX) 
 
+\If{$\exists invalid d \in dep$} \Return Pom ~~//no $f+1$ matching
+\EndIf
 \While{$\exists d \in dep: d \notin CommitLog \cup AbortLog $)}
 \State Suspend
 \EndWhile

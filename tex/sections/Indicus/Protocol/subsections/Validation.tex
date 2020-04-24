@@ -1,5 +1,120 @@
 %-------------------------------------------------------------------------------
-\subsection{Validation}
+\subsection{Validation Phase}
 %-------------------------------------------------------------------------------
 
-Talk about Voting, Logging, and finally recovery.
+In order to facilitate atomic committment across all shards involved in a transaction \sys clients invoke a Prepare request, inquiring each shard to validate the transaction for conflicts and cast a 2PC vote. Shards in \sys are replicated for fault tolerance.
+
+\sys comes in two different flavors, \sys{}3 and \sys{}5 respectively, that rely on varying replication degrees, but implement the same design. \sys{}3 requires $n=3f+1$ replicas \fs{, the minimum bound necessary for BFT SMR?,} per shard to guarantee consistency in the presence of $\leq f$ byzantine replicas. \sys{}5 reduces both latencies during failure free execution and complexity during recovery. \footnote{We believe that consortiums with high performance requirements or high replication degrees are respectively comfortable with paying for additional replicas or tolerating a lower fraction (1/3 vs 1/5) of failures}
+For the simplicity of exposition we discuss \sys{}5 for the remainder of the paper, and defer to section X \fs{and/or TR} to describe differences in \sys{}3. In the following, we outline \sys 's execution (unaffected by replication degree), validation and writeback protocols.
+
+The goal of the validation phase is straightforward:
+Shards need to cast a single durable vote, in the following we refer to this as the shard-decision. It is computed on the basis of different replica votes.
+The vote needs to respect isolation guarantees
+leaderless and partially ordered (i.e. coordination only when necessary)
+
+
+
+The goals of the Validation phase are threefold: \one It must decide on a single, durable vote per-shard that maintains Byzantine Serializability (henceforth we refer to this as a \textit{shard-decision}), \two It should be leaderless, and not enforce unecessary ordering for commutative, non-conflicting transactions, and \three It must preserve independent operability. \fs{needs to refer to the fallback}
+
+Satisfying these goals requires ovecoming several challenges. In order to maximize parallelism and embrace partial ordering, Indicus allows replicas to process requests out of order. Consequently, replicas may temporarily diverge, and hence return different validation results. Such divergence must be reconciled in a way that maintains Isolation, but not overly conservatively in order to maximize the ability to commit successfully and bound the impact of byzantine participants. Further, Indicus designates clients as validation coordinator for its own transactions, thus omitting a dedicated replica leader. The respective protocol must tolerate client failures such as crashes, omission/stalling, equivocation, or replays and allow for consistent recovery. 
+
+The Validation protocol can be broken down into two functionalities: Voting and Logging.
+Since \sys replicas may process requests in different order, they must reach consensus on a joint  decision. To do so, they cast a vote for their local validation result, which are subsequently democratically aggregated into a decision. In the case of Indicus, the client acts as the transaction coordinator who aggregates and relays results (along with necessary evidence).
+In order to maintain consistency in the presence of failures (no two honest replicas finalize different Commit/Abort decisions), this decision must be durable and unique, guaranteeing that a replay of any Writeback is idempotent. However, since a byzantine coordinator cannot be trusted to durably store a decision, nor could we retain liveness during a crash or partition, \sys demands clients to \textit{log} the decision at replicas before returning.
+ 
+
+The voting step requires a single round-trip to all replicas, whereas the logging phase requires at most one round-trip \fs{in Indicus5 and at most two round-trips in Indicus3.}. When execution is fault- and contention free transactions can be committed on the \textit{Fast-Path} in a single-round trip as an explicit logging round is not necessary.
+
+
+%%%%%%%%%% protocol
+To describe how the protocol operates in detail we follow a single-shard transaction through the system:
+
+\fbox{\begin{minipage}{23em}
+\textbf{(1: C $\rightarrow$ R)}: Client sends Prepare request to all Replicas within the Shard.
+\end{minipage}}\\
+Upon deciding to Commit in the Execution phase, a Client initiates Validation by sending a message $Phase1 \coloneqq \langle Prepare, TxID, TX \rangle_{\sigma_c}$ to all Replicas.
+
+\fbox{\begin{minipage}{23em}
+\textbf{(2: R $\rightarrow$ C)}: Replica receives validation request, processes it and returns vote to Client.
+\end{minipage}}\\
+A replica validates Timestamp and Dependency integrity of the request. It then evaluates Read and Write Sets for Isolation conflicts against its local state using the MVTSO Concurrency Control Check (CCC), as shown in algorithm 1. It returns a message $Phase1R \coloneqq \langle TxID, vote \rangle_r$, and optionally evidence in case it voted to Abort.
+
+\underline{Additional subtlelties}: 
+A replica never changes its Voting decision, because re-execution could leave to different results. A replica starts a timer to monitor the clients progress.
+
+\fbox{\begin{minipage}{23em}
+\textbf{(3: C)}: Client waits for vote replies.
+\end{minipage}}\\
+A client waits for at least $n-f$ ($4f+1$ in Indicus5) distinct replica votes, or more, up to a system specified timeout. 
+
+\fbox{\begin{minipage}{23em}
+\textbf{(3a: C)}: Client receives Threshold of matching votes and returns to application. Proceeds to Writeback
+\end{minipage}}\\
+In any of the following 3 cases, a client may short-circuit waiting for additional votes and omit a dedicated Logging round:
+\begin{enumerate}
+\item \textbf{$1$ Abort vote w/ Conflicting TX \& CommitCertificate}: A conflict with a commited transaction. The client validates the integrity of the CommitCertificate and returns the shard decision $(TxID, Abort, \langle ConflTX \rangle_{CC})$. 
+\item \textbf{$3f+1$ Abort votes w/ Conflicting TX}: A conflict with a prepared, but not yet committed transaction. The client returns the shard decision $(TxID, Abort, \{\langle AbstainVote\rangle_r\})$. 
+\item \textbf{$5f+1$ Commit votes}: No conflicts. The client returns the shard decision $(TxID, Commit, \{\langle CommitVote \rangle_r\}$
+\end{enumerate}
+Any of such Quorums forms a \textit{Shard-Certificate} and proves the decision. A client uses this Certificate to return to its application and issue the Writeback.
+
+\fbox{\begin{minipage}{23em}
+\textbf{(3b: C $\rightarrow$ R)}: Client receives divergent results and suggests a consistent decision to Replicas for Logging
+\end{minipage}}\\
+If a client does not receive the necessary thresholds of votes to return, it must continue on the \textit{Slow-Path}. To do so, it aggregates the votes according to following decison rule:
+If there exists a $CommitQuorum \coloneqq \frac{n+f+1}{2}$ of Commit Votes, the Slow-Path decision is Commit, otherwise it is Abort.
+A client broadcasts a message $Phase2 \coloneqq (TxID, decision)_c, \{\langle votes \rangle_r\}$.
+
+\underline{Additional subtlelties}: A client forwards a Quorum of $\geq n-f$ votes to the replicas in order to prove the Slow-Path decision is consistent with Isolation guarantees. Note, that a byzantine client may equivocate the decision by relaying different Quorums.
+
+\fbox{\begin{minipage}{23em}
+\textbf{(4: R $\rightarrow$ C)}: Replicas receive, validate and echo decision
+\end{minipage}}\\
+A replica confirms that the Decision matches the Quorum by evaluating the decision rule itself and adopting the decision. It then returns the decision to the client by sending $Phase2R \coloneqq \langle TxID, decision \rangle_r$. Importantly, a replica never changes its decision.
+
+\fbox{\begin{minipage}{23em}
+\textbf{(5: C)}: Client returns shard-decision to application and proceeds to Writeback
+\end{minipage}}\\
+A client waits for a Quorum of $n-f$ matching $Phase2R$ messages. Such a Quorum forms a \textit{Shard-Certificate} and proves the decision. A client uses this Certificate to return to its application and issue the Writeback.
+
+\underline{Additional subtlelties}: If a client equivocated, it will never receive a Shard-Certificate. An honest client however, is guaranteed to receive matching Phase2 replies. 
+
+We consider a decision (Commit, Abort) to be \textit{logged} when it is possible for some Shard-Certificate to exist, i.e. as soon as the necessary certificate Quorums exists at some Replicas.
+Figure \ref{fig:FigureSP} summarizes the relevant nomenclature.
+
+\begin{figure}
+\begin{center}
+\includegraphics[width= 0.5\textwidth]{./figures/Nom2.png}
+\end{center}
+\caption{Validation Nomenclature, Slow-Path. Note, that a byzantine client may equivocate Phase2 decisions by including Commit and Abort Quorums respectively. Byantine replicas may store multiple votes and decisions.}
+\label{fig:FigureSP}
+\end{figure}
+
+\subsubsection{Correctness}
+We show, that a \textit{logged} decision is final:
+\begin{theorem}[Saf]
+A logged decision is durable, and there can ever exist \textbf{at most one} logged decision.
+\end{theorem}
+\begin{proof}
+See TR.
+\end{proof} 
+
+Note, that since replicas never change their decision, it is possible for there to never be any logged decision if a byzantine client equivocated its Slow-Path Quorums. In order to reconcile this, we design and discuss a recovery mechanism in section X which relaxes the requirement on persisting a decision.  
+
+
+\begin{theorem} 
+Indicus maintains \textit{Byzantine-Serializability}.
+\end{theorem}
+To prove that this is the case, we show that for any two conflicting transactions, at most one can be committed.
+\begin{proof}
+See TR.
+\end{proof}
+
+\begin{theorem} 
+Indicus maintains Byzantine Independence in the absence of network adversary.
+\end{theorem}
+
+We show, that once a Client submits a transaction for validation, the result cannot be unilaterally decided by any byzantine participant, be it client or replica.
+\begin{proof}
+See TR.
+\end{proof}
