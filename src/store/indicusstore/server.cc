@@ -124,12 +124,15 @@ void Server::Load(const string &key, const string &value,
 
 void Server::HandleRead(const TransportAddress &remote,
     const proto::Read &msg) {
-  Debug("READ[%lu] for key %s.", msg.req_id(), BytesToHex(msg.key(), 16).c_str());
+  Debug("READ[%lu:%lu] for key %s with ts %lu.%lu.", msg.timestamp().id(),
+      msg.req_id(), BytesToHex(msg.key(), 16).c_str(),
+      msg.timestamp().timestamp(), msg.timestamp().id());
   Timestamp ts(msg.timestamp());
-  /*if (CheckHighWatermark(ts)) {
+  if (CheckHighWatermark(ts)) {
     // ignore request if beyond high watermark
+    Debug("Read timestamp beyond high watermark.");
     return;
-  }*/
+  }
 
   std::pair<Timestamp, Server::Value> tsVal;
   bool exists = store.get(msg.key(), ts, tsVal);
@@ -177,7 +180,8 @@ void Server::HandleRead(const TransportAddress &remote,
           mostRecent.timestamp().id());
 
       // TODO: currently limit depth of deps to 1 (no chains of dependencies)
-      if (mostRecent.deps_size() == 0) {
+      //   TODO: temporarily undo this TODO ^
+      // if (mostRecent.deps_size() == 0) {
         preparedWrite.set_value(preparedValue);
         *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
         *preparedWrite.mutable_txn_digest() = TransactionDigest(mostRecent);
@@ -189,7 +193,7 @@ void Server::HandleRead(const TransportAddress &remote,
         } else {
           *reply.mutable_prepared() = preparedWrite;
         }
-      }
+      //}
     }
   }
 
@@ -646,19 +650,35 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
 
     auto rtsItr = rts.find(write.key());
     if (rtsItr != rts.end()) {
+      auto rtsRBegin = rtsItr->second.rbegin();
+      if (rtsRBegin != rtsItr->second.rend()) {
+        Debug("Largest rts for write to key %s: %lu.%lu.",
+          BytesToHex(write.key(), 16).c_str(), rtsRBegin->getTimestamp(),
+          rtsRBegin->getID());
+      }
       auto rtsLB = rtsItr->second.lower_bound(ts);
-      if (rtsLB != rtsItr->second.end() && *rtsLB > ts) {
-        Debug("[%lu:%lu][%s] ABSTAIN larger rts acquired for key %s: rts %lu.%lu >"
-            " this txn's ts %lu.%lu.",
-            txn.client_id(),
-            txn.client_seq_num(),
-            BytesToHex(txnDigest, 16).c_str(),
-            BytesToHex(write.key(), 16).c_str(),
-            rtsLB->getTimestamp(),
-            rtsLB->getID(), ts.getTimestamp(), ts.getID());
-        stats.Increment("cc_abstains", 1);
-        stats.Increment("cc_abstains_rts", 1);
-        return proto::Phase1Reply::ABSTAIN;
+      if (rtsLB != rtsItr->second.end()) {
+        Debug("Lower bound rts for write to key %s: %lu.%lu.",
+          BytesToHex(write.key(), 16).c_str(), rtsLB->getTimestamp(),
+          rtsLB->getID());
+        if (*rtsLB == ts) {
+          rtsLB++;
+        }
+        if (rtsLB != rtsItr->second.end()) {
+          if (*rtsLB > ts) {
+            Debug("[%lu:%lu][%s] ABSTAIN larger rts acquired for key %s: rts %lu.%lu >"
+                " this txn's ts %lu.%lu.",
+                txn.client_id(),
+                txn.client_seq_num(),
+                BytesToHex(txnDigest, 16).c_str(),
+                BytesToHex(write.key(), 16).c_str(),
+                rtsLB->getTimestamp(),
+                rtsLB->getID(), ts.getTimestamp(), ts.getID());
+            stats.Increment("cc_abstains", 1);
+            stats.Increment("cc_abstains_rts", 1);
+            return proto::Phase1Reply::ABSTAIN;
+          }
+        }
       }
     }
     // TODO: add additional rts dep check to shrink abort window

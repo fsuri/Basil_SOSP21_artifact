@@ -200,7 +200,7 @@ void Client::Phase1(PendingRequest *req) {
     bclient[group]->Phase1(client_seq_num, txn, std::bind(
           &Client::Phase1Callback, this, req->id, group, std::placeholders::_1,
           std::placeholders::_2, std::placeholders::_3, std::placeholders::_4),
-        std::bind(&Client::Phase1TimeoutCallback, this, req->id,
+        std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
           std::placeholders::_1), req->timeout);
     req->outstandingPhase1s++;
   }
@@ -210,15 +210,15 @@ void Client::Phase1Callback(uint64_t txnId, int group,
     proto::CommitDecision decision, bool fast,
     const std::vector<proto::Phase1Reply> &phase1Replies,
     const std::vector<proto::SignedMessage> &signedPhase1Replies) {
-  Debug("PHASE1[%lu:%lu] callback decision %d from group %d", client_id,
-      client_seq_num, decision, group);
-
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
     Debug("Phase1Callback for terminated request %lu (txn already committed"
         " or aborted.", txnId);
     return;
   }
+
+  Debug("PHASE1[%lu:%lu] callback decision %d from group %d", client_id,
+      client_seq_num, decision, group);
 
   PendingRequest *req = itr->second;
   if (req->startedPhase2 || req->startedWriteback) {
@@ -253,8 +253,18 @@ void Client::Phase1Callback(uint64_t txnId, int group,
   }
 }
 
-void Client::Phase1TimeoutCallback(uint64_t txnId, int status) {
-  Warning("PHASE1[%lu:%lu] timed out.", client_id, txnId);
+void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
+  auto itr = this->pendingReqs.find(txnId);
+  if (itr == this->pendingReqs.end()) {
+    return;
+  }
+
+  PendingRequest *req = itr->second;
+  if (req->startedPhase2 || req->startedWriteback) {
+    return;
+  }
+
+  Warning("PHASE1[%lu:%lu] group %d timed out.", client_id, txnId, group);
 }
 
 void Client::HandleAllPhase1Received(PendingRequest *req) {
@@ -282,20 +292,20 @@ void Client::Phase2(PendingRequest *req) {
       req->signedPhase1RepliesGrouped, req->decision,
       std::bind(&Client::Phase2Callback, this, req->id,
         std::placeholders::_1, std::placeholders::_2),
-      std::bind(&Client::Phase2TimeoutCallback, this, req->id,
+      std::bind(&Client::Phase2TimeoutCallback, this, logGroup, req->id,
         std::placeholders::_1), req->timeout);
 }
 
 void Client::Phase2Callback(uint64_t txnId,
     const std::vector<proto::Phase2Reply> &phase2Replies,
     const std::vector<proto::SignedMessage> &signedPhase2Replies) {
-  Debug("PHASE2[%lu:%lu] callback", client_id, txnId);
-
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
     Debug("Phase2Callback for terminated request id %lu (txn already committed or aborted.", txnId);
     return;
   }
+  
+  Debug("PHASE2[%lu:%lu] callback", client_id, txnId);
 
   PendingRequest *req = itr->second;
 
@@ -315,8 +325,18 @@ void Client::Phase2Callback(uint64_t txnId,
   Writeback(req);
 }
 
-void Client::Phase2TimeoutCallback(uint64_t txnId, int status) {
-  Warning("PHASE2[%lu:%lu] timed out.", client_id, txnId);
+void Client::Phase2TimeoutCallback(int group, uint64_t txnId, int status) {
+  auto itr = this->pendingReqs.find(txnId);
+  if (itr == this->pendingReqs.end()) {
+    return;
+  }
+
+  PendingRequest *req = itr->second;
+  if (req->startedWriteback) {
+    return;
+  }
+
+  Warning("PHASE2[%lu:%lu] group %d timed out.", client_id, txnId, group);
 }
 
 void Client::Writeback(PendingRequest *req) {
