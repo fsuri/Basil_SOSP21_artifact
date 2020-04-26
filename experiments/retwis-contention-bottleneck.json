@@ -23,9 +23,9 @@
   "tpcc_c_c_id": 0,
   "tpcc_c_c_last": 0,
   "tpcc_data_file_path": "/usr/local/etc/tpcc-1-warehouse",
-  "client_abort_backoff": 0,
-  "client_retry_aborted": false,
-  "client_max_attempts": 1,
+  "client_abort_backoff": 10,
+  "client_retry_aborted": true,
+  "client_max_attempts": -1,
   "run_locally": false,
   "replication_protocol_settings": [
     {
@@ -35,6 +35,7 @@
       "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
+      "read_dep": "one-honest",
       "validate_proofs": false,
       "sign_messages": false,
       "key_path": "/usr/local/etc/indicus-keys"
@@ -43,6 +44,7 @@
       "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
+      "read_dep": "one-honest",
       "validate_proofs": true,
       "sign_messages": false,
       "key_path": "/usr/local/etc/indicus-keys"
