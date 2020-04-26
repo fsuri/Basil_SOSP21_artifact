@@ -75,19 +75,19 @@ Client applications execute transactions via the following interface. A TX objec
 \textbf{Read(key, TS, RQS)} 
 If \textit{key $\in$ WriteSet} a client returns the buffered write value. Otherwise, the client conducts a remote read:
 
-\fbox{\begin{minipage}{22em}
+\fbox{\begin{minipage}{23em}
 
 \textbf{1: C} $\rightarrow$ \textbf{R}: Client sends read request to Replicas
 \end{minipage}}\\
 Given a hyperparameter Read Quorum Size (RQS), a client sends $m = (Read, key, TS)_c$  to $RQS$ different replicas. Note, that in order to guarantee $\geq RQS$ replies a client might need to send up to $f$ additional requests to compensate for unresponsive/faulty participants ($max(|Replies|) \leq n-f$). 
 
-\fbox{\begin{minipage}{22em}
+\fbox{\begin{minipage}{23em}
 \textbf{2: R} $\rightarrow$ \textbf{C}: Replica processes client read and replies
 \end{minipage}}\\
 A replica authenticates the client\footnote{Byzantine replica may ignore read access control. Solving this problem is beyond the scope of this work; we defer to existing solutions \cite{basu2019efficient}.}, and whether the timestamp is within a local highwater mark ($HW = localClock + \delta$). It returns a signed message \text{$\langle \textit{ReadReply, Committed, Prepared} \rangle _R$}, where $Committed \coloneqq (value, version, proof)$ represents the value-version pair with largest committed write version smaller than TS and a proof of commitment,  and $Prepared \coloneqq (value, version, TxID', deps)$ the respective largest uncommitted value-version pair, the associated transaction ID, and the latter transactions potentially uncommitted read-write dependencies. Moreover, a Replica stores a new read timestamp (RTS) for the key: $RTS(key) = RTS(key) \cup TS$ (Fig. \ref{fig:MVTSOEX}: 3). 
 \fs{a replica may include a set of prepared values to increase likelihood of client receiving f+1 matching}
 
-\fbox{\begin{minipage}{22em}
+\fbox{\begin{minipage}{23em}
 \textbf{3: C} ($\rightarrow$ \textbf{R}): Client receives read replies 
 \end{minipage}}\\
 A client waits for RQS read replies and chooses the biggest valid result \textit{(value, version) $= max_{valid}$(\{Committed\},\{Prepared\}} (Figure \ref{fig:MVTSOEX}: 1,2) . A \textit{Committed} tuple is valid, if the proof confirms commitment, wheras a \textit{Prepared} is valid iff there exist $f+1$ matching \textit{Prepared$_r$} signed by different replicas. The client adds the version to its read set \textit{ReadSet = ReadSet $\cup$ (key, version)} and additionally claims a dependency if it was a \textit{Prepared} version: \textit{Dep = Dep $\cup$ f+1 $\times$ (Prepared$_r$)} . 
