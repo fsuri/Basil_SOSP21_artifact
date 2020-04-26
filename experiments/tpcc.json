@@ -26,9 +26,9 @@
   "client_zipf_coefficient": 0.75,
   "client_key_selector": "zipf",
   "rw_num_ops_txn": 2,
-  "client_abort_backoff": 0,
-  "client_retry_aborted": false,
-  "client_max_attempts": 1,
+  "client_abort_backoff": 10,
+  "client_retry_aborted": true,
+  "client_max_attempts": -1,
   "run_locally": false,
   "replication_protocol_settings": [
     {
@@ -38,6 +38,7 @@
       "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
+      "read_dep": "one-honest",
       "validate_proofs": false,
       "sign_messages": false,
       "key_path": "/usr/local/etc/indicus-keys"
@@ -46,6 +47,7 @@
       "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
+      "read_dep": "one-honest",
       "validate_proofs": true,
       "sign_messages": false,
       "key_path": "/usr/local/etc/indicus-keys"
@@ -72,8 +74,6 @@
   "client_experiment_length": 80,
   "client_ramp_down": 10,
   "client_ramp_up": 30,
-  "client_abort_backoff": 0,
-  "client_max_attempts": 1,
   "default_remote_shell": "bash",
   "server_host_format_str": "%s.%s.%s.utah.cloudlab.us",
   "client_host_format_str": "client-%d-%d.%s.%s.utah.cloudlab.us",
