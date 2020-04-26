@@ -55,6 +55,7 @@ void SyncTransactionBenchClient::SendNext(transaction_status_t *result) {
         backoff = std::uniform_int_distribution<int>(0,
           (1 << (currTxnAttempts - 1)) * abortBackoff)(GetRand());
         stats.Increment(GetLastOp() + "_backoff", backoff);
+        Warning("Backing off for %dms", backoff);
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(backoff));
     }

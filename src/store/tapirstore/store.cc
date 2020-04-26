@@ -85,6 +85,8 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
     // do OCC checks
     unordered_map<string, set<Timestamp>> pReads;
     GetPreparedReads(pReads);
+    unordered_map<string, set<Timestamp>> preparedWrites;
+    GetPreparedWrites(preparedWrites);
 
     // check for conflicts with the read set
     for (auto &read : txn.getReadSet()) {
@@ -242,9 +244,9 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
 
     // Otherwise, prepare this transaction for commit
     prepared[id] = make_pair(timestamp, txn);
-    for (const auto &write : txn.getWriteSet()) {
+    /*for (const auto &write : txn.getWriteSet()) {
       preparedWrites[write.first].insert(timestamp);
-    }
+    }*/
     Debug("[%lu] PREPARED TO COMMIT", id);
 
     return REPLY_OK;
@@ -323,10 +325,16 @@ Store::GetPreparedReads(unordered_map<string, set<Timestamp>> &reads)
 }
 
 void Store::Cleanup(uint64_t txnId) {
-  const auto &txn = prepared[txnId];
+  /*const auto &txn = prepared[txnId];
   for (const auto &write : txn.second.getWriteSet()) {
-    preparedWrites[write.first].erase(txn.first);
-  }
+    auto itr = preparedWrites.find(write.first);
+    if (itr != preparedWrites.end()) {
+      itr->second.erase(txn.first);
+      if (itr->second.size() == 0) {
+        preparedWrites.erase(itr);
+      }
+    }
+  }*/
   prepared.erase(txnId);
 }
 
