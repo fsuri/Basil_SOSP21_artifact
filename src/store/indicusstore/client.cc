@@ -344,22 +344,22 @@ void Client::Writeback(PendingRequest *req) {
 
   req->startedWriteback = true;
 
-  int result;
+  transaction_status_t result;
   switch (req->decision) {
     case proto::COMMIT: {
       Debug("WRITEBACK[%lu:%lu][%s] COMMIT.", client_id, req->id,
           BytesToHex(req->txnDigest, 16).c_str());
-      result = RESULT_COMMITTED;
+      result = COMMITTED;
       break;
     }
     case proto::ABORT: {
-      result = RESULT_SYSTEM_ABORTED;
+      result = ABORTED_SYSTEM;
       Debug("WRITEBACK[%lu:%lu][%s] ABORT.", client_id, req->id,
           BytesToHex(req->txnDigest, 16).c_str());
       break;
     }
     default: {
-      break;
+      NOT_REACHABLE();
     }
   }
 

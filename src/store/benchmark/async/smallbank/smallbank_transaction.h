@@ -19,8 +19,6 @@ class SmallbankTransaction : public SyncTransaction {
  public:
   SmallbankTransaction(SmallbankTransactionType type);
 
-  virtual int Execute(SyncClient &client);
-
   SmallbankTransactionType GetTransactionType();
 
  private:

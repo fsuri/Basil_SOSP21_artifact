@@ -25,15 +25,15 @@ void AsyncTransactionBenchClient::SendNext() {
         std::placeholders::_1, std::placeholders::_2));
 }
 
-void AsyncTransactionBenchClient::ExecuteCallback(int result,
+void AsyncTransactionBenchClient::ExecuteCallback(transaction_status_t result,
     std::map<std::string, std::string> readValues) {
   Debug("ExecuteCallback with result %d.", result);
   stats.Increment(GetLastOp() + "_attempts", 1);
   ++currTxnAttempts;
-  if (result == SUCCESS ||
+  if (result == COMMITTED || result == ABORTED_USER || 
       (maxAttempts != -1 && currTxnAttempts >= maxAttempts) ||
       !retryAborted) {
-    if (result == SUCCESS) {
+    if (result == COMMITTED) {
       stats.Increment(GetLastOp() + "_committed", 1);
     }
     if (retryAborted) {

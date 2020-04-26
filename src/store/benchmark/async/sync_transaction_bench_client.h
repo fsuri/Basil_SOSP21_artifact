@@ -18,7 +18,7 @@ class SyncTransactionBenchClient : public BenchmarkClient {
 
   virtual ~SyncTransactionBenchClient();
 
-  void SendNext(int *result);
+  void SendNext(transaction_status_t *result);
  protected:
   virtual SyncTransaction *GetNextTransaction() = 0;
   virtual void SendNext() override;

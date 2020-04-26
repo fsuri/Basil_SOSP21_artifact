@@ -84,7 +84,7 @@ void Client::ExecuteNextOperation(PendingRequest *req, proto::Branch &branch) {
     }
     case ABORT: {
       Abort(branch);
-      req->ecb(FAILED, std::map<std::string, std::string>());
+      req->ecb(ABORTED_USER, std::map<std::string, std::string>());
       break;
     }
     default:
@@ -173,7 +173,7 @@ void Client::HandlePrepareOK(const TransportAddress &remote,
     ClientBranch clientBranch = GetClientBranch(msg.branch());
     PendingRequest *req = itr->second;
     pendingReqs.erase(msg.branch().txn().id());
-    req->ecb(SUCCESS, clientBranch.readValues);
+    req->ecb(COMMITTED, clientBranch.readValues);
     delete req;
   } else if (itr->second->prepareOKs[msg.branch()] +
       static_cast<int64_t>(itr->second->prepareKOes[msg.branch()].size()) ==
@@ -335,7 +335,7 @@ void Client::ProcessPrepareKOs(PendingRequest *req,
       
       Abort(branch);
 
-      itr->second->ecb(FAILED, std::map<std::string, std::string>());
+      itr->second->ecb(ABORTED_SYSTEM, std::map<std::string, std::string>());
       pendingReqs.erase(pendingReqs.find(itr->second->id));
       delete itr->second;
     //});

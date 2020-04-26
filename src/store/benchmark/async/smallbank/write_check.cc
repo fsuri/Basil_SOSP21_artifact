@@ -7,7 +7,7 @@ namespace smallbank {
 WriteCheck::WriteCheck(const std::string &cust, const int32_t value, const uint32_t timeout) : SmallbankTransaction(WRITE_CHECK), cust(cust), value(value), timeout(timeout) {}
 WriteCheck::~WriteCheck() {
 }
-int WriteCheck::Execute(SyncClient &client) {
+transaction_status_t WriteCheck::Execute(SyncClient &client) {
     proto::AccountRow accountRow;
     proto::CheckingRow checkingRow;
     proto::SavingRow savingRow;
@@ -17,14 +17,14 @@ int WriteCheck::Execute(SyncClient &client) {
     if (!ReadAccountRow(client, cust, accountRow, timeout)) {
         client.Abort(timeout);
         Debug("Aborted WriteCheck (AccountRow)");
-        return 1;
+        return ABORTED_USER;
     }
     const uint32_t customerId = accountRow.customer_id();
     if (!ReadCheckingRow(client, customerId, checkingRow, timeout) || !
             ReadSavingRow(client, customerId, savingRow, timeout)) {
         client.Abort(timeout);
         Debug("Aborted WriteCheck (Balance)");
-        return 1;
+        return ABORTED_USER;
     }
     const int32_t sum = checkingRow.checking_balance() + savingRow.saving_balance();
     Debug("Sum for WriteCheck %d", sum);

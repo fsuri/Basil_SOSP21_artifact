@@ -3,6 +3,7 @@
 
 #include <random>
 #include "store/benchmark/async/bench_client.h"
+#include "store/common/frontend/client.h"
 #include "store/common/frontend/async_client.h"
 #include "store/common/frontend/async_transaction.h"
 
@@ -20,7 +21,7 @@ protected:
     virtual AsyncTransaction *GetNextTransaction() = 0;
     virtual void SendNext();
 
-    void ExecuteCallback(int result,
+    void ExecuteCallback(transaction_status_t result,
                          std::map<std::string, std::string> readValues);
 
     AsyncClient &client;

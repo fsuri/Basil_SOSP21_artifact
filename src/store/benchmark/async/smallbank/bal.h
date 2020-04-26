@@ -11,7 +11,7 @@ class Bal : public SmallbankTransaction {
 
   virtual ~Bal();
 
-  int Execute(SyncClient &client);
+  transaction_status_t Execute(SyncClient &client);
 
  private:
   std::string cust;

@@ -14,12 +14,12 @@ DepositChecking::DepositChecking(const std::string &cust, const int32_t value,
       
 DepositChecking::~DepositChecking() {}
 
-int DepositChecking::Execute(SyncClient &client) {
+transaction_status_t DepositChecking::Execute(SyncClient &client) {
   Debug("DepositChecking for name %s with val %d", cust.c_str(), value);
   if (value < 0) {
     client.Abort(timeout);
     Debug("Aborted DepositChecking (- val)");
-    return 1;
+    return ABORTED_USER;
   }
   proto::AccountRow accountRow;
   proto::CheckingRow checkingRow;
@@ -28,13 +28,13 @@ int DepositChecking::Execute(SyncClient &client) {
   if (!ReadAccountRow(client, cust, accountRow, timeout)) {
     client.Abort(timeout);
     Debug("Aborted DepositChecking (AccountRow)");
-    return 1;
+    return ABORTED_USER;
   }
   const uint32_t customerId = accountRow.customer_id();
   if (!ReadCheckingRow(client, customerId, checkingRow, timeout)) {
     client.Abort(timeout);
     Debug("Aborted DepositChecking (CheckingRow)");
-    return 1;
+    return ABORTED_USER;
   }
   Debug("DepositChecking old value %d", checkingRow.checking_balance());
   InsertCheckingRow(client, customerId, checkingRow.checking_balance() + value,

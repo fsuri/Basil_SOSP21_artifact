@@ -13,7 +13,7 @@ SyncNewOrder::SyncNewOrder(uint32_t timeout, uint32_t w_id, uint32_t C,
 SyncNewOrder::~SyncNewOrder() {
 }
 
-int SyncNewOrder::Execute(SyncClient &client) {
+transaction_status_t SyncNewOrder::Execute(SyncClient &client) {
   std::string str;
 
   Debug("NEW_ORDER");
@@ -81,7 +81,7 @@ int SyncNewOrder::Execute(SyncClient &client) {
     client.Get(i_key, str, timeout);
     if (str.empty()) {
       client.Abort(timeout);
-      return 1; // TODO: application abort
+      return ABORTED_USER;
     } else {
       ItemRow i_row;
       UW_ASSERT(i_row.ParseFromString(str));

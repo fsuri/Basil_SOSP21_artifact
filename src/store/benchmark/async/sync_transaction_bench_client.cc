@@ -22,23 +22,24 @@ SyncTransactionBenchClient::~SyncTransactionBenchClient() {
 }
 
 void SyncTransactionBenchClient::SendNext() {
-  int result;
+  transaction_status_t result;
   SendNext(&result);
 }
 
-void SyncTransactionBenchClient::SendNext(int *result) {
+void SyncTransactionBenchClient::SendNext(transaction_status_t *result) {
   currTxn = GetNextTransaction();
   currTxnAttempts = 0;
-  *result = 1; // default to failure
+  *result = ABORTED_SYSTEM; // default to failure
   while (true) {
     *result = currTxn->Execute(client);
     stats.Increment(GetLastOp() + "_attempts", 1);
     ++currTxnAttempts;
-    if (*result == SUCCESS || !retryAborted) {
-      if (*result == SUCCESS) {
+    if (*result == COMMITTED || *result == ABORTED_USER
+        || (maxAttempts != -1 && currTxnAttempts >= maxAttempts)
+        || !retryAborted) {
+      if (*result == COMMITTED) {
         stats.Increment(GetLastOp() + "_committed", 1);
-      }
-      if (*result == 1) { // RESULT_USER_ABORTED in morty-tapir/store/tapirstore/client.h
+      } else {
         stats.Increment(GetLastOp() +  "_" + std::to_string(*result), 1);
       }
       if (retryAborted) {
@@ -47,14 +48,8 @@ void SyncTransactionBenchClient::SendNext(int *result) {
       delete currTxn;
       currTxn = nullptr;
       break;
-    } else if (*result == 1) { // RESULT_USER_ABORTED in morty-tapir/store/tapirstore/client.h
-      stats.Increment(GetLastOp() +  "_" + std::to_string(*result), 1);
-      delete currTxn;
-      currTxn = nullptr;
-      break;
     } else {
       stats.Increment(GetLastOp() + "_" + std::to_string(*result), 1);
-      // stats.Increment(GetLastOp() + "_attempts", 1);
       int backoff = 0;
       if (abortBackoff > 0) {
         backoff = std::uniform_int_distribution<int>(0,
