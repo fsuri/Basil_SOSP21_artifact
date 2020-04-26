@@ -41,16 +41,15 @@ void AsyncAdapterClient::ExecuteNextOperation() {
     case COMMIT: {
       client->Commit(std::bind(&AsyncAdapterClient::CommitCallback, this,
         std::placeholders::_1), std::bind(&AsyncAdapterClient::CommitTimeout,
-          this, std::placeholders::_1), timeout);
+          this), timeout);
       // timeout doesn't really matter?
       break;
     }
     case ABORT: {
       client->Abort(std::bind(&AsyncAdapterClient::AbortCallback, this),
-          std::bind(&AsyncAdapterClient::AbortTimeout, this,
-            std::placeholders::_1), timeout);
+          std::bind(&AsyncAdapterClient::AbortTimeout, this), timeout);
       // timeout doesn't really matter?
-      currEcb(false, std::map<std::string, std::string>());
+      currEcb(ABORTED_USER, std::map<std::string, std::string>());
       break;
     }
     default:
@@ -82,12 +81,12 @@ void AsyncAdapterClient::PutTimeout(int status, const std::string &key,
   Warning("Put(%s,%s) timed out :(", key.c_str(), val.c_str());
 }
 
-void AsyncAdapterClient::CommitCallback(int result) {
+void AsyncAdapterClient::CommitCallback(transaction_status_t result) {
   Debug("Commit callback.");
   currEcb(result, readValues);
 }
 
-void AsyncAdapterClient::CommitTimeout(int status) {
+void AsyncAdapterClient::CommitTimeout() {
   Warning("Commit timed out :(");
 }
 
@@ -95,7 +94,7 @@ void AsyncAdapterClient::AbortCallback() {
   Debug("Abort callback.");
 }
 
-void AsyncAdapterClient::AbortTimeout(int status) {
+void AsyncAdapterClient::AbortTimeout() {
   Warning("Abort timed out :(");
 }
 

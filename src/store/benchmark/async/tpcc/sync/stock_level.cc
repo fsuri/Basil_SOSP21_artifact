@@ -13,7 +13,7 @@ SyncStockLevel::SyncStockLevel(uint32_t timeout, uint32_t w_id, uint32_t d_id,
 SyncStockLevel::~SyncStockLevel() {
 }
 
-int SyncStockLevel::Execute(SyncClient &client) {
+transaction_status_t SyncStockLevel::Execute(SyncClient &client) {
   std::string str;
 
   Debug("STOCK_LEVEL");

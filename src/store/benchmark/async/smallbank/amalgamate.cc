@@ -14,7 +14,7 @@ Amalgamate::Amalgamate(const std::string &cust1, const std::string &cust2,
 
 Amalgamate::~Amalgamate() {}
 
-int Amalgamate::Execute(SyncClient &client) {
+transaction_status_t Amalgamate::Execute(SyncClient &client) {
   proto::AccountRow accountRow1;
   proto::AccountRow accountRow2;
 
@@ -28,21 +28,21 @@ int Amalgamate::Execute(SyncClient &client) {
       !ReadAccountRow(client, cust2, accountRow2, timeout)) {
     client.Abort(timeout);
     Debug("Aborted Amalgamate (AccountRow)");
-    return 1;
+    return ABORTED_USER;
   }
   const uint32_t customerId1 = accountRow1.customer_id();
   const uint32_t customerId2 = accountRow2.customer_id();
   if (!ReadCheckingRow(client, customerId2, checkingRow2, timeout)) {
     client.Abort(timeout);
     Debug("Aborted Amalgamate (CheckingRow)");
-    return 1;
+    return ABORTED_USER;
   }
   const int32_t balance2 = checkingRow2.checking_balance();
   if (!ReadCheckingRow(client, customerId1, checkingRow1, timeout) ||
       !ReadSavingRow(client, customerId1, savingRow1, timeout)) {
     client.Abort(timeout);
     Debug("Aborted Amalgamate (2nd Balance)");
-    return 1;
+    return ABORTED_USER;
   }
   InsertCheckingRow(
       client, customerId2,

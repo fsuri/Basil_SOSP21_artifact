@@ -192,7 +192,7 @@ void ShardClient::Commit(uint64_t id, const Transaction & txn,
         commit_timeout_callback ctcb = pendingCommit->ctcb;
         this->pendingCommits.erase(itr);
         delete pendingCommit;
-        ctcb(REPLY_TIMEOUT);
+        ctcb();
       }
 
   });
@@ -230,7 +230,7 @@ void ShardClient::Abort(uint64_t id, const Transaction &txn,
         abort_timeout_callback atcb = pendingAbort->atcb;
         this->pendingAborts.erase(itr);
         delete pendingAbort;
-        atcb(REPLY_TIMEOUT);
+        atcb();
       }
   });
 
@@ -348,7 +348,7 @@ bool ShardClient::CommitCallback(uint64_t reqId,
     commit_callback ccb = pendingCommit->ccb;
     this->pendingCommits.erase(itr);
     delete pendingCommit;
-    ccb(true);
+    ccb(COMMITTED);
   }
   return true;
 }

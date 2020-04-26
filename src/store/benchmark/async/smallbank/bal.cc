@@ -10,7 +10,7 @@ Bal::Bal(const std::string &cust, const uint32_t timeout)
 
 Bal::~Bal() {}
 
-int Bal::Execute(SyncClient &client) {
+transaction_status_t Bal::Execute(SyncClient &client) {
   proto::AccountRow accountRow;
   proto::SavingRow savingRow;
   proto::CheckingRow checkingRow;
@@ -22,9 +22,9 @@ int Bal::Execute(SyncClient &client) {
                        timeout)) {
     client.Abort(timeout);
     Debug("Aborted Balance");
-    return 1;
+    return ABORTED_USER;
   }
-  int commitRes = client.Commit(timeout);
+  transaction_status_t commitRes = client.Commit(timeout);
   Debug("Committed Balance %d",
         savingRow.saving_balance() + checkingRow.checking_balance());
   //std::pair<uint32_t, bool> res = std::make_pair(

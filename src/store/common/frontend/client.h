@@ -19,6 +19,13 @@
 #include <string>
 #include <vector>
 
+enum transaction_status_t {
+  COMMITTED = 0,
+  ABORTED_USER,
+  ABORTED_SYSTEM,
+  ABORTED_MAX_RETRIES
+};
+
 typedef std::function<void(uint64_t)> begin_callback;
 typedef std::function<void()> begin_timeout_callback;
 
@@ -31,11 +38,11 @@ typedef std::function<void(int, const std::string &,
 typedef std::function<void(int, const std::string &,
     const std::string &)> put_timeout_callback;
 
-typedef std::function<void(int)> commit_callback;
-typedef std::function<void(int)> commit_timeout_callback;
+typedef std::function<void(transaction_status_t)> commit_callback;
+typedef std::function<void()> commit_timeout_callback;
 
 typedef std::function<void()> abort_callback;
-typedef std::function<void(int)> abort_timeout_callback;
+typedef std::function<void()> abort_timeout_callback;
 
 class Stats;
 

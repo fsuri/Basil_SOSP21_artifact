@@ -13,7 +13,7 @@ SyncOrderStatus::SyncOrderStatus(uint32_t timeout, uint32_t w_id,
 SyncOrderStatus::~SyncOrderStatus() {
 }
 
-int SyncOrderStatus::Execute(SyncClient &client) {
+transaction_status_t SyncOrderStatus::Execute(SyncClient &client) {
   std::string str;
 
   Debug("ORDER_STATUS");

@@ -883,7 +883,7 @@ int main(int argc, char **argv) {
             syncBench->Start([](){});
             while (!syncBench->IsFullyDone()) {
               syncBench->StartLatency();
-              int result;
+              transaction_status_t result;
               syncBench->SendNext(&result);
               syncBench->IncrementSent(result);
             }

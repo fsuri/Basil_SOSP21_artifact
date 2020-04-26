@@ -10,7 +10,7 @@ class TransactSaving : public SmallbankTransaction {
   TransactSaving(const std::string &cust, int32_t value, const uint32_t timeout);
   virtual ~TransactSaving();
 
-  int Execute(SyncClient &client);
+  transaction_status_t Execute(SyncClient &client);
  private:
   std::string cust;
   int32_t value;

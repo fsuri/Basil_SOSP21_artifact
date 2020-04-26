@@ -198,7 +198,7 @@ void Client::PrepareCallback(uint64_t reqId, int status, Timestamp ts) {
 void Client::HandleAllPreparesReceived(PendingRequest *req) {
   Debug("All PREPARE's [%lu] received", t_id);
   uint64_t reqId = req->id;
-  int abortResult = -1;
+  transaction_status_t abortResult = COMMITTED;
   switch (req->prepareStatus) {
     case REPLY_OK: {
       Debug("COMMIT [%lu]", t_id);
@@ -210,14 +210,14 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         if (itr != this->pendingReqs.end()) {
           PendingRequest *req = itr->second;
           if (!req->callbackInvoked) {
-            req->ccb(RESULT_COMMITTED);
+            req->ccb(COMMITTED);
             req->callbackInvoked = true;
           }
           this->pendingReqs.erase(itr);
           delete req;
         }
       };
-      commit_timeout_callback ctcb = [txnId = this->t_id](int status){
+      commit_timeout_callback ctcb = [txnId = this->t_id](){
         Warning("COMMIT[%lu] timeout.", txnId);
       };
       for (auto p : participants) {
@@ -226,7 +226,7 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
       }
       if (!syncCommit) {
         if (!req->callbackInvoked) {
-          req->ccb(RESULT_COMMITTED);
+          req->ccb(COMMITTED);
           req->callbackInvoked = true;
         }
       }
@@ -252,18 +252,18 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         break;
       } 
       statInts["aborts_max_retries"] += 1;
-      abortResult = RESULT_MAX_RETRIES;
+      abortResult = ABORTED_MAX_RETRIES;
       break;
     }
     case REPLY_FAIL: {
-      abortResult = RESULT_SYSTEM_ABORTED;
+      abortResult = ABORTED_SYSTEM;
       break;
     }
     default: {
       break;
     }
   }
-  if (abortResult > 0) {
+  if (abortResult != COMMITTED) {
     // application doesn't need to be notified when abort has been acknowledged,
     // so we use empty callback functions and directly call the commit callback
     // function (with commit=false indicating an abort)
@@ -275,7 +275,7 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         delete req;
       }
     };
-    abort_timeout_callback atcb = [txnId = this->t_id](int status){
+    abort_timeout_callback atcb = [txnId = this->t_id](){
       Warning("ABORT[%lu] timeout.", txnId);
     };
     AbortInternal(acb, atcb, ABORT_TIMEOUT); // we don't really care about the timeout here
@@ -292,7 +292,7 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
   // immediately move on to its next transaction without waiting for confirmation
   // that this transaction was aborted
   transport->Timer(0, [this, acb, atcb, timeout]() {
-      AbortInternal([](){}, [](int status){}, timeout);
+      AbortInternal([](){}, [](){}, timeout);
       acb();
   });
 }

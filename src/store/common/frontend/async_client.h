@@ -1,6 +1,7 @@
 #ifndef ASYNC_CLIENT_H
 #define ASYNC_CLIENT_H
 
+#include "store/common/frontend/client.h"
 #include "store/common/frontend/async_transaction.h"
 #include "store/common/stats.h"
 
@@ -8,7 +9,7 @@
 
 #define SUCCESS 0
 #define FAILED 1
-typedef std::function<void(int, std::map<std::string, std::string>)> execute_callback;
+typedef std::function<void(transaction_status_t, std::map<std::string, std::string>)> execute_callback;
 
 class AsyncClient {
  public:

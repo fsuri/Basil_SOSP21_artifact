@@ -12,7 +12,7 @@ class DepositChecking : public SmallbankTransaction {
 
   virtual ~DepositChecking();
 
-  int Execute(SyncClient &client);
+  transaction_status_t Execute(SyncClient &client);
 
  private:
   std::string cust;

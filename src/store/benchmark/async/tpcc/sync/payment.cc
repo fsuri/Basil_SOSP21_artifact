@@ -15,7 +15,7 @@ SyncPayment::SyncPayment(uint32_t timeout, uint32_t w_id, uint32_t c_c_last,
 SyncPayment::~SyncPayment() {
 }
 
-int SyncPayment::Execute(SyncClient &client) {
+transaction_status_t SyncPayment::Execute(SyncClient &client) {
   std::string str;
 
   Debug("PAYMENT");

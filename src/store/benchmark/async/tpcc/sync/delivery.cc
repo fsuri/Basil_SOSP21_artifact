@@ -12,7 +12,7 @@ SyncDelivery::SyncDelivery(uint32_t timeout, uint32_t w_id, uint32_t d_id,
 SyncDelivery::~SyncDelivery() {
 }
 
-int SyncDelivery::Execute(SyncClient &client) {
+transaction_status_t SyncDelivery::Execute(SyncClient &client) {
   std::string str;
 
   Debug("DELIVERY");
