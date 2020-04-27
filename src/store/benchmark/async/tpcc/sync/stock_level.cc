@@ -28,28 +28,32 @@ transaction_status_t SyncStockLevel::Execute(SyncClient &client) {
   UW_ASSERT(d_row.ParseFromString(str));
 
   uint32_t next_o_id = d_row.next_o_id();
-  Debug("Orders: %lu-%lu", next_o_id - 20, next_o_id - 1);
+  Debug("Orders: %u-%u", next_o_id - 20, next_o_id - 1);
 
   std::map<uint32_t, StockRow> stockRows;
   for (size_t ol_o_id = next_o_id - 20; ol_o_id < next_o_id; ++ol_o_id) {
     Debug("Order %lu", ol_o_id);
     client.Get(OrderRowKey(w_id, d_id, ol_o_id), str, timeout);
     OrderRow o_row;
+    if (str.empty()) {
+      Debug("  Non-existent order.");
+      continue;
+    }
     UW_ASSERT(o_row.ParseFromString(str));
-    Debug("  Order Lines: %lu", o_row.ol_cnt());
+    Debug("  Order Lines: %u", o_row.ol_cnt());
 
     for (size_t ol_number = 0; ol_number < o_row.ol_cnt(); ++ol_number) {
-      Debug("    OL %u", ol_number);
+      Debug("    OL %lu", ol_number);
       std::string ol_key = OrderLineRowKey(w_id, d_id, ol_o_id, ol_number);
       client.Get(ol_key, str, timeout);
       OrderLineRow ol_row;
       UW_ASSERT(ol_row.ParseFromString(str));
-      Debug("      Item %lu", ol_row.i_id());
+      Debug("      Item %d", ol_row.i_id());
 
       if (stockRows.find(ol_row.i_id()) == stockRows.end()) {
         client.Get(StockRowKey(w_id, ol_row.i_id()), str, timeout);
         UW_ASSERT(stockRows[ol_row.i_id()].ParseFromString(str));
-        Debug("Stock Item %lu quantity: %lu", ol_row.i_id(), stockRows[ol_row.i_id()].quantity());
+        Debug("Stock Item %d quantity: %d", ol_row.i_id(), stockRows[ol_row.i_id()].quantity());
       }
     }
   }
