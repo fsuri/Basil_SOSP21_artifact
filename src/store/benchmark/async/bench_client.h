@@ -83,6 +83,7 @@ class BenchmarkClient {
   int cooldownSec;
   struct timeval startTime;
   struct timeval endTime;
+  struct timeval startMeasureTime;
   string latencyFilename;
   int msSinceStart;
   int opLastInterval;
