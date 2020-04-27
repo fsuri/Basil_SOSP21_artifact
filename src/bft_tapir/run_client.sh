@@ -1,1 +1,0 @@
-./client -r replicas.config -c clients.config -k keys -n 4 -f 1 -m 1 -i 0
