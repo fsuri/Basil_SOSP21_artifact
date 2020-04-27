@@ -40,7 +40,7 @@ Upon deciding to Commit in the Execution phase, a Client initiates Validation by
 A replica validates Timestamp and Dependency integrity of the request. It then evaluates Read and Write Sets for Isolation conflicts against its local state using the MVTSO Concurrency Control Check (CCC), as shown in algorithm 1. It returns a message $Phase1R \coloneqq \langle TxID, vote \rangle_r$, and optionally evidence in case it voted to Abort.
 
 \underline{Additional subtlelties}: 
-A replica never changes its Voting decision, because re-execution could leave to different results. A replica starts a timer to monitor the clients progress.
+A replica never changes its Voting decision, because re-execution could leave to different results. Once the MVTSO-Ceck completes (i.e. there are no blocking dependencies), a replica starts a timer to monitor the clients progress.
 
 \fbox{\begin{minipage}{23em}
 \textbf{(3: C)}: Client waits for vote replies.
