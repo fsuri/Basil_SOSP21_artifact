@@ -46,6 +46,8 @@
 #include "store/janusstore/server.h"
 #include "store/mortystore/server.h"
 #include "store/indicusstore/server.h"
+#include "store/pbftstore/replica.h"
+#include "store/pbftstore/server.h"
 
 #include <gflags/gflags.h>
 
@@ -56,7 +58,8 @@ enum protocol_t {
 	PROTO_STRONG,
   PROTO_JANUS,
   PROTO_MORTY,
-  PROTO_INDICUS
+  PROTO_INDICUS,
+	PROTO_PBFT
 };
 
 enum transmode_t {
@@ -87,7 +90,8 @@ const std::string protocol_args[] = {
   "strong",
   "janus",
   "morty",
-  "indicus"
+  "indicus",
+	"pbft"
 };
 const protocol_t protos[] {
   PROTO_TAPIR,
@@ -95,7 +99,8 @@ const protocol_t protos[] {
   PROTO_STRONG,
   PROTO_JANUS,
   PROTO_MORTY,
-  PROTO_INDICUS
+  PROTO_INDICUS,
+	PROTO_PBFT
 };
 static bool ValidateProtocol(const char* flagname,
     const std::string &value) {
@@ -413,6 +418,17 @@ int main(int argc, char **argv) {
           indicusOCCType, part);
       break;
     }
+		case PROTO_PBFT: {
+			server = new pbftstore::Server(config, &keyManager,
+				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
+				FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs, FLAGS_indicus_time_delta,
+				part);
+			replica = new pbftstore::Replica(config, &keyManager,
+				dynamic_cast<pbftstore::App *>(server),
+				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, 1, false,
+			 	tport);
+			break;
+		}
     default: {
       NOT_REACHABLE();
     }

@@ -54,6 +54,7 @@ class VersionedKVStore {
       std::vector<std::pair<T, V>> &values);
   void put(const std::string &key, const V &v, const T &t);
   void commitGet(const std::string &key, const T &readTime, const T &commit);
+  bool getUpperBound(const std::string& key, const T& t, T& result);
 
  private:
   struct VersionedValue {
@@ -81,7 +82,7 @@ class VersionedKVStore {
 
 template<class T, class V>
 VersionedKVStore<T, V>::VersionedKVStore() { }
-    
+
 template<class T, class V>
 VersionedKVStore<T, V>::~VersionedKVStore() { }
 
@@ -117,7 +118,7 @@ bool VersionedKVStore<T, V>::get(const std::string &key,
   }
   return false;
 }
-    
+
 /* Returns the value valid at given timestamp.
  * Error if key did not exist at the timestamp. */
 template<class T, class V>
@@ -154,6 +155,21 @@ bool VersionedKVStore<T, V>::getRange(const std::string &key, const T &t,
 }
 
 template<class T, class V>
+bool VersionedKVStore<T, V>::getUpperBound(const std::string& key, const T& t, T& result) {
+  VersionedKVStore<T, V>::VersionedValue v(t);
+  auto it = store[key].upper_bound(v);
+
+  // if there is no valid version at this timestamp
+  if (it == store[key].end()) {
+    return false;
+  } else {
+    result = (*it).write;
+    return true;
+  }
+
+}
+
+template<class T, class V>
 void VersionedKVStore<T, V>::put(const std::string &key, const V &value,
     const T &t) {
   // Key does not exist. Create a list and an entry.
@@ -171,7 +187,7 @@ void VersionedKVStore<T, V>::commitGet(const std::string &key,
   if (inStore(key)) {
     typename std::set<VersionedKVStore<T, V>::VersionedValue>::iterator it;
     getValue(key, readTime, it);
-    
+
     if (it != store[key].end()) {
       // figure out if anyone has read this version before
       if (lastReads.find(key) != lastReads.end() &&
@@ -194,7 +210,7 @@ bool VersionedKVStore<T, V>::getLastRead(const std::string &key, T &lastRead) {
     }
   }
   return false;
-}    
+}
 
 /*
  * Get the latest read for the write valid at timestamp t
@@ -214,7 +230,7 @@ bool VersionedKVStore<T, V>::getLastRead(const std::string &key, const T &t,
       return true;
     }
   }
-  return false;	
+  return false;
 }
 
 template<class T, class V>
