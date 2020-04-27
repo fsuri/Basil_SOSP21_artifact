@@ -13,7 +13,7 @@ SyncTransactionBenchClient::SyncTransactionBenchClient(SyncClient &client,
     const std::string &latencyFilename)
     : BenchmarkClient(transport, seed, numRequests, expDuration, delay,
         warmupSec, cooldownSec, tputInterval, latencyFilename), client(client),
-    abortBackoff(abortBackoff), retryAborted(retryAborted),
+    abortBackoff(abortBackoff), retryAborted(retryAborted), maxBackoff(30000),
     maxAttempts(maxAttempts), timeout(timeout), currTxn(nullptr),
     currTxnAttempts(0UL) {
 }
@@ -52,8 +52,9 @@ void SyncTransactionBenchClient::SendNext(transaction_status_t *result) {
       stats.Increment(GetLastOp() + "_" + std::to_string(*result), 1);
       int backoff = 0;
       if (abortBackoff > 0) {
-        backoff = std::uniform_int_distribution<int>(0,
-          (1 << (currTxnAttempts - 1)) * abortBackoff)(GetRand());
+        int upper = std::min((1 << (currTxnAttempts - 1)) * abortBackoff,
+            maxBackoff);
+        backoff = std::uniform_int_distribution<int>(upper >> 1, upper)(GetRand());
         stats.Increment(GetLastOp() + "_backoff", backoff);
         Warning("Backing off for %dms", backoff);
       }

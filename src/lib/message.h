@@ -67,6 +67,7 @@ void _Message(enum Message_Type type,
               const char *fmt, ...)
         __attribute__((format(printf,5,6)));
 void _Panic(void) __attribute__((noreturn));
+void Backtrace();
 bool _Message_DebugEnabled(const char *fname);
 
 void Message_VA(enum Message_Type type,

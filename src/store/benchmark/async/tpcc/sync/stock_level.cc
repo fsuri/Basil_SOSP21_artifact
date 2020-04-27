@@ -36,7 +36,7 @@ transaction_status_t SyncStockLevel::Execute(SyncClient &client) {
     client.Get(OrderRowKey(w_id, d_id, ol_o_id), str, timeout);
     OrderRow o_row;
     if (str.empty()) {
-      Debug("  Non-existent order.");
+      Debug("  Non-existent Order %lu", ol_o_id);
       continue;
     }
     UW_ASSERT(o_row.ParseFromString(str));
@@ -47,13 +47,16 @@ transaction_status_t SyncStockLevel::Execute(SyncClient &client) {
       std::string ol_key = OrderLineRowKey(w_id, d_id, ol_o_id, ol_number);
       client.Get(ol_key, str, timeout);
       OrderLineRow ol_row;
+      if (str.empty()) {
+        Debug("  Non-existent Order Line %lu", ol_number);
+      }
       UW_ASSERT(ol_row.ParseFromString(str));
       Debug("      Item %d", ol_row.i_id());
 
       if (stockRows.find(ol_row.i_id()) == stockRows.end()) {
         client.Get(StockRowKey(w_id, ol_row.i_id()), str, timeout);
         UW_ASSERT(stockRows[ol_row.i_id()].ParseFromString(str));
-        Debug("Stock Item %d quantity: %d", ol_row.i_id(), stockRows[ol_row.i_id()].quantity());
+        Debug("      Stock Item %d quantity: %d", ol_row.i_id(), stockRows[ol_row.i_id()].quantity());
       }
     }
   }

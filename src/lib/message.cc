@@ -165,17 +165,21 @@ _Message_VA(enum Message_Type type, FILE *fp,
 void _Panic(void)
 {
 #if BACKTRACE_ON_PANIC
-    void *bt[100];
-    size_t size = backtrace(bt, 100);
-    char **strings = backtrace_symbols(bt, size);
-    if (strings) {
-        for (unsigned int i = 0; i < size; ++i) {
-            Warning("%s", strings[i]);
-        }
-    }
+  Backtrace();
 #endif
     abort();
     exit(1);
+}
+
+void Backtrace() {
+  void *bt[100];
+  size_t size = backtrace(bt, 100);
+  char **strings = backtrace_symbols(bt, size);
+  if (strings) {
+      for (unsigned int i = 0; i < size; ++i) {
+          Warning("%s", strings[i]);
+      }
+  }
 }
 
 #define MAX_DEFERRED_FREES 16

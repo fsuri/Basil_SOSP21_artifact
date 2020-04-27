@@ -108,6 +108,7 @@ void ShardClient::Get(uint64_t id, const std::string &key,
     uint64_t rds, read_callback gcb, read_timeout_callback gtcb,
     uint32_t timeout) {
   if (BufferGet(key, gcb)) {
+    Debug("[group %i] read from buffer.", group);
     return;
   }
 
@@ -269,6 +270,8 @@ void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
 bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
   for (const auto &write : txn.write_set()) {
     if (write.key() == key) {
+      Debug("[group %i] Key %s was written with val %s.", group,
+          BytesToHex(key, 16).c_str(), BytesToHex(write.value(), 16).c_str());
       rcb(REPLY_OK, key, write.value(), Timestamp(), proto::Dependency(),
           false, false);
       return true;
@@ -277,6 +280,9 @@ bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
 
   for (const auto &read : txn.read_set()) {
     if (read.key() == key) {
+      Debug("[group %i] Key %s was already read with ts %lu.%lu.", group,
+          BytesToHex(key, 16).c_str(), read.readtime().timestamp(),
+          read.readtime().id());
       rcb(REPLY_OK, key, readValues[key], read.readtime(), proto::Dependency(),
           false, false);
       return true;
@@ -305,6 +311,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     return; // this is a stale request
   }
   PendingQuorumGet *req = itr->second;
+  Debug("[group %i] ReadReply for %lu.", group, reply.req_id());
 
   // value and timestamp are valid
   req->numReplies++;
@@ -398,6 +405,9 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     // TODO: there is probably a more efficient way to pass signedPrepared
     //   back to top-level client
     readValues[key] = req->maxValue;
+    ReadMessage *read = txn.add_read_set();
+    *read->mutable_key() = key;
+    req->maxTs.serialize(read->mutable_readtime());
     gcb(REPLY_OK, key, req->maxValue, req->maxTs, req->dep, req->hasDep, true);
     delete req;
   }
