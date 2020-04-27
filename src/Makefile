@@ -140,7 +140,6 @@ include store/mortystore/Rules.mk
 include store/strongstore/Rules.mk
 include store/weakstore/Rules.mk
 include store/janusstore/Rules.mk
-include bft_tapir/Rules.mk
 include store/indicusstore/Rules.mk
 include store/pbftstore/Rules.mk
 include store/Rules.mk
