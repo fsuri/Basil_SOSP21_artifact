@@ -32,7 +32,6 @@
 #ifndef _INDICUS_SERVER_H_
 #define _INDICUS_SERVER_H_
 
-#include "bft_tapir/config.h"
 #include "replication/ir/replica.h"
 #include "store/server.h"
 #include "store/common/partitioner.h"
