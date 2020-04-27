@@ -28,6 +28,7 @@ class SyncTransactionBenchClient : public BenchmarkClient {
  private:
   uint32_t abortBackoff;
   bool retryAborted;
+  uint32_t maxBackoff;
   int32_t maxAttempts;
   uint32_t timeout;
   SyncTransaction *currTxn;
