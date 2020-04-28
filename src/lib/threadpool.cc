@@ -2,7 +2,7 @@
 
 ThreadPool::ThreadPool(uint32_t numThreads) {
   running = true;
-  for (int i = 0; i < numThreads; i++) {
+  for (uint32_t i = 0; i < numThreads; i++) {
     std::thread t([this] {
       while (true) {
         std::pair<std::function<void*()>, EventInfo*> job;
