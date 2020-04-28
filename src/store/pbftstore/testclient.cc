@@ -74,6 +74,52 @@ int main(int argc, char **argv) {
   // TEST THE FULL CLIENT
   // pbftstore::Client* client = new pbftstore::Client(config, 1, 1, &transport,
   //   default_partitioner, readQuorumSize, signMessages, validateProofs, km);
+  // pbftstore::Client* client = new pbftstore::Client(config, 1, 1, &transport,
+  //   default_partitioner, readQuorumSize, signMessages, validateProofs, km);
+
+  auto timeoutcb = [=]() {
+      printf("to\n");
+    };
+  auto puttimeoutcb = [=](int to, const std::string& key, const std::string& val) {
+      printf("to\n");
+    };
+  auto gettimeoutcb= [=](int to, const std::string& key) {
+      printf("to\n");
+    };
+
+
+  //client->Begin();
+  /*client->Put("A", "123", [=](int status, const std::string& key, const std::string& val) {
+    client->Commit([=](transaction_status_t status) {
+      printf("Committed %d\n", status);
+      //client->Begin();
+      client->Get("A", [=](int status, const std::string& key, const std::string& val,
+      const Timestamp& ts) {
+        std::cout << "Got " << val << std::endl;
+        client->Put("A", val + "fff", [=](int status, const std::string& key, const std::string& val) {
+          client->Commit([=](transaction_status_t status) {
+            printf("Committed2 %d\n", status);
+            client->Get("A", [=](int status, const std::string& key, const std::string& val,
+            const Timestamp& ts) {
+              std::cout << "Got2 " << val << std::endl;
+            }, gettimeoutcb, 1000);
+          }, timeoutcb, 1000);
+        }, puttimeoutcb, 1000);
+      }, gettimeoutcb, 1000);
+    }, timeoutcb, 1000);
+  }, puttimeoutcb, 1000);*/
+
+  // TEST THE SHARD CLIENT
+  // pbftstore::ShardClient* client = new pbftstore::ShardClient(config, &transport,
+  // 0, signMessages, validateProofs, km);
+  //
+  // Timestamp ts(15, 1);
+  // pbftstore::proto::Transaction txn;
+  // WriteMessage* wm1 = txn.add_writeset();
+  // wm1->set_key("a");
+  // wm1->set_value("123");
+  // ts.serialize(txn.mutable_timestamp());
+  // txn.add_participating_shards(0);
   //
   // auto timeoutcb = [=](int to) {
   //     printf("to\n");

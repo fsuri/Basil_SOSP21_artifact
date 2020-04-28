@@ -768,7 +768,7 @@ int main(int argc, char **argv) {
         }
 
         client = new pbftstore::Client(*config, FLAGS_num_shards,
-            FLAGS_num_groups, transport, part,
+            FLAGS_num_groups, tport, part,
             readQuorumSize,
             FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
             keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
