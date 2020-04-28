@@ -84,6 +84,8 @@ public:
     virtual bool CancelTimer(int id) override;
     virtual void CancelAllTimers() override;
 
+    void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb);
+
     TCPTransportAddress
     LookupAddress(const transport::Configuration &cfg,
                   int replicaIdx);

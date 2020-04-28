@@ -32,6 +32,6 @@ private:
   std::list<std::pair<std::function<void*()>, EventInfo*> > worklist;
   bool running;
 
-}
+};
 
 #endif  // _LIB_THREADPOOL_H_

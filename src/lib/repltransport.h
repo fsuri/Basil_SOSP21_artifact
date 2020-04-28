@@ -210,6 +210,8 @@ public:
     virtual int Timer(uint64_t ms, timer_callback_t cb) override;
     virtual bool CancelTimer(int id) override;
     virtual void CancelAllTimers() override;
+    
+    void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb);
 
     // DeliverMessage(addr, i) delivers the ith queued inbound message to the
     // receiver with address addr. It's possible to send a message to the

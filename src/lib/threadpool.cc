@@ -1,5 +1,7 @@
 #include "lib/threadpool.h"
 
+#include <thread>
+
 ThreadPool::ThreadPool(uint32_t numThreads) {
   running = true;
   for (uint32_t i = 0; i < numThreads; i++) {
@@ -8,9 +10,9 @@ ThreadPool::ThreadPool(uint32_t numThreads) {
         std::pair<std::function<void*()>, EventInfo*> job;
         {
           // only acquire the lock in this block so that the
-          // function execution is not holding the lock
-          std::lock_guard<std::mutex> lock(this->worklistMutex);
-          cv.wait(lk, [this] { return this->worklist.size() > 0 || !running; });
+          // std::function execution is not holding the lock
+          std::unique_lock<std::mutex> lock(this->worklistMutex);
+          cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });
           if (!running) {
             break;
           }
@@ -36,7 +38,7 @@ void ThreadPool::stop() {
 }
 
 
-static void ThreadPool::EventCallback(evutil_socket_t fd, short what, void *arg) {
+void ThreadPool::EventCallback(evutil_socket_t fd, short what, void *arg) {
   // we want to run the callback in the main event loop
   EventInfo* info = (EventInfo*) arg;
   info->cb(info->r);
@@ -50,7 +52,7 @@ void ThreadPool::dispatch(std::function<void*()> f, std::function<void(void*)> c
   info->ev = event_new(libeventBase, -1, 0, ThreadPool::EventCallback, info);
   event_add(info->ev, NULL);
 
-  pair<function<void*()>, EventInfo*> job(f, info);
+  std::pair<std::function<void*()>, EventInfo*> job(f, info);
 
   std::lock_guard<std::mutex> lk(worklistMutex);
   worklist.push_back(job);
