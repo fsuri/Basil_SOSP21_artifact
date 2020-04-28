@@ -49,6 +49,7 @@ transaction_status_t SyncStockLevel::Execute(SyncClient &client) {
       OrderLineRow ol_row;
       if (str.empty()) {
         Debug("  Non-existent Order Line %lu", ol_number);
+        continue;
       }
       UW_ASSERT(ol_row.ParseFromString(str));
       Debug("      Item %d", ol_row.i_id());

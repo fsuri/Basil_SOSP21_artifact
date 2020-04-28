@@ -66,8 +66,6 @@
   "client_experiment_length": 80,
   "client_ramp_down": 10,
   "client_ramp_up": 30,
-  "client_abort_backoff": 0,
-  "client_max_attempts": 1,
   "default_remote_shell": "bash",
   "server_host_format_str": "%s.%s.%s.utah.cloudlab.us",
   "client_host_format_str": "client-%d-%d.%s.%s.utah.cloudlab.us",
