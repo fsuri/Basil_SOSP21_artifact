@@ -62,6 +62,7 @@ BenchmarkClient::BenchmarkClient(Transport &transport, uint32_t seed,
   if (numRequests > 0) {
 	  latencies.reserve(numRequests);
   }
+  _Latency_Init(&latency, "txn");
 }
 
 BenchmarkClient::~BenchmarkClient() {
