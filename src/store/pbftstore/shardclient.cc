@@ -19,9 +19,41 @@ ShardClient::~ShardClient() {}
 
 bool ShardClient::validateReadProof(const proto::CommitProof& commitProof, const std::string& key,
   const std::string& value, const Timestamp& timestamp) {
-    // Commit proof is proof that key -> value was prepared on the shard, not that it was written
+    // First, verify the transaction
 
-    // TODO
+    // txn must have timestamp of write
+    if (Timestamp(commitProof.txn().timestamp()) != timestamp) {
+      return false;
+    }
+
+    bool found_write = false;
+
+    for (const auto& write : commitProof.txn().writeset()) {
+      if (write.key() == key && write.value() == value) {
+        found_write = true;
+        break;
+      }
+    }
+
+    if (!found_write) {
+      return false;
+    }
+
+    // Verified Transaction at this point
+
+    // Next, verify that the decision is valid for the transaction
+
+    std::string proofTxnDigest = TransactionDigest(commitProof.txn());
+
+    // make sure the writeback message is for the transaction
+    if (commitProof.writeback_message().txn_digest() != proofTxnDigest) {
+      return false;
+    }
+
+    if (!verifyGDecision(commitProof.writeback_message(), commitProof.txn(), keyManager, signMessages, config.f)) {
+      return false;
+    }
+
     return true;
   }
 

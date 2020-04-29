@@ -37,6 +37,10 @@ std::string BatchedDigest(proto::BatchedRequest& breq);
 
 std::string string_to_hex(const std::string& input);
 
+// return true if the grouped decision is valid
+bool verifyGDecision(const proto::GroupedDecision& gdecision,
+  const proto::Transaction& txn, KeyManager* keyManager, bool signMessages, uint64_t f);
+
 } // namespace pbftstore
 
 #endif /* PBFT_COMMON_H */
