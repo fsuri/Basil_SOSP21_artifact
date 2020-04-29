@@ -50,6 +50,10 @@ bool ShardClient::validateReadProof(const proto::CommitProof& commitProof, const
       return false;
     }
 
+    if (commitProof.writeback_message().status() != REPLY_OK) {
+      return false;
+    }
+
     if (!verifyGDecision(commitProof.writeback_message(), commitProof.txn(), keyManager, signMessages, config.f)) {
       return false;
     }
