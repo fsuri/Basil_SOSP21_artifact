@@ -13,6 +13,7 @@ const crypto::PubKey &KeyManager::GetPublicKey(uint64_t id) {
   if (itr == publicKeys.end()) {
     crypto::PubKey publicKey =  crypto::LoadPublicKey(keyPath + "/" +
         std::to_string(id) + ".pub");
+    publicKey.Precompute();
     auto pairItr = publicKeys.insert(std::make_pair(id, publicKey));
     return pairItr.first->second;
   } else {
