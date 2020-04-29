@@ -168,13 +168,16 @@ void BenchmarkClient::IncrementSent(int result) {
       uint64_t ns = Latency_End(&latency);
       // TODO: use standard definitions across all clients for success/commit and failure/abort
       if (result == 0) { // only record result if success
+        struct timespec curr;
+        clock_gettime(CLOCK_MONOTONIC, &curr);
         if (latencies.size() == 0UL) {
           gettimeofday(&startMeasureTime, NULL);
           startMeasureTime.tv_sec -= ns / 1000000000ULL;
           startMeasureTime.tv_usec -= (ns % 1000000000ULL) / 1000ULL;
           std::cout << "#start," << startMeasureTime.tv_sec << "," << startMeasureTime.tv_usec << std::endl;
         }
-        std::cout << GetLastOp() << ',' << ns << std::endl;
+        uint64_t currNanos = curr.tv_sec * 1000000000ULL + curr.tv_nsec;
+        std::cout << GetLastOp() << ',' << ns << ',' << currNanos << std::endl;
         latencies.push_back(ns);
       }
     }
