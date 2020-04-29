@@ -18,7 +18,7 @@ class RetwisClient : public AsyncTransactionBenchClient {
       Transport &transport, uint32_t seed, int numRequests, int expDuration,
       uint64_t delay, int warmupSec, int cooldownSec, int tputInterval,
       uint32_t abortBackoff,
-      bool retryAborted, int32_t maxAttempts,
+      bool retryAborted, uint32_t maxBackoff, uint32_t maxAttempts,
       const std::string &latencyFilename = "");
 
   virtual ~RetwisClient();
