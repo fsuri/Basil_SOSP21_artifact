@@ -20,6 +20,7 @@ AsyncTransactionBenchClient::~AsyncTransactionBenchClient() {
 
 void AsyncTransactionBenchClient::SendNext() {
   currTxn = GetNextTransaction();
+  Latency_Start(&latency);
   currTxnAttempts = 0;
   client.Execute(currTxn,
       std::bind(&AsyncTransactionBenchClient::ExecuteCallback, this,
