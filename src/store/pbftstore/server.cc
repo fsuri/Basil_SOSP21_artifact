@@ -18,10 +18,78 @@ Server::Server(const transport::Configuration& config, KeyManager *keyManager,
 
 Server::~Server() {}
 
+bool Server::CCC2(const proto::Transaction& txn) {
+  Debug("Starting ccc v2 check");
+  Timestamp txTs(txn.timestamp());
+  for (const auto &read : txn.readset()) {
+    if(!IsKeyOwned(read.key())) {
+      continue;
+    }
+
+    // we want to make sure that our reads don't span any
+    // committed/prepared writes
+
+    // check the committed writes
+    Timestamp rts(read.readtime());
+    // we want to make sure there are no committed writes for this key after
+    // the rts and before the txTs
+    std::vector<std::pair<Timestamp, Server::ValueAndProof>> committedWrites;
+    if (commitStore.getCommittedAfter(read.key(), rts, committedWrites)) {
+      for (const auto& committedWrite : committedWrites) {
+        if (committedWrite.first < txTs) {
+          Debug("found committed conflict with read for key: %s", read.key().c_str());
+          return false;
+        }
+      }
+    }
+
+    // check the prepared writes
+    const auto preparedWritesItr = preparedWrites.find(read.key());
+    if (preparedWritesItr != preparedWrites.end()) {
+      for (const auto& writeTs : preparedWritesItr->second) {
+        if (rts < writeTs && writeTs < txTs) {
+          Debug("found prepared conflict with read for key: %s", read.key().c_str());
+          return false;
+        }
+      }
+    }
+
+  }
+
+  Debug("checked all reads");
+
+  for (const auto &write : txn.writeset()) {
+    if(!IsKeyOwned(write.key())) {
+      continue;
+    }
+
+    // we want to make sure that no prepared/committed read spans
+    // our writes
+
+    // check commited reads
+    for (const auto& read : committedReads[write.key()]) {
+      // second is the read ts, first is the txTs that did the read
+      if (read.second < txTs && txTs < read.first) {
+          Debug("found committed conflict with write for key: %s", write.key().c_str());
+          return false;
+      }
+    }
+
+    // check prepared reads
+    for (const auto& read : preparedReads[write.key()]) {
+      // second is the read ts, first is the txTs that did the read
+      if (read.second < txTs && txTs < read.first) {
+          Debug("found prepared conflict with write for key: %s", write.key().c_str());
+          return false;
+      }
+    }
+  }
+  return true;
+}
+
 bool Server::CCC(const proto::Transaction& txn) {
   Debug("Starting ccc check");
   Timestamp txTs(txn.timestamp());
-  // TODO do the iterative version
   for (const auto &read : txn.readset()) {
     if(!IsKeyOwned(read.key())) {
       continue;
@@ -132,10 +200,26 @@ bool Server::CCC(const proto::Transaction& txn) {
   decision->set_txn_digest(digest);
   decision->set_shard_id(groupIdx);
   // OCC check
-  if (CCC(transaction)) {
+  if (CCC2(transaction)) {
     Debug("ccc succeeded");
     decision->set_status(REPLY_OK);
     pendingTransactions[digest] = transaction;
+
+    // update prepared reads and writes
+    Timestamp txTs(transaction.timestamp());
+    for (const auto& write : transaction.writeset()) {
+      if(!IsKeyOwned(write.key())) {
+        continue;
+      }
+      preparedWrites[write.key()].insert(txTs);
+    }
+    for (const auto& read : transaction.readset()) {
+      if(!IsKeyOwned(read.key())) {
+        continue;
+      }
+      preparedReads[read.key()][txTs] = read.readtime();
+    }
+
   } else {
     Debug("ccc failed");
     decision->set_status(REPLY_FAIL);
@@ -195,8 +279,8 @@ bool Server::CCC(const proto::Transaction& txn) {
   groupedDecisionAck->set_txn_digest(digest);
   if (gdecision.status() == REPLY_OK) {
     // verify gdecision
-    if (verifyGDecision(gdecision, pendingTransactions[gdecision.txn_digest()], keyManager, signMessages, config.f) &&
-        pendingTransactions.find(digest) != pendingTransactions.end()) {
+    if (pendingTransactions.find(digest) != pendingTransactions.end() &&
+        verifyGDecision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)) {
       proto::Transaction txn = pendingTransactions[digest];
       Timestamp ts(txn.timestamp());
       // apply tx
@@ -238,21 +322,41 @@ bool Server::CCC(const proto::Transaction& txn) {
       }
 
       // mark txn as commited
-      pendingTransactions.erase(digest);
+      cleanupPendingTx(digest);
       groupedDecisionAck->set_status(REPLY_OK);
     } else {
       groupedDecisionAck->set_status(REPLY_FAIL);
     }
   } else {
     // abort the tx
-    if (pendingTransactions.find(digest) != pendingTransactions.end()) {
-      pendingTransactions.erase(digest);
-    }
+    cleanupPendingTx(digest);
     groupedDecisionAck->set_status(REPLY_FAIL);
   }
   Debug("decision ack status: %d", groupedDecisionAck->status());
 
   return returnMessage(groupedDecisionAck);
+}
+
+void Server::cleanupPendingTx(std::string digest) {
+  if (pendingTransactions.find(digest) != pendingTransactions.end()) {
+    proto::Transaction tx = pendingTransactions[digest];
+    // remove prepared reads and writes
+    Timestamp txTs(tx.timestamp());
+    for (const auto& write : tx.writeset()) {
+      if(!IsKeyOwned(write.key())) {
+        continue;
+      }
+      preparedWrites[write.key()].erase(txTs);
+    }
+    for (const auto& read : tx.readset()) {
+      if(!IsKeyOwned(read.key())) {
+        continue;
+      }
+      preparedReads[read.key()].erase(txTs);
+    }
+
+    pendingTransactions.erase(digest);
+  }
 }
 
 void Server::Load(const string &key, const string &value,
