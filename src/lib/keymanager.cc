@@ -26,6 +26,7 @@ const crypto::PrivKey &KeyManager::GetPrivateKey(uint64_t id) {
   if (itr == privateKeys.end()) {
     crypto::PrivKey privateKey =  crypto::LoadPrivateKey(keyPath + "/" +
         std::to_string(id) + ".priv");
+    privateKey.Precompute();
     auto pairItr = privateKeys.insert(std::make_pair(id, privateKey));
     return pairItr.first->second;
   } else {
