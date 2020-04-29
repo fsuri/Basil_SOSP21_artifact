@@ -1,0 +1,34 @@
+%-------------------------------------------------------------------------------
+\subsection{Optimizations}
+%-------------------------------------------------------------------------------
+
+
+\fs{the current writeback might be unecessary to explain, since we implement the below anyways... Perhaps merge writeback and this subsection}
+\paragraph{Single Shard Logging}
+\fs{This does not work for Atomic Broadcast! In AB, the voting only happens AFTER the tx has already been logged (i.e. the order has been durably replicated)}
+
+When transaction execution touches multiple shards validation can incur redundant explicit logging overhead. When a Slow-Path is necessary to arrive at a logged decision on S different shards, bandwith is wasted. Consider an example in which $S-1$ shards attempt to log the decision Commit, while a single shard attempts to log an Abort decision. If the latter shard succeeds, the effort of the remaining shards was in vain. \fs{Moreover, logging is always bottlenecked by the slowest shard. }
+The culprit of this phenomenon is the delayal of Two-Phase-Commit (2PC) until the Writeback phase. By preemptively making a 2PC decision \textbf{before} logging we can avoid this redundancy. We remark, that even when when all shards agree on a decision, this saves redundant coordination.
+Concretely, we designate \textbf{one} involved shard as \textit{logging Shard}, while all other shards remain responsible only for Validation. The logging Shard can be determined via a determinsitic function over the \textit{involved Shards}. A simple load balanced solution may select $loggingS = min(TxID \% involvedShard)$. \fs{This does not work for Atomic Broadcast! In AB, the voting only happens AFTER the tx has already been logged (i.e. the order has been durably replicated).Figure \ref{fig:SingleShardOpt} shows a comparison and the revised structure. dont use this figure in actual paper} In order to log a decision, voting quorums from all involved shards are required. We modify step 3 of the Validation protocol accordingly:
+
+\fbox{\begin{minipage}{21em}
+\textbf{Validation (3: C)}: Client waits for vote replies from all involved Shards.
+\end{minipage}}
+A client aggregates a per-shard decision for each shard according to the \textit{CommitQuorum} rule. If all shard-decisions are Commit, it attempts to log a Commit decision by sending $Phase2 \coloneqq (TxID, Commit, S \times \{CommitQuorum\}$ to all replicas in the designated logging Shard. If a single shard-decision is Abort, it stops waiting for other shard-decisions and attempts to log an Abort decision by instead sending $Phase2 \coloneqq (TxID, Abort, AbortQuorum)$. 
+
+\underline{Additional subtlelties:} A client can go Fast-Path and return to the Writeback phase immediately only if Fast-Path Quorums were received for all shards. 
+
+The remaining Validation protocol proceeds identically to the multi-shard version. Notice, that when only a single shard is involved, no adjustments were made. The Writeback phase instead, may proceed with just the single certificate from the logging Shard
+
+
+The Fallback protocol is adjusted accordingly: A fallback replica need (and can) only be elected on the logging Shard, simplifying reconciliation and reducing the cost for interested clients. 
+To further reduce unecessary load, a client may attempt to first inquire whether decisions exists at the logging shard (Fallback protocol step 1 \& 2), before sending $Rec-Phase1$ messages to all shards in order to gather votes itself (Fallback protocol step 1). 
+
+
+\begin{figure*}
+\begin{center}
+\includegraphics[width= \textwidth]{./figures/SingleShard.png}
+\end{center}
+\caption{Single Shard Optimization}
+\label{fig:SingleShardOpt}
+\end{figure*}

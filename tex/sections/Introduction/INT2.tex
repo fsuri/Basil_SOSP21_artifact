@@ -13,10 +13,12 @@ participants.
 Maintaining a totally ordered log of requests, despite its appealing simplicity, is problematic as such an approach is hard to scale and costly to implement. This total order is in fact often unnecessary; modern distributed applications primarily consist of independent operations that could be executed concurrently. Supply chains for instance, despite their name, are actually complex networks that generate and process logically concurrent transactions.
 
 Existing research attempts to mitigate the aforementioned scalability bottleneck through a combination of sharding, cross-shard atomic commit protocols and centralised ordering services~\cite{kokoris2018omniledger,al2017chainspace,padilha2016callinicos}. These systems suffer from three primary drawbacks \one ~ they limit the expressivity of the transactions they support \two ~ they introduce unnecessary coordination across replicas and finally,
-\three ~ they often centralise the ordering of requests at a single leader, which raises fairness \fs{and scalability} concerns. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness. \fs{transaction limited expressiveness only partially attributtable to total order imo - ; ALSO: the 2 blockchain citations use the UTXO model, its probably a stretch to say that has to due with totally ordered based? Even with partial order one-shot models are desirable (UTXO is a oneshot in my eyes), since thats single round communication/coordination}
+\three ~ they often centralise the ordering of requests at a single leader, which raises fairness \fs{and scalability - cyclic mention..} concerns. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness. 
+\fs{these limitations currently don't read as if they are intertwined - when I think they should. I.e. the transaction expressiveness is limited in order to make the other limitations more scalable}
+\fs{transaction limited expressiveness only partially attributtable to total order imo - ; ALSO: the 2 blockchain citations use the UTXO model, its probably a stretch to say that has to due with totally ordered based? Even with partial order one-shot models are desirable (UTXO is a oneshot in my eyes), since thats single round communication/coordination}
 
 
-\fs{people build abstraction of total order on top of the physical total order. Implementation mirrors abstraction - we want to instead provide a different implementation. They KNOW that total order is limiting, its not a new idea or mistaken belief. The question is, can we do it differently. And people HAVE tried: But only for crash failure - or, only via sharding }
+\fs{people have been building the abstraction of a total order on top of a physical total order, i.e. the implementation mirrors abstraction. They KNOW that total order is limiting, its not a new idea or mistaken belief. The question is, whether it is possible to do it differently - we want to instead provide a different implementation. And people HAVE tried: But only for crash failure - or, only via sharding }
  
 In reality, building \textit{the abstraction} of a total order is sufficient, and distributed databases have long recognised this fact~\cite{crooks2018obladi,bernstein1979fas,Papadimitriou1979serializability,adya99weakconsis}. \fs{at this point a reader could expect us to talk about partial order and sharding - if we cut the Background section we currently do not mention sharding anywhere. That could seem ignorant.} Serializability, the gold-standard database criterion, defines a correct execution as one that is \textit{equivalent} to a correct schedule~\cite{bernstein1979fas,Papadimitriou1979serializability,bernstein1979fas}. This definition allows concurrent operations to execute in parallel and orders conflicting operations only.  Byzantine systems need be no different. This paper consequently argues for a paradigm "flip". The
 right way to build BFT data-sharing systems is not to layer database-like transactions and sharding on top of a BFT log, but instead to do the opposite and build out the abstraction of a BFT log atop a partially ordered distributed database.
@@ -88,9 +90,9 @@ In summary, we make the following three contributions:
 \begin{itemize}
 \item We introduce the notion of Byzantine Isolation and prove that \sys guarantees
 Byzantine Serializability.
-\item We introduce a novel concurrency control and recovery \fs{is this the best word} mechanism that balance the need for high-throughput in
+\item We introduce a novel concurrency control and recovery \fs{is "recovery" the right word?} mechanism that balance the need for high-throughput in
 the common case with resilience to Byzantine attacks.
-\item Our system remains leaderless and exhibits linear communication complexity, unlike prior BFT systems. \fs{this describes Q/U too - but we offer transactions and liveness}
+\item Our system remains leaderless and exhibits linear communication complexity, unlike prior BFT systems. \fs{this describes Q/U too, so its not quite "unlike prior" - but we offer transactions and liveness}
 \end{itemize}
 
 

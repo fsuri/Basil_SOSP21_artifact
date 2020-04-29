@@ -5,11 +5,12 @@
 
 \subsection{System Model}
 
-We adopt the standard adversarial assumptions of BFT replication. We assume that an arbitrary but finite number of \sys's client are faulty, and that, withing each shard, the number of faulty replicas does not exceed a threshold. Faulty clients and replicas may  deviate arbitrarily from their correct sepcification;  a strong but static adversary can coordinate their actions but cannot  break cryptographic primitivives  like collision-resistant hashes, encryption, and signatures. We denote a message $m$, signed by principal $p$ as $\langle m \rangle_p$.
+We adopt the standard adversarial assumptions of BFT replication. We assume that an arbitrary but finite number of \sys's client are faulty, and that, withing each shard, the number of faulty replicas does not exceed a threshold \textit{f}. Faulty clients and replicas may deviate arbitrarily from their correct specification; a strong but static adversary can coordinate their actions but cannot break \changebars{standard}{} cryptographic primitivives\changebars{}{like collision-resistant hashes, encryption, and signatures. We denote a message $m$, signed by principal $p$ as $\langle m \rangle_p$}.
 
-We design \sys{} so that it does not rely on network synchrony for safety; however, \sys can only guarantee liveness when messages exchanged between correct parties are delayed by no more that a fixed, but potentially unknown time interval~\cite{fischer1985impossibility}.
+\sys{} does not rely on network synchrony for safety. As is standard~\cite{castro1999practical, kotla2007zyzzyva, clement2009making, buchman2016tendermint}, the system is live when messages exchanged between correct parties are delayed by no more than a fixed, but potentially unknown time interval
+%\sys{}  does not rely on network synchrony for safety; however, it can only guarantee liveness when messages exchanged between correct parties are delayed by no more that a fixed, but potentially unknown time interval~\cite{fischer1985impossibility}}.
 
-% urther, \sys{] guarantees liveness one a per-client basis:
+% Further, \sys{] guarantees liveness one a per-client basis:
 % Unlike traditional State Machine Replication protocols, where client liveness  in which the liveness of all Clients is correlated with the fate of the system (or often more specifically a leader), our system guarantees liveness not on a system basis, but on a per client basis. Concretely, we only guarantee liveness to clients that follow the protocol. Conversely, an honest client only loses liveness when it intertwines its fate with byzantine clients.\\
 
-The influence of Byzantine clients may be reduced by enforcing authentication and access control; though it is impossible to prevent authenticated Byzantine clients from compromising the database's integrity, their actionsare  retraceable by auditing transaction logs.
+The influence of Byzantine clients may be reduced by enforcing authentication and access control; though it is impossible to prevent authenticated Byzantine clients from compromising the database's integrity, their actions are  retraceable by auditing transaction logs \nc{i'm not sure whether we should keep this. I understand that we need to defend against the attack where a bft client can just delete the database, but it comes out a bit of left field here}.

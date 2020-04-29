@@ -18,6 +18,9 @@
 \usepackage{enumitem}
 \usepackage{xcolor}
 \setlist{itemsep=0pt,parsep=0pt}             % more compact lists
+%\usepackage[belowskip=-5pt,aboveskip=5pt]{caption}
+ 
+%\setlength{\intextsep}{10pt plus 2pt minus 2pt}
 %-------------------------------------------------------------------------------
 \begin{document}
 %-------------------------------------------------------------------------------
@@ -87,14 +90,18 @@ Not more than 200 words, if possible, and preferably closer to 150.
 %-------------------------------------------------------------------------------
 \input{sections/Indicus/Protocol/Header.tex}
 \input{sections/Indicus/Protocol/subsections/Execution.tex}
-\input{sections/Indicus/Protocol/subsections/ConcurrencyControl.tex}
+\input{sections/Indicus/Protocol/subsections/MVTSO-Check.tex}
 \input{sections/Indicus/Protocol/subsections/Validation.tex}
+\input{sections/Indicus/Protocol/subsections/Writeback.tex}
+\input{sections/Indicus/Protocol/subsections/Fallback.tex}
+\input{sections/Indicus/Protocol/subsections/Optimizations.tex}
+
 %\input{sections/Indicus/Protocol/Protocol.tex}
 %\input{sections/Discussion.tex}
 
 
 
-\input{sections/Implementation.tex}
+%\input{sections/Implementation.tex}
 
 \input{sections/Limitations.tex}
 
