@@ -29,7 +29,7 @@
 #include "store/benchmark/async/smallbank/smallbank_client.h"
 #include "store/janusstore/client.h"
 #include "store/indicusstore/client.h"
-// #include "store/pbftstore/client.h"
+#include "store/pbftstore/client.h"
 #include "store/common/frontend/one_shot_client.h"
 #include "store/common/frontend/async_one_shot_adapter_client.h"
 #include "store/benchmark/async/common/zipf_key_selector.h"
@@ -643,11 +643,11 @@ int main(int argc, char **argv) {
             NOT_REACHABLE();
         }
 
-        // client = new pbftstore::Client(*config, FLAGS_num_shards,
-        //     FLAGS_num_groups, transport, part,
-        //     readQuorumSize,
-        //     FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-        //     keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+        client = new pbftstore::Client(*config, FLAGS_num_shards,
+            FLAGS_num_groups, transport, part,
+            readQuorumSize,
+            FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+            keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
 			}
       default:
