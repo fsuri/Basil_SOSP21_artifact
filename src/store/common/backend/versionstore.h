@@ -221,7 +221,10 @@ bool VersionedKVStore<T, V>::getLastRead(const std::string &key, const T &t,
   if (inStore(key)) {
     typename std::set<VersionedKVStore<T, V>::VersionedValue>::iterator it;
     getValue(key, t, it);
-    UW_ASSERT(it != store[key].end());
+    // TODO: this ASSERT seems incorrect. Why should we expect to find a value
+    //    at given time t? There is no constraint on t, so we have no guarantee
+    //    that a valid version exists.
+    // UW_ASSERT(it != store[key].end());
 
     // figure out if anyone has read this version before
     if (lastReads.find(key) != lastReads.end() &&

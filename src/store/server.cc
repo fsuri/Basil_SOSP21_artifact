@@ -182,7 +182,7 @@ DEFINE_int32(tpcc_num_warehouses, 1, "number of warehouses (for tpcc)");
 /**
  * TAPIR settings.
  */
-DEFINE_bool(linearizable, true, "run TAPIR in linearizable mode");
+DEFINE_bool(tapir_linearizable, true, "run TAPIR in linearizable mode");
 
 /**
  * StrongStore settings.
@@ -421,7 +421,7 @@ int main(int argc, char **argv) {
 
   switch (proto) {
     case PROTO_TAPIR: {
-      server = new tapirstore::Server(FLAGS_linearizable);
+      server = new tapirstore::Server(FLAGS_tapir_linearizable);
       replica = new replication::ir::IRReplica(config, FLAGS_group_idx, FLAGS_replica_idx,
           tport, dynamic_cast<replication::ir::IRAppReplica *>(server));
       break;
