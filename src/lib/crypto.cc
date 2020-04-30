@@ -115,7 +115,7 @@ PubKey DerivePublicKey(PrivKey &privateKey) {
   AutoSeededRandomPool prng;
 
   #ifdef USE_ECDSA_SIGS
-  Pubkey publicKey;
+  PubKey publicKey;
   privateKey.MakePublicKey(publicKey);
   #else
   PubKey publicKey(privateKey);
