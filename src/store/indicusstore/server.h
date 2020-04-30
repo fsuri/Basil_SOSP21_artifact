@@ -135,7 +135,6 @@ class Server : public TransportReceiver, public ::Server {
     return static_cast<int>(part(key, numShards) % numGroups) == groupIdx;
   }
 
-
   const transport::Configuration &config;
   const int groupIdx;
   const int idx;
@@ -151,6 +150,14 @@ class Server : public TransportReceiver, public ::Server {
   KeyManager *keyManager;
   const uint64_t timeDelta;
   TrueTime timeServer;
+
+  proto::SignedMessage signedMessage;
+  proto::PackedMessage packedMessage;
+  proto::Read read;
+  proto::Phase1 phase1;
+  proto::Phase2 phase2;
+  proto::Writeback writeback;
+  proto::Abort abort;
 
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V

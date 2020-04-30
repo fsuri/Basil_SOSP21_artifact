@@ -57,16 +57,8 @@ Server::~Server() {
 
 void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &t, const std::string &d, void *meta_data) {
-  proto::SignedMessage signedMessage;
-  proto::PackedMessage packedMessage;
-  proto::Read read;
-  proto::Phase1 phase1;
-  proto::Phase2 phase2;
-  proto::Writeback writeback;
-  proto::Abort abort;
-
-  std::string type;
-  std::string data;
+  const std::string *type;
+  const std::string *data;
   if (t == signedMessage.GetTypeName()) {
     if (!signedMessage.ParseFromString(d)) {
       return;
@@ -78,27 +70,27 @@ void Server::ReceiveMessage(const TransportAddress &remote,
       return;
     }
   } else {
-    type = t;
-    data = d;
+    type = &t;
+    data = &d;
   }
 
-  if (type == read.GetTypeName()) {
-    read.ParseFromString(data);
+  if (*type == read.GetTypeName()) {
+    read.ParseFromString(*data);
     HandleRead(remote, read);
-  } else if (type == phase1.GetTypeName()) {
-    phase1.ParseFromString(data);
+  } else if (*type == phase1.GetTypeName()) {
+    phase1.ParseFromString(*data);
     HandlePhase1(remote, phase1);
-  } else if (type == phase2.GetTypeName()) {
-    phase2.ParseFromString(data);
+  } else if (*type == phase2.GetTypeName()) {
+    phase2.ParseFromString(*data);
     HandlePhase2(remote, phase2);
-  } else if (type == writeback.GetTypeName()) {
-    writeback.ParseFromString(data);
+  } else if (*type == writeback.GetTypeName()) {
+    writeback.ParseFromString(*data);
     HandleWriteback(remote, writeback);
-  } else if (type == abort.GetTypeName()) {
-    abort.ParseFromString(data);
+  } else if (*type == abort.GetTypeName()) {
+    abort.ParseFromString(*data);
     HandleAbort(remote, abort, signedMessage.process_id());
   } else {
-    Panic("Received unexpected message type: %s", type.c_str());
+    Panic("Received unexpected message type: %s", type->c_str());
   }
 }
 

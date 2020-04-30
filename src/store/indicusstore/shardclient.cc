@@ -66,9 +66,9 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   proto::ReadReply readReply;
   proto::Phase1Reply phase1Reply;
   proto::Phase2Reply phase2Reply;
-  
-  std::string type;
-  std::string data;
+
+  const std::string *type;
+  const std::string *data;
   if (t == signedMessage.GetTypeName()) {
     if (!signedMessage.ParseFromString(d)) {
       return;
@@ -78,21 +78,21 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
       return;
     }
   } else {
-    type = t;
-    data = d;
+    type = &t;
+    data = &d;
   }
 
-  if (type == readReply.GetTypeName()) {
-    readReply.ParseFromString(data);
+  if (*type == readReply.GetTypeName()) {
+    readReply.ParseFromString(*data);
     HandleReadReply(readReply);
-  } else if (type == phase1Reply.GetTypeName()) {
-    phase1Reply.ParseFromString(data);
+  } else if (*type == phase1Reply.GetTypeName()) {
+    phase1Reply.ParseFromString(*data);
     HandlePhase1Reply(phase1Reply, signedMessage);
-  } else if (type == phase2Reply.GetTypeName()) {
-    phase2Reply.ParseFromString(data);
+  } else if (*type == phase2Reply.GetTypeName()) {
+    phase2Reply.ParseFromString(*data);
     HandlePhase2Reply(phase2Reply, signedMessage);
   } else {
-    Panic("Received unexpected message type: %s", type.c_str());
+    Panic("Received unexpected message type: %s", type->c_str());
   }
 }
 
