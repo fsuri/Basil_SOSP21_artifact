@@ -33,8 +33,6 @@
 
 #include <bitset>
 
-#include <valgrind/callgrind.h>
-
 #include "lib/tcptransport.h"
 #include "store/indicusstore/common.h"
 
@@ -59,8 +57,6 @@ Server::~Server() {
 
 void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &t, const std::string &d, void *meta_data) {
-  CALLGRIND_START_INSTRUMENTATION;
-
   proto::SignedMessage signedMessage;
   proto::PackedMessage packedMessage;
   proto::Read read;
@@ -104,8 +100,6 @@ void Server::ReceiveMessage(const TransportAddress &remote,
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
-
-  CALLGRIND_STOP_INSTRUMENTATION;
 }
 
 
