@@ -44,7 +44,7 @@ AsyncTransaction* AsyncTPCCClient::GetNextTransaction() {
     case TXN_STOCK_LEVEL:
       return new AsyncStockLevel(wid, did, GetRand());
     case TXN_DELIVERY:
-      return nullptr; //new AsyncDelivery(wid, TPCCClient::GetRand());
+      Panic("Async Delivery transaction not implemented.");
     default:
       NOT_REACHABLE();
   }
