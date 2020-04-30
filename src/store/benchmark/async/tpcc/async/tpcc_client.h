@@ -16,7 +16,7 @@ class AsyncTPCCClient : public AsyncTransactionBenchClient, public TPCCClient {
       uint32_t C_c_id, uint32_t C_c_last, uint32_t new_order_ratio,
       uint32_t delivery_ratio, uint32_t payment_ratio, uint32_t order_status_ratio,
       uint32_t stock_level_ratio, bool static_w_id,
-      uint32_t abortBackoff, bool retryAborted, int32_t maxAttempts,
+      uint32_t abortBackoff, bool retryAborted, uint32_t maxBackoff, uint32_t maxAttempts,
       const std::string &latencyFilename = "");
 
   virtual ~AsyncTPCCClient();

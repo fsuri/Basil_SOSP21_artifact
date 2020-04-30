@@ -38,7 +38,6 @@
 #include "lib/io_utils.h"
 
 #include "store/common/partitioner.h"
-#include "store/common/frontend/client.h"
 #include "store/server.h"
 #include "store/strongstore/server.h"
 #include "store/tapirstore/server.h"
@@ -48,6 +47,9 @@
 #include "store/indicusstore/server.h"
 #include "store/pbftstore/replica.h"
 #include "store/pbftstore/server.h"
+
+#include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
+#include "store/indicusstore/common.h"
 
 #include <gflags/gflags.h>
 
@@ -73,6 +75,14 @@ enum occ_type_t {
   OCC_TYPE_MVTSO,
   OCC_TYPE_TAPIR
 };
+
+enum read_dep_t {
+  READ_DEP_UNKNOWN,
+  READ_DEP_ONE,
+  READ_DEP_ONE_HONEST
+};
+
+
 
 /**
  * System settings.
@@ -164,11 +174,15 @@ DEFINE_string(partitioner, partitioner_args[0],	"the partitioner to use during t
     " experiment");
 DEFINE_validator(partitioner, &ValidatePartitioner);
 
+/**
+ * TPCC settings.
+ */
+DEFINE_int32(tpcc_num_warehouses, 1, "number of warehouses (for tpcc)");
 
 /**
  * TAPIR settings.
  */
-DEFINE_bool(linearizable, true, "run TAPIR in linearizable mode");
+DEFINE_bool(tapir_linearizable, true, "run TAPIR in linearizable mode");
 
 /**
  * StrongStore settings.
@@ -236,10 +250,31 @@ static bool ValidateOCCType(const char* flagname,
   std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
   return false;
 }
-
 DEFINE_string(indicus_occ_type, occ_type_args[0], "Type of OCC for validating"
     " transactions (for Indicus)");
 DEFINE_validator(indicus_occ_type, &ValidateOCCType);
+const std::string read_dep_args[] = {
+  "one-honest",
+	"one"
+};
+const read_dep_t read_deps[] {
+  READ_DEP_ONE_HONEST,
+  READ_DEP_ONE
+};
+static bool ValidateReadDep(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(read_dep_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == read_dep_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(indicus_read_dep, read_dep_args[0], "number of identical prepared"
+    " to claim dependency (for Indicus)");
+DEFINE_validator(indicus_read_dep, &ValidateReadDep);
 
 /**
  * Experiment settings.
@@ -348,7 +383,7 @@ int main(int argc, char **argv) {
       part = default_partitioner;
       break;
     case WAREHOUSE:
-      part = warehouse_partitioner;
+      part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses);
       break;
     default:
       NOT_REACHABLE();
@@ -367,12 +402,26 @@ int main(int argc, char **argv) {
     std::cerr << "Unknown occ type." << std::endl;
     return 1;
   }
+  
+  // parse read dep
+  read_dep_t read_dep = READ_DEP_UNKNOWN;
+  int numReadDeps = sizeof(read_dep_args);
+  for (int i = 0; i < numReadDeps; ++i) {
+    if (FLAGS_indicus_read_dep == read_dep_args[i]) {
+      read_dep = read_deps[i];
+      break;
+    }
+  }
+  if (proto == PROTO_INDICUS && read_dep == READ_DEP_UNKNOWN) {
+    std::cerr << "Unknown read dep." << std::endl;
+    return 1;
+  }
 
   KeyManager keyManager(FLAGS_indicus_key_path);
 
   switch (proto) {
     case PROTO_TAPIR: {
-      server = new tapirstore::Server(FLAGS_linearizable);
+      server = new tapirstore::Server(FLAGS_tapir_linearizable);
       replica = new replication::ir::IRReplica(config, FLAGS_group_idx, FLAGS_replica_idx,
           tport, dynamic_cast<replication::ir::IRAppReplica *>(server));
       break;
@@ -398,6 +447,17 @@ int main(int argc, char **argv) {
       break;
     }
     case PROTO_INDICUS: {
+      uint64_t readDepSize = 0;
+      switch (read_dep) {
+        case READ_DEP_ONE:
+          readDepSize = 1;
+          break;
+        case READ_DEP_ONE_HONEST:
+          readDepSize = config.f + 1;
+          break;
+        default:
+          NOT_REACHABLE();
+      }
       indicusstore::OCCType indicusOCCType;
       switch (occ_type) {
         case OCC_TYPE_TAPIR:
@@ -415,7 +475,7 @@ int main(int argc, char **argv) {
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
           tport, &keyManager, FLAGS_indicus_sign_messages,
           FLAGS_indicus_validate_proofs, timeDelta,
-          indicusOCCType, part);
+          indicusOCCType, part, readDepSize);
       break;
     }
 		case PROTO_PBFT: {
@@ -456,14 +516,13 @@ int main(int argc, char **argv) {
     }
     size_t loaded = 0;
     size_t stored = 0;
-    size_t sharded[] = {0, 0, 0};
+    Debug("Populating with data from %s.", FLAGS_data_file_path.c_str());
     while (!in.eof()) {
       std::string key;
       std::string value;
       int i = ReadBytesFromStream(&in, key);
       if (i == 0) {
         ReadBytesFromStream(&in, value);
-        sharded[part(key, FLAGS_num_shards)]++;
         if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
           server->Load(key, value, Timestamp());
           ++stored;
@@ -471,10 +530,6 @@ int main(int argc, char **argv) {
         ++loaded;
       }
     }
-    for (int i = 0; i < 3; ++i) {
-      std::cerr << sharded[i] << ' ';
-    }
-    std::cerr << std::endl;
     Debug("Stored %lu out of %lu key-value pairs from file %s.", stored,
         loaded, FLAGS_data_file_path.c_str());
   } else {

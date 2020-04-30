@@ -51,13 +51,15 @@ Client::~Client()
 /* Begins a transaction. All subsequent operations before a commit() or
  * abort() are part of this transaction.
  */
-void Client::Begin() {
+void Client::Begin(begin_callback bcb, begin_timeout_callback btcb, uint32_t timeout) {
   Debug("BEGIN tx");
 
-  currentTxn = proto::Transaction();
-  // Optimistically choose a read timestamp for all reads in this transaction
-  currentTxn.mutable_timestamp()->set_timestamp(timeServer.GetTime());
+  transport->Timer(0, [this](){
+    currentTxn = proto::Transaction();
+    // Optimistically choose a read timestamp for all reads in this transaction
+    currentTxn.mutable_timestamp()->set_timestamp(timeServer.GetTime());
   currentTxn.mutable_timestamp()->set_id(client_id);
+  });
 }
 
 void Client::Get(const std::string &key, get_callback gcb,
@@ -149,7 +151,7 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
         proto::Transaction txn = pp->txn;
         commit_callback ccb = pp->ccb;
         pendingPrepares.erase(digest);
-        ccb(REPLY_FAIL);
+        ccb(ABORTED_SYSTEM);
         AbortTxn(txn);
         return;
       }
@@ -184,7 +186,7 @@ void Client::HandlePrepareReply(std::string digest, uint64_t shard_id, int statu
         proto::Transaction txn = pp->txn;
         commit_callback ccb = pp->ccb;
         pendingPrepares.erase(digest);
-        ccb(REPLY_FAIL);
+        ccb(ABORTED_SYSTEM);
         AbortTxn(txn);
         return;
       }
@@ -256,13 +258,13 @@ void Client::HandleWritebackReply(std::string digest, uint64_t shard_id, int sta
     if (status == REPLY_FAIL) {
       commit_callback ccb = pw->ccb;
       pendingWritebacks.erase(digest);
-      ccb(REPLY_FAIL);
+      ccb(ABORTED_SYSTEM);
     } else {
       pw->writebackAcks.insert(shard_id);
       if (pw->writebackAcks.size() == (uint64_t) pw->txn.participating_shards_size()) {
         commit_callback ccb = pw->ccb;
         pendingWritebacks.erase(digest);
-        ccb(REPLY_OK);
+        ccb(COMMITTED);
       }
     }
   }

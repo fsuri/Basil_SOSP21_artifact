@@ -3,6 +3,7 @@
 
 #include <random>
 #include "store/benchmark/async/bench_client.h"
+#include "store/common/frontend/client.h"
 #include "store/common/frontend/async_client.h"
 #include "store/common/frontend/async_transaction.h"
 
@@ -10,8 +11,9 @@ class AsyncTransactionBenchClient : public BenchmarkClient {
 public:
     AsyncTransactionBenchClient(AsyncClient &client, Transport &transport,
         uint32_t seed, int numRequests, int expDuration, uint64_t delay,
-        int warmupSec, int cooldownSec, int tputInterval, uint32_t abortBackoff,
-        bool retryAborted, int32_t maxAttempts,
+        int warmupSec, int cooldownSec, int tputInterval,
+        uint32_t abortBackoff, bool retryAborted, 
+        uint32_t maxBackoff, uint32_t maxAttempts,
         const std::string &latencyFilename = "");
 
     virtual ~AsyncTransactionBenchClient();
@@ -20,14 +22,15 @@ protected:
     virtual AsyncTransaction *GetNextTransaction() = 0;
     virtual void SendNext();
 
-    void ExecuteCallback(int result,
+    void ExecuteCallback(transaction_status_t result,
                          std::map<std::string, std::string> readValues);
 
     AsyncClient &client;
 private:
     uint32_t abortBackoff;
     bool retryAborted;
-    int32_t maxAttempts;
+    uint32_t maxBackoff;
+    uint32_t maxAttempts;
     AsyncTransaction *currTxn;
     int32_t currTxnAttempts;
 

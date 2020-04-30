@@ -11,12 +11,23 @@
 
 #include "lib/assert.h"
 #include "lib/message.h"
+#include "store/common/stats.h"
 #include "store/common/timestamp.h"
 #include "store/common/partitioner.h"
 
 #include <functional>
 #include <string>
 #include <vector>
+
+enum transaction_status_t {
+  COMMITTED = 0,
+  ABORTED_USER,
+  ABORTED_SYSTEM,
+  ABORTED_MAX_RETRIES
+};
+
+typedef std::function<void(uint64_t)> begin_callback;
+typedef std::function<void()> begin_timeout_callback;
 
 typedef std::function<void(int, const std::string &,
     const std::string &, Timestamp)> get_callback;
@@ -27,11 +38,13 @@ typedef std::function<void(int, const std::string &,
 typedef std::function<void(int, const std::string &,
     const std::string &)> put_timeout_callback;
 
-typedef std::function<void(int)> commit_callback;
-typedef std::function<void(int)> commit_timeout_callback;
+typedef std::function<void(transaction_status_t)> commit_callback;
+typedef std::function<void()> commit_timeout_callback;
 
 typedef std::function<void()> abort_callback;
-typedef std::function<void(int)> abort_timeout_callback;
+typedef std::function<void()> abort_timeout_callback;
+
+class Stats;
 
 class Client {
  public:
@@ -39,7 +52,8 @@ class Client {
   virtual ~Client() {};
 
   // Begin a transaction.
-  virtual void Begin() = 0;
+  virtual void Begin(begin_callback bcb, begin_timeout_callback btcb,
+      uint32_t timeout) = 0;
 
   // Get the value corresponding to key.
   virtual void Get(const std::string &key, get_callback gcb,
@@ -56,9 +70,6 @@ class Client {
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
       uint32_t timeout) = 0;
-
-  // Returns statistics (vector of integers) about most recent transaction.
-  virtual std::vector<int> Stats() = 0;
 
 };
 

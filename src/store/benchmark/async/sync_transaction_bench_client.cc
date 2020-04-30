@@ -8,35 +8,37 @@
 SyncTransactionBenchClient::SyncTransactionBenchClient(SyncClient &client,
     Transport &transport, uint32_t seed, int numRequests, int expDuration,
     uint64_t delay, int warmupSec, int cooldownSec, int tputInterval,
-    uint32_t abortBackoff, bool retryAborted, int32_t maxAttempts,
-    const std::string &latencyFilename)
+    uint32_t abortBackoff, bool retryAborted, uint32_t maxBackoff,
+    uint32_t maxAttempts, uint32_t timeout, const std::string &latencyFilename)
     : BenchmarkClient(transport, seed, numRequests, expDuration, delay,
         warmupSec, cooldownSec, tputInterval, latencyFilename), client(client),
-    abortBackoff(abortBackoff), retryAborted(retryAborted),
-    maxAttempts(maxAttempts), currTxn(nullptr), currTxnAttempts(0UL) {
+    abortBackoff(abortBackoff), retryAborted(retryAborted), maxBackoff(maxBackoff),
+    maxAttempts(maxAttempts), timeout(timeout), currTxn(nullptr),
+    currTxnAttempts(0UL) {
 }
 
 SyncTransactionBenchClient::~SyncTransactionBenchClient() {
 }
 
 void SyncTransactionBenchClient::SendNext() {
-  int result;
+  transaction_status_t result;
   SendNext(&result);
 }
 
-void SyncTransactionBenchClient::SendNext(int *result) {
+void SyncTransactionBenchClient::SendNext(transaction_status_t *result) {
   currTxn = GetNextTransaction();
   currTxnAttempts = 0;
-  *result = 1; // default to failure
+  *result = ABORTED_SYSTEM; // default to failure
   while (true) {
     *result = currTxn->Execute(client);
     stats.Increment(GetLastOp() + "_attempts", 1);
     ++currTxnAttempts;
-    if (*result == SUCCESS || !retryAborted) {
-      if (*result == SUCCESS) {
+    if (*result == COMMITTED || *result == ABORTED_USER
+        || (maxAttempts != -1 && currTxnAttempts >= maxAttempts)
+        || !retryAborted) {
+      if (*result == COMMITTED) {
         stats.Increment(GetLastOp() + "_committed", 1);
-      }
-      if (*result == 1) { // RESULT_USER_ABORTED in morty-tapir/store/tapirstore/client.h
+      } else {
         stats.Increment(GetLastOp() +  "_" + std::to_string(*result), 1);
       }
       if (retryAborted) {
@@ -45,19 +47,15 @@ void SyncTransactionBenchClient::SendNext(int *result) {
       delete currTxn;
       currTxn = nullptr;
       break;
-    } else if (*result == 1) { // RESULT_USER_ABORTED in morty-tapir/store/tapirstore/client.h
-      stats.Increment(GetLastOp() +  "_" + std::to_string(*result), 1);
-      delete currTxn;
-      currTxn = nullptr;
-      break;
     } else {
       stats.Increment(GetLastOp() + "_" + std::to_string(*result), 1);
-      // stats.Increment(GetLastOp() + "_attempts", 1);
       int backoff = 0;
       if (abortBackoff > 0) {
-        backoff = std::uniform_int_distribution<int>(0,
-          (1 << (currTxnAttempts - 1)) * abortBackoff)(GetRand());
+        int upper = std::min((1 << (currTxnAttempts - 1)) * abortBackoff,
+            maxBackoff);
+        backoff = std::uniform_int_distribution<int>(upper >> 1, upper)(GetRand());
         stats.Increment(GetLastOp() + "_backoff", backoff);
+        Warning("Backing off for %dms", backoff);
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(backoff));
     }

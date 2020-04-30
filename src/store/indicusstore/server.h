@@ -60,6 +60,7 @@ class Server : public TransportReceiver, public ::Server {
       int numShards, int numGroups,
       Transport *transport, KeyManager *keyManager, bool signedMessages,
       bool validateProofs, uint64_t timeDelta, OCCType occType, partitioner part,
+      uint64_t readDepSize,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
@@ -86,7 +87,8 @@ class Server : public TransportReceiver, public ::Server {
       const proto::Phase2 &msg);
   void HandleWriteback(const TransportAddress &remote,
       const proto::Writeback &msg);
-  void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
+  void HandleAbort(const TransportAddress &remote, const proto::Abort &msg,
+      uint64_t senderId);
 
   proto::Phase1Reply::ConcurrencyControlResult DoOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
@@ -113,7 +115,8 @@ class Server : public TransportReceiver, public ::Server {
       std::vector<std::pair<Timestamp, Value>> &writes);
   void GetCommittedReads(const std::string &key,
       std::set<std::pair<Timestamp, Timestamp>> &reads);
-  void Commit(const std::string &txnDigest, const proto::Transaction &txn);
+  void Commit(const std::string &txnDigest, const proto::Transaction &txn,
+      const proto::CommittedProof &proof);
   void Abort(const std::string &txnDigest);
   void CheckDependents(const std::string &txnDigest);
   proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(
@@ -123,7 +126,8 @@ class Server : public TransportReceiver, public ::Server {
   bool CheckHighWatermark(const Timestamp &ts);
   void SendPhase1Reply(uint64_t reqId,
     proto::Phase1Reply::ConcurrencyControlResult result,
-    const proto::CommittedProof &conflict, const TransportAddress &remote);
+    const proto::CommittedProof &conflict, const std::string &txnDigest,
+    const TransportAddress &remote);
   void Clean(const std::string &txnDigest);
   void CleanDependencies(const std::string &txnDigest);
 
@@ -141,6 +145,7 @@ class Server : public TransportReceiver, public ::Server {
   Transport *transport;
   const OCCType occType;
   partitioner part;
+  const uint64_t readDepSize;
   const bool signedMessages;
   const bool validateProofs;
   KeyManager *keyManager;

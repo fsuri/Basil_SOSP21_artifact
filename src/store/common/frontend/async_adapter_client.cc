@@ -1,7 +1,7 @@
 #include "store/common/frontend/async_adapter_client.h"
 
-AsyncAdapterClient::AsyncAdapterClient(Client *client) : client(client),
-    opCount(0UL) {
+AsyncAdapterClient::AsyncAdapterClient(Client *client, uint32_t timeout) :
+    client(client), timeout(timeout), opCount(0UL) {
 }
 
 AsyncAdapterClient::~AsyncAdapterClient() {
@@ -13,8 +13,9 @@ void AsyncAdapterClient::Execute(AsyncTransaction *txn,
   currTxn = txn;
   opCount = 0UL;
   readValues.clear();
-  client->Begin();
-  ExecuteNextOperation();
+  client->Begin([this](uint64_t id) {
+    ExecuteNextOperation();
+  }, []{}, timeout);
 }
 
 void AsyncAdapterClient::ExecuteNextOperation() {
@@ -24,7 +25,7 @@ void AsyncAdapterClient::ExecuteNextOperation() {
       client->Get(op.key, std::bind(&AsyncAdapterClient::GetCallback, this,
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
         std::placeholders::_4), std::bind(&AsyncAdapterClient::GetTimeout, this,
-          std::placeholders::_1, std::placeholders::_2), 10000);
+          std::placeholders::_1, std::placeholders::_2), timeout);
       // timeout doesn't really matter?
       break;
     }
@@ -33,23 +34,22 @@ void AsyncAdapterClient::ExecuteNextOperation() {
             this, std::placeholders::_1, std::placeholders::_2,
             std::placeholders::_3), std::bind(&AsyncAdapterClient::PutTimeout,
               this, std::placeholders::_1, std::placeholders::_2,
-              std::placeholders::_3), 10000);
+              std::placeholders::_3), timeout);
       // timeout doesn't really matter?
       break;
     }
     case COMMIT: {
       client->Commit(std::bind(&AsyncAdapterClient::CommitCallback, this,
         std::placeholders::_1), std::bind(&AsyncAdapterClient::CommitTimeout,
-          this, std::placeholders::_1), 10000);
+          this), timeout);
       // timeout doesn't really matter?
       break;
     }
     case ABORT: {
       client->Abort(std::bind(&AsyncAdapterClient::AbortCallback, this),
-          std::bind(&AsyncAdapterClient::AbortTimeout, this,
-            std::placeholders::_1), 10000);
+          std::bind(&AsyncAdapterClient::AbortTimeout, this), timeout);
       // timeout doesn't really matter?
-      currEcb(false, std::map<std::string, std::string>());
+      currEcb(ABORTED_USER, std::map<std::string, std::string>());
       break;
     }
     default:
@@ -81,12 +81,12 @@ void AsyncAdapterClient::PutTimeout(int status, const std::string &key,
   Warning("Put(%s,%s) timed out :(", key.c_str(), val.c_str());
 }
 
-void AsyncAdapterClient::CommitCallback(int result) {
+void AsyncAdapterClient::CommitCallback(transaction_status_t result) {
   Debug("Commit callback.");
   currEcb(result, readValues);
 }
 
-void AsyncAdapterClient::CommitTimeout(int status) {
+void AsyncAdapterClient::CommitTimeout() {
   Warning("Commit timed out :(");
 }
 
@@ -94,7 +94,7 @@ void AsyncAdapterClient::AbortCallback() {
   Debug("Abort callback.");
 }
 
-void AsyncAdapterClient::AbortTimeout(int status) {
+void AsyncAdapterClient::AbortTimeout() {
   Warning("Abort timed out :(");
 }
 

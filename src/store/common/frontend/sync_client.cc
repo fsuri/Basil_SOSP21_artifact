@@ -7,8 +7,11 @@ SyncClient::SyncClient(Client *client) : client(client) {
 SyncClient::~SyncClient() {
 }
 
-void SyncClient::Begin() {
-  client->Begin();
+void SyncClient::Begin(uint32_t timeout) {
+  Promise promise(timeout);
+  client->Begin([promisePtr = &promise](uint64_t id){ promisePtr->Reply(0); },
+      [](){}, timeout);
+  promise.GetReply();
 }
 
 void SyncClient::Get(const std::string &key, std::string &value,
@@ -34,29 +37,24 @@ void SyncClient::Put(const std::string &key, const std::string &value,
   promise.GetReply();
 }
 
-int SyncClient::Commit(uint32_t timeout) {
+transaction_status_t SyncClient::Commit(uint32_t timeout) {
   Promise promise(timeout);
 
   client->Commit(std::bind(&SyncClient::CommitCallback, this, &promise,
         std::placeholders::_1),
         std::bind(&SyncClient::CommitTimeoutCallback, this,
-        &promise, std::placeholders::_1), timeout);
+        &promise), timeout);
 
-  return promise.GetReply();
+  return static_cast<transaction_status_t>(promise.GetReply());
 }
   
 void SyncClient::Abort(uint32_t timeout) {
   Promise promise(timeout);
 
   client->Abort(std::bind(&SyncClient::AbortCallback, this, &promise),
-        std::bind(&SyncClient::AbortTimeoutCallback, this, &promise,
-          std::placeholders::_1), timeout);
+        std::bind(&SyncClient::AbortTimeoutCallback, this, &promise), timeout);
 
   promise.GetReply();
-}
-
-std::vector<int> SyncClient::Stats() {
-  return client->Stats(); 
 }
 
 void SyncClient::GetCallback(Promise *promise, int status,
@@ -78,19 +76,19 @@ void SyncClient::PutTimeoutCallback(Promise *promise, int status, const std::str
   promise->Reply(status);
 }
 
-void SyncClient::CommitCallback(Promise *promise, int status) {
+void SyncClient::CommitCallback(Promise *promise, transaction_status_t status) {
   promise->Reply(status);
 }
 
-void SyncClient::CommitTimeoutCallback(Promise *promise, int status) {
-  promise->Reply(status);
+void SyncClient::CommitTimeoutCallback(Promise *promise) {
+  promise->Reply(REPLY_TIMEOUT);
 }
 
 void SyncClient::AbortCallback(Promise *promise) {
-  promise->Reply(REPLY_OK);
+  promise->Reply(ABORTED_USER);
 }
 
-void SyncClient::AbortTimeoutCallback(Promise *promise, int status) {
-  promise->Reply(status);
+void SyncClient::AbortTimeoutCallback(Promise *promise) {
+  promise->Reply(REPLY_TIMEOUT);
 }
 

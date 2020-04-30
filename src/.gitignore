@@ -2,6 +2,7 @@
 
 .DS_Store
 
+lib/crypto_bench
 lockserver/client-main
 lockserver/server-main
 lockserver/lockserver-repl
@@ -44,6 +45,8 @@ store/janusstore/tests/janus-client-test
 store/janusstore/tests/janus-server-test
 store/mortystore/tests/branch-generator-test
 store/mortystore/tests/branch-compatible-test
+store/pbftstore/testclient
+store/pbftstore/testserver
 
 bft_tapir/replica
 bft_tapir/client

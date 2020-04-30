@@ -4,19 +4,13 @@
 
 In order to facilitate atomic committment across all shards involved in a transaction \sys clients invoke a Prepare request, inquiring each shard to validate the transaction for conflicts and cast a 2PC vote. Shards in \sys are replicated for fault tolerance.
 
+\fs{idk where to put this and whether to mention at all - but we do want to state that there exists a version with 3f+1 (minimal replication degree) that implements the same ethos }
 \sys comes in two different flavors, \sys{}3 and \sys{}5 respectively, that rely on varying replication degrees, but implement the same design. \sys{}3 requires $n=3f+1$ replicas \fs{, the minimum bound necessary for BFT SMR?,} per shard to guarantee consistency in the presence of $\leq f$ byzantine replicas. \sys{}5 reduces both latencies during failure free execution and complexity during recovery. \footnote{We believe that consortiums with high performance requirements or high replication degrees are respectively comfortable with paying for additional replicas or tolerating a lower fraction (1/3 vs 1/5) of failures}
 For the simplicity of exposition we discuss \sys{}5 for the remainder of the paper, and defer to section X \fs{and/or TR} to describe differences in \sys{}3. In the following, we outline \sys 's execution (unaffected by replication degree), validation and writeback protocols.
 
-The goal of the validation phase is straightforward:
-Shards need to cast a single durable vote, in the following we refer to this as the shard-decision. It is computed on the basis of different replica votes.
-The vote needs to respect isolation guarantees
-leaderless and partially ordered (i.e. coordination only when necessary)
-
-
-
 The goals of the Validation phase are threefold: \one It must decide on a single, durable vote per-shard that maintains Byzantine Serializability (henceforth we refer to this as a \textit{shard-decision}), \two It should be leaderless, and not enforce unecessary ordering for commutative, non-conflicting transactions, and \three It must preserve independent operability. \fs{needs to refer to the fallback}
 
-Satisfying these goals requires ovecoming several challenges. In order to maximize parallelism and embrace partial ordering, Indicus allows replicas to process requests out of order. Consequently, replicas may temporarily diverge, and hence return different validation results. Such divergence must be reconciled in a way that maintains Isolation, but not overly conservatively in order to maximize the ability to commit successfully and bound the impact of byzantine participants. Further, Indicus designates clients as validation coordinator for its own transactions, thus omitting a dedicated replica leader. The respective protocol must tolerate client failures such as crashes, omission/stalling, equivocation, or replays and allow for consistent recovery. 
+Satisfying these goals requires ovecoming several challenges. In order to maximize parallelism and embrace partial ordering, \sys allows replicas to process requests out of order. Consequently, replicas may temporarily diverge, and hence return different validation results. Such divergence must be reconciled in a way that maintains Isolation, but not overly conservatively in order to bound the impact of byzantine participants and maximize likehlihood to commit. \sys designates clients as validation coordinator for its own transactions, thus omitting a dedicated replica leader. %The respective protocol must tolerate client failures such as crashes, omission/stalling, equivocation, or replays and allow for consistent recovery. 
 
 The Validation protocol can be broken down into two functionalities: Voting and Logging.
 Since \sys replicas may process requests in different order, they must reach consensus on a joint  decision. To do so, they cast a vote for their local validation result, which are subsequently democratically aggregated into a decision. In the case of Indicus, the client acts as the transaction coordinator who aggregates and relays results (along with necessary evidence).
@@ -40,7 +34,7 @@ Upon deciding to Commit in the Execution phase, a Client initiates Validation by
 A replica validates Timestamp and Dependency integrity of the request. It then evaluates Read and Write Sets for Isolation conflicts against its local state using the MVTSO Concurrency Control Check (CCC), as shown in algorithm 1. It returns a message $Phase1R \coloneqq \langle TxID, vote \rangle_r$, and optionally evidence in case it voted to Abort.
 
 \underline{Additional subtlelties}: 
-A replica never changes its Voting decision, because re-execution could leave to different results. A replica starts a timer to monitor the clients progress.
+A replica never changes its Voting decision, because re-execution could leave to different results. Once the MVTSO-Ceck completes (i.e. there are no blocking dependencies), a replica starts a timer to monitor the clients progress.
 
 \fbox{\begin{minipage}{23em}
 \textbf{(3: C)}: Client waits for vote replies.

@@ -18,3 +18,15 @@ partitioner warehouse_partitioner = [](const std::string &key, uint64_t nshards)
   uint32_t w_id = *reinterpret_cast<const uint32_t*>(key.c_str() + 1);
   return w_id % nshards;
 };
+
+partitioner warehouse_district_partitioner(uint64_t num_warehouses) {
+  return [num_warehouses](const std::string &key, uint64_t nshards) {
+    uint32_t w_id = *reinterpret_cast<const uint32_t*>(key.c_str() + 1);
+    uint32_t d_id = 0;
+    if (key.length() >= 9) {
+      d_id = *reinterpret_cast<const uint32_t*>(key.c_str() + 5);
+    }
+    return ((w_id * num_warehouses) + d_id) % nshards;
+  };
+}
+

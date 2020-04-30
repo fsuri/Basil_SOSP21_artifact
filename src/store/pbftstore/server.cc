@@ -18,10 +18,78 @@ Server::Server(const transport::Configuration& config, KeyManager *keyManager,
 
 Server::~Server() {}
 
+bool Server::CCC2(const proto::Transaction& txn) {
+  Debug("Starting ccc v2 check");
+  Timestamp txTs(txn.timestamp());
+  for (const auto &read : txn.readset()) {
+    if(!IsKeyOwned(read.key())) {
+      continue;
+    }
+
+    // we want to make sure that our reads don't span any
+    // committed/prepared writes
+
+    // check the committed writes
+    Timestamp rts(read.readtime());
+    // we want to make sure there are no committed writes for this key after
+    // the rts and before the txTs
+    std::vector<std::pair<Timestamp, Server::ValueAndProof>> committedWrites;
+    if (commitStore.getCommittedAfter(read.key(), rts, committedWrites)) {
+      for (const auto& committedWrite : committedWrites) {
+        if (committedWrite.first < txTs) {
+          Debug("found committed conflict with read for key: %s", read.key().c_str());
+          return false;
+        }
+      }
+    }
+
+    // check the prepared writes
+    const auto preparedWritesItr = preparedWrites.find(read.key());
+    if (preparedWritesItr != preparedWrites.end()) {
+      for (const auto& writeTs : preparedWritesItr->second) {
+        if (rts < writeTs && writeTs < txTs) {
+          Debug("found prepared conflict with read for key: %s", read.key().c_str());
+          return false;
+        }
+      }
+    }
+
+  }
+
+  Debug("checked all reads");
+
+  for (const auto &write : txn.writeset()) {
+    if(!IsKeyOwned(write.key())) {
+      continue;
+    }
+
+    // we want to make sure that no prepared/committed read spans
+    // our writes
+
+    // check commited reads
+    for (const auto& read : committedReads[write.key()]) {
+      // second is the read ts, first is the txTs that did the read
+      if (read.second < txTs && txTs < read.first) {
+          Debug("found committed conflict with write for key: %s", write.key().c_str());
+          return false;
+      }
+    }
+
+    // check prepared reads
+    for (const auto& read : preparedReads[write.key()]) {
+      // second is the read ts, first is the txTs that did the read
+      if (read.second < txTs && txTs < read.first) {
+          Debug("found prepared conflict with write for key: %s", write.key().c_str());
+          return false;
+      }
+    }
+  }
+  return true;
+}
+
 bool Server::CCC(const proto::Transaction& txn) {
   Debug("Starting ccc check");
   Timestamp txTs(txn.timestamp());
-  // TODO do the iterative version
   for (const auto &read : txn.readset()) {
     if(!IsKeyOwned(read.key())) {
       continue;
@@ -132,10 +200,26 @@ bool Server::CCC(const proto::Transaction& txn) {
   decision->set_txn_digest(digest);
   decision->set_shard_id(groupIdx);
   // OCC check
-  if (CCC(transaction)) {
+  if (CCC2(transaction)) {
     Debug("ccc succeeded");
     decision->set_status(REPLY_OK);
     pendingTransactions[digest] = transaction;
+
+    // update prepared reads and writes
+    Timestamp txTs(transaction.timestamp());
+    for (const auto& write : transaction.writeset()) {
+      if(!IsKeyOwned(write.key())) {
+        continue;
+      }
+      preparedWrites[write.key()].insert(txTs);
+    }
+    for (const auto& read : transaction.readset()) {
+      if(!IsKeyOwned(read.key())) {
+        continue;
+      }
+      preparedReads[read.key()][txTs] = read.readtime();
+    }
+
   } else {
     Debug("ccc failed");
     decision->set_status(REPLY_FAIL);
@@ -195,7 +279,8 @@ bool Server::CCC(const proto::Transaction& txn) {
   groupedDecisionAck->set_txn_digest(digest);
   if (gdecision.status() == REPLY_OK) {
     // verify gdecision
-    if (verifyGDecision(gdecision) && pendingTransactions.find(digest) != pendingTransactions.end()) {
+    if (pendingTransactions.find(digest) != pendingTransactions.end() &&
+        verifyGDecision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)) {
       proto::Transaction txn = pendingTransactions[digest];
       Timestamp ts(txn.timestamp());
       // apply tx
@@ -237,16 +322,14 @@ bool Server::CCC(const proto::Transaction& txn) {
       }
 
       // mark txn as commited
-      pendingTransactions.erase(digest);
+      cleanupPendingTx(digest);
       groupedDecisionAck->set_status(REPLY_OK);
     } else {
       groupedDecisionAck->set_status(REPLY_FAIL);
     }
   } else {
     // abort the tx
-    if (pendingTransactions.find(digest) != pendingTransactions.end()) {
-      pendingTransactions.erase(digest);
-    }
+    cleanupPendingTx(digest);
     groupedDecisionAck->set_status(REPLY_FAIL);
   }
   Debug("decision ack status: %d", groupedDecisionAck->status());
@@ -254,86 +337,26 @@ bool Server::CCC(const proto::Transaction& txn) {
   return returnMessage(groupedDecisionAck);
 }
 
-bool Server::verifyGDecision(const proto::GroupedDecision& gdecision) {
-  string digest = gdecision.txn_digest();
-  proto::Transaction txn = pendingTransactions[digest];
-
-  // We will go through the grouped decisions and make sure that each
-  // decision is valid. Then, we will mark the shard for those decisions
-  // as valid. We return true if all participating shard decisions are valid
-
-  // This will hold the remaining shards that we need to verify
-  unordered_set<uint64_t> remaining_shards;
-  for (auto id : txn.participating_shards()) {
-    Debug("requiring %lu", id);
-    remaining_shards.insert(id);
-  }
-
-  if (signMessages) {
-    // iterate over all shards
-    for (const auto& pair : gdecision.signed_decisions().grouped_decisions()) {
-      uint64_t shard_id = pair.first;
-      proto::GroupedSignedMessage grouped = pair.second;
-      // check if we are still looking for a grouped decision from this shard
-      if (remaining_shards.find(shard_id) != remaining_shards.end()) {
-        // unpack the message in the grouped signed message
-        proto::PackedMessage packedMsg;
-        if (packedMsg.ParseFromString(grouped.packed_msg())) {
-          // make sure the packed message is a Transaction Decision
-          proto::TransactionDecision decision;
-          if (decision.ParseFromString(packedMsg.msg())) {
-            // verify that the transaction decision is valid
-            if (decision.status() == REPLY_OK &&
-                decision.txn_digest() == digest &&
-                decision.shard_id() == shard_id) {
-              proto::SignedMessage signedMsg;
-              signedMsg.set_packed_msg(grouped.packed_msg());
-              // use this to keep track of the replicas for whom we have gotten
-              // a valid signature.
-              unordered_set<uint64_t> valid_signatures;
-
-              // now verify all of the signatures
-              for (const auto& id_sig_pair: grouped.signatures()) {
-                Debug("ungrouped transaction decision for %lu", id_sig_pair.first);
-                // recreate the signed message for the given replica id
-                signedMsg.set_replica_id(id_sig_pair.first);
-                signedMsg.set_signature(id_sig_pair.second);
-                // Debug("signature for %lu: %s", id_sig_pair.first, string_to_hex(id_sig_pair.second).c_str());
-
-                if (CheckSignature(signedMsg, keyManager)) {
-                  valid_signatures.insert(id_sig_pair.first);
-                } else {
-                  Debug("Failed to validate transaction decision signature for %lu", id_sig_pair.first);
-                }
-              }
-
-              // If we have confirmed f+1 signatures, then we mark this shard
-              // as verifying the decision
-              if (valid_signatures.size() >= (uint64_t) config.f + 1) {
-                Debug("signed: verified shard %lu", shard_id);
-                remaining_shards.erase(shard_id);
-              }
-            }
-          }
-        }
+void Server::cleanupPendingTx(std::string digest) {
+  if (pendingTransactions.find(digest) != pendingTransactions.end()) {
+    proto::Transaction tx = pendingTransactions[digest];
+    // remove prepared reads and writes
+    Timestamp txTs(tx.timestamp());
+    for (const auto& write : tx.writeset()) {
+      if(!IsKeyOwned(write.key())) {
+        continue;
       }
+      preparedWrites[write.key()].erase(txTs);
     }
-  } else {
-    for (const auto& pair : gdecision.decisions().grouped_decisions()) {
-      uint64_t shard_id = pair.first;
-      proto::TransactionDecision decision = pair.second;
-      if (remaining_shards.find(shard_id) != remaining_shards.end()) {
-        if (decision.status() == REPLY_OK &&
-            decision.txn_digest() == digest &&
-            decision.shard_id() == shard_id) {
-          remaining_shards.erase(shard_id);
-        }
+    for (const auto& read : tx.readset()) {
+      if(!IsKeyOwned(read.key())) {
+        continue;
       }
+      preparedReads[read.key()].erase(txTs);
     }
-  }
 
-  // the grouped decision should have a proof for all of the participating shards
-  return remaining_shards.size() == 0;
+    pendingTransactions.erase(digest);
+  }
 }
 
 void Server::Load(const string &key, const string &value,

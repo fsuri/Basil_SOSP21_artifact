@@ -165,17 +165,21 @@ _Message_VA(enum Message_Type type, FILE *fp,
 void _Panic(void)
 {
 #if BACKTRACE_ON_PANIC
-    void *bt[100];
-    size_t size = backtrace(bt, 100);
-    char **strings = backtrace_symbols(bt, size);
-    if (strings) {
-        for (unsigned int i = 0; i < size; ++i) {
-            Warning("%s", strings[i]);
-        }
-    }
+  Backtrace();
 #endif
     abort();
     exit(1);
+}
+
+void Backtrace() {
+  void *bt[100];
+  size_t size = backtrace(bt, 100);
+  char **strings = backtrace_symbols(bt, size);
+  if (strings) {
+      for (unsigned int i = 0; i < size; ++i) {
+          Warning("%s", strings[i]);
+      }
+  }
 }
 
 #define MAX_DEFERRED_FREES 16
@@ -217,8 +221,8 @@ _Message_DebugEnabled(const char *fname)
             if (!buf)
                 Panic("Failed to allocate buffer");
             nPats = 1;
-            for (size_t i = 0; i < strlen(buf); ++i) {
-                if (buf[i] == ',' || buf[i] == ' ')
+            for (size_t i = 0; i < strlen(env); ++i) {
+                if (env[i] == ',' || env[i] == ' ')
                     ++nPats;
             }
             pats = (char **)malloc(nPats * sizeof *pats);
@@ -226,10 +230,11 @@ _Message_DebugEnabled(const char *fname)
                 Panic("Failed to allocate buffer");
             pats[0] = buf;
             int patOut = 1;
-            for (size_t i = 0; i < strlen(buf); ++i) {
-                if (buf[i] == ',' || buf[i] == ' ') {
+            for (size_t i = 0; i < strlen(env); ++i) {
+                if (env[i] == ',' || env[i] == ' ') {
                     pats[patOut] = &buf[i+1];
                     buf[i] = '\0';
+                    patOut++;
                 }
             }
         }

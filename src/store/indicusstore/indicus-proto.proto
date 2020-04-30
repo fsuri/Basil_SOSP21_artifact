@@ -79,12 +79,11 @@ message PreparedProof {
 
 message ReadReply {
   required uint64 req_id = 1;
-  required int32 status = 2;
-  required bytes key = 3;
-  optional CommittedWrite committed = 4;
+  required bytes key = 2;
+  optional CommittedWrite committed = 3;
   oneof prepared_oneof {
-    PreparedWrite prepared = 5;
-    SignedMessage signed_prepared = 6;
+    PreparedWrite prepared = 4;
+    SignedMessage signed_prepared = 5;
   }
 }
 
@@ -113,10 +112,9 @@ message Phase1Reply {
     RETRY = 4;
   }
   required uint64 req_id = 1;
-  required int32 status = 2;
-  required ConcurrencyControlResult ccr = 3;
-  optional CommittedProof committed_conflict = 4;
-  optional bytes txn_digest = 5;
+  required ConcurrencyControlResult ccr = 2;
+  optional CommittedProof committed_conflict = 3;
+  optional bytes txn_digest = 4;
 }
 
 message Phase1Replies {
@@ -125,7 +123,7 @@ message Phase1Replies {
 
 message Phase2 {
   required uint64 req_id = 1;
-  required bytes txn_digest = 2;
+  optional Transaction txn = 2;
   oneof p1_replies_oneof {
     GroupedPhase1Replies p1_replies = 3;
     GroupedSignedPhase1Replies signed_p1_replies = 4;
@@ -144,14 +142,15 @@ message Phase2Replies {
 }
 
 message Writeback {
-  required uint64 req_id = 1;
+  required CommitDecision decision = 1;
   optional bytes txn_digest = 2;
-  optional Transaction txn = 3;
-  required CommitDecision decision = 4;
-  optional CommittedProof proof = 5;
+  oneof txn_proof {
+    Transaction txn = 3;
+    CommittedProof proof = 4;
+  }
 }
 
 message Abort {
-  required uint64 req_id = 1;
-  required bytes txn_digest = 2;
+  required TimestampMessage ts = 1;
+  repeated bytes read_set = 2;
 }

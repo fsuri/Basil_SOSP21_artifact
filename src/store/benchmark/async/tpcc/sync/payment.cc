@@ -6,19 +6,23 @@
 
 namespace tpcc {
 
-SyncPayment::SyncPayment(uint32_t w_id, uint32_t c_c_last, uint32_t c_c_id,
-      uint32_t num_warehouses, std::mt19937 &gen) : Payment(w_id, c_c_last,
-        c_c_id, num_warehouses, gen) {
+SyncPayment::SyncPayment(uint32_t timeout, uint32_t w_id, uint32_t c_c_last,
+    uint32_t c_c_id, uint32_t num_warehouses, std::mt19937 &gen) :
+    SyncTPCCTransaction(timeout),
+    Payment(w_id, c_c_last, c_c_id, num_warehouses, gen) {
 }
 
 SyncPayment::~SyncPayment() {
 }
 
-int SyncPayment::Execute(SyncClient &client) {
+transaction_status_t SyncPayment::Execute(SyncClient &client) {
   std::string str;
 
+  Debug("PAYMENT");
   Debug("Amount: %u", h_amount);
   Debug("Warehouse: %u", w_id);
+
+  client.Begin(timeout);
   
   std::string w_key = WarehouseRowKey(w_id);
   client.Get(w_key, str, timeout);

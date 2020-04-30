@@ -8,10 +8,10 @@ namespace tpcc {
 
 class SyncOrderStatus : public SyncTPCCTransaction, public OrderStatus {
  public:
-  SyncOrderStatus(uint32_t w_id, uint32_t c_c_last, uint32_t c_c_id,
-      std::mt19937 &gen);
+  SyncOrderStatus(uint32_t timeout, uint32_t w_id, uint32_t c_c_last,
+      uint32_t c_c_id, std::mt19937 &gen);
   virtual ~SyncOrderStatus();
-  virtual int Execute(SyncClient &client);
+  virtual transaction_status_t Execute(SyncClient &client);
 
 };
 

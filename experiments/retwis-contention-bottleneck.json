@@ -5,8 +5,8 @@
       "client_processes_per_client_node", "server_regions"],
     ["client_zipf_coefficient"]
   ],
-  "replication_protocol": ["tapir", "indicus"],
-  "client_protocol_mode": ["txn-l", "indicus"],
+  "replication_protocol": ["tapir", "indicus", "indicus"],
+  "client_protocol_mode": ["txn-l", "indicus", "indicus"],
   "num_shards": 24,
   "num_groups": 24,
   "client_num_keys": 10000000,
@@ -23,9 +23,9 @@
   "tpcc_c_c_id": 0,
   "tpcc_c_c_last": 0,
   "tpcc_data_file_path": "/usr/local/etc/tpcc-1-warehouse",
-  "client_abort_backoff": 0,
-  "client_retry_aborted": false,
-  "client_max_attempts": 1,
+  "client_abort_backoff": 10,
+  "client_retry_aborted": true,
+  "client_max_attempts": -1,
   "run_locally": false,
   "replication_protocol_settings": [
     {
@@ -34,17 +34,30 @@
     {
       "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
-      "read_quorum": "one-honest"
+      "read_quorum": "one-honest",
+      "read_dep": "one-honest",
+      "validate_proofs": false,
+      "sign_messages": false,
+      "key_path": "/usr/local/etc/indicus-keys"
+    },
+    {
+      "message_transport_type": "tcp",
+      "watermark_time_delta": 30000,
+      "read_quorum": "one-honest",
+      "read_dep": "one-honest",
+      "validate_proofs": true,
+      "sign_messages": false,
+      "key_path": "/usr/local/etc/indicus-keys"
     }
   ],
   "experiment_name": "indicus",
   "codebase_name": "indicus",
   "client_total": 288,
-  "client_processes_per_client_node": [32, 16],
+  "client_processes_per_client_node": [32, 16, 16],
   "client_nodes_per_server": 1,
   "client_threads_per_process": 1,
-  "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-  "pin_client_processes": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],
+  "pin_client_processes": [0, 1, 2, 3, 4, 5, 6, 7],
   "client_debug_output": false,
   "server_debug_output": false,
   "server_debug_stats": false,
@@ -52,8 +65,6 @@
   "client_experiment_length": 60,
   "client_ramp_down": 10,
   "client_ramp_up": 10,
-  "client_abort_backoff": 0,
-  "client_max_attempts": 1,
   "default_remote_shell": "bash",
   "server_host_format_str": "%s.%s.%s.utah.cloudlab.us",
   "client_host_format_str": "client-%d-%d.%s.%s.utah.cloudlab.us",
@@ -67,6 +78,11 @@
     "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
     "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2",
     "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
+    "ap-southeast-2-1", "ap-southeast-2-2"],
+    ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
+    "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
+    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2",
+    "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
     "ap-southeast-2-1", "ap-southeast-2-2"]
   ],
   "server_regions": [
@@ -75,6 +91,15 @@
       "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
       "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
         "ap-northeast-1-2"]
+    },
+    {
+      "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2"],
+      "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
+      "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
+        "ap-northeast-1-2"],
+      "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2"],
+      "eu-central-1": ["eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
+      "ap-southeast-2": ["ap-southeast-2-0", "ap-southeast-2-1", "ap-southeast-2-2"]
     },
     {
       "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2"],
@@ -144,7 +169,7 @@
       "height": 600,
       "width": 800,
       "series_indep_vars_idx": 0,
-      "series_titles": ["TAPIR", "Indicus"],
+      "series_titles": ["TAPIR", "Indicus-NoProofsNoSigs", "Indicus-NoSigs"],
       "x_var_is_config": true,
       "x_var": ["client_zipf_coefficient"],
       "x_label": "Zipf Coefficient",

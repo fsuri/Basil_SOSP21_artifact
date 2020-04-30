@@ -59,10 +59,10 @@ BenchmarkClient::BenchmarkClient(Transport &transport, uint32_t seed,
 	started = false;
 	done = false;
   cooldownStarted = false;
-	_Latency_Init(&latency, "op");
   if (numRequests > 0) {
 	  latencies.reserve(numRequests);
   }
+  _Latency_Init(&latency, "txn");
 }
 
 BenchmarkClient::~BenchmarkClient() {
@@ -168,14 +168,16 @@ void BenchmarkClient::IncrementSent(int result) {
       uint64_t ns = Latency_End(&latency);
       // TODO: use standard definitions across all clients for success/commit and failure/abort
       if (result == 0) { // only record result if success
+        struct timespec curr;
+        clock_gettime(CLOCK_MONOTONIC, &curr);
         if (latencies.size() == 0UL) {
-          struct timeval currTime;
-          gettimeofday(&currTime, NULL);
-          currTime.tv_sec -= ns / 1000000000ULL;
-          currTime.tv_usec -= (ns % 1000000000ULL) / 1000ULL;
-          std::cout << "#start," << currTime.tv_sec << "," << currTime.tv_usec << std::endl;
+          gettimeofday(&startMeasureTime, NULL);
+          startMeasureTime.tv_sec -= ns / 1000000000ULL;
+          startMeasureTime.tv_usec -= (ns % 1000000000ULL) / 1000ULL;
+          std::cout << "#start," << startMeasureTime.tv_sec << "," << startMeasureTime.tv_usec << std::endl;
         }
-        std::cout << GetLastOp() << ',' << ns << std::endl;
+        uint64_t currNanos = curr.tv_sec * 1000000000ULL + curr.tv_nsec;
+        std::cout << GetLastOp() << ',' << ns << ',' << currNanos << std::endl;
         latencies.push_back(ns);
       }
     }
@@ -185,9 +187,9 @@ void BenchmarkClient::IncrementSent(int result) {
       gettimeofday(&currTime, NULL);
 
       struct timeval diff = timeval_sub(currTime, startTime);
-      if (diff.tv_sec > expDuration - warmupSec - cooldownSec && !cooldownStarted) {
+      if (diff.tv_sec > expDuration - cooldownSec && !cooldownStarted) {
         Finish();
-      } else if (diff.tv_sec > expDuration - warmupSec) {
+      } else if (diff.tv_sec > expDuration) {
         CooldownDone();
       }
     } else if (n >= numRequests){ 
@@ -200,9 +202,9 @@ void BenchmarkClient::IncrementSent(int result) {
 
 void BenchmarkClient::Finish() {
   gettimeofday(&endTime, NULL);
-  std::cout << "#end," << endTime.tv_sec << "," << endTime.tv_usec << std::endl;
+  struct timeval diff = timeval_sub(endTime, startMeasureTime);
 
-  struct timeval diff = timeval_sub(endTime, startTime);
+  std::cout << "#end," << diff.tv_sec << "," << diff.tv_usec << std::endl;
 
   Notice("Completed %d requests in " FMT_TIMEVAL_DIFF " seconds", n,
       VA_TIMEVAL_DIFF(diff));

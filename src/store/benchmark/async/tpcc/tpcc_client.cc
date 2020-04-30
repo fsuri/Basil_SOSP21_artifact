@@ -49,11 +49,14 @@ TPCCTransactionType TPCCClient::GetNextTransaction(uint32_t *wid,
     if (static_w_id) {
       *did = stockLevelDId;
     } else {
-      *did = std::uniform_int_distribution<uint32_t>(1, num_warehouses)(gen);
+      *did = std::uniform_int_distribution<uint32_t>(1, 10)(gen);
     }
     lastOp = "stock_level";
     return TXN_STOCK_LEVEL; //new StockLevel(wid, did, gen);
   } else {
+    *did = std::uniform_int_distribution<uint32_t>(1, 10)(gen);
+    lastOp = "delivery";
+
     return TXN_DELIVERY;
   }
 }

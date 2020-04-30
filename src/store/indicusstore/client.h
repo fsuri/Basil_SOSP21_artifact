@@ -34,6 +34,7 @@
 
 #include "lib/assert.h"
 #include "lib/keymanager.h"
+#include "lib/latency.h"
 #include "lib/message.h"
 #include "lib/configuration.h"
 #include "lib/udptransport.h"
@@ -57,41 +58,42 @@ namespace indicusstore {
 
 class Client : public ::Client {
  public:
-  Client(transport::Configuration *config, uint64_t id, int nShards, int nGroups,
-      const std::vector<int> &closestReplicas, Transport *transport, partitioner part,
-      bool syncCommit, uint64_t readQuorumSize, bool signedMessages,
-      bool validateProofs, KeyManager *keyManager,
+  Client(transport::Configuration *config, uint64_t id, int nShards,
+      int nGroups, const std::vector<int> &closestReplicas,
+      Transport *transport, partitioner part, bool syncCommit,
+      uint64_t readMessages, uint64_t readQuorumSize, uint64_t readDepSize,
+      bool signedMessages, bool validateProofs, KeyManager *keyManager,
       TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 
   // Begin a transaction.
-  virtual void Begin();
+  virtual void Begin(begin_callback bcb, begin_timeout_callback btcb,
+      uint32_t timeout) override;
 
   // Get the value corresponding to key.
   virtual void Get(const std::string &key, get_callback gcb,
-      get_timeout_callback gtcb, uint32_t timeout = GET_TIMEOUT);
+      get_timeout_callback gtcb, uint32_t timeout = GET_TIMEOUT) override;
 
   // Set the value for the given key.
   virtual void Put(const std::string &key, const std::string &value,
       put_callback pcb, put_timeout_callback ptcb,
-      uint32_t timeout = PUT_TIMEOUT);
+      uint32_t timeout = PUT_TIMEOUT) override;
 
   // Commit all Get(s) and Put(s) since Begin().
   virtual void Commit(commit_callback ccb, commit_timeout_callback ctcb,
-      uint32_t timeout);
+      uint32_t timeout) override;
   
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
-      uint32_t timeout);
-
-  virtual std::vector<int> Stats();
+      uint32_t timeout) override;
 
  private:
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), outstandingPhase1s(0),
         outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
         decision(proto::COMMIT), fast(true),
-        startedPhase2(false), callbackInvoked(false) {
+        startedPhase2(false), startedWriteback(false),
+        callbackInvoked(false), timeout(0UL) {
     }
 
     ~PendingRequest() {
@@ -107,7 +109,9 @@ class Client : public ::Client {
     proto::CommitDecision decision;
     bool fast;
     bool startedPhase2;
+    bool startedWriteback;
     bool callbackInvoked;
+    uint32_t timeout;
     std::map<int, std::vector<proto::Phase1Reply>> phase1RepliesGrouped;
     std::map<int, std::vector<proto::SignedMessage>> signedPhase1RepliesGrouped;
     std::vector<proto::Phase2Reply> phase2Replies;
@@ -115,21 +119,20 @@ class Client : public ::Client {
     std::string txnDigest;
   };
 
-  // Prepare function
-  void Phase1(PendingRequest *req, uint32_t timeout);
+  void Phase1(PendingRequest *req);
   void Phase1Callback(uint64_t reqId, int group, proto::CommitDecision decision,
       bool fast, const std::vector<proto::Phase1Reply> &phase1Replies,
       const std::vector<proto::SignedMessage> &signedPhase1Replies);
-  void Phase1TimeoutCallback(uint64_t reqId, int status);
+  void Phase1TimeoutCallback(int group, uint64_t reqId, int status);
   void HandleAllPhase1Received(PendingRequest *req);
 
-  void Phase2(PendingRequest *req, uint32_t timeout);
+  void Phase2(PendingRequest *req);
   void Phase2Callback(uint64_t reqId,
       const std::vector<proto::Phase2Reply> &phase2Replies,
       const std::vector<proto::SignedMessage> &signedPhase2Replies);
-  void Phase2TimeoutCallback(uint64_t reqId, int status);
+  void Phase2TimeoutCallback(int group, uint64_t reqId, int status);
 
-  void Writeback(PendingRequest *req, uint32_t timeout);
+  void Writeback(PendingRequest *req);
 
   bool IsParticipant(int g) const;
 
@@ -147,7 +150,9 @@ class Client : public ::Client {
   std::vector<ShardClient *> bclient;
   partitioner part;
   bool syncCommit;
+  uint64_t readMessages;
   uint64_t readQuorumSize;
+  uint64_t readDepSize;
   bool signedMessages;
   bool validateProofs;
   KeyManager *keyManager;
@@ -171,6 +176,10 @@ class Client : public ::Client {
 
   /* Debug State */
   std::unordered_map<std::string, uint32_t> statInts;
+  struct Latency_t executeLatency;
+  struct Latency_t getLatency;
+  size_t getIdx;
+  struct Latency_t commitLatency;
 };
 
 } // namespace indicusstore

@@ -26,7 +26,7 @@ class SyncClient {
   virtual ~SyncClient();
 
   // Begin a transaction.
-  virtual void Begin();
+  virtual void Begin(uint32_t timeout);
 
   // Get the value corresponding to key.
   virtual void Get(const std::string &key, std::string &value,
@@ -37,13 +37,10 @@ class SyncClient {
       uint32_t timeout);
 
   // Commit all Get(s) and Put(s) since Begin().
-  virtual int Commit(uint32_t timeout);
+  virtual transaction_status_t Commit(uint32_t timeout);
   
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(uint32_t timeout);
-
-  // Returns statistics (vector of integers) about most recent transaction.
-  std::vector<int> Stats();
 
  private:
   void GetCallback(Promise *promise, int status, const std::string &key, const std::string &value,
@@ -53,10 +50,10 @@ class SyncClient {
       const std::string &value);
   void PutTimeoutCallback(Promise *promise, int status, const std::string &key,
       const std::string &value);
-  void CommitCallback(Promise *promise, int status);
-  void CommitTimeoutCallback(Promise *promise, int status);
+  void CommitCallback(Promise *promise, transaction_status_t status);
+  void CommitTimeoutCallback(Promise *promise);
   void AbortCallback(Promise *promise);
-  void AbortTimeoutCallback(Promise *promise, int status);
+  void AbortTimeoutCallback(Promise *promise);
 
   Client *client;
 };

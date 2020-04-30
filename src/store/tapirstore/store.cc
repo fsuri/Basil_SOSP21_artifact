@@ -43,7 +43,6 @@ int
 Store::Get(uint64_t id, const string &key, pair<Timestamp,string> &value)
 {
     Debug("[%lu] GET %s", id, key.c_str());
-
     bool ret = store.get(key, value);
     if (ret) {
         Debug("Value: %s at <%lu, %lu>", value.second.c_str(), value.first.getTimestamp(), value.first.getID());
@@ -86,6 +85,8 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
     // do OCC checks
     unordered_map<string, set<Timestamp>> pReads;
     GetPreparedReads(pReads);
+    unordered_map<string, set<Timestamp>> preparedWrites;
+    GetPreparedWrites(preparedWrites);
 
     // check for conflicts with the read set
     for (auto &read : txn.getReadSet()) {
@@ -108,10 +109,10 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
                 (linearizable || 
                  preparedWrites[read.first].upper_bound(timestamp) !=
                   preparedWrites[read.first].begin()) ) {
-                Debug("[%lu] ABSTAIN rw conflict w/ prepared key:%s",
+                Debug("[%lu] ABSTAIN wr conflict w/ prepared key:%s",
                       id, read.first.c_str());
                 stats.Increment("cc_abstains", 1);
-                stats.Increment("cc_abstains_rw_conflict", 1);
+                stats.Increment("cc_abstains_wr_conflict", 1);
                 return REPLY_ABSTAIN;
             }
 
@@ -127,9 +128,9 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
                 range.second.getTimestamp());
           }*/
           // UW_ASSERT(timestamp > range.first);
-          Debug("[%lu] ABORT rw conflict: %lu > %lu", id,
+          Debug("[%lu] ABORT wr conflict: %lu > %lu", id,
               timestamp.getTimestamp(), range.second.getTimestamp());
-          std::string s = std::to_string((uint32_t) read.first[0]); 
+          /*std::string s = std::to_string((uint32_t) read.first[0]); 
           if (read.first.length() >= 5) {
             s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
                 read.first.c_str() + 1));
@@ -146,9 +147,9 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
             s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
                 read.first.c_str() + 13));
           }
+          stats.Increment("cc_aborts_" + s, 1);*/
           stats.Increment("cc_aborts", 1);
-          stats.Increment("cc_aborts_rw_conflict", 1);
-          stats.Increment("cc_aborts_" + s, 1);
+          stats.Increment("cc_aborts_wr_conflict", 1);
           return REPLY_FAIL;
         } else {
             /* there may be a pending write in the past.  check
@@ -159,10 +160,10 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
                 for (auto &writeTime : preparedWrites[read.first]) {
                     if (writeTime > range.first && 
                         writeTime < timestamp) {
-                        Debug("[%lu] ABSTAIN rw conflict w/ prepared key:%s",
+                        Debug("[%lu] ABSTAIN wr conflict w/ prepared key:%s",
                               id, read.first.c_str());
                         stats.Increment("cc_abstains", 1);
-                        stats.Increment("cc_abstains_rw_conflict", 1);
+                        stats.Increment("cc_abstains_wr_conflict", 1);
                         return REPLY_ABSTAIN;
                     }
                 }
@@ -203,11 +204,11 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
 
             // if this key is in the store and has been read before
             if (ret && lastRead > timestamp) {
-                Debug("[%lu] RETRY wr conflict w/ prepared key:%s", 
+                Debug("[%lu] RETRY rw conflict w/ prepared key:%s", 
                       id, write.first.c_str());
                 proposedTimestamp = lastRead;
                 stats.Increment("cc_retries", 1);
-                stats.Increment("cc_retries_wr_conflict", 1);
+                stats.Increment("cc_retries_rw_conflict", 1);
                 return REPLY_RETRY; 
             }
         }
@@ -233,19 +234,19 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
         //propsed timestamp, abstain
         if ( pReads.find(write.first) != pReads.end() &&
              pReads[write.first].upper_bound(timestamp) != pReads[write.first].end() ) {
-            Debug("[%lu] ABSTAIN wr conflict w/ prepared key:%s", 
+            Debug("[%lu] ABSTAIN rw conflict w/ prepared key:%s", 
                   id, write.first.c_str());
             stats.Increment("cc_abstains", 1);
-            stats.Increment("cc_abstains_wr_conflict", 1);
+            stats.Increment("cc_abstains_rw_conflict", 1);
             return REPLY_ABSTAIN;
         }
     }
 
     // Otherwise, prepare this transaction for commit
     prepared[id] = make_pair(timestamp, txn);
-    for (const auto &write : txn.getWriteSet()) {
+    /*for (const auto &write : txn.getWriteSet()) {
       preparedWrites[write.first].insert(timestamp);
-    }
+    }*/
     Debug("[%lu] PREPARED TO COMMIT", id);
 
     return REPLY_OK;
@@ -324,10 +325,16 @@ Store::GetPreparedReads(unordered_map<string, set<Timestamp>> &reads)
 }
 
 void Store::Cleanup(uint64_t txnId) {
-  const auto &txn = prepared[txnId];
+  /*const auto &txn = prepared[txnId];
   for (const auto &write : txn.second.getWriteSet()) {
-    preparedWrites[write.first].erase(txn.first);
-  }
+    auto itr = preparedWrites.find(write.first);
+    if (itr != preparedWrites.end()) {
+      itr->second.erase(txn.first);
+      if (itr->second.size() == 0) {
+        preparedWrites.erase(itr);
+      }
+    }
+  }*/
   prepared.erase(txnId);
 }
 

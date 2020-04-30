@@ -8,9 +8,10 @@ namespace tpcc {
 
 class SyncDelivery : public SyncTPCCTransaction, public Delivery {
  public:
-  SyncDelivery(uint32_t w_id, uint32_t d_id, std::mt19937 &gen);
+  SyncDelivery(uint32_t timeout, uint32_t w_id, uint32_t d_id,
+      std::mt19937 &gen);
   virtual ~SyncDelivery();
-  virtual int Execute(SyncClient &client);
+  virtual transaction_status_t Execute(SyncClient &client);
 
 };
 

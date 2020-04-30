@@ -24,12 +24,13 @@
 #include "store/benchmark/async/common/uniform_key_selector.h"
 #include "store/benchmark/async/retwis/retwis_client.h"
 #include "store/benchmark/async/rw/rw_client.h"
+#include "store/benchmark/async/tpcc/sync/tpcc_client.h"
 #include "store/benchmark/async/tpcc/async/tpcc_client.h"
 #include "store/mortystore/client.h"
 #include "store/benchmark/async/smallbank/smallbank_client.h"
 #include "store/janusstore/client.h"
 #include "store/indicusstore/client.h"
-// #include "store/pbftstore/client.h"
+#include "store/pbftstore/client.h"
 #include "store/common/frontend/one_shot_client.h"
 #include "store/common/frontend/async_one_shot_adapter_client.h"
 #include "store/benchmark/async/common/zipf_key_selector.h"
@@ -38,6 +39,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <csignal>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -59,6 +61,7 @@ enum benchmode_t {
   BENCH_TPCC,
   BENCH_SMALLBANK_SYNC,
   BENCH_RW,
+  BENCH_TPCC_SYNC
 };
 
 enum keysmode_t {
@@ -77,7 +80,22 @@ enum read_quorum_t {
   READ_QUORUM_UNKNOWN,
   READ_QUORUM_ONE,
   READ_QUORUM_ONE_HONEST,
-  READ_QUORUM_MAJORITY_HONEST
+  READ_QUORUM_MAJORITY_HONEST,
+  READ_QUORUM_MAJORITY,
+  READ_QUORUM_ALL
+};
+
+enum read_dep_t {
+  READ_DEP_UNKNOWN,
+  READ_DEP_ONE,
+  READ_DEP_ONE_HONEST
+};
+
+enum read_messages_t {
+  READ_MESSAGES_UNKNOWN,
+  READ_MESSAGES_READ_QUORUM,
+  READ_MESSAGES_MAJORITY,
+  READ_MESSAGES_ALL
 };
 
 /**
@@ -94,12 +112,16 @@ DEFINE_bool(tapir_sync_commit, true, "wait until commit phase completes before"
 const std::string read_quorum_args[] = {
 	"one",
   "one-honest",
-  "majority-honest"
+  "majority-honest",
+  "majority",
+  "all"
 };
 const read_quorum_t read_quorums[] {
 	READ_QUORUM_ONE,
   READ_QUORUM_ONE_HONEST,
-  READ_QUORUM_MAJORITY_HONEST
+  READ_QUORUM_MAJORITY_HONEST,
+  READ_QUORUM_MAJORITY,
+  READ_QUORUM_ALL
 };
 static bool ValidateReadQuorum(const char* flagname,
     const std::string &value) {
@@ -115,13 +137,58 @@ static bool ValidateReadQuorum(const char* flagname,
 DEFINE_string(indicus_read_quorum, read_quorum_args[0], "size of read quorums"
     " (for Indicus)");
 DEFINE_validator(indicus_read_quorum, &ValidateReadQuorum);
+const std::string read_dep_args[] = {
+  "one-honest",
+	"one"
+};
+const read_dep_t read_deps[] {
+  READ_DEP_ONE_HONEST,
+  READ_DEP_ONE
+};
+static bool ValidateReadDep(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(read_dep_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == read_dep_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(indicus_read_dep, read_dep_args[0], "number of identical prepared"
+    " to claim dependency (for Indicus)");
+DEFINE_validator(indicus_read_dep, &ValidateReadDep);
+const std::string read_messages_args[] = {
+	"read-quorum",
+  "majority",
+  "all"
+};
+const read_messages_t read_messagess[] {
+  READ_MESSAGES_READ_QUORUM,
+  READ_MESSAGES_MAJORITY,
+  READ_MESSAGES_ALL
+};
+static bool ValidateReadMessages(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(read_messages_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == read_messages_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(indicus_read_messages, read_messages_args[0], "number of replicas"
+    " to send messages for reads (for Indicus)");
+DEFINE_validator(indicus_read_messages, &ValidateReadMessages);
 DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
     " necessary to prevent impersonation (for Indicus)");
 DEFINE_bool(indicus_validate_proofs, false, "send and validate proofs as"
     " necessary to check Byzantine behavior (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
-
 
 DEFINE_bool(debug_stats, false, "record stats related to debugging");
 
@@ -206,13 +273,15 @@ const std::string benchmark_args[] = {
 	"retwis",
   "tpcc",
   "smallbank",
-  "rw"
+  "rw",
+  "tpcc-sync"
 };
 const benchmode_t benchmodes[] {
   BENCH_RETWIS,
   BENCH_TPCC,
   BENCH_SMALLBANK_SYNC,
-  BENCH_RW
+  BENCH_RW,
+  BENCH_TPCC_SYNC
 };
 static bool ValidateBenchmark(const char* flagname, const std::string &value) {
   int n = sizeof(benchmark_args);
@@ -252,6 +321,8 @@ DEFINE_int32(abort_backoff, 100, "sleep exponentially increasing amount after ab
 DEFINE_bool(retry_aborted, true, "retry aborted transactions.");
 DEFINE_int32(max_attempts, -1, "max number of attempts per transaction (or -1"
     " for unlimited).");
+DEFINE_int32(message_timeout, 10000, "length of timeout for messages in ms.");
+DEFINE_int32(max_backoff, 5000, "max time to sleep after aborting.");
 
 /**
  * Retwis settings.
@@ -343,19 +414,18 @@ DEFINE_string(customer_name_file_path, "smallbank_names", "path to file"
 
 DEFINE_LATENCY(op);
 
-void FlushStats(const std::vector<::BenchmarkClient *> &benchClients,
-  const std::vector<::AsyncClient *> &asyncClients) {
-  if (FLAGS_stats_file.size() > 0) {
-    Stats total;
-    for (unsigned int i = 0; i < benchClients.size(); i++) {
-      total.Merge(benchClients[i]->GetStats());
-    }
-    for (unsigned int i = 0; i < asyncClients.size(); i++) {
-      total.Merge(asyncClients[i]->GetStats());
-    }
-    total.ExportJSON(FLAGS_stats_file);
-  }
-}
+std::vector<::AsyncClient *> asyncClients;
+std::vector<::SyncClient *> syncClients;
+std::vector<::Client *> clients;
+std::vector<::OneShotClient *> oneShotClients;
+std::vector<::BenchmarkClient *> benchClients;
+std::vector<std::thread *> threads;
+Transport *tport;
+transport::Configuration *config;
+KeyManager *keyManager;
+
+void Cleanup(int signal);
+void FlushStats();
 
 int main(int argc, char **argv) {
   gflags::SetUsageMessage(
@@ -437,6 +507,34 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // parse read messages
+  read_messages_t read_messages = READ_MESSAGES_UNKNOWN;
+  int numReadMessagess = sizeof(read_messages_args);
+  for (int i = 0; i < numReadMessagess; ++i) {
+    if (FLAGS_indicus_read_messages == read_messages_args[i]) {
+      read_messages = read_messagess[i];
+      break;
+    }
+  }
+  if (mode == PROTO_INDICUS && read_messages == READ_MESSAGES_UNKNOWN) {
+    std::cerr << "Unknown read messages." << std::endl;
+    return 1;
+  }
+
+  // parse read dep
+  read_dep_t read_dep = READ_DEP_UNKNOWN;
+  int numReadDeps = sizeof(read_dep_args);
+  for (int i = 0; i < numReadDeps; ++i) {
+    if (FLAGS_indicus_read_dep == read_dep_args[i]) {
+      read_dep = read_deps[i];
+      break;
+    }
+  }
+  if (mode == PROTO_INDICUS && read_dep == READ_DEP_UNKNOWN) {
+    std::cerr << "Unknown read dep." << std::endl;
+    return 1;
+  }
+
   // parse closest replicas
   std::vector<int> closestReplicas;
   std::stringstream iss(FLAGS_closest_replicas);
@@ -476,24 +574,17 @@ int main(int argc, char **argv) {
     }
   }
 
-  Transport *transport;
   switch (trans) {
     case TRANS_TCP:
-      transport = new TCPTransport(0.0, 0.0, 0, false);
+      tport = new TCPTransport(0.0, 0.0, 0, false);
       break;
     case TRANS_UDP:
-      transport = new UDPTransport(0.0, 0.0, 0, nullptr);
+      tport = new UDPTransport(0.0, 0.0, 0, nullptr);
       break;
     default:
       NOT_REACHABLE();
   }
 
-  std::vector<::AsyncClient *> asyncClients;
-  std::vector<::SyncClient *> syncClients;
-  std::vector<::Client *> clients;
-  std::vector<::OneShotClient *> oneShotClients;
-  std::vector<::BenchmarkClient *> benchClients;
-  std::vector<std::thread *> threads;
 
   KeySelector *keySelector;
   switch (keySelectionMode) {
@@ -510,7 +601,8 @@ int main(int argc, char **argv) {
   partitioner part;
   switch (benchMode) {
     case BENCH_TPCC:
-      part = warehouse_partitioner;
+    case BENCH_TPCC_SYNC:
+      part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses);
       break;
     default:
       part = default_partitioner;
@@ -547,8 +639,7 @@ int main(int argc, char **argv) {
         }
       }
 
-      FlushStats(benchClients, asyncClients);
-      transport->Stop();
+      tport->Stop();
     }
   };
 
@@ -558,8 +649,8 @@ int main(int argc, char **argv) {
               << std::endl;
     return -1;
   }
-  transport::Configuration *config = new transport::Configuration(configStream);
-  KeyManager *keyManager = new KeyManager(FLAGS_indicus_key_path);
+  config = new transport::Configuration(configStream);
+  keyManager = new KeyManager(FLAGS_indicus_key_path);
 
   if (closestReplicas.size() > 0 && closestReplicas.size() != static_cast<size_t>(config->n)) {
     std::cerr << "If specifying closest replicas, must specify all "
@@ -576,15 +667,15 @@ int main(int argc, char **argv) {
 
     switch (mode) {
       case PROTO_TAPIR: {
-        client = new tapirstore::Client(config, FLAGS_num_shards,
-            FLAGS_num_groups, FLAGS_closest_replica, transport, part,
-            FLAGS_tapir_sync_commit, TrueTime(FLAGS_clock_skew,
+        client = new tapirstore::Client(config, (FLAGS_client_id << 3) | i,
+            FLAGS_num_shards, FLAGS_num_groups, FLAGS_closest_replica,
+            tport, part, FLAGS_tapir_sync_commit, TrueTime(FLAGS_clock_skew,
               FLAGS_clock_error));
         break;
       }
       case PROTO_JANUS: {
         oneShotClient = new janusstore::Client(config,
-            FLAGS_num_shards, FLAGS_closest_replica, transport);
+            FLAGS_num_shards, FLAGS_closest_replica, tport);
         asyncClient = new AsyncOneShotAdapterClient(oneShotClient);
         break;
       }
@@ -600,7 +691,7 @@ int main(int argc, char **argv) {
       case PROTO_MORTY: {
         asyncClient = new mortystore::Client(config,
             (FLAGS_client_id << 3) | i, FLAGS_num_shards, FLAGS_num_groups,
-            FLAGS_closest_replica, transport, part, FLAGS_debug_stats);
+            FLAGS_closest_replica, tport, part, FLAGS_debug_stats);
         break;
       }
       case PROTO_INDICUS: {
@@ -615,14 +706,48 @@ int main(int argc, char **argv) {
           case READ_QUORUM_MAJORITY_HONEST:
             readQuorumSize = config->f * 2 + 1;
             break;
+          case READ_QUORUM_MAJORITY:
+            readQuorumSize = (config->n + 1) / 2;
+            break;
+          case READ_QUORUM_ALL:
+            readQuorumSize = config->f * 4 + 1;
+            break;
+          default:
+            NOT_REACHABLE();
+        }
+
+        uint64_t readMessages = 0;
+        switch (read_messages) {
+          case READ_MESSAGES_READ_QUORUM:
+            readMessages = readQuorumSize;
+            break;
+          case READ_MESSAGES_MAJORITY:
+            readQuorumSize = (config->n + 1) / 2;
+            break;
+          case READ_MESSAGES_ALL:
+            readQuorumSize = config->n;
+            break;
+          default:
+            NOT_REACHABLE();
+        }
+        UW_ASSERT(readMessages >= readQuorumSize);
+        
+        uint64_t readDepSize = 0;
+        switch (read_dep) {
+          case READ_DEP_ONE:
+            readDepSize = 1;
+            break;
+          case READ_DEP_ONE_HONEST:
+            readDepSize = config->f + 1;
+            break;
           default:
             NOT_REACHABLE();
         }
 
         client = new indicusstore::Client(config, (FLAGS_client_id << 3),
             FLAGS_num_shards,
-            FLAGS_num_groups, closestReplicas, transport, part,
-            FLAGS_tapir_sync_commit, readQuorumSize,
+            FLAGS_num_groups, closestReplicas, tport, part,
+            FLAGS_tapir_sync_commit, readMessages, readQuorumSize, readDepSize,
             FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
             keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
@@ -643,11 +768,11 @@ int main(int argc, char **argv) {
             NOT_REACHABLE();
         }
 
-        // client = new pbftstore::Client(*config, FLAGS_num_shards,
-        //     FLAGS_num_groups, transport, part,
-        //     readQuorumSize,
-        //     FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-        //     keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+        client = new pbftstore::Client(*config, FLAGS_num_shards,
+            FLAGS_num_groups, tport, part,
+            readQuorumSize,
+            FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+            keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
 			}
       default:
@@ -660,10 +785,11 @@ int main(int argc, char **argv) {
       case BENCH_RW:
         if (asyncClient == nullptr) {
           UW_ASSERT(client != nullptr);
-          asyncClient = new AsyncAdapterClient(client);
+          asyncClient = new AsyncAdapterClient(client, FLAGS_message_timeout);
         }
         break;
       case BENCH_SMALLBANK_SYNC:
+      case BENCH_TPCC_SYNC:
         if (syncClient == nullptr) {
           UW_ASSERT(client != nullptr);
           syncClient = new SyncClient(client);
@@ -678,15 +804,15 @@ int main(int argc, char **argv) {
 	  switch (benchMode) {
       case BENCH_RETWIS:
         UW_ASSERT(asyncClient != nullptr);
-        bench = new retwis::RetwisClient(keySelector, *asyncClient, *transport,
+        bench = new retwis::RetwisClient(keySelector, *asyncClient, *tport,
             seed,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
-            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_attempts);
+            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_backoff, FLAGS_max_attempts);
         break;
       case BENCH_TPCC:
         UW_ASSERT(asyncClient != nullptr);
-        bench = new tpcc::AsyncTPCCClient(*asyncClient, *transport,
+        bench = new tpcc::AsyncTPCCClient(*asyncClient, *tport,
             seed,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
@@ -695,15 +821,28 @@ int main(int argc, char **argv) {
             FLAGS_tpcc_delivery_ratio, FLAGS_tpcc_payment_ratio,
             FLAGS_tpcc_order_status_ratio, FLAGS_tpcc_stock_level_ratio,
             FLAGS_static_w_id, FLAGS_abort_backoff,
-            FLAGS_retry_aborted, FLAGS_max_attempts);
+            FLAGS_retry_aborted, FLAGS_max_backoff, FLAGS_max_attempts);
         break;
-      case BENCH_SMALLBANK_SYNC:
+      case BENCH_TPCC_SYNC:
         UW_ASSERT(syncClient != nullptr);
-        bench = new smallbank::SmallbankClient(*syncClient, *transport,
+        bench = new tpcc::SyncTPCCClient(*syncClient, *tport,
             seed,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
-            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_attempts,
+            FLAGS_tpcc_num_warehouses, FLAGS_tpcc_w_id, FLAGS_tpcc_C_c_id,
+            FLAGS_tpcc_C_c_last, FLAGS_tpcc_new_order_ratio,
+            FLAGS_tpcc_delivery_ratio, FLAGS_tpcc_payment_ratio,
+            FLAGS_tpcc_order_status_ratio, FLAGS_tpcc_stock_level_ratio,
+            FLAGS_static_w_id, FLAGS_abort_backoff,
+            FLAGS_retry_aborted, FLAGS_max_backoff, FLAGS_max_attempts, FLAGS_message_timeout);
+        break;
+      case BENCH_SMALLBANK_SYNC:
+        UW_ASSERT(syncClient != nullptr);
+        bench = new smallbank::SmallbankClient(*syncClient, *tport,
+            seed,
+            FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
+            FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
+            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_backoff, FLAGS_max_attempts,
             FLAGS_timeout, FLAGS_balance_ratio, FLAGS_deposit_checking_ratio,
             FLAGS_transact_saving_ratio, FLAGS_amalgamate_ratio,
             FLAGS_num_hotspots, FLAGS_num_customers - FLAGS_num_hotspots, FLAGS_hotspot_probability,
@@ -712,10 +851,10 @@ int main(int argc, char **argv) {
       case BENCH_RW:
         UW_ASSERT(asyncClient != nullptr);
         bench = new rw::RWClient(keySelector, FLAGS_num_ops_txn,
-            *asyncClient, *transport, seed,
+            *asyncClient, *tport, seed,
             FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
             FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
-            FLAGS_abort_backoff, FLAGS_retry_aborted,
+            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_backoff,
             FLAGS_max_attempts);
         break;
       default:
@@ -727,16 +866,17 @@ int main(int argc, char **argv) {
       case BENCH_TPCC:
       case BENCH_RW:
         // async benchmarks
-	      transport->Timer(0, [bench, bdcb]() { bench->Start(bdcb); });
+	      tport->Timer(0, [bench, bdcb]() { bench->Start(bdcb); });
         break;
-      case BENCH_SMALLBANK_SYNC: {
+      case BENCH_SMALLBANK_SYNC:
+      case BENCH_TPCC_SYNC: {
         SyncTransactionBenchClient *syncBench = dynamic_cast<SyncTransactionBenchClient *>(bench);
         UW_ASSERT(syncBench != nullptr);
         threads.push_back(new std::thread([syncBench, bdcb](){
             syncBench->Start([](){});
             while (!syncBench->IsFullyDone()) {
               syncBench->StartLatency();
-              int result;
+              transaction_status_t result;
               syncBench->SendNext(&result);
               syncBench->IncrementSent(result);
             }
@@ -767,12 +907,23 @@ int main(int argc, char **argv) {
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
   }
 
-  transport->Timer(4950, std::bind(FlushStats, benchClients, asyncClients));
-  transport->Run();
+  tport->Timer(4950, FlushStats);
 
+  std::signal(SIGKILL, Cleanup);
+  std::signal(SIGTERM, Cleanup);
+  std::signal(SIGINT, Cleanup);
+
+  tport->Run();
+
+  Cleanup(0);
+
+	return 0;
+}
+
+void Cleanup(int signal) {
+  FlushStats();
   delete config;
   delete keyManager;
-
   for (auto i : threads) {
     i->join();
     delete i;
@@ -792,6 +943,18 @@ int main(int argc, char **argv) {
   for (auto i : benchClients) {
     delete i;
   }
-  delete transport;
-	return 0;
+  delete tport;
+}
+
+void FlushStats() {
+  if (FLAGS_stats_file.size() > 0) {
+    Stats total;
+    for (unsigned int i = 0; i < benchClients.size(); i++) {
+      total.Merge(benchClients[i]->GetStats());
+    }
+    for (unsigned int i = 0; i < asyncClients.size(); i++) {
+      total.Merge(asyncClients[i]->GetStats());
+    }
+    total.ExportJSON(FLAGS_stats_file);
+  }
 }

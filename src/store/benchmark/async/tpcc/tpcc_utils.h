@@ -18,6 +18,7 @@ std::string StockRowKey(uint32_t w_id, uint32_t i_id);
 std::string HistoryRowKey(uint32_t w_id, uint32_t d_id, uint32_t c_id);
 std::string CustomerByNameRowKey(uint32_t w_id, uint32_t d_id, const std::string &c_last);
 std::string OrderByCustomerRowKey(uint32_t w_id, uint32_t d_id, uint32_t c_id);
+std::string EarliestNewOrderRowKey(uint32_t w_id, uint32_t d_id);
 
 template<class T>
 uint32_t NURand(T A, T x, T y, T C, std::mt19937 &gen) {

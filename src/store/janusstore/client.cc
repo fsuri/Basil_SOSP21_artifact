@@ -309,7 +309,7 @@ namespace janusstore {
       // return results to async_transaction_bench_client by invoking output commit callback
       Debug("Invoking execute callback for txn %lu", txn_id);
       stats.Increment("commits", 1);
-      req->ccb(0, std::map<std::string, std::string>());
+      req->ccb(COMMITTED, std::map<std::string, std::string>());
       req->responded_shards.clear();
     } else {
       // printf("%s\n", ("CLIENT - COMMIT CB - " + to_string(req->responded_shards.size()) + " shards responded out of " + to_string(req->participant_shards.size())).c_str());

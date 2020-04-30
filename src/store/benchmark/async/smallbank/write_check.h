@@ -10,7 +10,7 @@ class WriteCheck : public SmallbankTransaction {
   WriteCheck(const std::string &cust, const int32_t value, const uint32_t timeout);
   virtual ~WriteCheck();
 
-  int Execute(SyncClient &client);
+  transaction_status_t Execute(SyncClient &client);
  private:
   std::string cust;
   int32_t value;

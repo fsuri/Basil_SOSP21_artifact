@@ -42,10 +42,11 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     int numShards, int numGroups, Transport *transport, KeyManager *keyManager,
     bool signedMessages,
     bool validateProofs, uint64_t timeDelta, OCCType occType, partitioner part,
+    uint64_t readDepSize,
     TrueTime timeServer) :
     config(config), groupIdx(groupIdx), idx(idx), numShards(numShards),
     numGroups(numGroups), id(groupIdx * config.n + idx),
-    transport(transport), occType(occType), part(part),
+    transport(transport), occType(occType), part(part), readDepSize(readDepSize),
     signedMessages(signedMessages), validateProofs(validateProofs), keyManager(keyManager),
     timeDelta(timeDelta), timeServer(timeServer) {
   transport->Register(this, config, groupIdx, idx);
@@ -72,6 +73,8 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     }
 
     if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
+      Debug("VALIDATE failed for SignedMessage from %lu.",
+          signedMessage.process_id());
       return;
     }
   } else {
@@ -93,7 +96,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     HandleWriteback(remote, writeback);
   } else if (type == abort.GetTypeName()) {
     abort.ParseFromString(data);
-    HandleAbort(remote, abort);
+    HandleAbort(remote, abort, signedMessage.process_id());
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
@@ -121,12 +124,15 @@ void Server::Load(const string &key, const string &value,
 
 void Server::HandleRead(const TransportAddress &remote,
     const proto::Read &msg) {
-  Debug("READ[%lu] for key %s.", msg.req_id(), BytesToHex(msg.key(), 16).c_str());
+  Debug("READ[%lu:%lu] for key %s with ts %lu.%lu.", msg.timestamp().id(),
+      msg.req_id(), BytesToHex(msg.key(), 16).c_str(),
+      msg.timestamp().timestamp(), msg.timestamp().id());
   Timestamp ts(msg.timestamp());
-  /*if (CheckHighWatermark(ts)) {
+  if (CheckHighWatermark(ts)) {
     // ignore request if beyond high watermark
+    Debug("Read timestamp beyond high watermark.");
     return;
-  }*/
+  }
 
   std::pair<Timestamp, Server::Value> tsVal;
   bool exists = store.get(msg.key(), ts, tsVal);
@@ -138,14 +144,11 @@ void Server::HandleRead(const TransportAddress &remote,
     Debug("READ[%lu] Committed value of length %lu bytes with ts %lu.%lu.",
         msg.req_id(), tsVal.second.val.length(), tsVal.first.getTimestamp(),
         tsVal.first.getID());
-    reply.set_status(REPLY_OK);
     reply.mutable_committed()->set_value(tsVal.second.val);
     tsVal.first.serialize(reply.mutable_committed()->mutable_timestamp());
     if (validateProofs) {
       *reply.mutable_committed()->mutable_proof() = tsVal.second.proof;
     }
-  } else {
-    reply.set_status(REPLY_FAIL);
   }
 
   if (occType == MVTSO) {
@@ -177,7 +180,8 @@ void Server::HandleRead(const TransportAddress &remote,
           mostRecent.timestamp().id());
 
       // TODO: currently limit depth of deps to 1 (no chains of dependencies)
-      if (mostRecent.deps_size() == 0) {
+      //   TODO: temporarily undo this TODO ^
+      // if (mostRecent.deps_size() == 0) {
         preparedWrite.set_value(preparedValue);
         *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
         *preparedWrite.mutable_txn_digest() = TransactionDigest(mostRecent);
@@ -189,8 +193,7 @@ void Server::HandleRead(const TransportAddress &remote,
         } else {
           *reply.mutable_prepared() = preparedWrite;
         }
-        reply.set_status(REPLY_OK);
-      }
+      //}
     }
   }
 
@@ -209,7 +212,10 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
   if (validateProofs) {
     for (const auto &dep : msg.txn().deps()) {
-      if (!ValidateDependency(dep, &config, signedMessages, keyManager)) {
+      if (!ValidateDependency(dep, &config, readDepSize, signedMessages,
+            keyManager)) {
+        Debug("VALIDATE Dependency failed for txn %s.", BytesToHex(txnDigest,
+              16).c_str());
         // safe to ignore Byzantine client
         return;
       }
@@ -226,13 +232,14 @@ void Server::HandlePhase1(const TransportAddress &remote,
   p1Decisions[txnDigest] = result;
 
   if (result != proto::Phase1Reply::WAIT) {
-    SendPhase1Reply(msg.req_id(), result, conflict, remote);
+    SendPhase1Reply(msg.req_id(), result, conflict, txnDigest, remote);
   }
 }
 
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
-  Debug("PHASE2[%s].", BytesToHex(msg.txn_digest(), 16).c_str());
+  std::string txnDigest = TransactionDigest(msg.txn());
+  Debug("PHASE2[%s].", BytesToHex(txnDigest, 16).c_str());
 
   proto::CommitDecision decision;
   if (validateProofs) {
@@ -263,35 +270,25 @@ void Server::HandlePhase2(const TransportAddress &remote,
     }
     
     if (repliesValid) {
-      auto txnItr = ongoing.find(msg.txn_digest());
-      if (txnItr == ongoing.end()) {
-        // TODO: what to do if we receive a Phase2 msg without a Phase1 msg
-        //    we need to know the transaction content to validate the Phase1
-        //    decision
-        //  for now, drop the message?
-        return;
-      }
       decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs,
-          txnItr->second,
-          signedMessages, keyManager);
-      if (decision != msg.decision()) {
-        // ignore Byzantine clients
-        return;
-      }
+          msg.txn(), signedMessages, keyManager);
     } else {
+      Debug("VALIDATE signed Phase1Reply failed for txn %s.", BytesToHex(
+            txnDigest, 16).c_str());
       // ignore Byzantine clients
       return;
     }
   } else {
+    UW_ASSERT(msg.has_decision());
     decision = msg.decision();
   }
 
   proto::Phase2Reply reply;
   reply.set_req_id(msg.req_id());
   reply.set_decision(decision); 
-  *reply.mutable_txn_digest() = msg.txn_digest();
+  *reply.mutable_txn_digest() = txnDigest;
 
-  p2Decisions[msg.txn_digest()] = decision;
+  p2Decisions[reply.txn_digest()] = decision;
 
   if (signedMessages) {
     proto::SignedMessage signedMessage;
@@ -304,14 +301,21 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
 void Server::HandleWriteback(const TransportAddress &remote,
     const proto::Writeback &msg) {
-  std::string computedTxnDigest;
-  const std::string *txnDigest;
-  if (msg.decision() == proto::COMMIT) {
-    if (!msg.has_txn()) {
+  const proto::Transaction *txn;
+  if (validateProofs) {
+    txn = &msg.proof().txn();
+  } else {
+    if (msg.decision() == proto::COMMIT && !msg.has_txn()) {
       Warning("Malformed Writeback: commit must contain txn.");
       return;
     }
-    computedTxnDigest = TransactionDigest(msg.txn());
+    txn = &msg.txn();
+  }
+
+  std::string computedTxnDigest;
+  const std::string *txnDigest;
+  if (msg.decision() == proto::COMMIT) {
+    computedTxnDigest = TransactionDigest(*txn);
     txnDigest = &computedTxnDigest;
   } else {
     if (!msg.has_txn_digest()) {
@@ -324,23 +328,40 @@ void Server::HandleWriteback(const TransportAddress &remote,
   Debug("WRITEBACK[%s] with decision %d.",
       BytesToHex(*txnDigest, 16).c_str(), msg.decision());
 
-  if (validateProofs) {
-    if (!ValidateProof(msg.proof(), &config, signedMessages, keyManager)) {
-      // ignore Writeback without valid proof
-      return;
-    }
-  }
-
   if (msg.decision() == proto::COMMIT) {
-    Commit(*txnDigest, msg.txn());
+    if (validateProofs) {
+      if (!ValidateProofCommit(msg.proof(), &config, signedMessages, keyManager)) {
+        Debug("VALIDATE CommitProof commit failed for txn %s.", BytesToHex(
+              *txnDigest, 16).c_str());
+        // ignore Writeback without valid proof
+        return;
+      }
+    }
+    Commit(*txnDigest, *txn, msg.proof());
   } else {
+    if (validateProofs) {
+      if (!ValidateProofAbort(msg.proof(), &config, signedMessages,
+            keyManager)) {
+        Debug("VALIDATE CommitProof abort failed for txn %s.", BytesToHex(
+              *txnDigest, 16).c_str());
+        // ignore Writeback without valid proof
+        return;
+      }
+    }
+
     Abort(*txnDigest);
   }
 }
 
 void Server::HandleAbort(const TransportAddress &remote,
-    const proto::Abort &msg) {
-  Abort(msg.txn_digest());
+    const proto::Abort &msg, uint64_t senderId) {
+  if (signedMessages && msg.ts().id() != senderId) {
+    return;
+  }
+
+  for (const auto &read : msg.read_set()) {
+    rts[read].erase(msg.ts());
+  }
 }
 
 proto::Phase1Reply::ConcurrencyControlResult Server::DoOCCCheck(
@@ -629,19 +650,35 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
 
     auto rtsItr = rts.find(write.key());
     if (rtsItr != rts.end()) {
+      auto rtsRBegin = rtsItr->second.rbegin();
+      if (rtsRBegin != rtsItr->second.rend()) {
+        Debug("Largest rts for write to key %s: %lu.%lu.",
+          BytesToHex(write.key(), 16).c_str(), rtsRBegin->getTimestamp(),
+          rtsRBegin->getID());
+      }
       auto rtsLB = rtsItr->second.lower_bound(ts);
-      if (rtsLB != rtsItr->second.end() && *rtsLB > ts) {
-        Debug("[%lu:%lu][%s] ABSTAIN larger rts acquired for key %s: rts %lu.%lu >"
-            " this txn's ts %lu.%lu.",
-            txn.client_id(),
-            txn.client_seq_num(),
-            BytesToHex(txnDigest, 16).c_str(),
-            BytesToHex(write.key(), 16).c_str(),
-            rtsLB->getTimestamp(),
-            rtsLB->getID(), ts.getTimestamp(), ts.getID());
-        stats.Increment("cc_abstains", 1);
-        stats.Increment("cc_abstains_rts", 1);
-        return proto::Phase1Reply::ABSTAIN;
+      if (rtsLB != rtsItr->second.end()) {
+        Debug("Lower bound rts for write to key %s: %lu.%lu.",
+          BytesToHex(write.key(), 16).c_str(), rtsLB->getTimestamp(),
+          rtsLB->getID());
+        if (*rtsLB == ts) {
+          rtsLB++;
+        }
+        if (rtsLB != rtsItr->second.end()) {
+          if (*rtsLB > ts) {
+            Debug("[%lu:%lu][%s] ABSTAIN larger rts acquired for key %s: rts %lu.%lu >"
+                " this txn's ts %lu.%lu.",
+                txn.client_id(),
+                txn.client_seq_num(),
+                BytesToHex(txnDigest, 16).c_str(),
+                BytesToHex(write.key(), 16).c_str(),
+                rtsLB->getTimestamp(),
+                rtsLB->getID(), ts.getTimestamp(), ts.getID());
+            stats.Increment("cc_abstains", 1);
+            stats.Increment("cc_abstains_rts", 1);
+            return proto::Phase1Reply::ABSTAIN;
+          }
+        }
       }
     }
     // TODO: add additional rts dep check to shrink abort window
@@ -770,7 +807,7 @@ void Server::GetCommittedReads(const std::string &key,
 }
 
 void Server::Commit(const std::string &txnDigest,
-    const proto::Transaction &txn) {
+    const proto::Transaction &txn, const proto::CommittedProof &proof) {
   Timestamp ts(txn.timestamp());
   for (const auto &read : txn.read_set()) {
     if (!IsKeyOwned(read.key())) {
@@ -782,6 +819,7 @@ void Server::Commit(const std::string &txnDigest,
   
   Value val;
   if (validateProofs) {
+    val.proof = proof;
   }
 
   for (const auto &write : txn.write_set()) {
@@ -844,7 +882,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
             dependent);
         waitingDependencies.erase(dependent);
         proto::CommittedProof conflict;
-        SendPhase1Reply(dependenciesItr->second.reqId, result, conflict,
+        SendPhase1Reply(dependenciesItr->second.reqId, result, conflict, dependent,
             *dependenciesItr->second.remote);
       }
     }
@@ -889,10 +927,10 @@ bool Server::CheckHighWatermark(const Timestamp &ts) {
 
 void Server::SendPhase1Reply(uint64_t reqId,
     proto::Phase1Reply::ConcurrencyControlResult result,
-    const proto::CommittedProof &conflict, const TransportAddress &remote) {
+    const proto::CommittedProof &conflict, const std::string &txnDigest,
+    const TransportAddress &remote) {
   proto::Phase1Reply reply;
   reply.set_req_id(reqId);
-  reply.set_status(REPLY_OK);
   reply.set_ccr(result);
   /* TODO: are retries a thing?
   if (result == proto::Phase1Reply::RETRY) {
@@ -900,7 +938,10 @@ void Server::SendPhase1Reply(uint64_t reqId,
   }*/
 
   if (validateProofs) {
-    *reply.mutable_committed_conflict() = conflict;
+    if (conflict.has_txn()) {
+      *reply.mutable_committed_conflict() = conflict;
+    }
+    *reply.mutable_txn_digest() = txnDigest;
   }
 
   if (signedMessages) {
