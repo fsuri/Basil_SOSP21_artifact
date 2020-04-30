@@ -390,7 +390,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
       return proto::Phase1Reply::COMMIT;
     } else {
       // run the checks again for a new timestamp
-      prepared.erase(txnDigest);
+      Clean(txnDigest);
     }
   }
 
@@ -725,7 +725,7 @@ void Server::GetPreparedWriteTimestamps(
     std::unordered_map<std::string, std::set<Timestamp>> &writes) {
   // gather up the set of all writes that are currently prepared
   for (const auto &t : prepared) {
-    for (const auto &write : t.second.second.write_set()) {
+    for (const auto &write : t.second.second->write_set()) {
       if (IsKeyOwned(write.key())) {
         writes[write.key()].insert(t.second.first);
       }
@@ -734,9 +734,9 @@ void Server::GetPreparedWriteTimestamps(
 }
 
 void Server::GetPreparedWrites(
-      std::unordered_map<std::string, std::vector<proto::Transaction>> &writes) {
+      std::unordered_map<std::string, std::vector<const proto::Transaction *>> &writes) {
   for (const auto &t : prepared) {
-    for (const auto &write : t.second.second.write_set()) {
+    for (const auto &write : t.second.second->write_set()) {
       if (IsKeyOwned(write.key())) {
         writes[write.key()].push_back(t.second.second);
       }
@@ -748,7 +748,7 @@ void Server::GetPreparedReadTimestamps(
     std::unordered_map<std::string, std::set<Timestamp>> &reads) {
   // gather up the set of all writes that are currently prepared
   for (const auto &t : prepared) {
-    for (const auto &read : t.second.second.read_set()) {
+    for (const auto &read : t.second.second->read_set()) {
       if (IsKeyOwned(read.key())) {
         reads[read.key()].insert(t.second.first);
       }
@@ -757,10 +757,10 @@ void Server::GetPreparedReadTimestamps(
 }
 
 void Server::GetPreparedReads(
-    std::unordered_map<std::string, std::vector<proto::Transaction>> &reads) {
+    std::unordered_map<std::string, std::vector<const proto::Transaction*>> &reads) {
   // gather up the set of all writes that are currently prepared
   for (const auto &t : prepared) {
-    for (const auto &read : t.second.second.read_set()) {
+    for (const auto &read : t.second.second->read_set()) {
       if (IsKeyOwned(read.key())) {
         reads[read.key()].push_back(t.second.second);
       }
@@ -772,15 +772,16 @@ void Server::Prepare(const std::string &txnDigest,
     const proto::Transaction &txn) {
   Debug("PREPARE[%s] agreed to commit with ts %lu.%lu.",
       BytesToHex(txnDigest, 16).c_str(), txn.timestamp().timestamp(), txn.timestamp().id());
+  proto::Transaction &ongoingTxn= ongoing.at(txnDigest);
   auto p = prepared.insert(std::make_pair(txnDigest, std::make_pair(
-          Timestamp(txn.timestamp()), txn)));
+          Timestamp(txn.timestamp()), &ongoingTxn)));
   for (const auto &read : txn.read_set()) {
     if (IsKeyOwned(read.key())) {
-      preparedReads[read.key()].insert(&p.first->second.second);
+      preparedReads[read.key()].insert(p.first->second.second);
     }
   }
   std::pair<Timestamp, const proto::Transaction *> pWrite =
-    std::make_pair(p.first->second.first, &p.first->second.second);
+    std::make_pair(p.first->second.first, p.first->second.second);
   for (const auto &write : txn.write_set()) {
     if (IsKeyOwned(write.key())) {
       preparedWrites[write.key()].insert(pWrite);
@@ -856,17 +857,17 @@ void Server::Abort(const std::string &txnDigest) {
 }
 
 void Server::Clean(const std::string &txnDigest) {
-  ongoing.erase(txnDigest);
   auto itr = prepared.find(txnDigest);
   if (itr != prepared.end()) {
-    for (const auto &read : itr->second.second.read_set()) {
-      preparedReads[read.key()].erase(&itr->second.second);
+    for (const auto &read : itr->second.second->read_set()) {
+      preparedReads[read.key()].erase(itr->second.second);
     }
-    for (const auto &write : itr->second.second.write_set()) {
+    for (const auto &write : itr->second.second->write_set()) {
       preparedWrites[write.key()].erase(itr->second.first);
     }
     prepared.erase(itr);
   }
+  ongoing.erase(txnDigest);
 }
 
 void Server::CheckDependents(const std::string &txnDigest) {

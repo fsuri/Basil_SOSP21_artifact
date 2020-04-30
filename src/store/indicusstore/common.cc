@@ -500,6 +500,13 @@ bool operator!=(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2
 }
 
 std::string TransactionDigest(const proto::Transaction &txn) {
+  char digestChar[16];
+  *reinterpret_cast<uint64_t *>(digestChar) = txn.client_id();
+  *reinterpret_cast<uint64_t *>(digestChar + 8) = txn.client_seq_num();
+  return std::string(digestChar, 16);
+}
+
+std::string _TransactionDigest(const proto::Transaction &txn) {
   CryptoPP::SHA256 hash;
   std::string digest;
 

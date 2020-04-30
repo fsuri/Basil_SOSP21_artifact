@@ -105,11 +105,11 @@ class Server : public TransportReceiver, public ::Server {
   void GetPreparedWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
   void GetPreparedWrites(
-      std::unordered_map<std::string, std::vector<proto::Transaction>> &writes);
+      std::unordered_map<std::string, std::vector<const proto::Transaction *>> &writes);
   void GetPreparedReadTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &reads);
   void GetPreparedReads(
-      std::unordered_map<std::string, std::vector<proto::Transaction>> &reads);
+      std::unordered_map<std::string, std::vector<const proto::Transaction *>> &reads);
   void Prepare(const std::string &txnDigest, const proto::Transaction &txn);
   void GetCommittedWrites(const std::string &key, const Timestamp &ts,
       std::vector<std::pair<Timestamp, Value>> &writes);
@@ -159,7 +159,7 @@ class Server : public TransportReceiver, public ::Server {
 
   // Digest -> V
   std::unordered_map<std::string, proto::Transaction> ongoing;
-  std::unordered_map<std::string, std::pair<Timestamp, proto::Transaction>> prepared;
+  std::unordered_map<std::string, std::pair<Timestamp, const proto::Transaction *>> prepared;
   std::unordered_map<std::string, std::set<const proto::Transaction *>> preparedReads;
   std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
 
