@@ -588,4 +588,16 @@ uint64_t QuorumSize(const transport::Configuration *config) {
   return 4 * static_cast<uint64_t>(config->f) + 1;
 }
 
+uint64_t FastQuorumSize(const transport::Configuration *config) {
+  return static_cast<uint64_t>(config->n);
+}
+
+uint64_t SlowCommitQuorumSize(const transport::Configuration *config) {
+  return 3 * static_cast<uint64_t>(config->f) + 1;
+}
+
+uint64_t SlowAbortQuorumSize(const transport::Configuration *config) {
+  return static_cast<uint64_t>(config->f) + 1;
+}
+
 } // namespace indicusstore

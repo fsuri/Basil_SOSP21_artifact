@@ -92,7 +92,8 @@ bool TransactionsConflict(const proto::Transaction &a,
 
 uint64_t QuorumSize(const transport::Configuration *config);
 uint64_t FastQuorumSize(const transport::Configuration *config);
-uint64_t SlowQuorumSize(const transport::Configuration *config);
+uint64_t SlowCommitQuorumSize(const transport::Configuration *config);
+uint64_t SlowAbortQuorumSize(const transport::Configuration *config);
 
 } // namespace indicusstore
 

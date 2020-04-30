@@ -429,6 +429,7 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
       if (!validateProofs || ValidateProofCommit(reply.committed_conflict(), config,
               signedMessages, hashDigest, keyManager)) {
         Phase1Decision(itr);
+        return;
       } else {
         itr->second->numAbstains++;
       }
@@ -443,7 +444,9 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
 
   if (itr->second->phase1Replies.size() == static_cast<size_t>(config->n)) {
     Phase1Decision(itr);
-  } else if (itr->second->phase1Replies.size() >= QuorumSize(config) &&
+  } else if (itr->second->numCommits == SlowCommitQuorumSize(config)) {
+    Phase1Decision(itr);
+  } else if (itr->second->numAbstains == SlowAbortQuorumSize(config) &&
       !itr->second->decisionTimeoutStarted) {
     uint64_t reqId = reply.req_id();
     itr->second->decisionTimeout = new Timeout(transport,
