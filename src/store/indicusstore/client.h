@@ -62,7 +62,8 @@ class Client : public ::Client {
       int nGroups, const std::vector<int> &closestReplicas,
       Transport *transport, partitioner part, bool syncCommit,
       uint64_t readMessages, uint64_t readQuorumSize, uint64_t readDepSize,
-      bool signedMessages, bool validateProofs, KeyManager *keyManager,
+      bool signedMessages, bool validateProofs, bool hashDigest,
+      KeyManager *keyManager,
       TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 
@@ -155,6 +156,7 @@ class Client : public ::Client {
   uint64_t readDepSize;
   bool signedMessages;
   bool validateProofs;
+  bool hashDigest;
   KeyManager *keyManager;
   // TrueTime server.
   TrueTime timeServer;

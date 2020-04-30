@@ -66,11 +66,11 @@ proto::CommitDecision IndicusDecide(
     const std::map<int, std::vector<proto::Phase1Reply>> &replies,
     const transport::Configuration *config, bool validateProofs,
     const proto::Transaction &transaction,
-    bool signedMessages, KeyManager *keyManager) {
+    bool signedMessages, bool hashDigest, KeyManager *keyManager) {
   bool fast;
   for (const auto &groupReplies : replies) {
     proto::CommitDecision groupDecision = IndicusShardDecide(groupReplies.second,
-        config, validateProofs, transaction, signedMessages, keyManager, fast);
+        config, validateProofs, transaction, signedMessages, hashDigest, keyManager, fast);
     if (groupDecision == proto::ABORT) {
       return proto::ABORT;
     }
@@ -82,7 +82,7 @@ proto::CommitDecision IndicusShardDecide(
     const std::vector<proto::Phase1Reply> &replies,
     const transport::Configuration *config, bool validateProofs,
     const proto::Transaction &txn,
-    bool signedMessages, KeyManager *keyManager, bool &fast) {
+    bool signedMessages, bool hashDigest, KeyManager *keyManager, bool &fast) {
   int commits = 0;
   int abstains = 0;
 
@@ -93,7 +93,7 @@ proto::CommitDecision IndicusShardDecide(
     if (reply.ccr() == proto::Phase1Reply::ABORT) {
       if (validateProofs) {
         if (!ValidateProofCommit(reply.committed_conflict(), config, signedMessages,
-              keyManager)) {
+              hashDigest, keyManager)) {
           abstains++;
           continue;
         }
@@ -131,7 +131,7 @@ proto::CommitDecision IndicusShardDecide(
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     const std::string &key, const std::string &val, const Timestamp &timestamp,
-    const transport::Configuration *config, bool signedMessages,
+    const transport::Configuration *config, bool signedMessages, bool hashDigest,
     KeyManager *keyManager) {
   if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
     // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
@@ -139,7 +139,7 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     return true;
   }
 
-  if (!ValidateProofCommit(proof, config, signedMessages, keyManager)) {
+  if (!ValidateProofCommit(proof, config, signedMessages, hashDigest, keyManager)) {
     Debug("VALIDATE CommitProof commit failed for txn %lu.%lu.",
         proof.txn().client_id(), proof.txn().client_seq_num());
     return false;
@@ -180,14 +180,14 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
 
 bool ValidateProofCommit(const proto::CommittedProof &proof,
     const transport::Configuration *config, bool signedMessages,
-    KeyManager *keyManager) {
+    bool hashDigest, KeyManager *keyManager) {
   if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
     // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
     //    without needing to write all existing data with transactions
     return true;
   }
 
-  std::string txnDigest = TransactionDigest(proof.txn());
+  std::string txnDigest = TransactionDigest(proof.txn(), hashDigest);
   Debug("Validate proof commit for transaction %lu.%lu (%s).", proof.txn().client_id(),
       proof.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str());
   if (signedMessages) {
@@ -252,8 +252,8 @@ bool ValidateProofCommit(const proto::CommittedProof &proof,
 
 bool ValidateProofAbort(const proto::CommittedProof &proof,
     const transport::Configuration *config, bool signedMessages,
-    KeyManager *keyManager) {
-  std::string txnDigest = TransactionDigest(proof.txn());
+    bool hashDigest, KeyManager *keyManager) {
+  std::string txnDigest = TransactionDigest(proof.txn(), hashDigest);
   Debug("Validate proof abort for transaction %lu.%lu (%s).", proof.txn().client_id(),
       proof.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str());
   if (signedMessages) {
@@ -273,7 +273,7 @@ bool ValidateProofAbort(const proto::CommittedProof &proof,
         groupedP1Replies.insert(std::make_pair(signedP1Replies.first, p1Replies));
       }
       return ValidateP1RepliesAbort(groupedP1Replies, txnDigest, proof.txn(),
-          config, signedMessages, keyManager);
+          config, signedMessages, hashDigest, keyManager);
     } else if (proof.has_signed_p2_replies()) {
       std::vector<proto::Phase2Reply> p2Replies;
       for (const auto &signedP2Reply : proof.signed_p2_replies().msgs()) {
@@ -301,7 +301,7 @@ bool ValidateProofAbort(const proto::CommittedProof &proof,
         groupedP1Replies.insert(std::make_pair(groupP1Replies.first, p1Replies));
       }
       return ValidateP1RepliesAbort(groupedP1Replies, txnDigest, proof.txn(),
-          config, signedMessages, keyManager);
+          config, signedMessages, hashDigest, keyManager);
     } else if (proof.has_p2_replies()) {
       std::vector<proto::Phase2Reply> p2Replies;
       for (const auto &p2Reply : proof.p2_replies().replies()) {
@@ -383,7 +383,7 @@ bool ValidateP2RepliesCommit(
 bool ValidateP1RepliesAbort(
     const std::map<int, std::vector<proto::Phase1Reply>> &groupedP1Replies,
     const std::string &txnDigest, const proto::Transaction &txn,
-    const transport::Configuration *config, bool signedMessages,
+    const transport::Configuration *config, bool signedMessages, bool hashDigest,
     KeyManager *keyManager) {
   // TODO: technically only need a single Phase1Reply that says commit ->
   //    messages will all be the same
@@ -407,7 +407,7 @@ bool ValidateP1RepliesAbort(
         abstains++;
       } else if (p1Reply.ccr() == proto::Phase1Reply::ABORT) {
         if (ValidateProofCommit(p1Reply.committed_conflict(), config,
-              signedMessages, keyManager)) {
+              signedMessages, hashDigest, keyManager)) {
           Debug("Group %ld aborted transaction with committed conflict.", group);
           return true;
         } else {
@@ -499,52 +499,52 @@ bool operator!=(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2
   return !(pw1 == pw2);
 }
 
-std::string TransactionDigest(const proto::Transaction &txn) {
-  char digestChar[16];
-  *reinterpret_cast<uint64_t *>(digestChar) = txn.client_id();
-  *reinterpret_cast<uint64_t *>(digestChar + 8) = txn.client_seq_num();
-  return std::string(digestChar, 16);
-}
+std::string TransactionDigest(const proto::Transaction &txn, bool hashDigest) {
+  if (hashDigest) {
+    CryptoPP::SHA256 hash;
+    std::string digest;
 
-std::string _TransactionDigest(const proto::Transaction &txn) {
-  CryptoPP::SHA256 hash;
-  std::string digest;
+    uint64_t client_id = txn.client_id();
+    uint64_t client_seq_num = txn.client_seq_num();
+    hash.Update((const byte*) &client_id, sizeof(client_id));
+    hash.Update((const byte*) &client_seq_num, sizeof(client_seq_num));
+    for (const auto &group : txn.involved_groups()) {
+      hash.Update((const byte*) &group, sizeof(group));
+    }
+    for (const auto &read : txn.read_set()) {
+      uint64_t readtimeId = read.readtime().id();
+      uint64_t readtimeTs = read.readtime().timestamp();
+      hash.Update((const byte*) &read.key()[0], read.key().length());
+      hash.Update((const byte*) &readtimeId,
+          sizeof(read.readtime().id()));
+      hash.Update((const byte*) &readtimeTs,
+          sizeof(read.readtime().timestamp()));
+    }
+    for (const auto &write : txn.write_set()) {
+      hash.Update((const byte*) &write.key()[0], write.key().length());
+      hash.Update((const byte*) &write.value()[0], write.value().length());
+    }
+    for (const auto &dep : txn.deps()) {
+      hash.Update((const byte*) &dep.prepared().txn_digest()[0],
+          dep.prepared().txn_digest().length());
+    }
+    uint64_t timestampId = txn.timestamp().id();
+    uint64_t timestampTs = txn.timestamp().timestamp();
+    hash.Update((const byte*) &timestampId,
+        sizeof(timestampId));
+    hash.Update((const byte*) &timestampTs,
+        sizeof(timestampTs));
+    
+    digest.resize(hash.DigestSize());
+    hash.Final((byte*) &digest[0]);
 
-  uint64_t client_id = txn.client_id();
-  uint64_t client_seq_num = txn.client_seq_num();
-  hash.Update((const byte*) &client_id, sizeof(client_id));
-  hash.Update((const byte*) &client_seq_num, sizeof(client_seq_num));
-  for (const auto &group : txn.involved_groups()) {
-    hash.Update((const byte*) &group, sizeof(group));
+    return digest;
+  } else {
+    char digestChar[16];
+    *reinterpret_cast<uint64_t *>(digestChar) = txn.client_id();
+    *reinterpret_cast<uint64_t *>(digestChar + 8) = txn.client_seq_num();
+    return std::string(digestChar, 16);
   }
-  for (const auto &read : txn.read_set()) {
-    uint64_t readtimeId = read.readtime().id();
-    uint64_t readtimeTs = read.readtime().timestamp();
-    hash.Update((const byte*) &read.key()[0], read.key().length());
-    hash.Update((const byte*) &readtimeId,
-        sizeof(read.readtime().id()));
-    hash.Update((const byte*) &readtimeTs,
-        sizeof(read.readtime().timestamp()));
-  }
-  for (const auto &write : txn.write_set()) {
-    hash.Update((const byte*) &write.key()[0], write.key().length());
-    hash.Update((const byte*) &write.value()[0], write.value().length());
-  }
-  for (const auto &dep : txn.deps()) {
-    hash.Update((const byte*) &dep.prepared().txn_digest()[0],
-        dep.prepared().txn_digest().length());
-  }
-  uint64_t timestampId = txn.timestamp().id();
-  uint64_t timestampTs = txn.timestamp().timestamp();
-  hash.Update((const byte*) &timestampId,
-      sizeof(timestampId));
-  hash.Update((const byte*) &timestampTs,
-      sizeof(timestampTs));
-  
-  digest.resize(hash.DigestSize());
-  hash.Final((byte*) &digest[0]);
-
-  return digest;
 }
 
 std::string BytesToHex(const std::string &bytes, size_t maxLength) {
@@ -582,6 +582,10 @@ bool TransactionsConflict(const proto::Transaction &a,
     }
   }
   return false;
+}
+
+uint64_t QuorumSize(const transport::Configuration *config) {
+  return 4 * static_cast<uint64_t>(config->f) + 1;
 }
 
 } // namespace indicusstore

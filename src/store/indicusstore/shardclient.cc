@@ -39,7 +39,7 @@ namespace indicusstore {
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int group, const std::vector<int> &closestReplicas_,
-    bool signedMessages, bool validateProofs,
+    bool signedMessages, bool validateProofs, bool hashDigest,
     KeyManager *keyManager, TrueTime &timeServer) :
     client_id(client_id), transport(transport), config(config), group(group),
     timeServer(timeServer),
@@ -319,7 +319,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     if (validateProofs) {
       if (!ValidateTransactionWrite(reply.committed().proof(), req->key,
             reply.committed().value(), reply.committed().timestamp(), config,
-            signedMessages, keyManager)) {
+            signedMessages, hashDigest, keyManager)) {
         Debug("[group %i] Failed to validate committed value for read %lu.",
             group, reply.req_id());
         // invalid replies can be treated as if we never received a reply from
@@ -332,10 +332,11 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     Debug("[group %i] ReadReply for %lu with committed %lu byte value and ts %lu.%lu.",
         group, reply.req_id(), reply.committed().value().length(),
         replyTs.getTimestamp(), replyTs.getID());
-    if (req->numReplies == 1 || req->maxTs < replyTs) {
+    if (req->firstCommittedReply || req->maxTs < replyTs) {
       req->maxTs = replyTs;
       req->maxValue = reply.committed().value();
     }
+    req->firstCommittedReply = false;
   }
 
   proto::PreparedWrite prepared;
@@ -399,16 +400,12 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
         break;
       }
     }
-    read_callback gcb = req->gcb;
-    std::string key = req->key;
     pendingGets.erase(itr);
-    // TODO: there is probably a more efficient way to pass signedPrepared
-    //   back to top-level client
-    readValues[key] = req->maxValue;
     ReadMessage *read = txn.add_read_set();
-    *read->mutable_key() = key;
+    *read->mutable_key() = req->key;
     req->maxTs.serialize(read->mutable_readtime());
-    gcb(REPLY_OK, key, req->maxValue, req->maxTs, req->dep, req->hasDep, true);
+    readValues[req->key] = req->maxValue;
+    req->gcb(REPLY_OK, req->key, req->maxValue, req->maxTs, req->dep, req->hasDep, true);
     delete req;
   }
 }
@@ -427,9 +424,26 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
   }
   itr->second->phase1Replies.push_back(reply);
 
+  switch (reply.ccr()) {
+    case proto::Phase1Reply::ABORT:
+      if (!validateProofs || ValidateProofCommit(reply.committed_conflict(), config,
+              signedMessages, hashDigest, keyManager)) {
+        Phase1Decision(itr);
+      } else {
+        itr->second->numAbstains++;
+      }
+      break;
+    case proto::Phase1Reply::COMMIT:
+      itr->second->numCommits++;
+      break;
+    default:
+      itr->second->numAbstains++;
+      break;
+  }
+
   if (itr->second->phase1Replies.size() == static_cast<size_t>(config->n)) {
     Phase1Decision(itr);
-  } else if (itr->second->phase1Replies.size() >= QuorumSize() &&
+  } else if (itr->second->phase1Replies.size() >= QuorumSize(config) &&
       !itr->second->decisionTimeoutStarted) {
     uint64_t reqId = reply.req_id();
     itr->second->decisionTimeout = new Timeout(transport,
@@ -460,10 +474,10 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply,
     itr->second->matchingReplies++;
   }
 
-  if (itr->second->matchingReplies >= 4 * static_cast<uint64_t>(config->f) + 1) {
+  if (itr->second->matchingReplies >= QuorumSize(config)) {
     PendingPhase2 *pendingPhase2 = itr->second;
-    phase2_callback pcb = pendingPhase2->pcb;
-    pcb(pendingPhase2->phase2Replies, pendingPhase2->signedPhase2Replies);
+    pendingPhase2->pcb(pendingPhase2->phase2Replies,
+        pendingPhase2->signedPhase2Replies);
     this->pendingPhase2s.erase(itr);
     delete pendingPhase2;
   }
@@ -483,10 +497,9 @@ void ShardClient::Phase1Decision(
   PendingPhase1 *pendingPhase1 = itr->second;
   bool fast = false;
   proto::CommitDecision decision = IndicusShardDecide(pendingPhase1->phase1Replies,
-      config, validateProofs, pendingPhase1->transaction, signedMessages,
+      config, validateProofs, pendingPhase1->transaction, signedMessages, hashDigest,
       keyManager, fast);
-  phase1_callback pcb = pendingPhase1->pcb;
-  pcb(decision, fast, pendingPhase1->phase1Replies,
+  pendingPhase1->pcb(decision, fast, pendingPhase1->phase1Replies,
       pendingPhase1->signedPhase1Replies);
   this->pendingPhase1s.erase(itr);
   delete pendingPhase1;

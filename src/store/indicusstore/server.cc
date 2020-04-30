@@ -40,16 +40,24 @@ namespace indicusstore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     int numShards, int numGroups, Transport *transport, KeyManager *keyManager,
-    bool signedMessages,
-    bool validateProofs, uint64_t timeDelta, OCCType occType, partitioner part,
-    uint64_t readDepSize,
+    bool signedMessages, bool validateProofs, bool hashDigest,
+    uint64_t timeDelta, OCCType occType, partitioner part, uint64_t readDepSize,
     TrueTime timeServer) :
     config(config), groupIdx(groupIdx), idx(idx), numShards(numShards),
     numGroups(numGroups), id(groupIdx * config.n + idx),
     transport(transport), occType(occType), part(part), readDepSize(readDepSize),
-    signedMessages(signedMessages), validateProofs(validateProofs), keyManager(keyManager),
-    timeDelta(timeDelta), timeServer(timeServer) {
+    signedMessages(signedMessages), validateProofs(validateProofs),
+    hashDigest(hashDigest), keyManager(keyManager), timeDelta(timeDelta),
+    timeServer(timeServer) {
   transport->Register(this, config, groupIdx, idx);
+  
+  // this is needed purely from loading data without executing transactions
+  proto::CommittedProof proof;
+  proof.mutable_txn()->set_client_id(0);
+  proof.mutable_txn()->set_client_seq_num(0);
+  proof.mutable_txn()->mutable_timestamp()->set_timestamp(0);
+  proof.mutable_txn()->mutable_timestamp()->set_id(0);
+  committed.insert(std::make_pair("", proof));
 }
 
 Server::~Server() {
@@ -99,10 +107,9 @@ void Server::Load(const string &key, const string &value,
     const Timestamp timestamp) {
   Value val;
   val.val = value;
-  val.proof.mutable_txn()->set_client_id(0);
-  val.proof.mutable_txn()->set_client_seq_num(0);
-  val.proof.mutable_txn()->mutable_timestamp()->set_timestamp(0);
-  val.proof.mutable_txn()->mutable_timestamp()->set_id(0);
+  auto committedItr = committed.find("");
+  UW_ASSERT(committedItr != committed.end());
+  val.proof = &committedItr->second;
   store.put(key, val, timestamp);
   if (key.length() == 5 && key[0] == 0) {
     std::cerr << std::bitset<8>(key[0]) << ' '
@@ -139,7 +146,7 @@ void Server::HandleRead(const TransportAddress &remote,
     reply.mutable_committed()->set_value(tsVal.second.val);
     tsVal.first.serialize(reply.mutable_committed()->mutable_timestamp());
     if (validateProofs) {
-      *reply.mutable_committed()->mutable_proof() = tsVal.second.proof;
+      *reply.mutable_committed()->mutable_proof() = *tsVal.second.proof;
     }
   }
 
@@ -176,7 +183,7 @@ void Server::HandleRead(const TransportAddress &remote,
       // if (mostRecent.deps_size() == 0) {
         preparedWrite.set_value(preparedValue);
         *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
-        *preparedWrite.mutable_txn_digest() = TransactionDigest(mostRecent);
+        *preparedWrite.mutable_txn_digest() = TransactionDigest(mostRecent, hashDigest);
 
         if (signedMessages) {
           proto::SignedMessage signedMessage;
@@ -195,7 +202,7 @@ void Server::HandleRead(const TransportAddress &remote,
 
 void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
-  std::string txnDigest = TransactionDigest(msg.txn());
+  std::string txnDigest = TransactionDigest(msg.txn(), hashDigest);
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.",
       msg.txn().client_id(),
       msg.txn().client_seq_num(),
@@ -230,7 +237,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
-  std::string txnDigest = TransactionDigest(msg.txn());
+  std::string txnDigest = TransactionDigest(msg.txn(), hashDigest);
   Debug("PHASE2[%s].", BytesToHex(txnDigest, 16).c_str());
 
   proto::CommitDecision decision;
@@ -263,7 +270,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
     
     if (repliesValid) {
       decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs,
-          msg.txn(), signedMessages, keyManager);
+          msg.txn(), signedMessages, hashDigest, keyManager);
     } else {
       Debug("VALIDATE signed Phase1Reply failed for txn %s.", BytesToHex(
             txnDigest, 16).c_str());
@@ -307,7 +314,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
   std::string computedTxnDigest;
   const std::string *txnDigest;
   if (msg.decision() == proto::COMMIT) {
-    computedTxnDigest = TransactionDigest(*txn);
+    computedTxnDigest = TransactionDigest(*txn, hashDigest);
     txnDigest = &computedTxnDigest;
   } else {
     if (!msg.has_txn_digest()) {
@@ -322,7 +329,8 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
   if (msg.decision() == proto::COMMIT) {
     if (validateProofs) {
-      if (!ValidateProofCommit(msg.proof(), &config, signedMessages, keyManager)) {
+      if (!ValidateProofCommit(msg.proof(), &config, signedMessages, hashDigest,
+            keyManager)) {
         Debug("VALIDATE CommitProof commit failed for txn %s.", BytesToHex(
               *txnDigest, 16).c_str());
         // ignore Writeback without valid proof
@@ -332,7 +340,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
     Commit(*txnDigest, *txn, msg.proof());
   } else {
     if (validateProofs) {
-      if (!ValidateProofAbort(msg.proof(), &config, signedMessages,
+      if (!ValidateProofAbort(msg.proof(), &config, signedMessages, hashDigest,
             keyManager)) {
         Debug("VALIDATE CommitProof abort failed for txn %s.", BytesToHex(
               *txnDigest, 16).c_str());
@@ -536,7 +544,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
       //     GetCommittedWrites only returns writes larger than readVersion
       if (committedWrite.first < ts) {
         if (validateProofs) {
-          conflict = committedWrite.second.proof;
+          conflict = *committedWrite.second.proof;
         } 
         Debug("[%lu:%lu][%s] ABORT wr conflict committed write for key %s:"
             " this txn's read ts %lu.%lu < committed ts %lu.%lu < this txn's ts %lu.%lu.",
@@ -579,21 +587,25 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
       continue;
     }
 
-    std::set<std::pair<Timestamp, Timestamp>> committedReads;
-    GetCommittedReads(write.key(), committedReads);
+    auto committedReadsItr = committedReads.find(write.key());
 
-    if (committedReads.size() > 0) {
-      for (const auto &committedReadTs : committedReads) {
-        if (committedReadTs.second < ts && ts < committedReadTs.first) {
+    if (committedReadsItr != committedReads.end() && committedReadsItr->second.size() > 0) {
+      for (auto ritr = committedReadsItr->second.rbegin();
+          ritr != committedReadsItr->second.rend(); ++ritr) {
+        if (ts >= ritr->first) {
+          // iterating over committed reads from largest to smallest committed txn ts
+          //    if ts is larger than current itr, it is also larger than all subsequent itrs
+          break;
+        } else if (ritr->second < ts) {
           Debug("[%lu:%lu][%s] ABORT rw conflict committed read for key %s: committed"
               " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
               txn.client_id(),
               txn.client_seq_num(),
               BytesToHex(txnDigest, 16).c_str(),
               BytesToHex(write.key(), 16).c_str(),
-              committedReadTs.second.getTimestamp(),
-              committedReadTs.second.getID(), ts.getTimestamp(),
-              ts.getID(), committedReadTs.first.getTimestamp(), committedReadTs.first.getID());
+              ritr->second.getTimestamp(),
+              ritr->second.getID(), ts.getTimestamp(),
+              ts.getID(), ritr->first.getTimestamp(), ritr->first.getID());
           stats.Increment("cc_aborts", 1);
           stats.Increment("cc_aborts_rw_conflict", 1);
           return proto::Phase1Reply::ABORT;
@@ -810,9 +822,10 @@ void Server::Commit(const std::string &txnDigest,
     committedReads[read.key()].insert(std::make_pair(ts, read.readtime()));
   }
   
+  auto committedItr = committed.insert(std::make_pair(txnDigest, proof));
   Value val;
   if (validateProofs) {
-    val.proof = proof;
+    val.proof = &committedItr.first->second;
   }
 
   for (const auto &write : txn.write_set()) {
@@ -835,7 +848,6 @@ void Server::Commit(const std::string &txnDigest,
     }
   }
 
-  committed.insert(txnDigest);
   Clean(txnDigest);
   CheckDependents(txnDigest);
   CleanDependencies(txnDigest);

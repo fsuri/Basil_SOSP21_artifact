@@ -74,7 +74,7 @@ class ShardClient : public TransportReceiver {
  public:
   ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int group, const std::vector<int> &closestReplicas,
-      bool signedMessages, bool validateProofs,
+      bool signedMessages, bool validateProofs, bool hashDigest,
       KeyManager *keyManager, TrueTime &timeServer);
   virtual ~ShardClient();
 
@@ -110,7 +110,8 @@ class ShardClient : public TransportReceiver {
  private:
   struct PendingQuorumGet {
     PendingQuorumGet(uint64_t reqId) : reqId(reqId),
-        numReplies(0UL), numOKReplies(0UL), hasDep(false) { }
+        numReplies(0UL), numOKReplies(0UL), hasDep(false),
+        firstCommittedReply(true) { }
     ~PendingQuorumGet() { }
     uint64_t reqId;
     std::string key;
@@ -127,12 +128,13 @@ class ShardClient : public TransportReceiver {
     bool hasDep;
     read_callback gcb;
     read_timeout_callback gtcb;
+    bool firstCommittedReply;
   };
 
   struct PendingPhase1 {
     PendingPhase1(uint64_t reqId) : reqId(reqId),
         requestTimeout(nullptr), decisionTimeout(nullptr),
-        decisionTimeoutStarted(false) { }
+        decisionTimeoutStarted(false), numAbstains(0UL), numCommits(0UL) { }
     ~PendingPhase1() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
@@ -150,6 +152,8 @@ class ShardClient : public TransportReceiver {
     phase1_callback pcb;
     phase1_timeout_callback ptcb;
     proto::Transaction transaction;
+    uint64_t numAbstains;
+    uint64_t numCommits;
   };
 
   struct PendingPhase2 {
@@ -198,7 +202,6 @@ class ShardClient : public TransportReceiver {
   void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply,
       const proto::SignedMessage &signedPhase2Reply);
 
-  inline uint64_t QuorumSize() const { return 4 * config->f + 1; } 
   void Phase1Decision(uint64_t reqId);
   void Phase1Decision(
       std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
@@ -218,6 +221,7 @@ class ShardClient : public TransportReceiver {
   TrueTime &timeServer;
   bool signedMessages;
   bool validateProofs;
+  bool hashDigest;
   KeyManager *keyManager;
   uint64_t phase1DecisionTimeout;
   std::vector<int> closestReplicas;

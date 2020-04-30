@@ -187,6 +187,8 @@ DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
     " necessary to prevent impersonation (for Indicus)");
 DEFINE_bool(indicus_validate_proofs, false, "send and validate proofs as"
     " necessary to check Byzantine behavior (for Indicus)");
+DEFINE_bool(indicus_hash_digest, false, "use hash function compute transaction"
+    " digest (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
 
@@ -749,6 +751,7 @@ int main(int argc, char **argv) {
             FLAGS_num_groups, closestReplicas, tport, part,
             FLAGS_tapir_sync_commit, readMessages, readQuorumSize, readDepSize,
             FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+            FLAGS_indicus_hash_digest,
             keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
       }

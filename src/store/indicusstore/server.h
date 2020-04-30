@@ -59,8 +59,8 @@ class Server : public TransportReceiver, public ::Server {
   Server(const transport::Configuration &config, int groupIdx, int idx,
       int numShards, int numGroups,
       Transport *transport, KeyManager *keyManager, bool signedMessages,
-      bool validateProofs, uint64_t timeDelta, OCCType occType, partitioner part,
-      uint64_t readDepSize,
+      bool validateProofs, bool hashDigest, uint64_t timeDelta, OCCType occType,
+      partitioner part, uint64_t readDepSize,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
@@ -77,7 +77,7 @@ class Server : public TransportReceiver, public ::Server {
   friend class ServerTest;
   struct Value {
     std::string val;
-    proto::CommittedProof proof;
+    const proto::CommittedProof *proof;
   };
 
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
@@ -147,6 +147,7 @@ class Server : public TransportReceiver, public ::Server {
   const uint64_t readDepSize;
   const bool signedMessages;
   const bool validateProofs;
+  const bool hashDigest;
   KeyManager *keyManager;
   const uint64_t timeDelta;
   TrueTime timeServer;
@@ -173,7 +174,7 @@ class Server : public TransportReceiver, public ::Server {
 
   std::unordered_map<std::string, proto::Phase1Reply::ConcurrencyControlResult> p1Decisions;
   std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
-  std::unordered_set<std::string> committed;
+  std::unordered_map<std::string, proto::CommittedProof> committed;
   std::unordered_set<std::string> aborted;
   std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
   struct WaitingDependency {
