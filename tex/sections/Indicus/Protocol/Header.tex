@@ -2,6 +2,30 @@
 %-------------------------------------------------------------------------------
 %\section{Protocol}
 %-------------------------------------------------------------------------------
+\begin{figure*}[!th]
+\begin{center}
+\includegraphics[width= \textwidth]{./figures/Archi.png}
+\end{center}
+\caption{{\em Transaction Lifecycle}. Clients execute remote reads (1) and buffer writes (2). For Committment, all involved shards verify isolation (3). If there are conflicting transactions (TX'), replicas in a shard (B) vote to Abort. A client persists a decision (4) that serves as Two-Phase-Commit Vote for each shard (5), and Commits a transaction if all shards vote to commit (6).}
+\label{fig:Figure1}
+\end{figure*}
+\fs{cut figure if it is not useful}
+\sys is designed to be scalable and leaderless. Our architecture reflects this ethos. We briefly summarise it here before going into more detail in the later sections. 
+In \sys, clients drive the entire transaction life cycle which can be broken down into three stages as shown in Figure \ref{fig:Figure1}: i) Execution, ii) Validation, and iii) Writeback. 
+i) Clients \textit{speculatively execute} transactions themselves, invoking only remote read procedure calls (1) and buffering writes locally (2). \two Clients validate initiate a two-phase commit vote to validate speculative execution results for byzantine-serializability (3).
+For every involved shard, a client queries potentially inconsistent replicas for their commitment vote, reconciles divergent votes into a single per-shard decision that maintains Isolation, and make this decision durable to avoid replay of contradictory decisions (4). 
+iii) Lastly, clients aggregate all shard decisions (5) for atomic commit, return to the application and asynchronously, \textit{writes back} decisions and database updates (6).
+
+Next, we outline the protocols for Execution, Validation and Writeback respectively. 
+
+
+\fs{longer version in Architecture.tex }
+
+
+
+
+
+
 \iffalse
 \fs{since this only affect validation, maybe move it there.}
 \sys comes in two different flavors, \sys{}3 and \sys{}5 respectively, that rely on varying replication degrees, but implement the same design. \sys{}3 requires $n=3f+1$ replicas \fs{, the minimum bound necessary for BFT SMR?,} per shard to guarantee consistency in the presence of $\leq f$ byzantine replicas. \sys{}5 reduces both latencies during failure free execution and complexity during recovery. \footnote{We believe that consortiums with high performance requirements or high replication degrees are respectively comfortable with paying for additional replicas or tolerating a lower fraction (1/3 vs 1/5) of failures}
