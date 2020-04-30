@@ -50,6 +50,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     hashDigest(hashDigest), keyManager(keyManager), timeDelta(timeDelta),
     timeServer(timeServer) {
   transport->Register(this, config, groupIdx, idx);
+  _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
   
   // this is needed purely from loading data without executing transactions
   proto::CommittedProof proof;
@@ -819,7 +820,10 @@ void Server::Commit(const std::string &txnDigest,
       continue;
     }
     store.commitGet(read.key(), read.readtime(), ts);
+    Latency_Start(&committedReadInsertLat);
     committedReads[read.key()].insert(std::make_pair(ts, read.readtime()));
+    uint64_t ns = Latency_End(&committedReadInsertLat);
+    stats.Add("committed_read_insert_lat_" + BytesToHex(read.key(), 18), ns);
   }
   
   auto committedItr = committed.insert(std::make_pair(txnDigest, proof));

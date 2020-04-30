@@ -38,10 +38,15 @@ transaction_status_t SyncDelivery::Execute(SyncClient &client) {
   eno_row.SerializeToString(&str);
   client.Put(eno_key, str, timeout);
 
-  client.Put(NewOrderRowKey(w_id, d_id, o_id), "", timeout); // delete
 
   std::string o_key = OrderRowKey(w_id, d_id, o_id);
   client.Get(o_key, str, timeout);
+  if (str.empty()) {
+    // already delivered all orders for this warehouse
+    return client.Commit(timeout);
+  }
+
+  client.Put(NewOrderRowKey(w_id, d_id, o_id), "", timeout); // delete
   OrderRow o_row;
   UW_ASSERT(o_row.ParseFromString(str));
 

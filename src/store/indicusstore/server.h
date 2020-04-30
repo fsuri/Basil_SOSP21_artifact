@@ -32,7 +32,8 @@
 #ifndef _INDICUS_SERVER_H_
 #define _INDICUS_SERVER_H_
 
-#include "replication/ir/replica.h"
+#include "lib/latency.h"
+#include "lib/transport.h"
 #include "store/server.h"
 #include "store/common/partitioner.h"
 #include "store/common/timestamp.h"
@@ -186,6 +187,7 @@ class Server : public TransportReceiver, public ::Server {
 
   Stats stats;
   std::unordered_set<std::string> active;
+  Latency_t committedReadInsertLat;
 };
 
 } // namespace indicusstore

@@ -28,6 +28,7 @@ TPCCClient::~TPCCClient() {
 TPCCTransactionType TPCCClient::GetNextTransaction(uint32_t *wid,
     uint32_t *did, std::mt19937 &gen) {
   if (delivery && deliveryDId < 10) {
+    deliveryDId++;
     *wid = deliveryWId;
     *did = deliveryDId;
     return TXN_DELIVERY;
