@@ -21,16 +21,22 @@ transaction_status_t SyncNewOrder::Execute(SyncClient &client) {
 
   client.Begin(timeout);
 
-  client.Get(WarehouseRowKey(w_id), str, timeout);
-  WarehouseRow w_row;
-  UW_ASSERT(w_row.ParseFromString(str));
-  Debug("  Tax Rate: %u", w_row.tax());
-
+  client.Get(WarehouseRowKey(w_id), timeout);
   Debug("District: %u", d_id);
   std::string d_key = DistrictRowKey(w_id, d_id);
-  client.Get(d_key, str, timeout);
+  client.Get(d_key, timeout);
+  Debug("Customer: %u", c_id);
+  client.Get(CustomerRowKey(w_id, d_id, c_id), timeout);
+
+  std::vector<std::string> strs;
+  client.Wait(strs);
+
+  WarehouseRow w_row;
+  UW_ASSERT(w_row.ParseFromString(strs[0]));
+  Debug("  Tax Rate: %u", w_row.tax());
+
   DistrictRow d_row;
-  UW_ASSERT(d_row.ParseFromString(str));
+  UW_ASSERT(d_row.ParseFromString(strs[1]));
   Debug("  Tax Rate: %u", d_row.tax());
   uint32_t o_id = d_row.next_o_id();
   Debug("  Order Number: %u", o_id);
@@ -39,13 +45,13 @@ transaction_status_t SyncNewOrder::Execute(SyncClient &client) {
   d_row.SerializeToString(&str);
   client.Put(d_key, str, timeout);
 
-  Debug("Customer: %u", c_id);
-  client.Get(CustomerRowKey(w_id, d_id, c_id), str, timeout);
   CustomerRow c_row;
-  UW_ASSERT(c_row.ParseFromString(str));
+  UW_ASSERT(c_row.ParseFromString(strs[2]));
   Debug("  Discount: %i", c_row.discount());
   Debug("  Last Name: %s", c_row.last().c_str());
   Debug("  Credit: %s", c_row.credit().c_str());
+
+  strs.clear();
 
   NewOrderRow no_row;
   no_row.set_o_id(o_id);
@@ -78,21 +84,31 @@ transaction_status_t SyncNewOrder::Execute(SyncClient &client) {
     Debug("  Order Line %lu", ol_number);
     Debug("    Item: %u", o_ol_i_ids[ol_number]);
     std::string i_key = ItemRowKey(o_ol_i_ids[ol_number]);
-    client.Get(i_key, str, timeout);
-    if (str.empty()) {
+    client.Get(i_key, timeout);
+  }
+
+  for (size_t ol_number = 0; ol_number < ol_cnt; ++ol_number) {
+    Debug("  Order Line %lu", ol_number);
+    Debug("    Supply Warehouse: %u", o_ol_supply_w_ids[ol_number]);
+    client.Get(StockRowKey(o_ol_supply_w_ids[ol_number], o_ol_i_ids[ol_number]),
+        timeout);
+  }
+
+  client.Wait(strs);
+
+  for (size_t ol_number = 0; ol_number < ol_cnt; ++ol_number) {
+    if (strs[ol_number].empty()) {
       client.Abort(timeout);
       return ABORTED_USER;
     } else {
       ItemRow i_row;
-      UW_ASSERT(i_row.ParseFromString(str));
+      UW_ASSERT(i_row.ParseFromString(strs[ol_number]));
       Debug("    Item Name: %s", i_row.name().c_str());
   
-      Debug("    Supply Warehouse: %u", o_ol_supply_w_ids[ol_number]);
+      StockRow s_row;
       std::string s_key = StockRowKey(o_ol_supply_w_ids[ol_number],
           o_ol_i_ids[ol_number]);
-      client.Get(s_key, str, timeout);
-      StockRow s_row;
-      UW_ASSERT(s_row.ParseFromString(str));
+      UW_ASSERT(s_row.ParseFromString(strs[ol_number + ol_cnt]));
 
       if (s_row.quantity() - o_ol_quantities[ol_number] >= 10) {
         s_row.set_quantity(s_row.quantity() - o_ol_quantities[ol_number]);

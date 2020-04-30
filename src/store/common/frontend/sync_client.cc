@@ -24,6 +24,23 @@ void SyncClient::Get(const std::string &key, std::string &value,
   value = promise.GetValue();
 }
 
+void SyncClient::Get(const std::string &key, uint32_t timeout) {
+  Promise *promise = new Promise(timeout);
+  getPromises.push_back(promise);
+  client->Get(key, std::bind(&SyncClient::GetCallback, this, promise,
+      std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
+      std::placeholders::_4), std::bind(&SyncClient::GetTimeoutCallback, this,
+      promise, std::placeholders::_1, std::placeholders::_2), timeout);
+}
+
+void SyncClient::Wait(std::vector<std::string> &values) {
+  for (auto promise : getPromises) {
+    values.push_back(promise->GetValue());
+    delete promise;
+  }
+  getPromises.clear();
+}
+
 void SyncClient::Put(const std::string &key, const std::string &value,
       uint32_t timeout) {
   Promise promise(timeout);
@@ -38,6 +55,11 @@ void SyncClient::Put(const std::string &key, const std::string &value,
 }
 
 transaction_status_t SyncClient::Commit(uint32_t timeout) {
+  if (getPromises.size() > 0) {
+    std::vector<std::string> strs;
+    Wait(strs);
+  }
+
   Promise promise(timeout);
 
   client->Commit(std::bind(&SyncClient::CommitCallback, this, &promise,
@@ -49,6 +71,11 @@ transaction_status_t SyncClient::Commit(uint32_t timeout) {
 }
   
 void SyncClient::Abort(uint32_t timeout) {
+  if (getPromises.size() > 0) {
+    std::vector<std::string> strs;
+    Wait(strs);
+  }
+
   Promise promise(timeout);
 
   client->Abort(std::bind(&SyncClient::AbortCallback, this, &promise),

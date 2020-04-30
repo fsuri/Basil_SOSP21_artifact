@@ -15,6 +15,7 @@ SyncOrderStatus::~SyncOrderStatus() {
 
 transaction_status_t SyncOrderStatus::Execute(SyncClient &client) {
   std::string str;
+  std::vector<std::string> strs;
 
   Debug("ORDER_STATUS");
   Debug("Warehouse: %u", c_w_id);
@@ -39,16 +40,21 @@ transaction_status_t SyncOrderStatus::Execute(SyncClient &client) {
   }
   
   std::string c_key = CustomerRowKey(c_w_id, c_d_id, c_id);
-  client.Get(c_key, str, timeout);
+  client.Get(c_key, timeout);
+  std::string obc_key = OrderByCustomerRowKey(c_w_id, c_d_id, c_id);
+  client.Get(obc_key, timeout);
+
+  client.Wait(strs);
+
   CustomerRow c_row;
-  UW_ASSERT(c_row.ParseFromString(str));
+  UW_ASSERT(c_row.ParseFromString(strs[0]));
   Debug("  First: %s", c_row.first().c_str());
   Debug("  Last: %s", c_row.last().c_str());
 
-  std::string obc_key = OrderByCustomerRowKey(c_w_id, c_d_id, c_id);
-  client.Get(obc_key, str, timeout);
   OrderByCustomerRow obc_row;
-  UW_ASSERT(obc_row.ParseFromString(str));
+  UW_ASSERT(obc_row.ParseFromString(strs[1]));
+
+  strs.clear();
 
   o_id = obc_row.o_id();
   Debug("Order: %u", o_id);
@@ -61,8 +67,10 @@ transaction_status_t SyncOrderStatus::Execute(SyncClient &client) {
   Debug("  Carrier ID: %u", o_row.carrier_id());
 
   for (size_t ol_number = 0; ol_number < o_row.ol_cnt(); ++ol_number) {
-    client.Get(OrderLineRowKey(c_w_id, c_d_id, o_id, ol_number), str, timeout);
+    client.Get(OrderLineRowKey(c_w_id, c_d_id, o_id, ol_number), timeout);
   }
+
+  client.Wait(strs);
 
   Debug("COMMIT");
   return client.Commit(timeout);

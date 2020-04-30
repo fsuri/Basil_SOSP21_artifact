@@ -14,6 +14,7 @@ SyncDelivery::~SyncDelivery() {
 
 transaction_status_t SyncDelivery::Execute(SyncClient &client) {
   std::string str;
+  std::vector<std::string> strs;
 
   Debug("DELIVERY");
   Debug("Warehouse: %u", w_id);
@@ -50,19 +51,23 @@ transaction_status_t SyncDelivery::Execute(SyncClient &client) {
   Debug("  Carrier ID: %u", o_carrier_id);
   Debug("  Order Lines: %u", o_row.ol_cnt());
 
+  for (size_t ol_number = 0; ol_number < o_row.ol_cnt(); ++ol_number) {
+    client.Get(OrderLineRowKey(w_id, d_id, o_id, ol_number), timeout);
+  }
+
+  client.Wait(strs);
+
   int32_t total_amount = 0;
   for (size_t ol_number = 0; ol_number < o_row.ol_cnt(); ++ol_number) {
     Debug("    Order Line %lu", ol_number);
-    std::string ol_key = OrderLineRowKey(w_id, d_id, o_id, ol_number);
-    client.Get(ol_key, str, timeout);
     OrderLineRow ol_row;
-    UW_ASSERT(ol_row.ParseFromString(str));
+    UW_ASSERT(ol_row.ParseFromString(strs[ol_number]));
     Debug("      Amount: %i", ol_row.amount());
     total_amount += ol_row.amount();
 
     ol_row.set_delivery_d(ol_delivery_d);
     ol_row.SerializeToString(&str);
-    client.Put(ol_key, str, timeout);
+    client.Put(OrderLineRowKey(w_id, d_id, o_id, ol_number), str, timeout);
     Debug("      Delivery Date: %u", ol_delivery_d);
   }
   Debug("Total Amount: %i", total_amount);

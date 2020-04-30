@@ -32,6 +32,12 @@ class SyncClient {
   virtual void Get(const std::string &key, std::string &value,
       uint32_t timeout);
 
+  // Get value without waiting.
+  void Get(const std::string &key, uint32_t timeout);
+
+  // Wait for outstanding Gets to finish in FIFO order.
+  void Wait(std::vector<std::string> &values);
+
   // Set the value for the given key.
   virtual void Put(const std::string &key, const std::string &value,
       uint32_t timeout);
@@ -54,6 +60,8 @@ class SyncClient {
   void CommitTimeoutCallback(Promise *promise);
   void AbortCallback(Promise *promise);
   void AbortTimeoutCallback(Promise *promise);
+
+  std::vector<Promise *> getPromises;
 
   Client *client;
 };

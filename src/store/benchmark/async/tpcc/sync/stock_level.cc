@@ -15,6 +15,7 @@ SyncStockLevel::~SyncStockLevel() {
 
 transaction_status_t SyncStockLevel::Execute(SyncClient &client) {
   std::string str;
+  std::vector<std::string> strs;
 
   Debug("STOCK_LEVEL");
   Debug("Warehouse: %u", w_id);
@@ -33,34 +34,52 @@ transaction_status_t SyncStockLevel::Execute(SyncClient &client) {
   std::map<uint32_t, StockRow> stockRows;
   for (size_t ol_o_id = next_o_id - 20; ol_o_id < next_o_id; ++ol_o_id) {
     Debug("Order %lu", ol_o_id);
-    client.Get(OrderRowKey(w_id, d_id, ol_o_id), str, timeout);
-    OrderRow o_row;
+    client.Get(OrderRowKey(w_id, d_id, ol_o_id), timeout);
+  }
+
+  client.Wait(strs);
+
+  std::vector<uint32_t> ol_cnts;
+  for (size_t ol_o_id = next_o_id - 20; ol_o_id < next_o_id; ++ol_o_id) {
     if (str.empty()) {
       Debug("  Non-existent Order %lu", ol_o_id);
       continue;
     }
-    UW_ASSERT(o_row.ParseFromString(str));
+    OrderRow o_row;
+    UW_ASSERT(o_row.ParseFromString(strs[ol_o_id + 20 - next_o_id]));
     Debug("  Order Lines: %u", o_row.ol_cnt());
 
+    ol_cnts.push_back(o_row.ol_cnt());
     for (size_t ol_number = 0; ol_number < o_row.ol_cnt(); ++ol_number) {
       Debug("    OL %lu", ol_number);
       std::string ol_key = OrderLineRowKey(w_id, d_id, ol_o_id, ol_number);
-      client.Get(ol_key, str, timeout);
+      client.Get(ol_key, timeout);
+    }
+  }
+
+  strs.clear();
+  client.Wait(strs);
+
+  size_t strsIdx = 0;
+  for (size_t ol_o_id = next_o_id - 20; ol_o_id < next_o_id; ++ol_o_id) {
+    for (size_t ol_number = 0; ol_number < ol_cnts[ol_o_id + 20 - next_o_id]; ++ol_number) {
       OrderLineRow ol_row;
       if (str.empty()) {
         Debug("  Non-existent Order Line %lu", ol_number);
         continue;
       }
-      UW_ASSERT(ol_row.ParseFromString(str));
+      UW_ASSERT(ol_row.ParseFromString(strs[strsIdx]));
+      strsIdx++;
       Debug("      Item %d", ol_row.i_id());
 
       if (stockRows.find(ol_row.i_id()) == stockRows.end()) {
-        client.Get(StockRowKey(w_id, ol_row.i_id()), str, timeout);
-        UW_ASSERT(stockRows[ol_row.i_id()].ParseFromString(str));
-        Debug("      Stock Item %d quantity: %d", ol_row.i_id(), stockRows[ol_row.i_id()].quantity());
+        client.Get(StockRowKey(w_id, ol_row.i_id()), timeout);
       }
     }
   }
+
+  client.Wait(strs);
+
   Debug("COMMIT");
   return client.Commit(timeout);
 }

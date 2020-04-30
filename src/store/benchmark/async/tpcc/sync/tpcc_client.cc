@@ -33,6 +33,7 @@ SyncTPCCClient::~SyncTPCCClient() {
 SyncTransaction* SyncTPCCClient::GetNextTransaction() {
   uint32_t wid, did;
   TPCCTransactionType ttype = TPCCClient::GetNextTransaction(&wid, &did, GetRand());
+
   switch (ttype) {
     case TXN_NEW_ORDER:
       return new SyncNewOrder(GetTimeout(), wid, C_c_id, num_warehouses, GetRand());

@@ -43,6 +43,11 @@ class TPCCClient {
   uint32_t stockLevelDId;
   std::string lastOp;
 
+ private:
+  bool delivery;
+  uint32_t deliveryWId;
+  uint32_t deliveryDId;
+
 };
 
 } //namespace tpcc
