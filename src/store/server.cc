@@ -31,6 +31,8 @@
 
 #include <csignal>
 
+#include <valgrind/callgrind.h>
+
 #include "lib/keymanager.h"
 #include "lib/transport.h"
 #include "lib/tcptransport.h"
@@ -552,7 +554,12 @@ int main(int argc, char **argv) {
   std::signal(SIGKILL, Cleanup);
   std::signal(SIGTERM, Cleanup);
   std::signal(SIGINT, Cleanup);
+
+  CALLGRIND_START_INSTRUMENTATION;
   tport->Run();
+  CALLGRIND_STOP_INSTRUMENTATION;
+  CALLGRIND_DUMP_STATS;
+
   return 0;
 }
 
