@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
 
   UDPTransport transport(0.0, 0.0, 0);
 
-  KeyManager *km = new KeyManager("../../keys");
+  KeyManager *km = new KeyManager("../../keysrsa");
 
   int readQuorumSize = 2;
   bool signMessages = true;

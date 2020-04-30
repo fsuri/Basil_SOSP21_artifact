@@ -5,8 +5,13 @@ namespace crypto {
 using namespace CryptoPP;
 using namespace std;
 
+#ifdef USE_ECDSA_SIGS
 using Signer = ECDSA<ECP, SHA256>::Signer;
 using Verifier = ECDSA<ECP, SHA256>::Verifier;
+#else
+using Signer = RSASS<PSS, SHA256>::Signer;
+using Verifier = RSASS<PSS, SHA256>::Verifier;
+#endif
 
 string Hash(const string &message) {
   SHA256 hash;
@@ -95,8 +100,12 @@ PrivKey GeneratePrivateKey() {
   AutoSeededRandomPool prng;
 
   // generate keys
-  ECDSA<ECP, SHA256>::PrivateKey privateKey;
+  PrivKey privateKey;
+  #ifdef USE_ECDSA_SIGS
   privateKey.Initialize(prng, ASN1::secp256k1());
+  #else
+  privateKey.Initialize(prng, 2048);
+  #endif
 
   return privateKey;
 }
@@ -105,8 +114,12 @@ PubKey DerivePublicKey(PrivKey &privateKey) {
   // PGP Random Pool-like generator
   AutoSeededRandomPool prng;
 
-  ECDSA<ECP, SHA256>::PublicKey publicKey;
+  #ifdef USE_ECDSA_SIGS
+  Pubkey publicKey;
   privateKey.MakePublicKey(publicKey);
+  #else
+  PubKey publicKey(privateKey);
+  #endif
 
   bool result = publicKey.Validate(prng, 3);
   if (!result) {
