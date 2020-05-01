@@ -188,8 +188,9 @@ bool ValidateProofCommit(const proto::CommittedProof &proof,
   }
 
   std::string txnDigest = TransactionDigest(proof.txn(), hashDigest);
-  Debug("Validate proof commit for transaction %lu.%lu (%s).", proof.txn().client_id(),
-      proof.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str());
+  Debug("Validate proof commit for transaction %lu.%lu (%s).",
+      proof.txn().client_id(), proof.txn().client_seq_num(),
+      BytesToHex(txnDigest, 16).c_str());
   if (signedMessages) {
     if (proof.has_signed_p1_replies()) {
       std::map<int, std::vector<proto::Phase1Reply>> groupedP1Replies;

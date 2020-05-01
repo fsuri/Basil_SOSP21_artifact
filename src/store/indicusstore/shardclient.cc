@@ -44,6 +44,7 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     client_id(client_id), transport(transport), config(config), group(group),
     timeServer(timeServer),
     signedMessages(signedMessages), validateProofs(validateProofs),
+    hashDigest(hashDigest),
     keyManager(keyManager), phase1DecisionTimeout(1000UL), lastReqId(0UL) {
   transport->Register(this, *config, -1, -1);
 
