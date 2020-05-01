@@ -820,10 +820,10 @@ void Server::Commit(const std::string &txnDigest,
       continue;
     }
     store.commitGet(read.key(), read.readtime(), ts);
-    Latency_Start(&committedReadInsertLat);
+    //Latency_Start(&committedReadInsertLat);
     committedReads[read.key()].insert(std::make_pair(ts, read.readtime()));
-    uint64_t ns = Latency_End(&committedReadInsertLat);
-    stats.Add("committed_read_insert_lat_" + BytesToHex(read.key(), 18), ns);
+    //uint64_t ns = Latency_End(&committedReadInsertLat);
+    //stats.Add("committed_read_insert_lat_" + BytesToHex(read.key(), 18), ns);
   }
   
   auto committedItr = committed.insert(std::make_pair(txnDigest, proof));
