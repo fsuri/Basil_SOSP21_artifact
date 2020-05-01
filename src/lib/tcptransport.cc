@@ -227,7 +227,7 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
     if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char *)&n, sizeof(n)) < 0) {
       PWarning("Failed to set SO_RCVBUF on socket");
     }
-    
+
     if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char *)&n, sizeof(n)) < 0) {
       PWarning("Failed to set SO_SNDBUF on socket");
     }
@@ -330,7 +330,7 @@ TCPTransport::Register(TransportReceiver *receiver,
     if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char *)&n, sizeof(n)) < 0) {
       PWarning("Failed to set SO_RCVBUF on socket");
     }
-    
+
     if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char *)&n, sizeof(n)) < 0) {
       PWarning("Failed to set SO_SNDBUF on socket");
     }
@@ -422,7 +422,7 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     *((uint32_t *) ptr) = MAGIC;
     ptr += sizeof(uint32_t);
     UW_ASSERT((size_t)(ptr-buf) < totalLen);
-    
+
     *((size_t *) ptr) = totalLen;
     ptr += sizeof(size_t);
     UW_ASSERT((size_t)(ptr-buf) < totalLen);
@@ -549,6 +549,10 @@ TCPTransport::TimerCallback(evutil_socket_t fd, short what, void *arg)
     info->transport->OnTimer(info);
 }
 
+void TCPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {
+  Panic("Unimplemented");
+}
+
 void
 TCPTransport::LogCallback(int severity, const char *msg)
 {
@@ -654,7 +658,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
             return;
         }
         UW_ASSERT(*magic == MAGIC);
-    
+
         size_t *sz;
         unsigned char *x = evbuffer_pullup(evbuf, sizeof(*magic) + sizeof(*sz));
 
@@ -664,7 +668,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         }
         size_t totalSize = *sz;
         UW_ASSERT(totalSize < 1073741826);
-        
+
         if (evbuffer_get_length(evbuf) < totalSize) {
             //Debug("Don't have %ld bytes for a message yet, only %ld",
             //      totalSize, evbuffer_get_length(evbuf));
@@ -675,14 +679,14 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         char buf[totalSize];
         size_t copied = evbuffer_remove(evbuf, buf, totalSize);
         UW_ASSERT(copied == totalSize);
-        
+
         // Parse message
         char *ptr = buf + sizeof(*sz) + sizeof(*magic);
 
         size_t typeLen = *((size_t *)ptr);
         ptr += sizeof(size_t);
         UW_ASSERT((size_t)(ptr-buf) < totalSize);
-        
+
         UW_ASSERT((size_t)(ptr+typeLen-buf) < totalSize);
         string msgType(ptr, typeLen);
         ptr += typeLen;
@@ -690,7 +694,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         size_t msgLen = *((size_t *)ptr);
         ptr += sizeof(size_t);
         UW_ASSERT((size_t)(ptr-buf) < totalSize);
-        
+
         UW_ASSERT((size_t)(ptr+msgLen-buf) <= totalSize);
         string msg(ptr, msgLen);
         ptr += msgLen;
@@ -699,7 +703,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         auto addr = transport->tcpAddresses.find(bev);
         //transport->mtx.unlock();
         UW_ASSERT(addr != transport->tcpAddresses.end());
-        
+
         // Dispatch
         info->receiver->ReceiveMessage(addr->second, msgType, msg, nullptr);
         // Debug("Done processing large %s message", msgType.c_str());

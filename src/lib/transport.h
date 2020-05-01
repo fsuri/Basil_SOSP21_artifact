@@ -130,6 +130,11 @@ public:
     virtual void CancelAllTimers() = 0;
     virtual void Run() = 0;
     virtual void Stop() = 0;
+
+    /* Dispatch function f to the thread pool
+     * handle the result in cb
+     */
+    virtual void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) = 0;
 };
 
 class Timeout

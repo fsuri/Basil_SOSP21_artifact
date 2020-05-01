@@ -127,6 +127,10 @@ void ReplTransport::CancelAllTimers() {
     timers_.clear();
 }
 
+void ReplTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) {
+  Panic("Unimplemented");
+}
+
 bool ReplTransport::DeliverMessage(const ReplTransportAddress &addr,
                                    int index) {
     history_.push_back("transport.DeliverMessage({\"" + addr.Host() + "\", \"" +

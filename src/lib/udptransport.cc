@@ -210,7 +210,7 @@ BindToPort(int fd, const string &host, const string &port)
 
 UDPTransport::UDPTransport(double dropRate, double reorderRate,
                            int dscp, event_base *evbase)
-    : dropRate(dropRate), reorderRate(reorderRate), dscp(dscp)
+    : dropRate(dropRate), reorderRate(reorderRate), dscp(dscp), tp(ThreadPool(4))
 {
     struct timeval tv;
     lastTimerId = 0;
@@ -249,7 +249,6 @@ UDPTransport::UDPTransport(double dropRate, double reorderRate,
     for (event *x : signalEvents) {
         event_add(x, NULL);
     }
-
 }
 
 UDPTransport::~UDPTransport()
@@ -973,6 +972,11 @@ UDPTransport::OnTimer(UDPTransportTimerInfo *info)
 
     delete info;
 }
+
+void UDPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) {
+  tp.dispatch(f, cb, libeventBase);
+}
+
 
 void
 UDPTransport::SocketCallback(evutil_socket_t fd, short what, void *arg)
