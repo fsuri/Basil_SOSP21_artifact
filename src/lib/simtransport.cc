@@ -292,6 +292,10 @@ SimulatedTransport::Stop() {
     running = false;
 }
 
+void SimulatedTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {
+  Panic("Unimplemented");
+}
+
 
 const SimulatedTransportAddress *
 SimulatedTransport::LookupFCAddress(const transport::Configuration *cfg)

@@ -35,6 +35,7 @@
 #include "lib/configuration.h"
 #include "lib/transport.h"
 #include "lib/transportcommon.h"
+#include "lib/threadpool.h"
 
 #include <event2/event.h>
 
@@ -82,6 +83,8 @@ public:
     bool CancelTimer(int id) override;
     void CancelAllTimers() override;
 
+    void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb);
+
 private:
     struct UDPTransportTimerInfo
     {
@@ -123,6 +126,7 @@ private:
         string data;
     };
     std::map<UDPTransportAddress, UDPTransportFragInfo> fragInfo;
+    ThreadPool tp;
 
     bool _SendMessageInternal(TransportReceiver *src,
                               const UDPTransportAddress &dst,

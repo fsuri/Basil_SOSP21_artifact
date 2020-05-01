@@ -4,6 +4,8 @@
 #include <string>
 
 #include <cryptopp/eccrypto.h>
+#include <cryptopp/rsa.h>
+#include <cryptopp/pssr.h>
 #include <cryptopp/files.h>
 #include <cryptopp/hex.h>
 #include <cryptopp/oids.h>
@@ -15,8 +17,13 @@ namespace crypto {
 using namespace CryptoPP;
 using namespace std;
 
+#ifdef USE_ECDSA_SIGS
 using PrivKey = ECDSA<ECP, SHA256>::PrivateKey;
 using PubKey = ECDSA<ECP, SHA256>::PublicKey;
+#else
+using PrivKey = RSA::PrivateKey;
+using PubKey = RSA::PublicKey;
+#endif
 
 string Hash(const string &message);
 
