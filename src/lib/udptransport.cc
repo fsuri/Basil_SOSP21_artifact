@@ -662,6 +662,7 @@ void
 UDPTransport::Stop()
 {
     event_base_loopbreak(libeventBase);
+    tp.stop();
 }
 
 static void
