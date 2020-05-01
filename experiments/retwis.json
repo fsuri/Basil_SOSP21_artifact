@@ -16,22 +16,14 @@
   "client_zipf_coefficient": 0.75,
   "client_key_selector": "zipf",
   "rw_num_ops_txn": 2,
-  "tpcc_num_warehouses": 1,
-  "tpcc_stock_level_ratio": 6,
-  "tpcc_delivery_ratio": 0,
-  "tpcc_order_status_ratio": 6,
-  "tpcc_payment_ratio": 43,
-  "tpcc_new_order_ratio": 45,
-  "tpcc_c_c_id": 0,
-  "tpcc_c_c_last": 0,
-  "tpcc_data_file_path": "/usr/local/etc/tpcc-1-warehouse",
   "client_abort_backoff": 10,
   "client_retry_aborted": true,
   "client_max_attempts": -1,
   "run_locally": false,
   "replication_protocol_settings": [
     {
-      "message_transport_type": "tcp"
+      "message_transport_type": "tcp",
+      "strictly_serializable": false
     },
     {
       "message_transport_type": "tcp",
@@ -40,6 +32,7 @@
       "read_dep": "one-honest",
       "validate_proofs": false,
       "sign_messages": false,
+      "hash_digest": true,
       "key_path": "/usr/local/etc/indicus-keys"
     },
     {
@@ -49,20 +42,24 @@
       "read_dep": "one-honest",
       "validate_proofs": true,
       "sign_messages": false,
+      "hash_digest": true,
       "key_path": "/usr/local/etc/indicus-keys"
     }
   ],
   "experiment_name": "indicus",
   "codebase_name": "indicus",
-  "client_total": [[3, 9, 27, 63, 90, 144, 198, 252, 306],
-      [3, 9, 27, 63, 90, 144, 198, 252, 306],
-      [3, 9, 27, 63, 90, 144, 198, 252, 306]],
-  "client_processes_per_client_node": [[1, 1, 3, 7, 10, 16, 22, 28, 34],
-      [1, 1, 2, 4, 5, 8, 11, 14, 17],
-      [1, 1, 2, 4, 5, 8, 11, 14, 17]],
-  "client_nodes_per_server": [[1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1]],
+  "client_total": [
+      [3, 9, 18, 27, 36, 63, 90],
+      [3, 9, 18, 27, 36, 63, 90],
+      [3, 9, 18, 27, 36, 63, 90]],
+  "client_processes_per_client_node": [
+      [1, 1, 2, 3, 4, 7, 10],
+      [1, 1, 1, 2, 2, 4, 5],
+      [1, 1, 1, 2, 2, 4, 5]],
+  "client_nodes_per_server": [
+      [1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1]],
   "client_threads_per_process": 1,
   "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],
   "pin_client_processes": [0, 1, 2, 3, 4, 5, 6, 7],

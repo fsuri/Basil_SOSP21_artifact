@@ -29,7 +29,8 @@
   "run_locally": false,
   "replication_protocol_settings": [
     {
-      "message_transport_type": "tcp"
+      "message_transport_type": "tcp",
+      "strictly_serializable": false
     },
     {
       "message_transport_type": "tcp",

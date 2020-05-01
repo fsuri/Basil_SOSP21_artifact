@@ -30,7 +30,8 @@
   "run_locally": false,
   "replication_protocol_settings": [
     {
-      "message_transport_type": "tcp"
+      "message_transport_type": "tcp",
+      "strictly_serializable": false
     },
     {
       "message_transport_type": "tcp",
@@ -63,7 +64,7 @@
   "server_debug_output": "store/server.cc",
   "server_debug_stats": false,
   "client_debug_stats": false,
-  "client_experiment_length": 80,
+  "client_experiment_length": 180,
   "client_ramp_down": 10,
   "client_ramp_up": 30,
   "default_remote_shell": "bash",
