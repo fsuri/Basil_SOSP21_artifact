@@ -11,8 +11,27 @@ It then waits for necessary dependencies (uncommited writes that were read) to b
 The set of transactions for which the MVTSO-Check returns Commit is Byzantine-Serializable. 
 \end{theorem}
 \begin{proof}
-See TR.
+See TR. \fs{proof in comments}
 \end{proof}
+
+\iffalse
+\begin{proof}
+We first show, that the MVTSO-Check never returns Commit for two conflicting transactions TX1 and TX2.
+WLOG, assume that TX1 is validated before TX2 and MVTSO-Check(TX1, TX1.TS) returns Commit. This implies that all reads and writes of TX1 are \textit{Prepared}.
+We show by case distinction that TX2's validation cannot return Commit:
+\begin{itemize}
+
+\item \textbf{TX1.TS < TX2.TS} By timestamp order, the excution results of TX1 and TX2 should be equivalent to a serial schedule in which TX1 happened \textit{before} TX2. A conflict only arises, if TX2 performed a read that should have seen TX1's write, i.e. if TX2's $read.version < TX1.TS$. By lines 3-7 TX2 must Abstain/Abort since TX1 $\in Prepared$. 
+
+\item \textbf{TX1.TS > TX2.TS:} By timestamp order, the excution results of TX1 and TX2 should be equivalent to a serial schedule in which TX1 happened \textit{after} TX2. A conflict only arises, if TX2 attempts to write a version that TX1 should have observed, i.e. if TX1's $read.version < TX2.TS$. By lines 8-10 TX2 must Abstain/Abort since TX1 $\in Prepared$. 
+\end{itemize}
+
+We now show, that every honest clients transaction is \textit{legal}, i.e. its reads are based on committed writes. This follow straightforward from Execution protocol: An honest client only reads values that are either committed, or optimistically reads by claiming a dependency on uncommitted writes. By lines 14-18, a TX with dependencies only Commits if all of its dependencies Commit, implying that it read committed writes.
+
+Consequently, all honest clients experience Serializability, and thus, the MVTSO-check maintains Byzantine-Serializability.
+\end{proof}
+
+\fi
 
 \begin{algorithm}
 \caption{MVTSO-Check(TX, TS)}\label{mvtso}

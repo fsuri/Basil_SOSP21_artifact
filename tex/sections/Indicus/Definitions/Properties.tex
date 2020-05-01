@@ -96,7 +96,7 @@ system property that bounds the influence of Byzantine participants on the outco
 
 
 
- \par \textbf{Byzantine Independence} For every request $r$ issued by a correct client $c$, there exists no group of participants that can dictate the result of $r$, and contains only byzantine actors.
+ \par \textbf{Byzantine Independence} For every request $r$ issued by a correct client $c$, there exists no group of participants that can unilaterally dictate the result of $r$, and contains only byzantine actors.
 
 \fs{perhaps it currently sounds too strong, I am not sure whether the "reliably" part is captured.}
 \fs{explicitly phased as request and not transaction, so it is applicable to general SMR. For us: applies to reads: therefore we want to read from f+1, applies to transaction outcome: therefore we dont want a leader. If the adversary controls the network, then a single byz client can be that group. (applies to both reads and tx commit/abort). If you want to read from a single replica, then you are explicitly giving up byz independence for that request}
