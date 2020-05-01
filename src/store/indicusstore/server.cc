@@ -137,17 +137,17 @@ void Server::HandleRead(const TransportAddress &remote,
   std::pair<Timestamp, Server::Value> tsVal;
   bool exists = store.get(msg.key(), ts, tsVal);
 
-  proto::ReadReply reply;
-  reply.set_req_id(msg.req_id());
-  reply.set_key(msg.key());
+  readReply.Clear();
+  readReply.set_req_id(msg.req_id());
+  readReply.set_key(msg.key());
   if (exists) {
     Debug("READ[%lu] Committed value of length %lu bytes with ts %lu.%lu.",
         msg.req_id(), tsVal.second.val.length(), tsVal.first.getTimestamp(),
         tsVal.first.getID());
-    reply.mutable_committed()->set_value(tsVal.second.val);
-    tsVal.first.serialize(reply.mutable_committed()->mutable_timestamp());
+    readReply.mutable_committed()->set_value(tsVal.second.val);
+    tsVal.first.serialize(readReply.mutable_committed()->mutable_timestamp());
     if (validateProofs) {
-      *reply.mutable_committed()->mutable_proof() = *tsVal.second.proof;
+      *readReply.mutable_committed()->mutable_proof() = *tsVal.second.proof;
     }
   }
 
@@ -160,8 +160,7 @@ void Server::HandleRead(const TransportAddress &remote,
     auto itr = preparedWrites.find(msg.key());
     if (itr != preparedWrites.end() && itr->second.size() > 0) {
       // there is a prepared write for the key being read
-      proto::PreparedWrite preparedWrite;
-      proto::Transaction mostRecent;
+      mostRecent.Clear();
       for (const auto &t : itr->second) {
         if (t.first > Timestamp(mostRecent.timestamp())) {
           mostRecent = *t.second;
@@ -182,40 +181,39 @@ void Server::HandleRead(const TransportAddress &remote,
       // TODO: currently limit depth of deps to 1 (no chains of dependencies)
       //   TODO: temporarily undo this TODO ^
       // if (mostRecent.deps_size() == 0) {
+        preparedWrite.Clear();
         preparedWrite.set_value(preparedValue);
         *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
         *preparedWrite.mutable_txn_digest() = TransactionDigest(mostRecent, hashDigest);
 
         if (signedMessages) {
-          proto::SignedMessage signedMessage;
+          signedMessage.Clear();
           SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id, signedMessage);
-          *reply.mutable_signed_prepared() = signedMessage;
+          *readReply.mutable_signed_prepared() = signedMessage;
         } else {
-          *reply.mutable_prepared() = preparedWrite;
+          *readReply.mutable_prepared() = preparedWrite;
         }
       //}
     }
   }
 
-  // Only need to sign prepared portion of reply
-  transport->SendMessage(this, remote, reply);
+  // Only need to sign prepared portion of readReply
+  transport->SendMessage(this, remote, readReply);
 }
 
 void Server::HandlePhase1(const TransportAddress &remote,
     const proto::Phase1 &msg) {
   std::string txnDigest = TransactionDigest(msg.txn(), hashDigest);
-  Debug("PHASE1[%lu:%lu][%s] with ts %lu.",
-      msg.txn().client_id(),
-      msg.txn().client_seq_num(),
-      BytesToHex(txnDigest, 16).c_str(),
+  Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
+      msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
 
   if (validateProofs) {
     for (const auto &dep : msg.txn().deps()) {
       if (!ValidateDependency(dep, &config, readDepSize, signedMessages,
             keyManager)) {
-        Debug("VALIDATE Dependency failed for txn %s.", BytesToHex(txnDigest,
-              16).c_str());
+        Debug("VALIDATE Dependency failed for txn %s.",
+            BytesToHex(txnDigest, 16).c_str());
         // safe to ignore Byzantine client
         return;
       }
@@ -225,11 +223,10 @@ void Server::HandlePhase1(const TransportAddress &remote,
   ongoing[txnDigest] = msg.txn();
 
   Timestamp retryTs;
-  proto::CommittedProof conflict;
-  proto::Phase1Reply::ConcurrencyControlResult result = DoOCCCheck(
-      msg.req_id(), remote,
-      txnDigest, msg.txn(), retryTs, conflict);
-  p1Decisions[txnDigest] = result;
+  proto::Phase1Reply::ConcurrencyControlResult result = DoOCCCheck(msg.req_id(),
+      remote, txnDigest, msg.txn(), retryTs, conflict);
+
+  // p1Decisions[txnDigest] = result;
 
   if (result != proto::Phase1Reply::WAIT) {
     SendPhase1Reply(msg.req_id(), result, conflict, txnDigest, remote);
@@ -246,7 +243,6 @@ void Server::HandlePhase2(const TransportAddress &remote,
     std::map<int, std::vector<proto::Phase1Reply>> groupedPhase1Replies;
     bool repliesValid = true;
     if (signedMessages) {
-      proto::Phase1Reply phase1Reply;
       for (const auto &group : msg.signed_p1_replies().replies()) {
         std::vector<proto::Phase1Reply> phase1Replies;
         for (const auto &signedPhase1Reply : group.second.msgs()) {
@@ -262,8 +258,8 @@ void Server::HandlePhase2(const TransportAddress &remote,
     } else {
       for (const auto &group : msg.p1_replies().replies()) {
         std::vector<proto::Phase1Reply> phase1Replies;
-        for (const auto &phase1Reply : group.second.replies()) {
-          phase1Replies.push_back(phase1Reply);
+        for (const auto &p1Reply : group.second.replies()) {
+          phase1Replies.push_back(p1Reply);
         }
         groupedPhase1Replies.insert(std::make_pair(group.first, phase1Replies));
       }
@@ -283,19 +279,19 @@ void Server::HandlePhase2(const TransportAddress &remote,
     decision = msg.decision();
   }
 
-  proto::Phase2Reply reply;
-  reply.set_req_id(msg.req_id());
-  reply.set_decision(decision); 
-  *reply.mutable_txn_digest() = txnDigest;
+  phase2Reply.Clear();
+  phase2Reply.set_req_id(msg.req_id());
+  phase2Reply.set_decision(decision); 
+  *phase2Reply.mutable_txn_digest() = txnDigest;
 
-  p2Decisions[reply.txn_digest()] = decision;
+  // p2Decisions[phase2Reply.txn_digest()] = decision;
 
   if (signedMessages) {
-    proto::SignedMessage signedMessage;
-    SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
+    signedMessage.Clear();
+    SignMessage(phase2Reply, keyManager->GetPrivateKey(id), id, signedMessage);
     transport->SendMessage(this, remote, signedMessage);
   } else {
-    transport->SendMessage(this, remote, reply);
+    transport->SendMessage(this, remote, phase2Reply);
   }
 }
 
@@ -838,7 +834,8 @@ void Server::Commit(const std::string &txnDigest,
     }
 
     Debug("COMMIT[%lu,%lu] Committing write for key %s.",
-        txn.client_id(), txn.client_seq_num(), BytesToHex(write.key(), 16).c_str());
+        txn.client_id(), txn.client_seq_num(),
+        BytesToHex(write.key(), 16).c_str());
     val.val = write.value();
     store.put(write.key(), val, ts);
 
@@ -938,29 +935,24 @@ void Server::SendPhase1Reply(uint64_t reqId,
     proto::Phase1Reply::ConcurrencyControlResult result,
     const proto::CommittedProof &conflict, const std::string &txnDigest,
     const TransportAddress &remote) {
-  proto::Phase1Reply reply;
-  reply.set_req_id(reqId);
-  reply.set_ccr(result);
-  /* TODO: are retries a thing?
-  if (result == proto::Phase1Reply::RETRY) {
-    retryTs.serialize(reply.mutable_retry_timestamp());
-  }*/
+  phase1Reply.Clear();
+  phase1Reply.set_req_id(reqId);
+  phase1Reply.set_ccr(result);
 
   if (validateProofs) {
     if (conflict.has_txn()) {
-      *reply.mutable_committed_conflict() = conflict;
+      *phase1Reply.mutable_committed_conflict() = conflict;
     }
-    *reply.mutable_txn_digest() = txnDigest;
+    *phase1Reply.mutable_txn_digest() = txnDigest;
   }
 
   if (signedMessages) {
-    proto::SignedMessage signedMessage;
-    SignMessage(reply, keyManager->GetPrivateKey(id), id, signedMessage);
+    signedMessage.Clear();
+    SignMessage(phase1Reply, keyManager->GetPrivateKey(id), id, signedMessage);
     transport->SendMessage(this, remote, signedMessage);
   } else {
-    transport->SendMessage(this, remote, reply);
+    transport->SendMessage(this, remote, phase1Reply);
   }
-
 }
 
 void Server::CleanDependencies(const std::string &txnDigest) {

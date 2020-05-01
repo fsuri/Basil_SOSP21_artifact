@@ -153,6 +153,7 @@ class Server : public TransportReceiver, public ::Server {
   const uint64_t timeDelta;
   TrueTime timeServer;
 
+  /* Declare protobuf objects as members to avoid stack alloc/dealloc costs */
   proto::SignedMessage signedMessage;
   proto::PackedMessage packedMessage;
   proto::Read read;
@@ -160,6 +161,14 @@ class Server : public TransportReceiver, public ::Server {
   proto::Phase2 phase2;
   proto::Writeback writeback;
   proto::Abort abort;
+
+  proto::ReadReply readReply;
+  proto::Phase1Reply phase1Reply;
+  proto::Phase2Reply phase2Reply;
+
+  proto::Transaction mostRecent;
+  proto::PreparedWrite preparedWrite;
+  proto::CommittedProof conflict;
 
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
