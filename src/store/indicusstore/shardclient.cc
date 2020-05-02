@@ -70,12 +70,16 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
 
   const std::string *type;
   const std::string *data;
+  std::string signedType;
+  std::string signedData;
   if (t == signedMessage.GetTypeName()) {
     if (!signedMessage.ParseFromString(d)) {
       return;
     }
 
-    if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
+    type = &signedType;
+    data = &signedData;
+    if (!ValidateSignedMessage(signedMessage, keyManager, signedData, signedType)) {
       return;
     }
   } else {

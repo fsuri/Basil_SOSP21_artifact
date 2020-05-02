@@ -68,12 +68,16 @@ void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &t, const std::string &d, void *meta_data) {
   const std::string *type;
   const std::string *data;
+  std::string signedType;
+  std::string signedData;
   if (t == signedMessage.GetTypeName()) {
     if (!signedMessage.ParseFromString(d)) {
       return;
     }
 
-    if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
+    type = &signedType;
+    data = &signedData;
+    if (!ValidateSignedMessage(signedMessage, keyManager, signedData, signedType)) {
       Debug("VALIDATE failed for SignedMessage from %lu.",
           signedMessage.process_id());
       return;

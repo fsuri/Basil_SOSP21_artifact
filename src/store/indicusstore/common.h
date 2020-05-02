@@ -18,7 +18,7 @@ bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager, ::google::protobuf::Message &plaintextMsg);
 
 bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
-    KeyManager *keyManager, const std::string *&data, const std::string *&type);
+    KeyManager *keyManager, std::string &data, std::string &type);
 
 bool __PreValidateSignedMessage(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager, proto::PackedMessage &packedMessage);
