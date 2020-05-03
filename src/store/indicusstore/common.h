@@ -30,24 +30,25 @@ void SignMessage(const ::google::protobuf::Message &msg,
 proto::CommitDecision IndicusDecide(
     const std::map<int, std::vector<proto::Phase1Reply>> &replies,
     const transport::Configuration *config, bool validateProofs,
-    const proto::Transaction &transaction,
-    bool signedMessages, bool hashDigest, KeyManager *keyManager);
+    const proto::Transaction &transaction, const std::string &txnDigest,
+    bool signedMessages, KeyManager *keyManager);
 
 proto::CommitDecision IndicusShardDecide(
     const std::vector<proto::Phase1Reply> &replies,
     const transport::Configuration *config, bool validateProofs,
-    const proto::Transaction &txn,
-    bool signedMessages, bool hashDigest, KeyManager *keyManager, bool &fast);
+    const proto::Transaction &txn, const std::string &txnDigest,
+    bool signedMessages, KeyManager *keyManager, bool &fast);
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,
-    const std::string &key, const std::string &val, const Timestamp &timestamp,
-    const transport::Configuration *config, bool signedMessages, bool hashDigest,
+    const std::string &txnDigest, const std::string &key, const std::string &val, const Timestamp &timestamp,
+    const transport::Configuration *config, bool signedMessages,
     KeyManager *keyManager);
 
 // check must validate that proof replies are from all involved shards
 bool ValidateProofCommit(const proto::CommittedProof &proof,
+    const std::string &txnDigest,
     const transport::Configuration *config, bool signedMessages,
-    bool hashDigest, KeyManager *keyManager);
+    KeyManager *keyManager);
 
 bool ValidateProofAbort(const proto::CommittedProof &proof,
     const transport::Configuration *config, bool signedMessages,
@@ -94,6 +95,8 @@ uint64_t QuorumSize(const transport::Configuration *config);
 uint64_t FastQuorumSize(const transport::Configuration *config);
 uint64_t SlowCommitQuorumSize(const transport::Configuration *config);
 uint64_t SlowAbortQuorumSize(const transport::Configuration *config);
+bool IsReplicaInGroup(uint64_t id, uint32_t group,
+    const transport::Configuration *config);
 
 } // namespace indicusstore
 

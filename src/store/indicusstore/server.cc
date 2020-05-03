@@ -33,8 +33,10 @@
 
 #include <bitset>
 
+#include "lib/assert.h"
 #include "lib/tcptransport.h"
 #include "store/indicusstore/common.h"
+#include "store/indicusstore/phase1validator.h"
 
 namespace indicusstore {
 
@@ -239,44 +241,113 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
-  std::string txnDigest = TransactionDigest(msg.txn(), hashDigest);
-  Debug("PHASE2[%s].", BytesToHex(txnDigest, 16).c_str());
+  const proto::Transaction *txn;
+  const std::string *txnDigest;
+  std::string computedTxnDigest;
+  if (!msg.has_txn() && !msg.has_txn_digest()) {
+    Debug("PHASE2 message contains neither txn nor txn_digest.");
+    return;
+  } 
+  
+  if (msg.has_txn_digest()) {
+    auto txnItr = ongoing.find(msg.txn_digest());
+    if (txnItr == ongoing.end()) {
+      Debug("PHASE2[%s] message does not contain txn, but have not seen"
+          " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
+      return;
+    }
+
+    txn = &txnItr->second;
+    txnDigest = &msg.txn_digest();
+  } else {
+    txn = &msg.txn();
+    computedTxnDigest = TransactionDigest(msg.txn(), hashDigest);
+    txnDigest = &computedTxnDigest;
+  }
+
+  Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
 
   proto::CommitDecision decision;
+  // We can drop message by returning without responding if client misbehaves
   if (validateProofs) {
-    std::map<int, std::vector<proto::Phase1Reply>> groupedPhase1Replies;
-    bool repliesValid = true;
+    std::map<int, std::vector<const proto::Phase1Reply *>> groupedPhase1Replies;
     if (signedMessages) {
       for (const auto &group : msg.signed_p1_replies().replies()) {
-        std::vector<proto::Phase1Reply> phase1Replies;
+        auto &phase1Replies = groupedPhase1Replies[group.first];
         for (const auto &signedPhase1Reply : group.second.msgs()) {
-          if (ValidateSignedMessage(signedPhase1Reply, keyManager, phase1Reply)) {
-            phase1Replies.push_back(phase1Reply);
+          proto::Phase1Reply *p1Reply = new proto::Phase1Reply();
+          if (ValidateSignedMessage(signedPhase1Reply, keyManager, *p1Reply)) {
+            phase1Replies.push_back(p1Reply);
           } else {
-            repliesValid = false;
-            break;
+            Debug("Invalid Phase1Reply for group %ld.", group.first);
+            return;
           }
         }
-        groupedPhase1Replies.insert(std::make_pair(group.first, phase1Replies));
       }
     } else {
       for (const auto &group : msg.p1_replies().replies()) {
-        std::vector<proto::Phase1Reply> phase1Replies;
+        auto &phase1Replies = groupedPhase1Replies[group.first];
         for (const auto &p1Reply : group.second.replies()) {
-          phase1Replies.push_back(p1Reply);
+          phase1Replies.push_back(&p1Reply);
         }
-        groupedPhase1Replies.insert(std::make_pair(group.first, phase1Replies));
       }
     }
     
-    if (repliesValid) {
-      decision = IndicusDecide(groupedPhase1Replies, &config, validateProofs,
-          msg.txn(), signedMessages, hashDigest, keyManager);
+    bool validAbort = false;
+    std::set<int> groupsCommitted;
+    for (const auto &phase1Replies : groupedPhase1Replies) {
+      Phase1Validator p1Validator(txn, txnDigest, &config, keyManager,
+          signedMessages, hashDigest);
+
+      bool done = false;
+      for (size_t i = 0; i < phase1Replies.second.size(); ++i) {
+        const proto::SignedMessage *signedP1Reply = nullptr;
+        if (signedMessages) {
+          auto itr = msg.signed_p1_replies().replies().find(
+              phase1Replies.first);
+          signedP1Reply = &itr->second.msgs()[i];
+        }
+        
+        if (!p1Validator.ProcessMessage(phase1Replies.first, phase1Replies.second[i],
+            signedP1Reply)) {
+          return;
+        }
+
+        switch (p1Validator.GetState()) {
+          case FAST_COMMIT:
+          case SLOW_COMMIT_FINAL:
+            groupsCommitted.insert(phase1Replies.first); 
+            done = true;
+            break;
+          case FAST_ABORT:
+          case SLOW_ABORT_FINAL:
+            validAbort = true;
+            done = true;
+            break;
+          default:
+            return;
+        }
+
+        if (done) {
+          break;
+        }
+      }
+
+      if (validAbort) {
+        break;
+      }
+    }
+
+    if (validAbort) {
+      decision = proto::ABORT;
     } else {
-      Debug("VALIDATE signed Phase1Reply failed for txn %s.", BytesToHex(
-            txnDigest, 16).c_str());
-      // ignore Byzantine clients
-      return;
+      for (auto group : txn->involved_groups()) {
+        if (groupsCommitted.find(group) == groupsCommitted.end()) {
+          Debug("No Phase1Replies for involved_group %ld.", group);
+          return;
+        }
+      }
+      decision = proto::COMMIT;
     }
   } else {
     UW_ASSERT(msg.has_decision());
@@ -286,7 +357,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   phase2Reply.Clear();
   phase2Reply.set_req_id(msg.req_id());
   phase2Reply.set_decision(decision); 
-  *phase2Reply.mutable_txn_digest() = txnDigest;
+  *phase2Reply.mutable_txn_digest() = *txnDigest;
 
   // p2Decisions[phase2Reply.txn_digest()] = decision;
 
@@ -330,7 +401,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
   if (msg.decision() == proto::COMMIT) {
     if (validateProofs) {
-      if (!ValidateProofCommit(msg.proof(), &config, signedMessages, hashDigest,
+      if (!ValidateProofCommit(msg.proof(), *txnDigest, &config, signedMessages,
             keyManager)) {
         Debug("VALIDATE CommitProof commit failed for txn %s.", BytesToHex(
               *txnDigest, 16).c_str());

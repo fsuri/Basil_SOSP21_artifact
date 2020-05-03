@@ -150,10 +150,12 @@ void ShardClient::Put(uint64_t id, const std::string &key,
 }
 
 void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
+    const std::string &txnDigest,
     phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout) {
   Debug("[group %i] Sending PHASE1 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
-  PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId);
+  PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId, &transaction,
+      &txnDigest, config, keyManager, signedMessages, hashDigest);
   pendingPhase1s[reqId] = pendingPhase1;
   pendingPhase1->pcb = pcb;
   pendingPhase1->ptcb = ptcb;
@@ -322,9 +324,11 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   req->numReplies++;
   if (reply.has_committed()) {
     if (validateProofs) {
-      if (!ValidateTransactionWrite(reply.committed().proof(), req->key,
+      std::string committedTxnDigest = TransactionDigest(reply.committed().proof().txn(), hashDigest);
+      if (!ValidateTransactionWrite(reply.committed().proof(), committedTxnDigest,
+            req->key,
             reply.committed().value(), reply.committed().timestamp(), config,
-            signedMessages, hashDigest, keyManager)) {
+            signedMessages, keyManager)) {
         Debug("[group %i] Failed to validate committed value for read %lu.",
             group, reply.req_id());
         // invalid replies can be treated as if we never received a reply from
@@ -334,8 +338,8 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     }
 
     Timestamp replyTs(reply.committed().timestamp());
-    Debug("[group %i] ReadReply for %lu with committed %lu byte value and ts %lu.%lu.",
-        group, reply.req_id(), reply.committed().value().length(),
+    Debug("[group %i] ReadReply for %lu with committed %lu byte value and ts"
+        " %lu.%lu.", group, reply.req_id(), reply.committed().value().length(),
         replyTs.getTimestamp(), replyTs.getID());
     if (req->firstCommittedReply || req->maxTs < replyTs) {
       req->maxTs = replyTs;
@@ -364,8 +368,8 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
 
   if (hasPrepared) {
     Timestamp preparedTs(prepared.timestamp());
-    Debug("[group %i] ReadReply for %lu with prepared %lu byte value and ts %lu.%lu.",
-        group, reply.req_id(), prepared.value().length(),
+    Debug("[group %i] ReadReply for %lu with prepared %lu byte value and ts"
+        " %lu.%lu.", group, reply.req_id(), prepared.value().length(),
         preparedTs.getTimestamp(), preparedTs.getID());
     auto preparedItr = req->prepared.find(preparedTs);
     if (preparedItr == req->prepared.end()) {
@@ -393,11 +397,13 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
         *req->dep.mutable_prepared() = preparedItr->second.first;
         if (signedMessages) {
           for (const auto &signedWrite : req->signedPrepared[preparedItr->first]) {
-            *req->dep.mutable_proof()->mutable_signed_prepared()->add_msgs() = signedWrite;
+            *req->dep.mutable_proof()->mutable_signed_prepared()->add_msgs() =
+                signedWrite;
           }
         } else {
           for (size_t i = 0; i < static_cast<size_t>(config->f) + 1; ++i) {
-            *req->dep.mutable_proof()->mutable_prepared()->add_writes() = req->prepared[preparedItr->first].first;
+            *req->dep.mutable_proof()->mutable_prepared()->add_writes() =
+                req->prepared[preparedItr->first].first;
           }
         }
         req->dep.set_involved_group(group);
@@ -410,7 +416,8 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     *read->mutable_key() = req->key;
     req->maxTs.serialize(read->mutable_readtime());
     readValues[req->key] = req->maxValue;
-    req->gcb(REPLY_OK, req->key, req->maxValue, req->maxTs, req->dep, req->hasDep, true);
+    req->gcb(REPLY_OK, req->key, req->maxValue, req->maxTs, req->dep,
+        req->hasDep, true);
     delete req;
   }
 }
@@ -422,45 +429,91 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply,
     return; // this is a stale request
   }
 
+  PendingPhase1 *pendingPhase1 = itr->second;
+
   Debug("[group %i] PHASE1 callback ccr=%d", group, reply.ccr());
+  
+  if (!pendingPhase1->p1Validator.ProcessMessage(group, &reply,
+        &signedReply)) {
+    return;
+  }
 
   if (signedMessages) {
-    itr->second->signedPhase1Replies.push_back(signedReply);
+    pendingPhase1->signedPhase1Replies[reply.ccr()].push_back(signedReply);
   }
-  itr->second->phase1Replies.push_back(reply);
+  pendingPhase1->phase1Replies[reply.ccr()].push_back(reply);
 
-  switch (reply.ccr()) {
-    case proto::Phase1Reply::ABORT:
-      if (!validateProofs || ValidateProofCommit(reply.committed_conflict(), config,
-              signedMessages, hashDigest, keyManager)) {
-        Phase1Decision(itr);
-        return;
-      } else {
-        itr->second->numAbstains++;
+
+  // We want:
+  //   1) wait for 5f+1 commits if possible, even if we already have 3f+1 commits
+  //        because fast path
+  //   2) wait for 3f+1 commits if possible, instead of immediately aborting with
+  //        f+1 abstains
+  // need Phase1Validator to indicate whether its a fast commit, fast abort, or
+  //   slow abort so that client can potentially wait for more commits if possible
+  Phase1ValidationState state = pendingPhase1->p1Validator.GetState();
+  switch (state) {
+    case FAST_COMMIT:
+      pendingPhase1->decision = proto::COMMIT;
+      pendingPhase1->fast = true;
+      Phase1Decision(itr);
+      break;
+    case FAST_ABORT:
+      pendingPhase1->decision = proto::ABORT;
+      pendingPhase1->fast = true;
+      Phase1Decision(itr);
+      break;
+    case SLOW_COMMIT_FINAL:
+      pendingPhase1->decision = proto::COMMIT;
+      pendingPhase1->fast = false;
+      Phase1Decision(itr);
+      break;
+    case SLOW_ABORT_FINAL:
+      pendingPhase1->decision = proto::ABORT;
+      pendingPhase1->fast = false;
+      Phase1Decision(itr);
+      break;
+    case SLOW_COMMIT_TENTATIVE:
+      if (!pendingPhase1->decisionTimeoutStarted) {
+        uint64_t reqId = reply.req_id();
+        pendingPhase1->decisionTimeout = new Timeout(transport,
+            phase1DecisionTimeout, [this, reqId]() {
+              auto itr = pendingPhase1s.find(reqId);
+              if (itr == pendingPhase1s.end()) {
+                return;
+              }
+              itr->second->decision = proto::COMMIT;
+              itr->second->fast = false;
+              Phase1Decision(itr);      
+            }
+          );
+        pendingPhase1->decisionTimeout->Reset();
+        pendingPhase1->decisionTimeoutStarted = true;
       }
       break;
-    case proto::Phase1Reply::COMMIT:
-      itr->second->numCommits++;
+
+    case SLOW_ABORT_TENTATIVE:
+      if (!pendingPhase1->decisionTimeoutStarted) {
+        uint64_t reqId = reply.req_id();
+        pendingPhase1->decisionTimeout = new Timeout(transport,
+            phase1DecisionTimeout, [this, reqId]() {
+              auto itr = pendingPhase1s.find(reqId);
+              if (itr == pendingPhase1s.end()) {
+                return;
+              }
+              itr->second->decision = proto::ABORT;
+              itr->second->fast = false;
+              Phase1Decision(itr);      
+            }
+          );
+        pendingPhase1->decisionTimeout->Reset();
+        pendingPhase1->decisionTimeoutStarted = true;
+      }
+      break;
+    case NOT_ENOUGH:
       break;
     default:
-      itr->second->numAbstains++;
       break;
-  }
-
-  if (itr->second->phase1Replies.size() == static_cast<size_t>(config->n)) {
-    Phase1Decision(itr);
-  } else if (itr->second->numCommits == SlowCommitQuorumSize(config)) {
-    Phase1Decision(itr);
-  } else if (itr->second->numAbstains == SlowAbortQuorumSize(config) &&
-      !itr->second->decisionTimeoutStarted) {
-    uint64_t reqId = reply.req_id();
-    itr->second->decisionTimeout = new Timeout(transport,
-        phase1DecisionTimeout, [this, reqId]() {
-          Phase1Decision(reqId);      
-        }
-      );
-    itr->second->decisionTimeout->Reset();
-    itr->second->decisionTimeoutStarted = true;
   }
 }
 
@@ -503,12 +556,8 @@ void ShardClient::Phase1Decision(uint64_t reqId) {
 void ShardClient::Phase1Decision(
     std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr) {
   PendingPhase1 *pendingPhase1 = itr->second;
-  bool fast = false;
-  proto::CommitDecision decision = IndicusShardDecide(pendingPhase1->phase1Replies,
-      config, validateProofs, pendingPhase1->transaction, signedMessages, hashDigest,
-      keyManager, fast);
-  pendingPhase1->pcb(decision, fast, pendingPhase1->phase1Replies,
-      pendingPhase1->signedPhase1Replies);
+  pendingPhase1->pcb(pendingPhase1->decision, pendingPhase1->fast,
+      pendingPhase1->phase1Replies, pendingPhase1->signedPhase1Replies);
   this->pendingPhase1s.erase(itr);
   delete pendingPhase1;
 }

@@ -197,7 +197,7 @@ void Client::Phase1(PendingRequest *req) {
   UW_ASSERT(txn.involved_groups().size() > 0);
 
   for (auto group : txn.involved_groups()) {
-    bclient[group]->Phase1(client_seq_num, txn, std::bind(
+    bclient[group]->Phase1(client_seq_num, txn, req->txnDigest, std::bind(
           &Client::Phase1Callback, this, req->id, group, std::placeholders::_1,
           std::placeholders::_2, std::placeholders::_3, std::placeholders::_4),
         std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
@@ -208,8 +208,10 @@ void Client::Phase1(PendingRequest *req) {
 
 void Client::Phase1Callback(uint64_t txnId, int group,
     proto::CommitDecision decision, bool fast,
-    const std::vector<proto::Phase1Reply> &phase1Replies,
-    const std::vector<proto::SignedMessage> &signedPhase1Replies) {
+    const std::map<proto::Phase1Reply::ConcurrencyControlResult,
+    std::vector<proto::Phase1Reply>> &phase1Replies,
+    const std::map<proto::Phase1Reply::ConcurrencyControlResult,
+    std::vector<proto::SignedMessage>> &signedPhase1Replies) {
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
     Debug("Phase1Callback for terminated request %lu (txn already committed"
@@ -228,9 +230,22 @@ void Client::Phase1Callback(uint64_t txnId, int group,
   }
 
   if (validateProofs) {
-    req->phase1RepliesGrouped[group] = phase1Replies;
-    if (signedMessages) {
-      req->signedPhase1RepliesGrouped[group] = signedPhase1Replies;
+    if (decision == proto::ABORT && fast) {
+      req->phase1RepliesGrouped[group] = phase1Replies.find(proto::Phase1Reply::ABORT)->second;
+      if (signedMessages) {
+        req->signedPhase1RepliesGrouped[group] = signedPhase1Replies.find(proto::Phase1Reply::ABORT)->second;
+      }
+    } else if (decision == proto::ABORT) {
+      req->phase1RepliesGrouped[group] = phase1Replies.find(proto::Phase1Reply::ABSTAIN)->second;
+      if (signedMessages) {
+        req->signedPhase1RepliesGrouped[group] = signedPhase1Replies.find(proto::Phase1Reply::ABSTAIN)->second;
+      }
+    } else {
+      req->phase1RepliesGrouped[group] = phase1Replies.find(proto::Phase1Reply::COMMIT)->second;
+      if (signedMessages) {
+        req->signedPhase1RepliesGrouped[group] = signedPhase1Replies.find(proto::Phase1Reply::COMMIT)->second;
+      }
+
     }
   }
 

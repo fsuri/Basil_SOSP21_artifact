@@ -122,8 +122,10 @@ class Client : public ::Client {
 
   void Phase1(PendingRequest *req);
   void Phase1Callback(uint64_t reqId, int group, proto::CommitDecision decision,
-      bool fast, const std::vector<proto::Phase1Reply> &phase1Replies,
-      const std::vector<proto::SignedMessage> &signedPhase1Replies);
+      bool fast, const std::map<proto::Phase1Reply::ConcurrencyControlResult,
+      std::vector<proto::Phase1Reply>> &phase1Replies,
+      const std::map<proto::Phase1Reply::ConcurrencyControlResult,
+      std::vector<proto::SignedMessage>> &signedPhase1Replies);
   void Phase1TimeoutCallback(int group, uint64_t reqId, int status);
   void HandleAllPhase1Received(PendingRequest *req);
 

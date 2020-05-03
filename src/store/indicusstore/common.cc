@@ -65,12 +65,12 @@ void SignMessage(const ::google::protobuf::Message &msg,
 proto::CommitDecision IndicusDecide(
     const std::map<int, std::vector<proto::Phase1Reply>> &replies,
     const transport::Configuration *config, bool validateProofs,
-    const proto::Transaction &transaction,
-    bool signedMessages, bool hashDigest, KeyManager *keyManager) {
+    const proto::Transaction &transaction, const std::string &txnDigest,
+    bool signedMessages, KeyManager *keyManager) {
   bool fast;
   for (const auto &groupReplies : replies) {
     proto::CommitDecision groupDecision = IndicusShardDecide(groupReplies.second,
-        config, validateProofs, transaction, signedMessages, hashDigest, keyManager, fast);
+        config, validateProofs, transaction, txnDigest, signedMessages, keyManager, fast);
     if (groupDecision == proto::ABORT) {
       return proto::ABORT;
     }
@@ -81,8 +81,8 @@ proto::CommitDecision IndicusDecide(
 proto::CommitDecision IndicusShardDecide(
     const std::vector<proto::Phase1Reply> &replies,
     const transport::Configuration *config, bool validateProofs,
-    const proto::Transaction &txn,
-    bool signedMessages, bool hashDigest, KeyManager *keyManager, bool &fast) {
+    const proto::Transaction &txn,  const std::string &txnDigest,
+    bool signedMessages, KeyManager *keyManager, bool &fast) {
   int commits = 0;
   int abstains = 0;
 
@@ -92,8 +92,8 @@ proto::CommitDecision IndicusShardDecide(
   for (const auto& reply : replies) {
     if (reply.ccr() == proto::Phase1Reply::ABORT) {
       if (validateProofs) {
-        if (!ValidateProofCommit(reply.committed_conflict(), config, signedMessages,
-              hashDigest, keyManager)) {
+        if (!ValidateProofCommit(reply.committed_conflict(), txnDigest, config,
+              signedMessages, keyManager)) {
           abstains++;
           continue;
         }
@@ -130,8 +130,9 @@ proto::CommitDecision IndicusShardDecide(
 }
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,
+    const std::string &txnDigest,
     const std::string &key, const std::string &val, const Timestamp &timestamp,
-    const transport::Configuration *config, bool signedMessages, bool hashDigest,
+    const transport::Configuration *config, bool signedMessages,
     KeyManager *keyManager) {
   if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
     // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
@@ -139,7 +140,8 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     return true;
   }
 
-  if (!ValidateProofCommit(proof, config, signedMessages, hashDigest, keyManager)) {
+  if (!ValidateProofCommit(proof, txnDigest, config, signedMessages,
+        keyManager)) {
     Debug("VALIDATE CommitProof commit failed for txn %lu.%lu.",
         proof.txn().client_id(), proof.txn().client_seq_num());
     return false;
@@ -178,16 +180,17 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
   return true;
 }
 
+// Assume that txnDigest has been computed
 bool ValidateProofCommit(const proto::CommittedProof &proof,
+    const std::string &txnDigest,
     const transport::Configuration *config, bool signedMessages,
-    bool hashDigest, KeyManager *keyManager) {
+    KeyManager *keyManager) {
   if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
     // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
     //    without needing to write all existing data with transactions
     return true;
   }
 
-  std::string txnDigest = TransactionDigest(proof.txn(), hashDigest);
   Debug("Validate proof commit for transaction %lu.%lu (%s).",
       proof.txn().client_id(), proof.txn().client_seq_num(),
       BytesToHex(txnDigest, 16).c_str());
@@ -384,8 +387,8 @@ bool ValidateP2RepliesCommit(
 bool ValidateP1RepliesAbort(
     const std::map<int, std::vector<proto::Phase1Reply>> &groupedP1Replies,
     const std::string &txnDigest, const proto::Transaction &txn,
-    const transport::Configuration *config, bool signedMessages, bool hashDigest,
-    KeyManager *keyManager) {
+    const transport::Configuration *config, bool signedMessages,
+    bool hashDigest, KeyManager *keyManager) {
   // TODO: technically only need a single Phase1Reply that says commit ->
   //    messages will all be the same
   for (auto group : txn.involved_groups()) {
@@ -407,8 +410,10 @@ bool ValidateP1RepliesAbort(
       if (p1Reply.ccr() == proto::Phase1Reply::ABSTAIN) {
         abstains++;
       } else if (p1Reply.ccr() == proto::Phase1Reply::ABORT) {
-        if (ValidateProofCommit(p1Reply.committed_conflict(), config,
-              signedMessages, hashDigest, keyManager)) {
+        std::string committedTxnDigest = TransactionDigest(
+            p1Reply.committed_conflict().txn(), hashDigest);
+        if (ValidateProofCommit(p1Reply.committed_conflict(), committedTxnDigest,
+              config, signedMessages, keyManager)) {
           Debug("Group %ld aborted transaction with committed conflict.", group);
           return true;
         } else {
@@ -599,6 +604,11 @@ uint64_t SlowCommitQuorumSize(const transport::Configuration *config) {
 
 uint64_t SlowAbortQuorumSize(const transport::Configuration *config) {
   return static_cast<uint64_t>(config->f) + 1;
+}
+
+bool IsReplicaInGroup(uint64_t id, uint32_t group,
+    const transport::Configuration *config) {
+  return id / config->n == group;
 }
 
 } // namespace indicusstore
