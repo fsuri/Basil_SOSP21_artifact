@@ -96,7 +96,7 @@ system property that bounds the influence of Byzantine participants on the outco
 
 
 
- \par \textbf{Byzantine Independence} For every request $r$ issued by a correct client $c$, there exists no group of participants that can dictate the result of $r$, and contains only byzantine actors.
+ \par \textbf{Byzantine Independence} For every request $r$ issued by a correct client $c$, there exists no group of participants that can unilaterally dictate the result of $r$, and contains only byzantine actors.
 
 \fs{perhaps it currently sounds too strong, I am not sure whether the "reliably" part is captured.}
 \fs{explicitly phased as request and not transaction, so it is applicable to general SMR. For us: applies to reads: therefore we want to read from f+1, applies to transaction outcome: therefore we dont want a leader. If the adversary controls the network, then a single byz client can be that group. (applies to both reads and tx commit/abort). If you want to read from a single replica, then you are explicitly giving up byz independence for that request}
@@ -131,14 +131,10 @@ An execution is uncivil iff (a) there is no bound on message delay (asynchrony) 
 \fi
 
 
-
-\subsection{Discussion}
-\nc{I wasn't sure what to do with this paragraph. On the one hand I like it,
-on the other it's not obvious to me that it's necessary. What I do think
-is that the part on clients in the client model should go here. I attempted a much 
-shorter version but I'm not sure that this is better. It completely removes the "reactive" behaviour, which i understand is cool, but i'm not sure people will appreciate this. I think it acts better as a transition paragraph into the rest of the sections}
-
-The literature offers two main approaches to dealing with Byzantine bahaviors: \one~ BFT systems attempt to mask Byzantine actors, and thus strive to guarantee both safety and liveness in their presence; \two~ systems that provide  accountability do not provide safety, but discourage Byzantine actors by guaranteeing they will eventually be linked to their actions.  \sys{} leverages its system model to take a hybrid approach. On the one hand, it uses BFT to guarantee safety in the presence of Byzantine  behavior; on the other, being a permissioned system, it uses tamper-proof transaction logs to disincentivize  Byzantine behaviors that undermine the system's liveness.  Thus, \sys{}'s design leans towards  being efficient during fault-free executions; when misbehaviour does occur, \sys{} remains safe while bounding overheads, using auditing to address sustained attacks to its liveness.  We achieve this balance through the design of aggressive concurrency control mechanisms, which we combine with recovery protocols that enforce independent operability.
+\changebars{While \sys{} remains safe under byzantine attacks, we do not expect that these will be frequent in practice. Clients are incentivised to maintain standing in a permissioned system, and thus unlikely to engage in actively detectable byzantine behaviour, as this would result in them being removed from the database~\cite{haeberlen2010accountable}. Similarly, we assume that Byzantine actors have similar processing capacities as correct participants, and thus cannot flood the system, causing denial of service attacks. To this effect, we design \sys{} to minimise costs during gracious executions while bounding overheads when misbehaviour does occur. We design aggressive concurrency control mechanisms that optimistically expose uncommitted operations to maximise performance in the common case. We ensure, however, that these protocols preserve independent operability, which allows \sys{}
+to guarantee continued progress under Byzantine attacks{clement09aardvark}. 
+}{The literature offers two main approaches to dealing with Byzantine bahaviors: \one~ BFT systems attempt to mask Byzantine actors, and thus strive to guarantee both safety and liveness in their presence; \two~ systems that provide  accountability do not provide safety, but discourage Byzantine actors by guaranteeing they will eventually be linked to their actions.  \sys{} leverages its system model to take a hybrid approach. On the one hand, it uses BFT to guarantee safety in the presence of Byzantine  behavior; on the other, being a permissioned system, it uses tamper-proof transaction logs to disincentivize  Byzantine behaviors that undermine the system's liveness.  Thus, \sys{}'s design leans towards  being efficient during fault-free executions; when misbehaviour does occur, \sys{} remains safe while bounding overheads, using auditing to address sustained attacks to its liveness.  We achieve this balance through the design of aggressive concurrency control mechanisms, which we combine with recovery protocols that enforce independent operability.
+}
 
 \fs{NC version in comments}
 

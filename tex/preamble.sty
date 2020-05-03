@@ -161,3 +161,12 @@
 \newcommand{\VarP}[1]{\Var{#1^\prime}}
 \newcommand{\AND}{\mathbin{\mathbf{and}}}
 
+
+%proofs
+\setboolean{tr}{true}
+\ifthenelse{\boolean{tr}}{
+\newcommand{\tr}[2]{#1}
+}
+{
+\newcommand{\tr}[2]{#2}
+}
