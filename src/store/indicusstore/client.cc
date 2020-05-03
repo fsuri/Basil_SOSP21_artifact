@@ -231,16 +231,19 @@ void Client::Phase1Callback(uint64_t txnId, int group,
 
   if (validateProofs) {
     if (decision == proto::ABORT && fast) {
+      Debug("Have %lu ABORT replies from group %d.", phase1Replies.find(proto::Phase1Reply::ABORT)->second.size(), group);
       req->phase1RepliesGrouped[group] = phase1Replies.find(proto::Phase1Reply::ABORT)->second;
       if (signedMessages) {
         req->signedPhase1RepliesGrouped[group] = signedPhase1Replies.find(proto::Phase1Reply::ABORT)->second;
       }
     } else if (decision == proto::ABORT) {
+      Debug("Have %lu ABSTAIN replies from group %d.", phase1Replies.find(proto::Phase1Reply::ABSTAIN)->second.size(), group);
       req->phase1RepliesGrouped[group] = phase1Replies.find(proto::Phase1Reply::ABSTAIN)->second;
       if (signedMessages) {
         req->signedPhase1RepliesGrouped[group] = signedPhase1Replies.find(proto::Phase1Reply::ABSTAIN)->second;
       }
     } else {
+      Debug("Have %lu COMMIT replies from group %d.", phase1Replies.find(proto::Phase1Reply::COMMIT)->second.size(), group);
       req->phase1RepliesGrouped[group] = phase1Replies.find(proto::Phase1Reply::COMMIT)->second;
       if (signedMessages) {
         req->signedPhase1RepliesGrouped[group] = signedPhase1Replies.find(proto::Phase1Reply::COMMIT)->second;

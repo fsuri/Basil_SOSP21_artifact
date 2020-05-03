@@ -154,12 +154,11 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
     phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout) {
   Debug("[group %i] Sending PHASE1 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
-  PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId, &transaction,
-      &txnDigest, config, keyManager, signedMessages, hashDigest);
+  PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId, transaction,
+      txnDigest, config, keyManager, signedMessages, hashDigest);
   pendingPhase1s[reqId] = pendingPhase1;
   pendingPhase1->pcb = pcb;
   pendingPhase1->ptcb = ptcb;
-  pendingPhase1->transaction = transaction;
   pendingPhase1->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase1]() {
       phase1_timeout_callback ptcb = pendingPhase1->ptcb;
       auto itr = this->pendingPhase1s.find(pendingPhase1->reqId);

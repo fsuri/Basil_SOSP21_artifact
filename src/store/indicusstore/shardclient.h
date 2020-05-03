@@ -136,12 +136,12 @@ class ShardClient : public TransportReceiver {
   };
 
   struct PendingPhase1 {
-    PendingPhase1(uint64_t reqId, const proto::Transaction *txn,
-        const std::string *txnDigest, const transport::Configuration *config,
+    PendingPhase1(uint64_t reqId, const proto::Transaction &txn,
+        const std::string &txnDigest, const transport::Configuration *config,
         KeyManager *keyManager, bool signedMessages, bool hashDigest) :
         reqId(reqId), requestTimeout(nullptr), decisionTimeout(nullptr),
-        decisionTimeoutStarted(false),
-        p1Validator(txn, txnDigest, config, keyManager, signedMessages,
+        decisionTimeoutStarted(false), txn_(txn), txnDigest_(txnDigest),
+        p1Validator(&txn_, &txnDigest_, config, keyManager, signedMessages,
             hashDigest), decision(proto::ABORT), fast(false) { }
     ~PendingPhase1() {
       if (requestTimeout != nullptr) {
@@ -161,7 +161,8 @@ class ShardClient : public TransportReceiver {
       std::vector<proto::SignedMessage>> signedPhase1Replies;
     phase1_callback pcb;
     phase1_timeout_callback ptcb;
-    proto::Transaction transaction;
+    proto::Transaction txn_;
+    std::string txnDigest_;
     Phase1Validator p1Validator;
     proto::CommitDecision decision;
     bool fast;

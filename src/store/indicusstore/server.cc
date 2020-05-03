@@ -310,22 +310,23 @@ void Server::HandlePhase2(const TransportAddress &remote,
         
         if (!p1Validator.ProcessMessage(phase1Replies.first, phase1Replies.second[i],
             signedP1Reply)) {
+          Debug("VALIDATE failed with a proof of misbehavior.");
           return;
         }
 
         switch (p1Validator.GetState()) {
           case FAST_COMMIT:
-          case SLOW_COMMIT_FINAL:
+          case SLOW_COMMIT_TENTATIVE:
             groupsCommitted.insert(phase1Replies.first); 
             done = true;
             break;
           case FAST_ABORT:
-          case SLOW_ABORT_FINAL:
+          case SLOW_ABORT_TENTATIVE:
             validAbort = true;
             done = true;
             break;
           default:
-            return;
+            break;
         }
 
         if (done) {
