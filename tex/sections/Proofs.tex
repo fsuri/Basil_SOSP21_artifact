@@ -23,7 +23,7 @@ Consequently, all honest clients experience Serializability, and thus, the MVTSO
 \end{proof}
 
 \fs{should split this between Slow and Fast Path. Logged decisions are only slow path. Fast Path implies that the only logged decisions that are possible will be consistent}
-\fs{redefine logged decision: 3f+1 correct replicas have adopted a decision. Define shard-certificate: set of decisions that implies existance of a logged decision.
+\fs{redefine logged decision: 3f+1 correct replicas have adopted a decision. Define shard-certificate: set of decisions that implies existance of a logged decision.}
 \begin{theorem}[Saf]
 A logged decision is durable, and there can ever exist \textbf{at most one} logged decision.
 \fs{Clarify the point of this: We preserve consistency of writeback commit/abort. That in turn follows from the logged decision durability.}
