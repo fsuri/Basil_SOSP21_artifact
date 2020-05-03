@@ -138,12 +138,23 @@ bool Replica::sendMessageToPrimary(const ::google::protobuf::Message& msg) {
 }
 
 bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
+
   if (signMessages) {
-    proto::SignedMessage signedMsg;
-    SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMsg);
-    // send to everyone and to me
-    return transport->SendMessageToGroup(this, groupIdx, signedMsg) &&
-           transport->SendMessageToReplica(this, groupIdx, idx, signedMsg);
+    ::google::protobuf::Message* copy = msg.New();
+    copy->CopyFrom(msg);
+    transport->DispatchTP([this, copy] {
+      proto::SignedMessage* signedMsg = new proto::SignedMessage();
+      SignMessage(*copy, this->keyManager->GetPrivateKey(this->id), this->id, *signedMsg);
+      delete copy;
+      return (void*) signedMsg;
+    }, [this](void* ret) {
+      proto::SignedMessage* signedMsg = (proto::SignedMessage*) ret;
+      // send to everyone and to me
+      this->transport->SendMessageToGroup(this, this->groupIdx, *signedMsg);
+      this->transport->SendMessageToReplica(this, this->groupIdx, this->idx, *signedMsg);
+      delete signedMsg;
+    });
+    return true;
   } else {
     // send to everyone and to me
     return transport->SendMessageToGroup(this, groupIdx, msg) &&
@@ -179,7 +190,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
         // start the timer, 10ms should be a good amount
         batchTimerRunning = true;
         Debug("Starting batch timer");
-        batchTimerId = transport->Timer(10, [this]() {
+        batchTimerId = transport->Timer(4, [this]() {
           Debug("Batch timer expired, sending");
           this->batchTimerRunning = false;
           this->sendBatchedPreprepare();
@@ -218,7 +229,7 @@ void Replica::SendPreprepare(uint64_t seqnum, const proto::Preprepare& preprepar
   sendMessageToAll(preprepare);
 
   // wait 300 ms for tx to complete
-  seqnumCommitTimers[seqnum] = transport->Timer(300, [this, seqnum, preprepare]() {
+  seqnumCommitTimers[seqnum] = transport->Timer(2000, [this, seqnum, preprepare]() {
     Debug("Primary commit timer expired, resending preprepare");
     this->SendPreprepare(seqnum, preprepare);
   });
@@ -400,7 +411,7 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest) {
       Debug("Sending commit to everyone");
 
       sentCommits[seqnum].insert(viewnum);
-      transport->Timer(200, [this, seqnum, viewnum]() {
+      transport->Timer(2000, [this, seqnum, viewnum]() {
         Debug("erased sent commit");
         this->sentCommits[seqnum].erase(viewnum);
       });

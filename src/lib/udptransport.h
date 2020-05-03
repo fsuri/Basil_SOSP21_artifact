@@ -83,7 +83,7 @@ public:
     bool CancelTimer(int id) override;
     void CancelAllTimers() override;
 
-    void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb);
+    virtual void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) override;
 
 private:
     struct UDPTransportTimerInfo
