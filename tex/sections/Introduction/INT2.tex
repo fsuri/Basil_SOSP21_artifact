@@ -10,17 +10,30 @@ systems~\cite{castro1999practical,martin2006fast,kotla2007zyzzyva,  gueta2018sbf
 produce the same totally ordered log of operations across mutually distrustful
 participants. 
 
-Maintaining a totally ordered log of requests, despite its appealing simplicity, is problematic as such an approach is hard to scale and costly to implement \fs{need to be a little more concrete here; perhaps a citation as well?}. This total order is in fact often unnecessary; modern distributed applications primarily consist of independent operations that could be executed concurrently. Supply chains for instance, despite their name, are actually complex networks that generate and process logically concurrent transactions.
 
-Existing research attempts to mitigate the aforementioned scalability bottleneck through a combination of sharding, cross-shard atomic commit protocols and centralised ordering services~\cite{kokoris2018omniledger,al2017chainspace,padilha2016callinicos}. These systems suffer from three primary drawbacks \one ~ they limit the expressivity of the transactions they support \two ~ they introduce unnecessary coordination across replicas and finally,
-\three ~ they often centralise the ordering of requests at a single leader, which raises fairness \fs{and scalability - cyclic mention..} concerns. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness. 
+Maintaining a totally ordered log of requests, despite its appealing simplicity, is problematic:
+Such an approach is hard to scale \changebars{and costly to implement} as all agreement instances must be serialized, which in turn is often enforced by a dedicated sequencer, thus exposing both a throughput bottleneck and a single point of failure \cite{stathakopoulou2019mir}. This total order is in fact often unnecessary; modern distributed applications primarily consist of independent operations that could be executed concurrently. Supply chains for instance, despite their name, are actually complex networks that generate and process logically concurrent transactions. \fs{2nd mention of supply chains as example already}
+While this observation is frequently leveraged by distributed transaction protocols in the crash-fault model \cite{a bunch}, it has found scarce \cite{Clairvoyant} attention in the BFT space \fs{could we add a sentence for why? i.e. the simplicity of total order is so tempting?}.
+
+Instead, existing research attempts to mitigate the aforementioned scalability bottleneck through the application of sharding and cross-shard atomic commit protocols on top of centralised ordering services~\cite{kokoris2018omniledger,al2017chainspace,padilha2016callinicos}. The application of sharding however, conflates the functionality of horizontal scalability with the objective of a partial-order and remains an engineering optimization dependent on workload-specific partition mappings.
+On a high level, existing systems suffer from three primary drawbacks \one ~ they limit the expressivity of the transactions they support \two ~ they introduce unnecessary coordination across replicas and finally,
+\three ~ they often centralise the ordering of requests at a single leader, which, in addition to bottleneck concerns, raises fairness concerns for BFT settings. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness. 
+
+
+\fs{Old version in comments}
+\iffalse
+Maintaining a totally ordered log of requests, despite its appealing simplicity, is problematic as such an approach is hard to scale \fs{need to be a little more concrete here - the most important part is the single leader that is scalability bottleneck and Single point of failure+ all requests are sequenced; perhaps a citation as well? for example: BFTMir, Epaxos, TapirOrdering paper} \cite{stathakopoulou2019mir, moraru2013there zhang2016operation} and costly to implement \fs{need to justify "costly" a little better. costly in terms of scalability? that would be redundant. }. This total order is in fact often unnecessary; modern distributed applications primarily consist of independent operations that could be executed concurrently. Supply chains for instance, despite their name, are actually complex networks that generate and process logically concurrent transactions. \fs{2nd mention of supply chains as example already}
+
+Existing research attempts to mitigate the aforementioned scalability bottleneck through \changebars{the application of sharding and cross-shard atomic commit protocols on - layer atop?}{a combination of sharding, cross-shard atomic commit protocols and centralised ordering services}~\cite{kokoris2018omniledger,al2017chainspace,padilha2016callinicos}. These systems suffer from three primary drawbacks \one ~ they limit the expressivity of the transactions they support \two ~ they introduce unnecessary coordination across replicas and finally,
+\three ~ they often centralise the ordering of requests at a single leader, which raises fairness \fs{and scalability - cyclic mention.. - instead single point of failure?} concerns. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness. 
 \fs{these limitations currently don't read as if they are intertwined - when I think they should. I.e. the transaction expressiveness is limited in order to make the other limitations more scalable}
 \fs{transaction limited expressiveness only partially attributtable to total order imo - ; ALSO: the 2 blockchain citations use the UTXO model, its probably a stretch to say that has to due with totally ordered based? Even with partial order one-shot models are desirable (UTXO is a oneshot in my eyes), since thats single round communication/coordination}
 
 
 \fs{people have been building the abstraction of a total order on top of a physical total order, i.e. the implementation mirrors abstraction. They KNOW that total order is limiting, its not a new idea or mistaken belief. The question is, whether it is possible to do it differently - we want to instead provide a different implementation. And people HAVE tried: But only for crash failure - or, only via sharding }
+\fi
  
-In reality, building \textit{the abstraction} of a total order is sufficient, and distributed databases have long recognised this fact~\cite{crooks2018obladi,bernstein1979fas,Papadimitriou1979serializability,adya99weakconsis}. \fs{at this point a reader could expect us to talk about partial order and sharding - if we cut the Background section we currently do not mention sharding anywhere. That could seem ignorant.} Serializability, the gold-standard database criterion, defines a correct execution as one that is \textit{equivalent} to a correct schedule~\cite{bernstein1979fas,Papadimitriou1979serializability,bernstein1979fas}. This definition allows concurrent operations to execute in parallel and orders conflicting operations only.  Byzantine systems need be no different. This paper consequently argues for a paradigm "flip". The
+In reality, building \textit{the abstraction} of a total order is sufficient \changebars{cut-its redundant with above mention of CF distributed tx protocols - not ideal structure either though, since it jumps back and forth}{, and distributed databases have long recognised this fact}~\cite{crooks2018obladi,bernstein1979fas,Papadimitriou1979serializability,adya99weakconsis}.  Serializability, the gold-standard database criterion, defines a correct execution as one that is \textit{equivalent} to a correct schedule~\cite{bernstein1979fas,Papadimitriou1979serializability,bernstein1979fas}. This definition allows concurrent operations to execute in parallel and orders conflicting operations only.  Byzantine systems need be no different. This paper consequently argues for a paradigm "flip". The
 right way to build BFT data-sharing systems is not to layer database-like transactions and sharding on top of a BFT log, but instead to do the opposite and build out the abstraction of a BFT log atop a partially ordered distributed database.
 
 To this effect, we design \sys{}, the first leaderless and scalable key-value store that is resilient against
@@ -43,7 +56,7 @@ Kotla07Zyzzyva,castro1999practical}
 is intuitively problematic \cite{herlihy2016enhancing}. In contrast, \sys leaves the
 responsibility of driving the replication and distributed commit of a
 transaction to the client that proposes it \changebars{fs: cut imo}{and allows separate 
-shards to order transactions independently as the total order abstraction afforded by byzantine serializability can be maintained. }  \fs{Limitation of client computation can come here}
+shards to order transactions independently as the total order abstraction afforded by byzantine serializability can be maintained. } \fs{Limitation of client computation can come here: "A cost in doing so is higher computational load for clients"}
 
 Third, \sys{} avoids the duplicate ordering costs of transactional systems
 built on top of state machine replication. As Tapir noted~\cite{zhang2015tapir,mu2016consolidating},
@@ -52,7 +65,7 @@ operations within each shard for replication, and additionally enforce a serial 
 shards for distributed commit. In contrast, \sys{} integrates distributed commit with 
 replication and
 limits coordination to the validation step of the distributed commit
-protocol. \fs{mention the shortcoming of using sharding for PO here}
+protocol. %\fs{mention the shortcoming of using sharding for PO here}
 
 In practice, reaping these benefits requires us to address several
 technical obstacles. As in \fs{at this point we have not mentioned that we are OCC based} any OCC-based protocol, \sys
@@ -68,7 +81,9 @@ by correct clients.
 Byzantine behaviour in effect introduces a tension that is not present in non-byzantine
 distributed databases: optimistic and aggressive concurrency control mechanisms known
 to improve performance (~\cite{kung1981occ,bernstein1983mcc,reed1983atomic,xie2015callas,zhang2015tapir}) in failure-free executions also increase the system's vulnerability to byzantine faults. Consider for instance runtime pipelining~\cite{xie2015callas,su2017tebaldi} or multiversioned timestamp ordering (MVTSO)~\cite{bernstein1983mcc,reed1983atomic}: both allow writes to become visible to other operations before a transaction commits. While early write visibility helps reduce abort rates for
-contended workload, it can cause transactions to stall on uncommitted operations whose writes they have observed. To mitigate this tension, we design \sys{} to follow the ethos of \textit{independent operability}: both safety (serializability) and liveness (the ability to issue and complete transactions) are \textit{local} properties. 
+contended workload, it can cause transactions to stall on uncommitted operations whose writes they have observed. To mitigate this tension, we design \sys{} to follow the ethos of \textit{independent operability}: both safety (serializability) and liveness (the ability to issue and complete transactions) are properties that system users experience \textit{independently}. \fs{check comments to see whether this improves vs old version.}
+%OLD: are \textit{local} properties
+\iffalse
 \mb{I am confused by the use of ``local.'' Are we using it the same
 as Herlihy and Wing from the Linearizability paper? If not, I'd suggest we come
 up with a different term to avoid confusion. For example, Serializabiliy is not
@@ -76,12 +91,15 @@ a local property of a system comprised of multiple objects (it is not the case
 that the system is Serializable if and only if each object is Serializable).}
 \fs{Matt is right: What we mean is that a client "chooses" to experience serializability, so its locality is only per-client, not per-object. Liveness on the other hand is both per-client and object. Technically, just like serializability, its not per-object, but rather per-object-group that a transaction touches. Maybe we find a better description.}
 
-They remain, at all times, per client and per-object. Specifically, we develop a variant of multiversion timestamp ordering that \changebars{limits byzantine clients ability to strategically abort honest clients' transactions}{ precludes byzantine clients from
-aborting honest clients' transactions}. \fs{This is currently too strong. Can we be more clear about how our MVTSO achieves this? The things that come to mid are that writes are delayed and do not have external effect early, we dont accept writes that have high TS, and dependencies are only on f+1 matching reads}
- We additionally develop a novel \textit{fallback} mechanism that allows clients to finish others' pending transactions when stalled. Importantly, this fallback mechanism is per-object, and can thus take place concurrently with other non-conflicting operations. This is in contrast with traditional BFT view-changes which fully preclude normal operation processing.  Finally, we remain, at all times, fully leaderless. \fs{not true for the fallback, where we intentionally elect a leader. The difference is, that in Indicus each Tx has its own leader (which is usually the client, but can become a replica). We do not want to mislead.}
+They remain, at all times, per client and per-object. 
+\fi
+Specifically, we develop a variant of multiversion timestamp ordering that \changebars{limits byzantine clients ability to strategically abort honest clients' transactions}{ precludes byzantine clients from
+aborting honest clients' transactions}. %\fs{This is currently too strong. Can we be more clear about how our MVTSO achieves this? The things that come to mid are that writes are delayed and do not have external effect early, we dont accept writes that have high TS, and dependencies are only on f+1 matching reads}
+ We additionally develop a novel \textit{fallback} mechanism that allows clients to finish others' pending transactions when stalled, without empowering byzantine participants to skew results \fs{want to imply that byz independence is not vulnerable to this: another client could only decide which Quorums are used, not make it fully abort/commit arbitrarily}. Importantly, this fallback mechanism is \changebars{per-transaction}{per-object}, and can thus take place concurrently with other non-conflicting operations. This is in contrast with traditional BFT view-changes which fully preclude normal operation processing. Finally, we remain, at all times, fully leaderless. \fs{not true for the fallback, where we intentionally elect a leader, albeit this leader has very minimal influence - i.e. it cannot propose requests or unilaterally decide results - it is simply a dedicated coordinator. Furthermore - each TX HAS a leader, the client itself - The difference is, that in Indicus each Tx has its own leader (which is usually the client, but can become a replica). We do not want to mislead.}
 
+\changebars{}{
 Naturally, \sys{} also has limitations. First, it shifts some
-responsibilities from replicas to clients, which increases a client's computation load. Second, \sys{} is optimistic: it greedily allows transactions to read uncommitted data and allows replicas to process operations out of order. This approach can lead to high abort rates under heavy contention.
+responsibilities from replicas to clients, which increases a client's computation load. Second, \sys{} is optimistic: it greedily allows transactions to read uncommitted data and allows replicas to process operations out of order. This approach can lead to high abort rates under heavy contention.}
 \nc{while i think we should include
 limitations because that's a good thing to do, it's not obvious to me that the above paragraph is useful. Those limitations seem kinda obvious?}
 \fs{agree, the interleaving vulnerability part is also mentioned already. The client cost can be moved up - see earlier comment}
@@ -90,7 +108,7 @@ In summary, we make the following three contributions:
 \begin{itemize}
 \item We introduce the notion of Byzantine Isolation and prove that \sys guarantees
 Byzantine Serializability.
-\item We introduce a novel concurrency control and recovery \fs{is "recovery" the right word?} mechanism that balance the need for high-throughput in
+\item We introduce a novel concurrency control and recovery \fs{is "recovery" the right word? Its to support liveness - but yes, technically thats recovery from byz failure} mechanism that balance the need for high-throughput in
 the common case with resilience to Byzantine attacks.
 \item Our system remains leaderless and exhibits linear communication complexity, unlike prior BFT systems. \fs{this describes Q/U too, so its not quite "unlike prior" - but we offer transactions and liveness}
 \end{itemize}
