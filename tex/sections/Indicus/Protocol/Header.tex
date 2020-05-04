@@ -9,7 +9,23 @@
 \caption{{\em Transaction Lifecycle}. Clients execute remote reads (1) and buffer writes (2). For Committment, all involved shards verify isolation (3). If there are conflicting transactions (TX'), replicas in a shard (B) vote to Abort. A client persists a decision (4) that serves as Two-Phase-Commit Vote for each shard (5), and Commits a transaction if all shards vote to commit (6).}
 \label{fig:Figure1}
 \end{figure*}
-\fs{cut figure if it is not useful}
+\fs{cut figure if it is not useful} \nc{I don't figure hurts, but I don't think it helps much either}
+
+\sys is designed to be scalable and leaderless and our architecture reflects this ethos. \sys{} is a sharded and replicated transactional key-value store.
+
+\par \textbf{Transaction Execution} Transaction execution is driven by clients (removing costly all-to-all
+communications amongst replicas) and consists of three phases. First, in an \textit{execution phase}, clients execute individual transactional operations. As is standard in optimistic
+databases, reads are submitted to remote replicas while writes are buffered locally. \sys{} supports \textit{interactive} and cross-shard transactions: clients
+can issue new operations based on the results of past operations to any shard in the system. \sys{} must additionally ensure that these read operations do not violate
+Byzantine independence. In a second \textit{validation phase}, invidual shards in \sys{} must validate whether committing the transaction would violate serializability. For performance,
+\sys{} allows invidiual replicas within to process requests out of order. \sys{} must additionally ensure that Byzantine actors cannot cause spurious aborts. Finally, \sys{} aggregates each shard decision in a \textit{commit phase} and determines the outcome of the transaction, notifying both the application and replicas in the system of the decision. Importantly, this decision must be preserved across failures, reconfigurations and Byzantine attacks. We describe each of these phases in turn in Section~\ref{}
+
+\par \textbf{Transaction Recovery} A byzantine actor could begin executing a transaction, start the validation phase, but intentionally never reveal its decision. Without care,
+such behaviour would prevent the system from making progress, which would violate Byzantine independence. To ensure progress, \sys{} thus designs a recovery mechanism that can 
+carefully finish stalled transactions while maintaining serializability. We describe this fallback mechanism in Section~\ref{}.
+
+\nc{Florian's version in comments}
+\iffalse
 \sys is designed to be scalable and leaderless. Our architecture reflects this ethos. We briefly summarise it here before going into more detail in the later sections. 
 In \sys, clients drive the entire transaction life cycle which can be broken down into three stages as shown in Figure \ref{fig:Figure1}: i) Execution, ii) Validation, and iii) Writeback. 
 i) Clients \textit{speculatively execute} transactions themselves, invoking only remote read procedure calls (1) and buffering writes locally (2). \two Clients validate initiate a two-phase commit vote to validate speculative execution results for byzantine-serializability (3).
@@ -17,7 +33,7 @@ For every involved shard, a client queries potentially inconsistent replicas for
 iii) Lastly, clients aggregate all shard decisions (5) for atomic commit, return to the application and asynchronously, \textit{writes back} decisions and database updates (6).
 
 Next, we outline the protocols for Execution, Validation and Writeback respectively. 
-
+\fi
 
 \fs{longer version in Architecture.tex }
 

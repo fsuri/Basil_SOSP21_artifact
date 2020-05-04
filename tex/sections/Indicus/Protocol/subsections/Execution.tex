@@ -1,6 +1,3 @@
-%-------------------------------------------------------------------------------
-\subsection{Execution Phase}
-%-------------------------------------------------------------------------------
 \fs{whole section probably needs to fit in max 2 pages}
 
 The goals of \sys{}'s execution protocol are threefold: 1) to offer clients an interactive transaction interface, 2) to be scalable, and 3) to maintain independent operability.
@@ -11,7 +8,7 @@ By relying on optimistic rather than pessimistic CC schemes such as 2-phase-lock
 
 Before we detail \sys{}'s transaction processing and validation mechanism, we first discuss the CC that \sys implements as the latter are functions of the precise CC requirements. 
  
-\subsubsection{Concurrency Control}
+\subsection{Concurrency Control}
 
 %%% Explain MVTSO itself only briefly. Then explain how we make it for for byz
 % 1) bound timestamps, 2) make writes visible late only, 3) only allow f+1 matchin uncommitted writes, 4) read timestamps
@@ -61,7 +58,7 @@ Finally, \sys replicas evaluate writes for conflicts by maintaining a Read Times
 
 
 
-\subsubsection{Execution interface}
+\subsection{Execution interface}
 Client applications execute transactions via the following interface. A TX object \textit{TXObj $\coloneqq$ (SeqNo, ClientID, InvolvedShards, ReadSet, WriteSet, Dependencies)}, records the state necessary for Validation.
 
 \iffalse
