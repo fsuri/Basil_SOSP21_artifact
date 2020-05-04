@@ -2,10 +2,15 @@
 
 \sys{}'s execution protocol are three goals: 1) to offer clients an interactive transaction interface, 2) to be scalable, and 3) to maintain independent operability.
 
-\sys{} achieves these goals by combining optimistic client-side execution with an aggressive, but Byzantine resilient, concurrency control (CC) scheme that maintains Byz-Serializability.  \la{We seem to have already made this points in the intro tio the section} \changebars{}{\sys leaves clients responsible for executing the transactions they submit, and allows every client, in parallel, to execute arbitrary interactive transactions using read RPC's, instead of submitting stored procedured that must be ordered and executed by replica servers.}  By relying on optimistic rather than pessimistic CC schemes such as 2-phase-locking (2PL), \sys{} forgoes costly coordination to acquire locks, and sidesteps the concern of Byzantine clients refusing to relinquish locks.
+\sys{} achieves these goals by combining optimistic client-side execution with an aggressive, but Byzantine resilient, concurrency control (CC) scheme that maintains Byz-Serializability. 
+\iffalse
+ \la{We seem to have already made this points in the intro tio the section} \changebars{}{\sys leaves clients responsible for executing the transactions they submit, and allows every client, in parallel, to execute arbitrary interactive transactions using read RPC's, instead of submitting stored procedured that must be ordered and executed by replica servers.}  
+ \fi By relying on optimistic rather than pessimistic CC schemes such as 2-phase-locking (2PL), \sys{} forgoes costly coordination to acquire locks, and sidesteps the concern of Byzantine clients refusing to relinquish locks.
 
+\iffalse
 \la{I would just remove the following} 
 \changebars{}{Before we detail Indicus’s transaction processing and validation mechanism, we first discuss the CC that Indicus imple- ments as the latter are functions of the precise CC requirements.}
+\fi
 
 \subsection{\sys{}'s Concurrency Control}
 
@@ -21,7 +26,7 @@
 4) byz read timestamps (read lock implies you had access control, at that point it is no different than issuing a tx and completing. But we do not want to give the power to abort for no reason. It should be traceable.
 \fi
 
-\fs{fig doesnt make so much sense before reading the whole thing}
+\fs{fig doesnt make so much sense before reading the whole thing} \fs{cut this preamble}
 Figure \ref{fig:MVTSOEX} shows an example trace of \sys operational behaviors under different request processing orders (assume $f=1$) that we use to guide the remaining outline.
 
 \begin{figure*}
@@ -32,31 +37,31 @@ Figure \ref{fig:MVTSOEX} shows an example trace of \sys operational behaviors un
 \label{fig:MVTSOEX}
 \end{figure*}
 
-Our starting point is a Multiversioned Timestamp Ordering scheme (MVTSO) which prescribes a serialization order by assigning a speculative timestamp \textit{before} Execution \cite{bernstein1983multiversion, reed1983implementing, su2017tebaldi}. \\
+\par \textbf{MVTSO.} Our starting point is a Multiversioned Timestamp Ordering scheme (MVTSO) which prescribes a serialization order by assigning a speculative timestamp \textit{before} Execution \cite{bernstein1983multiversion, reed1983implementing, su2017tebaldi}. In MVTSO, reads operations return the latest written version smaller than the readers' timestamps, while writers attempt to create new versions at their timestamp, but must abort if a higher timestamped read would have "missed the write" by reading a prior version. A transaction may commit only, if all read-write dependencies have committed.
+
+\iffalse
 \fs{cut the whole following paragraph?} \la{Yes, I would cut it} This allows us to a) only classify concurent read/write operations as conflicting if their execution results violate the timestamp order (Fig. \ref{fig:MVTSOEX}: 4 bottom), and b) avoid write/write conflicts alltogether. 
 When speculative execution results match the pre-defined timestamp order, no aborts are necessary (Fig. \ref{fig:MVTSOEX}: 4 top). \sys{}'s challenge is therefore to a) assign appropriate timestamps and b) coordinate execution in a way that maximizes such coherence; the presence of Byzantine participants (clients/replicas) complicates this.
 
 In MVTSO, reads operations return the latest written version smaller than the readers' timestamps, while writers attempt to create new versions at their timestamp, but must abort if a higher timestamped read would have "missed the write" by reading a prior version. A transaction may commit only, if all read-write dependencies have committed.
+\fi
 
-\la{I wonder to what degree the following paragraph is necessary: is it really important to understand CC?}
+When \sys{}'s speculative execution results match the pre-defined timestamp order, no aborts are necessary (Fig. \ref{fig:MVTSOEX}: 4). \sys{}'s challenge is therefore to a) assign appropriate timestamps and b) coordinate execution in a way that maximizes such coherence; the presence of Byzantine participants (clients/replicas) complicates this.
 
-Read operations in \sys have the following sub-goals: \one Correct clients should read valid data, i.e. experience read integrity, \two Correct clients should read fresh data, i.e. minimize staleness and hence maximize commit chance, and \three Reads must provide the context necessary to potentially complete observed write state. 
-Clients validate the integrity of reads by requiring replicas to provide a proof of validity, which consists of a set of signatures confirming committment, or if not yet existant, a set of  $f+1$ replica's tentative commit endorsement \fs{maybe cut this second part, since it will become redundant}. Moreover, to guarantee that clients do not read maliciously stale data from their local replica, \sys encourages clients to read the latest version across $\geq f+1$ replicas (Fig. \ref{fig:MVTSOEX}: 1,2).
+\par \textbf{Byzantine resilience.} Read operations in \sys have the following sub-goals: \one Correct clients should read valid data, i.e. experience read integrity, \two Correct clients should read fresh data, i.e. minimize staleness and hence maximize commit chance, and \three Reads must provide the context necessary to potentially complete observed write state. 
+Clients validate the integrity of reads by requiring replicas to provide a proof of validity, which consists of a set of signatures confirming committment, or if not yet existant, a set of  $f+1$ replica's tentative commit endorsements \fs{maybe cut this second part, since it will become redundant}. Moreover, to guarantee that clients do not read maliciously stale data from their local replica, \sys encourages clients to read the latest version across $\geq f+1$ replicas (Fig. \ref{fig:MVTSOEX}: 1,2).
 Avoiding Byzantine influence comes at a cost: Read operations require a synchronous, potentially WAN \fs{or just remote - i.e. not local}, rountrip. 
 
 MVTSO intuitively synergizes well with \sys{}'s potenially WAN remote reads as reading from a fixed timestamp helps speculative readers observe consistent snapshots, even when execution is long and consequently interleavings are frequent (Fig. \ref{fig:MVTSOEX}: 6). \fs{at the price of experiencing serializability instead of strict serializability - that is only the case if your timestamps are outdated}.
 
-\la{Unclear what a dedicated bounded timestamp phase is}
-While we assume that clocks are loosely synchronized across correct participants, Byzantine participants may diverge arbitrarily and propose excessively high timestamps. To side-step the additional overhead that a dedicated, bounded timestamping phase \cite{Clairvoyant} incurs, we compromise by allowing clients to optimistically select their own timestamp, but rejecting request timestamps above a threshold at all correct replicas, thus incentivising clients to select bounded, close to real-time, timestamps. 
+While we assume that clocks are loosely synchronized across correct participants, Byzantine participants may diverge arbitrarily and propose excessively high timestamps. A simple solution is to bound time-stamps by querying the median time from a Quorum of replicas and including replies as proof \cite{bazzi2004non, bazzi2018clairvoyant}. To side-step the additional overheadd that a dedicated timestamping phase incurs, we compromise by allowing clients to optimistically select their own timestamps, but reject request timestamps above a threshold at all correct replicas, thus incentivising clients to select bounded, close to real-time, timestamps. 
 
 In traditional MVTSO, writes become visible to successive, higher timestamped, reads immediately. However, in the presence of Byzantine clients this is undesirable, as it allows clients to issue write operations without the intention of ever committing a transaction. Thus, any correct clients' read that observes, and consequently depends on a Byzantine clients write may be blocked indefinitely.
 %Allowing other clients to preemtively commit outstanding write operations is infeasible, as the remaining transaction procedure is known only to the issuing client, while conceiding pessimistic abort permission empowers Byzantine participants to obstruct any correct clients' writes. 
-To reconcile this dilemma, \sys{} defers all database updates until execution is complete and the client prepares the transaction for commitment. 
-% Concretely, \sys clients buffer all write operations, and submit them only when attempting to commit the transaction, thereby enabling other \sys client to orderly complete Validation and Writeback steps.
-
-\la{This needs to be better explained}
-Clients in \sys distinguish explicitly between globally \textit{committed} and tentatively \textit{prepared} writes awaiting a cross-shard atomic decision: While clients trust and accept every verified \textit{committed} write versions, they accept \textit{prepared} versions only when observing $f+1$ matching results. This ensures that a) at least one correct replica believes that the write can commit, and hence is worth observing, and b) that Byzantine replicas cannot violate Byzantine independence by reactively inventing transactions that are guaranteed to abort.
-
+\sys reconciles this dilemma by deferring all database updates until execution is complete and the client prepares the transaction for commitment. 
+% Concretely, \sys clients buffer all write operations, and submit them only when attempting to commit the transaction, thereby enabling other \sys client to orderly complete Validation and Writeback steps.\\
+\la{This needs to be better explained} \fs{took a pass:}
+Clients in \sys distinguish explicitly between writes \textit{committed} across all involved shards and tentative writes \textit{prepared} at a single shard: While clients accept all verifiable \textit{committed} version from a single replica, they accept \textit{prepared} versions only when endorsed by $f+1$ replicas. This ensures that a) at least one correct replica believes that the write can commit, and hence is worth observing, and b) that Byzantine replicas and clients cannot collude to violate Byzantine independence by reactively inventing versions. \fs{such invented transactions could be designed to be guaranteed to abort: I.e. by claiming to have read an out-dated version. The write versions could be engineered to be perfectly at the bound of the read timestamp, such that it is guaranteed to be chosen}\\
 Finally, \sys replicas evaluate writes for conflicts by maintaining a Read Timestamps (RTS) for each locally processed read (Fig. \ref{fig:MVTSOEX}: 3). While this allows un-prepared reads to elicit external effects, these affect only concurrent transactions with smaller timestamps and can be bypassed by re-trying a transaction. To nonetheless limit recurrent abuse, we discuss a personalized lease mechanism to limit Byzantine influence in section Y.z (Optional Modifc). \fs{or just do it here in 1-2 sentences. We do not implement this though.}
 
 
