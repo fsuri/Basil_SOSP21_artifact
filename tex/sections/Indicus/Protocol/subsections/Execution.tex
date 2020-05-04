@@ -1,6 +1,6 @@
 \fs{whole section probably needs to fit in max 2 pages}
 
-\sys{}'s execution protocol are three goals: 1) to offer clients an interactive transaction interface, 2) to be scalable, and 3) to maintain independent operability.
+\sys{}'s execution protocol has three goals: 1) to offer clients an interactive transaction interface \fs{too obvious?}, 2) to be scalable, and 3) to maintain independent operability \fs{and Byzantine independence, Serializability}.
 
 \sys{} achieves these goals by combining optimistic client-side execution with an aggressive, but Byzantine resilient, concurrency control (CC) scheme that maintains Byz-Serializability. 
 \iffalse
@@ -26,7 +26,7 @@
 4) byz read timestamps (read lock implies you had access control, at that point it is no different than issuing a tx and completing. But we do not want to give the power to abort for no reason. It should be traceable.
 \fi
 
-\fs{fig doesnt make so much sense before reading the whole thing} \fs{cut this preamble}
+\fs{fig doesnt make so much sense before reading the whole thing} \fs{cut this preamble?}
 Figure \ref{fig:MVTSOEX} shows an example trace of \sys operational behaviors under different request processing orders (assume $f=1$) that we use to guide the remaining outline.
 
 \begin{figure*}
@@ -37,7 +37,7 @@ Figure \ref{fig:MVTSOEX} shows an example trace of \sys operational behaviors un
 \label{fig:MVTSOEX}
 \end{figure*}
 
-\par \textbf{MVTSO.} Our starting point is a Multiversioned Timestamp Ordering scheme (MVTSO) which prescribes a serialization order by assigning a speculative timestamp \textit{before} Execution \cite{bernstein1983multiversion, reed1983implementing, su2017tebaldi}. In MVTSO, reads operations return the latest written version smaller than the readers' timestamps, while writers attempt to create new versions at their timestamp, but must abort if a higher timestamped read would have "missed the write" by reading a prior version. A transaction may commit only, if all read-write dependencies have committed.
+\par \textbf{MVTSO.} Our starting point is Multiversioned Timestamp Ordering (MVTSO), a concurrency control scheme which prescribes a serialization order by assigning a speculative timestamp \textit{before} execution \cite{bernstein1983multiversion, reed1983implementing, su2017tebaldi}. In MVTSO, read operations return the latest written version smaller than the readers' timestamps. Respectively, writers attempt to create new versions at their timestamp, but must abort if a higher timestamped read would have "missed the write" by reading a prior version. A transaction may commit only, if all read-write dependencies have committed.
 
 \iffalse
 \fs{cut the whole following paragraph?} \la{Yes, I would cut it} This allows us to a) only classify concurent read/write operations as conflicting if their execution results violate the timestamp order (Fig. \ref{fig:MVTSOEX}: 4 bottom), and b) avoid write/write conflicts alltogether. 
