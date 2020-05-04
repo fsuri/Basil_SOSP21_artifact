@@ -16,7 +16,7 @@ Such an approach is hard to scale \changebars{and costly to implement} as all ag
 While this observation is frequently leveraged by distributed transaction protocols in the crash-fault model \cite{a bunch}, it has found scarce \cite{Clairvoyant} attention in the BFT space \fs{could we add a sentence for why? i.e. the simplicity of total order is so tempting?}.
 
 Instead, existing research attempts to mitigate the aforementioned scalability bottleneck through the application of sharding and cross-shard atomic commit protocols on top of centralised ordering services~\cite{kokoris2018omniledger,al2017chainspace,padilha2016callinicos}. The application of sharding however, conflates the functionality of horizontal scalability with the objective of a partial-order and remains an engineering optimization dependent on workload-specific partition mappings.
-On a high level, existing systems suffer from three primary drawbacks \one ~ they limit the expressivity of the transactions they support \two ~ they introduce unnecessary coordination across replicas and finally,
+On a high level, existing systems suffer from three primary drawbacks \one ~ they limit the expressivity of the transactions they support \fs{the above citations refer to UTXO models, bad comparison; I figure this is supposed to refer to things like Callinicos} \two ~ they introduce unnecessary coordination across replicas and finally,
 \three ~ they often centralise the ordering of requests at a single leader, which, in addition to bottleneck concerns, raises fairness concerns for BFT settings. These limitations all stem from the same fallacy: the mistaken belief that building out a total order of operations is necessary for correctness. 
 
 
