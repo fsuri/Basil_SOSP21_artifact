@@ -9,19 +9,19 @@ enum CommitDecision {
   ABORT = 1;
 }
 
-message PackedMessage {
-  required bytes msg = 1;
-  required string type = 2;
-}
-
 message SignedMessage {
-  required bytes packed_msg = 1;
+  required bytes data = 1;
   required uint64 process_id = 2;
   required bytes signature = 3;
 }
 
-message SignedMessages {
-  repeated SignedMessage msgs = 1;
+message Signature {
+  required uint64 process_id = 1;
+  required bytes signature = 2;
+}
+
+message Signatures {
+  repeated Signature sigs = 1;
 }
 
 message Read {
@@ -30,21 +30,15 @@ message Read {
   required TimestampMessage timestamp = 3;
 }
 
-message GroupedPhase1Replies {
-  map<uint64, Phase1Replies> replies = 1;
-}
-
-message GroupedSignedPhase1Replies {
-  map<uint64, SignedMessages> replies = 1;
+message GroupedSignatures {
+  map<uint64, Signatures> grouped_sigs = 1;
 }
 
 message CommittedProof {
   required Transaction txn = 1;
-  oneof replies_oneof {
-    GroupedPhase1Replies p1_replies = 2;
-    GroupedSignedPhase1Replies signed_p1_replies = 3;
-    Phase2Replies p2_replies = 4;
-    SignedMessages signed_p2_replies = 5;
+  oneof reply_oneof {
+    GroupedSignatures p1_sigs = 2;
+    GroupedSignatures p2_sigs = 3;
   }
 }
 
@@ -56,7 +50,7 @@ message CommittedWrite {
 
 message Dependency {
   required PreparedWrite prepared = 1;
-  optional PreparedProof proof = 2;
+  optional Signatures prepared_sigs = 2;
   required int64 involved_group = 3;
 }
 
@@ -68,13 +62,6 @@ message PreparedWrite {
 
 message PreparedWrites {
   repeated PreparedWrite writes = 1;
-}
-
-message PreparedProof {
-  oneof prepared_oneof {
-    PreparedWrites prepared = 1;
-    SignedMessages signed_prepared = 2;
-  }
 }
 
 message ReadReply {
@@ -103,55 +90,72 @@ message Phase1 {
   required Transaction txn = 2;
 }
 
-message Phase1Reply {
-  enum ConcurrencyControlResult {
+message ConcurrencyControl {
+  enum Result {
     COMMIT = 0;
     ABORT = 1;
     ABSTAIN = 2;
     WAIT = 3;
     RETRY = 4;
   }
-  required uint64 req_id = 1;
-  required ConcurrencyControlResult ccr = 2;
+  required Result ccr = 2;
   optional CommittedProof committed_conflict = 3;
   optional bytes txn_digest = 4;
+}
+
+message Phase1Reply {
+  required uint64 req_id = 1;
+  oneof concurrency_oneof {
+    ConcurrencyControl cc = 2;
+    SignedMessage signed_cc = 3;
+  }
 }
 
 message Phase1Replies {
   repeated Phase1Reply replies = 1;
 }
 
+
 message Phase2 {
   required uint64 req_id = 1;
-  optional Transaction txn = 2;
-  optional bytes txn_digest = 3;
-  oneof p1_replies_oneof {
-    GroupedPhase1Replies p1_replies = 4;
-    GroupedSignedPhase1Replies signed_p1_replies = 5;
-  }
-  optional CommitDecision decision = 6;
+  required CommitDecision decision = 2;
+  optional Transaction txn = 3;
+  optional bytes txn_digest = 4;
+  optional GroupedSignatures grouped_sigs = 5;
 }
 
-message Phase2Reply {
-  required uint64 req_id = 1;
+message Phase2Decision {
   required CommitDecision decision = 2;
   optional bytes txn_digest = 3;
 }
 
-message Phase2Replies {
-  repeated Phase2Reply replies = 1;
+message Phase2Reply {
+  required uint64 req_id = 1;
+  oneof p2_decision_oneof {
+    Phase2Decision p2_decision = 2;
+    SignedMessage signed_p2_decision = 3;
+  }
 }
 
 message Writeback {
   required CommitDecision decision = 1;
   optional bytes txn_digest = 2;
-  oneof txn_proof {
-    Transaction txn = 3;
-    CommittedProof proof = 4;
+  optional Transaction txn = 3;
+  oneof reply_oneof {
+    GroupedSignatures p1_sigs = 4; // fast path commit
+    GroupedSignatures p2_sigs = 5; // slow path commit or abort
+    CommittedProof conflict = 6;   // fast path abort
   }
 }
 
-message Abort {
+message AbortInternal {
   required TimestampMessage ts = 1;
   repeated bytes read_set = 2;
+}
+
+message Abort {
+  oneof internal_oneof {
+    AbortInternal internal = 1;
+    SignedMessage signed_internal = 2;
+  }
 }

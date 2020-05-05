@@ -35,7 +35,7 @@ string Sign(const PrivKey &privateKey, const string &message) {
   return signature;
 }
 
-bool Verify(const PubKey &publicKey, const string &message, string &signature) {
+bool Verify(const PubKey &publicKey, const string &message, const string &signature) {
   // verify message
   bool result = false;
   Verifier verifier(publicKey);

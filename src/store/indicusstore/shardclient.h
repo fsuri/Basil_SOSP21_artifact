@@ -59,15 +59,11 @@ typedef std::function<void(int, const std::string &,
 typedef std::function<void(int, const std::string &)> read_timeout_callback;
 
 typedef std::function<void(proto::CommitDecision, bool,
-    const std::map<proto::Phase1Reply::ConcurrencyControlResult,
-    std::vector<proto::Phase1Reply>> &,
-    const std::map<proto::Phase1Reply::ConcurrencyControlResult,
-    std::vector<proto::SignedMessage>> &)> phase1_callback;
+    const proto::CommittedProof &,
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1_callback;
 typedef std::function<void(int)> phase1_timeout_callback;
 
-typedef std::function<void(
-    const std::vector<proto::Phase2Reply> &,
-    const std::vector<proto::SignedMessage> &)> phase2_callback;
+typedef std::function<void(const proto::Signatures &)> phase2_callback;
 typedef std::function<void(int)> phase2_timeout_callback;
 
 typedef std::function<void()> writeback_callback;
@@ -102,13 +98,15 @@ class ShardClient : public TransportReceiver {
       const std::string &txnDigest,
       phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout);
   virtual void Phase2(uint64_t id, const proto::Transaction &transaction,
-      const std::map<int, std::vector<proto::Phase1Reply>> &groupedPhase1Replies,
-      const std::map<int, std::vector<proto::SignedMessage>> &groupedSignedPhase1Replies,
-      proto::CommitDecision decision, phase2_callback pcb,
+      proto::CommitDecision decision,
+      const proto::GroupedSignatures &groupedSigs, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout);
   virtual void Writeback(uint64_t id, const proto::Transaction &transaction,
       const std::string &txnDigest,
-      proto::CommitDecision decision, const proto::CommittedProof &proof);
+      proto::CommitDecision decision, bool fast,
+      const proto::CommittedProof &conflict,
+      const proto::GroupedSignatures &p1Sigs,
+      const proto::GroupedSignatures &p2Sigs);
   
   virtual void Abort(uint64_t id, const TimestampMessage &ts);
  private:
@@ -127,7 +125,7 @@ class ShardClient : public TransportReceiver {
     uint64_t numReplies;
     uint64_t numOKReplies;
     std::map<Timestamp, std::pair<proto::PreparedWrite, uint64_t>> prepared;
-    std::map<Timestamp, std::vector<proto::SignedMessage>> signedPrepared;
+    std::map<Timestamp, proto::Signatures> preparedSigs;
     proto::Dependency dep;
     bool hasDep;
     read_callback gcb;
@@ -136,12 +134,13 @@ class ShardClient : public TransportReceiver {
   };
 
   struct PendingPhase1 {
-    PendingPhase1(uint64_t reqId, const proto::Transaction &txn,
+    PendingPhase1(uint64_t reqId, int group, const proto::Transaction &txn,
         const std::string &txnDigest, const transport::Configuration *config,
-        KeyManager *keyManager, bool signedMessages, bool hashDigest) :
+        KeyManager *keyManager, bool validateProofs, bool signedMessages, bool hashDigest) :
         reqId(reqId), requestTimeout(nullptr), decisionTimeout(nullptr),
         decisionTimeoutStarted(false), txn_(txn), txnDigest_(txnDigest),
-        p1Validator(&txn_, &txnDigest_, config, keyManager, signedMessages,
+        p1Validator(group, &txn_, &txnDigest_, config, keyManager, validateProofs,
+            signedMessages,
             hashDigest), decision(proto::ABORT), fast(false) { }
     ~PendingPhase1() {
       if (requestTimeout != nullptr) {
@@ -155,10 +154,7 @@ class ShardClient : public TransportReceiver {
     Timeout *requestTimeout;
     Timeout *decisionTimeout;
     bool decisionTimeoutStarted;
-    std::map<proto::Phase1Reply::ConcurrencyControlResult,
-      std::vector<proto::Phase1Reply>> phase1Replies;
-    std::map<proto::Phase1Reply::ConcurrencyControlResult,
-      std::vector<proto::SignedMessage>> signedPhase1Replies;
+    std::map<proto::ConcurrencyControl::Result, proto::Signatures> p1ReplySigs;
     phase1_callback pcb;
     phase1_timeout_callback ptcb;
     proto::Transaction txn_;
@@ -166,6 +162,7 @@ class ShardClient : public TransportReceiver {
     Phase1Validator p1Validator;
     proto::CommitDecision decision;
     bool fast;
+    proto::CommittedProof conflict;
   };
 
   struct PendingPhase2 {
@@ -180,8 +177,7 @@ class ShardClient : public TransportReceiver {
     proto::CommitDecision decision;
     Timeout *requestTimeout;
 
-    std::vector<proto::Phase2Reply> phase2Replies;
-    std::vector<proto::SignedMessage> signedPhase2Replies;
+    proto::Signatures p2ReplySigs;
     uint64_t matchingReplies;
     phase2_callback pcb;
     phase2_timeout_callback ptcb;
@@ -209,10 +205,8 @@ class ShardClient : public TransportReceiver {
 
   /* Callbacks for hearing back from a shard for an operation. */
   void HandleReadReply(const proto::ReadReply &readReply);
-  void HandlePhase1Reply(const proto::Phase1Reply &phase1Reply,
-      const proto::SignedMessage &signedPhase1Reply);
-  void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply,
-      const proto::SignedMessage &signedPhase2Reply);
+  void HandlePhase1Reply(const proto::Phase1Reply &phase1Reply);
+  void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply);
 
   void Phase1Decision(uint64_t reqId);
   void Phase1Decision(

@@ -67,45 +67,24 @@ Server::~Server() {
 }
 
 void Server::ReceiveMessage(const TransportAddress &remote,
-      const std::string &t, const std::string &d, void *meta_data) {
-  const std::string *type;
-  const std::string *data;
-  std::string signedType;
-  std::string signedData;
-  if (t == signedMessage.GetTypeName()) {
-    if (!signedMessage.ParseFromString(d)) {
-      return;
-    }
-
-    type = &signedType;
-    data = &signedData;
-    if (!ValidateSignedMessage(signedMessage, keyManager, signedData, signedType)) {
-      Debug("VALIDATE failed for SignedMessage from %lu.",
-          signedMessage.process_id());
-      return;
-    }
-  } else {
-    type = &t;
-    data = &d;
-  }
-
-  if (*type == read.GetTypeName()) {
-    read.ParseFromString(*data);
+      const std::string &type, const std::string &data, void *meta_data) {
+  if (type == read.GetTypeName()) {
+    read.ParseFromString(data);
     HandleRead(remote, read);
-  } else if (*type == phase1.GetTypeName()) {
-    phase1.ParseFromString(*data);
+  } else if (type == phase1.GetTypeName()) {
+    phase1.ParseFromString(data);
     HandlePhase1(remote, phase1);
-  } else if (*type == phase2.GetTypeName()) {
-    phase2.ParseFromString(*data);
+  } else if (type == phase2.GetTypeName()) {
+    phase2.ParseFromString(data);
     HandlePhase2(remote, phase2);
-  } else if (*type == writeback.GetTypeName()) {
-    writeback.ParseFromString(*data);
+  } else if (type == writeback.GetTypeName()) {
+    writeback.ParseFromString(data);
     HandleWriteback(remote, writeback);
-  } else if (*type == abort.GetTypeName()) {
-    abort.ParseFromString(*data);
-    HandleAbort(remote, abort, signedMessage.process_id());
+  } else if (type == abort.GetTypeName()) {
+    abort.ParseFromString(data);
+    HandleAbort(remote, abort);
   } else {
-    Panic("Received unexpected message type: %s", type->c_str());
+    Panic("Received unexpected message type: %s", type.c_str());
   }
 }
 
@@ -194,8 +173,8 @@ void Server::HandleRead(const TransportAddress &remote,
 
         if (signedMessages) {
           signedMessage.Clear();
-          SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id, signedMessage);
-          *readReply.mutable_signed_prepared() = signedMessage;
+          SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id,
+              readReply.mutable_signed_prepared());
         } else {
           *readReply.mutable_prepared() = preparedWrite;
         }
@@ -214,10 +193,9 @@ void Server::HandlePhase1(const TransportAddress &remote,
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
 
-  if (validateProofs) {
+  if (validateProofs && signedMessages) {
     for (const auto &dep : msg.txn().deps()) {
-      if (!ValidateDependency(dep, &config, readDepSize, signedMessages,
-            keyManager)) {
+      if (!ValidateDependency(dep, &config, readDepSize, keyManager)) {
         Debug("VALIDATE Dependency failed for txn %s.",
             BytesToHex(txnDigest, 16).c_str());
         // safe to ignore Byzantine client
@@ -229,12 +207,12 @@ void Server::HandlePhase1(const TransportAddress &remote,
   ongoing[txnDigest] = msg.txn();
 
   Timestamp retryTs;
-  proto::Phase1Reply::ConcurrencyControlResult result = DoOCCCheck(msg.req_id(),
+  proto::ConcurrencyControl::Result result = DoOCCCheck(msg.req_id(),
       remote, txnDigest, msg.txn(), retryTs, conflict);
 
   // p1Decisions[txnDigest] = result;
 
-  if (result != proto::Phase1Reply::WAIT) {
+  if (result != proto::ConcurrencyControl::WAIT) {
     SendPhase1Reply(msg.req_id(), result, conflict, txnDigest, remote);
   }
 }
@@ -242,17 +220,70 @@ void Server::HandlePhase1(const TransportAddress &remote,
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
   const proto::Transaction *txn;
+  std::string computedTxnDigest;
+  const std::string *txnDigest = &computedTxnDigest;
+  if (validateProofs) {
+    if (!msg.has_txn() && !msg.has_txn_digest()) {
+      Debug("PHASE2 message contains neither txn nor txn_digest.");
+      return;
+    } 
+
+    if (msg.has_txn_digest()) {
+      auto txnItr = ongoing.find(msg.txn_digest());
+      if (txnItr == ongoing.end()) {
+        Debug("PHASE2[%s] message does not contain txn, but have not seen"
+            " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
+        return;
+      }
+
+      txn = &txnItr->second;
+      txnDigest = &msg.txn_digest();
+    } else {
+      txn = &msg.txn();
+      computedTxnDigest = TransactionDigest(msg.txn(), hashDigest);
+      txnDigest = &computedTxnDigest;
+    }
+  }
+
+  Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
+
+  if (validateProofs && signedMessages && !ValidateP1Replies(msg.decision(),
+        false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config)) {
+    Debug("VALIDATE P1Replies failed.");
+    return;
+  }
+
+  phase2Reply.Clear();
+  phase2Reply.set_req_id(msg.req_id());
+  phase2Reply.mutable_p2_decision()->set_decision(msg.decision()); 
+  if (validateProofs) {
+    *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
+
+    if (signedMessages) {
+      proto::Phase2Decision p2Decision(phase2Reply.p2_decision());
+      SignMessage(p2Decision, keyManager->GetPrivateKey(id), id,
+          phase2Reply.mutable_signed_p2_decision());
+    }
+  }
+
+  transport->SendMessage(this, remote, phase2Reply);
+  Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
+}
+
+void Server::HandleWriteback(const TransportAddress &remote,
+    const proto::Writeback &msg) {
+  const proto::Transaction *txn;
   const std::string *txnDigest;
   std::string computedTxnDigest;
   if (!msg.has_txn() && !msg.has_txn_digest()) {
-    Debug("PHASE2 message contains neither txn nor txn_digest.");
+    Debug("WRITEBACK message contains neither txn nor txn_digest.");
     return;
   } 
-  
+
   if (msg.has_txn_digest()) {
     auto txnItr = ongoing.find(msg.txn_digest());
     if (txnItr == ongoing.end()) {
-      Debug("PHASE2[%s] message does not contain txn, but have not seen"
+      Debug("WRITEBACK[%s] message does not contain txn, but have not seen"
           " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
       return;
     }
@@ -265,179 +296,94 @@ void Server::HandlePhase2(const TransportAddress &remote,
     txnDigest = &computedTxnDigest;
   }
 
-  Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
-
-  proto::CommitDecision decision;
-  // We can drop message by returning without responding if client misbehaves
-  if (validateProofs) {
-    std::map<int, std::vector<const proto::Phase1Reply *>> groupedPhase1Replies;
-    if (signedMessages) {
-      for (const auto &group : msg.signed_p1_replies().replies()) {
-        auto &phase1Replies = groupedPhase1Replies[group.first];
-        for (const auto &signedPhase1Reply : group.second.msgs()) {
-          proto::Phase1Reply *p1Reply = new proto::Phase1Reply();
-          if (ValidateSignedMessage(signedPhase1Reply, keyManager, *p1Reply)) {
-            phase1Replies.push_back(p1Reply);
-          } else {
-            Debug("Invalid Phase1Reply for group %ld.", group.first);
-            return;
-          }
-        }
-      }
-    } else {
-      for (const auto &group : msg.p1_replies().replies()) {
-        auto &phase1Replies = groupedPhase1Replies[group.first];
-        for (const auto &p1Reply : group.second.replies()) {
-          phase1Replies.push_back(&p1Reply);
-        }
-      }
-    }
-    
-    bool validAbort = false;
-    std::set<int> groupsCommitted;
-    for (const auto &phase1Replies : groupedPhase1Replies) {
-      Phase1Validator p1Validator(txn, txnDigest, &config, keyManager,
-          signedMessages, hashDigest);
-
-      bool done = false;
-      for (size_t i = 0; i < phase1Replies.second.size(); ++i) {
-        const proto::SignedMessage *signedP1Reply = nullptr;
-        if (signedMessages) {
-          auto itr = msg.signed_p1_replies().replies().find(
-              phase1Replies.first);
-          signedP1Reply = &itr->second.msgs()[i];
-        }
-        
-        if (!p1Validator.ProcessMessage(phase1Replies.first, phase1Replies.second[i],
-            signedP1Reply)) {
-          Debug("VALIDATE failed with a proof of misbehavior.");
-          return;
-        }
-
-        switch (p1Validator.GetState()) {
-          case FAST_COMMIT:
-          case SLOW_COMMIT_TENTATIVE:
-            groupsCommitted.insert(phase1Replies.first); 
-            done = true;
-            break;
-          case FAST_ABORT:
-          case SLOW_ABORT_TENTATIVE:
-            validAbort = true;
-            done = true;
-            break;
-          default:
-            break;
-        }
-
-        if (done) {
-          break;
-        }
-      }
-
-      if (validAbort) {
-        break;
-      }
-    }
-
-    if (validAbort) {
-      decision = proto::ABORT;
-    } else {
-      for (auto group : txn->involved_groups()) {
-        if (groupsCommitted.find(group) == groupsCommitted.end()) {
-          Debug("No Phase1Replies for involved_group %ld.", group);
-          return;
-        }
-      }
-      decision = proto::COMMIT;
-    }
-  } else {
-    UW_ASSERT(msg.has_decision());
-    decision = msg.decision();
-  }
-
-  phase2Reply.Clear();
-  phase2Reply.set_req_id(msg.req_id());
-  phase2Reply.set_decision(decision); 
-  *phase2Reply.mutable_txn_digest() = *txnDigest;
-
-  // p2Decisions[phase2Reply.txn_digest()] = decision;
-
-  if (signedMessages) {
-    signedMessage.Clear();
-    SignMessage(phase2Reply, keyManager->GetPrivateKey(id), id, signedMessage);
-    transport->SendMessage(this, remote, signedMessage);
-  } else {
-    transport->SendMessage(this, remote, phase2Reply);
-  }
-}
-
-void Server::HandleWriteback(const TransportAddress &remote,
-    const proto::Writeback &msg) {
-  const proto::Transaction *txn;
-  if (validateProofs) {
-    txn = &msg.proof().txn();
-  } else {
-    if (msg.decision() == proto::COMMIT && !msg.has_txn()) {
-      Warning("Malformed Writeback: commit must contain txn.");
-      return;
-    }
-    txn = &msg.txn();
-  }
-
-  std::string computedTxnDigest;
-  const std::string *txnDigest;
-  if (msg.decision() == proto::COMMIT) {
-    computedTxnDigest = TransactionDigest(*txn, hashDigest);
-    txnDigest = &computedTxnDigest;
-  } else {
-    if (!msg.has_txn_digest()) {
-      Warning("Malformed Writeback: abort must contain txn_digest.");
-      return;
-    }
-    txnDigest = &msg.txn_digest();
-  }
-
   Debug("WRITEBACK[%s] with decision %d.",
       BytesToHex(*txnDigest, 16).c_str(), msg.decision());
 
+  proto::CommittedProof proof;
+  if (validateProofs) {
+    if (signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()) {
+      if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
+            keyManager, &config)) {
+        Debug("WRITEBACK[%s] Failed to validate P1 replies for fast commit.",
+            BytesToHex(*txnDigest, 16).c_str());
+        return;
+      }
+
+      *proof.mutable_p1_sigs() = msg.p1_sigs();
+    } else if (signedMessages && msg.has_p2_sigs()) {
+      if (!ValidateP2Replies(msg.decision(), txnDigest, msg.p2_sigs(),
+            keyManager, &config)) {
+        Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
+            BytesToHex(*txnDigest, 16).c_str(), msg.decision());
+        return;
+      }
+
+      if (msg.decision() == proto::COMMIT) {
+        *proof.mutable_p2_sigs() = msg.p2_sigs();
+      }
+    } else if (msg.decision() == proto::ABORT && msg.has_conflict()) {
+      std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
+          hashDigest);
+      if (!ValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
+            txnDigest, signedMessages, keyManager, &config)) {
+        Debug("WRITEBACK[%s] Failed to validate committed conflict for fast abort.",
+            BytesToHex(*txnDigest, 16).c_str());
+        return;
+      }
+    } else if (signedMessages) {
+      Debug("WRITEBACK[%s] decision %d, has_p1_sigs %d, has_p2_sigs %d, and"
+          " has_conflict %d.", BytesToHex(*txnDigest, 16).c_str(),
+          msg.decision(), msg.has_p1_sigs(), msg.has_p2_sigs(), msg.has_conflict());
+      return;
+    }
+  }
+
   if (msg.decision() == proto::COMMIT) {
     if (validateProofs) {
-      if (!ValidateProofCommit(msg.proof(), *txnDigest, &config, signedMessages,
-            keyManager)) {
-        Debug("VALIDATE CommitProof commit failed for txn %s.", BytesToHex(
-              *txnDigest, 16).c_str());
-        // ignore Writeback without valid proof
-        return;
-      }
+      *proof.mutable_txn() = *txn;
     }
-    Commit(*txnDigest, *txn, msg.proof());
+    Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
+    Commit(*txnDigest, *txn, proof);
   } else {
-    if (validateProofs) {
-      if (!ValidateProofAbort(msg.proof(), &config, signedMessages, hashDigest,
-            keyManager)) {
-        Debug("VALIDATE CommitProof abort failed for txn %s.", BytesToHex(
-              *txnDigest, 16).c_str());
-        // ignore Writeback without valid proof
-        return;
-      }
-    }
-
+    Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
     Abort(*txnDigest);
   }
 }
 
 void Server::HandleAbort(const TransportAddress &remote,
-    const proto::Abort &msg, uint64_t senderId) {
-  if (signedMessages && msg.ts().id() != senderId) {
-    return;
+    const proto::Abort &msg) {
+  const proto::AbortInternal *abort;
+  if (validateProofs && signedMessages) {
+    if (!msg.has_signed_internal()) {
+      return;
+    }
+
+    if (!crypto::Verify(keyManager->GetPublicKey(msg.signed_internal().process_id()),
+          msg.signed_internal().data(),
+          msg.signed_internal().signature())) {
+      return;
+    }
+
+    if (!abortInternal.ParseFromString(msg.signed_internal().data())) {
+      return;
+    }
+
+    if (abortInternal.ts().id() != msg.signed_internal().process_id()) {
+      return;
+    }
+
+    abort = &abortInternal;
+  } else {
+    UW_ASSERT(msg.has_internal());
+    abort = &msg.internal();
   }
 
-  for (const auto &read : msg.read_set()) {
-    rts[read].erase(msg.ts());
+  for (const auto &read : abort->read_set()) {
+    rts[read].erase(abort->ts());
   }
 }
 
-proto::Phase1Reply::ConcurrencyControlResult Server::DoOCCCheck(
+proto::ConcurrencyControl::Result Server::DoOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
     Timestamp &retryTs, proto::CommittedProof &conflict) {
@@ -448,11 +394,11 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoOCCCheck(
       return DoMVTSOOCCCheck(reqId, remote, txnDigest, txn, conflict);
     default:
       Panic("Unknown OCC type: %d.", occType);
-      return proto::Phase1Reply::ABORT;
+      return proto::ConcurrencyControl::ABORT;
   }
 }
 
-proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
+proto::ConcurrencyControl::Result Server::DoTAPIROCCCheck(
     const std::string &txnDigest, const proto::Transaction &txn,
     Timestamp &retryTs) {
   Debug("[%s] START PREPARE", txnDigest.c_str());
@@ -460,7 +406,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
   if (prepared.find(txnDigest) != prepared.end()) {
     if (prepared[txnDigest].first == txn.timestamp()) {
       Warning("[%s] Already Prepared!", txnDigest.c_str());
-      return proto::Phase1Reply::COMMIT;
+      return proto::ConcurrencyControl::COMMIT;
     } else {
       // run the checks again for a new timestamp
       Clean(txnDigest);
@@ -499,7 +445,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
             BytesToHex(read.key(), 16).c_str());
         stats.Increment("cc_abstains", 1);
         stats.Increment("cc_abstains_rw_conflict", 1);
-        return proto::Phase1Reply::ABSTAIN;
+        return proto::ConcurrencyControl::ABSTAIN;
       }
     } else {
       // if value is not still valtxnDigest, then abort.
@@ -513,7 +459,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
           txn.timestamp().timestamp(), range.second.getTimestamp());
       stats.Increment("cc_aborts", 1);
       stats.Increment("cc_aborts_rw_conflict", 1);
-      return proto::Phase1Reply::ABORT;
+      return proto::ConcurrencyControl::ABORT;
     }
   }
 
@@ -532,7 +478,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
             write.key().c_str());
         retryTs = val.first;
         stats.Increment("cc_retries_committed_write", 1);
-        return proto::Phase1Reply::ABSTAIN;
+        return proto::ConcurrencyControl::ABSTAIN;
       }
 
       // if last committed read is bigger than the timestamp, can't
@@ -546,7 +492,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
         Debug("[%s] RETRY wr conflict w/ prepared key:%s", txnDigest.c_str(),
             write.key().c_str());
         retryTs = lastRead;
-        return proto::Phase1Reply::ABSTAIN;
+        return proto::ConcurrencyControl::ABSTAIN;
       }
     }
 
@@ -560,7 +506,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
             write.key().c_str());
         retryTs = it->first;
         stats.Increment("cc_retries_prepared_write", 1);
-        return proto::Phase1Reply::ABSTAIN;
+        return proto::ConcurrencyControl::ABSTAIN;
       }
     }
 
@@ -572,7 +518,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
       Debug("[%s] ABSTAIN wr conflict w/ prepared key: %s",
             txnDigest.c_str(), write.key().c_str());
       stats.Increment("cc_abstains", 1);
-      return proto::Phase1Reply::ABSTAIN;
+      return proto::ConcurrencyControl::ABSTAIN;
     }
   }
 
@@ -581,10 +527,10 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoTAPIROCCCheck(
 
   Debug("[%s] PREPARED TO COMMIT", txnDigest.c_str());
 
-  return proto::Phase1Reply::COMMIT;
+  return proto::ConcurrencyControl::COMMIT;
 }
 
-proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
+proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
     proto::CommittedProof &conflict) {
@@ -600,7 +546,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
         ts.getTimestamp());
     stats.Increment("cc_abstains", 1);
     stats.Increment("cc_abstains_watermark", 1);
-    return proto::Phase1Reply::ABSTAIN;
+    return proto::ConcurrencyControl::ABSTAIN;
   }
 
   for (const auto &read : txn.read_set()) {
@@ -630,7 +576,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
             committedWrite.first.getID(), ts.getTimestamp(), ts.getID());
         stats.Increment("cc_aborts", 1);
         stats.Increment("cc_aborts_wr_conflict", 1);
-        return proto::Phase1Reply::ABORT;
+        return proto::ConcurrencyControl::ABORT;
       }
     }
 
@@ -649,7 +595,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
               preparedTs.first.getID(), ts.getTimestamp(), ts.getID());
           stats.Increment("cc_abstains", 1);
           stats.Increment("cc_abstains_wr_conflict", 1);
-          return proto::Phase1Reply::ABSTAIN;
+          return proto::ConcurrencyControl::ABSTAIN;
         }
       }
     }
@@ -665,23 +611,27 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
     if (committedReadsItr != committedReads.end() && committedReadsItr->second.size() > 0) {
       for (auto ritr = committedReadsItr->second.rbegin();
           ritr != committedReadsItr->second.rend(); ++ritr) {
-        if (ts >= ritr->first) {
+        if (ts >= std::get<0>(*ritr)) {
           // iterating over committed reads from largest to smallest committed txn ts
           //    if ts is larger than current itr, it is also larger than all subsequent itrs
           break;
-        } else if (ritr->second < ts) {
+        } else if (std::get<1>(*ritr) < ts) {
+          if (validateProofs) {
+            conflict = *std::get<2>(*ritr);
+          } 
           Debug("[%lu:%lu][%s] ABORT rw conflict committed read for key %s: committed"
               " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
               txn.client_id(),
               txn.client_seq_num(),
               BytesToHex(txnDigest, 16).c_str(),
               BytesToHex(write.key(), 16).c_str(),
-              ritr->second.getTimestamp(),
-              ritr->second.getID(), ts.getTimestamp(),
-              ts.getID(), ritr->first.getTimestamp(), ritr->first.getID());
+              std::get<1>(*ritr).getTimestamp(),
+              std::get<1>(*ritr).getID(), ts.getTimestamp(),
+              ts.getID(), std::get<0>(*ritr).getTimestamp(),
+              std::get<0>(*ritr).getID());
           stats.Increment("cc_aborts", 1);
           stats.Increment("cc_aborts_rw_conflict", 1);
-          return proto::Phase1Reply::ABORT;
+          return proto::ConcurrencyControl::ABORT;
         }
       }
     }
@@ -720,7 +670,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
               preparedReadTxn->timestamp().id());
           stats.Increment("cc_abstains", 1);
           stats.Increment("cc_abstains_rw_conflict", 1);
-          return proto::Phase1Reply::ABSTAIN;
+          return proto::ConcurrencyControl::ABSTAIN;
         }
       }
     }
@@ -753,7 +703,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
                 rtsLB->getID(), ts.getTimestamp(), ts.getID());
             stats.Increment("cc_abstains", 1);
             stats.Increment("cc_abstains_rts", 1);
-            return proto::Phase1Reply::ABSTAIN;
+            return proto::ConcurrencyControl::ABSTAIN;
           }
         }
       }
@@ -779,7 +729,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
       dependents[dep.prepared().txn_digest()].insert(txnDigest);
       auto dependenciesItr = waitingDependencies.find(txnDigest);
       if (dependenciesItr == waitingDependencies.end()) {
-        auto inserted =waitingDependencies.insert(std::make_pair(txnDigest,
+        auto inserted = waitingDependencies.insert(std::make_pair(txnDigest,
               WaitingDependency()));
         UW_ASSERT(inserted.second);
         dependenciesItr = inserted.first;
@@ -792,7 +742,7 @@ proto::Phase1Reply::ConcurrencyControlResult Server::DoMVTSOOCCCheck(
 
   if (!allFinished) {
     stats.Increment("cc_waits", 1);
-    return proto::Phase1Reply::WAIT;
+    return proto::ConcurrencyControl::WAIT;
   } else {
     return CheckDependencies(txn);
   }
@@ -876,33 +826,29 @@ void Server::GetCommittedWrites(const std::string &key, const Timestamp &ts,
   }
 }
 
-void Server::GetCommittedReads(const std::string &key,
-      std::set<std::pair<Timestamp, Timestamp>> &reads) {
-  auto itr = committedReads.find(key);
-  if (itr != committedReads.end()) {
-    reads = itr->second;
-  }
-}
-
 void Server::Commit(const std::string &txnDigest,
     const proto::Transaction &txn, const proto::CommittedProof &proof) {
   Timestamp ts(txn.timestamp());
+
+  auto committedItr = committed.insert(std::make_pair(txnDigest, proof));
+
+  Value val;
+  if (validateProofs) {
+    UW_ASSERT(proof.has_txn());
+    val.proof = &committedItr.first->second;
+  }
+
   for (const auto &read : txn.read_set()) {
     if (!IsKeyOwned(read.key())) {
       continue;
     }
     store.commitGet(read.key(), read.readtime(), ts);
     //Latency_Start(&committedReadInsertLat);
-    committedReads[read.key()].insert(std::make_pair(ts, read.readtime()));
+    committedReads[read.key()].insert(std::make_tuple(ts, read.readtime(), &committedItr.first->second));
     //uint64_t ns = Latency_End(&committedReadInsertLat);
     //stats.Add("committed_read_insert_lat_" + BytesToHex(read.key(), 18), ns);
   }
   
-  auto committedItr = committed.insert(std::make_pair(txnDigest, proof));
-  Value val;
-  if (validateProofs) {
-    val.proof = &committedItr.first->second;
-  }
 
   for (const auto &write : txn.write_set()) {
     if (!IsKeyOwned(write.key())) {
@@ -960,8 +906,9 @@ void Server::CheckDependents(const std::string &txnDigest) {
 
       dependenciesItr->second.deps.erase(txnDigest);
       if (dependenciesItr->second.deps.size() == 0) {
-        proto::Phase1Reply::ConcurrencyControlResult result = CheckDependencies(
+        proto::ConcurrencyControl::Result result = CheckDependencies(
             dependent);
+        UW_ASSERT(result != proto::ConcurrencyControl::ABORT);
         waitingDependencies.erase(dependent);
         proto::CommittedProof conflict;
         SendPhase1Reply(dependenciesItr->second.reqId, result, conflict, dependent,
@@ -971,14 +918,14 @@ void Server::CheckDependents(const std::string &txnDigest) {
   }
 }
 
-proto::Phase1Reply::ConcurrencyControlResult Server::CheckDependencies(
+proto::ConcurrencyControl::Result Server::CheckDependencies(
     const std::string &txnDigest) {
   auto txnItr = ongoing.find(txnDigest);
   UW_ASSERT(txnItr != ongoing.end());
   return CheckDependencies(txnItr->second);
 }
 
-proto::Phase1Reply::ConcurrencyControlResult Server::CheckDependencies(
+proto::ConcurrencyControl::Result Server::CheckDependencies(
     const proto::Transaction &txn) {
   for (const auto &dep : txn.deps()) {
     if (dep.involved_group() != groupIdx) {
@@ -988,15 +935,15 @@ proto::Phase1Reply::ConcurrencyControlResult Server::CheckDependencies(
       if (Timestamp(dep.prepared().timestamp()) > Timestamp(txn.timestamp())) {
         stats.Increment("cc_aborts", 1);
         stats.Increment("cc_aborts_dep_ts", 1);
-        return proto::Phase1Reply::ABORT;
+        return proto::ConcurrencyControl::ABSTAIN;
       }
     } else {
       stats.Increment("cc_aborts", 1);
       stats.Increment("cc_aborts_dep_aborted", 1);
-      return proto::Phase1Reply::ABORT;
+      return proto::ConcurrencyControl::ABSTAIN;
     }
   } 
-  return proto::Phase1Reply::COMMIT;
+  return proto::ConcurrencyControl::COMMIT;
 }
 
 bool Server::CheckHighWatermark(const Timestamp &ts) {
@@ -1008,27 +955,25 @@ bool Server::CheckHighWatermark(const Timestamp &ts) {
 }
 
 void Server::SendPhase1Reply(uint64_t reqId,
-    proto::Phase1Reply::ConcurrencyControlResult result,
+    proto::ConcurrencyControl::Result result,
     const proto::CommittedProof &conflict, const std::string &txnDigest,
     const TransportAddress &remote) {
   phase1Reply.Clear();
   phase1Reply.set_req_id(reqId);
-  phase1Reply.set_ccr(result);
 
+  phase1Reply.mutable_cc()->set_ccr(result);
   if (validateProofs) {
-    if (conflict.has_txn()) {
-      *phase1Reply.mutable_committed_conflict() = conflict;
+    *phase1Reply.mutable_cc()->mutable_txn_digest() = txnDigest;
+    if (result == proto::ConcurrencyControl::ABORT) {
+      *phase1Reply.mutable_cc()->mutable_committed_conflict() = conflict;
+    } else if (signedMessages) {
+      proto::ConcurrencyControl cc(phase1Reply.cc());
+      SignMessage(cc, keyManager->GetPrivateKey(id), id,
+          phase1Reply.mutable_signed_cc());
     }
-    *phase1Reply.mutable_txn_digest() = txnDigest;
   }
 
-  if (signedMessages) {
-    signedMessage.Clear();
-    SignMessage(phase1Reply, keyManager->GetPrivateKey(id), id, signedMessage);
-    transport->SendMessage(this, remote, signedMessage);
-  } else {
-    transport->SendMessage(this, remote, phase1Reply);
-  }
+  transport->SendMessage(this, remote, phase1Reply);
 }
 
 void Server::CleanDependencies(const std::string &txnDigest) {

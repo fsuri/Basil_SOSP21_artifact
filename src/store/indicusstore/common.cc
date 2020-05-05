@@ -9,128 +9,164 @@
 
 namespace indicusstore {
 
-bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
-    KeyManager *keyManager, ::google::protobuf::Message &plaintextMsg) {
-  proto::PackedMessage packedMessage;
-  if (!__PreValidateSignedMessage(signedMessage, keyManager, packedMessage)) {
-    return false;
-  }
-
-  if (packedMessage.type() != plaintextMsg.GetTypeName()) {
-    return false;
-  }
-
-  plaintextMsg.ParseFromString(packedMessage.msg());
-  return true;
-}
-
-bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
-    KeyManager *keyManager, std::string &data, std::string &type) {
-  proto::PackedMessage packedMessage;
-  if (!__PreValidateSignedMessage(signedMessage, keyManager, packedMessage)) {
-    return false;
-  }
-
-  data = packedMessage.msg();
-  type = packedMessage.type();
-  return true;
-}
-
-bool __PreValidateSignedMessage(const proto::SignedMessage &signedMessage,
-    KeyManager *keyManager, proto::PackedMessage &packedMessage) {
-  crypto::PubKey replicaPublicKey = keyManager->GetPublicKey(
-      signedMessage.process_id());
-  // verify that the replica actually sent this reply and that we are expecting
-  // this reply
-  if (!crypto::IsMessageValid(replicaPublicKey, signedMessage.packed_msg(),
-        &signedMessage)) {
-    return false;
-  }
-
-  return packedMessage.ParseFromString(signedMessage.packed_msg());
-}
-
 void SignMessage(const ::google::protobuf::Message &msg,
     const crypto::PrivKey &privateKey, uint64_t processId,
-    proto::SignedMessage &signedMessage) {
-  proto::PackedMessage packedMsg;
-  *packedMsg.mutable_msg() = msg.SerializeAsString();
-  *packedMsg.mutable_type() = msg.GetTypeName();
-  std::string msgData = packedMsg.SerializeAsString();
-  crypto::SignMessage(privateKey, msgData, signedMessage);
-  signedMessage.set_packed_msg(msgData);
-  signedMessage.set_process_id(processId);
+    proto::SignedMessage *signedMessage) {
+  signedMessage->set_process_id(processId);
+  UW_ASSERT(msg.SerializeToString(signedMessage->mutable_data()));
+  *signedMessage->mutable_signature() = crypto::Sign(privateKey,
+      signedMessage->data());
 }
 
-proto::CommitDecision IndicusDecide(
-    const std::map<int, std::vector<proto::Phase1Reply>> &replies,
-    const transport::Configuration *config, bool validateProofs,
-    const proto::Transaction &transaction, const std::string &txnDigest,
-    bool signedMessages, KeyManager *keyManager) {
-  bool fast;
-  for (const auto &groupReplies : replies) {
-    proto::CommitDecision groupDecision = IndicusShardDecide(groupReplies.second,
-        config, validateProofs, transaction, txnDigest, signedMessages, keyManager, fast);
-    if (groupDecision == proto::ABORT) {
-      return proto::ABORT;
+bool ValidateCommittedConflict(const proto::CommittedProof &proof,
+    const std::string *committedTxnDigest, const proto::Transaction *txn,
+    const std::string *txnDigest, bool signedMessages, KeyManager *keyManager,
+    const transport::Configuration *config) {
+  if (signedMessages && !ValidateCommittedProof(proof, committedTxnDigest,
+        keyManager, config)) {
+    return false;
+  }
+
+  if (!TransactionsConflict(proof.txn(), *txn)) {
+    Debug("Committed txn [%lu:%lu][%s] does not conflict with this txn [%lu:%lu][%s].",
+        proof.txn().client_id(), proof.txn().client_seq_num(),
+        BytesToHex(*committedTxnDigest, 16).c_str(),
+        txn->client_id(), txn->client_seq_num(),
+        BytesToHex(*txnDigest, 16).c_str());
+    return false;
+  }
+
+  return true;
+}
+
+bool ValidateCommittedProof(const proto::CommittedProof &proof,
+    const std::string *committedTxnDigest, KeyManager *keyManager,
+    const transport::Configuration *config) {
+  if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
+    // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
+    //    without needing to write all existing data with transactions
+    return true;
+  }
+
+  if (proof.has_p1_sigs()) {
+    return ValidateP1Replies(proto::COMMIT, true, &proof.txn(), committedTxnDigest,
+        proof.p1_sigs(), keyManager, config);
+  } else if (proof.has_p2_sigs()) {
+    return ValidateP2Replies(proto::COMMIT, committedTxnDigest, proof.p2_sigs(),
+        keyManager, config);
+  } else {
+    Debug("Proof has neither P1 nor P2 sigs.");
+    return false;
+  }
+}
+
+bool ValidateP1Replies(proto::CommitDecision decision,
+    bool fast,
+    const proto::Transaction *txn,
+    const std::string *txnDigest,
+    const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager,
+    const transport::Configuration *config) {
+  proto::ConcurrencyControl concurrencyControl;
+  concurrencyControl.Clear();
+  *concurrencyControl.mutable_txn_digest() = *txnDigest;
+  uint32_t quorumSize = 0;
+  if (fast && decision == proto::COMMIT) {
+    concurrencyControl.set_ccr(proto::ConcurrencyControl::COMMIT);
+    quorumSize = config->n;
+  } else if (decision == proto::COMMIT) {
+    concurrencyControl.set_ccr(proto::ConcurrencyControl::COMMIT);
+    quorumSize = SlowCommitQuorumSize(config);
+  } else if (decision == proto::ABORT) {
+    concurrencyControl.set_ccr(proto::ConcurrencyControl::ABSTAIN);
+    quorumSize = SlowAbortQuorumSize(config);
+  } else {
+    // NOT_REACHABLE();
+    return false;
+  }
+
+  std::string ccMsg;
+  concurrencyControl.SerializeToString(&ccMsg);
+  
+  std::set<int> groupsVerified;
+  for (const auto &sigs : groupedSigs.grouped_sigs()) {
+    uint32_t verified = 0;
+    for (const auto &sig : sigs.second.sigs()) {
+      if (!IsReplicaInGroup(sig.process_id(), sigs.first, config)) {
+        Debug("Signature for group %lu from replica %lu who is not in group.",
+            sigs.first, sig.process_id());
+        return false;
+      }
+
+      Debug("Verifying %lu byte signature from replica %lu in group %lu.",
+          sig.signature().size(), sig.process_id(), sigs.first);
+      if (!crypto::Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
+              sig.signature())) {
+        Debug("Signature from replica %lu in group %lu is not valid.",
+            sig.process_id(), sigs.first);
+        return false;
+      }
+      verified++;
+    }
+
+    if (verified != quorumSize) {
+      Debug("Expected exactly %u sigs but processed %u.", quorumSize, verified);
+      return false;
+    }
+
+    groupsVerified.insert(sigs.first);
+  }
+
+  if (decision == proto::COMMIT) {
+    for (auto group : txn->involved_groups()) {
+      if (groupsVerified.find(group) == groupsVerified.end()) {
+        Debug("No Phase1Replies for involved_group %ld.", group);
+        return false;
+      }
     }
   }
-  return proto::COMMIT;
+
+  return true;
 }
 
-proto::CommitDecision IndicusShardDecide(
-    const std::vector<proto::Phase1Reply> &replies,
-    const transport::Configuration *config, bool validateProofs,
-    const proto::Transaction &txn,  const std::string &txnDigest,
-    bool signedMessages, KeyManager *keyManager, bool &fast) {
-  int commits = 0;
-  int abstains = 0;
+bool ValidateP2Replies(proto::CommitDecision decision,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager, const transport::Configuration *config) {
+  proto::Phase2Decision p2Decision;
+  p2Decision.Clear();
+  p2Decision.set_decision(decision);
+  *p2Decision.mutable_txn_digest() = *txnDigest;
 
-  Timestamp ts = 0;
-  proto::CommitDecision decision;
+  std::string p2DecisionMsg;
+  p2Decision.SerializeToString(&p2DecisionMsg);
 
-  for (const auto& reply : replies) {
-    if (reply.ccr() == proto::Phase1Reply::ABORT) {
-      if (validateProofs) {
-        if (!ValidateProofCommit(reply.committed_conflict(), txnDigest, config,
-              signedMessages, keyManager)) {
-          abstains++;
-          continue;
-        }
-
-        // TODO: this should be MVTSO conflict, not generic conflict
-        if (!TransactionsConflict(txn,
-              reply.committed_conflict().txn())) {
-          abstains++;
-          continue;
-        }
-      }
-      return proto::CommitDecision::ABORT;
-    } else if (reply.ccr() == proto::Phase1Reply::ABSTAIN) {
-      abstains++;
-    } else if (reply.ccr() == proto::Phase1Reply::COMMIT) {
-      commits++;
-    } // TODO: do we care about RETRY?
+  if (groupedSigs.grouped_sigs().size() != 1) {
+    Debug("Expected exactly 1 group but saw %lu", groupedSigs.grouped_sigs().size());
+    return false;
+  }
+  
+  const auto &sigs = groupedSigs.grouped_sigs().begin();
+  uint32_t verified = 0;
+  for (const auto &sig : sigs->second.sigs()) {
+    if (!crypto::Verify(keyManager->GetPublicKey(sig.process_id()), p2DecisionMsg,
+            sig.signature())) {
+      Debug("Signature from %lu is not valid.", sig.process_id());
+      return false;
+    }
+    verified++;
   }
 
-  if (commits == config->n) {
-    decision = proto::CommitDecision::COMMIT;
-    fast = true;
-  } else if (abstains >= 3 * config->f + 1) {
-    decision = proto::CommitDecision::ABORT;
-    fast = true;
-  } else if (commits >= 3 * config->f + 1) {
-    decision = proto::CommitDecision::COMMIT;
-    fast = false;
-  } else {
-    decision = proto::CommitDecision::ABORT;
-    fast = false;
+  if (verified != QuorumSize(config)) {
+    Debug("Expected exactly %lu sigs but processed %u.", QuorumSize(config),
+        verified);
+    return false;
   }
-  return decision;
+
+  return true;
 }
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,
-    const std::string &txnDigest,
+    const std::string *txnDigest,
     const std::string &key, const std::string &val, const Timestamp &timestamp,
     const transport::Configuration *config, bool signedMessages,
     KeyManager *keyManager) {
@@ -140,9 +176,9 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     return true;
   }
 
-  if (!ValidateProofCommit(proof, txnDigest, config, signedMessages,
-        keyManager)) {
-    Debug("VALIDATE CommitProof commit failed for txn %lu.%lu.",
+  if (signedMessages && !ValidateCommittedProof(proof, txnDigest,
+        keyManager, config)) {
+    Debug("VALIDATE CommittedProof failed for txn %lu.%lu.",
         proof.txn().client_id(), proof.txn().client_seq_num());
     return false;
   }
@@ -180,318 +216,22 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
   return true;
 }
 
-// Assume that txnDigest has been computed
-bool ValidateProofCommit(const proto::CommittedProof &proof,
-    const std::string &txnDigest,
-    const transport::Configuration *config, bool signedMessages,
-    KeyManager *keyManager) {
-  if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
-    // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
-    //    without needing to write all existing data with transactions
-    return true;
-  }
-
-  Debug("Validate proof commit for transaction %lu.%lu (%s).",
-      proof.txn().client_id(), proof.txn().client_seq_num(),
-      BytesToHex(txnDigest, 16).c_str());
-  if (signedMessages) {
-    if (proof.has_signed_p1_replies()) {
-      std::map<int, std::vector<proto::Phase1Reply>> groupedP1Replies;
-      for (const auto &signedP1Replies : proof.signed_p1_replies().replies()) {
-        std::vector<proto::Phase1Reply> p1Replies;
-        for (const auto &signedP1Reply : signedP1Replies.second.msgs()) {
-          proto::Phase1Reply reply;
-          Debug("Validate %d bytes P1 reply.", signedP1Reply.ByteSize());
-          if (!ValidateSignedMessage(signedP1Reply, keyManager, reply)) {
-            Debug("Signed P1 reply is not valid.");
-            return false;
-          }
-          
-          p1Replies.push_back(reply);
-        }
-        groupedP1Replies.insert(std::make_pair(signedP1Replies.first, p1Replies));
-      }
-      return ValidateP1RepliesCommit(groupedP1Replies, txnDigest, proof.txn(),
-          config);
-    } else if (proof.has_signed_p2_replies()) {
-      std::vector<proto::Phase2Reply> p2Replies;
-      for (const auto &signedP2Reply : proof.signed_p2_replies().msgs()) {
-        proto::Phase2Reply reply;
-        if (!ValidateSignedMessage(signedP2Reply, keyManager, reply)) {
-          Debug("Signed P2 reply is not valid.");
-          return false;
-        }
-          
-        p2Replies.push_back(reply);
-      }   
-      return ValidateP2RepliesCommit(p2Replies, txnDigest, proof.txn(), config);
-    } else {
-      Debug("Has no signed replies.");
-      return false;
-    }
-  } else {
-    if (proof.has_p1_replies()) {
-      std::map<int, std::vector<proto::Phase1Reply>> groupedP1Replies;
-      for (const auto &groupP1Replies : proof.p1_replies().replies()) {
-        std::vector<proto::Phase1Reply> p1Replies;
-        for (const auto &p1Reply : groupP1Replies.second.replies()) {
-          p1Replies.push_back(p1Reply);
-        }
-        groupedP1Replies.insert(std::make_pair(groupP1Replies.first, p1Replies));
-      }
-      return ValidateP1RepliesCommit(groupedP1Replies, txnDigest, proof.txn(),
-          config);
-    } else if (proof.has_p2_replies()) {
-      std::vector<proto::Phase2Reply> p2Replies;
-      for (const auto &p2Reply : proof.p2_replies().replies()) {
-        p2Replies.push_back(p2Reply);
-      }
-      return ValidateP2RepliesCommit(p2Replies, txnDigest, proof.txn(), config);
-    } else {
-      Debug("Has no replies.");
-      return false;
-    }
-  }
-}
-
-bool ValidateProofAbort(const proto::CommittedProof &proof,
-    const transport::Configuration *config, bool signedMessages,
-    bool hashDigest, KeyManager *keyManager) {
-  std::string txnDigest = TransactionDigest(proof.txn(), hashDigest);
-  Debug("Validate proof abort for transaction %lu.%lu (%s).", proof.txn().client_id(),
-      proof.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str());
-  if (signedMessages) {
-    if (proof.has_signed_p1_replies()) {
-      std::map<int, std::vector<proto::Phase1Reply>> groupedP1Replies;
-      for (const auto &signedP1Replies : proof.signed_p1_replies().replies()) {
-        std::vector<proto::Phase1Reply> p1Replies;
-        for (const auto &signedP1Reply : signedP1Replies.second.msgs()) {
-          proto::Phase1Reply reply;
-          if (!ValidateSignedMessage(signedP1Reply, keyManager, reply)) {
-            Debug("Signed P1 reply is not valid.");
-            return false;
-          }
-          
-          p1Replies.push_back(reply);
-        }
-        groupedP1Replies.insert(std::make_pair(signedP1Replies.first, p1Replies));
-      }
-      return ValidateP1RepliesAbort(groupedP1Replies, txnDigest, proof.txn(),
-          config, signedMessages, hashDigest, keyManager);
-    } else if (proof.has_signed_p2_replies()) {
-      std::vector<proto::Phase2Reply> p2Replies;
-      for (const auto &signedP2Reply : proof.signed_p2_replies().msgs()) {
-        proto::Phase2Reply reply;
-        if (!ValidateSignedMessage(signedP2Reply, keyManager, reply)) {
-          Debug("Signed P2 reply is not valid.");
-          return false;
-        }
-          
-        p2Replies.push_back(reply);
-      }   
-      return ValidateP2RepliesAbort(p2Replies, txnDigest, proof.txn(), config);
-    } else {
-      Debug("Has no signed replies.");
-      return false;
-    }
-  } else {
-    if (proof.has_p1_replies()) {
-      std::map<int, std::vector<proto::Phase1Reply>> groupedP1Replies;
-      for (const auto &groupP1Replies : proof.p1_replies().replies()) {
-        std::vector<proto::Phase1Reply> p1Replies;
-        for (const auto &p1Reply : groupP1Replies.second.replies()) {
-          p1Replies.push_back(p1Reply);
-        }
-        groupedP1Replies.insert(std::make_pair(groupP1Replies.first, p1Replies));
-      }
-      return ValidateP1RepliesAbort(groupedP1Replies, txnDigest, proof.txn(),
-          config, signedMessages, hashDigest, keyManager);
-    } else if (proof.has_p2_replies()) {
-      std::vector<proto::Phase2Reply> p2Replies;
-      for (const auto &p2Reply : proof.p2_replies().replies()) {
-        p2Replies.push_back(p2Reply);
-      }
-      return ValidateP2RepliesAbort(p2Replies, txnDigest, proof.txn(), config);
-    } else {
-      Debug("Has no replies.");
-      return false;
-    }
-  }
-}
-
-// Assume that digest has been computed from txn
-bool ValidateP1RepliesCommit(
-    const std::map<int, std::vector<proto::Phase1Reply>> &groupedP1Replies,
-    const std::string &txnDigest, const proto::Transaction &txn,
-    const transport::Configuration *config) {
-  // TODO: technically only need a single Phase1Reply that says commit ->
-  //    messages will all be the same
-  for (auto group : txn.involved_groups()) {
-    auto repliesItr = groupedP1Replies.find(group);
-    if (repliesItr == groupedP1Replies.end()) {
-      // missing P1 replies from involved group
-      Debug("No P1 replies for group %ld", group);
-      return false;
-    }
-
-    if (repliesItr->second.size() < static_cast<size_t>(config->n)) {
-      Debug("Not enough P1 replies %lu for group %ld", repliesItr->second.size(),
-          group);
-      return false;
-    }
-
-    for (const auto &p1Reply : repliesItr->second) {
-      if (p1Reply.ccr() != proto::Phase1Reply::COMMIT) {
-        Debug("Not all COMMIT P1 replies for group %ld.", group);
-        return false;
-      }
-      
-      if (p1Reply.txn_digest() != txnDigest) {
-        // P1 reply is for different transaction
-        Debug("P1 reply digest %s does not match this txn digest %s in group %ld.",
-            BytesToHex(p1Reply.txn_digest(), 16).c_str(), BytesToHex(txnDigest, 16).c_str(),
-            group);
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-// Assume that digest has been computed from txn
-bool ValidateP2RepliesCommit(
-    const std::vector<proto::Phase2Reply> &p2Replies,
-    const std::string &txnDigest, const proto::Transaction &txn,
-    const transport::Configuration *config) {
-  if (p2Replies.size() < 4 * static_cast<size_t>(config->f) + 1) {
-    Debug("Not enough P2 replies %lu.", p2Replies.size());
-    return false;
-  }
-
-  for (const auto &p2Reply : p2Replies) {
-    if (p2Reply.decision() != proto::COMMIT) {
-      Debug("Not all P2 COMMIT replies.");
-      return false;
-    }
-    
-    if (p2Reply.txn_digest() != txnDigest) {
-      Debug("P2 reply digest %s does not match this txn digest %s.",
-          BytesToHex(p2Reply.txn_digest(), 16).c_str(),
-          BytesToHex(txnDigest, 16).c_str());
-      return false;
-    }
-  }
-  return true;
-}
-
-bool ValidateP1RepliesAbort(
-    const std::map<int, std::vector<proto::Phase1Reply>> &groupedP1Replies,
-    const std::string &txnDigest, const proto::Transaction &txn,
-    const transport::Configuration *config, bool signedMessages,
-    bool hashDigest, KeyManager *keyManager) {
-  // TODO: technically only need a single Phase1Reply that says commit ->
-  //    messages will all be the same
-  for (auto group : txn.involved_groups()) {
-    auto repliesItr = groupedP1Replies.find(group);
-    if (repliesItr == groupedP1Replies.end()) {
-      Debug("No P1 replies for group %ld", group);
-      continue;
-    }
-
-    uint32_t abstains = 0;
-    for (const auto &p1Reply : repliesItr->second) {
-      if (p1Reply.txn_digest() != txnDigest ) {
-        Debug("P1 reply digest %s does not match this txn digest %s.",
-            BytesToHex(p1Reply.txn_digest(), 16).c_str(),
-            BytesToHex(txnDigest, 16).c_str());
-        return false;
-      }
-
-      if (p1Reply.ccr() == proto::Phase1Reply::ABSTAIN) {
-        abstains++;
-      } else if (p1Reply.ccr() == proto::Phase1Reply::ABORT) {
-        std::string committedTxnDigest = TransactionDigest(
-            p1Reply.committed_conflict().txn(), hashDigest);
-        if (ValidateProofCommit(p1Reply.committed_conflict(), committedTxnDigest,
-              config, signedMessages, keyManager)) {
-          Debug("Group %ld aborted transaction with committed conflict.", group);
-          return true;
-        } else {
-          abstains++;
-        }
-      }
-    }
-
-    if (abstains >= 3 * static_cast<uint32_t>(config->f) + 1) {
-      Debug("Group %ld aborted with >= 3f+1 abstains.", group);
-      return true;
-    }
-  }
-  return false;
-}
-
-// Assume that digest has been computed from txn
-bool ValidateP2RepliesAbort(
-    const std::vector<proto::Phase2Reply> &p2Replies,
-    const std::string &txnDigest, const proto::Transaction &txn,
-    const transport::Configuration *config) {
-  if (p2Replies.size() < 4 * static_cast<size_t>(config->f) + 1) {
-    Debug("Not enough P2 replies.");
-    return false;
-  }
-
-  for (const auto &p2Reply : p2Replies) {
-    if (p2Reply.decision() != proto::ABORT) {
-      Debug("Not all P2 ABORT replies.");
-      return false;
-    }
-    
-    if (p2Reply.txn_digest() != txnDigest) {
-      Debug("P2 reply digest %s does not match this txn digest %s.",
-          BytesToHex(p2Reply.txn_digest(), 16).c_str(),
-          BytesToHex(txnDigest, 16).c_str());
-      return false;
-    }
-  }
-  return true;
-}
-
-
 bool ValidateDependency(const proto::Dependency &dep,
     const transport::Configuration *config, uint64_t readDepSize,
-    bool signedMessages, KeyManager *keyManager) {
-  if (signedMessages) {
-    if (dep.proof().has_signed_prepared()) {
-      if (dep.proof().signed_prepared().msgs().size() < readDepSize) {
-        return false;
-      }
-
-      for (const auto &signedWrite : dep.proof().signed_prepared().msgs()) {
-        proto::PreparedWrite write;
-        if (!ValidateSignedMessage(signedWrite, keyManager, write)) {
-          return false;
-        }
-        
-        if (write != dep.prepared()) {
-          return false;
-        }
-      }
-      return true;
-    } else {
-      return false;
-    }
-  } else {
-    if (dep.proof().prepared().writes().size() < readDepSize) {
-      return false;
-    }
-
-    for (const auto &write : dep.proof().prepared().writes()) {
-      if (write != dep.prepared()) {
-        return false;
-      }
-    }
-    return true;
+    KeyManager *keyManager) {
+  if (dep.prepared_sigs().sigs_size() < readDepSize) {
+    return false;
   }
+
+  std::string preparedData;
+  dep.prepared().SerializeToString(&preparedData);
+  for (const auto &sig : dep.prepared_sigs().sigs()) {
+    if (!crypto::Verify(keyManager->GetPublicKey(sig.process_id()), preparedData,
+          sig.signature())) {
+      return false;    
+    }
+  }
+  return true;
 }
 
 bool operator==(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2) {

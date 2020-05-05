@@ -38,6 +38,7 @@
 #include <event2/thread.h>
 #include <event2/bufferevent_struct.h>
 
+#include <cstdio>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -466,7 +467,13 @@ TCPTransport::Run()
 void
 TCPTransport::Stop()
 {
+  Timer(500, [this](){
+    for (const auto &outgoing : tcpOutgoing) {
+      bufferevent_free(outgoing.second);
+    }
+    event_base_dump_events(libeventBase, stderr);
     event_base_loopbreak(libeventBase);
+  });
 }
 
 int

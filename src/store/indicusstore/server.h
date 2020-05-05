@@ -88,17 +88,16 @@ class Server : public TransportReceiver, public ::Server {
       const proto::Phase2 &msg);
   void HandleWriteback(const TransportAddress &remote,
       const proto::Writeback &msg);
-  void HandleAbort(const TransportAddress &remote, const proto::Abort &msg,
-      uint64_t senderId);
+  void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
-  proto::Phase1Reply::ConcurrencyControlResult DoOCCCheck(
+  proto::ConcurrencyControl::Result DoOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
       Timestamp &retryTs, proto::CommittedProof &conflict);
-  proto::Phase1Reply::ConcurrencyControlResult DoTAPIROCCCheck(
+  proto::ConcurrencyControl::Result DoTAPIROCCCheck(
       const std::string &txnDigest, const proto::Transaction &txn,
       Timestamp &retryTs);
-  proto::Phase1Reply::ConcurrencyControlResult DoMVTSOOCCCheck(
+  proto::ConcurrencyControl::Result DoMVTSOOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
       proto::CommittedProof &conflict);
@@ -114,19 +113,17 @@ class Server : public TransportReceiver, public ::Server {
   void Prepare(const std::string &txnDigest, const proto::Transaction &txn);
   void GetCommittedWrites(const std::string &key, const Timestamp &ts,
       std::vector<std::pair<Timestamp, Value>> &writes);
-  void GetCommittedReads(const std::string &key,
-      std::set<std::pair<Timestamp, Timestamp>> &reads);
   void Commit(const std::string &txnDigest, const proto::Transaction &txn,
       const proto::CommittedProof &proof);
   void Abort(const std::string &txnDigest);
   void CheckDependents(const std::string &txnDigest);
-  proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(
+  proto::ConcurrencyControl::Result CheckDependencies(
       const std::string &txnDigest);
-  proto::Phase1Reply::ConcurrencyControlResult CheckDependencies(
+  proto::ConcurrencyControl::Result CheckDependencies(
       const proto::Transaction &txn);
   bool CheckHighWatermark(const Timestamp &ts);
   void SendPhase1Reply(uint64_t reqId,
-    proto::Phase1Reply::ConcurrencyControlResult result,
+    proto::ConcurrencyControl::Result result,
     const proto::CommittedProof &conflict, const std::string &txnDigest,
     const TransportAddress &remote);
   void Clean(const std::string &txnDigest);
@@ -155,7 +152,6 @@ class Server : public TransportReceiver, public ::Server {
 
   /* Declare protobuf objects as members to avoid stack alloc/dealloc costs */
   proto::SignedMessage signedMessage;
-  proto::PackedMessage packedMessage;
   proto::Read read;
   proto::Phase1 phase1;
   proto::Phase2 phase2;
@@ -169,10 +165,12 @@ class Server : public TransportReceiver, public ::Server {
   proto::Transaction mostRecent;
   proto::PreparedWrite preparedWrite;
   proto::CommittedProof conflict;
+  proto::ConcurrencyControl concurrencyControl;
+  proto::AbortInternal abortInternal;
 
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
-  std::unordered_map<std::string, std::set<std::pair<Timestamp, Timestamp>>> committedReads;
+  std::unordered_map<std::string, std::set<std::tuple<Timestamp, Timestamp, const proto::CommittedProof *>>> committedReads;
   std::unordered_map<std::string, std::set<Timestamp>> rts;
 
   // Digest -> V
@@ -182,7 +180,7 @@ class Server : public TransportReceiver, public ::Server {
   std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
 
 
-  std::unordered_map<std::string, proto::Phase1Reply::ConcurrencyControlResult> p1Decisions;
+  std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
   std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
   std::unordered_map<std::string, proto::CommittedProof> committed;
   std::unordered_set<std::string> aborted;

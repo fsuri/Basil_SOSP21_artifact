@@ -208,10 +208,8 @@ void Client::Phase1(PendingRequest *req) {
 
 void Client::Phase1Callback(uint64_t txnId, int group,
     proto::CommitDecision decision, bool fast,
-    const std::map<proto::Phase1Reply::ConcurrencyControlResult,
-    std::vector<proto::Phase1Reply>> &phase1Replies,
-    const std::map<proto::Phase1Reply::ConcurrencyControlResult,
-    std::vector<proto::SignedMessage>> &signedPhase1Replies) {
+    const proto::CommittedProof &conflict,
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs) {
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
     Debug("Phase1Callback for terminated request %lu (txn already committed"
@@ -229,30 +227,35 @@ void Client::Phase1Callback(uint64_t txnId, int group,
     return;
   }
 
-  if (validateProofs) {
-    if (decision == proto::ABORT && fast) {
-      Debug("Have %lu ABORT replies from group %d.", phase1Replies.find(proto::Phase1Reply::ABORT)->second.size(), group);
-      req->phase1RepliesGrouped[group] = phase1Replies.find(proto::Phase1Reply::ABORT)->second;
-      if (signedMessages) {
-        req->signedPhase1RepliesGrouped[group] = signedPhase1Replies.find(proto::Phase1Reply::ABORT)->second;
-      }
-    } else if (decision == proto::ABORT) {
-      Debug("Have %lu ABSTAIN replies from group %d.", phase1Replies.find(proto::Phase1Reply::ABSTAIN)->second.size(), group);
-      req->phase1RepliesGrouped[group] = phase1Replies.find(proto::Phase1Reply::ABSTAIN)->second;
-      if (signedMessages) {
-        req->signedPhase1RepliesGrouped[group] = signedPhase1Replies.find(proto::Phase1Reply::ABSTAIN)->second;
-      }
-    } else {
-      Debug("Have %lu COMMIT replies from group %d.", phase1Replies.find(proto::Phase1Reply::COMMIT)->second.size(), group);
-      req->phase1RepliesGrouped[group] = phase1Replies.find(proto::Phase1Reply::COMMIT)->second;
-      if (signedMessages) {
-        req->signedPhase1RepliesGrouped[group] = signedPhase1Replies.find(proto::Phase1Reply::COMMIT)->second;
-      }
-
+  if (decision == proto::ABORT && fast) {
+    if (validateProofs) {
+      req->conflict = conflict;
+    }
+  }
+  
+  if (validateProofs && signedMessages) {
+    if (decision == proto::ABORT && !fast) {
+      auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
+      UW_ASSERT(itr != sigs.end());
+      Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
+          group);
+      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
+      req->slowAbortGroup = group;
+    } else if (decision == proto::COMMIT) {
+      auto itr = sigs.find(proto::ConcurrencyControl::COMMIT);
+      UW_ASSERT(itr != sigs.end());
+      Debug("Have %d COMMIT replies from group %d.", itr->second.sigs_size(),
+          group);
+      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
     }
   }
 
-  req->fast = req->fast && fast;
+  if (fast && decision == proto::ABORT) {
+    req->fast = true;
+  } else {
+    req->fast = req->fast && fast;
+  }
+
   --req->outstandingPhase1s;
   switch(decision) {
     case proto::COMMIT:
@@ -304,19 +307,39 @@ void Client::Phase2(PendingRequest *req) {
   Debug("PHASE2[%lu:%lu][%s] logging to group %ld", client_id, client_seq_num,
       BytesToHex(req->txnDigest, 16).c_str(), logGroup);
 
+  if (validateProofs && signedMessages) {
+    if (req->decision == proto::ABORT) {
+      UW_ASSERT(req->slowAbortGroup >= 0);
+      UW_ASSERT(req->p1ReplySigsGrouped.grouped_sigs().find(req->slowAbortGroup) != req->p1ReplySigsGrouped.grouped_sigs().end());
+      while (req->p1ReplySigsGrouped.grouped_sigs().size() > 1) {
+        auto itr = req->p1ReplySigsGrouped.mutable_grouped_sigs()->begin();
+        if (itr->first == req->slowAbortGroup) {
+          itr++;
+        }
+        req->p1ReplySigsGrouped.mutable_grouped_sigs()->erase(itr);
+      }
+    }
+
+    uint64_t quorumSize = req->decision == proto::COMMIT ?
+        SlowCommitQuorumSize(config) : SlowAbortQuorumSize(config);
+    for (auto &groupSigs : *req->p1ReplySigsGrouped.mutable_grouped_sigs()) {
+      while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > quorumSize) {
+        groupSigs.second.mutable_sigs()->RemoveLast();
+      }
+    }
+  }
+
   req->startedPhase2 = true;
-  bclient[logGroup]->Phase2(client_seq_num, txn,
-      req->phase1RepliesGrouped,
-      req->signedPhase1RepliesGrouped, req->decision,
-      std::bind(&Client::Phase2Callback, this, req->id,
-        std::placeholders::_1, std::placeholders::_2),
+  bclient[logGroup]->Phase2(client_seq_num, txn, req->decision,
+      req->p1ReplySigsGrouped,
+      std::bind(&Client::Phase2Callback, this, req->id, logGroup,
+        std::placeholders::_1),
       std::bind(&Client::Phase2TimeoutCallback, this, logGroup, req->id,
         std::placeholders::_1), req->timeout);
 }
 
-void Client::Phase2Callback(uint64_t txnId,
-    const std::vector<proto::Phase2Reply> &phase2Replies,
-    const std::vector<proto::SignedMessage> &signedPhase2Replies) {
+void Client::Phase2Callback(uint64_t txnId, int group,
+    const proto::Signatures &p2ReplySigs) {
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
     Debug("Phase2Callback for terminated request id %lu (txn already committed or aborted.", txnId);
@@ -333,11 +356,8 @@ void Client::Phase2Callback(uint64_t txnId,
     return;
   }
 
-  if (validateProofs) {
-    req->phase2Replies = phase2Replies;
-    if (signedMessages) {
-      req->signedPhase2Replies = signedPhase2Replies;
-    }
+  if (validateProofs && signedMessages) {
+    (*req->p2ReplySigsGrouped.mutable_grouped_sigs())[group] = p2ReplySigs;
   }
 
   Writeback(req);
@@ -381,42 +401,10 @@ void Client::Writeback(PendingRequest *req) {
     }
   }
 
-
-  proto::CommittedProof proof;
-  if (validateProofs) {
-    *proof.mutable_txn() = txn;
-    if (req->fast) {
-      if (signedMessages) {
-        for (const auto &signedPhase1Reply : req->signedPhase1RepliesGrouped) {
-          for (const auto &signedReply : signedPhase1Reply.second) {
-            *(*proof.mutable_signed_p1_replies()->mutable_replies())[signedPhase1Reply.first].add_msgs() = signedReply;
-          }
-        }
-      } else {
-        for (const auto &phase1Reply : req->phase1RepliesGrouped) {
-          for (const auto &reply : phase1Reply.second) {
-            *(*proof.mutable_p1_replies()->mutable_replies())[phase1Reply.first].add_replies() = reply;
-          }
-        }
-      }
-    } else {
-      if (signedMessages) {
-        for (const auto &signedPhase2Reply : req->signedPhase2Replies) {
-          *proof.mutable_signed_p2_replies()->add_msgs() = signedPhase2Reply;
-        }
-
-      } else {
-        proto::Phase2Replies p2Replies;
-        for (const auto &phase2Reply : req->phase2Replies) {
-          *proof.mutable_p2_replies()->add_replies() = phase2Reply;
-        }
-      }
-    }
-  }
-
   for (auto group : txn.involved_groups()) {
     bclient[group]->Writeback(client_seq_num, txn, req->txnDigest,
-        req->decision, proof);
+        req->decision, req->fast, req->conflict, req->p1ReplySigsGrouped,
+        req->p2ReplySigsGrouped);
   }
 
   if (!req->callbackInvoked) {

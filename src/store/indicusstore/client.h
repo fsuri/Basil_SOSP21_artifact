@@ -94,7 +94,7 @@ class Client : public ::Client {
         outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
         decision(proto::COMMIT), fast(true),
         startedPhase2(false), startedWriteback(false),
-        callbackInvoked(false), timeout(0UL) {
+        callbackInvoked(false), timeout(0UL), slowAbortGroup(-1) {
     }
 
     ~PendingRequest() {
@@ -113,26 +113,24 @@ class Client : public ::Client {
     bool startedWriteback;
     bool callbackInvoked;
     uint32_t timeout;
-    std::map<int, std::vector<proto::Phase1Reply>> phase1RepliesGrouped;
-    std::map<int, std::vector<proto::SignedMessage>> signedPhase1RepliesGrouped;
-    std::vector<proto::Phase2Reply> phase2Replies;
-    std::vector<proto::SignedMessage> signedPhase2Replies;
+    proto::GroupedSignatures p1ReplySigsGrouped;
+    proto::GroupedSignatures p2ReplySigsGrouped;
     std::string txnDigest;
+    int slowAbortGroup;
+    proto::CommittedProof conflict;
   };
 
   void Phase1(PendingRequest *req);
   void Phase1Callback(uint64_t reqId, int group, proto::CommitDecision decision,
-      bool fast, const std::map<proto::Phase1Reply::ConcurrencyControlResult,
-      std::vector<proto::Phase1Reply>> &phase1Replies,
-      const std::map<proto::Phase1Reply::ConcurrencyControlResult,
-      std::vector<proto::SignedMessage>> &signedPhase1Replies);
+      bool fast, const proto::CommittedProof &conflict,
+      const std::map<proto::ConcurrencyControl::Result,
+      proto::Signatures> &sigs);
   void Phase1TimeoutCallback(int group, uint64_t reqId, int status);
   void HandleAllPhase1Received(PendingRequest *req);
 
   void Phase2(PendingRequest *req);
-  void Phase2Callback(uint64_t reqId,
-      const std::vector<proto::Phase2Reply> &phase2Replies,
-      const std::vector<proto::SignedMessage> &signedPhase2Replies);
+  void Phase2Callback(uint64_t reqId, int group,
+      const proto::Signatures &p2ReplySigs);
   void Phase2TimeoutCallback(int group, uint64_t reqId, int status);
 
   void Writeback(PendingRequest *req);

@@ -24,22 +24,22 @@ enum Phase1ValidationState {
 
 class Phase1Validator {
  public:
-  Phase1Validator(const proto::Transaction *txn, const std::string *txnDigest,
-      const transport::Configuration *config, KeyManager *keyManager,
-      bool signedMessages, bool hashDigest);
+  Phase1Validator(int group, const proto::Transaction *txn,
+      const std::string *txnDigest, const transport::Configuration *config,
+      KeyManager *keyManager, bool validateProofs, bool signedMessages, bool hashDigest);
   virtual ~Phase1Validator();
 
-  bool ProcessMessage(int group,
-      const proto::Phase1Reply *p1Reply,
-      const proto::SignedMessage *signedP1Reply);
+  bool ProcessMessage(const proto::ConcurrencyControl &cc);
   
   inline Phase1ValidationState GetState() const { return state; }
     
  private:
+  const int group;
   const proto::Transaction *txn;
   const std::string *txnDigest;
   const transport::Configuration *config;
   KeyManager *keyManager;
+  const bool validateProofs;
   const bool signedMessages;
   const bool hashDigest;
 

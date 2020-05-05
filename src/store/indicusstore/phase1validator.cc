@@ -5,30 +5,22 @@
 
 namespace indicusstore {
 
-Phase1Validator::Phase1Validator(const proto::Transaction *txn,
+Phase1Validator::Phase1Validator(int group, const proto::Transaction *txn,
     const std::string *txnDigest, const transport::Configuration *config,
-    KeyManager *keyManager, bool signedMessages, bool hashDigest) : txn(txn),
-    txnDigest(txnDigest), config(config), keyManager(keyManager),
-    signedMessages(signedMessages), hashDigest(hashDigest), 
+    KeyManager *keyManager, bool validateProofs,
+    bool signedMessages, bool hashDigest) : group(group),
+    txn(txn), txnDigest(txnDigest), config(config), keyManager(keyManager),
+    validateProofs(validateProofs), signedMessages(signedMessages), hashDigest(hashDigest), 
     state(NOT_ENOUGH), commits(0U), abstains(0U) {
 }
 
 Phase1Validator::~Phase1Validator() {
 }
 
-bool Phase1Validator::ProcessMessage(int group,
-    const proto::Phase1Reply *p1Reply,
-    const proto::SignedMessage *signedP1Reply) {
-  if (signedMessages && !IsReplicaInGroup(group,
-        signedP1Reply->process_id(), config)) {
-    Debug("[group %d] Phase1Reply from replica %lu who is not in group.",
-        group, signedP1Reply->process_id());
-    return false;
-  }
-
-  if (p1Reply->txn_digest() != *txnDigest) {
+bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
+  if (validateProofs && cc.txn_digest() != *txnDigest) {
     Debug("[group %d] Phase1Reply digest %s does not match computed digest %s.",
-        group, BytesToHex(p1Reply->txn_digest(), 16).c_str(),
+        group, BytesToHex(cc.txn_digest(), 16).c_str(),
         BytesToHex(*txnDigest, 16).c_str());
     return false;
   }
@@ -39,21 +31,21 @@ bool Phase1Validator::ProcessMessage(int group,
     return false;
   }
 
-  switch(p1Reply->ccr()) {
-    case proto::Phase1Reply::ABORT: {
+  switch(cc.ccr()) {
+    case proto::ConcurrencyControl::ABORT: {
       std::string committedTxnDigest = TransactionDigest(
-          p1Reply->committed_conflict().txn(), hashDigest);
-      if (ValidateProofCommit(p1Reply->committed_conflict(),
-            committedTxnDigest, config, signedMessages, keyManager)) {
-        state = FAST_ABORT;
-      } else {
+          cc.committed_conflict().txn(), hashDigest);
+      if (validateProofs && !ValidateCommittedConflict(cc.committed_conflict(),
+            &committedTxnDigest, txn, txnDigest, signedMessages, keyManager, config)) {
         Debug("[group %d] Invalid committed_conflict for Phase1Reply.",
             group);
         return false;
+      } else {
+        state = FAST_ABORT;
       }
       break;
     }
-    case proto::Phase1Reply::COMMIT:
+    case proto::ConcurrencyControl::COMMIT:
       commits++;
 
       if (commits == config->n) {
@@ -70,7 +62,7 @@ bool Phase1Validator::ProcessMessage(int group,
         state = SLOW_COMMIT_FINAL;
       }
       break;
-    case proto::Phase1Reply::ABSTAIN:
+    case proto::ConcurrencyControl::ABSTAIN:
       abstains++;
 
       if (state == SLOW_COMMIT_TENTATIVE) {

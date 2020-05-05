@@ -29,7 +29,7 @@ string Hash(const string &message);
 
 string Sign(const PrivKey &privateKey, const string &message);
 
-bool Verify(const PubKey &publicKey, const string &message, string &signature);
+bool Verify(const PubKey &publicKey, const string &message, const string &signature);
 
 void SavePublicKey(const string &filename, PubKey &key);
 

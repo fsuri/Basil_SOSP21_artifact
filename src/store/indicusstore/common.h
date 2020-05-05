@@ -14,38 +14,35 @@
 
 namespace indicusstore {
 
-bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
-    KeyManager *keyManager, ::google::protobuf::Message &plaintextMsg);
-
-bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
-    KeyManager *keyManager, std::string &data, std::string &type);
-
-bool __PreValidateSignedMessage(const proto::SignedMessage &signedMessage,
-    KeyManager *keyManager, proto::PackedMessage &packedMessage);
-
 void SignMessage(const ::google::protobuf::Message &msg,
     const crypto::PrivKey &privateKey, uint64_t processId,
-    proto::SignedMessage &signedMessage);
+    proto::SignedMessage *signedMessage);
 
-proto::CommitDecision IndicusDecide(
-    const std::map<int, std::vector<proto::Phase1Reply>> &replies,
-    const transport::Configuration *config, bool validateProofs,
-    const proto::Transaction &transaction, const std::string &txnDigest,
-    bool signedMessages, KeyManager *keyManager);
+bool ValidateCommittedConflict(const proto::CommittedProof &proof,
+    const std::string *committedTxnDigest, const proto::Transaction *txn,
+    const std::string *txnDigest, bool signedMessages, KeyManager *keyManager,
+    const transport::Configuration *config);
 
-proto::CommitDecision IndicusShardDecide(
-    const std::vector<proto::Phase1Reply> &replies,
-    const transport::Configuration *config, bool validateProofs,
-    const proto::Transaction &txn, const std::string &txnDigest,
-    bool signedMessages, KeyManager *keyManager, bool &fast);
+bool ValidateCommittedProof(const proto::CommittedProof &proof,
+    const std::string *committedTxnDigest, KeyManager *keyManager,
+    const transport::Configuration *config);
+
+bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager, const transport::Configuration *config);
+
+bool ValidateP2Replies(proto::CommitDecision decision,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager, const transport::Configuration *config);
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,
-    const std::string &txnDigest, const std::string &key, const std::string &val, const Timestamp &timestamp,
+    const std::string *txnDigest, const std::string &key, const std::string &val, const Timestamp &timestamp,
     const transport::Configuration *config, bool signedMessages,
     KeyManager *keyManager);
 
 // check must validate that proof replies are from all involved shards
-bool ValidateProofCommit(const proto::CommittedProof &proof,
+bool ValidateProofCommit1(const proto::CommittedProof &proof,
     const std::string &txnDigest,
     const transport::Configuration *config, bool signedMessages,
     KeyManager *keyManager);
@@ -78,7 +75,7 @@ bool ValidateP2RepliesAbort(
 
 bool ValidateDependency(const proto::Dependency &dep,
     const transport::Configuration *config, uint64_t readDepSize,
-    bool signedMessages, KeyManager *keyManager);
+    KeyManager *keyManager);
 
 bool operator==(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2);
 
