@@ -36,7 +36,7 @@ LIB-tcptransport := $(o)tcptransport.o $(LIB-transport)
 
 LIB-persistent_register := $(o)persistent_register.o $(LIB-message)
 
-LIB-crypto := $(o)crypto.o $(o)keymanager.o
+LIB-crypto := $(LIB-message) $(o)crypto.o $(o)keymanager.o
 
 $(d)crypto_bench: $(LIB-latency) $(LIB-crypto) $(o)crypto_bench.o
 

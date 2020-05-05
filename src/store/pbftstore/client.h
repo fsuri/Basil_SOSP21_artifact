@@ -68,6 +68,7 @@ class Client : public ::Client {
   KeyManager *keyManager;
   // TrueTime server.
   TrueTime timeServer;
+  int client_seq_num;
 
   struct PendingPrepare {
     proto::Transaction txn;

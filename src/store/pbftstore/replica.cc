@@ -65,6 +65,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     }
 
     if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
+      Debug("Message is invalid!");
       return;
     }
     recvSignedMessage = true;

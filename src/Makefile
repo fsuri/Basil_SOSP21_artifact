@@ -34,6 +34,8 @@ CFLAGS += $(LIBSSL_CFLAGS)
 LDFLAGS += $(LIBSSL_LDFLAGS)
 # cryptopp
 LDFLAGS += -l:libcryptopp.so
+# libsodium
+LDFLAGS += -lsodium
 
 
 # Google test framework. This doesn't use pkgconfig
