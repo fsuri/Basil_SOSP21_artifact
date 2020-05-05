@@ -210,7 +210,7 @@ BindToPort(int fd, const string &host, const string &port)
 
 UDPTransport::UDPTransport(double dropRate, double reorderRate,
                            int dscp, event_base *evbase)
-    : dropRate(dropRate), reorderRate(reorderRate), dscp(dscp), tp(ThreadPool(4))
+    : dropRate(dropRate), reorderRate(reorderRate), dscp(dscp)
 {
     struct timeval tv;
     lastTimerId = 0;

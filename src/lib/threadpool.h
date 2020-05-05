@@ -1,6 +1,7 @@
 #ifndef _LIB_THREADPOOL_H_
 #define _LIB_THREADPOOL_H_
 
+#include "assert.h"
 #include <list>
 #include <mutex>
 #include <functional>
@@ -12,7 +13,10 @@ class ThreadPool {
 
 public:
 
-  ThreadPool(uint32_t numThreads);
+  ThreadPool();
+
+  // copy constructor panics
+  ThreadPool(const ThreadPool& tp) { Panic("Unimplemented"); }
 
   void stop();
 

@@ -362,7 +362,7 @@ void Server::cleanupPendingTx(std::string digest) {
 void Server::Load(const string &key, const string &value,
     const Timestamp timestamp) {
   ValueAndProof val;
-  value.val = value;
+  val.value = value;
   commitStore.put(key, val, timestamp);
 }
 

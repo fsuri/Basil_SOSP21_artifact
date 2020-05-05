@@ -389,7 +389,7 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
                                   const TCPTransportAddress &dst,
                                   const Message &m)
 {
-  
+
     Debug("Sending %s message over TCP to %s:%d",
         m.GetTypeName().c_str(), inet_ntoa(dst.addr.sin_addr),
         htons(dst.addr.sin_port));
@@ -550,7 +550,7 @@ TCPTransport::TimerCallback(evutil_socket_t fd, short what, void *arg)
 }
 
 void TCPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {
-  Panic("Unimplemented");
+  tp.dispatch(f, cb, libeventBase);
 }
 
 void
@@ -733,7 +733,7 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
     TCPTransportTCPListener *info = (TCPTransportTCPListener *)arg;
     TCPTransport *transport = info->transport;
     //transport->mtx.lock();
-    auto it = transport->tcpAddresses.find(bev);    
+    auto it = transport->tcpAddresses.find(bev);
     //transport->mtx.unlock();
     UW_ASSERT(it != transport->tcpAddresses.end());
     TCPTransportAddress addr = it->second;
@@ -755,7 +755,7 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
     } else if (what & BEV_EVENT_EOF) {
         Warning("EOF on outgoing TCP connection to server");
         bufferevent_free(bev);
-        
+
         //transport->mtx.lock();
         auto it2 = transport->tcpOutgoing.find(addr);
         transport->tcpOutgoing.erase(it2);
