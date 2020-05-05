@@ -82,7 +82,7 @@ by correct clients.
 Byzantine behaviour in effect introduces a tension that is not present in non-byzantine
 distributed databases: optimistic and aggressive concurrency control mechanisms known
 to improve performance (~\cite{kung1981occ,bernstein1983mcc,reed1983atomic,xie2015callas,zhang2015tapir}) in failure-free executions also increase the system's vulnerability to byzantine faults. Consider for instance runtime pipelining~\cite{xie2015callas,su2017tebaldi} or multiversioned timestamp ordering (MVTSO)~\cite{bernstein1983mcc,reed1983atomic}: both allow writes to become visible to other operations before a transaction commits. While early write visibility helps reduce abort rates for
-contended workload, it can cause transactions to stall on uncommitted operations whose writes they have observed. To mitigate this tension, we design \sys{} to follow the ethos of \textit{independent operability}: both safety (serializability) and liveness (the ability to issue and complete transactions) are \textit{local} properties. They remain, at all times, per client and per-object.  
+contended workload, it can cause transactions to stall on uncommitted operations whose writes they have observed. To mitigate this tension, we design \sys{} to follow the ethos of \textit{independent operability}: both safety (serializability) and liveness (the ability to issue and complete transactions) are \textit{local} properties. They remain, at all times, per client and per-object.  \fs{should be per-transation rather than per-object?}
 
 %that system users experience \textit{independently/individually/seperately?}. \fs{check comments to see whether this improves vs old version.} \nc{I'm not entirely sure what it means by independently sorry}
 %OLD: are \textit{local} properties
@@ -92,7 +92,7 @@ as Herlihy and Wing from the Linearizability paper? If not, I'd suggest we come
 up with a different term to avoid confusion. For example, Serializabiliy is not
 a local property of a system comprised of multiple objects (it is not the case
 that the system is Serializable if and only if each object is Serializable).}
-\fs{Matt is right: What we mean is that a client "chooses" to experience serializability, so its locality is only per-client, not per-object. Liveness on the other hand is both per-client and object. Technically, just like serializability, its not per-object, but rather per-object-group that a transaction touches. Maybe we find a better description.}
+\fs{ What we mean is that a client "chooses" to experience serializability, so it is experienced locally per-client. Also, technically its not per-object, but rather per-object-group that a transaction touches. The same goes for liveness: clients experience it individually, and liveness  is on transaction grouping, not per-object.}
 
 
 
