@@ -26,9 +26,9 @@ We show by case distinction that TX2's validation cannot return Commit:
 \item \textbf{TX1.TS > TX2.TS:} By timestamp order, the excution results of TX1 and TX2 should be equivalent to a serial schedule in which TX1 happened \textit{after} TX2. A conflict only arises, if TX2 attempts to write a version that TX1 should have observed, i.e. if TX1's $read.version < TX2.TS$. By lines 8-10 TX2 must Abstain/Abort since TX1 $\in Prepared$. 
 \end{itemize}
 
-We now show, that every honest clients transaction is \textit{legal}, i.e. its reads are based on committed writes. This follow straightforward from Execution protocol: An honest client only reads values that are either committed, or optimistically reads by claiming a dependency on uncommitted writes. By lines 14-18, a TX with dependencies only Commits if all of its dependencies Commit, implying that it read committed writes.
+We now show, that every correct clients transaction is \textit{legal}, i.e. its reads are based on committed writes. This follow straightforward from Execution protocol: A correct client only reads values that are either committed, or optimistically reads by claiming a dependency on uncommitted writes. By lines 14-18, a TX with dependencies only Commits if all of its dependencies Commit, implying that it read committed writes.
 
-Consequently, all honest clients experience Serializability, and thus, the MVTSO-check maintains Byzantine-Serializability.
+Consequently, all correct clients experience Serializability, and thus, the MVTSO-check maintains Byzantine-Serializability.
 \end{proof}
 
 \fi

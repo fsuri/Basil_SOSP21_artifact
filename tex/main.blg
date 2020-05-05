@@ -1,114 +1,107 @@
 This is BibTeX, Version 0.99d (TeX Live 2017/Debian)
 Capacity: max_strings=100000, hash_size=100000, hash_prime=85009
 The top-level auxiliary file: main.aux
+White space in argument---line 123 of file main.aux
+ : \citation{castro1999practical,martin2006fast,kotla2007zyzzyva,gueta2018sbft,clement2009making,buchman2016tendermint,yin2019hotstuff,Clement09Upright,duan2014hbft
+ :                                                                                                                                                                   ,pires2018generalized,bessani2014state,lamport2011byzantizing,arun2019ezbft,malkhi2019flexible,duan2014hbft,yin2003separating,Guerraoui08Next,Kotla04High,liskov2010viewstamped}
+I'm skipping whatever remains of this command
+White space in argument---line 141 of file main.aux
+ : \citation{zhang2016operation,zhang2015tapir,mu2016consolidating
+ :                                                                 }
+I'm skipping whatever remains of this command
 The style file: plain.bst
 Database file #1: refs.bib
-Repeated entry---line 21750 of file refs.bib
- : @inproceedings{yin2019hotstuff
- :                               ,
-I'm skipping whatever remains of this entry
-Repeated entry---line 21767 of file refs.bib
- : @inproceedings{padilha2013augustus
- :                                   ,
-I'm skipping whatever remains of this entry
-Repeated entry---line 21807 of file refs.bib
- : @inproceedings{yan2018carousel
- :                               ,
-I'm skipping whatever remains of this entry
-Repeated entry---line 21822 of file refs.bib
- : @inproceedings{mu2016consolidating
- :                                   ,
-I'm skipping whatever remains of this entry
-Repeated entry---line 21872 of file refs.bib
+Repeated entry---line 21841 of file refs.bib
  : @inproceedings{castro1999practical
  :                                   ,
 I'm skipping whatever remains of this entry
-Repeated entry---line 21893 of file refs.bib
+Repeated entry---line 21862 of file refs.bib
  : @article{pires2018generalized
  :                              ,
 I'm skipping whatever remains of this entry
-Repeated entry---line 21904 of file refs.bib
+Repeated entry---line 21873 of file refs.bib
  : @inproceedings{clement2009making
  :                                 ,
 I'm skipping whatever remains of this entry
-Repeated entry---line 21918 of file refs.bib
+Repeated entry---line 21887 of file refs.bib
  : @article{stathakopoulou2019mir
  :                               ,
 I'm skipping whatever remains of this entry
-Repeated entry---line 21924 of file refs.bib
+Repeated entry---line 21893 of file refs.bib
  : @inproceedings{bazzi2018clairvoyant
  :                                    ,
 I'm skipping whatever remains of this entry
-Repeated entry---line 21992 of file refs.bib
+Repeated entry---line 21961 of file refs.bib
  : @article{gueta2018sbft
  :                       ,
 I'm skipping whatever remains of this entry
-Repeated entry---line 22184 of file refs.bib
+Repeated entry---line 22153 of file refs.bib
  : @inproceedings{bessani2014state
  :                                ,
 I'm skipping whatever remains of this entry
-Repeated entry---line 22233 of file refs.bib
+Repeated entry---line 22202 of file refs.bib
  : @inproceedings{ongaro2014search
  :                                ,
 I'm skipping whatever remains of this entry
-Repeated entry---line 22254 of file refs.bib
+Repeated entry---line 22223 of file refs.bib
  : @article{lamport2005generalized
  :                                ,
 I'm skipping whatever remains of this entry
-Repeated entry---line 22260 of file refs.bib
+Repeated entry---line 22229 of file refs.bib
  : @inproceedings{kraska2013mdcc
  :                              ,
 I'm skipping whatever remains of this entry
 Warning--I didn't find a database entry for ""
-Warning--I didn't find a database entry for "("
+Warning--I didn't find a database entry for "crooks17seeing"
+Warning--I didn't find a database entry for "cloudlab"
+Warning--empty year in aguilera2007sinfonia
 Warning--empty school in buchman2016tendermint
 Warning--can't use both volume and number fields in castro1999practical
 Warning--empty year in kraska2013mdcc
 Warning--empty institution in Lamport2005a
 Warning--empty journal in lamport2005generalized
-Warning--empty publisher in lamport2019byzantine
 Warning--empty year in li2012redblue
 Warning--empty journal in liskov2012viewstamped
 Warning--empty year in padilha2013augustus
-You've used 88 entries,
+You've used 86 entries,
             2118 wiz_defined-function locations,
-            1167 strings with 23147 characters,
-and the built_in function-call counts, 34201 in all, are:
-= -- 3387
-> -- 1590
-< -- 50
-+ -- 637
-- -- 539
-* -- 2232
-:= -- 5320
-add.period$ -- 271
-call.type$ -- 88
-change.case$ -- 530
+            1177 strings with 23562 characters,
+and the built_in function-call counts, 35006 in all, are:
+= -- 3504
+> -- 1634
+< -- 52
++ -- 650
+- -- 557
+* -- 2331
+:= -- 5413
+add.period$ -- 276
+call.type$ -- 86
+change.case$ -- 532
 chr.to.int$ -- 0
-cite$ -- 97
-duplicate$ -- 1415
-empty$ -- 2696
-format.name$ -- 539
-if$ -- 7437
+cite$ -- 95
+duplicate$ -- 1466
+empty$ -- 2716
+format.name$ -- 557
+if$ -- 7642
 int.to.chr$ -- 0
-int.to.str$ -- 88
-missing$ -- 75
-newline$ -- 433
-num.names$ -- 178
-pop$ -- 677
+int.to.str$ -- 86
+missing$ -- 78
+newline$ -- 429
+num.names$ -- 174
+pop$ -- 658
 preamble$ -- 1
-purify$ -- 443
+purify$ -- 448
 quote$ -- 0
-skip$ -- 1135
+skip$ -- 1162
 stack$ -- 0
-substring$ -- 2061
-swap$ -- 498
-text.length$ -- 50
+substring$ -- 2137
+swap$ -- 535
+text.length$ -- 52
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 352
+type$ -- 342
 warning$ -- 9
-while$ -- 335
-width$ -- 90
-write$ -- 948
-(There were 14 error messages)
+while$ -- 337
+width$ -- 88
+write$ -- 959
+(There were 12 error messages)
