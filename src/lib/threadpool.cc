@@ -1,10 +1,14 @@
 #include "lib/threadpool.h"
 
 #include <thread>
+#include <sched.h>
 
-ThreadPool::ThreadPool(uint32_t numThreads) {
+ThreadPool::ThreadPool() {
+  int num_cpus = std::thread::hardware_concurrency();
+  Debug("num cpus %d", num_cpus);
+  uint32_t num_threads = (uint32_t) std::max(1, num_cpus - 1);
   running = true;
-  for (uint32_t i = 0; i < numThreads; i++) {
+  for (uint32_t i = 0; i < num_threads; i++) {
     std::thread t([this] {
       while (true) {
         std::pair<std::function<void*()>, EventInfo*> job;
@@ -28,6 +32,16 @@ ThreadPool::ThreadPool(uint32_t numThreads) {
         event_active(job.second->ev, 0, 0);
       }
     });
+    // Create a cpu_set_t object representing a set of CPUs. Clear it and mark
+    // only CPU i as set.
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(i, &cpuset);
+    int rc = pthread_setaffinity_np(t.native_handle(),
+                                    sizeof(cpu_set_t), &cpuset);
+    if (rc != 0) {
+        Panic("Error calling pthread_setaffinity_np: %d", rc);
+    }
     t.detach();
   }
 }

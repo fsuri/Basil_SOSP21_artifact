@@ -23,7 +23,7 @@ Consequently, all honest clients experience Serializability, and thus, the MVTSO
 \end{proof}
 
 \fs{should split this between Slow and Fast Path. Logged decisions are only slow path. Fast Path implies that the only logged decisions that are possible will be consistent}
-\fs{redefine logged decision: 3f+1 correct replicas have adopted a decision. Define shard-certificate: set of decisions that implies existance of a logged decision.
+\fs{redefine logged decision: 3f+1 correct replicas have adopted a decision. Define shard-certificate: set of decisions that implies existance of a logged decision.}
 \begin{theorem}[Saf]
 A logged decision is durable, and there can ever exist \textbf{at most one} logged decision.
 \fs{Clarify the point of this: We preserve consistency of writeback commit/abort. That in turn follows from the logged decision durability.}
@@ -75,48 +75,53 @@ Thus, when the network is not adversarial, validation decisions are \textit{Byza
 
 \begin{theorem}[Liv] 
 Every transaction that an honest client is \textit{interested} in eventually completes.
+\fs{Clarify: Exactly one shard-decision exists. I.e. Safety is maintained, but there will be one decision. }
 \end{theorem}
 
 \begin{proof}
-First, we note, that a timely client can trivially complete all of its own transactions that have no dependencies. However, if a client is slow, or its transaction has dependencies, it may lose autonomy of its own transaction. For a given client c, we define the set \textit{Interested$_c$} to include its own tansactions and all their dependencies, as well as any other arbitrary transactions whose completion a client is interested in. 
+First, we note, that a timely client can trivially complete all of its own transactions that have no dependencies. However, if a client is slow, or its transaction has dependencies, it may lose autonomy over its own transaction. For a given client c, we define the set \textit{Interested$_c$} to include its own tansactions and all their dependencies, as well as any other arbitrary transactions whose completion a client is interested in. 
 
 We distinguish two cases for each $TX \in Interested_c$ that has timed out on its orignial client: 
-1) Client manages to receive shard-certificate using base-protocol (then its no different than a tx of its own, Saf holds from above rules)
-2) Client cannot obtain shard-certificate and starts Fallback
-We will show that the Fallback mechanism is Safe and Live.
-Safety: Follows straightforward from Lemma1
-Liveness: Follows straightforward from Lemma2
+1) An interested client manages to receive a shard-certificate by either re-issuing a $Phase1$ message and receiving a Fast-Path Threshold of $Phase1R$ messages, or by issuing a new $Phase2$ message and receiving a Slow-Path Quorum of $Phase2R$ messages. In this case, a client is able to complete the transaction as any client may issue the Writeback. Saf is maintained as this case follows the normal-case protocol operation.\\
 
+2) An interested client cannot obtain shard-certificate and starts a Fallback invocation. By Lemma1, given synchrony, a correct Fallback replica will be elected after at most $f+1$ election rounds. Such a Fallback replica will reconcile a consistent decision across all replicas, thus allowing the interested client to receive a Slow-Path Quorum of $Phase2R$ messages (matching decisions, matching views) as shard-certificate, allowing it to complete the Writeback phase. By Lemma2, this decision is consistent with any potential past shard-certificate that may have existed.
 
-
--proof that election is secure. : logged decision stays durable and at most one, but replica decisions can change.
-
-
-\begin{lemma}
-The Decision Reconciliation Rule maintains Saf.
-\end{lemma}
-
-\textbf{Decision Reconciliation Rule:} \textit{dec$_{new}$ $=$ maj(\{Elect.decision\})}. 
-
-\begin{proof} If a logged decision exists, i.e. $3f+1$ correct replicas have adopted the same decision, any Quorum of $4f+1$ Elect messages is guaranteed to contain $2f+1$ matching decisions (a majority). Thus, by the Decision Reconciliation Rule, the only new decision possible is the previously logged decision. Furthermore, decisions used for reconciliation need not match in views: If there ever existed a logged decision $d$ with matching views, then all future $dec_{new} = d$.\\
-
- Otherwise, an arbitrary decision qualifies since at least one honest replica must have agreed to it.
 \end{proof}
- 
+
 
 
 \begin{lemma}
-Given weak synchrony, Fallback election is live 
+Given weak synchrony, Fallback election is live and non-skipping.
 \end{lemma}
-- proof that election is live:
-- after f+1 (in synchronous window) rounds correct leader will be elected.
 
-\underline{\textbf{View Change Rules:}} \one Replicas only adopt a view $v+1$ if the view set includes $3f+1$ votes from view $v$. \textit{Vote subsumtion:} A view $v$ may count as a vote for all $v' \leq v$. \two Replicas that lag behind, may safely skip ahead to the maximum view $v$ present $f+1$ times, since, by induction, $\geq 3f+1$ replicas must have claimed to be in a view $\geq v-1$. Thus, any possible divergence can be reconciled in a single step, as there must exist a view $v' \geq max(honest.views) -1 $ for which at least $f+1$ honest votes exist in any Quorum of $4f+1$ votes.\\
-\underline{Additional subtlelties:} Replicas enforce exponential time-outs for new elections. In absence of honest interested clients, byzantine clients may invoke fallback elections at a subset of replicas, thus inhibiting true election and skipping select replicas' terms. To avoid artificially increased timeouts and non-skipping candidates, replicas may forward the $ElectFB$ message to all other replicas. Replicas that receive $f+1$ forwarded messages, adopt larger views, and forward the $ElectFB$ message themselves, thus ensuring election for each view.
-\footnote{This optimization is not necessary for "theoretical" liveness. To avoid unecessary all-to-all communication, it may only be enforced for views $v > T$, where T is a system hyperparameter }\\
+\underline{\textbf{View Change Rules:}} \one Replicas only adopt a view $v+1$ if the view set includes $3f+1$ votes from view $v$. \textit{Vote subsumtion:} A view $v$ may count as a vote for all $v' \leq v$. \two Replicas that lag behind, may safely skip ahead to the maximum view $v$ present $f+1$ times, since, by induction, $\geq 3f+1$ replicas must have claimed to be in a view $\geq v-1$. \\
+We note, that replicas enforce exponential time-outs on each new tenure: A replica will not adopt a new view and start a new election, until the previous view leader (client or Fallback replica) has elapsed its time-out.
+
+\begin{proof}
+A client must provide $3f+1$ matching view responses in order for replicas to adopt the next view and start an election. This implies, that for each correct replica in view $v$, there must exist at least $2f+1$ correct replicas in view $\geq v-1$ (A).
+If a client cannot receive such a Quorum, e.g. due to temorary view inconsistency, it must reconcile the views first. This is possible in a single step: By (A) any set of $4f+1$ replica responses must contain $\geq f+1$ correct replicas' votes for a view $v' \geq max(correct.views) -1 $. 
+Thus, in the presence on a correct interested clients, and when time-outs grow large enough to enforce synchrony, Byzantine clients cannot stop the successful election of a new Fallback by continuously invoking a view-change. Moreover, election is non-skipping, as a correct client will broadcast a new-view invocation to all replicas. 
+\end{proof}
+
+\underline{Practical optimizations:}  In absence of honest interested clients, byzantine clients may invoke fallback elections at a subset of replicas, thus inhibiting true election and skipping select replicas' terms. To avoid artificially increased timeouts and non-skipping candidates, replicas may forward the $ElectFB$ message to all other replicas. Replicas that receive $f+1$ forwarded messages, adopt larger views, and forward the $ElectFB$ message themselves, thus ensuring that all correct replicas adopt each new view, and a Fallback replica is successfully endorsed.
+This optimization is not necessary for "theoretical" liveness as shown by Lemma1. To avoid unecessary all-to-all communication, it may only be enforced for views $v > T$, where T is a system hyperparameter.\\
 
 %%%%%%%%%%%%%%%%
 
-We distinguish two cases: \one There exists no decisions 
-This follows straightforward from the eventual existance of an honest Fallback replica (at most $f+1$ elections) that reconciles all honest replicas.. For any transaction, an interested honest client will eventually receive a shard-decision, and hence the transaction will complete.
+
+
+
+\begin{lemma}
+The Decision Reconciliation Rule maintains both Saf and Byz-Serializability.
+\end{lemma}
+
+The Fallback mechanism extends the requirment for shard-certificates to match in both decisions and views. Consequently, a logged decision is a pair of (decision, view) that, at one point in time, is adopted by $\geq 3f+1$  correct replicas.
+
+\textbf{Decision Reconciliation Rule:} \textit{dec$_{new}$ $=$ maj(\{Elect.decision\})}. Note, that for decision reconciliation, the associated view of a decision is explicitly irrelevant.
+
+\begin{proof} If a logged decision exists, i.e. $3f+1$ correct replicas have adopted the same decision, any Quorum of $4f+1$ Elect messages is guaranteed to contain $2f+1$ matching decisions (a majority). Thus, by the Decision Reconciliation Rule, the only new decision possible is the previously logged decision. By induction, this hols for all consecutive views: If there ever existed a logged decision $d$ in view $v$, then all $dec_{v' > v} = d$. Consequently, Elect messages for future, higher views, do not need not match in their decision views.
+
+If no logged decision existed, then any majority decision qualifies. This is consistent with Byz-Serializability since the majority decision contains $\geq f+1$ correct replicas, which would only have agreed to a decision on the basis of a matching Quorum of $Phase1R$ messages.
 \end{proof}
+
+\textit{Aside:} If shard-certificates were not required to match in views, Saf would be violated. Consider an example in which for a view $v$ half of the replicas have adopted decisions Commit/Abort respectively. Let $P_1$ (Commit) and $P_2$ (Abort) be the partitions of replicas with matching votes. A Byzantine Fallback may use two Elect Quorums with different majorities to send $dec_{v+1}$ = Abort to $P_1$, and $dec_{v+1}$ = Commit to $P_2$. Then shard-certificates for both Commit/Abort could exist by using $P_1$ from view $v$ and $P_2$ from view $v+1$, and vice versa, violating Saf. 

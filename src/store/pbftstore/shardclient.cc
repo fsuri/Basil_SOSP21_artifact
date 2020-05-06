@@ -76,9 +76,11 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
     }
 
     if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
+      Debug("signature was invalid");
       return;
     }
     recvSignedMessage = true;
+    Debug("signature was valid");
   } else {
     type = t;
     data = d;

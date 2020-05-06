@@ -90,6 +90,15 @@ class Server : public TransportReceiver, public ::Server {
       const proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
+//Fallback protocol components
+// void HandleP1_Rec -> exec p1 if unreceived, reply with p1r, or p2r + dec_view  (Need to modify normal P2R message to contain view=0), current view
+// void HandleP2_Rec -> Reply with p2 decision
+// void HandleFB_Invoke -> send Elect message to FB based on views
+// void HandleFB_Dec -> receive FB decision and send to all interested
+
+//Fallback responsibilities
+//void HandleFB_Elect: If 4f+1 received -> send HandleFB_Dec to all replicas in logging shard
+
   proto::ConcurrencyControl::Result DoOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,

@@ -58,6 +58,7 @@ TAPIR depends on protobufs, libevent and openssl, so you will need the following
 - libevent-dev
 - libssl-dev
 - libgflags-dev
+- libsodium-dev
 
 In addition, you need to install the following libraries from source:
 - [googletest-1.10](https://github.com/google/googletest/releases/tag/release-1.10.0)

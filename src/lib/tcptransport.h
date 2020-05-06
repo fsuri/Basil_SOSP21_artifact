@@ -36,6 +36,7 @@
 #include "lib/transport.h"
 #include "lib/transportcommon.h"
 #include "lib/latency.h"
+#include "lib/threadpool.h"
 
 #include <event2/event.h>
 #include <event2/buffer.h>
@@ -129,6 +130,7 @@ private:
     std::map<TCPTransportAddress, struct bufferevent *> tcpOutgoing;
     std::map<struct bufferevent *, TCPTransportAddress> tcpAddresses;
     Latency_t sockWriteLat;
+    ThreadPool tp;
 
     virtual bool SendMessageInternal(TransportReceiver *src,
                              const TCPTransportAddress &dst,

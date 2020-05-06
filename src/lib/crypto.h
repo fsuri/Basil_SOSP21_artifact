@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include <cryptopp/eccrypto.h>
+#include <sodium.h>
 #include <cryptopp/rsa.h>
 #include <cryptopp/pssr.h>
 #include <cryptopp/files.h>
@@ -18,8 +18,8 @@ using namespace CryptoPP;
 using namespace std;
 
 #ifdef USE_ECDSA_SIGS
-using PrivKey = ECDSA<ECP, SHA256>::PrivateKey;
-using PubKey = ECDSA<ECP, SHA256>::PublicKey;
+using PubKey = unsigned char*;
+using PrivKey = unsigned char*;
 #else
 using PrivKey = RSA::PrivateKey;
 using PubKey = RSA::PublicKey;
@@ -42,6 +42,8 @@ PrivKey LoadPrivateKey(const string &filename);
 PrivKey GeneratePrivateKey();
 
 PubKey DerivePublicKey(PrivKey &privateKey);
+
+std::pair<PrivKey, PubKey> GenerateKeypair();
 
 // TODO should have canonical serialization for this to be correct,
 // but this should be fine for now

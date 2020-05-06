@@ -1,5 +1,5 @@
 %-------------------------------------------------------------------------------
-\section{Architecture}
+\section{Overview}
 %-------------------------------------------------------------------------------
 \begin{figure*}[!th]
 \begin{center}
@@ -9,6 +9,18 @@
 \label{fig:Figure1}
 \end{figure*}
 
+\sys is designed to be scalable and leaderless and our architecture reflects this ethos. \sys{} is a sharded and replicated transactional key-value store.
+
+\par \textbf{Transaction Execution} Transaction execution is driven by clients (removing costly all-to-all
+communications amongst replicas) and consists of three phases. First, in an \textit{execution phase}, clients execute individual transactional operations. As is standard in optimistic
+databases, reads are submitted to remote replicas while writes are buffered locally. \sys{} supports \textit{interactive} and cross-shard transactions: clients
+can issue new operations based on the results of past operations to any shard in the system. \sys{} must additionally ensure that these read operations do not violate
+Byzantine independence. In a second \textit{validation phase}, invidual shards in \sys{} must validate whether committing the transaction would violate serializability. For performance,
+\sys{} allows invidiual replicas within to process requests out of order. \sys{} must additionally ensure that Byzantine actors cannot cause spurious aborts. Finally, \sys{} aggregates each shard decision in a \textit{commit phase} and determines the outcome of the transaction, notifying both the application and replicas in the system of the decision. Importantly, this decision must be preserved across failures, reconfigurations and Byzantine attacks. We describe each of these phases in turn in Section~\ref{}
+
+\par \textbt{Transaction Recovery} To ensure progress, design a recovery mechanism that can finish stalled transactions. We describe this fallback mechanism in Section~\ref{}.
+
+\nc{Florian's version in comments}
 \sys is designed to be scalable and leaderless. Our architecture reflects this ethos. We briefly summarise it here before going into more detail in the later sections. 
 In \sys, clients drive the entire transaction life cycle which can be broken down into three stages as shown in Figure \ref{fig:Figure1}: i) Execution, ii) Validation, and iii) Writeback. 
 i) Clients \textit{speculatively execute} transactions themselves, invoking only remote read procedure calls (1) and buffering writes locally (2). Transactions may read and write arbitrarily and can span several data partitions (shards). Moreover, different clients may execute transactions concurrently, performing reads in different order at (a subset of) replicas within each shard. 

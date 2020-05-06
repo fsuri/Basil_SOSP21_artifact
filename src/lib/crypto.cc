@@ -1,4 +1,5 @@
 #include "lib/crypto.h"
+#include "lib/assert.h"
 
 namespace crypto {
 
@@ -6,8 +7,8 @@ using namespace CryptoPP;
 using namespace std;
 
 #ifdef USE_ECDSA_SIGS
-using Signer = ECDSA<ECP, SHA256>::Signer;
-using Verifier = ECDSA<ECP, SHA256>::Verifier;
+// using Signer = ECDSA<ECP, SHA256>::Signer;
+// using Verifier = ECDSA<ECP, SHA256>::Verifier;
 #else
 using Signer = RSASS<PSS, SHA256>::Signer;
 using Verifier = RSASS<PSS, SHA256>::Verifier;
@@ -24,6 +25,11 @@ string Hash(const string &message) {
 }
 
 string Sign(const PrivKey &privateKey, const string &message) {
+  #ifdef USE_ECDSA_SIGS
+  unsigned char edsig[crypto_sign_BYTES];
+  crypto_sign_detached(edsig, NULL, (const unsigned char*) message.c_str(), message.length(), privateKey);
+  std::string signature(reinterpret_cast<char*>(edsig), crypto_sign_BYTES);
+  #else
   // sign message
   std::string signature;
   Signer signer(privateKey);
@@ -31,11 +37,15 @@ string Sign(const PrivKey &privateKey, const string &message) {
 
   StringSource ss(message, true,
                   new SignerFilter(prng, signer, new StringSink(signature)));
+  #endif
 
   return signature;
 }
 
 bool Verify(const PubKey &publicKey, const string &message, const string &signature) {
+  #ifdef USE_ECDSA_SIGS
+  bool result = crypto_sign_verify_detached((const unsigned char*) signature.c_str(), (const unsigned char*) message.c_str(), message.length(), publicKey) == 0;
+  #else
   // verify message
   bool result = false;
   Verifier verifier(publicKey);
@@ -43,6 +53,7 @@ bool Verify(const PubKey &publicKey, const string &message, const string &signat
       signature + message, true,
       new SignatureVerificationFilter(
           verifier, new ArraySink((uint8_t *)&result, sizeof(result))));
+  #endif
 
   return result;
 }
@@ -55,17 +66,29 @@ void Save(const std::string &filename, const BufferedTransformation &bt) {
 }
 
 void SavePublicKey(const string &filename, PubKey &key) {
+  #ifdef USE_ECDSA_SIGS
+  FILE * file = fopen(filename.c_str(), "w+");
+  fwrite(key, sizeof(unsigned char), crypto_sign_PUBLICKEYBYTES, file);
+  fclose(file);
+  #else
   ByteQueue queue;
   key.Save(queue);
 
   Save(filename, queue);
+  #endif
 }
 
 void SavePrivateKey(const std::string &filename, PrivKey &key) {
+  #ifdef USE_ECDSA_SIGS
+  FILE * file = fopen(filename.c_str(), "w+");
+  fwrite(key, sizeof(unsigned char), crypto_sign_SECRETKEYBYTES, file);
+  fclose(file);
+  #else
   ByteQueue queue;
   key.Save(queue);
 
   Save(filename, queue);
+  #endif
 }
 
 void Load(const string &filename, BufferedTransformation &bt) {
@@ -77,20 +100,35 @@ void Load(const string &filename, BufferedTransformation &bt) {
 
 PubKey LoadPublicKey(const string &filename) {
   PubKey key;
+  #ifdef USE_ECDSA_SIGS
+  FILE * file = fopen(filename.c_str(), "r+");
+  key = (PubKey) malloc(crypto_sign_PUBLICKEYBYTES);
+  fread(key, sizeof(unsigned char), crypto_sign_PUBLICKEYBYTES, file);
+  fclose(file);
+  #else
   ByteQueue queue;
   Load(filename, queue);
 
   key.Load(queue);
+  #endif
 
   return key;
 }
 
 PrivKey LoadPrivateKey(const string &filename) {
   PrivKey key;
+  #ifdef USE_ECDSA_SIGS
+  // Reading data to array of unsigned chars
+  FILE * file = fopen(filename.c_str(), "r+");
+  key = (PrivKey) malloc(crypto_sign_SECRETKEYBYTES);
+  fread(key, sizeof(unsigned char), crypto_sign_SECRETKEYBYTES, file);
+  fclose(file);
+  #else
   ByteQueue queue;
   Load(filename, queue);
 
   key.Load(queue);
+  #endif
 
   return key;
 }
@@ -102,7 +140,8 @@ PrivKey GeneratePrivateKey() {
   // generate keys
   PrivKey privateKey;
   #ifdef USE_ECDSA_SIGS
-  privateKey.Initialize(prng, ASN1::secp256k1());
+  // privateKey.Initialize(prng, ASN1::secp256k1());
+  Panic("Illegal");
   #else
   privateKey.Initialize(prng, 2048);
   #endif
@@ -116,17 +155,25 @@ PubKey DerivePublicKey(PrivKey &privateKey) {
 
   #ifdef USE_ECDSA_SIGS
   PubKey publicKey;
-  privateKey.MakePublicKey(publicKey);
+  // privateKey.MakePublicKey(publicKey);
+  Panic("Illegal");
   #else
   PubKey publicKey(privateKey);
-  #endif
-
   bool result = publicKey.Validate(prng, 3);
   if (!result) {
     throw "Public key derivation failed";
   }
+  #endif
+
 
   return publicKey;
+}
+
+std::pair<PrivKey, PubKey> GenerateKeypair() {
+  PubKey pk = (PubKey) malloc(crypto_sign_PUBLICKEYBYTES);
+  PrivKey sk = (PrivKey) malloc(crypto_sign_SECRETKEYBYTES);
+  crypto_sign_keypair(pk, sk);
+  return std::pair<PrivKey, PubKey>(sk, pk);
 }
 
 }  // namespace crypto

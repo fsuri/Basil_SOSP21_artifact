@@ -6,28 +6,19 @@ Michael Abd-El-Malek, Gregory~R Ganger, Garth~R Goodson, Michael~K Reiter, and
 \newblock Fault-scalable byzantine fault-tolerant services.
 \newblock {\em ACM SIGOPS Operating Systems Review}, 39(5):59--74, 2005.
 
-\bibitem{Abdollah2007}
-T.~Abdollah.
-\newblock {LAX} outage is blamed on 1 computer.
-\newblock {\em Los Angeles Times}, August 2007.
+\bibitem{adya99weakconsis}
+Atul Adya.
+\newblock {\em Weak Consistency: A Generalized Theory and Optimistic
+  Implementations for Distributed Transactions}.
+\newblock {Ph.D.}, MIT, Cambridge, MA, USA, March 1999.
+\newblock Also as Technical Report MIT/LCS/TR-786.
 
-\bibitem{abraham2017revisiting}
-Ittai Abraham, Guy Gueta, Dahlia Malkhi, Lorenzo Alvisi, Rama Kotla, and
-  Jean-Philippe Martin.
-\newblock Revisiting fast practical byzantine fault tolerance.
-\newblock {\em arXiv preprint arXiv:1712.01367}, 2017.
-
-\bibitem{abraham2018revisiting}
-Ittai Abraham, Guy Gueta, Dahlia Malkhi, and Jean-Philippe Martin.
-\newblock Revisiting fast practical byzantine fault tolerance: Thelma, velma,
-  and zelma.
-\newblock {\em arXiv preprint arXiv:1801.10022}, 2018.
-
-\bibitem{adya1995efficient}
-Atul Adya, Robert Gruber, Barbara Liskov, and Umesh Maheshwari.
-\newblock Efficient optimistic concurrency control using loosely synchronized
-  clocks.
-\newblock {\em ACM SIGMOD Record}, 24(2):23--34, 1995.
+\bibitem{aguilera2007sinfonia}
+Marcos~K. Aguilera, Arif Merchant, Mehul Shah, Alistair Veitch, and Christos
+  Karamanolis.
+\newblock Sinfonia: A new paradigm for building scalable distributed systems.
+\newblock In {\em Proceedings of the 21st ACM Symposium on Operating Systems
+  Principles}, SOSP '07, pages 159--174.
 
 \bibitem{al2017chainspace}
 Mustafa Al-Bassam, Alberto Sonnino, Shehar Bano, Dave Hrycyszyn, and George
@@ -66,18 +57,33 @@ Rida Bazzi and Maurice Herlihy.
 \newblock In {\em International Symposium on Stabilizing, Safety, and Security
   of Distributed Systems}, pages 254--268. Springer, 2018.
 
-\bibitem{ben1983another}
-Michael Ben-Or.
-\newblock Another advantage of free choice: Completely asynchronous agreement
-  protocols (extended abstract),".
-\newblock In {\em Proceedings of the 2nd ACM Annual Symposium on Principles of
-  Distributed Computing, Montreal, Quebec}, pages 27--30, 1983.
+\bibitem{bazzi2004non}
+Rida~A Bazzi and Yin Ding.
+\newblock Non-skipping timestamps for byzantine data storage systems.
+\newblock In {\em International Symposium on Distributed Computing}, pages
+  405--419. Springer, 2004.
+
+\bibitem{bernstein1979fas}
+P.~A. Bernstein, D.~W. Shipman, and W.~S. Wong.
+\newblock Formal aspects of serializability in database concurrency control.
+\newblock {\em IEEE Trans. Softw. Eng.}, 5(3):203--216, May 1979.
+
+\bibitem{bernstein1983mcc}
+Philip~A Bernstein and Nathan Goodman.
+\newblock Multiversion concurrency control;theory and algorithms.
+\newblock {\em ACM Transactions on Database Systems}, 8(4):465--483, 1983.
 
 \bibitem{bernstein1983multiversion}
 Philip~A Bernstein and Nathan Goodman.
 \newblock Multiversion concurrency control—theory and algorithms.
 \newblock {\em ACM Transactions on Database Systems (TODS)}, 8(4):465--483,
   1983.
+
+\bibitem{bernstein1987concurrency}
+Philip~A Bernstein, Vassos Hadzilacos, and Nathan Goodman.
+\newblock {\em Concurrency control and recovery in database systems}, volume
+  370.
+\newblock Addison-wesley New York, 1987.
 
 \bibitem{bessani2014state}
 Alysson Bessani, Jo{\~a}o Sousa, and Eduardo~EP Alchieri.
@@ -108,21 +114,18 @@ Allen Clement, Manos Kapritsos, Sangmin Lee, Yang Wang, Lorenzo Alvisi, Mike
 \newblock In {\em SOSP '09: Proceedings of the ACM SIGOPS 22nd symposium on
   Operating systems principles}, pages 277--290, New York, NY, USA, 2009. ACM.
 
+\bibitem{clement09aardvark}
+Allen Clement, Edmund Wong, Lorenzo Alvisi, Mike Dahlin, and Mirco Marchetti.
+\newblock Making byzantine fault tolerant systems tolerate byzantine faults.
+\newblock In {\em Proceedings of the 6th USENIX Symposium on Networked Systems
+  Design and Implementation}, NSDI’09, page 153–168, USA, 2009. USENIX
+  Association.
+
 \bibitem{clement2009making}
 Allen Clement, Edmund~L Wong, Lorenzo Alvisi, Michael Dahlin, and Mirco
   Marchetti.
 \newblock Making byzantine fault tolerant systems tolerate byzantine faults.
 \newblock In {\em NSDI}, volume~9, pages 153--168, 2009.
-
-\bibitem{StateFarmQuorum2}
-Coindesk.
-\newblock State farm, usaa to pay each other insurance claims on blockchain by
-  2020, May, 2019.
-
-\bibitem{AutoInventory}
-Coindesk.
-\newblock Jpmorgan tests private blockchain to track auto dealer inventory,
-  November, 2019.
 
 \bibitem{cowling2006hq}
 James Cowling, Daniel Myers, Barbara Liskov, Rodrigo Rodrigues, and Liuba
@@ -132,41 +135,28 @@ James Cowling, Daniel Myers, Barbara Liskov, Rodrigo Rodrigues, and Liuba
 \newblock In {\em Proceedings of the 7th symposium on Operating systems design
   and implementation}, pages 177--190, 2006.
 
+\bibitem{crooks2018obladi}
+Natacha Crooks, Matthew Burke, Ethan Cecchetti, Sitar Harel, Rachit Agarwal,
+  and Lorenzo Alvisi.
+\newblock Obladi: Oblivious serializable transactions in the cloud.
+\newblock In {\em 13th {USENIX} Symposium on Operating Systems Design and
+  Implementation ({OSDI} 18)}, pages 727--743, Carlsbad, CA, October 2018.
+  {USENIX} Association.
+
 \bibitem{duan2014hbft}
 Sisi Duan, Sean Peisert, and Karl~N Levitt.
 \newblock hbft: speculative byzantine fault tolerance with minimum cost.
 \newblock {\em IEEE Transactions on Dependable and Secure Computing},
   12(1):58--70, 2014.
 
-\bibitem{duan2018beat}
-Sisi Duan, Michael~K Reiter, and Haibin Zhang.
-\newblock Beat: Asynchronous bft made practical.
-\newblock In {\em Proceedings of the 2018 ACM SIGSAC Conference on Computer and
-  Communications Security}, pages 2028--2041, 2018.
-
 \bibitem{fischer1985impossibility}
 Michael~J Fischer, Nancy~A Lynch, and Michael~S Paterson.
 \newblock Impossibility of distributed consensus with one faulty process.
 \newblock {\em Journal of the ACM (JACM)}, 32(2):374--382, 1985.
 
-\bibitem{StateFarmQuorum}
-Forbes.
-\newblock State farm and usaa see stark increase in efficiency when testing
-  blockchain subrogation, July, 2019.
-
 \bibitem{Hyperledger}
 The~Linux Foundation.
 \newblock An introduction to hyperledger, July, 2018.
-
-\bibitem{HyperledgerHealth}
-The~Linux Foundation.
-\newblock Change healthcare using hyperledger fabric to improve claims
-  lifecycle throughput and transparency, June, 2019.
-
-\bibitem{HyperledgerTelecom}
-The~Linux Foundation.
-\newblock Optimizing wholesale intercarrier settlement with hyperledger fabric
-  blockchain, November2019.
 
 \bibitem{garcia2011efficient}
 Rui Garcia, Rodrigo Rodrigues, and Nuno Pregui{\c{c}}a.
@@ -174,12 +164,6 @@ Rui Garcia, Rodrigo Rodrigues, and Nuno Pregui{\c{c}}a.
   replication.
 \newblock In {\em Proceedings of the sixth conference on Computer systems},
   pages 107--122, 2011.
-
-\bibitem{garcia1986applications}
-Hector Garcia~Molina, Frank Pittelli, and Susan Davidson.
-\newblock Applications of byzantine agreement in database systems.
-\newblock {\em ACM Transactions on Database Systems (TODS)}, 11(1):27--47,
-  1986.
 
 \bibitem{gilad2017algorand}
 Yossi Gilad, Rotem Hemo, Silvio Micali, Georgios Vlachos, and Nickolai
@@ -200,6 +184,13 @@ Guy~Golan Gueta, Ittai Abraham, Shelly Grossman, Dahlia Malkhi, Benny Pinkas,
 \newblock Sbft: a scalable decentralized trust infrastructure for blockchains.
 \newblock {\em arXiv preprint arXiv:1804.01626}, 2018.
 
+\bibitem{haeberlen2010accountable}
+Andreas Haeberlen, Paarijaat Aditya, Rodrigo Rodrigues, and Peter Druschel.
+\newblock Accountable virtual machines.
+\newblock In {\em Proceedings of the 9th USENIX Conference on Operating Systems
+  Design and Implementation}, OSDI’10, page 119–134, USA, 2010. USENIX
+  Association.
+
 \bibitem{herlihy2016enhancing}
 Maurice Herlihy and Mark Moir.
 \newblock Enhancing accountability and trust in distributed ledgers.
@@ -218,6 +209,11 @@ Eleftherios Kokoris-Kogias, Philipp Jovanovic, Linus Gasser, Nicolas Gailly,
 \newblock In {\em 2018 IEEE Symposium on Security and Privacy (SP)}, pages
   583--598. IEEE, 2018.
 
+\bibitem{Kotla07Zyzzyva}
+R.~Kotla, L.~Alvisi, M.~Dahlin, A.~Clement, and E.~Wong.
+\newblock {Zyzzyva:} {S}peculative {B}yzantine fault tolerance.
+\newblock In {\em Proc. 20th SOSP}, October 2007.
+
 \bibitem{Kotla04High}
 R.~Kotla and M.~Dahlin.
 \newblock High throughput {B}yzantine fault tolerance.
@@ -234,6 +230,11 @@ Tim Kraska, Gene Pang, Michael~J. Franklin, Samuel Madden, and Alan Fekete.
 \newblock Mdcc: multi-data center consistency.
 \newblock In {\em Proceedings of the 8th ACM European Conference on Computer
   Systems}, EuroSys '13, pages 113--126.
+
+\bibitem{kung1981occ}
+H.~T. Kung and John~T. Robinson.
+\newblock {On Optimistic Methods for Concurrency Control}.
+\newblock {\em ACM Transactions on Database Systems}, 6(2):213--226, 1981.
 
 \bibitem{Lamport01Paxos}
 L.~Lamport.
@@ -267,18 +268,19 @@ Leslie Lamport.
 \newblock In {\em International Symposium on Distributed Computing}, pages
   211--224. Springer, 2011.
 
-\bibitem{lamport2019byzantine}
-Leslie Lamport, Robert Shostak, and Marshall Pease.
-\newblock The byzantine generals problem.
-\newblock In {\em Concurrency: the Works of Leslie Lamport}, pages 203--226.
-  2019.
-
 \bibitem{Lampson2001}
 Butler Lampson.
 \newblock The abcd's of paxos.
 \newblock In {\em PODC '01: Proceedings of the twentieth annual ACM symposium
   on Principles of distributed computing}, page~13, New York, NY, USA, 2001.
   ACM.
+
+\bibitem{li2016sarek}
+Bijun Li, Wenbo Xu, Muhammad~Zeeshan Abid, Tobias Distler, and R{\"u}diger
+  Kapitza.
+\newblock Sarek: Optimistic parallel ordering in byzantine fault tolerance.
+\newblock In {\em 2016 12th European Dependable Computing Conference (EDCC)},
+  pages 77--88. IEEE, 2016.
 
 \bibitem{li2012redblue}
 Cheng Li, Daniel Porto, Allen Clement, Johannes Gehrke, Nuno Pregui\c{c}a, and
@@ -335,12 +337,6 @@ J-P Martin and Lorenzo Alvisi.
 \newblock {\em IEEE Transactions on Dependable and Secure Computing},
   3(3):202--215, 2006.
 
-\bibitem{miller2016honey}
-Andrew Miller, Yu~Xia, Kyle Croman, Elaine Shi, and Dawn Song.
-\newblock The honey badger of bft protocols.
-\newblock In {\em Proceedings of the 2016 ACM SIGSAC Conference on Computer and
-  Communications Security}, pages 31--42, 2016.
-
 \bibitem{moraru2013there}
 Iulian Moraru, David~G Andersen, and Michael Kaminsky.
 \newblock There is more consensus in egalitarian parliaments.
@@ -350,6 +346,13 @@ Iulian Moraru, David~G Andersen, and Michael Kaminsky.
 \bibitem{EthereumQuorum}
 JP~Morgan.
 \newblock Quorum, 2020.
+
+\bibitem{mu2014extracting}
+Shuai Mu, Yang Cui, Yang Zhang, Wyatt Lloyd, and Jinyang Li.
+\newblock Extracting more concurrency from distributed transactions.
+\newblock In {\em Proceedings of the 11th USENIX Conference on Operating
+  Systems Design and Implementation}, OSDI'14, pages 479--494, Berkeley, CA,
+  USA, 2014. USENIX Association.
 
 \bibitem{mu2016consolidating}
 Shuai Mu, Lamont Nelson, Wyatt Lloyd, and Jinyang Li.
@@ -384,6 +387,11 @@ Ricardo Padilha and Fernando Pedone.
 \newblock In {\em Proceedings of the 8th ACM European Conference on Computer
   Systems}, EuroSys '13, pages 99--112.
 
+\bibitem{Papadimitriou1979serializability}
+Christos~H. Papadimitriou.
+\newblock {The Serializability of Concurrent Database Updates}.
+\newblock {\em Journal of the ACM (JACM)}, 26(4):631--653, 1979.
+
 \bibitem{park2019exploiting}
 Seo~Jin Park and John Ousterhout.
 \newblock Exploiting commutativity for practical fast replication.
@@ -411,6 +419,11 @@ Serguei Popov.
 \newblock The tangle.
 \newblock {\em cit. on}, page 131, 2016.
 
+\bibitem{reed1983atomic}
+David~P. Reed.
+\newblock {Implementing Atomic Actions on Decentralized Data}.
+\newblock {\em {ACM} Trans. Comput. Syst.}, 1(1):3--23, 1983.
+
 \bibitem{reed1983implementing}
 David~P Reed.
 \newblock Implementing atomic actions on decentralized data.
@@ -427,39 +440,22 @@ Fred~B Schneider.
   approach: A tutorial.
 \newblock {\em ACM Computing Surveys (CSUR)}, 22(4):299--319, 1990.
 
-\bibitem{sharma2018databasify}
-Ankur Sharma, Felix~Martin Schuhknecht, Divya Agrawal, and Jens Dittrich.
-\newblock How to databasify a blockchain: the case of hyperledger fabric.
-\newblock {\em arXiv preprint arXiv:1810.13177}, 2018.
-
-\bibitem{shrestha2019revisiting}
-Nibesh Shrestha and Mohan Kumar.
-\newblock Revisiting ezbft: A decentralized byzantine fault tolerant protocol
-  with speculation.
-\newblock {\em arXiv preprint arXiv:1909.03990}, 2019.
-
-\bibitem{singh2008bft}
-Atul Singh, Tathagata Das, Petros Maniatis, Peter Druschel, and Timothy Roscoe.
-\newblock Bft protocols under fire.
-\newblock In {\em NSDI}, volume~8, pages 189--204, 2008.
-
 \bibitem{stathakopoulou2019mir}
 Chrysoula Stathakopoulou, Tudor David, and Marko Vukoli{\'c}.
 \newblock Mir-bft: High-throughput bft for blockchains.
 \newblock {\em arXiv preprint arXiv:1906.05552}, 2019.
+
+\bibitem{su2017tebaldi}
+Chunzhi Su, Natacha Crooks, Cong Ding, Lorenzo Alvisi, and Chao Xie.
+\newblock Bringing modular concurrency control to the next level.
+\newblock In {\em Proceedings of the 2017 ACM International Conference on
+  Management of Data}, SIGMOD '17, pages 283--297, 2017.
 
 \bibitem{sutra2011fast}
 Pierre Sutra and Marc Shapiro.
 \newblock Fast genuine generalized consensus.
 \newblock In {\em 2011 IEEE 30th International Symposium on Reliable
   Distributed Systems}, pages 255--264. IEEE, 2011.
-
-\bibitem{thomas1979majority}
-Robert~H Thomas.
-\newblock A majority consensus approach to concurrency control for multiple
-  copy databases.
-\newblock {\em ACM Transactions on Database Systems (TODS)}, 4(2):180--209,
-  1979.
 
 \bibitem{van2014vive}
 Robbert Van~Renesse, Nicolas Schiper, and Fred~B Schneider.
@@ -473,6 +469,12 @@ Ben Vandiver, Hari Balakrishnan, Barbara Liskov, and Sam Madden.
   commit barrier scheduling.
 \newblock In {\em Proceedings of twenty-first ACM SIGOPS symposium on Operating
   systems principles}, pages 59--72, 2007.
+
+\bibitem{xie2015callas}
+Chao Xie, Chunzhi Su, Cody Littley, Lorenzo Alvisi, Manos Kapritsos, and Yang
+  Wang.
+\newblock {High-performance ACID via Modular Concurrency Control}.
+\newblock In {\em ACM Symposium on Operating System Principles (SOSP)}, 2015.
 
 \bibitem{yan2018carousel}
 Xinan Yan, Linguan Yang, Hongbo Zhang, Xiayue~Charles Lin, Bernard Wong,
@@ -502,13 +504,6 @@ Mahdi Zamani, Mahnush Movahedi, and Mariana Raykova.
 \newblock Rapidchain: Scaling blockchain via full.
 \newblock In {\em Proceedings of the 2018 ACM SIGSAC Conference on Computer and
   Communications Security}, pages 931--948, 2018.
-
-\bibitem{Zhang2015}
-Irene Zhang, Naveen~Kr. Sharma, Adriana Szekeres, Arvind Krishnamurthy, and Dan
-  R.~K. Ports.
-\newblock Building consistent transactions with inconsistent replication.
-\newblock In {\em Proceedings of the 25th Symposium on Operating Systems
-  Principles}, SOSP '15, pages 263--278, 2015.
 
 \bibitem{zhang2015tapir}
 Irene Zhang, Naveen~Kr. Sharma, Adriana Szekeres, Arvind Krishnamurthy, and Dan

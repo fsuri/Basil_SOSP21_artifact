@@ -70,12 +70,22 @@ Not more than 200 words, if possible, and preferably closer to 150.
 %\input{sections/Introduction/Qshort.tex}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%5
+%-------------------------------------------------------------------------------
+\section{Model and Definitions}
+\label{section:model}
+%-------------------------------------------------------------------------------
 
 %\input{sections/Indicus/Definitions/Definitions-Notes.tex}
 \input{sections/Indicus/Definitions/Model.tex}
 \input{sections/Indicus/Definitions/Properties.tex}
 
 
+
+%-------------------------------------------------------------------------------
+\section{System Overview}
+\label{section:arch}
+%-------------------------------------------------------------------------------
+\input{sections/Indicus/Protocol/Header.tex}
 %\input{sections/Indicus/Preamble.tex}\\
 
 
@@ -85,14 +95,22 @@ Not more than 200 words, if possible, and preferably closer to 150.
 
 
 %\input{sections/Indicus/Protocol/Protocol-Notes.tex}
+
+
 %-------------------------------------------------------------------------------
-\section{Indicus}
+\section{Transaction Execution}
+\label{section:exec}
 %-------------------------------------------------------------------------------
-\input{sections/Indicus/Protocol/Header.tex}
 \input{sections/Indicus/Protocol/subsections/Execution.tex}
 \input{sections/Indicus/Protocol/subsections/MVTSO-Check.tex}
 \input{sections/Indicus/Protocol/subsections/Validation.tex}
 \input{sections/Indicus/Protocol/subsections/Writeback.tex}
+
+%-------------------------------------------------------------------------------
+\section{Transaction Recovery}
+\label{section:rec}
+%-------------------------------------------------------------------------------
+
 \input{sections/Indicus/Protocol/subsections/Fallback.tex}
 \input{sections/Indicus/Protocol/subsections/Optimizations.tex}
 
@@ -116,10 +134,7 @@ Not more than 200 words, if possible, and preferably closer to 150.
 %-------------------------------------------------------------------------------
 \section*{Acknowledgments}
 %-------------------------------------------------------------------------------
-
-The USENIX latex style is old and very tired, which is why
-there's no \textbackslash{}acks command for you to use when
-acknowledging. Sorry.
+%see ack.txt
 
 %-------------------------------------------------------------------------------
 \section*{Availability}

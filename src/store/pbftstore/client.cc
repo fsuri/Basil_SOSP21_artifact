@@ -26,6 +26,7 @@ Client::Client(const transport::Configuration& config, int nGroups, int nShards,
     uniform_int_distribution<uint64_t> dis;
     client_id = dis(gen);
   }
+  client_seq_num = 0;
 
   bclient.reserve(ngroups);
 
@@ -54,12 +55,12 @@ Client::~Client()
 void Client::Begin(begin_callback bcb, begin_timeout_callback btcb, uint32_t timeout) {
   Debug("BEGIN tx");
 
-  transport->Timer(0, [this](){
-    currentTxn = proto::Transaction();
-    // Optimistically choose a read timestamp for all reads in this transaction
-    currentTxn.mutable_timestamp()->set_timestamp(timeServer.GetTime());
+  client_seq_num++;
+  currentTxn = proto::Transaction();
+  // Optimistically choose a read timestamp for all reads in this transaction
+  currentTxn.mutable_timestamp()->set_timestamp(timeServer.GetTime());
   currentTxn.mutable_timestamp()->set_id(client_id);
-  });
+  bcb(client_seq_num);
 }
 
 void Client::Get(const std::string &key, get_callback gcb,

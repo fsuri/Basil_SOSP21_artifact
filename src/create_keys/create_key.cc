@@ -12,15 +12,15 @@ int main(int argc, char** argv) {
   const char* keyname = argv[1];
   std::string keyFileName(keyname);
 
-  crypto::PrivKey privateKey = crypto::GeneratePrivateKey();
-  crypto::PubKey publicKey =
-      crypto::DerivePublicKey(privateKey);
+  std::pair<crypto::PrivKey, crypto::PubKey> keypair = crypto::GenerateKeypair();
+  crypto::PrivKey privKey = keypair.first;
+  crypto::PubKey pubKey = keypair.second;
 
   std::string privateKeyname = keyFileName + ".priv";
-  crypto::SavePrivateKey(privateKeyname, privateKey);
+  crypto::SavePrivateKey(privateKeyname, privKey);
   std::cout << "Saved private key to: " << privateKeyname << std::endl;
 
   std::string publicKeyname = keyFileName + ".pub";
-  crypto::SavePublicKey(publicKeyname, publicKey);
+  crypto::SavePublicKey(publicKeyname, pubKey);
   std::cout << "Saved public key to: " << publicKeyname << std::endl;
 }
