@@ -101,7 +101,11 @@ void Load(const string &filename, BufferedTransformation &bt) {
 PubKey LoadPublicKey(const string &filename) {
   PubKey key;
   #ifdef USE_ECDSA_SIGS
-  FILE * file = fopen(filename.c_str(), "r+");
+  FILE * file = fopen(filename.c_str(), "r");
+  if (file == NULL) {
+    Panic("Could not open public key file %s: %s", filename.c_str(),
+       strerror(errno));
+  }
   key = (PubKey) malloc(crypto_sign_PUBLICKEYBYTES);
   fread(key, sizeof(unsigned char), crypto_sign_PUBLICKEYBYTES, file);
   fclose(file);
@@ -119,7 +123,11 @@ PrivKey LoadPrivateKey(const string &filename) {
   PrivKey key;
   #ifdef USE_ECDSA_SIGS
   // Reading data to array of unsigned chars
-  FILE * file = fopen(filename.c_str(), "r+");
+  FILE * file = fopen(filename.c_str(), "r");
+  if (file == NULL) {
+    Panic("Could not open private key file %s: %s", filename.c_str(),
+        strerror(errno));
+  }
   key = (PrivKey) malloc(crypto_sign_SECRETKEYBYTES);
   fread(key, sizeof(unsigned char), crypto_sign_SECRETKEYBYTES, file);
   fclose(file);
