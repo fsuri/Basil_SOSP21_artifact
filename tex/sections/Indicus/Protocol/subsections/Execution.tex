@@ -19,11 +19,11 @@
 %Afterwards: explain execution interface. After that explain validation check. Then have overarching example
 \iffalse
 % we need to change a few things:
-0) timestmap bound
-1) Read validity
-2) deferred writes
-3) read uncommitted
-4) byz read timestamps (read lock implies you had access control, at that point it is no different than issuing a tx and completing. But we do not want to give the power to abort for no reason. It should be traceable.
+% 0) timestmap bound
+% 1) Read validity
+% 2) deferred writes
+% 3) read uncommitted
+% 4) byz read timestamps (read lock implies you had access control, at that point it is no different than issuing a tx and completing. But we do not want to give the power to abort for no reason. It should be traceable.
 \fi
 
 \fs{fig doesnt make so much sense before reading the whole thing} \fs{cut this preamble?}
@@ -37,7 +37,7 @@ Figure \ref{fig:MVTSOEX} shows an example trace of \sys operational behaviors un
 \label{fig:MVTSOEX}
 \end{figure*}
 
-\par \textbf{MVTSO.} Our starting point is Multiversioned Timestamp Ordering (MVTSO), a concurrency control scheme which prescribes a serialization order by assigning a speculative timestamp \textit{before} execution \cite{bernstein1983multiversion, reed1983implementing, su2017tebaldi}. In MVTSO, read operations return the latest written version smaller than the readers' timestamps. Respectively, writers attempt to create new versions at their timestamp, but must abort if a higher timestamped read would have "missed the write" by reading a prior version. A transaction may commit only, if all read-write dependencies have committed.
+\par \textbf{MVTSO.} Our starting point is Multiversioned Timestamp Ordering (MVTSO), a concurrency control scheme that prescribes a serialization order by assigning a speculative timestamp \textit{before} execution \cite{bernstein1983multiversion, reed1983implementing, su2017tebaldi}. In MVTSO, reading object $o$  returns $o$'s  the latest written version smaller than the readers' timestamps. Writers attempting to create a new version of $o$  must abort if a higher timestamped read has already retrieved an earlier version of $o$ (if they didn't, that read operation would appear to have ``missed a write''). A transaction may commit only if all read-write dependencies have committed.
 
 \iffalse
 \fs{cut the whole following paragraph?} \la{Yes, I would cut it} This allows us to a) only classify concurent read/write operations as conflicting if their execution results violate the timestamp order (Fig. \ref{fig:MVTSOEX}: 4 bottom), and b) avoid write/write conflicts alltogether. 
