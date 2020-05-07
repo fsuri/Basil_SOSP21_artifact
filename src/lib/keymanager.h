@@ -7,16 +7,18 @@
 
 class KeyManager {
  public:
-  KeyManager(const std::string &keyPath);
+  KeyManager(const std::string &keyPath, crypto::KeyType t, bool precompute);
   virtual ~KeyManager();
 
-  const crypto::PubKey &GetPublicKey(uint64_t id);
-  const crypto::PrivKey &GetPrivateKey(uint64_t id);
+  crypto::PubKey* GetPublicKey(uint64_t id);
+  crypto::PrivKey* GetPrivateKey(uint64_t id);
 
  private:
   const std::string keyPath;
-  std::map<uint64_t, crypto::PubKey> publicKeys;
-  std::map<uint64_t, crypto::PrivKey> privateKeys;
+  const crypto::KeyType keyType;
+  const bool precompute;
+  std::map<uint64_t, crypto::PubKey*> publicKeys;
+  std::map<uint64_t, crypto::PrivKey*> privateKeys;
 };
 
 #endif

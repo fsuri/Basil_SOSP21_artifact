@@ -38,7 +38,7 @@ bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
 
 bool __PreValidateSignedMessage(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager, proto::PackedMessage &packedMessage) {
-  crypto::PubKey replicaPublicKey = keyManager->GetPublicKey(
+  crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(
       signedMessage.process_id());
   // verify that the replica actually sent this reply and that we are expecting
   // this reply
@@ -51,7 +51,7 @@ bool __PreValidateSignedMessage(const proto::SignedMessage &signedMessage,
 }
 
 void SignMessage(const ::google::protobuf::Message &msg,
-    const crypto::PrivKey &privateKey, uint64_t processId,
+    crypto::PrivKey* privateKey, uint64_t processId,
     proto::SignedMessage &signedMessage) {
   proto::PackedMessage packedMsg;
   *packedMsg.mutable_msg() = msg.SerializeAsString();
@@ -167,7 +167,7 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
       break;
     }
   }
-  
+
   if (!keyInWriteSet) {
     Debug("VALIDATE value failed for txn %lu.%lu; key %s not written.",
         proof.txn().client_id(), proof.txn().client_seq_num(),
@@ -202,7 +202,7 @@ bool ValidateProofCommit(const proto::CommittedProof &proof,
             Debug("Signed P1 reply is not valid.");
             return false;
           }
-          
+
           p1Replies.push_back(reply);
         }
         groupedP1Replies.insert(std::make_pair(signedP1Replies.first, p1Replies));
@@ -217,9 +217,9 @@ bool ValidateProofCommit(const proto::CommittedProof &proof,
           Debug("Signed P2 reply is not valid.");
           return false;
         }
-          
+
         p2Replies.push_back(reply);
-      }   
+      }
       return ValidateP2RepliesCommit(p2Replies, txnDigest, proof.txn(), config);
     } else {
       Debug("Has no signed replies.");
@@ -267,7 +267,7 @@ bool ValidateProofAbort(const proto::CommittedProof &proof,
             Debug("Signed P1 reply is not valid.");
             return false;
           }
-          
+
           p1Replies.push_back(reply);
         }
         groupedP1Replies.insert(std::make_pair(signedP1Replies.first, p1Replies));
@@ -282,9 +282,9 @@ bool ValidateProofAbort(const proto::CommittedProof &proof,
           Debug("Signed P2 reply is not valid.");
           return false;
         }
-          
+
         p2Replies.push_back(reply);
-      }   
+      }
       return ValidateP2RepliesAbort(p2Replies, txnDigest, proof.txn(), config);
     } else {
       Debug("Has no signed replies.");
@@ -341,7 +341,7 @@ bool ValidateP1RepliesCommit(
         Debug("Not all COMMIT P1 replies for group %ld.", group);
         return false;
       }
-      
+
       if (p1Reply.txn_digest() != txnDigest) {
         // P1 reply is for different transaction
         Debug("P1 reply digest %s does not match this txn digest %s in group %ld.",
@@ -369,7 +369,7 @@ bool ValidateP2RepliesCommit(
       Debug("Not all P2 COMMIT replies.");
       return false;
     }
-    
+
     if (p2Reply.txn_digest() != txnDigest) {
       Debug("P2 reply digest %s does not match this txn digest %s.",
           BytesToHex(p2Reply.txn_digest(), 16).c_str(),
@@ -439,7 +439,7 @@ bool ValidateP2RepliesAbort(
       Debug("Not all P2 ABORT replies.");
       return false;
     }
-    
+
     if (p2Reply.txn_digest() != txnDigest) {
       Debug("P2 reply digest %s does not match this txn digest %s.",
           BytesToHex(p2Reply.txn_digest(), 16).c_str(),
@@ -465,7 +465,7 @@ bool ValidateDependency(const proto::Dependency &dep,
         if (!ValidateSignedMessage(signedWrite, keyManager, write)) {
           return false;
         }
-        
+
         if (write != dep.prepared()) {
           return false;
         }
@@ -533,7 +533,7 @@ std::string TransactionDigest(const proto::Transaction &txn) {
       sizeof(timestampId));
   hash.Update((const byte*) &timestampTs,
       sizeof(timestampTs));
-  
+
   digest.resize(hash.DigestSize());
   hash.Final((byte*) &digest[0]);
 

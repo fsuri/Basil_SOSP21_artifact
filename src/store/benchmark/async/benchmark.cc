@@ -650,7 +650,7 @@ int main(int argc, char **argv) {
     return -1;
   }
   config = new transport::Configuration(configStream);
-  keyManager = new KeyManager(FLAGS_indicus_key_path);
+  keyManager = new KeyManager(FLAGS_indicus_key_path, crypto::ED25, true);
 
   if (closestReplicas.size() > 0 && closestReplicas.size() != static_cast<size_t>(config->n)) {
     std::cerr << "If specifying closest replicas, must specify all "
@@ -731,7 +731,7 @@ int main(int argc, char **argv) {
             NOT_REACHABLE();
         }
         UW_ASSERT(readMessages >= readQuorumSize);
-        
+
         uint64_t readDepSize = 0;
         switch (read_dep) {
           case READ_DEP_ONE:

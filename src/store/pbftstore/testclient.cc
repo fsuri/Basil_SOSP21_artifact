@@ -4,6 +4,7 @@
 #include "store/common/common-proto.pb.h"
 #include "store/pbftstore/pbft-proto.pb.h"
 #include "store/common/partitioner.h"
+#include <iostream>
 
 class NodeClient : TransportReceiver {
  public:
@@ -60,7 +61,7 @@ int main(int argc, char **argv) {
 
   UDPTransport transport(0.0, 0.0, 0);
 
-  KeyManager *km = new KeyManager("../../keys");
+  KeyManager *km = new KeyManager("../../keys", crypto::ED25, true);
 
   int readQuorumSize = 2;
   bool signMessages = true;

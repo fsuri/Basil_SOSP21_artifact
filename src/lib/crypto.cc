@@ -1,18 +1,38 @@
 #include "lib/crypto.h"
 #include "lib/assert.h"
 
+#include <sodium.h>
+#include <cryptopp/eccrypto.h>
+#include <cryptopp/rsa.h>
+#include <cryptopp/pssr.h>
+#include <cryptopp/files.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/oids.h>
+#include <cryptopp/osrng.h>
+#include <cryptopp/sha.h>
+
 namespace crypto {
 
 using namespace CryptoPP;
 using namespace std;
 
-#ifdef USE_ECDSA_SIGS
-// using Signer = ECDSA<ECP, SHA256>::Signer;
-// using Verifier = ECDSA<ECP, SHA256>::Verifier;
-#else
-using Signer = RSASS<PSS, SHA256>::Signer;
-using Verifier = RSASS<PSS, SHA256>::Verifier;
-#endif
+struct PubKey {
+  KeyType t;
+  union {
+    RSA::PublicKey* rsaKey;
+    CryptoPP::ECDSA<ECP, SHA256>::PublicKey* ecdsaKey;
+    unsigned char* ed25Key;
+  };
+};
+
+struct PrivKey {
+  KeyType t;
+  union {
+    RSA::PrivateKey* rsaKey;
+    CryptoPP::ECDSA<ECP, SHA256>::PrivateKey* ecdsaKey;
+    unsigned char* ed25Key;
+  };
+};
 
 string Hash(const string &message) {
   SHA256 hash;
@@ -24,38 +44,64 @@ string Hash(const string &message) {
   return digest;
 }
 
-string Sign(const PrivKey &privateKey, const string &message) {
-  #ifdef USE_ECDSA_SIGS
-  unsigned char edsig[crypto_sign_BYTES];
-  crypto_sign_detached(edsig, NULL, (const unsigned char*) message.c_str(), message.length(), privateKey);
-  std::string signature(reinterpret_cast<char*>(edsig), crypto_sign_BYTES);
-  #else
-  // sign message
-  std::string signature;
-  Signer signer(privateKey);
-  AutoSeededRandomPool prng;
+string Sign(PrivKey* privateKey, const string &message) {
+  switch(privateKey->t) {
+  case RSA: {
+    std::string signature;
+    RSASS<PSS, SHA256>::Signer signer(*privateKey->rsaKey);
+    AutoSeededRandomPool prng;
 
-  StringSource ss(message, true,
-                  new SignerFilter(prng, signer, new StringSink(signature)));
-  #endif
+    StringSource ss(message, true,
+                    new SignerFilter(prng, signer, new StringSink(signature)));
+    return signature;
+  }
+  case ECDSA: {
+    std::string signature;
+    CryptoPP::ECDSA<ECP, SHA256>::Signer signer(*privateKey->ecdsaKey);
+    AutoSeededRandomPool prng;
 
-  return signature;
+    StringSource ss(message, true,
+                    new SignerFilter(prng, signer, new StringSink(signature)));
+    return signature;
+  }
+  case ED25: {
+    std::string signature;
+    signature.resize(crypto_sign_BYTES);
+    crypto_sign_detached((unsigned char*) &signature[0], NULL, (unsigned char*) &message[0], message.length(), privateKey->ed25Key);
+    return signature;
+  }
+  default: {
+    Panic("unimplemented");
+  }
+  }
 }
 
-bool Verify(const PubKey &publicKey, const string &message, string &signature) {
-  #ifdef USE_ECDSA_SIGS
-  bool result = crypto_sign_verify_detached((const unsigned char*) signature.c_str(), (const unsigned char*) message.c_str(), message.length(), publicKey) == 0;
-  #else
-  // verify message
-  bool result = false;
-  Verifier verifier(publicKey);
-  StringSource ss2(
-      signature + message, true,
-      new SignatureVerificationFilter(
-          verifier, new ArraySink((uint8_t *)&result, sizeof(result))));
-  #endif
 
-  return result;
+bool Verify(PubKey* publicKey, const string &message, string &signature) {
+  switch(publicKey->t) {
+  case RSA: {
+    bool result = false;
+    RSASS<PSS, SHA256>::Verifier verifier(*publicKey->rsaKey);
+    StringSource ss2(
+        signature + message, true,
+        new SignatureVerificationFilter(
+            verifier, new ArraySink((uint8_t *)&result, sizeof(result))));
+    return result;
+  }
+  case ECDSA: {
+    bool result = false;
+    CryptoPP::ECDSA<ECP, SHA256>::Verifier verifier(*publicKey->ecdsaKey);
+    StringSource ss2(
+        signature + message, true,
+        new SignatureVerificationFilter(
+            verifier, new ArraySink((uint8_t *)&result, sizeof(result))));
+    return result;
+  }
+  case ED25: {
+    return crypto_sign_verify_detached((unsigned char*) &signature[0], (unsigned char*) &message[0], message.length(), publicKey->ed25Key) == 0;
+  }
+  }
+  Panic("unimplemented");
 }
 
 void Save(const std::string &filename, const BufferedTransformation &bt) {
@@ -65,30 +111,62 @@ void Save(const std::string &filename, const BufferedTransformation &bt) {
   file.MessageEnd();
 }
 
-void SavePublicKey(const string &filename, PubKey &key) {
-  #ifdef USE_ECDSA_SIGS
+void SaveCFile(const std::string &filename, unsigned char* bytes, size_t length) {
   FILE * file = fopen(filename.c_str(), "w+");
-  fwrite(key, sizeof(unsigned char), crypto_sign_PUBLICKEYBYTES, file);
+  fwrite(bytes, sizeof(unsigned char), length, file);
   fclose(file);
-  #else
-  ByteQueue queue;
-  key.Save(queue);
-
-  Save(filename, queue);
-  #endif
 }
 
-void SavePrivateKey(const std::string &filename, PrivKey &key) {
-  #ifdef USE_ECDSA_SIGS
-  FILE * file = fopen(filename.c_str(), "w+");
-  fwrite(key, sizeof(unsigned char), crypto_sign_SECRETKEYBYTES, file);
-  fclose(file);
-  #else
-  ByteQueue queue;
-  key.Save(queue);
+void SavePublicKey(const string &filename, PubKey* key) {
+  switch(key->t) {
+  case RSA: {
+    ByteQueue queue;
+    key->rsaKey->Save(queue);
 
-  Save(filename, queue);
-  #endif
+    Save(filename, queue);
+    break;
+  }
+  case ECDSA: {
+    ByteQueue queue;
+    key->ecdsaKey->Save(queue);
+
+    Save(filename, queue);
+    break;
+  }
+  case ED25: {
+    SaveCFile(filename, key->ed25Key, crypto_sign_PUBLICKEYBYTES);
+    break;
+  }
+  default: {
+    Panic("unimplemented");
+  }
+  }
+}
+
+void SavePrivateKey(const std::string &filename, PrivKey* key) {
+  switch(key->t) {
+  case RSA: {
+    ByteQueue queue;
+    key->rsaKey->Save(queue);
+
+    Save(filename, queue);
+    break;
+  }
+  case ECDSA: {
+    ByteQueue queue;
+    key->ecdsaKey->Save(queue);
+
+    Save(filename, queue);
+    break;
+  }
+  case ED25: {
+    SaveCFile(filename, key->ed25Key, crypto_sign_PUBLICKEYBYTES);
+    break;
+  }
+  default: {
+    Panic("unimplemented");
+  }
+  }
 }
 
 void Load(const string &filename, BufferedTransformation &bt) {
@@ -98,82 +176,138 @@ void Load(const string &filename, BufferedTransformation &bt) {
   bt.MessageEnd();
 }
 
-PubKey LoadPublicKey(const string &filename) {
-  PubKey key;
-  #ifdef USE_ECDSA_SIGS
+void LoadCFile(const std::string &filename, unsigned char* bytes, size_t length) {
   FILE * file = fopen(filename.c_str(), "r+");
-  key = (PubKey) malloc(crypto_sign_PUBLICKEYBYTES);
-  fread(key, sizeof(unsigned char), crypto_sign_PUBLICKEYBYTES, file);
-  fclose(file);
-  #else
-  ByteQueue queue;
-  Load(filename, queue);
-
-  key.Load(queue);
-  #endif
-
-  return key;
-}
-
-PrivKey LoadPrivateKey(const string &filename) {
-  PrivKey key;
-  #ifdef USE_ECDSA_SIGS
-  // Reading data to array of unsigned chars
-  FILE * file = fopen(filename.c_str(), "r+");
-  key = (PrivKey) malloc(crypto_sign_SECRETKEYBYTES);
-  fread(key, sizeof(unsigned char), crypto_sign_SECRETKEYBYTES, file);
-  fclose(file);
-  #else
-  ByteQueue queue;
-  Load(filename, queue);
-
-  key.Load(queue);
-  #endif
-
-  return key;
-}
-
-PrivKey GeneratePrivateKey() {
-  // PGP Random Pool-like generator
-  AutoSeededRandomPool prng;
-
-  // generate keys
-  PrivKey privateKey;
-  #ifdef USE_ECDSA_SIGS
-  // privateKey.Initialize(prng, ASN1::secp256k1());
-  Panic("Illegal");
-  #else
-  privateKey.Initialize(prng, 2048);
-  #endif
-
-  return privateKey;
-}
-
-PubKey DerivePublicKey(PrivKey &privateKey) {
-  // PGP Random Pool-like generator
-  AutoSeededRandomPool prng;
-
-  #ifdef USE_ECDSA_SIGS
-  PubKey publicKey;
-  // privateKey.MakePublicKey(publicKey);
-  Panic("Illegal");
-  #else
-  PubKey publicKey(privateKey);
-  bool result = publicKey.Validate(prng, 3);
-  if (!result) {
-    throw "Public key derivation failed";
+  if (file == NULL) {
+    Panic("Invalid filename %s", filename.c_str());
   }
-  #endif
-
-
-  return publicKey;
+  fread(bytes, sizeof(unsigned char), length, file);
+  fclose(file);
 }
 
-std::pair<PrivKey, PubKey> GenerateKeypair() {
-  PubKey pk = (PubKey) malloc(crypto_sign_PUBLICKEYBYTES);
-  PrivKey sk = (PrivKey) malloc(crypto_sign_SECRETKEYBYTES);
-  crypto_sign_keypair(pk, sk);
-  return std::pair<PrivKey, PubKey>(sk, pk);
+PubKey* LoadPublicKey(const string &filename, KeyType t, bool precompute) {
+  PubKey* key = (PubKey*) malloc(sizeof(PubKey));
+  key->t = t;
+  switch(key->t) {
+  case RSA: {
+    key->rsaKey = new RSA::PublicKey();
+    ByteQueue queue;
+    Load(filename, queue);
+
+    key->rsaKey->Load(queue);
+    break;
+  }
+  case ECDSA: {
+    key->ecdsaKey = new CryptoPP::ECDSA<ECP, SHA256>::PublicKey();
+    ByteQueue queue;
+    Load(filename, queue);
+
+    key->ecdsaKey->Load(queue);
+    if (precompute) {
+      key->ecdsaKey->Precompute();
+    }
+    break;
+  }
+  case ED25: {
+    key->ed25Key = (unsigned char*) malloc(crypto_sign_PUBLICKEYBYTES);
+    LoadCFile(filename, key->ed25Key, crypto_sign_PUBLICKEYBYTES);
+    break;
+  }
+  default: {
+    Panic("unimplemented");
+  }
+  }
+  return key;
+}
+
+PrivKey* LoadPrivateKey(const string &filename, KeyType t, bool precompute) {
+  PrivKey* key = (PrivKey*) malloc(sizeof(PrivKey));
+  key->t = t;
+  switch(key->t) {
+  case RSA: {
+    key->rsaKey = new RSA::PrivateKey();
+    ByteQueue queue;
+    Load(filename, queue);
+
+    key->rsaKey->Load(queue);
+    break;
+  }
+  case ECDSA: {
+    key->ecdsaKey = new CryptoPP::ECDSA<ECP, SHA256>::PrivateKey();
+    ByteQueue queue;
+    Load(filename, queue);
+
+    key->ecdsaKey->Load(queue);
+    if (precompute) {
+      key->ecdsaKey->Precompute();
+    }
+    break;
+  }
+  case ED25: {
+    key->ed25Key = (unsigned char*) malloc(crypto_sign_SECRETKEYBYTES);
+    LoadCFile(filename, key->ed25Key, crypto_sign_SECRETKEYBYTES);
+    break;
+  }
+  default: {
+    Panic("unimplemented");
+  }
+  }
+  return key;
+}
+
+std::pair<PrivKey*, PubKey*> GenerateKeypair(KeyType t, bool precompute) {
+  PrivKey* privKey = (PrivKey*) malloc(sizeof(PrivKey));
+  privKey->t = t;
+  PubKey* pubKey = (PubKey*) malloc(sizeof(PubKey));
+  pubKey->t = t;
+
+  switch(t) {
+  case RSA: {
+    // PGP Random Pool-like generator
+    AutoSeededRandomPool prng;
+
+    // generate keys
+    privKey->rsaKey = new RSA::PrivateKey();
+    privKey->rsaKey->Initialize(prng, 2048);
+
+    pubKey->rsaKey = new RSA::PublicKey(*privKey->rsaKey);
+    bool result = pubKey->rsaKey->Validate(prng, 3);
+    if (!result) {
+      throw "Public key derivation failed";
+    }
+    break;
+  }
+  case ECDSA: {
+    // PGP Random Pool-like generator
+    AutoSeededRandomPool prng;
+
+    // generate keys
+    privKey->ecdsaKey = new CryptoPP::ECDSA<ECP, SHA256>::PrivateKey();
+    privKey->ecdsaKey->Initialize(prng, ASN1::secp256k1());
+
+    pubKey->ecdsaKey = new CryptoPP::ECDSA<ECP, SHA256>::PublicKey();
+    privKey->ecdsaKey->MakePublicKey(*pubKey->ecdsaKey);
+    bool result = pubKey->ecdsaKey->Validate(prng, 3);
+    if (!result) {
+      throw "Public key derivation failed";
+    }
+    if (precompute) {
+      privKey->ecdsaKey->Precompute();
+      pubKey->ecdsaKey->Precompute();
+    }
+    break;
+  }
+  case ED25: {
+    pubKey->ed25Key = (unsigned char*) malloc(crypto_sign_PUBLICKEYBYTES);
+    privKey->ed25Key = (unsigned char*) malloc(crypto_sign_SECRETKEYBYTES);
+    crypto_sign_keypair(pubKey->ed25Key, privKey->ed25Key);
+    break;
+  }
+  default: {
+    Panic("unimplemented");
+  }
+  }
+  return std::pair<PrivKey*, PubKey*>(privKey, pubKey);
 }
 
 }  // namespace crypto

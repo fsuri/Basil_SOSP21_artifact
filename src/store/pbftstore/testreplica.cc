@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
 
   UDPTransport transport(0.0, 0.0, 0);
 
-  KeyManager keyManager(keyPath);
+  KeyManager keyManager(keyPath, crypto::ED25, true);
   int numShards = 1;
   int numGroups = 1;
   uint64_t maxBatchSize = 3;

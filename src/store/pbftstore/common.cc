@@ -46,7 +46,7 @@ bool __PreValidateSignedMessage(const proto::SignedMessage &signedMessage,
 
 bool CheckSignature(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager) {
-    crypto::PubKey replicaPublicKey = keyManager->GetPublicKey(
+    crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(
         signedMessage.replica_id());
     // verify that the replica actually sent this reply and that we are expecting
     // this reply
@@ -55,7 +55,7 @@ bool CheckSignature(const proto::SignedMessage &signedMessage,
 }
 
 void SignMessage(const ::google::protobuf::Message &msg,
-    const crypto::PrivKey &privateKey, uint64_t processId,
+    crypto::PrivKey* privateKey, uint64_t processId,
     proto::SignedMessage &signedMessage) {
   proto::PackedMessage packedMsg;
   *packedMsg.mutable_msg() = msg.SerializeAsString();

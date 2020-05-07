@@ -8,7 +8,7 @@ LD = g++
 EXPAND = lib/tmpl/expand
 
 #CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNUW_ASSERT
-CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -DUSE_ECDSA_SIGS
+CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized
 CXXFLAGS := -g -std=c++17
 LDFLAGS := -levent_pthreads
 ## Debian package: check
@@ -36,6 +36,7 @@ LDFLAGS += $(LIBSSL_LDFLAGS)
 LDFLAGS += -l:libcryptopp.so
 # libsodium
 LDFLAGS += -lsodium
+LDFLAGS += -lblake3
 
 
 # Google test framework. This doesn't use pkgconfig
