@@ -91,7 +91,7 @@ Consequently, all correct clients experience Serializability, and thus, the MVTS
 
 \end{algorithm}
 
-In order to perform the MVTSO-check, a replica maintains several data strucutres: \one It stores read timestamps, read versions alongside the multiversioned write stores for committed and tenative transactions respectively, to provide efficient evaluation of conflicts.
+In order to perform the MVTSO-check, a replica maintains several data strucutres: \one It stores read timestamps, read versions alongside the multiversioned write stores for committed and tenative transactions respectively, to provide efficient lookups for conflict evaluation.
 \two In order to confirm dependency outcomes, replicas log proofs for completed transactions in respective Commit and Abort Log sets, that together induce the ledger of all processed transactions. 
 \three To avoid busy waiting when dependencies are not yet resolved, a replica temporarily suspends the MVTSO-check for the current transaction, allowing it to process other transactions pending validation. To facilitate this, it keeps track of an additonal transaction to dependents mapping that allows to identify and resume all suspended MVTSO-checks associated with dependents of a completing transaction.
 
