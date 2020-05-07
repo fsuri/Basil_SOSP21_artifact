@@ -2,102 +2,129 @@
 #include "lib/batched_sigs.h"
 #include <cstring>
 #include <unordered_map>
+#include "blake3.h"
 
 namespace BatchedSigs {
 
-std::string packInt(unsigned int i) {
-  unsigned char buf[4];
-  buf[0] = ((unsigned int) i >> 24) & 0xFF;
-  buf[1] = ((unsigned int) i >> 16) & 0xFF;
-  buf[2] = ((unsigned int) i >> 8) & 0xFF;
-  buf[3] = ((unsigned int) i) & 0xFF;
-  return std::string(reinterpret_cast<char*>(buf), 4);
+void packInt(unsigned int i, unsigned char* out) {
+  out[0] = ((unsigned int) i >> 24) & 0xFF;
+  out[1] = ((unsigned int) i >> 16) & 0xFF;
+  out[2] = ((unsigned int) i >> 8) & 0xFF;
+  out[3] = ((unsigned int) i) & 0xFF;
 }
 
-unsigned int unpackInt(std::string str) {
-  unsigned int tmp = (unsigned char) str[0];
-  tmp = (tmp << 8) | (unsigned char) str[1];
-  tmp = (tmp << 8) | (unsigned char) str[2];
-  tmp = (tmp << 8) | (unsigned char) str[3];
+unsigned int unpackInt(unsigned char* in) {
+  unsigned int tmp = 0;
+  tmp = in[0];
+  tmp = (tmp << 8) | in[1];
+  tmp = (tmp << 8) | in[2];
+  tmp = (tmp << 8) | in[3];
   return tmp;
 }
 
-std::string string_to_hex(const std::string& input)
-{
-    static const char hex_digits[] = "0123456789ABCDEF";
+blake3_hasher hasher;
+void bhash(unsigned char* in, size_t len, unsigned char* out) {
+  blake3_hasher_init(&hasher);
 
-    std::string output;
-    output.reserve(input.length() * 2);
-    for (unsigned char c : input)
-    {
-        output.push_back(hex_digits[c >> 4]);
-        output.push_back(hex_digits[c & 15]);
-    }
-    return output;
+  blake3_hasher_update(&hasher, in, len);
+
+  // Finalize the hash. BLAKE3_OUT_LEN is the default output length, 32 bytes.
+  blake3_hasher_finalize(&hasher, out, BLAKE3_OUT_LEN);
+}
+
+void bhash_cat(unsigned char* in1, unsigned char* in2, unsigned char* out) {
+  blake3_hasher_init(&hasher);
+
+  blake3_hasher_update(&hasher, in1, BLAKE3_OUT_LEN);
+  blake3_hasher_update(&hasher, in2, BLAKE3_OUT_LEN);
+
+  // Finalize the hash. BLAKE3_OUT_LEN is the default output length, 32 bytes.
+  blake3_hasher_finalize(&hasher, out, BLAKE3_OUT_LEN);
+}
+
+#include <stdint.h>
+static inline uint32_t log2(const uint32_t x) {
+  uint32_t y;
+  asm ( "\tbsr %1, %0\n"
+      : "=r"(y)
+      : "r" (x)
+  );
+  return y;
 }
 
 std::vector<std::string> generateBatchedSignatures(std::vector<std::string> messages, crypto::PrivKey* privateKey) {
   // generate the merkel tree
   unsigned int n = messages.size();
   assert(n > 0);
+  size_t hash_size = BLAKE3_OUT_LEN;
 
-  std::vector<std::string> hashes;
-  for (unsigned int i = 0; i < n-1; i++) {
-    hashes.push_back("");
-  }
+  unsigned char* tree = (unsigned char*) malloc(hash_size*(2*n - 1));
   for (unsigned int i = 0; i < n; i++) {
-    hashes.push_back(crypto::Hash(messages[i]));
+    bhash((unsigned char*) &messages[i][0], messages[i].length(), &tree[(n - 1 + i)*hash_size]);
   }
-  // hashes now has 2n-1 elements
-  assert(hashes.size() == 2*n - 1);
 
   for (int i = 2*n - 2; i >= 2; i-=2) {
-    std::string concatHash = hashes[i-1]+ hashes[i];
-    hashes[(i/2) - 1] = crypto::Hash(concatHash);
+    bhash_cat(&tree[(i-1)*hash_size], &tree[(i)*hash_size], &tree[((i/2) - 1)*hash_size]);
   }
 
-  std::string rootSig = crypto::Sign(privateKey, hashes[0]);
+  std::string rootHash(&tree[0], &tree[hash_size]);
+  std::string rootSig = crypto::Sign(privateKey, rootHash);
 
   std::vector<std::string> sigs;
   size_t sig_size = crypto::SigSize(privateKey);
 
+  size_t max_size = sig_size + 4 + 4 + (log2(n) + 1)*hash_size;
+  unsigned char* sig = (unsigned char*) malloc(max_size);
+  memcpy(&sig[0], &rootSig[0], sig_size);
+  packInt(n, &sig[sig_size]);
+  unsigned int starting_pos = sig_size + 8;
+
   for (unsigned int i = 0; i < n; i++) {
-    std::string hash = crypto::Hash(messages[i]);
-    std::string sig = rootSig + packInt(n) + packInt(i);
+    packInt(i, &sig[sig_size+4]);
+    int h = 0;
     for (int j = n - 1 + i; j >= 1; j=(j+1)/2 - 1) {
-      assert(hash == hashes[j]);
-      sig += j % 2 == 0 ? hashes[j - 1] : hashes[j + 1];
-      hash = crypto::Hash(j % 2 == 0 ? hashes[j-1] + hash : hash + hashes[j+1]);
+      memcpy(&sig[starting_pos + h*hash_size], &tree[(j % 2 == 0 ? j - 1 : j + 1)*hash_size], hash_size);
+      h++;
     }
-    sigs.push_back(sig);
+    std::string sigstr(&sig[0], &sig[starting_pos + h*hash_size]);
+    sigs.push_back(sigstr);
   }
 
   return sigs;
 }
 
+// cache mapping root sig to hash that it verifies
 std::unordered_map<std::string, std::string> cache;
 
 bool verifyBatchedSignature(std::string signature, std::string message, crypto::PubKey* publicKey) {
-  size_t hash_size = crypto::HashSize();
+  size_t hash_size = BLAKE3_OUT_LEN;
   size_t sig_size = crypto::SigSize(publicKey);
-  std::string rootSig = signature.substr(0, sig_size);
-  unsigned int n = unpackInt(signature.substr(sig_size, 4));
-  unsigned int i = unpackInt(signature.substr(sig_size+4, 4));
-  int starting_pos = sig_size + 8;
 
-  std::string hash = crypto::Hash(message);
+  std::string rootSig = signature.substr(0, sig_size);
+  unsigned int n = unpackInt((unsigned char*) &signature[sig_size]);
+  unsigned int i = unpackInt((unsigned char*) &signature[sig_size+4]);
+  unsigned int starting_pos = sig_size + 8;
+
+  unsigned char hash[BLAKE3_OUT_LEN];
+  unsigned char hashout[BLAKE3_OUT_LEN];
+  bhash((unsigned char*) &message[0], message.length(), &hash[0]);
   int h = 0;
   for (int j = n - 1 + i; j >= 1; j=(j+1)/2 - 1) {
-    std::string nextHash = signature.substr(starting_pos + h*hash_size, hash_size);
-    hash = crypto::Hash(j % 2 == 0 ? nextHash + hash : hash + nextHash);
+    if (j % 2 == 0) {
+      bhash_cat((unsigned char*) &signature[starting_pos + h*hash_size], &hash[0], hashout);
+    } else {
+      bhash_cat(&hash[0], (unsigned char*) &signature[starting_pos + h*hash_size], hashout);
+    }
+    memcpy(&hash[0], &hashout[0], hash_size);
     h++;
   }
+  std::string hashStr(&hash[0], &hash[hash_size]);
 
   if (cache.find(rootSig) != cache.end()) {
-    return cache[rootSig] == hash;
+    return cache[rootSig] == hashStr;
   } else {
-    if (crypto::Verify(publicKey, hash, rootSig)) {
-      cache[rootSig] = hash;
+    if (crypto::Verify(publicKey, hashStr, rootSig)) {
+      cache[rootSig] = hashStr;
       return true;
     } else {
       return false;
