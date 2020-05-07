@@ -6,13 +6,6 @@ Michael Abd-El-Malek, Gregory~R Ganger, Garth~R Goodson, Michael~K Reiter, and
 \newblock Fault-scalable byzantine fault-tolerant services.
 \newblock {\em ACM SIGOPS Operating Systems Review}, 39(5):59--74, 2005.
 
-\bibitem{adya99weakconsis}
-Atul Adya.
-\newblock {\em Weak Consistency: A Generalized Theory and Optimistic
-  Implementations for Distributed Transactions}.
-\newblock {Ph.D.}, MIT, Cambridge, MA, USA, March 1999.
-\newblock Also as Technical Report MIT/LCS/TR-786.
-
 \bibitem{aguilera2007sinfonia}
 Marcos~K. Aguilera, Arif Merchant, Mehul Shah, Alistair Veitch, and Christos
   Karamanolis.
@@ -97,6 +90,11 @@ Ethan Buchman.
   blockchains}.
 \newblock PhD thesis, 2016.
 
+\bibitem{Libra}
+Calibra.
+\newblock A simple global payment system and financial infrastructure that
+  empowers billions of people., May, 2020, url = {https://libra.org/en-US/}.
+
 \bibitem{castro1999practical}
 Miguel Castro, Barbara Liskov, et~al.
 \newblock Practical byzantine fault tolerance.
@@ -135,13 +133,10 @@ James Cowling, Daniel Myers, Barbara Liskov, Rodrigo Rodrigues, and Liuba
 \newblock In {\em Proceedings of the 7th symposium on Operating systems design
   and implementation}, pages 177--190, 2006.
 
-\bibitem{crooks2018obladi}
-Natacha Crooks, Matthew Burke, Ethan Cecchetti, Sitar Harel, Rachit Agarwal,
-  and Lorenzo Alvisi.
-\newblock Obladi: Oblivious serializable transactions in the cloud.
-\newblock In {\em 13th {USENIX} Symposium on Operating Systems Design and
-  Implementation ({OSDI} 18)}, pages 727--743, Carlsbad, CA, October 2018.
-  {USENIX} Association.
+\bibitem{DeloitteSupply}
+Deloitte.
+\newblock Using blockchain \& internet-of-things in supply chain traceability,
+  2017.
 
 \bibitem{duan2014hbft}
 Sisi Duan, Sean Peisert, and Karl~N Levitt.
@@ -158,6 +153,11 @@ Michael~J Fischer, Nancy~A Lynch, and Michael~S Paterson.
 The~Linux Foundation.
 \newblock An introduction to hyperledger, July, 2018.
 
+\bibitem{HyperledgerHealth}
+The~Linux Foundation.
+\newblock Change healthcare using hyperledger fabric to improve claims
+  lifecycle throughput and transparency, June, 2019.
+
 \bibitem{garcia2011efficient}
 Rui Garcia, Rodrigo Rodrigues, and Nuno Pregui{\c{c}}a.
 \newblock Efficient middleware for byzantine fault tolerant database
@@ -171,6 +171,11 @@ Yossi Gilad, Rotem Hemo, Silvio Micali, Georgios Vlachos, and Nickolai
 \newblock Algorand: Scaling byzantine agreements for cryptocurrencies.
 \newblock In {\em Proceedings of the 26th Symposium on Operating Systems
   Principles}, pages 51--68, 2017.
+
+\bibitem{HyperledgerTelecom}
+Hyperledger Telecom Special~Interest Group.
+\newblock Optimizing wholesale intercarrier settlement with hyperledger fabric
+  blockchain, November2019.
 
 \bibitem{Guerraoui08Next}
 Rachid Guerraoui.
@@ -195,6 +200,15 @@ Andreas Haeberlen, Paarijaat Aditya, Rodrigo Rodrigues, and Peter Druschel.
 Maurice Herlihy and Mark Moir.
 \newblock Enhancing accountability and trust in distributed ledgers.
 \newblock {\em arXiv preprint arXiv:1606.07490}, 2016.
+
+\bibitem{IBMFoodSupply}
+IBM.
+\newblock Ibm food trust. a new era for the world’s food supply., May, 2020.
+
+\bibitem{IBMSettlements}
+IBM.
+\newblock Transform cross-border payments with ibm blockchain world wire, May,
+  2020, url = {https://www.ibm.com/blockchain/solutions/world-wire}.
 
 \bibitem{junqueira2011zab}
 Flavio~P Junqueira, Benjamin~C Reed, and Marco Serafini.
@@ -439,6 +453,11 @@ Fred~B Schneider.
 \newblock Implementing fault-tolerant services using the state machine
   approach: A tutorial.
 \newblock {\em ACM Computing Surveys (CSUR)}, 22(4):299--319, 1990.
+
+\bibitem{StateFarmSubrogation}
+Statefarm.
+\newblock State farm and usaa working together to test a blockchain solution,
+  May, 2019.
 
 \bibitem{stathakopoulou2019mir}
 Chrysoula Stathakopoulou, Tudor David, and Marko Vukoli{\'c}.
