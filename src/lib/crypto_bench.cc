@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
   std::random_device rd;
 
 
-  #ifdef USE_ECDSA_SIGS
+  #ifdef USE_ED25519_SIGS
   std::pair<crypto::PrivKey, crypto::PubKey> keypair = crypto::GenerateKeypair();
   crypto::PrivKey privKey = keypair.first;
   crypto::PubKey pubKey = keypair.second;

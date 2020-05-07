@@ -7,8 +7,9 @@ using namespace CryptoPP;
 using namespace std;
 
 #ifdef USE_ECDSA_SIGS
-// using Signer = ECDSA<ECP, SHA256>::Signer;
-// using Verifier = ECDSA<ECP, SHA256>::Verifier;
+using Signer = ECDSA<ECP, SHA256>::Signer;
+using Verifier = ECDSA<ECP, SHA256>::Verifier;
+#elif USE_ED25519_SIGS
 #else
 using Signer = RSASS<PSS, SHA256>::Signer;
 using Verifier = RSASS<PSS, SHA256>::Verifier;
@@ -25,7 +26,7 @@ string Hash(const string &message) {
 }
 
 string Sign(const PrivKey &privateKey, const string &message) {
-  #ifdef USE_ECDSA_SIGS
+  #ifdef USE_ED25519_SIGS
   unsigned char edsig[crypto_sign_BYTES];
   crypto_sign_detached(edsig, NULL, (const unsigned char*) message.c_str(), message.length(), privateKey);
   std::string signature(reinterpret_cast<char*>(edsig), crypto_sign_BYTES);
@@ -43,7 +44,7 @@ string Sign(const PrivKey &privateKey, const string &message) {
 }
 
 bool Verify(const PubKey &publicKey, const string &message, const string &signature) {
-  #ifdef USE_ECDSA_SIGS
+  #ifdef USE_ED25519_SIGS
   bool result = crypto_sign_verify_detached((const unsigned char*) signature.c_str(), (const unsigned char*) message.c_str(), message.length(), publicKey) == 0;
   #else
   // verify message
@@ -66,7 +67,7 @@ void Save(const std::string &filename, const BufferedTransformation &bt) {
 }
 
 void SavePublicKey(const string &filename, PubKey &key) {
-  #ifdef USE_ECDSA_SIGS
+  #ifdef USE_ED25519_SIGS
   FILE * file = fopen(filename.c_str(), "w+");
   fwrite(key, sizeof(unsigned char), crypto_sign_PUBLICKEYBYTES, file);
   fclose(file);
@@ -79,7 +80,7 @@ void SavePublicKey(const string &filename, PubKey &key) {
 }
 
 void SavePrivateKey(const std::string &filename, PrivKey &key) {
-  #ifdef USE_ECDSA_SIGS
+  #ifdef USE_ED25519_SIGS
   FILE * file = fopen(filename.c_str(), "w+");
   fwrite(key, sizeof(unsigned char), crypto_sign_SECRETKEYBYTES, file);
   fclose(file);
@@ -100,7 +101,7 @@ void Load(const string &filename, BufferedTransformation &bt) {
 
 PubKey LoadPublicKey(const string &filename) {
   PubKey key;
-  #ifdef USE_ECDSA_SIGS
+  #ifdef USE_ED25519_SIGS
   FILE * file = fopen(filename.c_str(), "r");
   if (file == NULL) {
     Panic("Could not open public key file %s: %s", filename.c_str(),
@@ -121,7 +122,7 @@ PubKey LoadPublicKey(const string &filename) {
 
 PrivKey LoadPrivateKey(const string &filename) {
   PrivKey key;
-  #ifdef USE_ECDSA_SIGS
+  #ifdef USE_ED25519_SIGS
   // Reading data to array of unsigned chars
   FILE * file = fopen(filename.c_str(), "r");
   if (file == NULL) {
@@ -147,9 +148,10 @@ PrivKey GeneratePrivateKey() {
 
   // generate keys
   PrivKey privateKey;
-  #ifdef USE_ECDSA_SIGS
-  // privateKey.Initialize(prng, ASN1::secp256k1());
+  #ifdef USE_ED25519_SIGS
   Panic("Illegal");
+  #elif USE_ECDSA_SIGS
+  privateKey.Initialize(prng, ASN1::secp256k1());
   #else
   privateKey.Initialize(prng, 2048);
   #endif
@@ -161,27 +163,30 @@ PubKey DerivePublicKey(PrivKey &privateKey) {
   // PGP Random Pool-like generator
   AutoSeededRandomPool prng;
 
-  #ifdef USE_ECDSA_SIGS
-  PubKey publicKey;
-  // privateKey.MakePublicKey(publicKey);
+  #ifdef USE_ED25519_SIGS
   Panic("Illegal");
+  #elif USE_ECDSA_SIGS 
+  PubKey publicKey;
+  privateKey.MakePublicKey(publicKey);
   #else
   PubKey publicKey(privateKey);
+  #endif
+  
   bool result = publicKey.Validate(prng, 3);
   if (!result) {
     throw "Public key derivation failed";
   }
-  #endif
-
 
   return publicKey;
 }
 
+#ifdef USE_ED25519_SIGS
 std::pair<PrivKey, PubKey> GenerateKeypair() {
   PubKey pk = (PubKey) malloc(crypto_sign_PUBLICKEYBYTES);
   PrivKey sk = (PrivKey) malloc(crypto_sign_SECRETKEYBYTES);
   crypto_sign_keypair(pk, sk);
   return std::pair<PrivKey, PubKey>(sk, pk);
 }
+#endif 
 
 }  // namespace crypto
