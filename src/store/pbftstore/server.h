@@ -80,7 +80,8 @@ private:
 
   // return true if this key is owned by this shard
   inline bool IsKeyOwned(const std::string &key) const {
-    return static_cast<int>(part(key, numShards) % numGroups) == groupIdx;
+    std::vector<int> txnGroups;
+    return static_cast<int>(part(key, numShards, groupIdx, txnGroups) % numGroups) == groupIdx;
   }
 };
 

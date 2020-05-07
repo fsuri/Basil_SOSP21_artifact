@@ -84,7 +84,8 @@ void Client::Get(const std::string &key, get_callback gcb,
   transport->Timer(0, [this, key, gcb, gtcb, timeout]() {
     Debug("GET [%lu : %s]", t_id, key.c_str());
     // Contact the appropriate shard to get the value.
-    int i = part(key, nshards) % ngroups;
+    std::vector<int> txnGroups(participants.begin(), participants.end());
+    int i = part(key, nshards, -1, txnGroups) % ngroups;
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (participants.find(i) == participants.end()) {
@@ -102,7 +103,8 @@ void Client::Put(const std::string &key, const std::string &value,
   transport->Timer(0, [this, key, value, pcb, ptcb, timeout]() {
     Debug("PUT [%lu : %s]", t_id, key.c_str());
     // Contact the appropriate shard to set the value.
-    int i = part(key, nshards) % ngroups;
+    std::vector<int> txnGroups(participants.begin(), participants.end());
+    int i = part(key, nshards, -1, txnGroups) % ngroups;
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (participants.find(i) == participants.end()) {

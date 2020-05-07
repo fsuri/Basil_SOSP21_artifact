@@ -521,13 +521,14 @@ int main(int argc, char **argv) {
     size_t loaded = 0;
     size_t stored = 0;
     Debug("Populating with data from %s.", FLAGS_data_file_path.c_str());
+    std::vector<int> txnGroups;
     while (!in.eof()) {
       std::string key;
       std::string value;
       int i = ReadBytesFromStream(&in, key);
       if (i == 0) {
         ReadBytesFromStream(&in, value);
-        if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
+        if (part(key, FLAGS_num_shards, FLAGS_group_idx, txnGroups) % FLAGS_num_groups == FLAGS_group_idx) {
           server->Load(key, value, Timestamp());
           ++stored;
         }
@@ -545,8 +546,9 @@ int main(int argc, char **argv) {
       return 1;
     }
     std::string key;
+    std::vector<int> txnGroups;
     while (std::getline(in, key)) {
-      if (part(key, FLAGS_num_shards) % FLAGS_num_groups == FLAGS_group_idx) {
+      if (part(key, FLAGS_num_shards, FLAGS_group_idx, txnGroups) % FLAGS_num_groups == FLAGS_group_idx) {
         server->Load(key, "null", Timestamp());
       }
     }

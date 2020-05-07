@@ -206,7 +206,8 @@ void Client::HandlePrepareKO(const TransportAddress &remote,
 void Client::Get(PendingRequest *req, proto::Branch &branch,
     const std::string &key) {
   // Contact the appropriate shard to get the value.
-  int i = part(key, nshards) % ngroups;
+  std::vector<int> txnGroups(branch.shards().begin(), branch.shards().end());
+  int i = part(key, nshards, -1, txnGroups) % ngroups;
   if (std::find(branch.shards().begin(), branch.shards().end(),
         i) == branch.shards().end()) {
     branch.mutable_shards()->Add(i);
@@ -251,7 +252,8 @@ void Client::Get(PendingRequest *req, proto::Branch &branch,
 void Client::Put(proto::Branch &branch, const std::string &key,
     const std::string &value) {
   // Contact the appropriate shard to get the value.
-  int i = part(key, nshards) % ngroups;
+  std::vector<int> txnGroups(branch.shards().begin(), branch.shards().end());
+  int i = part(key, nshards, -1, txnGroups) % ngroups;
   if (std::find(branch.shards().begin(), branch.shards().end(),
         i) == branch.shards().end()) {
     branch.mutable_shards()->Add(i);

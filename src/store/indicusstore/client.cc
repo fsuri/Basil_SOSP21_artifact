@@ -107,7 +107,8 @@ void Client::Get(const std::string &key, get_callback gcb,
         BytesToHex(key, 16).c_str());
 
     // Contact the appropriate shard to get the value.
-    int i = part(key, nshards) % ngroups;
+    std::vector<int> txnGroups(txn.involved_groups().begin(), txn.involved_groups().end());
+    int i = part(key, nshards, -1, txnGroups) % ngroups;
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (!IsParticipant(i)) {
@@ -155,7 +156,8 @@ void Client::Put(const std::string &key, const std::string &value,
           16).c_str());
 
     // Contact the appropriate shard to set the value.
-    int i = part(key, nshards) % ngroups;
+    std::vector<int> txnGroups(txn.involved_groups().begin(), txn.involved_groups().end());
+    int i = part(key, nshards, -1, txnGroups) % ngroups;
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (!IsParticipant(i)) {

@@ -85,7 +85,9 @@ void Client::Get(const std::string &key, get_callback gcb,
   Debug("GET Operation [%s]", key.c_str());
 
   // Contact the appropriate shard to get the value.
-  int i = part(key, nshards);
+  std::vector<int> txnGroups;
+  int i = part(key, nshards, -1, txnGroups);
+
 
   // Send the GET operation to appropriate shard.
   Promise promise;
@@ -99,7 +101,8 @@ void Client::Put(const std::string &key, const std::string &value,
   Debug("PUT Operation [%s]", key.c_str());
 
   // Contact the appropriate shard to set the value.
-  int i = part(key, nshards);
+  std::vector<int> txnGroups;
+  int i = part(key, nshards, -1, txnGroups);
 
      // Send the GET operation to appropriate shard.
   Promise promise;

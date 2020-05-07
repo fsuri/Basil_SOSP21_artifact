@@ -139,7 +139,8 @@ class Server : public TransportReceiver, public ::Server {
   void CleanDependencies(const std::string &txnDigest);
 
   inline bool IsKeyOwned(const std::string &key) const {
-    return static_cast<int>(part(key, numShards) % numGroups) == groupIdx;
+    std::vector<int> txnGroups;
+    return static_cast<int>(part(key, numShards, groupIdx, txnGroups) % numGroups) == groupIdx;
   }
 
   const transport::Configuration &config;

@@ -2,14 +2,17 @@
 #define PARTITIONER_H
 
 #include <functional>
+#include <set>
 #include <string>
+#include <vector>
 
 enum Partitioner {
   DEFAULT = 0,
   WAREHOUSE,
 };
 
-typedef std::function<uint64_t(const std::string &, uint64_t)> partitioner;
+typedef std::function<uint64_t(const std::string &, uint64_t, int,
+    const std::vector<int> &)> partitioner;
 
 extern partitioner default_partitioner;
 extern partitioner warehouse_partitioner;

@@ -171,13 +171,15 @@ PubKey DerivePublicKey(PrivKey &privateKey) {
   #else
   PubKey publicKey(privateKey);
   #endif
-  
+ 
+  #ifndef USE_ED25519_SIGS
   bool result = publicKey.Validate(prng, 3);
   if (!result) {
     throw "Public key derivation failed";
   }
 
   return publicKey;
+  #endif
 }
 
 #ifdef USE_ED25519_SIGS

@@ -121,7 +121,8 @@ int
 Client::Get(const string &key, string &value)
 {
     // Contact the appropriate shard to get the value.
-    int i = part(key, nshards);
+    std::vector<int> txnGroups;
+    int i = part(key, nshards, -1, txnGroups);
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (participants.find(i) == participants.end()) {
@@ -143,7 +144,9 @@ int
 Client::Put(const string &key, const string &value)
 {
     // Contact the appropriate shard to set the value.
-    int i = part(key, nshards);
+    std::vector<int> txnGroups;
+    int i = part(key, nshards, -1, txnGroups);
+
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (participants.find(i) == participants.end()) {
