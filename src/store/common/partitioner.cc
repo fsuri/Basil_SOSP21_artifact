@@ -21,12 +21,24 @@ partitioner warehouse_partitioner = [](const std::string &key, uint64_t nshards,
   return w_id % nshards;
 };
 
+
+partitioner warehouse_district_partitioner_dist_items(uint64_t num_warehouses) {
+  return [num_warehouses](const std::string &key, uint64_t nshards, int group,
+      const std::vector<int> &txnGroups) {
+    uint32_t w_id = *reinterpret_cast<const uint32_t*>(key.c_str() + 1);
+    uint32_t d_id = 0;
+    if (key.length() >= 9) {
+      d_id = *reinterpret_cast<const uint32_t*>(key.c_str() + 5);
+    }
+    return ((w_id * num_warehouses) + d_id) % nshards;
+  };
+}
+
 partitioner warehouse_district_partitioner(uint64_t num_warehouses) {
   return [num_warehouses](const std::string &key, uint64_t nshards, int group,
       const std::vector<int> &txnGroups) {
     switch (key[0]) {
       case 0:  // WAREHOUSE
-      case 8:  // STOCK
       {
         uint32_t w_id = *reinterpret_cast<const uint32_t*>(key.c_str() + 1);
         return (w_id * num_warehouses) % nshards;
@@ -45,6 +57,7 @@ partitioner warehouse_district_partitioner(uint64_t num_warehouses) {
         uint32_t w_id = *reinterpret_cast<const uint32_t*>(key.c_str() + 1);
         return (w_id * num_warehouses) % nshards;
       }
+      case 8:  // STOCK
       case 1:  // DISTRICT
       case 2:  // CUSTOMER
       case 3:  // HISTORY

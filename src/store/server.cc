@@ -84,8 +84,6 @@ enum read_dep_t {
   READ_DEP_ONE_HONEST
 };
 
-
-
 /**
  * System settings.
  */
@@ -155,10 +153,12 @@ DEFINE_validator(trans_protocol, &ValidateTransMode);
 
 const std::string partitioner_args[] = {
 	"default",
+  "warehouse_dist_items",
   "warehouse"
 };
 const Partitioner parts[] {
   DEFAULT,
+  WAREHOUSE_DIST_ITEMS,
   WAREHOUSE
 };
 static bool ValidatePartitioner(const char* flagname,
@@ -385,6 +385,9 @@ int main(int argc, char **argv) {
   switch (partType) {
     case DEFAULT:
       part = default_partitioner;
+      break;
+    case WAREHOUSE_DIST_ITEMS:
+      part = warehouse_district_partitioner_dist_items(FLAGS_tpcc_num_warehouses);
       break;
     case WAREHOUSE:
       part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses);

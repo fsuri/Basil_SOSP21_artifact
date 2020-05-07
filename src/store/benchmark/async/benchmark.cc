@@ -326,6 +326,33 @@ DEFINE_int32(max_attempts, -1, "max number of attempts per transaction (or -1"
 DEFINE_int32(message_timeout, 10000, "length of timeout for messages in ms.");
 DEFINE_int32(max_backoff, 5000, "max time to sleep after aborting.");
 
+const std::string partitioner_args[] = {
+	"default",
+  "warehouse_dist_items",
+  "warehouse"
+};
+const Partitioner parts[] {
+  DEFAULT,
+  WAREHOUSE_DIST_ITEMS,
+  WAREHOUSE
+};
+static bool ValidatePartitioner(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(partitioner_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == partitioner_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(partitioner, partitioner_args[0],	"the partitioner to use during this"
+    " experiment");
+DEFINE_validator(partitioner, &ValidatePartitioner);
+
+
+
 /**
  * Retwis settings.
  */
@@ -480,6 +507,16 @@ int main(int argc, char **argv) {
     std::cerr << "Unknown benchmark." << std::endl;
     return 1;
   }
+  
+  // parse partitioner
+  Partitioner partType = DEFAULT;
+  int numParts = sizeof(partitioner_args);
+  for (int i = 0; i < numParts; ++i) {
+    if (FLAGS_partitioner == partitioner_args[i]) {
+      partType = parts[i];
+      break;
+    }
+  }
 
   // parse key selector
   keysmode_t keySelectionMode = KEYS_UNKNOWN;
@@ -601,14 +638,18 @@ int main(int argc, char **argv) {
   }
 
   partitioner part;
-  switch (benchMode) {
-    case BENCH_TPCC:
-    case BENCH_TPCC_SYNC:
+  switch (partType) {
+    case DEFAULT:
+      part = default_partitioner;
+      break;
+    case WAREHOUSE_DIST_ITEMS:
+      part = warehouse_district_partitioner_dist_items(FLAGS_tpcc_num_warehouses);
+      break;
+    case WAREHOUSE:
       part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses);
       break;
     default:
-      part = default_partitioner;
-      break;
+      NOT_REACHABLE();
   }
 
 	std::string latencyFile;
