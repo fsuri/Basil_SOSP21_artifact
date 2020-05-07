@@ -951,7 +951,7 @@ int main(int argc, char **argv) {
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
   }
 
-  tport->Timer(FLAGS_exp_duration * 1000 - 1000, FlushStats);
+  tport->Timer(4950, FlushStats);
 
   std::signal(SIGKILL, Cleanup);
   std::signal(SIGTERM, Cleanup);

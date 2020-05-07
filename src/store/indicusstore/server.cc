@@ -274,10 +274,6 @@ void Server::HandlePhase2(const TransportAddress &remote,
     }
   }
 
-  if (!signedMessages) {
-    phase2Reply.set_replica_id(id);
-  }
-
   transport->SendMessage(this, remote, phase2Reply);
   Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
 }
@@ -988,10 +984,6 @@ void Server::SendPhase1Reply(uint64_t reqId,
           phase1Reply.mutable_signed_cc());
       //Latency_End(&signLat);
     }
-  }
-
-  if (!signedMessages && result != proto::ConcurrencyControl::ABORT) {
-    phase1Reply.set_replica_id(id);
   }
 
   transport->SendMessage(this, remote, phase1Reply);

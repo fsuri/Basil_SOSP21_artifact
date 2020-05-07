@@ -193,13 +193,13 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
 }
 
 void Client::Phase1(PendingRequest *req) {
-  Debug("PHASE1 [%lu:%lu] at %lu", client_id, req->id,
+  Debug("PHASE1 [%lu:%lu] at %lu", client_id, client_seq_num,
       txn.timestamp().timestamp());
 
   UW_ASSERT(txn.involved_groups().size() > 0);
 
   for (auto group : txn.involved_groups()) {
-    bclient[group]->Phase1(req->id, txn, req->txnDigest, std::bind(
+    bclient[group]->Phase1(client_seq_num, txn, req->txnDigest, std::bind(
           &Client::Phase1Callback, this, req->id, group, std::placeholders::_1,
           std::placeholders::_2, std::placeholders::_3, std::placeholders::_4),
         std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
@@ -219,8 +219,8 @@ void Client::Phase1Callback(uint64_t txnId, int group,
     return;
   }
 
-  Debug("PHASE1[%lu:%lu] callback decision %d from group %d", client_id, txnId,
-      decision, group);
+  Debug("PHASE1[%lu:%lu] callback decision %d from group %d", client_id,
+      client_seq_num, decision, group);
 
   PendingRequest *req = itr->second;
   if (req->startedPhase2 || req->startedWriteback) {
@@ -332,7 +332,7 @@ void Client::Phase2(PendingRequest *req) {
   }
 
   req->startedPhase2 = true;
-  bclient[logGroup]->Phase2(req->id, txn, req->txnDigest, req->decision,
+  bclient[logGroup]->Phase2(client_seq_num, txn, req->decision,
       req->p1ReplySigsGrouped,
       std::bind(&Client::Phase2Callback, this, req->id, logGroup,
         std::placeholders::_1),
@@ -404,7 +404,7 @@ void Client::Writeback(PendingRequest *req) {
   }
 
   for (auto group : txn.involved_groups()) {
-    bclient[group]->Writeback(req->id, txn, req->txnDigest,
+    bclient[group]->Writeback(client_seq_num, txn, req->txnDigest,
         req->decision, req->fast, req->conflict, req->p1ReplySigsGrouped,
         req->p2ReplySigsGrouped);
   }
