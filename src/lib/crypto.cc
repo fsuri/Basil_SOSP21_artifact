@@ -44,6 +44,11 @@ string Hash(const string &message) {
   return digest;
 }
 
+size_t HashSize() {
+  SHA256 hash;
+  return hash.DigestSize();
+}
+
 string Sign(PrivKey* privateKey, const string &message) {
   switch(privateKey->t) {
   case RSA: {
@@ -74,6 +79,30 @@ string Sign(PrivKey* privateKey, const string &message) {
     Panic("unimplemented");
   }
   }
+}
+
+size_t SigSize(KeyType t) {
+  switch(t) {
+  case RSA: {
+    Panic("unimplemented");
+  }
+  case ECDSA: {
+    Panic("unimplemented");
+  }
+  case ED25: {
+    return crypto_sign_BYTES;
+  }
+  default: {
+    Panic("unimplemented");
+  }
+  }
+}
+
+size_t SigSize(PrivKey* privateKey) {
+  return SigSize(privateKey->t);
+}
+size_t SigSize(PubKey* publicKey) {
+  return SigSize(publicKey->t);
 }
 
 

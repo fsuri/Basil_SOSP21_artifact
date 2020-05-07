@@ -13,8 +13,11 @@ typedef struct PrivKey PrivKey;
 using namespace std;
 
 string Hash(const string &message);
+size_t HashSize();
 
 string Sign(PrivKey* privateKey, const string &message);
+size_t SigSize(PrivKey* privateKey);
+size_t SigSize(PubKey* publicKey);
 
 bool Verify(PubKey* publicKey, const string &message, string &signature);
 

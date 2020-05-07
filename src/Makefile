@@ -36,6 +36,7 @@ LDFLAGS += $(LIBSSL_LDFLAGS)
 LDFLAGS += -l:libcryptopp.so
 # libsodium
 LDFLAGS += -lsodium
+LDFLAGS += -L ./lib/ -lblake3
 
 
 # Google test framework. This doesn't use pkgconfig

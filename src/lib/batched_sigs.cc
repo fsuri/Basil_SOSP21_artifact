@@ -2,7 +2,7 @@
 #include "lib/batched_sigs.h"
 #include <cstring>
 #include <unordered_map>
-#include "blake3.h"
+#include "lib/blake3.h"
 #include <stdint.h>
 
 namespace BatchedSigs {
