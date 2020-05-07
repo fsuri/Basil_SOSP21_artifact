@@ -982,6 +982,9 @@ void Server::SendPhase1Reply(uint64_t reqId,
       //Latency_Start(&signLat);
       SignMessage(cc, keyManager->GetPrivateKey(id), id,
           phase1Reply.mutable_signed_cc());
+      Debug("PHASE1[%s] Sending Phase1Reply with signature %s from priv key %d.",
+          BytesToHex(txnDigest, 16).c_str(),
+          BytesToHex(phase1Reply.signed_cc().signature(), 100).c_str(), id);
       //Latency_End(&signLat);
     }
   }

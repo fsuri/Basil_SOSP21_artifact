@@ -403,7 +403,9 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
   const proto::ConcurrencyControl *cc = nullptr;
   proto::ConcurrencyControl validatedCC;
   if (hasSigned) {
-    Debug("Verifying signed_cc because has_cc %d and ccr %d.", reply.has_cc(),
+    Debug("[group %i] Verifying signed_cc because has_cc %d and ccr %d.",
+        group,
+        reply.has_cc(),
         reply.cc().ccr());
     if (!reply.has_signed_cc()) {
       return;
@@ -417,6 +419,10 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
 
     if (!crypto::Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
           reply.signed_cc().data(), reply.signed_cc().signature())) {
+      Debug("[group %i] Signature %s from replica %lu is not valid.", group,
+            BytesToHex(reply.signed_cc().signature(), 100).c_str(),
+            reply.signed_cc().process_id());
+
       return;
     }
 

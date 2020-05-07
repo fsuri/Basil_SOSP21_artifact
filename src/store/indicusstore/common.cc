@@ -14,6 +14,9 @@ void SignMessage(const ::google::protobuf::Message &msg,
     proto::SignedMessage *signedMessage) {
   signedMessage->set_process_id(processId);
   UW_ASSERT(msg.SerializeToString(signedMessage->mutable_data()));
+  Debug("Signing data %s with priv key %s.",
+      BytesToHex(signedMessage->data(), 128).c_str(),
+      BytesToHex(std::string(reinterpret_cast<const char*>(privateKey), 64), 128).c_str());
   *signedMessage->mutable_signature() = crypto::Sign(privateKey,
       signedMessage->data());
 }
