@@ -53,6 +53,8 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     timeServer(timeServer) {
   transport->Register(this, config, groupIdx, idx);
   _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
+  _Latency_Init(&verifyLat, "verify_lat");
+  _Latency_Init(&signLat, "sign_lat");
   
   // this is needed purely from loading data without executing transactions
   proto::CommittedProof proof;
@@ -64,6 +66,8 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
 }
 
 Server::~Server() {
+  Latency_Dump(&verifyLat);
+  Latency_Dump(&signLat);
 }
 
 void Server::ReceiveMessage(const TransportAddress &remote,
@@ -173,8 +177,10 @@ void Server::HandleRead(const TransportAddress &remote,
 
         if (signedMessages) {
           signedMessage.Clear();
+          Latency_Start(&signLat);
           SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id,
               readReply.mutable_signed_prepared());
+          Latency_End(&signLat);
         } else {
           *readReply.mutable_prepared() = preparedWrite;
         }
@@ -261,8 +267,10 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
     if (signedMessages) {
       proto::Phase2Decision p2Decision(phase2Reply.p2_decision());
+      Latency_Start(&signLat);
       SignMessage(p2Decision, keyManager->GetPrivateKey(id), id,
           phase2Reply.mutable_signed_p2_decision());
+      Latency_Start(&signLat);
     }
   }
 
@@ -303,7 +311,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
   if (validateProofs) {
     if (signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()) {
       if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
-            keyManager, &config)) {
+            keyManager, &config, verifyLat)) {
         Debug("WRITEBACK[%s] Failed to validate P1 replies for fast commit.",
             BytesToHex(*txnDigest, 16).c_str());
         return;
@@ -312,7 +320,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
       *proof.mutable_p1_sigs() = msg.p1_sigs();
     } else if (signedMessages && msg.has_p2_sigs()) {
       if (!ValidateP2Replies(msg.decision(), txnDigest, msg.p2_sigs(),
-            keyManager, &config)) {
+            keyManager, &config, verifyLat)) {
         Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
             BytesToHex(*txnDigest, 16).c_str(), msg.decision());
         return;
@@ -358,11 +366,14 @@ void Server::HandleAbort(const TransportAddress &remote,
       return;
     }
 
+    Latency_Start(&verifyLat);
     if (!crypto::Verify(keyManager->GetPublicKey(msg.signed_internal().process_id()),
           msg.signed_internal().data(),
           msg.signed_internal().signature())) {
+      Latency_End(&verifyLat);
       return;
     }
+    Latency_End(&verifyLat);
 
     if (!abortInternal.ParseFromString(msg.signed_internal().data())) {
       return;
@@ -968,8 +979,10 @@ void Server::SendPhase1Reply(uint64_t reqId,
       *phase1Reply.mutable_cc()->mutable_committed_conflict() = conflict;
     } else if (signedMessages) {
       proto::ConcurrencyControl cc(phase1Reply.cc());
+      Latency_Start(&signLat);
       SignMessage(cc, keyManager->GetPrivateKey(id), id,
           phase1Reply.mutable_signed_cc());
+      Latency_End(&signLat);
     }
   }
 

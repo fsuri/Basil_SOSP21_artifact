@@ -5,6 +5,7 @@
 #include "lib/keymanager.h"
 #include "store/common/timestamp.h"
 #include "store/indicusstore/indicus-proto.pb.h"
+#include "lib/latency.h"
 
 #include <map>
 #include <string>
@@ -32,9 +33,20 @@ bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config);
 
+bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager, const transport::Configuration *config,
+    Latency_t &lat);
+
 bool ValidateP2Replies(proto::CommitDecision decision,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config);
+
+bool ValidateP2Replies(proto::CommitDecision decision,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager, const transport::Configuration *config,
+    Latency_t &lat);
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     const std::string *txnDigest, const std::string &key, const std::string &val, const Timestamp &timestamp,

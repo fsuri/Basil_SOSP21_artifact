@@ -204,6 +204,8 @@ class Server : public TransportReceiver, public ::Server {
   Stats stats;
   std::unordered_set<std::string> active;
   Latency_t committedReadInsertLat;
+  Latency_t verifyLat;
+  Latency_t signLat;
 };
 
 } // namespace indicusstore
