@@ -76,7 +76,7 @@ TxnStore::Prepare(uint64_t id, const Transaction &txn,
 }
 
 void
-TxnStore::Commit(uint64_t id, uint64_t timestamp)
+TxnStore::Commit(uint64_t id, const Timestamp &ts)
 {
     Panic("Unimplemented COMMIT");
 }

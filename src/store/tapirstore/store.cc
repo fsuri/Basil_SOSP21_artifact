@@ -80,6 +80,8 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
             // run the checks again for a new timestamp
             Cleanup(id);
         }
+    } else {
+      ongoing[id] = txn;
     }
 
     // do OCC checks
@@ -253,17 +255,14 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
 }
     
 void
-Store::Commit(uint64_t id, uint64_t timestamp)
+Store::Commit(uint64_t id, const Timestamp &timestamp)
 {
 
     Debug("[%lu, %lu] COMMIT", id, timestamp);
     
-    // Nope. might not find it
-    //UW_ASSERT(prepared.find(id) != prepared.end());
+    const auto &t = ongoing[id];
 
-    pair<Timestamp, Transaction> p = prepared[id];
-
-    Commit(p.first, p.second);
+    Commit(timestamp, t);
 
     Cleanup(id);
 }
@@ -336,6 +335,7 @@ void Store::Cleanup(uint64_t txnId) {
     }
   }*/
   prepared.erase(txnId);
+  ongoing.erase(txnId);
 }
 
 } // namespace tapirstore

@@ -88,9 +88,9 @@ void BufferClient::Prepare(const Timestamp &timestamp, prepare_callback pcb,
   txnclient->Prepare(tid, txn, timestamp, pcb, ptcb, timeout);
 }
 
-void BufferClient::Commit(uint64_t timestamp, commit_callback ccb,
+void BufferClient::Commit(const Timestamp &ts, commit_callback ccb,
     commit_timeout_callback ctcb, uint32_t timeout) {
-  txnclient->Commit(tid, txn, timestamp, ccb, ctcb, timeout);
+  txnclient->Commit(tid, txn, ts, ccb, ctcb, timeout);
 }
     
 void BufferClient::Abort(abort_callback acb, abort_timeout_callback atcb,

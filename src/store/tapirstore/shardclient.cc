@@ -165,7 +165,7 @@ void ShardClient::Prepare(uint64_t id, const Transaction &txn,
 }
 
 void ShardClient::Commit(uint64_t id, const Transaction & txn,
-      uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
+      const Timestamp &timestamp, commit_callback ccb, commit_timeout_callback ctcb,
       uint32_t timeout) {
   
 
@@ -174,7 +174,7 @@ void ShardClient::Commit(uint64_t id, const Transaction & txn,
   Request request;
   request.set_op(Request::COMMIT);
   request.set_txnid(id);
-  request.mutable_commit()->set_timestamp(timestamp);
+  timestamp.serialize(request.mutable_commit()->mutable_timestamp());
   request.SerializeToString(&request_str);
 
   uint64_t reqId = lastReqId++;

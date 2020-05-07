@@ -57,7 +57,7 @@ public:
     int Get(uint64_t id, const std::string &key, std::pair<Timestamp, std::string> &value);
     int Get(uint64_t id, const std::string &key, const Timestamp &timestamp, std::pair<Timestamp, std::string> &value);
     int Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp, Timestamp &proposed);
-    void Commit(uint64_t id, uint64_t timestamp = 0);
+    void Commit(uint64_t id, const Timestamp &timestamp);
     void Abort(uint64_t id, const Transaction &txn = Transaction());
     void Load(const std::string &key, const std::string &value, const Timestamp &timestamp);
 
@@ -70,6 +70,7 @@ private:
 
     // TODO: comment this.
     std::unordered_map<uint64_t, std::pair<Timestamp, Transaction>> prepared;
+    std::unordered_map<uint64_t, Transaction> ongoing;
     //std::unordered_map<std::string, std::set<Timestamp>> preparedWrites;
 
     void GetPreparedWrites(std::unordered_map< std::string, std::set<Timestamp> > &writes);

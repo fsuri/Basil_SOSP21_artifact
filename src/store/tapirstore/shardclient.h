@@ -71,7 +71,7 @@ class ShardClient : public TxnClient {
 
   // Commit all Get(s) and Put(s) since Begin().
   virtual void Commit(uint64_t id, const Transaction & txn,
-      uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
+      const Timestamp &timestamp, commit_callback ccb, commit_timeout_callback ctcb,
       uint32_t timeout) override;
   
   // Abort all Get(s) and Put(s) since Begin().
@@ -105,7 +105,7 @@ class ShardClient : public TxnClient {
         delete requestTimeout;
       }
     }
-    uint64_t ts;
+    Timestamp ts;
     Transaction txn;
     Timeout *requestTimeout;
   };

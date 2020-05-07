@@ -223,7 +223,7 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         Warning("COMMIT[%lu] timeout.", txnId);
       };
       for (auto p : participants) {
-          bclient[p]->Commit(req->prepareTimestamp.getTimestamp(), ccb, ctcb,
+          bclient[p]->Commit(req->prepareTimestamp, ccb, ctcb,
               1000); // we don't really care about the timeout here
       }
       if (!syncCommit) {

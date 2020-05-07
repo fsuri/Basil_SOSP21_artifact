@@ -15,7 +15,7 @@ message PrepareMessage {
 }
 
 message CommitMessage {
-    required uint64 timestamp = 1;
+    required TimestampMessage timestamp = 1;
 }
 
 message AbortMessage {

@@ -58,9 +58,11 @@ Server::ExecInconsistentUpcall(const string &str1)
     request.ParseFromString(str1);
 
     switch (request.op()) {
-    case tapirstore::proto::Request::COMMIT:
-        store->Commit(request.txnid(), request.commit().timestamp());
+    case tapirstore::proto::Request::COMMIT: {
+        Timestamp ts(request.commit().timestamp());
+        store->Commit(request.txnid(), ts);
         break;
+    }
     case tapirstore::proto::Request::ABORT:
         store->Abort(request.txnid(), Transaction(request.abort().txn()));
         break;

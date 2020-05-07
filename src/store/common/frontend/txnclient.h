@@ -81,7 +81,7 @@ class TxnClient {
 
   // Commit all Get(s) and Put(s) since Begin().
   virtual void Commit(uint64_t id, const Transaction & txn,
-      uint64_t timestamp, commit_callback ccb, commit_timeout_callback ctcb,
+      const Timestamp &ts, commit_callback ccb, commit_timeout_callback ctcb,
       uint32_t timeout) = 0;
   
   // Abort all Get(s) and Put(s) since Begin().
