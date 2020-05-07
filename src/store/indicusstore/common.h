@@ -24,7 +24,7 @@ bool __PreValidateSignedMessage(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager, proto::PackedMessage &packedMessage);
 
 void SignMessage(const ::google::protobuf::Message &msg,
-    const crypto::PrivKey &privateKey, uint64_t processId,
+    crypto::PrivKey* privateKey, uint64_t processId,
     proto::SignedMessage &signedMessage);
 
 proto::CommitDecision IndicusDecide(

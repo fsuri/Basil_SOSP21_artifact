@@ -293,7 +293,7 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
     }
   }
 
-  testSlot(seqnum, viewnum, digest);
+  testSlot(seqnum, viewnum, digest, true);
 }
 
 void Replica::HandlePrepare(const TransportAddress &remote,
@@ -318,7 +318,7 @@ void Replica::HandlePrepare(const TransportAddress &remote,
   uint64_t viewnum = prepare.viewnum();
   string digest = prepare.digest();
 
-  testSlot(seqnum, viewnum, digest);
+  testSlot(seqnum, viewnum, digest, true);
 }
 
 void Replica::HandleCommit(const TransportAddress &remote,
@@ -344,7 +344,7 @@ void Replica::HandleCommit(const TransportAddress &remote,
   uint64_t viewnum = commit.viewnum();
   string digest = commit.digest();
 
-  testSlot(seqnum, viewnum, digest);
+  testSlot(seqnum, viewnum, digest, false);
 }
 
 void Replica::HandleGrouped(const TransportAddress &remote,
@@ -402,40 +402,32 @@ void Replica::HandleGrouped(const TransportAddress &remote,
 // prepare, and commit because these messages can arrive in arbitrary order
 // and commit messages may be received before preprepares on a sufficiently
 // odd network
-void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest) {
-  // TODO make this a wear off in a timeout instead, or just remove it
-  // for simplicity, make sure we haven't already sent the commit
-  if (sentCommits[seqnum].find(viewnum) == sentCommits[seqnum].end()) {
-    // wait for 2f prepare + preprepare all matching and then send commit to
-    // everyone start timer for 2f+1 commits
-    if (slots.Prepared(seqnum, viewnum, config.f)) {
-      Debug("Sending commit to everyone");
+void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool gotPrepare) {
+  // wait for 2f prepare + preprepare all matching and then send commit to
+  // everyone start timer for 2f+1 commits
+  // the gotPrepare just makes it so that commits don't cause commits to be sent
+  // which would just loop forever
+  if (gotPrepare && slots.Prepared(seqnum, viewnum, config.f)) {
+    Debug("Sending commit to everyone");
 
-      sentCommits[seqnum].insert(viewnum);
-      transport->Timer(2000, [this, seqnum, viewnum]() {
-        Debug("erased sent commit");
-        this->sentCommits[seqnum].erase(viewnum);
-      });
+    // Multicast commit to everyone
+    proto::Commit commit;
+    commit.set_seqnum(seqnum);
+    commit.set_viewnum(viewnum);
+    commit.set_digest(digest);
 
-      // Multicast commit to everyone
-      proto::Commit commit;
-      commit.set_seqnum(seqnum);
-      commit.set_viewnum(viewnum);
-      commit.set_digest(digest);
-
-      if (primaryCoordinator) {
-        int primaryIdx = config.GetLeaderIndex(currentView);
-        if (idx == primaryIdx) {
-          Debug("Sending prepare proof");
-          // send prepare proof to all replicas
-          proto::GroupedSignedMessage proof = slots.getPrepareProof(seqnum, viewnum, digest);
-          sendMessageToAll(proof);
-        }
-
-        sendMessageToPrimary(commit);
-      } else {
-        sendMessageToAll(commit);
+    if (primaryCoordinator) {
+      int primaryIdx = config.GetLeaderIndex(currentView);
+      if (idx == primaryIdx) {
+        Debug("Sending prepare proof");
+        // send prepare proof to all replicas
+        proto::GroupedSignedMessage proof = slots.getPrepareProof(seqnum, viewnum, digest);
+        sendMessageToAll(proof);
       }
+
+      sendMessageToPrimary(commit);
+    } else {
+      sendMessageToAll(commit);
     }
   }
 

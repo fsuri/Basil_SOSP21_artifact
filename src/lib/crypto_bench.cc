@@ -1,13 +1,14 @@
 #include "lib/latency.h"
 #include "lib/crypto.h"
+#include "lib/batched_sigs.h"
+#include "lib/blake3.h"
 
 #include <gflags/gflags.h>
 
 #include <random>
-#include <sodium.h>
 
-DEFINE_uint64(size, 100, "size of data to verify.");
-DEFINE_uint64(iterations, 1000, "number of iterations to measure.");
+DEFINE_uint64(size, 1000, "size of data to verify.");
+DEFINE_uint64(iterations, 100, "number of iterations to measure.");
 
 void GenerateRandomString(uint64_t size, std::random_device &rd, std::string &s) {
   s.clear();
@@ -22,44 +23,25 @@ int main(int argc, char *argv[]) {
 
   std::random_device rd;
 
+  crypto::KeyType keyType = crypto::ED25;
+  bool precompute = true;
 
-  #ifdef USE_ECDSA_SIGS
-  std::pair<crypto::PrivKey, crypto::PubKey> keypair = crypto::GenerateKeypair();
-  crypto::PrivKey privKey = keypair.first;
-  crypto::PubKey pubKey = keypair.second;
-  #else
-  crypto::PrivKey privKey(crypto::GeneratePrivateKey());
-  crypto::PubKey pubKey(crypto::DerivePublicKey(privKey));
-  #endif
-  // privKey.Precompute();
-  // pubKey.Precompute();
-
-  unsigned char pk[crypto_sign_PUBLICKEYBYTES];
-  unsigned char sk[crypto_sign_SECRETKEYBYTES];
-  crypto_sign_keypair(pk, sk);
-
-  {
-    std::string s;
-    GenerateRandomString(FLAGS_size, rd, s);
-    unsigned char edsig[crypto_sign_BYTES];
-    int result = crypto_sign_detached(edsig, NULL, (const unsigned char*) s.c_str(), s.length(), sk);
-    std::string signature(reinterpret_cast<char*>(edsig), crypto_sign_BYTES);
-    printf("Result: %d\n", result);
-    result = crypto_sign_verify_detached((const unsigned char*) signature.c_str(), (const unsigned char*) s.c_str(), s.length(), pk);
-    printf("Result: %d\n", result);
-    std::cout << "eq " << ((bool) (result == 0)) << std::endl;
-  }
+  std::pair<crypto::PrivKey*, crypto::PubKey*> keypair = crypto::GenerateKeypair(keyType, precompute);
+  crypto::PrivKey* privKey = keypair.first;
+  crypto::PubKey* pubKey = keypair.second;
 
   struct Latency_t signLat;
   struct Latency_t verifyLat;
+  struct Latency_t signBLat;
+  struct Latency_t verifyBLat;
   struct Latency_t hashLat;
-  struct Latency_t signEDLat;
-  struct Latency_t verifyEDLat;
+  struct Latency_t blake3Lat;
   _Latency_Init(&signLat, "sign");
   _Latency_Init(&verifyLat, "verify");
+  _Latency_Init(&signBLat, "sign");
+  _Latency_Init(&verifyBLat, "verify");
   _Latency_Init(&hashLat, "sha256");
-  _Latency_Init(&signEDLat, "sign");
-  _Latency_Init(&verifyEDLat, "verify");
+  _Latency_Init(&blake3Lat, "blake3");
   for (uint64_t i = 0; i < FLAGS_iterations; ++i) {
     std::string s;
     GenerateRandomString(FLAGS_size, rd, s);
@@ -70,30 +52,52 @@ int main(int argc, char *argv[]) {
     crypto::Verify(pubKey, s, sig);
     Latency_End(&verifyLat);
 
-    CryptoPP::SHA256 hash;
-    std::string digest;
     std::string hs;
-    GenerateRandomString(FLAGS_size, rd, s);
+    GenerateRandomString(FLAGS_size, rd, hs);
 
     Latency_Start(&hashLat);
-    hash.Update((const byte*) &hs[0], hs.length());
-    digest.resize(hash.DigestSize());
-    hash.Final((byte*) &digest[0]);
+    std::string digest = crypto::Hash(hs);
     Latency_End(&hashLat);
 
 
-    unsigned char edsig[crypto_sign_BYTES];
-    Latency_Start(&signEDLat);
-    crypto_sign_detached(edsig, NULL, (const byte*) &s[0], s.length(), sk);
-    Latency_End(&signEDLat);
-    Latency_Start(&verifyEDLat);
-    crypto_sign_verify_detached(edsig, (const byte*) &s[0], s.length(), pk);
-    Latency_End(&verifyEDLat);
+    std::string hs2;
+    GenerateRandomString(FLAGS_size, rd, hs2);
+
+    Latency_Start(&blake3Lat);
+      // Initialize the hasher.
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+
+    // Read input bytes from stdin.
+    blake3_hasher_update(&hasher, &hs2[0], hs2.length());
+
+    // Finalize the hash. BLAKE3_OUT_LEN is the default output length, 32 bytes.
+    uint8_t output[BLAKE3_OUT_LEN];
+    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
+    Latency_End(&blake3Lat);
+
+    std::vector<std::string> messages;
+    int nmsgs = 4;
+    for (int i = 0; i < nmsgs; i++) {
+      std::string tmp;
+      GenerateRandomString(FLAGS_size, rd, tmp);
+      messages.push_back(tmp);
+    }
+    Latency_Start(&signBLat);
+    std::vector<std::string> sigs = BatchedSigs::generateBatchedSignatures(messages, privKey);
+    Latency_End(&signBLat);
+    Latency_Start(&verifyBLat);
+    for (int i = 0; i < nmsgs; i++) {
+      assert(BatchedSigs::verifyBatchedSignature(sigs[i], messages[i], pubKey));
+    }
+    Latency_End(&verifyBLat);
+
   }
   Latency_Dump(&signLat);
   Latency_Dump(&verifyLat);
+  Latency_Dump(&signBLat);
+  Latency_Dump(&verifyBLat);
   Latency_Dump(&hashLat);
-  Latency_Dump(&signEDLat);
-  Latency_Dump(&verifyEDLat);
+  Latency_Dump(&blake3Lat);
   return 0;
 }

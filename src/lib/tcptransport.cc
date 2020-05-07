@@ -466,6 +466,7 @@ TCPTransport::Run()
 void
 TCPTransport::Stop()
 {
+    tp.stop();
     event_base_loopbreak(libeventBase);
 }
 
