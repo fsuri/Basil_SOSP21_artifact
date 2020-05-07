@@ -2,20 +2,20 @@
 \subsubsection{Preserving isolation}
 
 Algorithm \ref{mvtso} shows the necessary concurrency control check to preserve Byzantine-Serializability. 
-Given a transactions prepare request \la{This transaction prepare
+Given a transactions \changebars{validation request OR: commit request }{prepare request \la{This transaction prepare
   request comes a bit out of the blue---it is not discussed explictly
   in the previous section
-  as one of the messages being exchanged} the validation check returns
+  as one of the messages being exchanged} \fs{2PC-Prepare request was mentioned in "Commit()"}} the validation check returns
 an Abort vote if a conflict has been detected, and Commit
 otherwise. \la{For my taste, there are a lot of COmmit flying
-  around... can we just call these Yes or No votes, like BHG?}
+  around... can we just call these Yes or No votes, like BHG?} \fs{could call it "accept" and "reject"? I.e. we vote to accept/reject the clients commit/prepare (whatever word you prefer) request}
 When execution results match the timestamp order, there are no
 conflicts (Fig. \ref{fig:MVTSOEX}: 4 top). For each read, a replica
 verifies that it has not voted to commit a conflicting write
-(Algorithm \ref{mvtso}, line 3-7). Conversely, for each write, a
+(Algorithm \ref{mvtso}, line 3-6). Conversely, for each write, a
 replica confirms that there exist no previously accepted reads (line
-8-10), \la{line numbers are off} and no ongoing read transactions
-(line 11-12) \la{line numbers off} that conflict. Fig. \ref{fig:MVTSOEX}: 4 shows both non-conflicting and conflicting interleavings.
+7-9), and no ongoing read transactions
+(line 10-11) that conflict. Fig. \ref{fig:MVTSOEX}: 4 shows both non-conflicting and conflicting interleavings.
 If there are no conflicts, a replica tentatively \textit{prepares} a transaction, making its writes visible and evaluating future transactions against it for conflicts. Regardless of the outcome, a replica garbage collects all Read Timestmaps (RTS) associated with the transactions reads.
 It then waits for necessary dependencies (uncommited writes that were read) to be resolved (Figure \ref{fig:MVTSOEX}: 5). We remark, that the concurrency control check is serialized and executed atomically for each transaction.
 
@@ -73,7 +73,7 @@ Consequently, all correct clients experience Serializability, and thus, the MVTS
 \EndFor
 \State Prepared.add(TX) 
 
-\If{$\exists invalid d \in dep$} \Return Pom ~~//no $f+1$ matching
+\If{$\exists$ invalid $d \in dep$} \Return Pom ~~//no $f+1$ matching. CHANGE TO, if dep does not exist in Prepared/Committed if we go that route.
 \EndIf
 \While{$\exists d \in dep: d \notin CommitLog \cup AbortLog $)}
 \State Suspend
