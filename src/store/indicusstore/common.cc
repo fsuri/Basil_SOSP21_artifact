@@ -68,7 +68,7 @@ bool ValidateP1Replies(proto::CommitDecision decision,
     KeyManager *keyManager,
     const transport::Configuration *config) {
   Latency_t dummyLat;
-  _Latency_Init(&dummyLat, "dummy_lat");
+  //_Latency_Init(&dummyLat, "dummy_lat");
   return ValidateP1Replies(decision, fast, txn, txnDigest, groupedSigs,
       keyManager, config, dummyLat);
 }
@@ -113,15 +113,15 @@ bool ValidateP1Replies(proto::CommitDecision decision,
 
       Debug("Verifying %lu byte signature from replica %lu in group %lu.",
           sig.signature().size(), sig.process_id(), sigs.first);
-      Latency_Start(&lat);
+      //Latency_Start(&lat);
       if (!crypto::Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
               sig.signature())) {
-        Latency_End(&lat);
+        //Latency_End(&lat);
         Debug("Signature from replica %lu in group %lu is not valid.",
             sig.process_id(), sigs.first);
         return false;
       }
-      Latency_End(&lat);
+      //Latency_End(&lat);
       verified++;
     }
 
@@ -149,7 +149,7 @@ bool ValidateP2Replies(proto::CommitDecision decision,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config) {
   Latency_t dummyLat;
-  _Latency_Init(&dummyLat, "dummy_lat");
+  //_Latency_Init(&dummyLat, "dummy_lat");
   return ValidateP2Replies(decision, txnDigest, groupedSigs,
       keyManager, config, dummyLat);
 }
@@ -174,14 +174,14 @@ bool ValidateP2Replies(proto::CommitDecision decision,
   const auto &sigs = groupedSigs.grouped_sigs().begin();
   uint32_t verified = 0;
   for (const auto &sig : sigs->second.sigs()) {
-    Latency_Start(&lat);
+    //Latency_Start(&lat);
     if (!crypto::Verify(keyManager->GetPublicKey(sig.process_id()), p2DecisionMsg,
             sig.signature())) {
-      Latency_End(&lat);
+      //Latency_End(&lat);
       Debug("Signature from %lu is not valid.", sig.process_id());
       return false;
     }
-    Latency_End(&lat);
+    //Latency_End(&lat);
     verified++;
   }
 

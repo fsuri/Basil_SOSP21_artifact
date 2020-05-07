@@ -177,10 +177,10 @@ void Server::HandleRead(const TransportAddress &remote,
 
         if (signedMessages) {
           signedMessage.Clear();
-          Latency_Start(&signLat);
+          //Latency_Start(&signLat);
           SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id,
               readReply.mutable_signed_prepared());
-          Latency_End(&signLat);
+          //Latency_End(&signLat);
         } else {
           *readReply.mutable_prepared() = preparedWrite;
         }
@@ -267,10 +267,10 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
     if (signedMessages) {
       proto::Phase2Decision p2Decision(phase2Reply.p2_decision());
-      Latency_Start(&signLat);
+      //Latency_Start(&signLat);
       SignMessage(p2Decision, keyManager->GetPrivateKey(id), id,
           phase2Reply.mutable_signed_p2_decision());
-      Latency_Start(&signLat);
+      //Latency_End(&signLat);
     }
   }
 
@@ -366,14 +366,14 @@ void Server::HandleAbort(const TransportAddress &remote,
       return;
     }
 
-    Latency_Start(&verifyLat);
+    //Latency_Start(&verifyLat);
     if (!crypto::Verify(keyManager->GetPublicKey(msg.signed_internal().process_id()),
           msg.signed_internal().data(),
           msg.signed_internal().signature())) {
-      Latency_End(&verifyLat);
+      //Latency_End(&verifyLat);
       return;
     }
-    Latency_End(&verifyLat);
+    //Latency_End(&verifyLat);
 
     if (!abortInternal.ParseFromString(msg.signed_internal().data())) {
       return;
@@ -979,10 +979,10 @@ void Server::SendPhase1Reply(uint64_t reqId,
       *phase1Reply.mutable_cc()->mutable_committed_conflict() = conflict;
     } else if (signedMessages) {
       proto::ConcurrencyControl cc(phase1Reply.cc());
-      Latency_Start(&signLat);
+      //Latency_Start(&signLat);
       SignMessage(cc, keyManager->GetPrivateKey(id), id,
           phase1Reply.mutable_signed_cc());
-      Latency_End(&signLat);
+      //Latency_End(&signLat);
     }
   }
 
