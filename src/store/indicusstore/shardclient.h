@@ -98,7 +98,7 @@ class ShardClient : public TransportReceiver {
       const std::string &txnDigest,
       phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout);
   virtual void Phase2(uint64_t id, const proto::Transaction &transaction,
-      proto::CommitDecision decision,
+      const std::string &txnDigest, proto::CommitDecision decision,
       const proto::GroupedSignatures &groupedSigs, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout);
   virtual void Writeback(uint64_t id, const proto::Transaction &transaction,
@@ -151,6 +151,7 @@ class ShardClient : public TransportReceiver {
       }
     }
     uint64_t reqId;
+    uint64_t txnId;
     Timeout *requestTimeout;
     Timeout *decisionTimeout;
     bool decisionTimeoutStarted;
@@ -174,6 +175,7 @@ class ShardClient : public TransportReceiver {
       }
     }
     uint64_t reqId;
+    uint64_t txnId;
     proto::CommitDecision decision;
     Timeout *requestTimeout;
 
@@ -240,6 +242,8 @@ class ShardClient : public TransportReceiver {
   std::unordered_map<uint64_t, PendingPhase1 *> pendingPhase1s;
   std::unordered_map<uint64_t, PendingPhase2 *> pendingPhase2s;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
+
+  std::unordered_map<uint64_t, std::set<uint64_t>> txnReplies;
 };
 
 } // namespace indicusstore

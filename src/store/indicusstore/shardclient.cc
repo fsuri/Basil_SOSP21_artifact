@@ -137,6 +137,7 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
   PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId, group, transaction,
       txnDigest, config, keyManager, validateProofs, signedMessages, hashDigest);
   pendingPhase1s[reqId] = pendingPhase1;
+  pendingPhase1->txnId = id;
   pendingPhase1->pcb = pcb;
   pendingPhase1->ptcb = ptcb;
   pendingPhase1->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase1]() {
@@ -161,7 +162,7 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
 }
 
 void ShardClient::Phase2(uint64_t id,
-    const proto::Transaction &txn,
+    const proto::Transaction &txn, const std::string &txnDigest,
     proto::CommitDecision decision,
     const proto::GroupedSignatures &groupedSigs, phase2_callback pcb,
     phase2_timeout_callback ptcb, uint32_t timeout) {
@@ -169,6 +170,7 @@ void ShardClient::Phase2(uint64_t id,
   uint64_t reqId = lastReqId++;
   PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);
   pendingPhase2s[reqId] = pendingPhase2;
+  pendingPhase2->txnId = id;
   pendingPhase2->pcb = pcb;
   pendingPhase2->ptcb = ptcb;
   pendingPhase2->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase2]() {
@@ -186,13 +188,23 @@ void ShardClient::Phase2(uint64_t id,
   proto::Phase2 phase2;
   phase2.set_req_id(reqId);
   phase2.set_decision(decision);
-  if (validateProofs) {
-    *phase2.mutable_txn() = txn;
-    if (signedMessages) {
-      *phase2.mutable_grouped_sigs() = groupedSigs;
+  if (validateProofs && signedMessages) {
+    *phase2.mutable_grouped_sigs() = groupedSigs;
+  }
+  proto::Phase2 phase2Txn(phase2);
+  *phase2Txn.mutable_txn() = txn;
+  proto::Phase2 phase2Digest(phase2);
+  *phase2Digest.mutable_txn_digest() = txnDigest;
+
+  for (int i = 0; i < config->n; ++i) {
+    auto itr = txnReplies.find(pendingPhase2->txnId);
+    if (itr != txnReplies.end() && itr->second.find(i) != itr->second.end()) {
+      // replica has see txn
+      transport->SendMessageToReplica(this, group, i, phase2Digest);
+    } else {
+      transport->SendMessageToReplica(this, group, i, phase2Txn);
     }
   }
-  transport->SendMessageToGroup(this, group, phase2);
 
   pendingPhase2->requestTimeout->Reset();
 }
@@ -215,11 +227,25 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
     }
   }
   if (decision == proto::COMMIT) {
-    *writeback.mutable_txn() = transaction;
+    proto::Writeback writebackTxn(writeback);
+    *writebackTxn.mutable_txn() = txn;
+    proto::Writeback writebackDigest(writeback);
+    *writebackDigest.mutable_txn_digest() = txnDigest;
+
+    for (int i = 0; i < config->n; ++i) {
+      auto itr = txnReplies.find(id);
+      if (itr != txnReplies.end() && itr->second.find(i) != itr->second.end()) {
+        // replica has see txn
+        transport->SendMessageToReplica(this, group, i, writebackDigest);
+      } else {
+        transport->SendMessageToReplica(this, group, i, writebackTxn);
+      }
+    }
+  } else {
+    *writeback.mutable_txn_digest() = txnDigest;
+    transport->SendMessageToGroup(this, group, writeback);
   }
-  writeback.set_txn_digest(txnDigest);
-  
-  transport->SendMessageToGroup(this, group, writeback);
+
   Debug("[group %i] Sent WRITEBACK[%lu]", group, id);
 }
 
@@ -403,8 +429,6 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
   const proto::ConcurrencyControl *cc = nullptr;
   proto::ConcurrencyControl validatedCC;
   if (hasSigned) {
-    Debug("Verifying signed_cc because has_cc %d and ccr %d.", reply.has_cc(),
-        reply.cc().ccr());
     if (!reply.has_signed_cc()) {
       return;
     }
@@ -417,6 +441,8 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
 
     if (!crypto::Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
           reply.signed_cc().data(), reply.signed_cc().signature())) {
+      Debug("[group %d] Signature from replica %lu is not valid.", group,
+          reply.signed_cc().process_id());
       return;
     }
 
@@ -438,9 +464,14 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
   }
 
   if (hasSigned) {
+    txnReplies[pendingPhase1->txnId].insert(reply.signed_cc().process_id() % config->n);
+    Debug("Adding signature from replica %lu.", reply.signed_cc().process_id());
     proto::Signature *sig = pendingPhase1->p1ReplySigs[cc->ccr()].add_sigs();
     sig->set_process_id(reply.signed_cc().process_id());
     *sig->mutable_signature() = reply.signed_cc().signature();
+  } else if (reply.has_cc() && reply.cc().ccr() != proto::ConcurrencyControl::ABORT) {
+    UW_ASSERT(reply.has_replica_id());
+    txnReplies[pendingPhase1->txnId].insert(reply.replica_id() % config->n);
   }
 
   Phase1ValidationState state = pendingPhase1->p1Validator.GetState();
@@ -554,10 +585,15 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
   Debug("[group %i] PHASE2 reply with decision %d", group,
       p2Decision->decision());
 
+
   if (validateProofs && signedMessages) {
+    txnReplies[itr->second->txnId].insert(reply.signed_p2_decision().process_id() % config->n);
     proto::Signature *sig = itr->second->p2ReplySigs.add_sigs();
     sig->set_process_id(reply.signed_p2_decision().process_id());
     *sig->mutable_signature()= reply.signed_p2_decision().signature();
+  } else {
+    UW_ASSERT(reply.has_replica_id());
+    txnReplies[itr->second->txnId].insert(reply.replica_id() % config->n);
   }
 
   if (p2Decision->decision() == itr->second->decision) {

@@ -105,9 +105,10 @@ message ConcurrencyControl {
 
 message Phase1Reply {
   required uint64 req_id = 1;
+  optional uint64 replica_id = 2;
   oneof concurrency_oneof {
-    ConcurrencyControl cc = 2;
-    SignedMessage signed_cc = 3;
+    ConcurrencyControl cc = 3;
+    SignedMessage signed_cc = 4;
   }
 }
 
@@ -125,15 +126,16 @@ message Phase2 {
 }
 
 message Phase2Decision {
-  required CommitDecision decision = 2;
-  optional bytes txn_digest = 3;
+  required CommitDecision decision = 1;
+  optional bytes txn_digest = 2;
 }
 
 message Phase2Reply {
   required uint64 req_id = 1;
+  optional uint64 replica_id = 2;
   oneof p2_decision_oneof {
-    Phase2Decision p2_decision = 2;
-    SignedMessage signed_p2_decision = 3;
+    Phase2Decision p2_decision = 3;
+    SignedMessage signed_p2_decision = 4;
   }
 }
 
