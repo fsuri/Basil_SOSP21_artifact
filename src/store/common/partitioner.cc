@@ -39,6 +39,7 @@ partitioner warehouse_district_partitioner(uint64_t num_warehouses) {
       const std::vector<int> &txnGroups) {
     switch (key[0]) {
       case 0:  // WAREHOUSE
+      case 8:  // STOCK
       {
         uint32_t w_id = *reinterpret_cast<const uint32_t*>(key.c_str() + 1);
         return (w_id * num_warehouses) % nshards;
@@ -57,7 +58,6 @@ partitioner warehouse_district_partitioner(uint64_t num_warehouses) {
         uint32_t w_id = *reinterpret_cast<const uint32_t*>(key.c_str() + 1);
         return (w_id * num_warehouses) % nshards;
       }
-      case 8:  // STOCK
       case 1:  // DISTRICT
       case 2:  // CUSTOMER
       case 3:  // HISTORY
