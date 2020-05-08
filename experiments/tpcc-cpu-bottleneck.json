@@ -27,7 +27,8 @@
   "rw_num_ops_txn": 2,
   "client_abort_backoff": 2,
   "client_retry_aborted": true,
-  "client_max_attempts": -1,
+  "client_max_attempts": 20,
+  "client_max_backoff": 2500,
   "run_locally": false,
   "replication_protocol_settings": [
     {
