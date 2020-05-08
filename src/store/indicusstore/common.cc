@@ -53,10 +53,10 @@ bool ValidateCommittedProof(const proto::CommittedProof &proof,
 
   if (proof.has_p1_sigs()) {
     return ValidateP1Replies(proto::COMMIT, true, &proof.txn(), committedTxnDigest,
-        proof.p1_sigs(), keyManager, config);
+        proof.p1_sigs(), keyManager, config, -1, proto::ConcurrencyControl::ABORT);
   } else if (proof.has_p2_sigs()) {
     return ValidateP2Replies(proto::COMMIT, committedTxnDigest, proof.p2_sigs(),
-        keyManager, config);
+        keyManager, config, -1, proto::ABORT);
   } else {
     Debug("Proof has neither P1 nor P2 sigs.");
     return false;
@@ -69,11 +69,12 @@ bool ValidateP1Replies(proto::CommitDecision decision,
     const std::string *txnDigest,
     const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager,
-    const transport::Configuration *config) {
+    const transport::Configuration *config,
+    int64_t myProcessId, proto::ConcurrencyControl::Result myResult) {
   Latency_t dummyLat;
   //_Latency_Init(&dummyLat, "dummy_lat");
   return ValidateP1Replies(decision, fast, txn, txnDigest, groupedSigs,
-      keyManager, config, dummyLat);
+      keyManager, config, myProcessId, myResult, dummyLat);
 }
 
 bool ValidateP1Replies(proto::CommitDecision decision,
@@ -82,7 +83,9 @@ bool ValidateP1Replies(proto::CommitDecision decision,
     const std::string *txnDigest,
     const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager,
-    const transport::Configuration *config, Latency_t &lat) {
+    const transport::Configuration *config,
+    int64_t myProcessId, proto::ConcurrencyControl::Result myResult,
+    Latency_t &lat) {
   proto::ConcurrencyControl concurrencyControl;
   concurrencyControl.Clear();
   *concurrencyControl.mutable_txn_digest() = *txnDigest;
@@ -105,19 +108,30 @@ bool ValidateP1Replies(proto::CommitDecision decision,
   concurrencyControl.SerializeToString(&ccMsg);
   
   std::set<int> groupsVerified;
+  std::set<uint64_t> replicasVerified;
   for (const auto &sigs : groupedSigs.grouped_sigs()) {
     uint32_t verified = 0;
     for (const auto &sig : sigs.second.sigs()) {
+
       if (!IsReplicaInGroup(sig.process_id(), sigs.first, config)) {
         Debug("Signature for group %lu from replica %lu who is not in group.",
             sigs.first, sig.process_id());
         return false;
       }
 
+      bool skip = false;
+      if (sig.process_id() == myProcessId && myProcessId >= 0) {
+        if (concurrencyControl.ccr() == myResult) {
+          skip = true;
+        } else {
+          return false;
+        }
+      }
+
       Debug("Verifying %lu byte signature from replica %lu in group %lu.",
           sig.signature().size(), sig.process_id(), sigs.first);
       //Latency_Start(&lat);
-      if (!crypto::Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
+      if (!skip && !crypto::Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
               sig.signature())) {
         //Latency_End(&lat);
         Debug("Signature from replica %lu in group %lu is not valid.",
@@ -125,6 +139,10 @@ bool ValidateP1Replies(proto::CommitDecision decision,
         return false;
       }
       //Latency_End(&lat);
+      //
+      if (!replicasVerified.insert(sig.process_id()).second) {
+        return false;
+      }
       verified++;
     }
 
@@ -150,16 +168,18 @@ bool ValidateP1Replies(proto::CommitDecision decision,
 
 bool ValidateP2Replies(proto::CommitDecision decision,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
-    KeyManager *keyManager, const transport::Configuration *config) {
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision) {
   Latency_t dummyLat;
   //_Latency_Init(&dummyLat, "dummy_lat");
   return ValidateP2Replies(decision, txnDigest, groupedSigs,
-      keyManager, config, dummyLat);
+      keyManager, config, myProcessId, myDecision, dummyLat);
 }
 
 bool ValidateP2Replies(proto::CommitDecision decision,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision,
     Latency_t &lat) {
   proto::Phase2Decision p2Decision;
   p2Decision.Clear();
@@ -176,15 +196,30 @@ bool ValidateP2Replies(proto::CommitDecision decision,
   
   const auto &sigs = groupedSigs.grouped_sigs().begin();
   uint32_t verified = 0;
+  std::set<uint64_t> replicasVerified;
   for (const auto &sig : sigs->second.sigs()) {
     //Latency_Start(&lat);
-    if (!crypto::Verify(keyManager->GetPublicKey(sig.process_id()), p2DecisionMsg,
-            sig.signature())) {
+
+    bool skip = false;
+    if (sig.process_id() == myProcessId && myProcessId >= 0) {
+      if (p2Decision.decision() == myDecision) {
+        skip = true;
+      } else {
+        return false;
+      }
+    }
+
+    if (!skip && !crypto::Verify(keyManager->GetPublicKey(sig.process_id()),
+          p2DecisionMsg, sig.signature())) {
       //Latency_End(&lat);
       Debug("Signature from %lu is not valid.", sig.process_id());
       return false;
     }
     //Latency_End(&lat);
+
+    if (!replicasVerified.insert(sig.process_id()).second) {
+      return false;
+    }
     verified++;
   }
 

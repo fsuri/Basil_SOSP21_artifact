@@ -138,6 +138,10 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
     const TransportAddress &remote);
   void Clean(const std::string &txnDigest);
   void CleanDependencies(const std::string &txnDigest);
+  void LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId,
+      proto::ConcurrencyControl::Result &myResult);
+  void LookupP2Decision(const std::string &txnDigest,
+      int64_t &myProcessId, proto::CommitDecision &myDecision);
 
   inline bool IsKeyOwned(const std::string &key) const {
     return static_cast<int>((*part)(key, numShards, groupIdx, dummyTxnGroups) % numGroups) == groupIdx;

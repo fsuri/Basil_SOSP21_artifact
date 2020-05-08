@@ -31,21 +31,25 @@ bool ValidateCommittedProof(const proto::CommittedProof &proof,
 bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
-    KeyManager *keyManager, const transport::Configuration *config);
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::ConcurrencyControl::Result myResult);
 
 bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::ConcurrencyControl::Result myResult,
     Latency_t &lat);
 
 bool ValidateP2Replies(proto::CommitDecision decision,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
-    KeyManager *keyManager, const transport::Configuration *config);
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision);
 
 bool ValidateP2Replies(proto::CommitDecision decision,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision,
     Latency_t &lat);
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,

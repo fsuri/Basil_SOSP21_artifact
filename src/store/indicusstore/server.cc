@@ -268,8 +268,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
 
+  int64_t myProcessId;
+  proto::ConcurrencyControl::Result myResult;
+  LookupP1Decision(*txnDigest, myProcessId, myResult);
   if (validateProofs && signedMessages && !ValidateP1Replies(msg.decision(),
-        false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config)) {
+        false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
+        myResult)) {
     Debug("VALIDATE P1Replies failed.");
     return;
   }
@@ -328,15 +332,23 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
   if (validateProofs) {
     if (signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()) {
+      int64_t myProcessId;
+      proto::ConcurrencyControl::Result myResult;
+      LookupP1Decision(*txnDigest, myProcessId, myResult);
+
       if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
-            keyManager, &config, verifyLat)) {
+            keyManager, &config, myProcessId, myResult, verifyLat)) {
         Debug("WRITEBACK[%s] Failed to validate P1 replies for fast commit.",
             BytesToHex(*txnDigest, 16).c_str());
         return;
       }
     } else if (signedMessages && msg.has_p2_sigs()) {
+      int64_t myProcessId;
+      proto::CommitDecision myDecision;
+      LookupP2Decision(*txnDigest, myProcessId, myDecision);
+
       if (!ValidateP2Replies(msg.decision(), txnDigest, msg.p2_sigs(),
-            keyManager, &config, verifyLat)) {
+            keyManager, &config, myProcessId, myDecision, verifyLat)) {
         Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
             BytesToHex(*txnDigest, 16).c_str(), msg.decision());
         return;
@@ -745,7 +757,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         aborted.find(dep.prepared().txn_digest()) == aborted.end()) {
 
       if (validateProofs && signedMessages && !verifyDeps) {
-        if (prepared.find(dep.prepared().txn_digesT()) == prepared.end()) {
+        if (prepared.find(dep.prepared().txn_digest()) == prepared.end()) {
           return proto::ConcurrencyControl::ABSTAIN;
         }
       }
@@ -1040,6 +1052,29 @@ void Server::CleanDependencies(const std::string &txnDigest) {
     waitingDependencies.erase(dependenciesItr);
   }
   dependents.erase(txnDigest);
+}
+
+void Server::LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId,
+    proto::ConcurrencyControl::Result &myResult) {
+  myProcessId = -1;
+  // see if we participated in this decision
+  auto p1DecisionItr = p1Decisions.find(txnDigest);
+  if (p1DecisionItr != p1Decisions.end()) {
+    myProcessId = id;
+    myResult = p1DecisionItr->second;
+  }
+}
+
+void Server::LookupP2Decision(const std::string &txnDigest, int64_t &myProcessId,
+    proto::CommitDecision &myDecision) {
+  myProcessId = -1;
+  // see if we participated in this decision
+  auto p2DecisionItr = p2Decisions.find(txnDigest);
+  if (p2DecisionItr != p2Decisions.end()) {
+    myProcessId = id;
+    myDecision = p2DecisionItr->second;
+  }
+
 }
 
 } // namespace indicusstore
