@@ -50,8 +50,8 @@ Second Institution
 %-------------------------------------------------------------------------------
 \begin{abstract}
 %-------------------------------------------------------------------------------
-Your abstract text goes here. Just a few facts. Whet our appetites.
-Not more than 200 words, if possible, and preferably closer to 150.
+This paper presents \sys{}, the first leaderless Byzantine Fault Tolerant (BFT) key-value store that provides ACID transaction. Unlike traditional BFT approaches that build atop totally ordered SMR protocols, \sys is designed around the premise of \textit{independent operability}. By allowing clients to execute and drive consensus instances for their own transactions in parallel, \sys enables commutative transactions to complete independently while limiting the influence of Byzantine behavior on results. \sys furthermore introduces a novel recovery mechanism to retain liveness under faults.
+This design, coupled with an aggressive concurrency control mechanism to maintain Isolation correctness, allows \sys to reasonably compete within non-BFT tolerant transaction systems, while outperforming SMR-based BFT solutions: For the TPC-C OLTP workload \sys{}'s throughput and latency comes within Yx and Zx respectively when compared to Tapir, a state-of-the-art non-BFT key-value store; but improves over a total-order inducing BFT baseline by Sx and Tx respectively.
 \end{abstract}
 
 

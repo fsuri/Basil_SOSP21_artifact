@@ -82,7 +82,7 @@ Every transaction that an honest client is \textit{interested} in eventually com
 First, we note, that a timely client can trivially complete all of its own transactions that have no dependencies. However, if a client is slow, or its transaction has dependencies, it may lose autonomy over its own transaction. For a given client c, we define the set \textit{Interested$_c$} to include its own tansactions and all their dependencies, as well as any other arbitrary transactions whose completion a client is interested in. 
 
 We distinguish two cases for each $TX \in Interested_c$ that has timed out on its orignial client: 
-1) An interested client manages to receive a shard-certificate by either re-issuing a $Phase1$ message and receiving a Fast-Path Threshold of $Phase1R$ messages, or by issuing a new $Phase2$ message and receiving a Slow-Path Quorum of $Phase2R$ messages. In this case, a client is able to complete the transaction as any client may issue the Writeback. Saf is maintained as this case follows the normal-case protocol operation.\\
+1) An interested client manages to receive a shard-certificate by either re-issuing a $Phase1$ message and receiving a Fast-Path Threshold of $Phase1R$ messages, or by issuing a new $Phase2$ message and receiving a Slow-Path Quorum of $Phase2R$ messages. In this case, a client is able to complete the transaction as any client may issue the Writeback. Saf is maintained as this case follows the normal-case protocol operation.
 
 2) An interested client cannot obtain shard-certificate and starts a Fallback invocation. By Lemma1, given synchrony, a correct Fallback replica will be elected after at most $f+1$ election rounds. Such a Fallback replica will reconcile a consistent decision across all replicas, thus allowing the interested client to receive a Slow-Path Quorum of $Phase2R$ messages (matching decisions, matching views) as shard-certificate, allowing it to complete the Writeback phase. By Lemma2, this decision is consistent with any potential past shard-certificate that may have existed.
 
@@ -94,7 +94,8 @@ We distinguish two cases for each $TX \in Interested_c$ that has timed out on it
 Given weak synchrony, Fallback election is live and non-skipping.
 \end{lemma}
 
-\underline{\textbf{View Change Rules:}} \one Replicas only adopt a view $v+1$ if the view set includes $3f+1$ votes from view $v$. \textit{Vote subsumtion:} A view $v$ may count as a vote for all $v' \leq v$. \two Replicas that lag behind, may safely skip ahead to the maximum view $v$ present $f+1$ times, since, by induction, $\geq 3f+1$ replicas must have claimed to be in a view $\geq v-1$. \\
+\underline{\textbf{View Change Rules:}} \one Replicas only adopt a view $v+1$ if the view set includes $3f+1$ votes from view $v$. \textit{Vote subsumtion:} A view $v$ may count as a vote for all $v' \leq v$. \two Replicas that lag behind, may safely skip ahead to the maximum view $v$ present $f+1$ times, since, by induction, $\geq 3f+1$ replicas must have claimed to be in a view $\geq v-1$. 
+
 We note, that replicas enforce exponential time-outs on each new tenure: A replica will not adopt a new view and start a new election, until the previous view leader (client or Fallback replica) has elapsed its time-out.
 
 \begin{proof}
@@ -104,7 +105,7 @@ Thus, in the presence on a correct interested clients, and when time-outs grow l
 \end{proof}
 
 \underline{Practical optimizations:}  In absence of honest interested clients, byzantine clients may invoke fallback elections at a subset of replicas, thus inhibiting true election and skipping select replicas' terms. To avoid artificially increased timeouts and non-skipping candidates, replicas may forward the $ElectFB$ message to all other replicas. Replicas that receive $f+1$ forwarded messages, adopt larger views, and forward the $ElectFB$ message themselves, thus ensuring that all correct replicas adopt each new view, and a Fallback replica is successfully endorsed.
-This optimization is not necessary for "theoretical" liveness as shown by Lemma1. To avoid unecessary all-to-all communication, it may only be enforced for views $v > T$, where T is a system hyperparameter.\\
+This optimization is not necessary for "theoretical" liveness as shown by Lemma1. To avoid unecessary all-to-all communication, it may only be enforced for views $v > T$, where T is a system hyperparameter.
 
 %%%%%%%%%%%%%%%%
 
