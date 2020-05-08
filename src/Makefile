@@ -105,6 +105,8 @@ SRCS :=
 TEST_SRCS :=
 # GTEST_SRCS is tests that use Google's testing framework
 GTEST_SRCS :=
+# C_SRCS are the .c and .s files
+C_SRCS :=
 
 # PROTOS is the list of protobuf *.proto files
 PROTOS :=
@@ -183,7 +185,7 @@ $(PROTOSRCS) : .obj/gen/%.pb.cc: %.proto
 DEPFLAGS = -M -MF ${@:.o=.d} -MP -MT $@ -MG
 
 # $(call add-CFLAGS,$(TEST_SRCS),$(CHECK_CFLAGS))
-OBJS := $(SRCS:%.cc=.obj/%.o) $(TEST_SRCS:%.cc=.obj/%.o) $(GTEST_SRCS:%.cc=.obj/%.o)
+OBJS := $(S_SRCS:%.S=.obj/%.o) $(C_SRCS:%.c=.obj/%.o) $(SRCS:%.cc=.obj/%.o) $(TEST_SRCS:%.cc=.obj/%.o) $(GTEST_SRCS:%.cc=.obj/%.o)
 
 define compile
 	@mkdir -p $(dir $@)
