@@ -637,6 +637,7 @@ int main(int argc, char **argv) {
       NOT_REACHABLE();
   }
 
+  std::mt19937 rand(FLAGS_client_id); // TODO: is this safe?
   partitioner part;
   switch (partType) {
     case DEFAULT:
@@ -646,7 +647,7 @@ int main(int argc, char **argv) {
       part = warehouse_district_partitioner_dist_items(FLAGS_tpcc_num_warehouses);
       break;
     case WAREHOUSE:
-      part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses);
+      part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses, rand);
       break;
     default:
       NOT_REACHABLE();
@@ -951,7 +952,7 @@ int main(int argc, char **argv) {
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
   }
 
-  tport->Timer(4950, FlushStats);
+  tport->Timer(FLAGS_exp_duration * 1000 - 1000, FlushStats);
 
   std::signal(SIGKILL, Cleanup);
   std::signal(SIGTERM, Cleanup);

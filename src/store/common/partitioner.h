@@ -4,6 +4,7 @@
 #include <functional>
 #include <set>
 #include <string>
+#include <random>
 #include <vector>
 
 enum Partitioner {
@@ -19,6 +20,6 @@ extern partitioner default_partitioner;
 extern partitioner warehouse_partitioner;
 
 partitioner warehouse_district_partitioner_dist_items(uint64_t num_warehouses);
-partitioner warehouse_district_partitioner(uint64_t num_warehouses);
+partitioner warehouse_district_partitioner(uint64_t num_warehouses, std::mt19937 &rd);
 
 #endif /* PARTITIONER_H */

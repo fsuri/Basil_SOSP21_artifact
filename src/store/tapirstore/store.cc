@@ -130,8 +130,8 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
                 range.second.getTimestamp());
           }*/
           // UW_ASSERT(timestamp > range.first);
-          Debug("[%lu] ABORT wr conflict: %lu > %lu", id,
-              timestamp.getTimestamp(), range.second.getTimestamp());
+          //
+          std::string s;
           /*std::string s = std::to_string((uint32_t) read.first[0]); 
           if (read.first.length() >= 5) {
             s += "," + std::to_string(*reinterpret_cast<const uint32_t*>(
@@ -150,6 +150,8 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
                 read.first.c_str() + 13));
           }
           stats.Increment("cc_aborts_" + s, 1);*/
+          Debug("[%lu] ABORT wr conflict on key %s: %lu > %lu", id, s.c_str(),
+              timestamp.getTimestamp(), range.second.getTimestamp());
           stats.Increment("cc_aborts", 1);
           stats.Increment("cc_aborts_wr_conflict", 1);
           return REPLY_FAIL;
@@ -258,7 +260,7 @@ void
 Store::Commit(uint64_t id, const Timestamp &timestamp)
 {
 
-    Debug("[%lu, %lu] COMMIT", id, timestamp);
+    Debug("[%lu] COMMIT at ts %lu.%lu", id, timestamp.getTimestamp(), timestamp.getID());
     
     const auto &t = ongoing[id];
 

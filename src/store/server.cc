@@ -381,6 +381,7 @@ int main(int argc, char **argv) {
     }
   }
 
+  std::mt19937 unused;
   partitioner part;
   switch (partType) {
     case DEFAULT:
@@ -390,7 +391,7 @@ int main(int argc, char **argv) {
       part = warehouse_district_partitioner_dist_items(FLAGS_tpcc_num_warehouses);
       break;
     case WAREHOUSE:
-      part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses);
+      part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses, unused);
       break;
     default:
       NOT_REACHABLE();
