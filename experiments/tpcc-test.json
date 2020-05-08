@@ -13,6 +13,7 @@
   "num_shards": 1,
   "num_groups": 1,
   "benchmark_name": "tpcc-sync",
+  "partitioner": "warehouse",
   "tpcc_num_warehouses": 1,
   "tpcc_stock_level_ratio": 4,
   "tpcc_delivery_ratio": 4,
@@ -33,9 +34,10 @@
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
+      "hash_digest": true,
       "validate_proofs": true,
-      "sign_messages": false,
-      "key_path": "/usr/local/etc/indicus-keys"
+      "sign_messages": true,
+      "key_path": "/usr/local/etc/indicus-keys/sodium"
     }
   ],
   "experiment_name": "indicus",
@@ -46,8 +48,8 @@
   "client_threads_per_process": 1,
   "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],
   "pin_client_processes": [0, 1, 2, 3, 4, 5, 6, 7],
-  "client_debug_output": false,
-  "server_debug_output": false,
+  "client_debug_output": "store/indicusstore/*.*",
+  "server_debug_output": "store/indicusstore/*.*",
   "server_debug_stats": false,
   "client_debug_stats": false,
   "client_experiment_length": 30,
@@ -57,7 +59,7 @@
   "server_host_format_str": "%s.%s.%s.utah.cloudlab.us",
   "client_host_format_str": "client-%d-%d.%s.%s.utah.cloudlab.us",
   "project_name": "morty-pg0",
-  "fault_tolerance": 1,
+  "fault_tolerance": 0,
   "server_names": [
     ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
     "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",

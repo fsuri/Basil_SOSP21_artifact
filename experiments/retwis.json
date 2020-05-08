@@ -16,7 +16,7 @@
   "client_zipf_coefficient": 0.75,
   "client_key_selector": "zipf",
   "rw_num_ops_txn": 2,
-  "client_abort_backoff": 10,
+  "client_abort_backoff": 2,
   "client_retry_aborted": true,
   "client_max_attempts": -1,
   "run_locally": false,
@@ -33,7 +33,7 @@
       "validate_proofs": false,
       "sign_messages": false,
       "hash_digest": true,
-      "key_path": "/usr/local/etc/indicus-keys"
+      "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
       "message_transport_type": "tcp",
@@ -43,7 +43,7 @@
       "validate_proofs": true,
       "sign_messages": false,
       "hash_digest": true,
-      "key_path": "/usr/local/etc/indicus-keys"
+      "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
       "message_transport_type": "tcp",
@@ -53,7 +53,7 @@
       "validate_proofs": true,
       "sign_messages": true,
       "hash_digest": true,
-      "key_path": "/usr/local/etc/indicus-keys"
+      "key_path": "/usr/local/etc/indicus-keys/sodium"
     }
   ],
   "experiment_name": "indicus",

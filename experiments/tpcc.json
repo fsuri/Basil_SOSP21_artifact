@@ -12,6 +12,7 @@
   "num_shards": 24,
   "num_groups": 24,
   "benchmark_name": "tpcc-sync",
+  "partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
   "tpcc_stock_level_ratio": 4,
   "tpcc_delivery_ratio": 4,
@@ -40,7 +41,7 @@
       "hash_digest": true,
       "validate_proofs": false,
       "sign_messages": false,
-      "key_path": "/usr/local/etc/indicus-keys"
+      "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
       "message_transport_type": "tcp",
@@ -50,7 +51,7 @@
       "hash_digest": true,
       "validate_proofs": true,
       "sign_messages": false,
-      "key_path": "/usr/local/etc/indicus-keys"
+      "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
       "message_transport_type": "tcp",
@@ -60,7 +61,7 @@
       "hash_digest": true,
       "validate_proofs": true,
       "sign_messages": true,
-      "key_path": "/usr/local/etc/indicus-keys"
+      "key_path": "/usr/local/etc/indicus-keys/sodium"
     }
 
   ],
