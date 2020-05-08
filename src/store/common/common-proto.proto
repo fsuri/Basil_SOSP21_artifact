@@ -15,6 +15,10 @@ message WriteMessage {
     required bytes value = 2;
 }
 
+message PingMessage {
+  required uint64 salt = 1;
+}
+
 // A serialized transaction
 message TransactionMessage {
     repeated ReadMessage readset = 1;
