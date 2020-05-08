@@ -40,7 +40,7 @@ namespace indicusstore {
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int group, const std::vector<int> &closestReplicas_,
     bool signedMessages, bool validateProofs, bool hashDigest,
-    KeyManager *keyManager, TrueTime &timeServer) :
+    KeyManager *keyManager, TrueTime &timeServer) : PingInitiator(transport, config->n),
     client_id(client_id), transport(transport), config(config), group(group),
     timeServer(timeServer),
     signedMessages(signedMessages), validateProofs(validateProofs),
@@ -66,6 +66,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   proto::ReadReply readReply;
   proto::Phase1Reply phase1Reply;
   proto::Phase2Reply phase2Reply;
+  PingMessage ping;
 
   if (type == readReply.GetTypeName()) {
     readReply.ParseFromString(data);
@@ -76,6 +77,9 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   } else if (type == phase2Reply.GetTypeName()) {
     phase2Reply.ParseFromString(data);
     HandlePhase2Reply(phase2Reply);
+  } else if (type == ping.GetTypeName()) {
+    ping.ParseFromString(data);
+    HandlePingResponse(this, remote, ping);
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }

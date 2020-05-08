@@ -46,6 +46,7 @@
 #include "store/common/common-proto.pb.h"
 #include "store/indicusstore/indicus-proto.pb.h"
 #include "store/indicusstore/phase1validator.h"
+#include "store/common/pinginitiator.h"
 
 #include <map>
 #include <string>
@@ -69,7 +70,7 @@ typedef std::function<void(int)> phase2_timeout_callback;
 typedef std::function<void()> writeback_callback;
 typedef std::function<void(int)> writeback_timeout_callback;
 
-class ShardClient : public TransportReceiver {
+class ShardClient : public TransportReceiver, public PingInitiator {
  public:
   ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int group, const std::vector<int> &closestReplicas,

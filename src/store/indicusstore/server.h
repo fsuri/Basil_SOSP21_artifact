@@ -34,6 +34,7 @@
 
 #include "lib/latency.h"
 #include "lib/transport.h"
+#include "store/common/backend/pingserver.h"
 #include "store/server.h"
 #include "store/common/partitioner.h"
 #include "store/common/timestamp.h"
@@ -55,7 +56,7 @@ enum OCCType {
   TAPIR = 1
 };
 
-class Server : public TransportReceiver, public ::Server {
+class Server : public TransportReceiver, public ::Server, public PingServer {
  public:
   Server(const transport::Configuration &config, int groupIdx, int idx,
       int numShards, int numGroups,
@@ -177,6 +178,8 @@ class Server : public TransportReceiver, public ::Server {
   proto::CommittedProof conflict;
   proto::ConcurrencyControl concurrencyControl;
   proto::AbortInternal abortInternal;
+
+  PingMessage ping;
 
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V

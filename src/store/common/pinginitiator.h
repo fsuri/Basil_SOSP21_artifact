@@ -31,6 +31,8 @@ class PingInitiator {
   std::map<uint64_t, std::pair<size_t, struct timespec>> outstandingSalts;
   std::map<size_t, uint64_t> roundTripEstimates;
 
+  std::vector<size_t> orderedReplicas;
+
   PingMessage ping;
 };
 

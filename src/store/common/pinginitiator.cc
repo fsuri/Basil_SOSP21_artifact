@@ -14,6 +14,15 @@ void PingInitiator::Start(TransportReceiver *receiver) {
     SendPing(receiver, i);
   }
   transport->Timer(length, [this](){
+    std::set<std::pair<uint64_t, size_t>> sortedEstimates;
+    for (const auto &estimate : roundTripEstimates) {
+      sortedEstimates.insert(std::make_pair(estimate.second, estimate.first));
+    }
+
+    for (const auto &sortedEstimate : sortedEstimates) {
+      orderedReplicas.push_back(sortedEstimate.second);
+    }
+
     done = true;
   });
 }

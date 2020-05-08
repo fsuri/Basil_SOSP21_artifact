@@ -44,7 +44,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     int numShards, int numGroups, Transport *transport, KeyManager *keyManager,
     bool signedMessages, bool validateProofs, bool hashDigest,
     uint64_t timeDelta, OCCType occType, partitioner part, uint64_t readDepSize,
-    TrueTime timeServer) :
+    TrueTime timeServer) : PingServer(transport),
     config(config), groupIdx(groupIdx), idx(idx), numShards(numShards),
     numGroups(numGroups), id(groupIdx * config.n + idx),
     transport(transport), occType(occType), part(part), readDepSize(readDepSize),
@@ -87,6 +87,9 @@ void Server::ReceiveMessage(const TransportAddress &remote,
   } else if (type == abort.GetTypeName()) {
     abort.ParseFromString(data);
     HandleAbort(remote, abort);
+  } else if (type == ping.GetTypeName()) {
+    ping.ParseFromString(data);
+    HandlePingMessage(this, remote, ping);
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
