@@ -9,7 +9,7 @@ using namespace std;
 
 Server::Server(const transport::Configuration& config, KeyManager *keyManager,
   int groupIdx, int idx, int numShards, int numGroups, bool signMessages,
-  bool validateProofs, uint64_t timeDelta, partitioner part,
+  bool validateProofs, uint64_t timeDelta, Partitioner *part,
   TrueTime timeServer) : config(config), keyManager(keyManager),
   groupIdx(groupIdx), idx(idx), id(groupIdx * config.n + idx),
   numShards(numShards), numGroups(numGroups), signMessages(signMessages),

@@ -74,8 +74,9 @@ int main(int argc, char **argv) {
   // TEST THE FULL CLIENT
   // pbftstore::Client* client = new pbftstore::Client(config, 1, 1, &transport,
   //   default_partitioner, readQuorumSize, signMessages, validateProofs, km);
+  DefaultPartitioner dp;
   pbftstore::Client* client = new pbftstore::Client(config, 1, 1, &transport,
-    default_partitioner, readQuorumSize, signMessages, validateProofs, km);
+    &dp, readQuorumSize, signMessages, validateProofs, km);
 
   auto timeoutcb = [=]() {
       printf("to\n");

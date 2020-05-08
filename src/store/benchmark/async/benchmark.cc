@@ -331,7 +331,7 @@ const std::string partitioner_args[] = {
   "warehouse_dist_items",
   "warehouse"
 };
-const Partitioner parts[] {
+const partitioner_t parts[] {
   DEFAULT,
   WAREHOUSE_DIST_ITEMS,
   WAREHOUSE
@@ -452,6 +452,7 @@ std::vector<std::thread *> threads;
 Transport *tport;
 transport::Configuration *config;
 KeyManager *keyManager;
+Partitioner *part;
 
 void Cleanup(int signal);
 void FlushStats();
@@ -509,7 +510,7 @@ int main(int argc, char **argv) {
   }
   
   // parse partitioner
-  Partitioner partType = DEFAULT;
+  partitioner_t partType = DEFAULT;
   int numParts = sizeof(partitioner_args);
   for (int i = 0; i < numParts; ++i) {
     if (FLAGS_partitioner == partitioner_args[i]) {
@@ -638,16 +639,16 @@ int main(int argc, char **argv) {
   }
 
   std::mt19937 rand(FLAGS_client_id); // TODO: is this safe?
-  partitioner part;
+  
   switch (partType) {
     case DEFAULT:
-      part = default_partitioner;
+      part = new DefaultPartitioner();
       break;
     case WAREHOUSE_DIST_ITEMS:
-      part = warehouse_district_partitioner_dist_items(FLAGS_tpcc_num_warehouses);
+      part = new WarehouseDistItemsPartitioner(FLAGS_tpcc_num_warehouses);
       break;
     case WAREHOUSE:
-      part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses, rand);
+      part = new WarehousePartitioner(FLAGS_tpcc_num_warehouses, rand);
       break;
     default:
       NOT_REACHABLE();
@@ -989,6 +990,7 @@ void Cleanup(int signal) {
     delete i;
   }
   delete tport;
+  delete part;
 }
 
 void FlushStats() {

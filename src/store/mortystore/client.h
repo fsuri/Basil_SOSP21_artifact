@@ -29,7 +29,7 @@ struct ClientBranch {
 class Client : public ::AsyncClient {
  public:
   Client(transport::Configuration *config, uint64_t client_id, int nShards,
-      int nGroups, int closestReplica, Transport *transport, partitioner part,
+      int nGroups, int closestReplica, Transport *transport, Partitioner *part,
       bool debugStats);
   virtual ~Client();
 
@@ -99,7 +99,7 @@ class Client : public ::AsyncClient {
   // Transport used by client proxies.
   Transport *transport;
 
-  partitioner part;
+  Partitioner *part;
   const bool debugStats;
   
   uint64_t lastReqId;

@@ -99,7 +99,7 @@ class ShardClient : public TransportReceiver, public PingInitiator {
       const std::string &txnDigest,
       phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout);
   virtual void Phase2(uint64_t id, const proto::Transaction &transaction,
-      proto::CommitDecision decision,
+      const std::string &txnDigest, proto::CommitDecision decision,
       const proto::GroupedSignatures &groupedSigs, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout);
   virtual void Writeback(uint64_t id, const proto::Transaction &transaction,

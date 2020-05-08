@@ -18,7 +18,7 @@ namespace pbftstore {
 
 class Server : public App, public ::Server {
 public:
-  Server(const transport::Configuration& config, KeyManager *keyManager, int groupIdx, int idx, int numShards, int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, partitioner part, TrueTime timeServer = TrueTime(0, 0));
+  Server(const transport::Configuration& config, KeyManager *keyManager, int groupIdx, int idx, int numShards, int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, Partitioner *part, TrueTime timeServer = TrueTime(0, 0));
   ~Server();
 
   ::google::protobuf::Message* Execute(const std::string& type, const std::string& msg);
@@ -41,7 +41,7 @@ private:
   bool signMessages;
   bool validateProofs;
   uint64_t timeDelta;
-  partitioner part;
+  Partitioner *part;
   TrueTime timeServer;
 
   struct ValueAndProof {
@@ -81,7 +81,7 @@ private:
   // return true if this key is owned by this shard
   inline bool IsKeyOwned(const std::string &key) const {
     std::vector<int> txnGroups;
-    return static_cast<int>(part(key, numShards, groupIdx, txnGroups) % numGroups) == groupIdx;
+    return static_cast<int>((*part)(key, numShards, groupIdx, txnGroups) % numGroups) == groupIdx;
   }
 };
 

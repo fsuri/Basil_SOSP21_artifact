@@ -43,7 +43,7 @@ namespace indicusstore {
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     int numShards, int numGroups, Transport *transport, KeyManager *keyManager,
     bool signedMessages, bool validateProofs, bool hashDigest,
-    uint64_t timeDelta, OCCType occType, partitioner part, uint64_t readDepSize,
+    uint64_t timeDelta, OCCType occType, Partitioner *part, uint64_t readDepSize,
     TrueTime timeServer) : PingServer(transport),
     config(config), groupIdx(groupIdx), idx(idx), numShards(numShards),
     numGroups(numGroups), id(groupIdx * config.n + idx),
@@ -57,15 +57,21 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   _Latency_Init(&signLat, "sign_lat");
   
   // this is needed purely from loading data without executing transactions
-  proto::CommittedProof proof;
-  proof.mutable_txn()->set_client_id(0);
-  proof.mutable_txn()->set_client_seq_num(0);
-  proof.mutable_txn()->mutable_timestamp()->set_timestamp(0);
-  proof.mutable_txn()->mutable_timestamp()->set_id(0);
+  proto::CommittedProof *proof = new proto::CommittedProof();
+  proof->mutable_txn()->set_client_id(0);
+  proof->mutable_txn()->set_client_seq_num(0);
+  proof->mutable_txn()->mutable_timestamp()->set_timestamp(0);
+  proof->mutable_txn()->mutable_timestamp()->set_id(0);
   committed.insert(std::make_pair("", proof));
 }
 
 Server::~Server() {
+  for (const auto &c : committed) {
+    delete c.second;
+  }
+  for (const auto &o : ongoing) {
+    delete o.second;
+  }
   Latency_Dump(&verifyLat);
   Latency_Dump(&signLat);
 }
@@ -102,7 +108,7 @@ void Server::Load(const string &key, const string &value,
   val.val = value;
   auto committedItr = committed.find("");
   UW_ASSERT(committedItr != committed.end());
-  val.proof = &committedItr->second;
+  val.proof = committedItr->second;
   store.put(key, val, timestamp);
   if (key.length() == 5 && key[0] == 0) {
     std::cerr << std::bitset<8>(key[0]) << ' '
@@ -196,7 +202,7 @@ void Server::HandleRead(const TransportAddress &remote,
 }
 
 void Server::HandlePhase1(const TransportAddress &remote,
-    const proto::Phase1 &msg) {
+    proto::Phase1 &msg) {
   std::string txnDigest = TransactionDigest(msg.txn(), hashDigest);
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
@@ -213,16 +219,17 @@ void Server::HandlePhase1(const TransportAddress &remote,
     }
   }
   
-  ongoing[txnDigest] = msg.txn();
+  proto::Transaction *txn = msg.release_txn();
+  ongoing[txnDigest] = txn;
 
   Timestamp retryTs;
   proto::ConcurrencyControl::Result result = DoOCCCheck(msg.req_id(),
-      remote, txnDigest, msg.txn(), retryTs, conflict);
+      remote, txnDigest, msg.txn(), retryTs, committedProof);
 
   // p1Decisions[txnDigest] = result;
 
   if (result != proto::ConcurrencyControl::WAIT) {
-    SendPhase1Reply(msg.req_id(), result, conflict, txnDigest, remote);
+    SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);
   }
 }
 
@@ -245,7 +252,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
         return;
       }
 
-      txn = &txnItr->second;
+      txn = txnItr->second;
       txnDigest = &msg.txn_digest();
     } else {
       txn = &msg.txn();
@@ -282,14 +289,16 @@ void Server::HandlePhase2(const TransportAddress &remote,
 }
 
 void Server::HandleWriteback(const TransportAddress &remote,
-    const proto::Writeback &msg) {
-  const proto::Transaction *txn;
+    proto::Writeback &msg) {
+  proto::Transaction *txn;
   const std::string *txnDigest;
   std::string computedTxnDigest;
-  if (!msg.has_txn() && !msg.has_txn_digest()) {
+  if (!msg.has_txn_digest()) {
     Debug("WRITEBACK message contains neither txn nor txn_digest.");
     return;
   } 
+
+  UW_ASSERT(!msg.has_txn());
 
   if (msg.has_txn_digest()) {
     auto txnItr = ongoing.find(msg.txn_digest());
@@ -299,10 +308,10 @@ void Server::HandleWriteback(const TransportAddress &remote,
       return;
     }
 
-    txn = &txnItr->second;
+    txn = txnItr->second;
     txnDigest = &msg.txn_digest();
   } else {
-    txn = &msg.txn();
+    txn = msg.release_txn();
     computedTxnDigest = TransactionDigest(msg.txn(), hashDigest);
     txnDigest = &computedTxnDigest;
   }
@@ -310,7 +319,6 @@ void Server::HandleWriteback(const TransportAddress &remote,
   Debug("WRITEBACK[%s] with decision %d.",
       BytesToHex(*txnDigest, 16).c_str(), msg.decision());
 
-  proto::CommittedProof proof;
   if (validateProofs) {
     if (signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()) {
       if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
@@ -319,18 +327,12 @@ void Server::HandleWriteback(const TransportAddress &remote,
             BytesToHex(*txnDigest, 16).c_str());
         return;
       }
-
-      *proof.mutable_p1_sigs() = msg.p1_sigs();
     } else if (signedMessages && msg.has_p2_sigs()) {
       if (!ValidateP2Replies(msg.decision(), txnDigest, msg.p2_sigs(),
             keyManager, &config, verifyLat)) {
         Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
             BytesToHex(*txnDigest, 16).c_str(), msg.decision());
         return;
-      }
-
-      if (msg.decision() == proto::COMMIT) {
-        *proof.mutable_p2_sigs() = msg.p2_sigs();
       }
     } else if (msg.decision() == proto::ABORT && msg.has_conflict()) {
       std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
@@ -350,11 +352,9 @@ void Server::HandleWriteback(const TransportAddress &remote,
   }
 
   if (msg.decision() == proto::COMMIT) {
-    if (validateProofs) {
-      *proof.mutable_txn() = *txn;
-    }
     Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
-    Commit(*txnDigest, *txn, proof);
+    Commit(*txnDigest, txn, msg.has_p1_sigs() ? msg.p1_sigs() : msg.p2_sigs(),
+        msg.has_p1_sigs());
   } else {
     Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
     Abort(*txnDigest);
@@ -813,9 +813,9 @@ void Server::Prepare(const std::string &txnDigest,
     const proto::Transaction &txn) {
   Debug("PREPARE[%s] agreed to commit with ts %lu.%lu.",
       BytesToHex(txnDigest, 16).c_str(), txn.timestamp().timestamp(), txn.timestamp().id());
-  proto::Transaction &ongoingTxn= ongoing.at(txnDigest);
+  const proto::Transaction *ongoingTxn = ongoing.at(txnDigest);
   auto p = prepared.insert(std::make_pair(txnDigest, std::make_pair(
-          Timestamp(txn.timestamp()), &ongoingTxn)));
+          Timestamp(txn.timestamp()), ongoingTxn)));
   for (const auto &read : txn.read_set()) {
     if (IsKeyOwned(read.key())) {
       preparedReads[read.key()].insert(p.first->second.second);
@@ -840,37 +840,51 @@ void Server::GetCommittedWrites(const std::string &key, const Timestamp &ts,
   }
 }
 
-void Server::Commit(const std::string &txnDigest,
-    const proto::Transaction &txn, const proto::CommittedProof &proof) {
-  Timestamp ts(txn.timestamp());
-
-  auto committedItr = committed.insert(std::make_pair(txnDigest, proof));
+void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
+      const proto::GroupedSignatures &groupedSigs, bool p1Sigs) {
+  Timestamp ts(txn->timestamp());
 
   Value val;
+  proto::CommittedProof *proof = nullptr;
   if (validateProofs) {
-    UW_ASSERT(proof.has_txn());
-    val.proof = &committedItr.first->second;
+    proof = new proto::CommittedProof(); 
+  }
+  val.proof = proof;
+
+  auto committedItr = committed.insert(std::make_pair(txnDigest, proof));
+  if (validateProofs) {
+    // CAUTION: we no longer own txn pointer (which we allocated during Phase1
+    //    and stored in ongoing)
+    proof->set_allocated_txn(txn);
+    if (signedMessages) {
+      if (p1Sigs) {
+        *proof->mutable_p1_sigs() = groupedSigs;
+      } else {
+        *proof->mutable_p2_sigs() = groupedSigs;
+      }
+    }
   }
 
-  for (const auto &read : txn.read_set()) {
+  for (const auto &read : txn->read_set()) {
     if (!IsKeyOwned(read.key())) {
       continue;
     }
     store.commitGet(read.key(), read.readtime(), ts);
     //Latency_Start(&committedReadInsertLat);
-    committedReads[read.key()].insert(std::make_tuple(ts, read.readtime(), &committedItr.first->second));
+    committedReads[read.key()].insert(std::make_tuple(ts, read.readtime(),
+          committedItr.first->second));
     //uint64_t ns = Latency_End(&committedReadInsertLat);
     //stats.Add("committed_read_insert_lat_" + BytesToHex(read.key(), 18), ns);
   }
   
 
-  for (const auto &write : txn.write_set()) {
+  for (const auto &write : txn->write_set()) {
     if (!IsKeyOwned(write.key())) {
       continue;
     }
 
     Debug("COMMIT[%lu,%lu] Committing write for key %s.",
-        txn.client_id(), txn.client_seq_num(),
+        txn->client_id(), txn->client_seq_num(),
         BytesToHex(write.key(), 16).c_str());
     val.val = write.value();
     store.put(write.key(), val, ts);
@@ -901,10 +915,14 @@ void Server::Clean(const std::string &txnDigest) {
   auto itr = prepared.find(txnDigest);
   if (itr != prepared.end()) {
     for (const auto &read : itr->second.second->read_set()) {
-      preparedReads[read.key()].erase(itr->second.second);
+      if (IsKeyOwned(read.key())) {
+        preparedReads[read.key()].erase(itr->second.second);
+      }
     }
     for (const auto &write : itr->second.second->write_set()) {
-      preparedWrites[write.key()].erase(itr->second.first);
+      if (IsKeyOwned(write.key())) {
+        preparedWrites[write.key()].erase(itr->second.first);
+      }
     }
     prepared.erase(itr);
   }
@@ -936,7 +954,7 @@ proto::ConcurrencyControl::Result Server::CheckDependencies(
     const std::string &txnDigest) {
   auto txnItr = ongoing.find(txnDigest);
   UW_ASSERT(txnItr != ongoing.end());
-  return CheckDependencies(txnItr->second);
+  return CheckDependencies(*txnItr->second);
 }
 
 proto::ConcurrencyControl::Result Server::CheckDependencies(

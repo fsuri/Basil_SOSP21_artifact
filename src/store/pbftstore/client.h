@@ -20,7 +20,7 @@ namespace pbftstore {
 class Client : public ::Client {
  public:
   Client(const transport::Configuration& config, int nGroups, int nShards,
-      Transport *transport, partitioner part,
+      Transport *transport, Partitioner *part,
       uint64_t readQuorumSize, bool signMessages,
       bool validateProofs, KeyManager *keyManager,
       TrueTime timeserver = TrueTime(0,0));
@@ -61,7 +61,7 @@ class Client : public ::Client {
   Transport *transport;
   // Client for each shard
   std::vector<ShardClient *> bclient;
-  partitioner part;
+  Partitioner *part;
   uint64_t readQuorumSize;
   bool signMessages;
   bool validateProofs;

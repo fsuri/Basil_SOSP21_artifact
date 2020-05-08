@@ -7,7 +7,7 @@ namespace pbftstore {
 using namespace std;
 
 Client::Client(const transport::Configuration& config, int nGroups, int nShards,
-      Transport *transport, partitioner part,
+      Transport *transport, Partitioner *part,
       uint64_t readQuorumSize, bool signMessages,
       bool validateProofs, KeyManager *keyManager,
       TrueTime timeserver) : config(config), nshards(nShards),
@@ -69,7 +69,7 @@ void Client::Get(const std::string &key, get_callback gcb,
 
   // Contact the appropriate shard to get the value.
   std::vector<int> txnGroups;
-  int i = part(key, nshards, -1, txnGroups) % ngroups;
+  int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
 
   // If needed, add this shard to set of participants and send BEGIN.
   if (!IsParticipant(i)) {
@@ -96,7 +96,7 @@ void Client::Put(const std::string &key, const std::string &value,
     put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
   // Contact the appropriate shard to set the value.
   std::vector<int> txnGroups;
-  int i = part(key, nshards, -1, txnGroups) % ngroups;
+  int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
 
   // If needed, add this shard to set of participants and send BEGIN.
   if (!IsParticipant(i)) {

@@ -62,7 +62,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       int numShards, int numGroups,
       Transport *transport, KeyManager *keyManager, bool signedMessages,
       bool validateProofs, bool hashDigest, uint64_t timeDelta, OCCType occType,
-      partitioner part, uint64_t readDepSize,
+      Partitioner *part, uint64_t readDepSize,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
@@ -84,11 +84,11 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
-      const proto::Phase1 &msg);
+      proto::Phase1 &msg);
   void HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg);
   void HandleWriteback(const TransportAddress &remote,
-      const proto::Writeback &msg);
+      proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
 //Fallback protocol components
@@ -123,8 +123,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void Prepare(const std::string &txnDigest, const proto::Transaction &txn);
   void GetCommittedWrites(const std::string &key, const Timestamp &ts,
       std::vector<std::pair<Timestamp, Value>> &writes);
-  void Commit(const std::string &txnDigest, const proto::Transaction &txn,
-      const proto::CommittedProof &proof);
+  void Commit(const std::string &txnDigest, proto::Transaction *txn,
+      const proto::GroupedSignatures &groupedSigs, bool p1Sigs);
   void Abort(const std::string &txnDigest);
   void CheckDependents(const std::string &txnDigest);
   proto::ConcurrencyControl::Result CheckDependencies(
@@ -140,8 +140,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void CleanDependencies(const std::string &txnDigest);
 
   inline bool IsKeyOwned(const std::string &key) const {
-    std::vector<int> txnGroups;
-    return static_cast<int>(part(key, numShards, groupIdx, txnGroups) % numGroups) == groupIdx;
+    return static_cast<int>((*part)(key, numShards, groupIdx, dummyTxnGroups) % numGroups) == groupIdx;
   }
 
   const transport::Configuration &config;
@@ -152,7 +151,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   const int id;
   Transport *transport;
   const OCCType occType;
-  partitioner part;
+  Partitioner *part;
   const uint64_t readDepSize;
   const bool signedMessages;
   const bool validateProofs;
@@ -175,9 +174,10 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
   proto::Transaction mostRecent;
   proto::PreparedWrite preparedWrite;
-  proto::CommittedProof conflict;
+  proto::CommittedProof committedProof;
   proto::ConcurrencyControl concurrencyControl;
   proto::AbortInternal abortInternal;
+  std::vector<int> dummyTxnGroups;
 
   PingMessage ping;
 
@@ -187,7 +187,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   std::unordered_map<std::string, std::set<Timestamp>> rts;
 
   // Digest -> V
-  std::unordered_map<std::string, proto::Transaction> ongoing;
+  std::unordered_map<std::string, proto::Transaction *> ongoing;
   std::unordered_map<std::string, std::pair<Timestamp, const proto::Transaction *>> prepared;
   std::unordered_map<std::string, std::set<const proto::Transaction *>> preparedReads;
   std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
@@ -195,7 +195,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
   std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
   std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
-  std::unordered_map<std::string, proto::CommittedProof> committed;
+  std::unordered_map<std::string, proto::CommittedProof *> committed;
   std::unordered_set<std::string> aborted;
   std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
   struct WaitingDependency {

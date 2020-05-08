@@ -60,7 +60,7 @@ class Client : public ::Client {
  public:
   Client(transport::Configuration *config, uint64_t id, int nShards,
       int nGroups, const std::vector<int> &closestReplicas,
-      Transport *transport, partitioner part, bool syncCommit,
+      Transport *transport, Partitioner *part, bool syncCommit,
       uint64_t readMessages, uint64_t readQuorumSize, uint64_t readDepSize,
       bool signedMessages, bool validateProofs, bool hashDigest,
       KeyManager *keyManager,
@@ -149,7 +149,7 @@ class Client : public ::Client {
   Transport *transport;
   // Client for each shard
   std::vector<ShardClient *> bclient;
-  partitioner part;
+  Partitioner *part;
   bool syncCommit;
   uint64_t readMessages;
   uint64_t readQuorumSize;

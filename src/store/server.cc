@@ -156,7 +156,7 @@ const std::string partitioner_args[] = {
   "warehouse_dist_items",
   "warehouse"
 };
-const Partitioner parts[] {
+const partitioner_t parts[] {
   DEFAULT,
   WAREHOUSE_DIST_ITEMS,
   WAREHOUSE
@@ -297,6 +297,7 @@ DEFINE_string(data_file_path, "", "path to file containing key-value pairs to be
 Server *server = nullptr;
 TransportReceiver *replica = nullptr;
 ::Transport *tport = nullptr;
+Partitioner *part = nullptr;
 
 void Cleanup(int signal);
 
@@ -372,7 +373,7 @@ int main(int argc, char **argv) {
   }
 
   // parse protocol and mode
-  Partitioner partType = DEFAULT;
+  partitioner_t partType = DEFAULT;
   int numParts = sizeof(partitioner_args);
   for (int i = 0; i < numParts; ++i) {
     if (FLAGS_partitioner == partitioner_args[i]) {
@@ -382,16 +383,15 @@ int main(int argc, char **argv) {
   }
 
   std::mt19937 unused;
-  partitioner part;
   switch (partType) {
     case DEFAULT:
-      part = default_partitioner;
+      part = new DefaultPartitioner();
       break;
     case WAREHOUSE_DIST_ITEMS:
-      part = warehouse_district_partitioner_dist_items(FLAGS_tpcc_num_warehouses);
+      part = new WarehouseDistItemsPartitioner(FLAGS_tpcc_num_warehouses);
       break;
     case WAREHOUSE:
-      part = warehouse_district_partitioner(FLAGS_tpcc_num_warehouses, unused);
+      part = new WarehousePartitioner(FLAGS_tpcc_num_warehouses, unused);
       break;
     default:
       NOT_REACHABLE();
@@ -532,7 +532,7 @@ int main(int argc, char **argv) {
       int i = ReadBytesFromStream(&in, key);
       if (i == 0) {
         ReadBytesFromStream(&in, value);
-        if (part(key, FLAGS_num_shards, FLAGS_group_idx, txnGroups) % FLAGS_num_groups == FLAGS_group_idx) {
+        if ((*part)(key, FLAGS_num_shards, FLAGS_group_idx, txnGroups) % FLAGS_num_groups == FLAGS_group_idx) {
           server->Load(key, value, Timestamp());
           ++stored;
         }
@@ -552,7 +552,7 @@ int main(int argc, char **argv) {
     std::string key;
     std::vector<int> txnGroups;
     while (std::getline(in, key)) {
-      if (part(key, FLAGS_num_shards, FLAGS_group_idx, txnGroups) % FLAGS_num_groups == FLAGS_group_idx) {
+      if ((*part)(key, FLAGS_num_shards, FLAGS_group_idx, txnGroups) % FLAGS_num_groups == FLAGS_group_idx) {
         server->Load(key, "null", Timestamp());
       }
     }
@@ -576,6 +576,7 @@ void Cleanup(int signal) {
     server->GetStats().ExportJSON(FLAGS_stats_file);
   }
   delete server;
+  delete part;
   if (replica != nullptr) {
     delete replica;
   }

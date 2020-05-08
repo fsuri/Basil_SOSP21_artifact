@@ -36,7 +36,7 @@ namespace tapirstore {
 using namespace std;
 
 Client::Client(transport::Configuration *config, uint64_t id, int nShards,
-    int nGroups, int closestReplica, Transport *transport, partitioner part,
+    int nGroups, int closestReplica, Transport *transport, Partitioner *part,
     bool syncCommit, TrueTime timeServer) : config(config), client_id(id),
     nshards(nShards), ngroups(nGroups), transport(transport), part(part),
     syncCommit(syncCommit), timeServer(timeServer), lastReqId(0UL) {
@@ -85,7 +85,7 @@ void Client::Get(const std::string &key, get_callback gcb,
     Debug("GET [%lu : %s]", t_id, key.c_str());
     // Contact the appropriate shard to get the value.
     std::vector<int> txnGroups(participants.begin(), participants.end());
-    int i = part(key, nshards, -1, txnGroups) % ngroups;
+    int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (participants.find(i) == participants.end()) {
@@ -104,7 +104,7 @@ void Client::Put(const std::string &key, const std::string &value,
     Debug("PUT [%lu : %s]", t_id, key.c_str());
     // Contact the appropriate shard to set the value.
     std::vector<int> txnGroups(participants.begin(), participants.end());
-    int i = part(key, nshards, -1, txnGroups) % ngroups;
+    int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (participants.find(i) == participants.end()) {

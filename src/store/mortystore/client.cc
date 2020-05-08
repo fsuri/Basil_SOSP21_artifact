@@ -9,7 +9,7 @@
 namespace mortystore {
 
 Client::Client(transport::Configuration *config, uint64_t client_id, int nShards,
-    int nGroups, int closestReplica, Transport *transport, partitioner part,
+    int nGroups, int closestReplica, Transport *transport, Partitioner *part,
     bool debugStats) : config(config), client_id(client_id), nshards(nShards),
     ngroups(nGroups), transport(transport), part(part), debugStats(debugStats),
     lastReqId(0UL), prepareBranchIds(0UL) {
@@ -207,7 +207,7 @@ void Client::Get(PendingRequest *req, proto::Branch &branch,
     const std::string &key) {
   // Contact the appropriate shard to get the value.
   std::vector<int> txnGroups(branch.shards().begin(), branch.shards().end());
-  int i = part(key, nshards, -1, txnGroups) % ngroups;
+  int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
   if (std::find(branch.shards().begin(), branch.shards().end(),
         i) == branch.shards().end()) {
     branch.mutable_shards()->Add(i);
@@ -253,7 +253,7 @@ void Client::Put(proto::Branch &branch, const std::string &key,
     const std::string &value) {
   // Contact the appropriate shard to get the value.
   std::vector<int> txnGroups(branch.shards().begin(), branch.shards().end());
-  int i = part(key, nshards, -1, txnGroups) % ngroups;
+  int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
   if (std::find(branch.shards().begin(), branch.shards().end(),
         i) == branch.shards().end()) {
     branch.mutable_shards()->Add(i);

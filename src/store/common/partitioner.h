@@ -7,11 +7,55 @@
 #include <random>
 #include <vector>
 
-enum Partitioner {
+enum partitioner_t {
   DEFAULT = 0,
   WAREHOUSE_DIST_ITEMS,
   WAREHOUSE,
 };
+
+class Partitioner {
+ public:
+  Partitioner() {}
+  virtual ~Partitioner() {}
+  virtual uint64_t operator()(const std::string &key, uint64_t numShards,
+      int group, const std::vector<int> &txnGroups) = 0;
+};
+
+class DefaultPartitioner : public Partitioner {
+ public:
+  DefaultPartitioner() {}
+  virtual ~DefaultPartitioner() {}
+
+  virtual uint64_t operator()(const std::string &key, uint64_t numShards,
+      int group, const std::vector<int> &txnGroups);
+};
+
+class WarehouseDistItemsPartitioner : public Partitioner {
+ public:
+  WarehouseDistItemsPartitioner(uint64_t numWarehouses) : numWarehouses(numWarehouses) {}
+  virtual ~WarehouseDistItemsPartitioner() {}
+  virtual uint64_t operator()(const std::string &key, uint64_t numShards,
+      int group, const std::vector<int> &txnGroups);
+
+ private:
+  const uint64_t numWarehouses;
+};
+
+class WarehousePartitioner : public Partitioner {
+ public:
+  WarehousePartitioner(uint64_t numWarehouses, std::mt19937 &rd) :
+      numWarehouses(numWarehouses), rd(rd) {}
+  virtual ~WarehousePartitioner() {}
+
+  virtual uint64_t operator()(const std::string &key, uint64_t numShards,
+      int group, const std::vector<int> &txnGroups);
+
+ private:
+  const uint64_t numWarehouses;
+  std::mt19937 &rd;
+};
+
+
 
 typedef std::function<uint64_t(const std::string &, uint64_t, int,
     const std::vector<int> &)> partitioner;

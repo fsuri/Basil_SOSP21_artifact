@@ -40,7 +40,7 @@ using namespace std;
 Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     int nGroups,
     const std::vector<int> &closestReplicas, Transport *transport,
-    partitioner part, bool syncCommit, uint64_t readMessages,
+    Partitioner *part, bool syncCommit, uint64_t readMessages,
     uint64_t readQuorumSize, uint64_t readDepSize, bool signedMessages,
     bool validateProofs, bool hashDigest, KeyManager *keyManager, TrueTime timeServer)
     : config(config), client_id(id), nshards(nShards), ngroups(nGroups),
@@ -108,7 +108,7 @@ void Client::Get(const std::string &key, get_callback gcb,
 
     // Contact the appropriate shard to get the value.
     std::vector<int> txnGroups(txn.involved_groups().begin(), txn.involved_groups().end());
-    int i = part(key, nshards, -1, txnGroups) % ngroups;
+    int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (!IsParticipant(i)) {
@@ -157,7 +157,7 @@ void Client::Put(const std::string &key, const std::string &value,
 
     // Contact the appropriate shard to set the value.
     std::vector<int> txnGroups(txn.involved_groups().begin(), txn.involved_groups().end());
-    int i = part(key, nshards, -1, txnGroups) % ngroups;
+    int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
 
     // If needed, add this shard to set of participants and send BEGIN.
     if (!IsParticipant(i)) {
@@ -332,7 +332,7 @@ void Client::Phase2(PendingRequest *req) {
   }
 
   req->startedPhase2 = true;
-  bclient[logGroup]->Phase2(client_seq_num, txn, req->decision,
+  bclient[logGroup]->Phase2(client_seq_num, txn, req->txnDigest, req->decision,
       req->p1ReplySigsGrouped,
       std::bind(&Client::Phase2Callback, this, req->id, logGroup,
         std::placeholders::_1),
