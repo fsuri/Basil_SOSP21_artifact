@@ -124,6 +124,9 @@ bool ValidateP1Replies(proto::CommitDecision decision,
         if (concurrencyControl.ccr() == myResult) {
           skip = true;
         } else {
+          Debug("Signature purportedly from replica %lu"
+              " (= my id %ld) doesn't match my response %u.",
+              sig.process_id(), myProcessId, concurrencyControl.ccr());
           return false;
         }
       }
@@ -140,7 +143,10 @@ bool ValidateP1Replies(proto::CommitDecision decision,
       }
       //Latency_End(&lat);
       //
-      if (!replicasVerified.insert(sig.process_id()).second) {
+      auto insertItr = replicasVerified.insert(sig.process_id());
+      if (!insertItr.second) {
+        Debug("Already verified sig from replica %lu in group %lu.",
+            sig.process_id(), sigs.first);
         return false;
       }
       verified++;

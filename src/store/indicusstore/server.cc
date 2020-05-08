@@ -229,9 +229,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
   Timestamp retryTs;
   proto::ConcurrencyControl::Result result = DoOCCCheck(msg.req_id(),
-      remote, txnDigest, msg.txn(), retryTs, committedProof);
-
-  p1Decisions[txnDigest] = result;
+      remote, txnDigest, *txn, retryTs, committedProof);
 
   if (result != proto::ConcurrencyControl::WAIT) {
     SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);
@@ -371,7 +369,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
   }
 
   if (msg.decision() == proto::COMMIT) {
-    Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
+    Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
     Commit(*txnDigest, txn, msg.has_p1_sigs() ? msg.p1_sigs() : msg.p2_sigs(),
         msg.has_p1_sigs());
   } else {
@@ -1017,6 +1015,8 @@ void Server::SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
     const proto::CommittedProof &conflict, const std::string &txnDigest,
     const TransportAddress &remote) {
+  p1Decisions[txnDigest] = result;
+
   phase1Reply.Clear();
   phase1Reply.set_req_id(reqId);
 
