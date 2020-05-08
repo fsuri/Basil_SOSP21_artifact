@@ -233,6 +233,8 @@ DEFINE_bool(indicus_validate_proofs, false, "send and validate proofs as"
     " necessary to check Byzantine behavior (for Indicus)");
 DEFINE_bool(indicus_hash_digest, false, "use hash function compute transaction"
     " digest (for Indicus)");
+DEFINE_bool(indicus_verify_deps, true, "check signatures of transaction"
+    " depdendencies (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
 const std::string occ_type_args[] = {
@@ -482,8 +484,8 @@ int main(int argc, char **argv) {
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
           tport, &keyManager, FLAGS_indicus_sign_messages,
-          FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest, timeDelta,
-          indicusOCCType, part, readDepSize);
+          FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
+          FLAGS_indicus_verify_deps, timeDelta, indicusOCCType, part, readDepSize);
       break;
     }
 		case PROTO_PBFT: {

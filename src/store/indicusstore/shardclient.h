@@ -74,7 +74,7 @@ class ShardClient : public TransportReceiver, public PingInitiator {
  public:
   ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int group, const std::vector<int> &closestReplicas,
-      bool signedMessages, bool validateProofs, bool hashDigest,
+      bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
       KeyManager *keyManager, TrueTime &timeServer);
   virtual ~ShardClient();
 
@@ -220,17 +220,17 @@ class ShardClient : public TransportReceiver, public PingInitiator {
   void FinishRequest();
   int SendGet(const std::string &request_str);
 
-  uint64_t client_id; // Unique ID for this client.
+  const uint64_t client_id; // Unique ID for this client.
   Transport *transport; // Transport layer.
   transport::Configuration *config;
-  int group; // which shard this client accesses
-  int replica; // which replica to use for reads
+  const int group; // which shard this client accesses
   TrueTime &timeServer;
-  bool signedMessages;
-  bool validateProofs;
-  bool hashDigest;
+  const bool signedMessages;
+  const bool validateProofs;
+  const bool hashDigest;
+  const bool verifyDeps;
   KeyManager *keyManager;
-  uint64_t phase1DecisionTimeout;
+  const uint64_t phase1DecisionTimeout;
   std::vector<int> closestReplicas;
 
   uint64_t lastReqId;

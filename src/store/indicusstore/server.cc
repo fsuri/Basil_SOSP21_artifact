@@ -42,15 +42,15 @@ namespace indicusstore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     int numShards, int numGroups, Transport *transport, KeyManager *keyManager,
-    bool signedMessages, bool validateProofs, bool hashDigest,
+    bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     uint64_t timeDelta, OCCType occType, Partitioner *part, uint64_t readDepSize,
     TrueTime timeServer) : PingServer(transport),
     config(config), groupIdx(groupIdx), idx(idx), numShards(numShards),
     numGroups(numGroups), id(groupIdx * config.n + idx),
     transport(transport), occType(occType), part(part), readDepSize(readDepSize),
     signedMessages(signedMessages), validateProofs(validateProofs),
-    hashDigest(hashDigest), keyManager(keyManager), timeDelta(timeDelta),
-    timeServer(timeServer) {
+    hashDigest(hashDigest), verifyDeps(verifyDeps), keyManager(keyManager),
+    timeDelta(timeDelta), timeServer(timeServer) {
   transport->Register(this, config, groupIdx, idx);
   _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
   _Latency_Init(&verifyLat, "verify_lat");
@@ -184,7 +184,7 @@ void Server::HandleRead(const TransportAddress &remote,
         *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
         *preparedWrite.mutable_txn_digest() = TransactionDigest(mostRecent, hashDigest);
 
-        if (signedMessages) {
+        if (validateProofs && signedMessages && verifyDeps) {
           signedMessage.Clear();
           //Latency_Start(&signLat);
           SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id,
@@ -208,8 +208,13 @@ void Server::HandlePhase1(const TransportAddress &remote,
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
 
-  if (validateProofs && signedMessages) {
+  if (validateProofs && signedMessages && verifyDeps) {
     for (const auto &dep : msg.txn().deps()) {
+      if (!dep.has_prepared_sigs()) {
+        Debug("Dep for txn %s missing signatures.",
+          BytesToHex(txnDigest, 16).c_str());
+        return;
+      }
       if (!ValidateDependency(dep, &config, readDepSize, keyManager)) {
         Debug("VALIDATE Dependency failed for txn %s.",
             BytesToHex(txnDigest, 16).c_str());
@@ -226,7 +231,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
   proto::ConcurrencyControl::Result result = DoOCCCheck(msg.req_id(),
       remote, txnDigest, msg.txn(), retryTs, committedProof);
 
-  // p1Decisions[txnDigest] = result;
+  p1Decisions[txnDigest] = result;
 
   if (result != proto::ConcurrencyControl::WAIT) {
     SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);
@@ -268,6 +273,8 @@ void Server::HandlePhase2(const TransportAddress &remote,
     Debug("VALIDATE P1Replies failed.");
     return;
   }
+  
+  p2Decisions[*txnDigest] = msg.decision();
 
   phase2Reply.Clear();
   phase2Reply.set_req_id(msg.req_id());
@@ -563,6 +570,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     return proto::ConcurrencyControl::ABSTAIN;
   }
 
+
   for (const auto &read : txn.read_set()) {
     // TODO: remove this check when txns only contain read set/write set for the
     //   shards stored at this replica
@@ -735,6 +743,13 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     }
     if (committed.find(dep.prepared().txn_digest()) == committed.end() &&
         aborted.find(dep.prepared().txn_digest()) == aborted.end()) {
+
+      if (validateProofs && signedMessages && !verifyDeps) {
+        if (prepared.find(dep.prepared().txn_digesT()) == prepared.end()) {
+          return proto::ConcurrencyControl::ABSTAIN;
+        }
+      }
+
       Debug("[%lu:%lu][%s] WAIT for dependency %s to finish.",
           txn.client_id(), txn.client_seq_num(),
           BytesToHex(txnDigest, 16).c_str(),

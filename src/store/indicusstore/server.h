@@ -61,8 +61,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   Server(const transport::Configuration &config, int groupIdx, int idx,
       int numShards, int numGroups,
       Transport *transport, KeyManager *keyManager, bool signedMessages,
-      bool validateProofs, bool hashDigest, uint64_t timeDelta, OCCType occType,
-      Partitioner *part, uint64_t readDepSize,
+      bool validateProofs, bool hashDigest, bool verifyDeps, uint64_t timeDelta,
+      OCCType occType, Partitioner *part, uint64_t readDepSize,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
@@ -156,6 +156,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   const bool signedMessages;
   const bool validateProofs;
   const bool hashDigest;
+  const bool verifyDeps;
   KeyManager *keyManager;
   const uint64_t timeDelta;
   TrueTime timeServer;

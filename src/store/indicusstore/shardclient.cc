@@ -39,12 +39,12 @@ namespace indicusstore {
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int group, const std::vector<int> &closestReplicas_,
-    bool signedMessages, bool validateProofs, bool hashDigest,
+    bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     KeyManager *keyManager, TrueTime &timeServer) : PingInitiator(transport, config->n),
     client_id(client_id), transport(transport), config(config), group(group),
     timeServer(timeServer),
     signedMessages(signedMessages), validateProofs(validateProofs),
-    hashDigest(hashDigest),
+    hashDigest(hashDigest), verifyDeps(verifyDeps),
     keyManager(keyManager), phase1DecisionTimeout(1000UL), lastReqId(0UL) {
   transport->Register(this, *config, -1, -1);
 
@@ -316,7 +316,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   const proto::PreparedWrite *prepared;
   proto::PreparedWrite validatedPrepared;
   bool hasPrepared = false;
-  if (validateProofs && signedMessages) {
+  if (validateProofs && signedMessages && verifyDeps) {
     if (reply.has_signed_prepared()) {
       if (!crypto::Verify(keyManager->GetPublicKey(
               reply.signed_prepared().process_id()),
@@ -370,7 +370,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
         req->maxTs = preparedItr->first;
         req->maxValue = preparedItr->second.first.value();
         *req->dep.mutable_prepared() = preparedItr->second.first;
-        if (validateProofs && signedMessages) {
+        if (validateProofs && signedMessages && verifyDeps) {
           *req->dep.mutable_prepared_sigs() = req->preparedSigs[preparedItr->first];
         }
         req->dep.set_involved_group(group);

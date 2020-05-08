@@ -42,12 +42,14 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     const std::vector<int> &closestReplicas, Transport *transport,
     Partitioner *part, bool syncCommit, uint64_t readMessages,
     uint64_t readQuorumSize, uint64_t readDepSize, bool signedMessages,
-    bool validateProofs, bool hashDigest, KeyManager *keyManager, TrueTime timeServer)
+    bool validateProofs, bool hashDigest, bool verifyDeps,
+    KeyManager *keyManager, TrueTime timeServer)
     : config(config), client_id(id), nshards(nShards), ngroups(nGroups),
     transport(transport), part(part), syncCommit(syncCommit),
     readMessages(readMessages), readQuorumSize(readQuorumSize),
     readDepSize(readDepSize), signedMessages(signedMessages),
-    validateProofs(validateProofs), hashDigest(hashDigest), keyManager(keyManager),
+    validateProofs(validateProofs), hashDigest(hashDigest), verifyDeps(verifyDeps),
+    keyManager(keyManager),
     timeServer(timeServer), client_seq_num(0UL), lastReqId(0UL), getIdx(0UL) {
   bclient.reserve(nshards);
 
@@ -56,7 +58,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
     bclient[i] = new ShardClient(config, transport, client_id, i,
-        closestReplicas, signedMessages, validateProofs, hashDigest,
+        closestReplicas, signedMessages, validateProofs, hashDigest, verifyDeps,
         keyManager, timeServer);
   }
 
