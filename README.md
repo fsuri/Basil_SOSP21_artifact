@@ -63,6 +63,7 @@ TAPIR depends on protobufs, libevent and openssl, so you will need the following
 In addition, you need to install the following libraries from source:
 - [googletest-1.10](https://github.com/google/googletest/releases/tag/release-1.10.0)
 - [protobuf-3.5.1](https://github.com/protocolbuffers/protobuf/releases/tag/v3.5.1)
+- [cryptopp-8.2](htps://cryptopp.com/cryptopp820.zip)
 
 ### On Mac
 The known Mac equivalents for the above packages, available through `brew install` are:
