@@ -1004,6 +1004,10 @@ void FlushStats() {
     for (unsigned int i = 0; i < asyncClients.size(); i++) {
       total.Merge(asyncClients[i]->GetStats());
     }
+    for (unsigned int i = 0; i < clients.size(); i++) {
+      total.Merge(clients[i]->GetStats());
+    }
+
     total.ExportJSON(FLAGS_stats_file);
   }
 }

@@ -62,12 +62,6 @@ ShardClient::~ShardClient() {
 
 void ShardClient::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
-  proto::SignedMessage signedMessage;
-  proto::ReadReply readReply;
-  proto::Phase1Reply phase1Reply;
-  proto::Phase2Reply phase2Reply;
-  PingMessage ping;
-
   if (type == readReply.GetTypeName()) {
     readReply.ParseFromString(data);
     HandleReadReply(readReply);
@@ -88,7 +82,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
 void ShardClient::Begin(uint64_t id) {
   Debug("[group %i] BEGIN: %lu", group, id);
 
-  txn = proto::Transaction();
+  txn.Clear();
   readValues.clear();
 }
 
@@ -110,7 +104,7 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   pendingGet->gcb = gcb;
   pendingGet->gtcb = gtcb;
 
-  proto::Read read;
+  read.Clear();
   read.set_req_id(reqId);
   read.set_key(key);
   *read.mutable_timestamp() = ts;
@@ -155,7 +149,7 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
   });
 
   // create prepare request
-  proto::Phase1 phase1;
+  phase1.Clear();
   phase1.set_req_id(reqId);
   *phase1.mutable_txn() = transaction;
 
@@ -187,7 +181,7 @@ void ShardClient::Phase2(uint64_t id,
       ptcb(REPLY_TIMEOUT);
   });
 
-  proto::Phase2 phase2;
+  phase2.Clear();
   phase2.set_req_id(reqId);
   phase2.set_decision(decision);
   *phase2.mutable_txn_digest() = txnDigest;
@@ -204,8 +198,8 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
     proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
     const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs) {
 
+  writeback.Clear();
   // create commit request
-  proto::Writeback writeback;
   writeback.set_decision(decision);
   if (validateProofs && signedMessages) {
     if (fast && decision == proto::COMMIT) {
@@ -223,7 +217,7 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
 }
 
 void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
-  proto::Abort abort;
+  abort.Clear();
   *abort.mutable_internal()->mutable_ts() = ts;
   for (const auto &read : txn.read_set()) {
     *abort.mutable_internal()->add_read_set() = read.key();
@@ -290,7 +284,8 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   req->numReplies++;
   if (reply.has_committed()) {
     if (validateProofs) {
-      std::string committedTxnDigest = TransactionDigest(reply.committed().proof().txn(), hashDigest);
+      std::string committedTxnDigest = TransactionDigest(
+          reply.committed().proof().txn(), hashDigest);
       if (!ValidateTransactionWrite(reply.committed().proof(), &committedTxnDigest,
             req->key, reply.committed().value(), reply.committed().timestamp(), config,
             signedMessages, keyManager)) {
@@ -314,7 +309,6 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   }
 
   const proto::PreparedWrite *prepared;
-  proto::PreparedWrite validatedPrepared;
   bool hasPrepared = false;
   if (validateProofs && signedMessages && verifyDeps) {
     if (reply.has_signed_prepared()) {
@@ -400,7 +394,6 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
   bool hasSigned = (validateProofs && signedMessages) && (!reply.has_cc() || reply.cc().ccr() != proto::ConcurrencyControl::ABORT);
 
   const proto::ConcurrencyControl *cc = nullptr;
-  proto::ConcurrencyControl validatedCC;
   if (hasSigned) {
     Debug("[group %i] Verifying signed_cc because has_cc %d and ccr %d.",
         group,
@@ -526,7 +519,6 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
   }
 
   const proto::Phase2Decision *p2Decision = nullptr;
-  proto::Phase2Decision validatedP2Decision;
   if (validateProofs && signedMessages) {
     if (!reply.has_signed_p2_decision()) {
       Debug("[group %i] Phase2Reply missing signed_p2_decision.", group);

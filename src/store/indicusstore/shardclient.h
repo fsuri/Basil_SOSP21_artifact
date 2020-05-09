@@ -241,6 +241,20 @@ class ShardClient : public TransportReceiver, public PingInitiator {
   std::unordered_map<uint64_t, PendingPhase1 *> pendingPhase1s;
   std::unordered_map<uint64_t, PendingPhase2 *> pendingPhase2s;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
+
+  proto::Read read;
+  proto::Phase1 phase1;
+  proto::Phase2 phase2;
+  proto::Writeback writeback;
+  proto::Abort abort;
+  proto::ReadReply readReply;
+  proto::Phase1Reply phase1Reply;
+  proto::Phase2Reply phase2Reply;
+  PingMessage ping;
+  
+  proto::PreparedWrite validatedPrepared;
+  proto::ConcurrencyControl validatedCC;
+  proto::Phase2Decision validatedP2Decision;
 };
 
 } // namespace indicusstore
