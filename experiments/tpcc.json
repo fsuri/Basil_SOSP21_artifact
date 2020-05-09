@@ -41,6 +41,7 @@
       "hash_digest": true,
       "validate_proofs": false,
       "sign_messages": false,
+      "verify_deps": false,
       "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
@@ -51,6 +52,7 @@
       "hash_digest": true,
       "validate_proofs": true,
       "sign_messages": false,
+      "verify_deps": false,
       "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
@@ -61,6 +63,7 @@
       "hash_digest": true,
       "validate_proofs": true,
       "sign_messages": true,
+      "verify_deps": false,
       "key_path": "/usr/local/etc/indicus-keys/sodium"
     }
 

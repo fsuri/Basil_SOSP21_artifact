@@ -43,6 +43,7 @@
       "hash_digest": true,
       "validate_proofs": false,
       "sign_messages": false,
+      "verify_deps": false,
       "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
@@ -53,6 +54,7 @@
       "hash_digest": true,
       "validate_proofs": true,
       "sign_messages": false,
+      "verify_deps": false,
       "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
@@ -63,6 +65,7 @@
       "hash_digest": true,
       "validate_proofs": true,
       "sign_messages": true,
+      "verify_deps": false,
       "key_path": "/usr/local/etc/indicus-keys/sodium"
     }
   ],
@@ -199,7 +202,7 @@
       "height": 600,
       "width": 800,
       "series_indep_vars_idx": 0,
-      "series_titles": ["TAPIR", "Indicus-NoProofsNoSigs", "Indicus-NoSigs"],
+      "series_titles": ["TAPIR", "Indicus-NoProofsNoSigs", "Indicus-NoSigs", "Indicus"],
       "x_var_is_config": true,
       "x_var": ["num_groups"],
       "x_label": "Number of Shards (individual processes)",
