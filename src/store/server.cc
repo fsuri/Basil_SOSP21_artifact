@@ -481,11 +481,12 @@ int main(int argc, char **argv) {
       }
       uint64_t timeDelta = (FLAGS_indicus_time_delta / 1000) << 32;
       timeDelta = timeDelta | (FLAGS_indicus_time_delta % 1000) * 1000;
+			indicusstore::Parameters params(FLAGS_indicus_sign_messages,
+				FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
+				FLAGS_indicus_verify_deps, 1);
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
-          tport, &keyManager, FLAGS_indicus_sign_messages,
-          FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
-          FLAGS_indicus_verify_deps, timeDelta, indicusOCCType, part, readDepSize);
+          tport, &keyManager, params, timeDelta, indicusOCCType, part, readDepSize);
       break;
     }
 		case PROTO_PBFT: {

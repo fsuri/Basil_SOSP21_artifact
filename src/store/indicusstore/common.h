@@ -111,6 +111,19 @@ uint64_t SlowAbortQuorumSize(const transport::Configuration *config);
 bool IsReplicaInGroup(uint64_t id, uint32_t group,
     const transport::Configuration *config);
 
+typedef struct Parameters {
+  const bool signedMessages;
+  const bool validateProofs;
+  const bool hashDigest;
+  const bool verifyDeps;
+  const int signatureBatchSize;
+
+  Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
+    int signatureBatchSize) :
+    signedMessages(signedMessages), validateProofs(validateProofs),
+    hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize) {}
+} Parameters;
+
 } // namespace indicusstore
 
 #endif /* INDICUS_COMMON_H */

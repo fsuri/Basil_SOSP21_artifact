@@ -7,18 +7,16 @@ namespace indicusstore {
 
 Phase1Validator::Phase1Validator(int group, const proto::Transaction *txn,
     const std::string *txnDigest, const transport::Configuration *config,
-    KeyManager *keyManager, bool validateProofs,
-    bool signedMessages, bool hashDigest) : group(group),
+    KeyManager *keyManager, Parameters params) : group(group),
     txn(txn), txnDigest(txnDigest), config(config), keyManager(keyManager),
-    validateProofs(validateProofs), signedMessages(signedMessages), hashDigest(hashDigest), 
-    state(NOT_ENOUGH), commits(0U), abstains(0U) {
+    params(params), state(NOT_ENOUGH), commits(0U), abstains(0U) {
 }
 
 Phase1Validator::~Phase1Validator() {
 }
 
 bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
-  if (validateProofs && cc.txn_digest() != *txnDigest) {
+  if (params.validateProofs && cc.txn_digest() != *txnDigest) {
     Debug("[group %d] Phase1Reply digest %s does not match computed digest %s.",
         group, BytesToHex(cc.txn_digest(), 16).c_str(),
         BytesToHex(*txnDigest, 16).c_str());
@@ -34,9 +32,9 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
   switch(cc.ccr()) {
     case proto::ConcurrencyControl::ABORT: {
       std::string committedTxnDigest = TransactionDigest(
-          cc.committed_conflict().txn(), hashDigest);
-      if (validateProofs && !ValidateCommittedConflict(cc.committed_conflict(),
-            &committedTxnDigest, txn, txnDigest, signedMessages, keyManager, config)) {
+          cc.committed_conflict().txn(), params.hashDigest);
+      if (params.validateProofs && !ValidateCommittedConflict(cc.committed_conflict(),
+            &committedTxnDigest, txn, txnDigest, params.signedMessages, keyManager, config)) {
         Debug("[group %d] Invalid committed_conflict for Phase1Reply.",
             group);
         return false;

@@ -26,22 +26,20 @@ class Phase1Validator {
  public:
   Phase1Validator(int group, const proto::Transaction *txn,
       const std::string *txnDigest, const transport::Configuration *config,
-      KeyManager *keyManager, bool validateProofs, bool signedMessages, bool hashDigest);
+      KeyManager *keyManager, Parameters params);
   virtual ~Phase1Validator();
 
   bool ProcessMessage(const proto::ConcurrencyControl &cc);
-  
+
   inline Phase1ValidationState GetState() const { return state; }
-    
+
  private:
   const int group;
   const proto::Transaction *txn;
   const std::string *txnDigest;
   const transport::Configuration *config;
   KeyManager *keyManager;
-  const bool validateProofs;
-  const bool signedMessages;
-  const bool hashDigest;
+  const Parameters params;
 
   Phase1ValidationState state;
   uint32_t commits;

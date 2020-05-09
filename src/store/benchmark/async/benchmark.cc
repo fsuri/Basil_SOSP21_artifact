@@ -510,7 +510,7 @@ int main(int argc, char **argv) {
     std::cerr << "Unknown benchmark." << std::endl;
     return 1;
   }
-  
+
   // parse partitioner
   partitioner_t partType = DEFAULT;
   int numParts = sizeof(partitioner_args);
@@ -641,7 +641,7 @@ int main(int argc, char **argv) {
   }
 
   std::mt19937 rand(FLAGS_client_id); // TODO: is this safe?
-  
+
   switch (partType) {
     case DEFAULT:
       part = new DefaultPartitioner();
@@ -791,13 +791,15 @@ int main(int argc, char **argv) {
             NOT_REACHABLE();
         }
 
+				indicusstore::Parameters params(FLAGS_indicus_sign_messages,
+					FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
+					FLAGS_indicus_verify_deps, 1);
+
         client = new indicusstore::Client(config, (FLAGS_client_id << 3),
             FLAGS_num_shards,
             FLAGS_num_groups, closestReplicas, tport, part,
             FLAGS_tapir_sync_commit, readMessages, readQuorumSize, readDepSize,
-            FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-            FLAGS_indicus_hash_digest, FLAGS_indicus_verify_deps,
-            keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+            params, keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
       }
 			case PROTO_PBFT: {
