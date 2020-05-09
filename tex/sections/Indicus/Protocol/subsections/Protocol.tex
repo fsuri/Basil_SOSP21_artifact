@@ -17,21 +17,25 @@ much of the performance benefit of early visibility while enforcing independent 
 
 \par \textbf{Read(key)} In traditional MVTSO, a read for transaction $T$ returns the version with the highest timestamp smaller than $T$. In a replicated setting where replicas process requests independently, this is no longer sufficient: a write could have been made visible at replica $R$ but not $R'$, causing a read to $R$ by transaction $T$ to return a stale value. MVTSO transactions must additionally be validated, as we describe in \S\ref{}. In a Byzantine
 setting, however, further care is required as Byzantine replicas could intentionally submit stale (or imaginary!) values that would cause transactions to abort, violating Byzantine independence. The read logic is then as follows:
+
 \fbox{\begin{minipage}{23em}
 \textbf{1: C} $\rightarrow$ \textbf{R}: Client sends read request to Replicas
-\end{minipage}}\\
-%Improve RQS formulation
+\end{minipage}}
+
 A client broadcasts a signed read request  $m = (Read, key, TS)_c$ to \textit{all} replicas.
+
 \fbox{\begin{minipage}{23em}
 \textbf{2: R} $\rightarrow$ \textbf{C}: Replica processes client read and replies
-\end{minipage}}\\
+\end{minipage}}
+
 Each replica $R$ validates the signature and checks that the request timestamp is smaller than $R_{Time} + \delta$. Upon success, it updates the key's read timestamp with $T$'s own timestamp. Finally, the replica returns a signed message \text{$\langle \textit{ Committed, Prepared} \rangle _R$} that contains two entries.
-The \textit{Committed=(version,proof)} entry contains one the largest \textit{committed} version whose timestamp is smaller than $T$'s, along side a proof that it has committed. A commit proof consists of a \nc{Fill in}(as we describe in Section~\ref{}. The \textit{Prepared=(version,TxId,deps)} entry consists of the largest \textit{prepared} version that satisfies the same timestamp criterion (if any exists), along with the transaction's id \textit{TxId} and its write-read dependencies \textit{deps}.
+The \textit{Committed=(version,proof)} entry contains one the largest \textit{committed} version whose timestamp is smaller than $T$'s, along side a proof that it has committed. A commit proof consists of a \nc{Fill in} (as we describe in Section~\ref{}). The \textit{Prepared=(version,TxId,deps)} entry consists of the largest \textit{prepared} version that satisfies the same timestamp criterion (if any exists), along with the transaction's id \textit{TxId} and its write-read dependencies \textit{deps}.
 The need to distinguish between prepared and committed transactions is unique to Byzantine MVTSO and stems, once again, from the need to enforce independent operability as we describe next.
 
 \fbox{\begin{minipage}{23em}
 \textbf{3: C} ($\rightarrow$ \textbf{R}): Client receives read replies 
-\end{minipage}}\\
+\end{minipage}}
+
 A client waits for $f+1$ read replies and chooses the largest \textit{valid} version ($=max_{valid}(\{Committed\},\{Prepared\})$).
 A committed version is valid if it associated with a valid proof. 
 Reading from $f+1$ replicas ensures that at least one honest replica
