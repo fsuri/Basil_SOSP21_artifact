@@ -106,7 +106,7 @@ size_t SigSize(PubKey* publicKey) {
 }
 
 
-bool Verify(PubKey* publicKey, const string &message, string &signature) {
+bool Verify(PubKey* publicKey, const string &message, const string &signature) {
   switch(publicKey->t) {
   case RSA: {
     bool result = false;
@@ -338,6 +338,5 @@ std::pair<PrivKey*, PubKey*> GenerateKeypair(KeyType t, bool precompute) {
   }
   return std::pair<PrivKey*, PubKey*>(privKey, pubKey);
 }
-#endif 
 
 }  // namespace crypto
