@@ -64,7 +64,7 @@ static inline uint32_t log2(const uint32_t x) {
 }
 
 // generate batches signatures for every message in [messages] using [privateKey]
-std::vector<std::string> generateBatchedSignatures(std::vector<std::string> messages, crypto::PrivKey* privateKey) {
+void generateBatchedSignatures(std::vector<std::string*> messages, crypto::PrivKey* privateKey, std::vector<std::string*> sigs) {
   unsigned int n = messages.size();
   assert(n > 0);
   size_t hash_size = BLAKE3_OUT_LEN;
@@ -73,7 +73,7 @@ std::vector<std::string> generateBatchedSignatures(std::vector<std::string> mess
   unsigned char* tree = (unsigned char*) malloc(hash_size*(2*n - 1));
   // insert the message hashes into the tree
   for (unsigned int i = 0; i < n; i++) {
-    bhash((unsigned char*) &messages[i][0], messages[i].length(), &tree[(n - 1 + i)*hash_size]);
+    bhash((unsigned char*) &messages[i]->at(0), messages[i]->length(), &tree[(n - 1 + i)*hash_size]);
   }
 
   // compute the hashes going up the tree
@@ -85,7 +85,6 @@ std::vector<std::string> generateBatchedSignatures(std::vector<std::string> mess
   std::string rootHash(&tree[0], &tree[hash_size]);
   std::string rootSig = crypto::Sign(privateKey, rootHash);
 
-  std::vector<std::string> sigs;
   size_t sig_size = crypto::SigSize(privateKey);
 
   // figure out the maximum size of a signature
@@ -110,35 +109,33 @@ std::vector<std::string> generateBatchedSignatures(std::vector<std::string> mess
       memcpy(&sig[starting_pos + h*hash_size], &tree[(j % 2 == 0 ? j - 1 : j + 1)*hash_size], hash_size);
       h++;
     }
-    // create a string from the raw signature bytes (performs a copy)
-    std::string sigstr(&sig[0], &sig[starting_pos + h*hash_size]);
-    sigs.push_back(sigstr);
+    // replace the sig with the raw signature bytes (performs a copy)
+    sigs[i]->replace(0, starting_pos + h*hash_size, reinterpret_cast<const char*>(&sig[0]), starting_pos + h*hash_size);
+    assert(sigs[i]->size() == starting_pos + h*hash_size);
   }
-
-  return sigs;
 }
 
 // cache mapping root sig to hash that it verifies
 // map from signatures to hashes because it is _possible_ for two nodes
 // to have the same batch and thus the same merkle tree
-std::unordered_map<std::string, std::string> cache;
+std::unordered_map<std::string, std::string> batchedSigsCache;
 
-bool verifyBatchedSignature(std::string signature, std::string message, crypto::PubKey* publicKey) {
+bool verifyBatchedSignature(const std::string* signature, const std::string* message, crypto::PubKey* publicKey) {
   size_t hash_size = BLAKE3_OUT_LEN;
   size_t sig_size = crypto::SigSize(publicKey);
 
   // get the signature of the root, the number of signatures in the batch (n)
   // and this message's index in the batch (i)
-  std::string rootSig = signature.substr(0, sig_size);
-  unsigned int n = unpackInt((unsigned char*) &signature[sig_size]);
-  unsigned int i = unpackInt((unsigned char*) &signature[sig_size+4]);
+  std::string rootSig = signature->substr(0, sig_size);
+  unsigned int n = unpackInt((unsigned char*) &signature->at(sig_size));
+  unsigned int i = unpackInt((unsigned char*) &signature->at(sig_size+4));
   // compute the position where the hashes start in the signature
   unsigned int starting_pos = sig_size + 8;
 
   // this will store the hash as we traverse the merkle tree
   unsigned char hash[BLAKE3_OUT_LEN];
   // the leaf hash is the hash of the message
-  bhash((unsigned char*) &message[0], message.length(), &hash[0]);
+  bhash((unsigned char*) &message->at(0), message->length(), &hash[0]);
   // h is the index of the sibling hash in the signature
   int h = 0;
   // j is the current position in the tree.
@@ -146,24 +143,24 @@ bool verifyBatchedSignature(std::string signature, std::string message, crypto::
   for (int j = n - 1 + i; j >= 1; j=(j+1)/2 - 1) {
     if (j % 2 == 0) {
       // node j was the right sibling
-      bhash_cat((unsigned char*) &signature[starting_pos + h*hash_size], &hash[0], hash);
+      bhash_cat((unsigned char*) &signature->at(starting_pos + h*hash_size), &hash[0], hash);
     } else {
       // node j was the left sibling
-      bhash_cat(&hash[0], (unsigned char*) &signature[starting_pos + h*hash_size], hash);
+      bhash_cat(&hash[0], (unsigned char*) &signature->at(starting_pos + h*hash_size), hash);
     }
     h++;
   }
   std::string hashStr(&hash[0], &hash[hash_size]);
 
-  if (cache.find(rootSig) != cache.end()) {
+  if (batchedSigsCache.find(rootSig) != batchedSigsCache.end()) {
     // if the root signature exists in the cache, check if it verifies the hash
     // derived from the signature
-    return cache[rootSig] == hashStr;
+    return batchedSigsCache[rootSig] == hashStr;
   } else {
     // otherwise, verify the computed root hash
     if (crypto::Verify(publicKey, hashStr, rootSig)) {
       // if it is valid, store it in the cache.
-      cache[rootSig] = hashStr;
+      batchedSigsCache[rootSig] = hashStr;
       return true;
     } else {
       return false;

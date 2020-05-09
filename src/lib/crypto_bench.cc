@@ -17,6 +17,13 @@ void GenerateRandomString(uint64_t size, std::random_device &rd, std::string &s)
   }
 }
 
+void GenerateRandomString(uint64_t size, std::random_device &rd, std::string* s) {
+  s->clear();
+  for (uint64_t i = 0; i < size; ++i) {
+    s->push_back(static_cast<char>(rd()));
+  }
+}
+
 int main(int argc, char *argv[]) {
   gflags::SetUsageMessage("benchmark signature verification.");
 	gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -42,6 +49,17 @@ int main(int argc, char *argv[]) {
   _Latency_Init(&verifyBLat, "verify");
   _Latency_Init(&hashLat, "sha256");
   _Latency_Init(&blake3Lat, "blake3");
+
+  std::vector<std::string*> messages;
+  int batchSize = 100;
+  for (int i = 0; i < batchSize; i++) {
+    messages.push_back(new std::string());
+  }
+  std::vector<std::string*> sigs;
+  for (int i = 0; i < batchSize; i++) {
+    sigs.push_back(new std::string());
+  }
+
   for (uint64_t i = 0; i < FLAGS_iterations; ++i) {
     std::string s;
     GenerateRandomString(FLAGS_size, rd, s);
@@ -76,18 +94,15 @@ int main(int argc, char *argv[]) {
     blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
     Latency_End(&blake3Lat);
 
-    std::vector<std::string> messages;
-    int nmsgs = 4;
-    for (int i = 0; i < nmsgs; i++) {
+    for (int i = 0; i < batchSize; i++) {
       std::string tmp;
-      GenerateRandomString(FLAGS_size, rd, tmp);
-      messages.push_back(tmp);
+      GenerateRandomString(FLAGS_size, rd, messages[i]);
     }
     Latency_Start(&signBLat);
-    std::vector<std::string> sigs = BatchedSigs::generateBatchedSignatures(messages, privKey);
+    BatchedSigs::generateBatchedSignatures(messages, privKey, sigs);
     Latency_End(&signBLat);
     Latency_Start(&verifyBLat);
-    for (int i = 0; i < nmsgs; i++) {
+    for (int i = 0; i < batchSize; i++) {
       assert(BatchedSigs::verifyBatchedSignature(sigs[i], messages[i], pubKey));
     }
     Latency_End(&verifyBLat);

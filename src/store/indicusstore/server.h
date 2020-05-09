@@ -90,6 +90,16 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
+  bool batchTimerRunning;
+  int batchTimerId;
+  int nextBatchNum;
+  std::vector<::google::protobuf::Message*> pendingBatchMessages;
+  std::vector<proto::SignedMessage*> pendingBatchSignedMessages;
+  std::vector<signedCallback> pendingBatchCallbacks;
+  void MessageToSign(::google::protobuf::Message* msg,
+      proto::SignedMessage *signedMessage, signedCallback cb);
+  void SignBatch();
+
 //Fallback protocol components
 // void HandleP1_Rec -> exec p1 if unreceived, reply with p1r, or p2r + dec_view  (Need to modify normal P2R message to contain view=0), current view
 // void HandleP2_Rec -> Reply with p2 decision
@@ -169,9 +179,13 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   proto::Writeback writeback;
   proto::Abort abort;
 
-  proto::ReadReply readReply;
-  proto::Phase1Reply phase1Reply;
-  proto::Phase2Reply phase2Reply;
+  // need indexes for batching
+  std::vector<proto::ReadReply> readReply;
+  int nextReadReplyIdx;
+  std::vector<proto::Phase1Reply> phase1Reply;
+  int nextPhase1ReplyIdx;
+  std::vector<proto::Phase2Reply> phase2Reply;
+  int nextPhase2ReplyIdx;
 
   proto::Transaction mostRecent;
   proto::PreparedWrite preparedWrite;

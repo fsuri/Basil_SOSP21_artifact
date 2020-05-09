@@ -61,6 +61,15 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   proof->mutable_txn()->mutable_timestamp()->set_timestamp(0);
   proof->mutable_txn()->mutable_timestamp()->set_id(0);
   committed.insert(std::make_pair("", proof));
+
+  for (int i = 0; i < params.signatureBatchSize; i++) {
+    readReply.push_back(proto::ReadReply());
+    phase1Reply.push_back(proto::Phase1Reply());
+    phase2Reply.push_back(proto::Phase2Reply());
+  }
+  nextReadReplyIdx = 0;
+  nextPhase1ReplyIdx = 0;
+  nextPhase2ReplyIdx = 0;
 }
 
 Server::~Server() {
@@ -133,19 +142,26 @@ void Server::HandleRead(const TransportAddress &remote,
   std::pair<Timestamp, Server::Value> tsVal;
   bool exists = store.get(msg.key(), ts, tsVal);
 
-  readReply.Clear();
-  readReply.set_req_id(msg.req_id());
-  readReply.set_key(msg.key());
+  int replyIdx = nextReadReplyIdx++;
+  readReply[replyIdx].Clear();
+  readReply[replyIdx].set_req_id(msg.req_id());
+  readReply[replyIdx].set_key(msg.key());
   if (exists) {
     Debug("READ[%lu] Committed value of length %lu bytes with ts %lu.%lu.",
         msg.req_id(), tsVal.second.val.length(), tsVal.first.getTimestamp(),
         tsVal.first.getID());
-    readReply.mutable_committed()->set_value(tsVal.second.val);
-    tsVal.first.serialize(readReply.mutable_committed()->mutable_timestamp());
+    readReply[replyIdx].mutable_committed()->set_value(tsVal.second.val);
+    tsVal.first.serialize(readReply[replyIdx].mutable_committed()->mutable_timestamp());
     if (params.validateProofs) {
-      *readReply.mutable_committed()->mutable_proof() = *tsVal.second.proof;
+      *readReply[replyIdx].mutable_committed()->mutable_proof() = *tsVal.second.proof;
     }
   }
+
+  TransportAddress* remoteCopy = remote.clone();
+  auto sendCB = [=]() {
+    this->transport->SendMessage(this, *remoteCopy, this->readReply[replyIdx]);
+    delete remoteCopy;
+  };
 
   if (occType == MVTSO) {
     /* update rts */
@@ -177,26 +193,32 @@ void Server::HandleRead(const TransportAddress &remote,
       // TODO: currently limit depth of deps to 1 (no chains of dependencies)
       //   TODO: temporarily undo this TODO ^
       // if (mostRecent.deps_size() == 0) {
-        preparedWrite.Clear();
-        preparedWrite.set_value(preparedValue);
-        *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
-        *preparedWrite.mutable_txn_digest() = TransactionDigest(mostRecent, params.hashDigest);
+        proto::PreparedWrite* preparedWrite = new proto::PreparedWrite();
+        preparedWrite->Clear();
+        preparedWrite->set_value(preparedValue);
+        *preparedWrite->mutable_timestamp() = mostRecent.timestamp();
+        *preparedWrite->mutable_txn_digest() = TransactionDigest(mostRecent, params.hashDigest);
 
         if (params.validateProofs && params.signedMessages && params.verifyDeps) {
           signedMessage.Clear();
           //Latency_Start(&signLat);
-          SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id,
-              readReply.mutable_signed_prepared());
+          MessageToSign(preparedWrite, readReply[replyIdx].mutable_signed_prepared(),
+            [sendCB, preparedWrite]() {
+              sendCB();
+              delete preparedWrite;
+            });
+          return;
           //Latency_End(&signLat);
         } else {
-          *readReply.mutable_prepared() = preparedWrite;
+          *readReply[replyIdx].mutable_prepared() = *preparedWrite;
+          delete preparedWrite;
         }
       //}
     }
   }
 
   // Only need to sign prepared portion of readReply
-  transport->SendMessage(this, remote, readReply);
+  sendCB();
 }
 
 void Server::HandlePhase1(const TransportAddress &remote,
@@ -213,7 +235,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
           BytesToHex(txnDigest, 16).c_str());
         return;
       }
-      if (!ValidateDependency(dep, &config, readDepSize, keyManager)) {
+      if (!ValidateDependency(dep, &config, readDepSize, keyManager, params.signatureBatchSize)) {
         Debug("VALIDATE Dependency failed for txn %s.",
             BytesToHex(txnDigest, 16).c_str());
         // safe to ignore Byzantine client
@@ -269,30 +291,42 @@ void Server::HandlePhase2(const TransportAddress &remote,
   LookupP1Decision(*txnDigest, myProcessId, myResult);
   if (params.validateProofs && params.signedMessages && !ValidateP1Replies(msg.decision(),
         false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
-        myResult)) {
+        myResult, params.signatureBatchSize)) {
     Debug("VALIDATE P1Replies failed.");
     return;
   }
 
   p2Decisions[*txnDigest] = msg.decision();
 
-  phase2Reply.Clear();
-  phase2Reply.set_req_id(msg.req_id());
-  phase2Reply.mutable_p2_decision()->set_decision(msg.decision());
+  int replyIdx = nextPhase2ReplyIdx++;
+
+  TransportAddress* remoteCopy = remote.clone();
+  auto sendCB = [=]() {
+    this->transport->SendMessage(this, *remoteCopy, this->phase2Reply[replyIdx]);
+    Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
+    delete remoteCopy;
+  };
+
+  phase2Reply[replyIdx].Clear();
+  phase2Reply[replyIdx].set_req_id(msg.req_id());
+  phase2Reply[replyIdx].mutable_p2_decision()->set_decision(msg.decision());
   if (params.validateProofs) {
-    *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
+    *phase2Reply[replyIdx].mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
 
     if (params.signedMessages) {
-      proto::Phase2Decision p2Decision(phase2Reply.p2_decision());
+      proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply[replyIdx].p2_decision());
       //Latency_Start(&signLat);
-      SignMessage(p2Decision, keyManager->GetPrivateKey(id), id,
-          phase2Reply.mutable_signed_p2_decision());
+      MessageToSign(p2Decision, phase2Reply[replyIdx].mutable_signed_p2_decision(),
+        [sendCB, p2Decision]() {
+          sendCB();
+          delete p2Decision;
+        });
       //Latency_End(&signLat);
+      return;
     }
   }
 
-  transport->SendMessage(this, remote, phase2Reply);
-  Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
+  sendCB();
 }
 
 void Server::HandleWriteback(const TransportAddress &remote,
@@ -333,7 +367,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
       LookupP1Decision(*txnDigest, myProcessId, myResult);
 
       if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
-            keyManager, &config, myProcessId, myResult, verifyLat)) {
+            keyManager, &config, myProcessId, myResult, verifyLat, params.signatureBatchSize)) {
         Debug("WRITEBACK[%s] Failed to validate P1 replies for fast commit.",
             BytesToHex(*txnDigest, 16).c_str());
         return;
@@ -344,7 +378,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
       LookupP2Decision(*txnDigest, myProcessId, myDecision);
 
       if (!ValidateP2Replies(msg.decision(), txnDigest, msg.p2_sigs(),
-            keyManager, &config, myProcessId, myDecision, verifyLat)) {
+            keyManager, &config, myProcessId, myDecision, verifyLat, params.signatureBatchSize)) {
         Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
             BytesToHex(*txnDigest, 16).c_str(), msg.decision());
         return;
@@ -353,7 +387,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
       std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
           params.hashDigest);
       if (!ValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
-            txnDigest, params.signedMessages, keyManager, &config)) {
+            txnDigest, params.signedMessages, keyManager, &config, params.signatureBatchSize)) {
         Debug("WRITEBACK[%s] Failed to validate committed conflict for fast abort.",
             BytesToHex(*txnDigest, 16).c_str());
         return;
@@ -385,9 +419,10 @@ void Server::HandleAbort(const TransportAddress &remote,
     }
 
     //Latency_Start(&verifyLat);
-    if (!crypto::Verify(keyManager->GetPublicKey(msg.signed_internal().process_id()),
+    if (!Verify(keyManager->GetPublicKey(msg.signed_internal().process_id()),
           msg.signed_internal().data(),
-          msg.signed_internal().signature())) {
+          msg.signed_internal().signature(),
+          params.signatureBatchSize)) {
       //Latency_End(&verifyLat);
       return;
     }
@@ -410,6 +445,56 @@ void Server::HandleAbort(const TransportAddress &remote,
   for (const auto &read : abort->read_set()) {
     rts[read].erase(abort->ts());
   }
+}
+
+void Server::MessageToSign(::google::protobuf::Message* msg,
+    proto::SignedMessage *signedMessage, signedCallback cb) {
+  if (params.signatureBatchSize == 1) {
+    Debug("Batch size = 1, immediately signing");
+    SignMessage(msg, keyManager->GetPrivateKey(id), id,
+        signedMessage);
+    nextReadReplyIdx = 0;
+    nextPhase1ReplyIdx = 0;
+    nextPhase2ReplyIdx = 0;
+    cb();
+  } else {
+    pendingBatchMessages.push_back(msg);
+    pendingBatchSignedMessages.push_back(signedMessage);
+    pendingBatchCallbacks.push_back(cb);
+
+    if (pendingBatchMessages.size() >= params.signatureBatchSize) {
+      Debug("Batch is full, sending");
+      if (batchTimerRunning) {
+        transport->CancelTimer(batchTimerId);
+        batchTimerRunning = false;
+      }
+      SignBatch();
+    } else if (!batchTimerRunning) {
+      batchTimerRunning = true;
+      Debug("Starting batch timer");
+      // TODO make this a param?
+      batchTimerId = transport->Timer(4, [this]() {
+        Debug("Batch timer expired, sending");
+        this->batchTimerRunning = false;
+        this->SignBatch();
+      });
+    }
+  }
+}
+
+void Server::SignBatch() {
+  SignMessages(pendingBatchMessages, keyManager->GetPrivateKey(id), id,
+    pendingBatchSignedMessages);
+  pendingBatchMessages.clear();
+  pendingBatchSignedMessages.clear();
+  for (const auto& cb : pendingBatchCallbacks) {
+    cb();
+  }
+  pendingBatchCallbacks.clear();
+  nextBatchNum = 0;
+  nextReadReplyIdx = 0;
+  nextPhase1ReplyIdx = 0;
+  nextPhase2ReplyIdx = 0;
 }
 
 proto::ConcurrencyControl::Result Server::DoOCCCheck(
@@ -1015,27 +1100,38 @@ void Server::SendPhase1Reply(uint64_t reqId,
     const TransportAddress &remote) {
   p1Decisions[txnDigest] = result;
 
-  phase1Reply.Clear();
-  phase1Reply.set_req_id(reqId);
+  int replyIdx = nextPhase1ReplyIdx++;
+  phase1Reply[replyIdx].Clear();
+  phase1Reply[replyIdx].set_req_id(reqId);
 
-  phase1Reply.mutable_cc()->set_ccr(result);
+  TransportAddress* remoteCopy = remote.clone();
+  auto sendCB = [remoteCopy, this, replyIdx]() {
+    this->transport->SendMessage(this, *remoteCopy, this->phase1Reply[replyIdx]);
+    delete remoteCopy;
+  };
+
+  phase1Reply[replyIdx].mutable_cc()->set_ccr(result);
   if (params.validateProofs) {
-    *phase1Reply.mutable_cc()->mutable_txn_digest() = txnDigest;
+    *phase1Reply[replyIdx].mutable_cc()->mutable_txn_digest() = txnDigest;
     if (result == proto::ConcurrencyControl::ABORT) {
-      *phase1Reply.mutable_cc()->mutable_committed_conflict() = conflict;
+      *phase1Reply[replyIdx].mutable_cc()->mutable_committed_conflict() = conflict;
     } else if (params.signedMessages) {
-      proto::ConcurrencyControl cc(phase1Reply.cc());
+      proto::ConcurrencyControl* cc = new proto::ConcurrencyControl(phase1Reply[replyIdx].cc());
       //Latency_Start(&signLat);
-      SignMessage(cc, keyManager->GetPrivateKey(id), id,
-          phase1Reply.mutable_signed_cc());
-      Debug("PHASE1[%s] Sending Phase1Reply with signature %s from priv key %d.",
-          BytesToHex(txnDigest, 16).c_str(),
-          BytesToHex(phase1Reply.signed_cc().signature(), 100).c_str(), id);
+      MessageToSign(cc, phase1Reply[replyIdx].mutable_signed_cc(),
+        [sendCB, cc, txnDigest, this, replyIdx]() {
+          Debug("PHASE1[%s] Sending Phase1Reply with signature %s from priv key %d.",
+            BytesToHex(txnDigest, 16).c_str(),
+            BytesToHex(this->phase1Reply[replyIdx].signed_cc().signature(), 100).c_str(), this->id);
+          sendCB();
+          delete cc;
+        });
       //Latency_End(&signLat);
+      return;
     }
   }
 
-  transport->SendMessage(this, remote, phase1Reply);
+  sendCB();
 }
 
 void Server::CleanDependencies(const std::string &txnDigest) {

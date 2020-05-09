@@ -229,8 +229,15 @@ void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
 
   if (params.validateProofs && params.signedMessages) {
     proto::AbortInternal internal(abort.internal());
-    SignMessage(internal, keyManager->GetPrivateKey(client_id), client_id,
-        abort.mutable_signed_internal());
+    if (params.signatureBatchSize == 1) {
+      SignMessage(&internal, keyManager->GetPrivateKey(client_id), client_id,
+          abort.mutable_signed_internal());
+    } else {
+      std::vector<::google::protobuf::Message*> messages = {&internal};
+      std::vector<proto::SignedMessage*> signedMessages = {abort.mutable_signed_internal()};
+      SignMessages(messages, keyManager->GetPrivateKey(client_id), client_id,
+          signedMessages);
+    }
   }
 
   transport->SendMessageToGroup(this, group, abort);
@@ -291,7 +298,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
       std::string committedTxnDigest = TransactionDigest(reply.committed().proof().txn(), params.hashDigest);
       if (!ValidateTransactionWrite(reply.committed().proof(), &committedTxnDigest,
             req->key, reply.committed().value(), reply.committed().timestamp(), config,
-            params.signedMessages, keyManager)) {
+            params.signedMessages, keyManager, params.signatureBatchSize)) {
         Debug("[group %i] Failed to validate committed value for read %lu.",
             group, reply.req_id());
         // invalid replies can be treated as if we never received a reply from
@@ -316,10 +323,11 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   bool hasPrepared = false;
   if (params.validateProofs && params.signedMessages && params.verifyDeps) {
     if (reply.has_signed_prepared()) {
-      if (!crypto::Verify(keyManager->GetPublicKey(
+      if (!Verify(keyManager->GetPublicKey(
               reply.signed_prepared().process_id()),
               reply.signed_prepared().data(),
-              reply.signed_prepared().signature())) {
+              reply.signed_prepared().signature(),
+              params.signatureBatchSize)) {
           return;
       }
 
@@ -414,8 +422,8 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
       return;
     }
 
-    if (!crypto::Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
-          reply.signed_cc().data(), reply.signed_cc().signature())) {
+    if (!Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
+          reply.signed_cc().data(), reply.signed_cc().signature(), params.signatureBatchSize)) {
       Debug("[group %i] Signature %s from replica %lu is not valid.", group,
             BytesToHex(reply.signed_cc().signature(), 100).c_str(),
             reply.signed_cc().process_id());
@@ -537,10 +545,11 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
       return;
     }
 
-    if (!crypto::Verify(keyManager->GetPublicKey(
+    if (!Verify(keyManager->GetPublicKey(
             reply.signed_p2_decision().process_id()),
           reply.signed_p2_decision().data(),
-          reply.signed_p2_decision().signature())) {
+          reply.signed_p2_decision().signature(),
+          params.signatureBatchSize)) {
       return;
     }
 

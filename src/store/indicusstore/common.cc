@@ -7,13 +7,15 @@
 #include "store/common/timestamp.h"
 #include "store/common/transaction.h"
 
+#include "lib/batched_sigs.h"
+
 namespace indicusstore {
 
-void SignMessage(const ::google::protobuf::Message &msg,
+void SignMessage(::google::protobuf::Message* msg,
     crypto::PrivKey* privateKey, uint64_t processId,
     proto::SignedMessage *signedMessage) {
   signedMessage->set_process_id(processId);
-  UW_ASSERT(msg.SerializeToString(signedMessage->mutable_data()));
+  UW_ASSERT(msg->SerializeToString(signedMessage->mutable_data()));
   Debug("Signing data %s with priv key %s.",
       BytesToHex(signedMessage->data(), 128).c_str(),
       BytesToHex(std::string(reinterpret_cast<const char*>(privateKey), 64), 128).c_str());
@@ -21,12 +23,42 @@ void SignMessage(const ::google::protobuf::Message &msg,
       signedMessage->data());
 }
 
+void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
+    crypto::PrivKey* privateKey, uint64_t processId,
+    const std::vector<proto::SignedMessage*>& signedMessages) {
+  UW_ASSERT(msgs.size() == signedMessages.size());
+
+  std::vector<std::string*> messageStrs;
+  for (unsigned int i = 0; i < msgs.size(); i++) {
+    signedMessages[i]->set_process_id(processId);
+    UW_ASSERT(msgs[i]->SerializeToString(signedMessages[i]->mutable_data()));
+    messageStrs.push_back(signedMessages[i]->mutable_data());
+  }
+
+  std::vector<std::string*> sigs;
+  for (unsigned int i = 0; i < msgs.size(); i++) {
+    sigs.push_back(signedMessages[i]->mutable_signature());
+  }
+
+  BatchedSigs::generateBatchedSignatures(messageStrs, privateKey, sigs);
+}
+
+bool Verify(crypto::PubKey* publicKey, const string &message, const string &signature,
+    unsigned int sigBatchSize) {
+  if (sigBatchSize == 1) {
+    return crypto::Verify(publicKey, message,
+          signature);
+  } else {
+    return BatchedSigs::verifyBatchedSignature(&signature, &message, publicKey);
+  }
+}
+
 bool ValidateCommittedConflict(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, const proto::Transaction *txn,
     const std::string *txnDigest, bool signedMessages, KeyManager *keyManager,
-    const transport::Configuration *config) {
+    const transport::Configuration *config, unsigned int sigBatchSize) {
   if (signedMessages && !ValidateCommittedProof(proof, committedTxnDigest,
-        keyManager, config)) {
+        keyManager, config, sigBatchSize)) {
     return false;
   }
 
@@ -44,7 +76,7 @@ bool ValidateCommittedConflict(const proto::CommittedProof &proof,
 
 bool ValidateCommittedProof(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, KeyManager *keyManager,
-    const transport::Configuration *config) {
+    const transport::Configuration *config, unsigned int sigBatchSize) {
   if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
     // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
     //    without needing to write all existing data with transactions
@@ -53,10 +85,10 @@ bool ValidateCommittedProof(const proto::CommittedProof &proof,
 
   if (proof.has_p1_sigs()) {
     return ValidateP1Replies(proto::COMMIT, true, &proof.txn(), committedTxnDigest,
-        proof.p1_sigs(), keyManager, config, -1, proto::ConcurrencyControl::ABORT);
+        proof.p1_sigs(), keyManager, config, -1, proto::ConcurrencyControl::ABORT, sigBatchSize);
   } else if (proof.has_p2_sigs()) {
     return ValidateP2Replies(proto::COMMIT, committedTxnDigest, proof.p2_sigs(),
-        keyManager, config, -1, proto::ABORT);
+        keyManager, config, -1, proto::ABORT, sigBatchSize);
   } else {
     Debug("Proof has neither P1 nor P2 sigs.");
     return false;
@@ -70,11 +102,11 @@ bool ValidateP1Replies(proto::CommitDecision decision,
     const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager,
     const transport::Configuration *config,
-    int64_t myProcessId, proto::ConcurrencyControl::Result myResult) {
+    int64_t myProcessId, proto::ConcurrencyControl::Result myResult, unsigned int sigBatchSize) {
   Latency_t dummyLat;
   //_Latency_Init(&dummyLat, "dummy_lat");
   return ValidateP1Replies(decision, fast, txn, txnDigest, groupedSigs,
-      keyManager, config, myProcessId, myResult, dummyLat);
+      keyManager, config, myProcessId, myResult, dummyLat, sigBatchSize);
 }
 
 bool ValidateP1Replies(proto::CommitDecision decision,
@@ -85,7 +117,7 @@ bool ValidateP1Replies(proto::CommitDecision decision,
     KeyManager *keyManager,
     const transport::Configuration *config,
     int64_t myProcessId, proto::ConcurrencyControl::Result myResult,
-    Latency_t &lat) {
+    Latency_t &lat, unsigned int sigBatchSize) {
   proto::ConcurrencyControl concurrencyControl;
   concurrencyControl.Clear();
   *concurrencyControl.mutable_txn_digest() = *txnDigest;
@@ -106,7 +138,7 @@ bool ValidateP1Replies(proto::CommitDecision decision,
 
   std::string ccMsg;
   concurrencyControl.SerializeToString(&ccMsg);
-  
+
   std::set<int> groupsVerified;
   std::set<uint64_t> replicasVerified;
   for (const auto &sigs : groupedSigs.grouped_sigs()) {
@@ -134,8 +166,8 @@ bool ValidateP1Replies(proto::CommitDecision decision,
       Debug("Verifying %lu byte signature from replica %lu in group %lu.",
           sig.signature().size(), sig.process_id(), sigs.first);
       //Latency_Start(&lat);
-      if (!skip && !crypto::Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
-              sig.signature())) {
+      if (!skip && !Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
+              sig.signature(), sigBatchSize)) {
         //Latency_End(&lat);
         Debug("Signature from replica %lu in group %lu is not valid.",
             sig.process_id(), sigs.first);
@@ -175,18 +207,18 @@ bool ValidateP1Replies(proto::CommitDecision decision,
 bool ValidateP2Replies(proto::CommitDecision decision,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
-    int64_t myProcessId, proto::CommitDecision myDecision) {
+    int64_t myProcessId, proto::CommitDecision myDecision, unsigned int sigBatchSize) {
   Latency_t dummyLat;
   //_Latency_Init(&dummyLat, "dummy_lat");
   return ValidateP2Replies(decision, txnDigest, groupedSigs,
-      keyManager, config, myProcessId, myDecision, dummyLat);
+      keyManager, config, myProcessId, myDecision, dummyLat, sigBatchSize);
 }
 
 bool ValidateP2Replies(proto::CommitDecision decision,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::CommitDecision myDecision,
-    Latency_t &lat) {
+    Latency_t &lat, unsigned int sigBatchSize) {
   proto::Phase2Decision p2Decision;
   p2Decision.Clear();
   p2Decision.set_decision(decision);
@@ -199,7 +231,7 @@ bool ValidateP2Replies(proto::CommitDecision decision,
     Debug("Expected exactly 1 group but saw %lu", groupedSigs.grouped_sigs().size());
     return false;
   }
-  
+
   const auto &sigs = groupedSigs.grouped_sigs().begin();
   uint32_t verified = 0;
   std::set<uint64_t> replicasVerified;
@@ -215,8 +247,8 @@ bool ValidateP2Replies(proto::CommitDecision decision,
       }
     }
 
-    if (!skip && !crypto::Verify(keyManager->GetPublicKey(sig.process_id()),
-          p2DecisionMsg, sig.signature())) {
+    if (!skip && !Verify(keyManager->GetPublicKey(sig.process_id()),
+          p2DecisionMsg, sig.signature(), sigBatchSize)) {
       //Latency_End(&lat);
       Debug("Signature from %lu is not valid.", sig.process_id());
       return false;
@@ -242,7 +274,7 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     const std::string *txnDigest,
     const std::string &key, const std::string &val, const Timestamp &timestamp,
     const transport::Configuration *config, bool signedMessages,
-    KeyManager *keyManager) {
+    KeyManager *keyManager, unsigned int sigBatchSize) {
   if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
     // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
     //    without needing to write all existing data with transactions
@@ -250,7 +282,7 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
   }
 
   if (signedMessages && !ValidateCommittedProof(proof, txnDigest,
-        keyManager, config)) {
+        keyManager, config, sigBatchSize)) {
     Debug("VALIDATE CommittedProof failed for txn %lu.%lu.",
         proof.txn().client_id(), proof.txn().client_seq_num());
     return false;
@@ -291,7 +323,7 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
 
 bool ValidateDependency(const proto::Dependency &dep,
     const transport::Configuration *config, uint64_t readDepSize,
-    KeyManager *keyManager) {
+    KeyManager *keyManager, unsigned int sigBatchSize) {
   if (dep.prepared_sigs().sigs_size() < readDepSize) {
     return false;
   }
@@ -299,9 +331,9 @@ bool ValidateDependency(const proto::Dependency &dep,
   std::string preparedData;
   dep.prepared().SerializeToString(&preparedData);
   for (const auto &sig : dep.prepared_sigs().sigs()) {
-    if (!crypto::Verify(keyManager->GetPublicKey(sig.process_id()), preparedData,
-          sig.signature())) {
-      return false;    
+    if (!Verify(keyManager->GetPublicKey(sig.process_id()), preparedData,
+          sig.signature(), sigBatchSize)) {
+      return false;
     }
   }
   return true;
@@ -353,7 +385,7 @@ std::string TransactionDigest(const proto::Transaction &txn, bool hashDigest) {
         sizeof(timestampId));
     hash.Update((const byte*) &timestampTs,
         sizeof(timestampTs));
-    
+
     digest.resize(hash.DigestSize());
     hash.Final((byte*) &digest[0]);
 

@@ -34,7 +34,7 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
       std::string committedTxnDigest = TransactionDigest(
           cc.committed_conflict().txn(), params.hashDigest);
       if (params.validateProofs && !ValidateCommittedConflict(cc.committed_conflict(),
-            &committedTxnDigest, txn, txnDigest, params.signedMessages, keyManager, config)) {
+            &committedTxnDigest, txn, txnDigest, params.signedMessages, keyManager, config, params.signatureBatchSize)) {
         Debug("[group %d] Invalid committed_conflict for Phase1Reply.",
             group);
         return false;
