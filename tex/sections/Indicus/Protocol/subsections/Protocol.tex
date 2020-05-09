@@ -1,0 +1,17 @@
+\sys{} takes as its starting point an aggressive multiversioned concurrency control,
+MVTSO, and modifies it in three ways: \one~it has the client drive the protocol execution,
+thus removing all centralised system components \two~it merges concurrency control
+with replication and consequently removes duplicate coordinations present in prior approaches~\cite{}, and finally \three~it hardens the protocol against Byzantine attacks to guaranteeByzantine serializability while preserving independent operability.
+
+\par \textbf{MVTSO} Traditional MVTSO works as follows. A transaction $t$ is assigned (usually by a transaction manager or scheduler) a unique timestamp $t_{ts}$ that determines its serialization order. As MVTSO is a multiversioned system, every write operation creates a new version of every object and timestamps it with its encompassing transaction's timestamp $t_ts$. Read operations for $t$ return the version with the largest timestamp that is smaller than $t_{ts}$. Read operations mark the read object with $t_{ts}$ (we refer to this as a read timestamp or RTS). Any subsequent write operation belongng to a transaction with a smaller timestamp that tries to write the same object will be subsequently aborted. Read timestamps are key to preserving serializability: they guarantee that no read will miss a write belonging to a transaction that would have preceded it in the serialization order (as all such writes are aborted). MVTSO is an optimistic protocol: it allows read operations to observe the uncommitted writes of ongoing transactions. These read operations acquire \textit{dependencies} on these transactions and abort if any of them fail to commit.   
+
+Optimism of  MVTSO that makes it subject to ..
+
+\par \textbf{On startup}
+
+
+\par \textbf{On read}
+
+\par \textbf{On write}
+
+\par \textbf{On commit}

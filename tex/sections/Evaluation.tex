@@ -40,7 +40,7 @@ Our evaluation seeks to answer the following questions:
     behavior?
 \end{itemize}
 
-\paragraph{Implementation and Baselines.} We implemented our prototype of \sys in TODO lines of C++ code. To evaluate the overheads of byzantine fault tolerance, we compare against TAPIR\cite{zhang2015tapir}, a state of the art distributed transaction system for the crash failure model, that like \sys sidesteps total-order replication. In order to facilitate a fair comparison we build \sys atop TAPIR communication layer, and extend it to provide authentication. We use SHA256 Hash functions and ECDSA signatures provided by the cryptopp library (https://www.cryptopp.com/). Further, we implement a strawman BFT baseline NoPO that, unlike \sys, (optionally) uses naive Optimistic Concurrency control, and relies on PBFT cite() to provide totally ordered broadcast for the Validation layer. (We use signatures instead of MAcs for PBFT. But ECDSA is much more efficent than RSA, and cpu should not be the bottleneck?) NoPO maintains \sys 's speculative Execution structure in order to offer interactive transactions. fs{if we moved the speculative execution to a single replica that processes reads and buffers writes then it would simulate BFT-DUR }. \fs{Lastly, we modify Hyperledger Fabric, a popular enterprise-ready permissioned Blockchain solution, to process Online Transactional Processing (OLTP) workloads (instead of smart contracts) in order to facilitate a comparison with a state of the art blockchain. To do so, we replace the Simulation layer with NoPO's speculative execution.}
+\paragraph{Implementation and Baselines.} We implemented our prototype of \sys in TODO lines of C++ code. To evaluate the overheads of byzantine fault tolerance, we compare against Tapir\cite{zhang2015tapir}, a state of the art distributed transaction system for the crash failure model, that like \sys sidesteps total-order replication. In order to facilitate a fair comparison we build \sys atop Tapir's communication layer, and extend it to provide authentication. We use SHA256 Hash functions and ECDSA signatures provided by the cryptopp library (https://www.cryptopp.com/)  \fs{replace with ed25519 and libsodium ref}. Further, we implement a strawman BFT baseline NoPO that, unlike \sys, uses standard Optimistic Concurrency control, and relies on PBFT cite() to provide totally ordered broadcast for the Validation layer. \fs{(We use signatures instead of MAcs for PBFT. To an extent that is actually necessary to provide non-ambiguation for reads, since the baseline still uses the same exec structure. If we wanted to use Macs, we would have to totally order every read as well. } NoPO maintains \sys 's speculative Execution structure in order to offer interactive transactions (and not have to order reads too). fs{if we moved the speculative execution to a single replica that processes reads and buffers writes then it would simulate BFT-DUR }. \fs{Lastly, we modify Hyperledger Fabric, a popular enterprise-ready permissioned Blockchain solution, to process Online Transactional Processing (OLTP) workloads (instead of smart contracts) in order to facilitate a comparison with a state of the art blockchain. To do so, we replace the Simulation layer with NoPO's speculative execution.}
 
 \begin{figure*}[t]
 \centering
@@ -84,7 +84,7 @@ experiment runs for 90 seconds and we ignore measurements from the first and
 last 30 seconds to ensure that our results represent the behavior of all systems
 in a steady state.
 
-\paragraph{Workloads.} We evaluate the performance of \sys using the TPC-C and Smallbank workloads to simulate realistic Online Transaction Processing (OLTP) applications. TPC-C simulates the business logic of an e-commerce vendor operating multiple warehouses, while Smallbank simulates a small-scale banking application that allows for transfers, deposits, and withdrawals. Additionally, we use the YCSB workload generator for our microbenchmarks in order to simulate random distributions of read/write requests.
+\paragraph{Workloads.} We evaluate the performance of \sys using the TPC-C and Smallbank workloads to simulate realistic Online Transaction Processing (OLTP) applications. TPC-C simulates the business logic of an e-commerce vendor operating multiple warehouses, while Smallbank simulates a small-scale banking application that allows for transfers, deposits, and withdrawals. Additionally, we use the YCSB workload generator for our microbenchmarks in order to simulate random distributions of read/write requests. \fs{mention retwis instead I guess - we didnt use Smallbank or Ycsb yet}
 
 \paragraph{Setup.} We run all our experiments using CloudLab machines (TODO: specs), in both in-datacenter (LAN) and cross-datacenter (WAN) environments. For WAN settings, we respectively place 1/3 of replicas in geographic regions USA, Europe, and Asia; Figure X. shows single-hop message-delays. (TODO: latencies in LAN and WAN - maybe do only WAN).
 
@@ -150,7 +150,7 @@ because their commit protocols are a) routed via a leader replica at each shard 
 TAPIR moreover achieves the highest throughput before saturation because it does not
 require expensive signature computations and validation of proofs. \sys{} achieves
 better throughput than Hyperledger and OCC+PBFT as proposal load is balanced across client coordinators instead of single primary replica that must sequence every transaction per shard ( as is the case with the leader replicas in Hyperledger
-and OCC+PBFT).
+and OCC+PBFT). 
 
 
 \subsection{Microbenchmarks}
@@ -169,7 +169,8 @@ and OCC+PBFT).
   \label{fig:bft-overhead-tput}
 \end{figure}
 
-\paragraph{BFT Overheads.} We measure the maximum throughput of \sys{} and TAPIR with the YCSB+T workload at moderate skew in order to quantify the performance overhead of tolerating byzantine failures.
+\paragraph{BFT Overheads.} \fs{should this just go into the previous graphs, like we were currently evaluating? Or remove it from the previous ones.}
+We measure the maximum throughput of \sys{} and TAPIR with the YCSB+T workload at moderate skew in order to quantify the performance overhead of tolerating byzantine failures.
 Figure~\ref{fig:bft-overhead-tput} shows the results.
 
 Indicus with no proofs and no signatures comes within 10\% of the throughput of
@@ -183,7 +184,7 @@ Indicus, reads are executed by $\geq f+1$ replicas.
 \fs{Need to evaluate impact of RQS: Compare with just 1 read, f+1 reads, or >3f+1 (for read locks). Create more read/write conflicts and see whether read locks actually help.}
 
 Indicus with signatures and no proofs achieves a lower maximum throughput than
-Indicus with no signatures and no proofs because signature computations are
+Indicus with no signatures and no proofs because signature computations and hashing (txobjects, signatures) are
 expensive.
 
 Similarly, the computation required to serialize, deserialize, and validate
@@ -193,6 +194,8 @@ to Indicus with no signatures and no proofs and TAPIR.
 Indicus with both signatures and proofs achieves the lowest maximum throughput.
 In total, tolerating Byzantine failures imposes about a 75\% throughput overhead
 for this workload.
+
+\fs{the next 2 experiments can probably go}
 
 \begin{figure}
   Bar Graph\\
@@ -275,6 +278,10 @@ read uncommitted writes. This comes at the risk of cascading aborts.
   \label{fig:to-vs-po-tput-lat}
 \end{figure}
 
+
+\fs{Cut until here}
+
+\fs{also probably redundant to be in an explicit graph}
 \paragraph{Enforcing partial order} Figure~\ref{fig:to-vs-po-tput-lat} shows the overhead from the leader-based
 OCC+PBFT relative to the quorum-based \sys{}. Latency is higher because leader-based
 protocols require redundant wide-area round trips during the validation phase. Moreover, the total order requirment implies that validation must wait for all previously sequenced operations to complete (instead of happing as soon as it arrives), resulting in idle times.
@@ -295,7 +302,7 @@ may be spread equally across all replicas in the shard.
 \fi
 
 \subsection{Failures}
-
+ \fs{still need to implement fallback}
 \begin{figure}
   Scatter Plot\\
   X-axis: time (since start of experiment)\\
