@@ -28,7 +28,7 @@ bool CheckSignature(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager);
 
 void SignMessage(const ::google::protobuf::Message &msg,
-    const crypto::PrivKey &privateKey, uint64_t processId,
+    crypto::PrivKey* privateKey, uint64_t processId,
     proto::SignedMessage &signedMessage);
 
 std::string TransactionDigest(const proto::Transaction &txn);

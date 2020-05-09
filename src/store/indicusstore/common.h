@@ -16,8 +16,8 @@
 namespace indicusstore {
 
 void SignMessage(const ::google::protobuf::Message &msg,
-    const crypto::PrivKey &privateKey, uint64_t processId,
-    proto::SignedMessage *signedMessage);
+    crypto::PrivKey* privateKey, uint64_t processId,
+    proto::SignedMessage &signedMessage);
 
 bool ValidateCommittedConflict(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, const proto::Transaction *txn,

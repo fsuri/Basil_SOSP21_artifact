@@ -467,6 +467,7 @@ TCPTransport::Run()
 void
 TCPTransport::Stop()
 {
+  tp.stop();
   Timer(500, [this](){
     for (const auto &outgoing : tcpOutgoing) {
       bufferevent_free(outgoing.second);

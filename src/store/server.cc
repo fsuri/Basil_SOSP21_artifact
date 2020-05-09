@@ -412,7 +412,7 @@ int main(int argc, char **argv) {
     std::cerr << "Unknown occ type." << std::endl;
     return 1;
   }
-  
+
   // parse read dep
   read_dep_t read_dep = READ_DEP_UNKNOWN;
   int numReadDeps = sizeof(read_dep_args);
@@ -427,7 +427,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  KeyManager keyManager(FLAGS_indicus_key_path);
+  KeyManager keyManager(FLAGS_indicus_key_path, crypto::ED25, true);
 
   switch (proto) {
     case PROTO_TAPIR: {

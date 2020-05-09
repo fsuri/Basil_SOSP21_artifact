@@ -10,7 +10,7 @@
 namespace indicusstore {
 
 void SignMessage(const ::google::protobuf::Message &msg,
-    const crypto::PrivKey &privateKey, uint64_t processId,
+    crypto::PrivKey* privateKey, uint64_t processId,
     proto::SignedMessage *signedMessage) {
   signedMessage->set_process_id(processId);
   UW_ASSERT(msg.SerializeToString(signedMessage->mutable_data()));
@@ -278,7 +278,7 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
       break;
     }
   }
-  
+
   if (!keyInWriteSet) {
     Debug("VALIDATE value failed for txn %lu.%lu; key %s not written.",
         proof.txn().client_id(), proof.txn().client_seq_num(),

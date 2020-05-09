@@ -28,7 +28,7 @@
  * SOFTWARE.
  *
  **********************************************************************/
- 
+
 #ifndef _INDICUS_CLIENT_H_
 #define _INDICUS_CLIENT_H_
 
@@ -83,7 +83,7 @@ class Client : public ::Client {
   // Commit all Get(s) and Put(s) since Begin().
   virtual void Commit(commit_callback ccb, commit_timeout_callback ctcb,
       uint32_t timeout) override;
-  
+
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
       uint32_t timeout) override;
@@ -132,6 +132,15 @@ class Client : public ::Client {
   void Phase2Callback(uint64_t reqId, int group,
       const proto::Signatures &p2ReplySigs);
   void Phase2TimeoutCallback(int group, uint64_t reqId, int status);
+
+  // Fallback logic
+  //void Receive Full Dep or Receive Full Conflict.
+  //void Phase1_Rec   P1 do not need to be signed
+  //void Phase1_Rec_Callback
+  //void Phase2_Rec    P2 need to be signed in order to enforce time-out, replicas will buffer until time-out.
+  //void Phase2_Rec_Callback
+  //void InvokeFallback
+  //void ReceiveNewView.
 
   void Writeback(PendingRequest *req);
 

@@ -90,10 +90,7 @@ public:
   std::unordered_map<std::string, TransportAddress*> replyAddrs;
 
   // tests to see if we are ready to send commit or executute the slot
-  void testSlot(uint64_t seqnum, uint64_t viewnum, std::string digest);
-
-  // map from seqnum to set of views that we have sent the commit for
-  std::unordered_map<uint64_t, std::unordered_set<uint64_t>> sentCommits;
+  void testSlot(uint64_t seqnum, uint64_t viewnum, std::string digest, bool gotPrepare);
 
   void executeSlots();
 };

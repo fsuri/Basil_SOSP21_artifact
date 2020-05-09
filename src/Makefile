@@ -8,7 +8,7 @@ LD = g++
 EXPAND = lib/tmpl/expand
 
 #CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNUW_ASSERT
-CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -DUSE_ED25519_SIGS
+CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized
 CXXFLAGS := -g -std=c++17
 LDFLAGS := -levent_pthreads
 ## Debian package: check
@@ -36,6 +36,7 @@ LDFLAGS += $(LIBSSL_LDFLAGS)
 LDFLAGS += -l:libcryptopp.so
 # libsodium
 LDFLAGS += -lsodium
+LDFLAGS += -L ./lib/ -lblake3
 
 
 # Google test framework. This doesn't use pkgconfig
@@ -104,6 +105,8 @@ SRCS :=
 TEST_SRCS :=
 # GTEST_SRCS is tests that use Google's testing framework
 GTEST_SRCS :=
+# C_SRCS are the .c and .s files
+C_SRCS :=
 
 # PROTOS is the list of protobuf *.proto files
 PROTOS :=
@@ -182,7 +185,7 @@ $(PROTOSRCS) : .obj/gen/%.pb.cc: %.proto
 DEPFLAGS = -M -MF ${@:.o=.d} -MP -MT $@ -MG
 
 # $(call add-CFLAGS,$(TEST_SRCS),$(CHECK_CFLAGS))
-OBJS := $(SRCS:%.cc=.obj/%.o) $(TEST_SRCS:%.cc=.obj/%.o) $(GTEST_SRCS:%.cc=.obj/%.o)
+OBJS := $(S_SRCS:%.S=.obj/%.o) $(C_SRCS:%.c=.obj/%.o) $(SRCS:%.cc=.obj/%.o) $(TEST_SRCS:%.cc=.obj/%.o) $(GTEST_SRCS:%.cc=.obj/%.o)
 
 define compile
 	@mkdir -p $(dir $@)
