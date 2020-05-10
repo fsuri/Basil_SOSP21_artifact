@@ -2,14 +2,16 @@
 
 #include "lib/message.h"
 
-PingInitiator::PingInitiator(Transport *transport, size_t numReplicas) :
-    transport(transport), numReplicas(numReplicas), alpha(0.75), length(5000) {
+#include <sstream>
+
+PingInitiator::PingInitiator(Transport *transport, int group, size_t numReplicas) :
+    transport(transport), group(group), numReplicas(numReplicas), alpha(0.75), length(5000) {
 }
 
 PingInitiator::~PingInitiator() {
 }
 
-void PingInitiator::Start(TransportReceiver *receiver) {
+void PingInitiator::StartPings(TransportReceiver *receiver) {
   for (size_t i = 0; i < numReplicas; ++i) {
     SendPing(receiver, i);
   }
@@ -19,9 +21,15 @@ void PingInitiator::Start(TransportReceiver *receiver) {
       sortedEstimates.insert(std::make_pair(estimate.second, estimate.first));
     }
 
+    orderedReplicas.clear();
+    std::stringstream ss;
+    ss << "Replica indices in increasing round trip time order: [";
     for (const auto &sortedEstimate : sortedEstimates) {
       orderedReplicas.push_back(sortedEstimate.second);
+      ss << sortedEstimate.second << ", ";
     }
+    ss << "].";
+    Notice("%s", ss.str().c_str()); 
 
     done = true;
   });
@@ -34,7 +42,7 @@ void PingInitiator::SendPing(TransportReceiver *receiver, size_t replica) {
     PPanic("Failed to get CLOCK_MONOTONIC");
   }
   outstandingSalts.insert(std::make_pair(ping.salt(), std::make_pair(replica, start)));
-  transport->SendMessageToReplica(receiver, 0, replica, ping);
+  transport->SendMessageToReplica(receiver, group, replica, ping);
 }
 
 void PingInitiator::HandlePingResponse(TransportReceiver *receiver,
@@ -47,11 +55,13 @@ void PingInitiator::HandlePingResponse(TransportReceiver *receiver,
     }
 
     uint64_t roundTrip = timespec_delta(saltItr->second.second, now);
+    Debug("Round trip to replica %lu took %luns.", saltItr->second.first, roundTrip);
     auto estimateItr = roundTripEstimates.find(saltItr->second.first);
     if (estimateItr == roundTripEstimates.end()) {
       roundTripEstimates.insert(std::make_pair(saltItr->second.first, roundTrip));
     } else {
       estimateItr->second = (1 - alpha) * estimateItr->second + alpha * roundTrip; 
+      Debug("Updated round trip estimate to %lu.", estimateItr->second);
     }
 
     if (!done) {

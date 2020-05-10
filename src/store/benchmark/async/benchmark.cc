@@ -105,6 +105,7 @@ DEFINE_uint64(client_id, 0, "unique identifier for client");
 DEFINE_string(config_path, "", "path to shard configuration file");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
 DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
+DEFINE_bool(ping_replicas, false, "determine latency to replicas via pings");
 
 DEFINE_bool(tapir_sync_commit, true, "wait until commit phase completes before"
     " sending additional transactions (for TAPIR)");
@@ -793,7 +794,7 @@ int main(int argc, char **argv) {
 
         client = new indicusstore::Client(config, (FLAGS_client_id << 3),
             FLAGS_num_shards,
-            FLAGS_num_groups, closestReplicas, tport, part,
+            FLAGS_num_groups, closestReplicas, FLAGS_ping_replicas, tport, part,
             FLAGS_tapir_sync_commit, readMessages, readQuorumSize, readDepSize,
             FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
             FLAGS_indicus_hash_digest, FLAGS_indicus_verify_deps,

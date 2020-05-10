@@ -59,7 +59,7 @@ namespace indicusstore {
 class Client : public ::Client {
  public:
   Client(transport::Configuration *config, uint64_t id, int nShards,
-      int nGroups, const std::vector<int> &closestReplicas,
+      int nGroups, const std::vector<int> &closestReplicas, bool pingReplicas,
       Transport *transport, Partitioner *part, bool syncCommit,
       uint64_t readMessages, uint64_t readQuorumSize, uint64_t readDepSize,
       bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
@@ -160,6 +160,7 @@ class Client : public ::Client {
   std::vector<ShardClient *> bclient;
   Partitioner *part;
   bool syncCommit;
+  const bool pingReplicas;
   const uint64_t readMessages;
   const uint64_t readQuorumSize;
   const uint64_t readDepSize;
@@ -171,6 +172,9 @@ class Client : public ::Client {
   // TrueTime server.
   TrueTime timeServer;
 
+
+  bool first;
+  bool startedPings;
 
   /* Transaction Execution State */
   // Ongoing transaction ID.

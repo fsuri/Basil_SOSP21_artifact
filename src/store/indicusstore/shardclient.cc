@@ -39,10 +39,12 @@ namespace indicusstore {
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int group, const std::vector<int> &closestReplicas_,
+    bool pingReplicas,
     bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
-    KeyManager *keyManager, TrueTime &timeServer) : PingInitiator(transport, config->n),
+    KeyManager *keyManager, TrueTime &timeServer) : PingInitiator(transport,
+      group, config->n),
     client_id(client_id), transport(transport), config(config), group(group),
-    timeServer(timeServer),
+    timeServer(timeServer), pingReplicas(pingReplicas),
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps),
     keyManager(keyManager), phase1DecisionTimeout(1000UL), lastReqId(0UL) {
@@ -53,7 +55,7 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
       closestReplicas.push_back((i + client_id) % config->n);
     }
   } else {
-    closestReplicas = closestReplicas;
+    closestReplicas = closestReplicas_;
   }
 }
 

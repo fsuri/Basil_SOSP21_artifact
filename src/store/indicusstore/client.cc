@@ -39,27 +39,27 @@ using namespace std;
 
 Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     int nGroups,
-    const std::vector<int> &closestReplicas, Transport *transport,
+    const std::vector<int> &closestReplicas, bool pingReplicas, Transport *transport,
     Partitioner *part, bool syncCommit, uint64_t readMessages,
     uint64_t readQuorumSize, uint64_t readDepSize, bool signedMessages,
     bool validateProofs, bool hashDigest, bool verifyDeps,
     KeyManager *keyManager, TrueTime timeServer)
     : config(config), client_id(id), nshards(nShards), ngroups(nGroups),
-    transport(transport), part(part), syncCommit(syncCommit),
+    transport(transport), part(part), syncCommit(syncCommit), pingReplicas(pingReplicas),
     readMessages(readMessages), readQuorumSize(readQuorumSize),
     readDepSize(readDepSize), signedMessages(signedMessages),
     validateProofs(validateProofs), hashDigest(hashDigest), verifyDeps(verifyDeps),
     keyManager(keyManager),
-    timeServer(timeServer), client_seq_num(0UL), lastReqId(0UL), getIdx(0UL) {
-  bclient.reserve(nshards);
+    timeServer(timeServer), first(true), startedPings(false),
+    client_seq_num(0UL), lastReqId(0UL), getIdx(0UL) {
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
 
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
-    bclient[i] = new ShardClient(config, transport, client_id, i,
-        closestReplicas, signedMessages, validateProofs, hashDigest, verifyDeps,
-        keyManager, timeServer);
+    bclient.push_back(new ShardClient(config, transport, client_id, i,
+        closestReplicas, pingReplicas, signedMessages, validateProofs, hashDigest, verifyDeps,
+        keyManager, timeServer));
   }
 
   Debug("Indicus client [%lu] created! %lu %lu", client_id, nshards,
@@ -85,8 +85,17 @@ Client::~Client()
 void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
       uint32_t timeout) {
   transport->Timer(0, [this, bcb, btcb, timeout]() {
-    Latency_Start(&executeLatency);
+    if (pingReplicas) {
+      if (!first && !startedPings) {
+        startedPings = true;
+        for (auto sclient : bclient) {
+          sclient->StartPings(sclient);
+        }
+      }
+      first = false;
+    }
 
+    Latency_Start(&executeLatency);
     client_seq_num++;
     Debug("BEGIN [%lu]", client_seq_num);
 
@@ -103,6 +112,7 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
 void Client::Get(const std::string &key, get_callback gcb,
     get_timeout_callback gtcb, uint32_t timeout) {
   transport->Timer(0, [this, key, gcb, gtcb, timeout]() {
+
     Latency_Start(&getLatency);
 
     Debug("GET[%lu:%lu] for key %s", client_id, client_seq_num,

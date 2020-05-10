@@ -10,18 +10,25 @@
 
 class PingInitiator {
  public:
-  PingInitiator(Transport *transport, size_t numReplicas);
+  PingInitiator(Transport *transport, int group, size_t numReplicas);
   virtual ~PingInitiator();
 
-  void Start(TransportReceiver *receiver);
-  void SendPing(TransportReceiver *receiver, size_t replica);
+  void StartPings(TransportReceiver *receiver);
+
+ protected:
+  inline const std::vector<size_t> &GetOrderedReplicas() const { return orderedReplicas; }
+  
   void HandlePingResponse(TransportReceiver *receiver, 
       const TransportAddress &remote, const PingMessage &ping);
 
  private:
+  void SendPing(TransportReceiver *receiver, size_t replica);
+
   static uint64_t timespec_delta(const struct timespec &a,
       const struct timespec &b);
+
   Transport *transport;
+  const int group;
   const size_t numReplicas;
   const double alpha;
   const uint64_t length;
@@ -32,6 +39,7 @@ class PingInitiator {
   std::map<size_t, uint64_t> roundTripEstimates;
 
   std::vector<size_t> orderedReplicas;
+
 
   PingMessage ping;
 };
