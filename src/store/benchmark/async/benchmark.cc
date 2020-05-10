@@ -191,6 +191,8 @@ DEFINE_bool(indicus_hash_digest, false, "use hash function compute transaction"
     " digest (for Indicus)");
 DEFINE_bool(indicus_verify_deps, true, "check signatures of transaction"
     " depdendencies (for Indicus)");
+DEFINE_uint64(indicus_sig_batch, 1, "signature batch size"
+    " sig batch size (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
 
@@ -793,7 +795,7 @@ int main(int argc, char **argv) {
 
 				indicusstore::Parameters params(FLAGS_indicus_sign_messages,
 					FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
-					FLAGS_indicus_verify_deps, 1);
+					FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch);
 
         client = new indicusstore::Client(config, (FLAGS_client_id << 3),
             FLAGS_num_shards,

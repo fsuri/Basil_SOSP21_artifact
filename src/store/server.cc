@@ -235,6 +235,8 @@ DEFINE_bool(indicus_hash_digest, false, "use hash function compute transaction"
     " digest (for Indicus)");
 DEFINE_bool(indicus_verify_deps, true, "check signatures of transaction"
     " depdendencies (for Indicus)");
+DEFINE_uint64(indicus_sig_batch, 1, "signature batch size"
+    " sig batch size (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
 const std::string occ_type_args[] = {
@@ -483,7 +485,7 @@ int main(int argc, char **argv) {
       timeDelta = timeDelta | (FLAGS_indicus_time_delta % 1000) * 1000;
 			indicusstore::Parameters params(FLAGS_indicus_sign_messages,
 				FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
-				FLAGS_indicus_verify_deps, 1);
+				FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch);
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
           tport, &keyManager, params, timeDelta, indicusOCCType, part, readDepSize);
