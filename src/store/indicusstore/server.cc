@@ -43,12 +43,12 @@ namespace indicusstore {
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     int numShards, int numGroups, Transport *transport, KeyManager *keyManager,
     Parameters params, uint64_t timeDelta, OCCType occType, Partitioner *part,
-    uint64_t readDepSize, TrueTime timeServer) : PingServer(transport),
+    uint64_t readDepSize, unsigned int batchTimeoutMS, TrueTime timeServer) : PingServer(transport),
     config(config), groupIdx(groupIdx), idx(idx), numShards(numShards),
     numGroups(numGroups), id(groupIdx * config.n + idx),
     transport(transport), occType(occType), part(part), readDepSize(readDepSize),
     params(params), keyManager(keyManager),
-    timeDelta(timeDelta), timeServer(timeServer) {
+    timeDelta(timeDelta), batchTimeoutMS(batchTimeoutMS), timeServer(timeServer) {
   transport->Register(this, config, groupIdx, idx);
   _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
   _Latency_Init(&verifyLat, "verify_lat");
@@ -62,14 +62,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   proof->mutable_txn()->mutable_timestamp()->set_id(0);
   committed.insert(std::make_pair("", proof));
 
-  for (int i = 0; i < params.signatureBatchSize; i++) {
-    readReply.push_back(proto::ReadReply());
-    phase1Reply.push_back(proto::Phase1Reply());
-    phase2Reply.push_back(proto::Phase2Reply());
-  }
-  nextReadReplyIdx = 0;
-  nextPhase1ReplyIdx = 0;
-  nextPhase2ReplyIdx = 0;
+  batchTimerRunning = false;
 }
 
 Server::~Server() {
@@ -142,25 +135,25 @@ void Server::HandleRead(const TransportAddress &remote,
   std::pair<Timestamp, Server::Value> tsVal;
   bool exists = store.get(msg.key(), ts, tsVal);
 
-  int replyIdx = nextReadReplyIdx++;
-  readReply[replyIdx].Clear();
-  readReply[replyIdx].set_req_id(msg.req_id());
-  readReply[replyIdx].set_key(msg.key());
+  proto::ReadReply* readReply = new proto::ReadReply();
+  readReply->set_req_id(msg.req_id());
+  readReply->set_key(msg.key());
   if (exists) {
     Debug("READ[%lu] Committed value of length %lu bytes with ts %lu.%lu.",
         msg.req_id(), tsVal.second.val.length(), tsVal.first.getTimestamp(),
         tsVal.first.getID());
-    readReply[replyIdx].mutable_committed()->set_value(tsVal.second.val);
-    tsVal.first.serialize(readReply[replyIdx].mutable_committed()->mutable_timestamp());
+    readReply->mutable_committed()->set_value(tsVal.second.val);
+    tsVal.first.serialize(readReply->mutable_committed()->mutable_timestamp());
     if (params.validateProofs) {
-      *readReply[replyIdx].mutable_committed()->mutable_proof() = *tsVal.second.proof;
+      *readReply->mutable_committed()->mutable_proof() = *tsVal.second.proof;
     }
   }
 
   TransportAddress* remoteCopy = remote.clone();
-  auto sendCB = [=]() {
-    this->transport->SendMessage(this, *remoteCopy, this->readReply[replyIdx]);
+  auto sendCB = [this, remoteCopy, readReply]() {
+    this->transport->SendMessage(this, *remoteCopy, *readReply);
     delete remoteCopy;
+    delete readReply;
   };
 
   if (occType == MVTSO) {
@@ -202,7 +195,7 @@ void Server::HandleRead(const TransportAddress &remote,
         if (params.validateProofs && params.signedMessages && params.verifyDeps) {
           signedMessage.Clear();
           //Latency_Start(&signLat);
-          MessageToSign(preparedWrite, readReply[replyIdx].mutable_signed_prepared(),
+          MessageToSign(preparedWrite, readReply->mutable_signed_prepared(),
             [sendCB, preparedWrite]() {
               sendCB();
               delete preparedWrite;
@@ -210,7 +203,7 @@ void Server::HandleRead(const TransportAddress &remote,
           return;
           //Latency_End(&signLat);
         } else {
-          *readReply[replyIdx].mutable_prepared() = *preparedWrite;
+          *readReply->mutable_prepared() = *preparedWrite;
           delete preparedWrite;
         }
       //}
@@ -298,25 +291,25 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   p2Decisions[*txnDigest] = msg.decision();
 
-  int replyIdx = nextPhase2ReplyIdx++;
+  proto::Phase2Reply* phase2Reply = new proto::Phase2Reply();
 
   TransportAddress* remoteCopy = remote.clone();
-  auto sendCB = [=]() {
-    this->transport->SendMessage(this, *remoteCopy, this->phase2Reply[replyIdx]);
+  auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
+    this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
     delete remoteCopy;
+    delete phase2Reply;
   };
 
-  phase2Reply[replyIdx].Clear();
-  phase2Reply[replyIdx].set_req_id(msg.req_id());
-  phase2Reply[replyIdx].mutable_p2_decision()->set_decision(msg.decision());
+  phase2Reply->set_req_id(msg.req_id());
+  phase2Reply->mutable_p2_decision()->set_decision(msg.decision());
   if (params.validateProofs) {
-    *phase2Reply[replyIdx].mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
+    *phase2Reply->mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
 
     if (params.signedMessages) {
-      proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply[replyIdx].p2_decision());
+      proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
       //Latency_Start(&signLat);
-      MessageToSign(p2Decision, phase2Reply[replyIdx].mutable_signed_p2_decision(),
+      MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
         [sendCB, p2Decision]() {
           sendCB();
           delete p2Decision;
@@ -453,9 +446,6 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
     Debug("Batch size = 1, immediately signing");
     SignMessage(msg, keyManager->GetPrivateKey(id), id,
         signedMessage);
-    nextReadReplyIdx = 0;
-    nextPhase1ReplyIdx = 0;
-    nextPhase2ReplyIdx = 0;
     cb();
   } else {
     pendingBatchMessages.push_back(msg);
@@ -472,9 +462,8 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
     } else if (!batchTimerRunning) {
       batchTimerRunning = true;
       Debug("Starting batch timer");
-      // TODO make this a param?
-      batchTimerId = transport->Timer(4, [this]() {
-        Debug("Batch timer expired, sending");
+      batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
+        Debug("Batch timer expired with %lu items, sending", this->pendingBatchMessages.size());
         this->batchTimerRunning = false;
         this->SignBatch();
       });
@@ -491,10 +480,6 @@ void Server::SignBatch() {
     cb();
   }
   pendingBatchCallbacks.clear();
-  nextBatchNum = 0;
-  nextReadReplyIdx = 0;
-  nextPhase1ReplyIdx = 0;
-  nextPhase2ReplyIdx = 0;
 }
 
 proto::ConcurrencyControl::Result Server::DoOCCCheck(
@@ -1100,29 +1085,28 @@ void Server::SendPhase1Reply(uint64_t reqId,
     const TransportAddress &remote) {
   p1Decisions[txnDigest] = result;
 
-  int replyIdx = nextPhase1ReplyIdx++;
-  phase1Reply[replyIdx].Clear();
-  phase1Reply[replyIdx].set_req_id(reqId);
+  proto::Phase1Reply* phase1Reply = new proto::Phase1Reply();
+  phase1Reply->set_req_id(reqId);
 
   TransportAddress* remoteCopy = remote.clone();
-  auto sendCB = [remoteCopy, this, replyIdx]() {
-    this->transport->SendMessage(this, *remoteCopy, this->phase1Reply[replyIdx]);
+  auto sendCB = [remoteCopy, this, phase1Reply]() {
+    this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
     delete remoteCopy;
   };
 
-  phase1Reply[replyIdx].mutable_cc()->set_ccr(result);
+  phase1Reply->mutable_cc()->set_ccr(result);
   if (params.validateProofs) {
-    *phase1Reply[replyIdx].mutable_cc()->mutable_txn_digest() = txnDigest;
+    *phase1Reply->mutable_cc()->mutable_txn_digest() = txnDigest;
     if (result == proto::ConcurrencyControl::ABORT) {
-      *phase1Reply[replyIdx].mutable_cc()->mutable_committed_conflict() = conflict;
+      *phase1Reply->mutable_cc()->mutable_committed_conflict() = conflict;
     } else if (params.signedMessages) {
-      proto::ConcurrencyControl* cc = new proto::ConcurrencyControl(phase1Reply[replyIdx].cc());
+      proto::ConcurrencyControl* cc = new proto::ConcurrencyControl(phase1Reply->cc());
       //Latency_Start(&signLat);
-      MessageToSign(cc, phase1Reply[replyIdx].mutable_signed_cc(),
-        [sendCB, cc, txnDigest, this, replyIdx]() {
+      MessageToSign(cc, phase1Reply->mutable_signed_cc(),
+        [sendCB, cc, txnDigest, this, phase1Reply]() {
           Debug("PHASE1[%s] Sending Phase1Reply with signature %s from priv key %d.",
             BytesToHex(txnDigest, 16).c_str(),
-            BytesToHex(this->phase1Reply[replyIdx].signed_cc().signature(), 100).c_str(), this->id);
+            BytesToHex(phase1Reply->signed_cc().signature(), 100).c_str(), this->id);
           sendCB();
           delete cc;
         });

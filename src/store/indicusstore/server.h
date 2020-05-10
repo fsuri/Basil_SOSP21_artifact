@@ -61,7 +61,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   Server(const transport::Configuration &config, int groupIdx, int idx,
       int numShards, int numGroups,
       Transport *transport, KeyManager *keyManager, Parameters params, uint64_t timeDelta,
-      OCCType occType, Partitioner *part, uint64_t readDepSize,
+      OCCType occType, Partitioner *part, uint64_t readDepSize, unsigned int batchTimeoutMS,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
@@ -92,7 +92,6 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
   bool batchTimerRunning;
   int batchTimerId;
-  int nextBatchNum;
   std::vector<::google::protobuf::Message*> pendingBatchMessages;
   std::vector<proto::SignedMessage*> pendingBatchSignedMessages;
   std::vector<signedCallback> pendingBatchCallbacks;
@@ -169,6 +168,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   const Parameters params;
   KeyManager *keyManager;
   const uint64_t timeDelta;
+  const unsigned int batchTimeoutMS;
   TrueTime timeServer;
 
   /* Declare protobuf objects as members to avoid stack alloc/dealloc costs */
@@ -178,14 +178,6 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   proto::Phase2 phase2;
   proto::Writeback writeback;
   proto::Abort abort;
-
-  // need indexes for batching
-  std::vector<proto::ReadReply> readReply;
-  int nextReadReplyIdx;
-  std::vector<proto::Phase1Reply> phase1Reply;
-  int nextPhase1ReplyIdx;
-  std::vector<proto::Phase2Reply> phase2Reply;
-  int nextPhase2ReplyIdx;
 
   proto::Transaction mostRecent;
   proto::PreparedWrite preparedWrite;

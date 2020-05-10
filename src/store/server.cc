@@ -237,6 +237,8 @@ DEFINE_bool(indicus_verify_deps, true, "check signatures of transaction"
     " depdendencies (for Indicus)");
 DEFINE_uint64(indicus_sig_batch, 1, "signature batch size"
     " sig batch size (for Indicus)");
+DEFINE_uint64(indicus_sig_batch_timeout, 10, "signature batch timeout ms"
+    " sig batch timeout (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
 const std::string occ_type_args[] = {
@@ -488,7 +490,7 @@ int main(int argc, char **argv) {
 				FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch);
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
-          tport, &keyManager, params, timeDelta, indicusOCCType, part, readDepSize);
+          tport, &keyManager, params, timeDelta, indicusOCCType, part, readDepSize, FLAGS_indicus_sig_batch_timeout);
       break;
     }
 		case PROTO_PBFT: {
