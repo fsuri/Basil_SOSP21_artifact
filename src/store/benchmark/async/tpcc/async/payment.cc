@@ -18,13 +18,13 @@ AsyncPayment::AsyncPayment(uint32_t w_id, uint32_t c_c_last, uint32_t c_c_id,
 AsyncPayment::~AsyncPayment() {
 }
 
-Operation AsyncPayment::GetNextOperation(size_t opCount,
+Operation AsyncPayment::GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
   std::map<std::string, std::string> readValues) {
-  if (opCount == 0) {
+  if (finishedOpCount == 0) {
     Debug("Amount: %u", h_amount);
     Debug("Warehouse: %u", w_id);
     return Get(WarehouseRowKey(w_id));
-  } else if (opCount == 1) {
+  } else if (finishedOpCount == 1) {
     std::string w_key = WarehouseRowKey(w_id);
     auto w_row_itr = readValues.find(w_key);
     UW_ASSERT(w_row_itr != readValues.end());
@@ -36,10 +36,10 @@ Operation AsyncPayment::GetNextOperation(size_t opCount,
     std::string w_row_out;
     w_row.SerializeToString(&w_row_out);
     return Put(w_key, w_row_out);
-  } else if (opCount == 2) {
+  } else if (finishedOpCount == 2) {
     Debug("District: %u", d_id);
     return Get(DistrictRowKey(d_w_id, d_id));
-  } else if (opCount == 3) {
+  } else if (finishedOpCount == 3) {
     std::string d_key = DistrictRowKey(d_w_id, d_id);
     auto d_row_itr = readValues.find(d_key);
     UW_ASSERT(d_row_itr != readValues.end());
@@ -51,7 +51,7 @@ Operation AsyncPayment::GetNextOperation(size_t opCount,
     std::string d_row_out;
     d_row.SerializeToString(&d_row_out);
     return Put(d_key, d_row_out);
-  } else if (opCount == 4) {
+  } else if (finishedOpCount == 4) {
     if (c_by_last_name) { // access customer by last name
       Debug("Customer: %s", c_last.c_str());
       Debug("  Get(c_w_id=%u, c_d_id=%u, c_last=%s)", c_w_id, c_d_id,
@@ -64,7 +64,7 @@ Operation AsyncPayment::GetNextOperation(size_t opCount,
   } else {
     uint32_t count;
     if (c_by_last_name) {
-      if (opCount == 5) {
+      if (finishedOpCount == 5) {
         std::string cbn_key = CustomerByNameRowKey(c_w_id, c_d_id, c_last);
         auto cbn_row_itr = readValues.find(cbn_key);
         UW_ASSERT(cbn_row_itr != readValues.end());
@@ -79,9 +79,9 @@ Operation AsyncPayment::GetNextOperation(size_t opCount,
 
         return Get(CustomerRowKey(c_w_id, c_d_id, c_id));
       }
-      count = opCount - 1;
+      count = finishedOpCount - 1;
     } else {
-      count = opCount;
+      count = finishedOpCount;
     }
 
     if (count == 5) {
@@ -121,9 +121,11 @@ Operation AsyncPayment::GetNextOperation(size_t opCount,
       std::string h_row_out;
       h_row.SerializeToString(&h_row_out);
       return Put(HistoryRowKey(w_id, d_id, c_id), h_row_out);
-    } else {
+    } else if (count == 7) {
       Debug("COMMIT");
       return Commit();
+    } else {
+      return Wait();
     }
   }
   }

@@ -4,10 +4,11 @@
 #include <string>
 
 enum OperationType {
-  GET,
+  GET = 0,
   PUT,
   COMMIT,
-  ABORT
+  ABORT,
+  WAIT
 };
 
 struct Operation {
@@ -15,6 +16,8 @@ struct Operation {
   std::string key;
   std::string value;
 };
+
+Operation Wait();
 
 Operation Get(const std::string &key);
 

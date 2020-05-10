@@ -25,7 +25,8 @@ class AsyncAdapterClient : public AsyncClient {
 
   Client *client;
   uint32_t timeout;
-  size_t opCount;
+  size_t outstandingOpCount;
+  size_t finishedOpCount;
   std::map<std::string, std::string> readValues;
   execute_callback currEcb;
   AsyncTransaction *currTxn;

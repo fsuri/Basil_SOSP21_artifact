@@ -59,7 +59,7 @@ void Client::ExecuteNextOperation(PendingRequest *req, proto::Branch &branch) {
     Latency_Start(&opLat);
   }
 
-  Operation op = req->txn->GetNextOperation(clientBranch.opCount,
+  Operation op = req->txn->GetNextOperation(clientBranch.opCount, 0UL,
       clientBranch.readValues);
 
   if (Message_DebugEnabled(__FILE__)) {

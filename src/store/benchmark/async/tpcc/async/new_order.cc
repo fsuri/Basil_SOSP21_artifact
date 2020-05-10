@@ -20,15 +20,15 @@ AsyncNewOrder::~AsyncNewOrder() {
   delete [] i_row;
 }
 
-Operation AsyncNewOrder::GetNextOperation(size_t opCount,
+Operation AsyncNewOrder::GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
   std::map<std::string, std::string> readValues) {
-  if (opCount == 0) {
+  if (finishedOpCount == 0) {
     Debug("Warehouse: %u", w_id);
     return Get(WarehouseRowKey(w_id));
-  } else if (opCount == 1) {
+  } else if (finishedOpCount == 1) {
     Debug("District: %u", d_id);
     return Get(DistrictRowKey(w_id, d_id));
-  } else if (opCount == 2) {
+  } else if (finishedOpCount == 2) {
     std::string d_key = DistrictRowKey(w_id, d_id);
     auto d_row_itr = readValues.find(d_key);
     UW_ASSERT(d_row_itr != readValues.end());
@@ -41,10 +41,10 @@ Operation AsyncNewOrder::GetNextOperation(size_t opCount,
     std::string d_row_out;
     d_row.SerializeToString(&d_row_out);
     return Put(d_key, d_row_out);
-  } else if (opCount == 3) {
+  } else if (finishedOpCount == 3) {
     Debug("Customer: %u", c_id);
     return Get(CustomerRowKey(w_id, d_id, c_id));
-  } else if (opCount == 4) {
+  } else if (finishedOpCount == 4) {
     NewOrderRow no_row;
     no_row.set_o_id(o_id);
     no_row.set_d_id(d_id);
@@ -53,7 +53,7 @@ Operation AsyncNewOrder::GetNextOperation(size_t opCount,
     std::string no_row_out;
     no_row.SerializeToString(&no_row_out);
     return Put(NewOrderRowKey(w_id, d_id, o_id), no_row_out);
-  } else if (opCount == 5) {
+  } else if (finishedOpCount == 5) {
     OrderRow o_row;
     o_row.set_id(o_id);
     o_row.set_d_id(d_id);
@@ -67,7 +67,7 @@ Operation AsyncNewOrder::GetNextOperation(size_t opCount,
     std::string o_row_out;
     o_row.SerializeToString(&o_row_out);
     return Put(OrderRowKey(w_id, d_id, o_id), o_row_out);
-  } else if (opCount == 6) {
+  } else if (finishedOpCount == 6) {
     OrderByCustomerRow obc_row;
     obc_row.set_w_id(w_id);
     obc_row.set_d_id(d_id);
@@ -77,9 +77,9 @@ Operation AsyncNewOrder::GetNextOperation(size_t opCount,
     std::string obc_row_out;
     obc_row.SerializeToString(&obc_row_out);
     return Put(OrderByCustomerRowKey(w_id, d_id, c_id), obc_row_out);
-  } else if (static_cast<int32_t>(opCount) < 7 + 4 * ol_cnt) {
-    int i = (opCount - 7) % 4;
-    size_t ol_number = (opCount - 7) / 4;
+  } else if (static_cast<int32_t>(finishedOpCount) < 7 + 4 * ol_cnt) {
+    int i = (finishedOpCount - 7) % 4;
+    size_t ol_number = (finishedOpCount - 7) / 4;
     UW_ASSERT(o_ol_i_ids.size() > ol_number);
     UW_ASSERT(o_ol_supply_w_ids.size() > ol_number);
     UW_ASSERT(o_ol_quantities.size() > ol_number);
@@ -175,9 +175,11 @@ Operation AsyncNewOrder::GetNextOperation(size_t opCount,
       ol_row.SerializeToString(&ol_row_out);
       return Put(OrderLineRowKey(w_id, d_id, o_id, ol_number), ol_row_out);
     }
-  } else {
+  } else if (static_cast<int32_t>(finishedOpCount) == 7 + 4 * ol_cnt) {
     Debug("COMMIT");
     return Commit();
+  } else {
+    return Wait();
   }
 }
 

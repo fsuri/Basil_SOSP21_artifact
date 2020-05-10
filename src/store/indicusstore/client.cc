@@ -113,7 +113,7 @@ void Client::Get(const std::string &key, get_callback gcb,
     get_timeout_callback gtcb, uint32_t timeout) {
   transport->Timer(0, [this, key, gcb, gtcb, timeout]() {
 
-    Latency_Start(&getLatency);
+    // Latency_Start(&getLatency);
 
     Debug("GET[%lu:%lu] for key %s", client_id, client_seq_num,
         BytesToHex(key, 16).c_str());
@@ -131,7 +131,7 @@ void Client::Get(const std::string &key, get_callback gcb,
     read_callback rcb = [gcb, this](int status, const std::string &key,
         const std::string &val, const Timestamp &ts, const proto::Dependency &dep,
         bool hasDep, bool addReadSet) {
-      uint64_t ns = Latency_End(&getLatency);
+      uint64_t ns = 0; //Latency_End(&getLatency);
       if (Message_DebugEnabled(__FILE__)) {
         Debug("GET[%lu:%lu] Callback for key %s with %lu bytes and ts %lu.%lu after %luus.",
             client_id, client_seq_num, BytesToHex(key, 16).c_str(), val.length(),

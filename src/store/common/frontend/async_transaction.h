@@ -13,7 +13,7 @@ class AsyncTransaction {
   AsyncTransaction() { }
   virtual ~AsyncTransaction() { }
 
-  virtual Operation GetNextOperation(size_t opCount,
+  virtual Operation GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
       const std::map<std::string, std::string> readValues) = 0;
 
 };

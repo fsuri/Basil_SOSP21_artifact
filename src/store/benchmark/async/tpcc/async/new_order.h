@@ -18,7 +18,7 @@ class AsyncNewOrder : public AsyncTPCCTransaction, public NewOrder {
       std::mt19937 &gen);
   virtual ~AsyncNewOrder();
 
-  Operation GetNextOperation(size_t opCount,
+  Operation GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
       std::map<std::string, std::string> readValues);
 
  protected:

@@ -13,7 +13,7 @@ class AddUser : public RetwisTransaction {
   virtual ~AddUser();
  
  protected:
-  Operation GetNextOperation(size_t opCount,
+  Operation GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
       std::map<std::string, std::string> readValues);
 
 };

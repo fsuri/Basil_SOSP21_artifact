@@ -1,5 +1,9 @@
 #include "store/common/frontend/transaction_utils.h"
 
+Operation Wait() {
+  return Operation{WAIT, "", ""};
+}
+
 Operation Get(const std::string &key) {
   return Operation{GET, key, ""};
 }
