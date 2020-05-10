@@ -28,6 +28,7 @@ message Request {
           PREPARE = 2;
           COMMIT = 3;
           ABORT = 4;
+          PING = 5;
      }	
      required Operation op = 1;
      required uint64 txnid = 2;
@@ -35,6 +36,7 @@ message Request {
      optional PrepareMessage prepare = 4;
      optional CommitMessage commit = 5;
      optional AbortMessage abort = 6;
+     optional PingMessage ping = 7;
 }
 
 message Reply {
@@ -45,4 +47,5 @@ message Reply {
      required int32 status = 1;
      optional bytes value = 2;
      optional TimestampMessage timestamp = 3;
+     optional PingMessage ping = 4;
 }

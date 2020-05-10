@@ -40,8 +40,9 @@ using namespace std;
 using namespace proto;
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
-    uint64_t client_id, int shard, int closestReplica) : client_id(client_id),
-    transport(transport), config(config), shard(shard) {
+    uint64_t client_id, int shard, int closestReplica, bool pingReplicas) :
+    PingInitiator(this, transport, config->n), client_id(client_id),
+    transport(transport), config(config), shard(shard), pingReplicas(pingReplicas) {
   client = new replication::ir::IRClient(*config, transport, shard, client_id << 3 | shard);
 
   if (closestReplica == -1) {
@@ -79,7 +80,9 @@ void ShardClient::Get(uint64_t id, const std::string &key, get_callback gcb,
   pendingGet->gcb = gcb;
   pendingGet->gtcb = gtcb;
 
-  client->InvokeUnlogged(replica, request_str, bind(&ShardClient::GetCallback,
+  size_t getReplica = pingReplicas && GetOrderedReplicas().size() > 0 ?
+    GetOrderedReplicas()[0] : replica;
+  client->InvokeUnlogged(getReplica, request_str, bind(&ShardClient::GetCallback,
       this, pendingGet->reqId, placeholders::_1, placeholders::_2),
       bind(&ShardClient::GetTimeout, this, id, pendingGet->reqId), timeout);
 
@@ -109,7 +112,9 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   pendingGet->gcb = gcb;
   pendingGet->gtcb = gtcb;
 
-  client->InvokeUnlogged(replica, request_str, bind(&ShardClient::GetCallback,
+  size_t getReplica = pingReplicas && GetOrderedReplicas().size() > 0 ?
+    GetOrderedReplicas()[0] : replica;
+  client->InvokeUnlogged(getReplica, request_str, bind(&ShardClient::GetCallback,
       this, pendingGet->reqId, placeholders::_1, placeholders::_2),
       bind(&ShardClient::GetTimeout, this, id, pendingGet->reqId), timeout);
 }
@@ -238,6 +243,21 @@ void ShardClient::Abort(uint64_t id, const Transaction &txn,
       this, pendingAbort->reqId, placeholders::_1, placeholders::_2));
 
   pendingAbort->requestTimeout->Reset();
+}
+
+bool ShardClient::SendPing(size_t replica, const PingMessage &ping) {
+  // create request
+  string request_str;
+  Request request;
+  request.set_op(Request::PING);
+  *request.mutable_ping() = ping;
+  request.SerializeToString(&request_str);
+
+  client->InvokeUnlogged(replica, request_str,
+      bind(&ShardClient::PingCallback, this, placeholders::_1, placeholders::_2),
+      [](const std::string &s, replication::ErrorCode ec){},
+      5000);
+  return true;
 }
 
 std::string ShardClient::TapirDecide(const std::map<std::string,std::size_t> &results) {
@@ -371,6 +391,15 @@ bool ShardClient::AbortCallback(uint64_t reqId,
     delete pendingAbort;
     acb();
   }
+  return true;
+}
+
+bool ShardClient::PingCallback(const std::string &request_str,
+    const std::string &reply_str) {
+  Reply reply;
+  reply.ParseFromString(reply_str);
+
+  HandlePingResponse(reply.ping());
   return true;
 }
 

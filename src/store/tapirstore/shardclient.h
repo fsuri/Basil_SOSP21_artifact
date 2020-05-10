@@ -41,17 +41,18 @@
 #include "store/common/transaction.h"
 #include "store/common/frontend/txnclient.h"
 #include "store/tapirstore/tapir-proto.pb.h"
+#include "store/common/pinginitiator.h"
 
 #include <map>
 #include <string>
 
 namespace tapirstore {
 
-class ShardClient : public TxnClient {
+class ShardClient : public TxnClient, public PingInitiator, public PingTransport  {
  public:
   /* Constructor needs path to shard config. */
   ShardClient(transport::Configuration *config, Transport *transport,
-      uint64_t client_id, int shard, int closestReplica);
+      uint64_t client_id, int shard, int closestReplica, bool pingReplicas);
   virtual ~ShardClient();
 
   // Begin a transaction.
@@ -84,6 +85,7 @@ class ShardClient : public TxnClient {
       const Timestamp &timestamp, prepare_callback pcb,
       prepare_timeout_callback ptcb, uint32_t timeout) override;
 
+  virtual bool SendPing(size_t replica, const PingMessage &ping);
  private:
   struct PendingPrepare : public TxnClient::PendingPrepare {
     PendingPrepare(uint64_t reqId) : TxnClient::PendingPrepare(reqId),
@@ -126,6 +128,7 @@ class ShardClient : public TxnClient {
   transport::Configuration *config;
   int shard; // which shard this client accesses
   int replica; // which replica to use for reads
+  bool pingReplicas;
 
   replication::ir::IRClient *client; // Client proxy.
 
@@ -149,6 +152,7 @@ class ShardClient : public TxnClient {
       const std::string &);
   bool AbortCallback(uint64_t reqId, const std::string &,
       const std::string &);
+  bool PingCallback(const std::string &, const std::string &);
 
   /* Helper Functions for starting and finishing requests */
   void StartRequest();

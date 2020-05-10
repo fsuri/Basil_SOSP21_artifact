@@ -41,8 +41,8 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int group, const std::vector<int> &closestReplicas_,
     bool pingReplicas,
     bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
-    KeyManager *keyManager, TrueTime &timeServer) : PingInitiator(transport,
-      group, config->n),
+    KeyManager *keyManager, TrueTime &timeServer) : PingInitiator(this, transport,
+      config->n),
     client_id(client_id), transport(transport), config(config), group(group),
     timeServer(timeServer), pingReplicas(pingReplicas),
     signedMessages(signedMessages), validateProofs(validateProofs),
@@ -75,7 +75,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
     HandlePhase2Reply(phase2Reply);
   } else if (type == ping.GetTypeName()) {
     ping.ParseFromString(data);
-    HandlePingResponse(this, remote, ping);
+    HandlePingResponse(ping);
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
@@ -235,6 +235,12 @@ void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
 
   Debug("[group %i] Sent ABORT[%lu]", group, id);
 }
+
+bool ShardClient::SendPing(size_t replica, const PingMessage &ping) {
+  transport->SendMessageToReplica(this, group, replica, ping);
+  return true;
+}
+
 
 bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
   for (const auto &write : txn.write_set()) {

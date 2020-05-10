@@ -70,7 +70,7 @@ typedef std::function<void(int)> phase2_timeout_callback;
 typedef std::function<void()> writeback_callback;
 typedef std::function<void(int)> writeback_timeout_callback;
 
-class ShardClient : public TransportReceiver, public PingInitiator {
+class ShardClient : public TransportReceiver, public PingInitiator, public PingTransport {
  public:
   ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int group, const std::vector<int> &closestReplicas,
@@ -111,6 +111,7 @@ class ShardClient : public TransportReceiver, public PingInitiator {
       const proto::GroupedSignatures &p2Sigs);
   
   virtual void Abort(uint64_t id, const TimestampMessage &ts);
+  virtual bool SendPing(size_t replica, const PingMessage &ping); 
  private:
   struct PendingQuorumGet {
     PendingQuorumGet(uint64_t reqId) : reqId(reqId),

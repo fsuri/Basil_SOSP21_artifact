@@ -37,9 +37,12 @@ using namespace std;
 
 Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     int nGroups, int closestReplica, Transport *transport, Partitioner *part,
+    bool pingReplicas,
     bool syncCommit, TrueTime timeServer) : config(config), client_id(id),
     nshards(nShards), ngroups(nGroups), transport(transport), part(part),
-    syncCommit(syncCommit), timeServer(timeServer), lastReqId(0UL) {
+    pingReplicas(pingReplicas),
+    syncCommit(syncCommit), timeServer(timeServer), lastReqId(0UL),
+    first(true), startedPings(false) {
     t_id = client_id << 32;
 
     bclient.reserve(nshards);
@@ -49,8 +52,9 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     /* Start a client for each shard. */
     for (uint64_t i = 0; i < ngroups; i++) {
         ShardClient *shardclient = new ShardClient(config,
-                transport, client_id, i, closestReplica);
+                transport, client_id, i, closestReplica, pingReplicas);
         bclient[i] = new BufferClient(shardclient);
+        sclient.push_back(shardclient);
     }
 
     Debug("Tapir client [%lu] created! %lu %lu", client_id, nshards, bclient.size());
@@ -71,6 +75,16 @@ Client::~Client()
 void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
       uint32_t timeout) {
   transport->Timer(0, [this, bcb, btcb, timeout]() {
+    if (pingReplicas) {
+      if (!first && !startedPings) {
+        startedPings = true;
+        for (auto s : sclient) {
+          s->StartPings();
+        }
+      }
+      first = false;
+    }
+
     Debug("BEGIN [%lu]", t_id + 1);
     t_id++;
     participants.clear();

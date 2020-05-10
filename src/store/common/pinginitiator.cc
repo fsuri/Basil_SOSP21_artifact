@@ -4,16 +4,17 @@
 
 #include <sstream>
 
-PingInitiator::PingInitiator(Transport *transport, int group, size_t numReplicas) :
-    transport(transport), group(group), numReplicas(numReplicas), alpha(0.75), length(5000) {
+PingInitiator::PingInitiator(PingTransport *pingTransport, Transport *transport,
+    size_t numReplicas) : pingTransport(pingTransport),
+    transport(transport), numReplicas(numReplicas), alpha(0.75), length(5000) {
 }
 
 PingInitiator::~PingInitiator() {
 }
 
-void PingInitiator::StartPings(TransportReceiver *receiver) {
+void PingInitiator::StartPings() {
   for (size_t i = 0; i < numReplicas; ++i) {
-    SendPing(receiver, i);
+    SendPing(i);
   }
   transport->Timer(length, [this](){
     std::set<std::pair<uint64_t, size_t>> sortedEstimates;
@@ -35,18 +36,17 @@ void PingInitiator::StartPings(TransportReceiver *receiver) {
   });
 }
 
-void PingInitiator::SendPing(TransportReceiver *receiver, size_t replica) {
+void PingInitiator::SendPing(size_t replica) {
   ping.set_salt(rd());
   struct timespec start;
   if (clock_gettime(CLOCK_MONOTONIC, &start) < 0) {
     PPanic("Failed to get CLOCK_MONOTONIC");
   }
   outstandingSalts.insert(std::make_pair(ping.salt(), std::make_pair(replica, start)));
-  transport->SendMessageToReplica(receiver, group, replica, ping);
+  pingTransport->SendPing(replica, ping);
 }
 
-void PingInitiator::HandlePingResponse(TransportReceiver *receiver,
-    const TransportAddress &remote, const PingMessage &ping) {
+void PingInitiator::HandlePingResponse(const PingMessage &ping) {
   auto saltItr = outstandingSalts.find(ping.salt());
   if (saltItr != outstandingSalts.end()) {
     struct timespec now;
@@ -65,7 +65,7 @@ void PingInitiator::HandlePingResponse(TransportReceiver *receiver,
     }
 
     if (!done) {
-      SendPing(receiver, saltItr->second.first);
+      SendPing(saltItr->second.first);
     }
     outstandingSalts.erase(saltItr);
   }

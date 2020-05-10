@@ -89,7 +89,7 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
       if (!first && !startedPings) {
         startedPings = true;
         for (auto sclient : bclient) {
-          sclient->StartPings(sclient);
+          sclient->StartPings();
         }
       }
       first = false;
