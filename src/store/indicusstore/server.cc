@@ -43,20 +43,18 @@ namespace indicusstore {
 
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     int numShards, int numGroups, Transport *transport, KeyManager *keyManager,
-    bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
-    uint64_t timeDelta, OCCType occType, Partitioner *part, uint64_t readDepSize,
+    Parameters params, uint64_t timeDelta, OCCType occType, Partitioner *part,
     TrueTime timeServer) : PingServer(transport),
     config(config), groupIdx(groupIdx), idx(idx), numShards(numShards),
     numGroups(numGroups), id(groupIdx * config.n + idx),
-    transport(transport), occType(occType), part(part), readDepSize(readDepSize),
-    signedMessages(signedMessages), validateProofs(validateProofs),
-    hashDigest(hashDigest), verifyDeps(verifyDeps), keyManager(keyManager),
+    transport(transport), occType(occType), part(part),
+    params(params), keyManager(keyManager),
     timeDelta(timeDelta), timeServer(timeServer) {
   transport->Register(this, config, groupIdx, idx);
   _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
   _Latency_Init(&verifyLat, "verify_lat");
   _Latency_Init(&signLat, "sign_lat");
-  
+
   // this is needed purely from loading data without executing transactions
   proto::CommittedProof *proof = new proto::CommittedProof();
   proof->mutable_txn()->set_client_id(0);
@@ -145,7 +143,7 @@ void Server::HandleRead(const TransportAddress &remote,
         tsVal.first.getID());
     readReply.mutable_write()->set_committed_value(tsVal.second.val);
     tsVal.first.serialize(readReply.mutable_write()->mutable_committed_timestamp());
-    if (validateProofs) {
+    if (params.validateProofs) {
       *readReply.mutable_proof() = *tsVal.second.proof;
     }
   }
@@ -177,16 +175,16 @@ void Server::HandleRead(const TransportAddress &remote,
       Debug("Prepared write with most recent ts %lu.%lu.",
           mostRecent->timestamp().timestamp(), mostRecent->timestamp().id());
 
-      if (maxDepDepth == -1 || DependencyDepth(mostRecent) <= maxDepDepth) {
+      if (params.maxDepDepth == -1 || DependencyDepth(mostRecent) <= params.maxDepDepth) {
         readReply.mutable_write()->set_prepared_value(preparedValue);
         *readReply.mutable_write()->mutable_prepared_timestamp() = mostRecent->timestamp();
-        *readReply.mutable_write()->mutable_prepared_txn_digest() = TransactionDigest(*mostRecent, hashDigest);
+        *readReply.mutable_write()->mutable_prepared_txn_digest() = TransactionDigest(*mostRecent, params.hashDigest);
       }
     }
   }
 
-  if (validateProofs && signedMessages &&
-      (readReply.write().has_committed_value() || (verifyDeps && readReply.write().has_prepared_value()))) {
+  if (params.validateProofs && params.signedMessages &&
+      (readReply.write().has_committed_value() || (params.verifyDeps && readReply.write().has_prepared_value()))) {
     proto::Write write(readReply.write());
     //Latency_Start(&signLat);
     SignMessage(write, keyManager->GetPrivateKey(id), id,
@@ -198,19 +196,19 @@ void Server::HandleRead(const TransportAddress &remote,
 
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
-  std::string txnDigest = TransactionDigest(msg.txn(), hashDigest);
+  std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
 
-  if (validateProofs && signedMessages && verifyDeps) {
+  if (params.validateProofs && params.signedMessages && params.verifyDeps) {
     for (const auto &dep : msg.txn().deps()) {
       if (!dep.has_write_sigs()) {
         Debug("Dep for txn %s missing signatures.",
           BytesToHex(txnDigest, 16).c_str());
         return;
       }
-      if (!ValidateDependency(dep, &config, readDepSize, keyManager)) {
+      if (!ValidateDependency(dep, &config, params.readDepSize, keyManager)) {
         Debug("VALIDATE Dependency failed for txn %s.",
             BytesToHex(txnDigest, 16).c_str());
         // safe to ignore Byzantine client
@@ -218,7 +216,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
       }
     }
   }
-  
+
   proto::Transaction *txn = msg.release_txn();
   ongoing[txnDigest] = txn;
 
@@ -236,11 +234,11 @@ void Server::HandlePhase2(const TransportAddress &remote,
   const proto::Transaction *txn;
   std::string computedTxnDigest;
   const std::string *txnDigest = &computedTxnDigest;
-  if (validateProofs) {
+  if (params.validateProofs) {
     if (!msg.has_txn() && !msg.has_txn_digest()) {
       Debug("PHASE2 message contains neither txn nor txn_digest.");
       return;
-    } 
+    }
 
     if (msg.has_txn_digest()) {
       auto txnItr = ongoing.find(msg.txn_digest());
@@ -254,7 +252,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
       txnDigest = &msg.txn_digest();
     } else {
       txn = &msg.txn();
-      computedTxnDigest = TransactionDigest(msg.txn(), hashDigest);
+      computedTxnDigest = TransactionDigest(msg.txn(), params.hashDigest);
       txnDigest = &computedTxnDigest;
     }
   }
@@ -264,22 +262,22 @@ void Server::HandlePhase2(const TransportAddress &remote,
   int64_t myProcessId;
   proto::ConcurrencyControl::Result myResult;
   LookupP1Decision(*txnDigest, myProcessId, myResult);
-  if (validateProofs && signedMessages && !ValidateP1Replies(msg.decision(),
+  if (params.validateProofs && params.signedMessages && !ValidateP1Replies(msg.decision(),
         false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
         myResult)) {
     Debug("VALIDATE P1Replies failed.");
     return;
   }
-  
+
   p2Decisions[*txnDigest] = msg.decision();
 
   phase2Reply.Clear();
   phase2Reply.set_req_id(msg.req_id());
-  phase2Reply.mutable_p2_decision()->set_decision(msg.decision()); 
-  if (validateProofs) {
+  phase2Reply.mutable_p2_decision()->set_decision(msg.decision());
+  if (params.validateProofs) {
     *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
 
-    if (signedMessages) {
+    if (params.signedMessages) {
       proto::Phase2Decision p2Decision(phase2Reply.p2_decision());
       //Latency_Start(&signLat);
       SignMessage(p2Decision, keyManager->GetPrivateKey(id), id,
@@ -300,7 +298,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
   if (!msg.has_txn_digest()) {
     Debug("WRITEBACK message contains neither txn nor txn_digest.");
     return;
-  } 
+  }
 
   UW_ASSERT(!msg.has_txn());
 
@@ -316,15 +314,15 @@ void Server::HandleWriteback(const TransportAddress &remote,
     txnDigest = &msg.txn_digest();
   } else {
     txn = msg.release_txn();
-    computedTxnDigest = TransactionDigest(msg.txn(), hashDigest);
+    computedTxnDigest = TransactionDigest(msg.txn(), params.hashDigest);
     txnDigest = &computedTxnDigest;
   }
 
   Debug("WRITEBACK[%s] with decision %d.",
       BytesToHex(*txnDigest, 16).c_str(), msg.decision());
 
-  if (validateProofs) {
-    if (signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()) {
+  if (params.validateProofs) {
+    if (params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()) {
       int64_t myProcessId;
       proto::ConcurrencyControl::Result myResult;
       LookupP1Decision(*txnDigest, myProcessId, myResult);
@@ -335,7 +333,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
             BytesToHex(*txnDigest, 16).c_str());
         return;
       }
-    } else if (signedMessages && msg.has_p2_sigs()) {
+    } else if (params.signedMessages && msg.has_p2_sigs()) {
       int64_t myProcessId;
       proto::CommitDecision myDecision;
       LookupP2Decision(*txnDigest, myProcessId, myDecision);
@@ -348,14 +346,14 @@ void Server::HandleWriteback(const TransportAddress &remote,
       }
     } else if (msg.decision() == proto::ABORT && msg.has_conflict()) {
       std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
-          hashDigest);
+          params.hashDigest);
       if (!ValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
-            txnDigest, signedMessages, keyManager, &config)) {
+            txnDigest, params.signedMessages, keyManager, &config)) {
         Debug("WRITEBACK[%s] Failed to validate committed conflict for fast abort.",
             BytesToHex(*txnDigest, 16).c_str());
         return;
       }
-    } else if (signedMessages) {
+    } else if (params.signedMessages) {
       Debug("WRITEBACK[%s] decision %d, has_p1_sigs %d, has_p2_sigs %d, and"
           " has_conflict %d.", BytesToHex(*txnDigest, 16).c_str(),
           msg.decision(), msg.has_p1_sigs(), msg.has_p2_sigs(), msg.has_conflict());
@@ -376,7 +374,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
 void Server::HandleAbort(const TransportAddress &remote,
     const proto::Abort &msg) {
   const proto::AbortInternal *abort;
-  if (validateProofs && signedMessages) {
+  if (params.validateProofs && params.signedMessages) {
     if (!msg.has_signed_internal()) {
       return;
     }
@@ -589,9 +587,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       // readVersion < committedTs < ts
       //     GetCommittedWrites only returns writes larger than readVersion
       if (committedWrite.first < ts) {
-        if (validateProofs) {
+        if (params.validateProofs) {
           conflict = *committedWrite.second.proof;
-        } 
+        }
         Debug("[%lu:%lu][%s] ABORT wr conflict committed write for key %s:"
             " this txn's read ts %lu.%lu < committed ts %lu.%lu < this txn's ts %lu.%lu.",
             txn.client_id(),
@@ -627,7 +625,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       }
     }
   }
-  
+
   for (const auto &write : txn.write_set()) {
     if (!IsKeyOwned(write.key())) {
       continue;
@@ -643,9 +641,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
           //    if ts is larger than current itr, it is also larger than all subsequent itrs
           break;
         } else if (std::get<1>(*ritr) < ts) {
-          if (validateProofs) {
+          if (params.validateProofs) {
             conflict = *std::get<2>(*ritr);
-          } 
+          }
           Debug("[%lu:%lu][%s] ABORT rw conflict committed read for key %s: committed"
               " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
               txn.client_id(),
@@ -749,7 +747,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     if (committed.find(dep.write().prepared_txn_digest()) == committed.end() &&
         aborted.find(dep.write().prepared_txn_digest()) == aborted.end()) {
 
-      if (validateProofs && signedMessages && !verifyDeps) {
+      if (params.validateProofs && params.signedMessages && !params.verifyDeps) {
         if (prepared.find(dep.write().prepared_txn_digest()) == prepared.end()) {
           return proto::ConcurrencyControl::ABSTAIN;
         }
@@ -843,17 +841,17 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
 
   Value val;
   proto::CommittedProof *proof = nullptr;
-  if (validateProofs) {
-    proof = new proto::CommittedProof(); 
+  if (params.validateProofs) {
+    proof = new proto::CommittedProof();
   }
   val.proof = proof;
 
   auto committedItr = committed.insert(std::make_pair(txnDigest, proof));
-  if (validateProofs) {
+  if (params.validateProofs) {
     // CAUTION: we no longer own txn pointer (which we allocated during Phase1
     //    and stored in ongoing)
     proof->set_allocated_txn(txn);
-    if (signedMessages) {
+    if (params.signedMessages) {
       if (p1Sigs) {
         *proof->mutable_p1_sigs() = groupedSigs;
       } else {
@@ -873,7 +871,7 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
     //uint64_t ns = Latency_End(&committedReadInsertLat);
     //stats.Add("committed_read_insert_lat_" + BytesToHex(read.key(), 18), ns);
   }
-  
+
 
   for (const auto &write : txn->write_set()) {
     if (!IsKeyOwned(write.key())) {
@@ -971,7 +969,7 @@ proto::ConcurrencyControl::Result Server::CheckDependencies(
       stats.Increment("cc_aborts_dep_aborted", 1);
       return proto::ConcurrencyControl::ABSTAIN;
     }
-  } 
+  }
   return proto::ConcurrencyControl::COMMIT;
 }
 
@@ -993,11 +991,11 @@ void Server::SendPhase1Reply(uint64_t reqId,
   phase1Reply.set_req_id(reqId);
 
   phase1Reply.mutable_cc()->set_ccr(result);
-  if (validateProofs) {
+  if (params.validateProofs) {
     *phase1Reply.mutable_cc()->mutable_txn_digest() = txnDigest;
     if (result == proto::ConcurrencyControl::ABORT) {
       *phase1Reply.mutable_cc()->mutable_committed_conflict() = conflict;
-    } else if (signedMessages) {
+    } else if (params.signedMessages) {
       proto::ConcurrencyControl cc(phase1Reply.cc());
       //Latency_Start(&signLat);
       SignMessage(cc, keyManager->GetPrivateKey(id), id,

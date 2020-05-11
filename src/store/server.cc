@@ -237,6 +237,9 @@ DEFINE_bool(indicus_verify_deps, true, "check signatures of transaction"
     " depdendencies (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
+DEFINE_int64(indicus_max_dep_depth, -1, "maximum length of dependency chain"
+    " allowed by honest replicas [-1 is no maximum] (for Indicus)");
+
 const std::string occ_type_args[] = {
 	"tapir",
   "mvtso"
@@ -481,11 +484,12 @@ int main(int argc, char **argv) {
       }
       uint64_t timeDelta = (FLAGS_indicus_time_delta / 1000) << 32;
       timeDelta = timeDelta | (FLAGS_indicus_time_delta % 1000) * 1000;
+			indicusstore::Parameters params(FLAGS_indicus_sign_messages,
+				FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
+				FLAGS_indicus_verify_deps, 1, FLAGS_indicus_max_dep_depth, readDepSize);
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
-          tport, &keyManager, FLAGS_indicus_sign_messages,
-          FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
-          FLAGS_indicus_verify_deps, timeDelta, indicusOCCType, part, readDepSize);
+          tport, &keyManager, params, timeDelta, indicusOCCType, part);
       break;
     }
 		case PROTO_PBFT: {

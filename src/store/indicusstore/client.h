@@ -61,9 +61,8 @@ class Client : public ::Client {
   Client(transport::Configuration *config, uint64_t id, int nShards,
       int nGroups, const std::vector<int> &closestReplicas, bool pingReplicas,
       Transport *transport, Partitioner *part, bool syncCommit,
-      uint64_t readMessages, uint64_t readQuorumSize, uint64_t readDepSize,
-      bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
-      KeyManager *keyManager,
+      uint64_t readMessages, uint64_t readQuorumSize,
+      Parameters params, KeyManager *keyManager,
       TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 
@@ -163,11 +162,7 @@ class Client : public ::Client {
   const bool pingReplicas;
   const uint64_t readMessages;
   const uint64_t readQuorumSize;
-  const uint64_t readDepSize;
-  const bool signedMessages;
-  const bool validateProofs;
-  const bool hashDigest;
-  const bool verifyDeps;
+  const Parameters params;
   KeyManager *keyManager;
   // TrueTime server.
   TrueTime timeServer;

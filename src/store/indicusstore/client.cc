@@ -41,14 +41,12 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     int nGroups,
     const std::vector<int> &closestReplicas, bool pingReplicas, Transport *transport,
     Partitioner *part, bool syncCommit, uint64_t readMessages,
-    uint64_t readQuorumSize, uint64_t readDepSize, bool signedMessages,
-    bool validateProofs, bool hashDigest, bool verifyDeps,
+    uint64_t readQuorumSize, Parameters params,
     KeyManager *keyManager, TrueTime timeServer)
     : config(config), client_id(id), nshards(nShards), ngroups(nGroups),
     transport(transport), part(part), syncCommit(syncCommit), pingReplicas(pingReplicas),
     readMessages(readMessages), readQuorumSize(readQuorumSize),
-    readDepSize(readDepSize), signedMessages(signedMessages),
-    validateProofs(validateProofs), hashDigest(hashDigest), verifyDeps(verifyDeps),
+    params(params),
     keyManager(keyManager),
     timeServer(timeServer), first(true), startedPings(false),
     client_seq_num(0UL), lastReqId(0UL), getIdx(0UL) {
@@ -58,7 +56,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
     bclient.push_back(new ShardClient(config, transport, client_id, i,
-        closestReplicas, pingReplicas, signedMessages, validateProofs, hashDigest, verifyDeps,
+        closestReplicas, pingReplicas, params,
         keyManager, timeServer));
   }
 
@@ -157,7 +155,7 @@ void Client::Get(const std::string &key, get_callback gcb,
 
     // Send the GET operation to appropriate shard.
     bclient[i]->Get(client_seq_num, key, txn.timestamp(), readMessages,
-        readQuorumSize, readDepSize, rcb, rtcb, timeout);
+        readQuorumSize, params.readDepSize, rcb, rtcb, timeout);
   });
 }
 
@@ -197,9 +195,8 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     req->ccb = ccb;
     req->ctcb = ctcb;
     req->callbackInvoked = false;
-    req->txnDigest = TransactionDigest(txn, hashDigest);
+    req->txnDigest = TransactionDigest(txn, params.hashDigest);
     req->timeout = timeout;
-    
     stats.Increment("txn_groups_" + std::to_string(txn.involved_groups().size()));
     Phase1(req);
   });
@@ -243,12 +240,12 @@ void Client::Phase1Callback(uint64_t txnId, int group,
   }
 
   if (decision == proto::ABORT && fast) {
-    if (validateProofs) {
+    if (params.validateProofs) {
       req->conflict = conflict;
     }
   }
-  
-  if (validateProofs && signedMessages) {
+
+  if (params.validateProofs && params.signedMessages) {
     if (decision == proto::ABORT && !fast) {
       auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
       UW_ASSERT(itr != sigs.end());
@@ -322,7 +319,7 @@ void Client::Phase2(PendingRequest *req) {
   Debug("PHASE2[%lu:%lu][%s] logging to group %ld", client_id, client_seq_num,
       BytesToHex(req->txnDigest, 16).c_str(), logGroup);
 
-  if (validateProofs && signedMessages) {
+  if (params.validateProofs && params.signedMessages) {
     if (req->decision == proto::ABORT) {
       UW_ASSERT(req->slowAbortGroup >= 0);
       UW_ASSERT(req->p1ReplySigsGrouped.grouped_sigs().find(req->slowAbortGroup) != req->p1ReplySigsGrouped.grouped_sigs().end());
@@ -360,7 +357,7 @@ void Client::Phase2Callback(uint64_t txnId, int group,
     Debug("Phase2Callback for terminated request id %lu (txn already committed or aborted.", txnId);
     return;
   }
-  
+
   Debug("PHASE2[%lu:%lu] callback", client_id, txnId);
 
   PendingRequest *req = itr->second;
@@ -371,7 +368,7 @@ void Client::Phase2Callback(uint64_t txnId, int group,
     return;
   }
 
-  if (validateProofs && signedMessages) {
+  if (params.validateProofs && params.signedMessages) {
     (*req->p2ReplySigsGrouped.mutable_grouped_sigs())[group] = p2ReplySigs;
   }
 

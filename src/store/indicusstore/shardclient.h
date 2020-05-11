@@ -75,8 +75,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int group, const std::vector<int> &closestReplicas,
       bool pingReplicas,
-      bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
-      KeyManager *keyManager, TrueTime &timeServer);
+      Parameters params, KeyManager *keyManager, TrueTime &timeServer);
   virtual ~ShardClient();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
@@ -109,7 +108,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
       const proto::CommittedProof &conflict,
       const proto::GroupedSignatures &p1Sigs,
       const proto::GroupedSignatures &p2Sigs);
-  
+
   virtual void Abort(uint64_t id, const TimestampMessage &ts);
   virtual bool SendPing(size_t replica, const PingMessage &ping); 
  private:
@@ -139,12 +138,11 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   struct PendingPhase1 {
     PendingPhase1(uint64_t reqId, int group, const proto::Transaction &txn,
         const std::string &txnDigest, const transport::Configuration *config,
-        KeyManager *keyManager, bool validateProofs, bool signedMessages, bool hashDigest) :
+        KeyManager *keyManager, Parameters params) :
         reqId(reqId), requestTimeout(nullptr), decisionTimeout(nullptr),
         decisionTimeoutStarted(false), txn_(txn), txnDigest_(txnDigest),
-        p1Validator(group, &txn_, &txnDigest_, config, keyManager, validateProofs,
-            signedMessages,
-            hashDigest), decision(proto::ABORT), fast(false) { }
+        p1Validator(group, &txn_, &txnDigest_, config, keyManager, params),
+        decision(proto::ABORT), fast(false) { }
     ~PendingPhase1() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
@@ -229,10 +227,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   const int group; // which shard this client accesses
   TrueTime &timeServer;
   const bool pingReplicas;
-  const bool signedMessages;
-  const bool validateProofs;
-  const bool hashDigest;
-  const bool verifyDeps;
+  const Parameters params;
   KeyManager *keyManager;
   const uint64_t phase1DecisionTimeout;
   std::vector<int> closestReplicas;
