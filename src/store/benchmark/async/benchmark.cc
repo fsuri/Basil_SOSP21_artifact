@@ -713,9 +713,10 @@ int main(int argc, char **argv) {
     SyncClient *syncClient = nullptr;
     OneShotClient *oneShotClient = nullptr;
 
+    uint64_t clientId = (FLAGS_client_id << 32) | i;
     switch (mode) {
       case PROTO_TAPIR: {
-        client = new tapirstore::Client(config, (FLAGS_client_id << 3) | i,
+        client = new tapirstore::Client(config, clientId,
             FLAGS_num_shards, FLAGS_num_groups, FLAGS_closest_replica,
             tport, part, FLAGS_ping_replicas, FLAGS_tapir_sync_commit,
             TrueTime(FLAGS_clock_skew,
@@ -739,7 +740,7 @@ int main(int argc, char **argv) {
       }*/
       case PROTO_MORTY: {
         asyncClient = new mortystore::Client(config,
-            (FLAGS_client_id << 3) | i, FLAGS_num_shards, FLAGS_num_groups,
+            clientId, FLAGS_num_shards, FLAGS_num_groups,
             FLAGS_closest_replica, tport, part, FLAGS_debug_stats);
         break;
       }
@@ -797,7 +798,7 @@ int main(int argc, char **argv) {
 					FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
 					FLAGS_indicus_verify_deps, 1, 0, readDepSize);
 
-        client = new indicusstore::Client(config, (FLAGS_client_id << 3),
+        client = new indicusstore::Client(config, clientId,
             FLAGS_num_shards,
             FLAGS_num_groups, closestReplicas, FLAGS_ping_replicas, tport, part,
             FLAGS_tapir_sync_commit, readMessages, readQuorumSize,

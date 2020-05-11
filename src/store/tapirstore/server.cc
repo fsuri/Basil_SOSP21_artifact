@@ -67,7 +67,7 @@ Server::ExecInconsistentUpcall(const string &str1)
         store->Abort(request.txnid(), Transaction(request.abort().txn()));
         break;
     default:
-        Panic("Unrecognized inconsisternt operation.");
+        Panic("Unrecognized inconsisternt operation %d.", request.op());
     }
 }
 

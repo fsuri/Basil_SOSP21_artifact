@@ -43,7 +43,7 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int shard, int closestReplica, bool pingReplicas) :
     PingInitiator(this, transport, config->n), client_id(client_id),
     transport(transport), config(config), shard(shard), pingReplicas(pingReplicas) {
-  client = new replication::ir::IRClient(*config, transport, shard, client_id << 3 | shard);
+  client = new replication::ir::IRClient(*config, transport, shard, client_id);
 
   if (closestReplica == -1) {
     replica = client_id % config->n;
