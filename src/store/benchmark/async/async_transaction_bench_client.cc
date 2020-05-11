@@ -53,7 +53,7 @@ void AsyncTransactionBenchClient::ExecuteCallback(transaction_status_t result,
       uint64_t upper = std::min((1 << exp) * abortBackoff, maxBackoff);
       backoff = std::uniform_int_distribution<uint64_t>(upper >> 1, upper)(GetRand());
       stats.Increment(GetLastOp() + "_backoff", backoff);
-      Warning("Backing off for %lums", backoff);
+      Debug("Backing off for %lums", backoff);
     }
     transport.Timer(backoff, [this]() {
         client.Execute(currTxn,

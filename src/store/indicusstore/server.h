@@ -112,9 +112,9 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       const std::string &txnDigest, const proto::Transaction &txn,
       proto::CommittedProof &conflict);
 
-  void GetPreparedWriteTimestamps(
+  void GetWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
-  void GetPreparedWrites(
+  void GetWrites(
       std::unordered_map<std::string, std::vector<const proto::Transaction *>> &writes);
   void GetPreparedReadTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &reads);
@@ -178,7 +178,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   proto::Phase2Reply phase2Reply;
 
   proto::Transaction mostRecent;
-  proto::PreparedWrite preparedWrite;
+  proto::Write preparedWrite;
   proto::CommittedProof committedProof;
   proto::ConcurrencyControl concurrencyControl;
   proto::AbortInternal abortInternal;

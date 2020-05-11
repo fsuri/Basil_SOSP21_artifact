@@ -293,13 +293,13 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
 bool ValidateDependency(const proto::Dependency &dep,
     const transport::Configuration *config, uint64_t readDepSize,
     KeyManager *keyManager) {
-  if (dep.prepared_sigs().sigs_size() < readDepSize) {
+  if (dep.write_sigs().sigs_size() < readDepSize) {
     return false;
   }
 
   std::string preparedData;
-  dep.prepared().SerializeToString(&preparedData);
-  for (const auto &sig : dep.prepared_sigs().sigs()) {
+  dep.write().SerializeToString(&preparedData);
+  for (const auto &sig : dep.write_sigs().sigs()) {
     if (!crypto::Verify(keyManager->GetPublicKey(sig.process_id()), preparedData,
           sig.signature())) {
       return false;    
@@ -308,14 +308,17 @@ bool ValidateDependency(const proto::Dependency &dep,
   return true;
 }
 
-bool operator==(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2) {
-  return pw1.value() == pw2.value() &&
-    pw1.timestamp().timestamp() == pw2.timestamp().timestamp() &&
-    pw1.timestamp().id() == pw2.timestamp().id() &&
-    pw1.txn_digest() == pw2.txn_digest();
+bool operator==(const proto::Write &pw1, const proto::Write &pw2) {
+  return pw1.committed_value() == pw2.committed_value() &&
+    pw1.committed_timestamp().timestamp() == pw2.committed_timestamp().timestamp() &&
+    pw1.committed_timestamp().id() == pw2.committed_timestamp().id() &&
+    pw1.prepared_value() == pw2.prepared_value() &&
+    pw1.prepared_timestamp().timestamp() == pw2.prepared_timestamp().timestamp() &&
+    pw1.prepared_timestamp().id() == pw2.prepared_timestamp().id() &&
+    pw1.prepared_txn_digest() == pw2.prepared_txn_digest();
 }
 
-bool operator!=(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2) {
+bool operator!=(const proto::Write &pw1, const proto::Write &pw2) {
   return !(pw1 == pw2);
 }
 
@@ -345,8 +348,8 @@ std::string TransactionDigest(const proto::Transaction &txn, bool hashDigest) {
       hash.Update((const CryptoPP::byte*) &write.value()[0], write.value().length());
     }
     for (const auto &dep : txn.deps()) {
-      hash.Update((const CryptoPP::byte*) &dep.prepared().txn_digest()[0],
-          dep.prepared().txn_digest().length());
+      hash.Update((const CryptoPP::byte*) &dep.write().prepared_txn_digest()[0],
+          dep.write().prepared_txn_digest().length());
     }
     uint64_t timestampId = txn.timestamp().id();
     uint64_t timestampTs = txn.timestamp().timestamp();

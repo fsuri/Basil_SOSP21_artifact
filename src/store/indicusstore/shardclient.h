@@ -127,7 +127,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     std::string maxValue;
     uint64_t numReplies;
     uint64_t numOKReplies;
-    std::map<Timestamp, std::pair<proto::PreparedWrite, uint64_t>> prepared;
+    std::map<Timestamp, std::pair<proto::Write, uint64_t>> prepared;
     std::map<Timestamp, proto::Signatures> preparedSigs;
     proto::Dependency dep;
     bool hasDep;
@@ -256,7 +256,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   proto::Phase2Reply phase2Reply;
   PingMessage ping;
   
-  proto::PreparedWrite validatedPrepared;
+  proto::Write validatedPrepared;
   proto::ConcurrencyControl validatedCC;
   proto::Phase2Decision validatedP2Decision;
 };

@@ -43,34 +43,30 @@ message CommittedProof {
 }
 
 message CommittedWrite {
-  required bytes value = 1;
-  required TimestampMessage timestamp = 2;
   optional CommittedProof proof = 3;
 }
 
 message Dependency {
-  required PreparedWrite prepared = 1;
-  optional Signatures prepared_sigs = 2;
+  required Write write = 1;
+  optional Signatures write_sigs = 2;
   required int64 involved_group = 3;
 }
 
-message PreparedWrite {
-  required bytes value = 1;
-  required TimestampMessage timestamp = 2;
-  required bytes txn_digest = 3;
-}
-
-message PreparedWrites {
-  repeated PreparedWrite writes = 1;
+message Write {
+  optional bytes committed_value = 1;
+  optional TimestampMessage committed_timestamp = 2;
+  optional bytes prepared_value = 3;
+  optional TimestampMessage prepared_timestamp = 4;
+  optional bytes prepared_txn_digest = 5;
 }
 
 message ReadReply {
   required uint64 req_id = 1;
   required bytes key = 2;
-  optional CommittedWrite committed = 3;
+  optional CommittedProof proof = 3;
   oneof prepared_oneof {
-    PreparedWrite prepared = 4;
-    SignedMessage signed_prepared = 5;
+    Write write = 4;
+    SignedMessage signed_write = 5;
   }
 }
 

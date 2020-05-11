@@ -10,8 +10,6 @@
 DEFINE_uint64(size, 1000, "size of data to verify.");
 DEFINE_uint64(iterations, 100, "number of iterations to measure.");
 
-using namespace CryptoPP;
-
 void GenerateRandomString(uint64_t size, std::random_device &rd, std::string &s) {
   s.clear();
   for (uint64_t i = 0; i < size; ++i) {

@@ -288,15 +288,51 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   PendingQuorumGet *req = itr->second;
   Debug("[group %i] ReadReply for %lu.", group, reply.req_id());
 
+  const proto::Write *write;
+  if (validateProofs && signedMessages) {
+    if (reply.has_signed_write()) {
+      if (!crypto::Verify(keyManager->GetPublicKey(reply.signed_write().process_id()),
+              reply.signed_write().data(), reply.signed_write().signature())) {
+          return;
+      }
+      
+      if(!validatedPrepared.ParseFromString(reply.signed_write().data())) {
+        return;
+      }
+
+      write = &validatedPrepared;
+    } else {
+      if (reply.has_write() && reply.write().has_committed_value()) {
+        Debug("[group %i] Reply contains unsigned committed value.", group);
+        return;
+      }
+
+      if (verifyDeps && reply.has_write() && reply.write().has_prepared_value()) {
+        Debug("[group %i] Reply contains unsigned prepared value.", group);
+        return;
+      }
+
+      write = &reply.write();
+      UW_ASSERT(!write->has_committed_value());
+      UW_ASSERT(!write->has_prepared_value() || !verifyDeps);
+    }
+  } else {
+    write = &reply.write();
+  }
+
   // value and timestamp are valid
   req->numReplies++;
-  if (reply.has_committed()) {
+  if (write->has_committed_value() && write->has_committed_timestamp()) {
     if (validateProofs) {
+      if (!reply.has_proof()) {
+        return;
+      }
+
       std::string committedTxnDigest = TransactionDigest(
-          reply.committed().proof().txn(), hashDigest);
-      if (!ValidateTransactionWrite(reply.committed().proof(), &committedTxnDigest,
-            req->key, reply.committed().value(), reply.committed().timestamp(), config,
-            signedMessages, keyManager)) {
+          reply.proof().txn(), hashDigest);
+      if (!ValidateTransactionWrite(reply.proof(), &committedTxnDigest,
+            req->key, write->committed_value(), write->committed_timestamp(),
+            config, signedMessages, keyManager)) {
         Debug("[group %i] Failed to validate committed value for read %lu.",
             group, reply.req_id());
         // invalid replies can be treated as if we never received a reply from
@@ -305,59 +341,36 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
       }
     }
 
-    Timestamp replyTs(reply.committed().timestamp());
+    Timestamp replyTs(write->committed_timestamp());
     Debug("[group %i] ReadReply for %lu with committed %lu byte value and ts"
-        " %lu.%lu.", group, reply.req_id(), reply.committed().value().length(),
+        " %lu.%lu.", group, reply.req_id(), write->committed_value().length(),
         replyTs.getTimestamp(), replyTs.getID());
     if (req->firstCommittedReply || req->maxTs < replyTs) {
       req->maxTs = replyTs;
-      req->maxValue = reply.committed().value();
+      req->maxValue = write->committed_value();
     }
     req->firstCommittedReply = false;
   }
 
-  const proto::PreparedWrite *prepared;
-  bool hasPrepared = false;
-  if (validateProofs && signedMessages && verifyDeps) {
-    if (reply.has_signed_prepared()) {
-      if (!crypto::Verify(keyManager->GetPublicKey(
-              reply.signed_prepared().process_id()),
-              reply.signed_prepared().data(),
-              reply.signed_prepared().signature())) {
-          return;
-      }
-      
-      if(!validatedPrepared.ParseFromString(reply.signed_prepared().data())) {
-        return;
-      }
 
-      prepared = &validatedPrepared;
-      hasPrepared = true;
-    }
-  } else {
-    if (reply.has_prepared()) {
-      hasPrepared = true;
-      prepared = &reply.prepared();
-    }
-  }
-
-  if (hasPrepared) {
-    Timestamp preparedTs(prepared->timestamp());
+  if (write->has_prepared_value() && write->has_prepared_timestamp() &&
+      write->has_prepared_txn_digest()) {
+    Timestamp preparedTs(write->prepared_timestamp());
     Debug("[group %i] ReadReply for %lu with prepared %lu byte value and ts"
-        " %lu.%lu.", group, reply.req_id(), prepared->value().length(),
+        " %lu.%lu.", group, reply.req_id(), write->prepared_value().length(),
         preparedTs.getTimestamp(), preparedTs.getID());
     auto preparedItr = req->prepared.find(preparedTs);
     if (preparedItr == req->prepared.end()) {
       req->prepared.insert(std::make_pair(preparedTs,
-            std::make_pair(*prepared, 1)));
-    } else if (preparedItr->second.first == *prepared) {
+            std::make_pair(*write, 1)));
+    } else if (preparedItr->second.first == *write) {
       preparedItr->second.second += 1;
     }
 
-    if (validateProofs && signedMessages) {
+    if (validateProofs && signedMessages && verifyDeps) {
       proto::Signature *sig = req->preparedSigs[preparedTs].add_sigs();
-      sig->set_process_id(reply.signed_prepared().process_id());
-      *sig->mutable_signature() = reply.signed_prepared().signature();
+      sig->set_process_id(reply.signed_write().process_id());
+      *sig->mutable_signature() = reply.signed_write().signature();
     }
   }
 
@@ -370,10 +383,10 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
 
       if (preparedItr->second.second >= req->rds) {
         req->maxTs = preparedItr->first;
-        req->maxValue = preparedItr->second.first.value();
-        *req->dep.mutable_prepared() = preparedItr->second.first;
+        req->maxValue = preparedItr->second.first.prepared_value();
+        *req->dep.mutable_write() = preparedItr->second.first;
         if (validateProofs && signedMessages && verifyDeps) {
-          *req->dep.mutable_prepared_sigs() = req->preparedSigs[preparedItr->first];
+          *req->dep.mutable_write_sigs() = req->preparedSigs[preparedItr->first];
         }
         req->dep.set_involved_group(group);
         req->hasDep = true;

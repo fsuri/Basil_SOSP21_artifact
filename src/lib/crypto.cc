@@ -206,7 +206,7 @@ void Load(const string &filename, BufferedTransformation &bt) {
 }
 
 void LoadCFile(const std::string &filename, unsigned char* bytes, size_t length) {
-  FILE * file = fopen(filename.c_str(), "r+");
+  FILE * file = fopen(filename.c_str(), "r");
   if (file == NULL) {
     Panic("Invalid filename %s", filename.c_str());
   }

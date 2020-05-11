@@ -93,9 +93,9 @@ bool ValidateDependency(const proto::Dependency &dep,
     const transport::Configuration *config, uint64_t readDepSize,
     KeyManager *keyManager);
 
-bool operator==(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2);
+bool operator==(const proto::Write &pw1, const proto::Write &pw2);
 
-bool operator!=(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2);
+bool operator!=(const proto::Write &pw1, const proto::Write &pw2);
 
 std::string TransactionDigest(const proto::Transaction &txn, bool hashDigest);
 

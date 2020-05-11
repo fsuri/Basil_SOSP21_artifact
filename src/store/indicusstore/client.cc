@@ -139,8 +139,8 @@ void Client::Get(const std::string &key, get_callback gcb,
         if (hasDep) {
           Debug("GET[%lu:%lu] Callback for key %s with dep ts %lu.%lu.",
               client_id, client_seq_num, BytesToHex(key, 16).c_str(),
-              dep.prepared().timestamp().timestamp(),
-              dep.prepared().timestamp().id());
+              dep.write().prepared_timestamp().timestamp(),
+              dep.write().prepared_timestamp().id());
         }
       }
       if (addReadSet) {

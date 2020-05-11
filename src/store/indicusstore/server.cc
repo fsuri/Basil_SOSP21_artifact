@@ -142,10 +142,10 @@ void Server::HandleRead(const TransportAddress &remote,
     Debug("READ[%lu] Committed value of length %lu bytes with ts %lu.%lu.",
         msg.req_id(), tsVal.second.val.length(), tsVal.first.getTimestamp(),
         tsVal.first.getID());
-    readReply.mutable_committed()->set_value(tsVal.second.val);
-    tsVal.first.serialize(readReply.mutable_committed()->mutable_timestamp());
+    readReply.mutable_write()->set_committed_value(tsVal.second.val);
+    tsVal.first.serialize(readReply.mutable_write()->mutable_committed_timestamp());
     if (validateProofs) {
-      *readReply.mutable_committed()->mutable_proof() = *tsVal.second.proof;
+      *readReply.mutable_proof() = *tsVal.second.proof;
     }
   }
 
@@ -179,25 +179,22 @@ void Server::HandleRead(const TransportAddress &remote,
       // TODO: currently limit depth of deps to 1 (no chains of dependencies)
       //   TODO: temporarily undo this TODO ^
       // if (mostRecent.deps_size() == 0) {
-        preparedWrite.Clear();
-        preparedWrite.set_value(preparedValue);
-        *preparedWrite.mutable_timestamp() = mostRecent.timestamp();
-        *preparedWrite.mutable_txn_digest() = TransactionDigest(mostRecent, hashDigest);
+        readReply.mutable_write()->set_prepared_value(preparedValue);
+        *readReply.mutable_write()->mutable_prepared_timestamp() = mostRecent.timestamp();
+        *readReply.mutable_write()->mutable_prepared_txn_digest() = TransactionDigest(mostRecent, hashDigest);
 
-        if (validateProofs && signedMessages && verifyDeps) {
-          signedMessage.Clear();
-          //Latency_Start(&signLat);
-          SignMessage(preparedWrite, keyManager->GetPrivateKey(id), id,
-              readReply.mutable_signed_prepared());
-          //Latency_End(&signLat);
-        } else {
-          *readReply.mutable_prepared() = preparedWrite;
-        }
       //}
     }
   }
 
-  // Only need to sign prepared portion of readReply
+  if (validateProofs && signedMessages &&
+      (readReply.write().has_committed_value() || (verifyDeps && readReply.write().has_prepared_value()))) {
+    proto::Write write(readReply.write());
+    //Latency_Start(&signLat);
+    SignMessage(write, keyManager->GetPrivateKey(id), id,
+        readReply.mutable_signed_write());
+    //Latency_End(&signLat);
+  }
   transport->SendMessage(this, remote, readReply);
 }
 
@@ -210,7 +207,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
   if (validateProofs && signedMessages && verifyDeps) {
     for (const auto &dep : msg.txn().deps()) {
-      if (!dep.has_prepared_sigs()) {
+      if (!dep.has_write_sigs()) {
         Debug("Dep for txn %s missing signatures.",
           BytesToHex(txnDigest, 16).c_str());
         return;
@@ -673,7 +670,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       for (const auto preparedReadTxn : preparedReadsItr->second) {
         bool isDep = false;
         for (const auto &dep : preparedReadTxn->deps()) {
-          if (txnDigest == dep.prepared().txn_digest()) {
+          if (txnDigest == dep.write().prepared_txn_digest()) {
             isDep = true;
             break;
           }
@@ -751,11 +748,11 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     if (dep.involved_group() != groupIdx) {
       continue;
     }
-    if (committed.find(dep.prepared().txn_digest()) == committed.end() &&
-        aborted.find(dep.prepared().txn_digest()) == aborted.end()) {
+    if (committed.find(dep.write().prepared_txn_digest()) == committed.end() &&
+        aborted.find(dep.write().prepared_txn_digest()) == aborted.end()) {
 
       if (validateProofs && signedMessages && !verifyDeps) {
-        if (prepared.find(dep.prepared().txn_digest()) == prepared.end()) {
+        if (prepared.find(dep.write().prepared_txn_digest()) == prepared.end()) {
           return proto::ConcurrencyControl::ABSTAIN;
         }
       }
@@ -763,9 +760,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       Debug("[%lu:%lu][%s] WAIT for dependency %s to finish.",
           txn.client_id(), txn.client_seq_num(),
           BytesToHex(txnDigest, 16).c_str(),
-          BytesToHex(dep.prepared().txn_digest(), 16).c_str());
+          BytesToHex(dep.write().prepared_txn_digest(), 16).c_str());
       allFinished = false;
-      dependents[dep.prepared().txn_digest()].insert(txnDigest);
+      dependents[dep.write().prepared_txn_digest()].insert(txnDigest);
       auto dependenciesItr = waitingDependencies.find(txnDigest);
       if (dependenciesItr == waitingDependencies.end()) {
         auto inserted = waitingDependencies.insert(std::make_pair(txnDigest,
@@ -775,7 +772,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       }
       dependenciesItr->second.reqId = reqId;
       dependenciesItr->second.remote = &remote;
-      dependenciesItr->second.deps.insert(dep.prepared().txn_digest());
+      dependenciesItr->second.deps.insert(dep.write().prepared_txn_digest());
     }
   }
 
@@ -784,29 +781,6 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     return proto::ConcurrencyControl::WAIT;
   } else {
     return CheckDependencies(txn);
-  }
-}
-
-void Server::GetPreparedWriteTimestamps(
-    std::unordered_map<std::string, std::set<Timestamp>> &writes) {
-  // gather up the set of all writes that are currently prepared
-  for (const auto &t : prepared) {
-    for (const auto &write : t.second.second->write_set()) {
-      if (IsKeyOwned(write.key())) {
-        writes[write.key()].insert(t.second.first);
-      }
-    }
-  }
-}
-
-void Server::GetPreparedWrites(
-      std::unordered_map<std::string, std::vector<const proto::Transaction *>> &writes) {
-  for (const auto &t : prepared) {
-    for (const auto &write : t.second.second->write_set()) {
-      if (IsKeyOwned(write.key())) {
-        writes[write.key()].push_back(t.second.second);
-      }
-    }
   }
 }
 
@@ -988,8 +962,8 @@ proto::ConcurrencyControl::Result Server::CheckDependencies(
     if (dep.involved_group() != groupIdx) {
       continue;
     }
-    if (committed.find(dep.prepared().txn_digest()) != committed.end()) {
-      if (Timestamp(dep.prepared().timestamp()) > Timestamp(txn.timestamp())) {
+    if (committed.find(dep.write().prepared_txn_digest()) != committed.end()) {
+      if (Timestamp(dep.write().prepared_timestamp()) > Timestamp(txn.timestamp())) {
         stats.Increment("cc_aborts", 1);
         stats.Increment("cc_aborts_dep_ts", 1);
         return proto::ConcurrencyControl::ABSTAIN;
