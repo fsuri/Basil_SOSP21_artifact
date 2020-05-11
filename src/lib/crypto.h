@@ -5,7 +5,7 @@
 
 namespace crypto {
 
-enum KeyType { RSA, ECDSA, ED25 };
+enum KeyType { RSA, ECDSA, ED25, SECP };
 
 typedef struct PubKey PubKey;
 typedef struct PrivKey PrivKey;

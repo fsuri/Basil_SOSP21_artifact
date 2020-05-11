@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
 
   std::random_device rd;
 
-  crypto::KeyType keyType = crypto::ED25;
+  crypto::KeyType keyType = crypto::SECP;
   bool precompute = true;
 
   std::pair<crypto::PrivKey*, crypto::PubKey*> keypair = crypto::GenerateKeypair(keyType, precompute);
