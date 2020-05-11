@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     std::string sig(crypto::Sign(privKey, s));
     Latency_End(&signLat);
     Latency_Start(&verifyLat);
-    crypto::Verify(pubKey, s, sig);
+    assert(crypto::Verify(pubKey, s, sig));
     Latency_End(&verifyLat);
 
     std::string hs;

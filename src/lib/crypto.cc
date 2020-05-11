@@ -228,7 +228,7 @@ void SavePrivateKey(const std::string &filename, PrivKey* key) {
     break;
   }
   case ED25: {
-    SaveCFile(filename, key->ed25Key, crypto_sign_PUBLICKEYBYTES);
+    SaveCFile(filename, key->ed25Key, crypto_sign_SECRETKEYBYTES);
     break;
   }
   case SECP: {
