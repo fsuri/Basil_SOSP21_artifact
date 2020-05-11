@@ -91,13 +91,14 @@ class Server : public TransportReceiver, public ::Server {
       uint64_t senderId);
 
 //Fallback protocol components
+// Edit MVTSO-check: When we suspend a transaction waiting for a dependency, then after some timeout, we should send the full TX to the client (IF we have it - 1 correct replica is guaranteed to have it.)
 // void HandleP1_Rec -> exec p1 if unreceived, reply with p1r, or p2r + dec_view  (Need to modify normal P2R message to contain view=0), current view
 // void HandleP2_Rec -> Reply with p2 decision
-// void HandleFB_Invoke -> send Elect message to FB based on views
-// void HandleFB_Dec -> receive FB decision and send to all interested
+// void HandleFB_Invoke -> send Elect message to FB based on views received. OR: Send all to all to other replicas (can use MACs to all replicas BESIDES the To-be-fallback) for next replica to elect.
+// void HandleFB_Dec -> receive FB decision, verify whether majority was indeed confirmed and sends signed P2R to all interested clients (this must include the view from the decision)
 
 //Fallback responsibilities
-//void HandleFB_Elect: If 4f+1 received -> send HandleFB_Dec to all replicas in logging shard
+//void HandleFB_Elect: If 4f+1 Elect messages received -> form Decision based on majority, and forward the elect set (send FB_Dec) to all replicas in logging shard. (This includes the FB replica itself - Just skip ahead to HandleFB_Dec automatically: send P2R to clients)
 
 
 
