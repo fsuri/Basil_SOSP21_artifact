@@ -32,6 +32,7 @@
 #include "store/indicusstore/server.h"
 
 #include <bitset>
+#include <queue>
 
 #include "lib/assert.h"
 #include "lib/tcptransport.h"
@@ -155,35 +156,32 @@ void Server::HandleRead(const TransportAddress &remote,
     rts[msg.key()].insert(ts);
 
     /* add prepared deps */
+    const proto::Transaction *mostRecent;
     auto itr = preparedWrites.find(msg.key());
     if (itr != preparedWrites.end() && itr->second.size() > 0) {
       // there is a prepared write for the key being read
-      mostRecent.Clear();
       for (const auto &t : itr->second) {
-        if (t.first > Timestamp(mostRecent.timestamp())) {
-          mostRecent = *t.second;
+        if (t.first > Timestamp(mostRecent->timestamp())) {
+          mostRecent = t.second;
         }
       }
 
       std::string preparedValue;
-      for (const auto &w : mostRecent.write_set()) {
+      for (const auto &w : mostRecent->write_set()) {
         if (w.key() == msg.key()) {
           preparedValue = w.value();
           break;
         }
       }
 
-      Debug("Prepared write with most recent ts %lu.%lu.", mostRecent.timestamp().timestamp(),
-          mostRecent.timestamp().id());
+      Debug("Prepared write with most recent ts %lu.%lu.",
+          mostRecent->timestamp().timestamp(), mostRecent->timestamp().id());
 
-      // TODO: currently limit depth of deps to 1 (no chains of dependencies)
-      //   TODO: temporarily undo this TODO ^
-      // if (mostRecent.deps_size() == 0) {
+      if (maxDepDepth == -1 || DependencyDepth(mostRecent) <= maxDepDepth) {
         readReply.mutable_write()->set_prepared_value(preparedValue);
-        *readReply.mutable_write()->mutable_prepared_timestamp() = mostRecent.timestamp();
-        *readReply.mutable_write()->mutable_prepared_txn_digest() = TransactionDigest(mostRecent, hashDigest);
-
-      //}
+        *readReply.mutable_write()->mutable_prepared_timestamp() = mostRecent->timestamp();
+        *readReply.mutable_write()->mutable_prepared_txn_digest() = TransactionDigest(*mostRecent, hashDigest);
+      }
     }
   }
 
@@ -1029,7 +1027,7 @@ void Server::CleanDependencies(const std::string &txnDigest) {
 }
 
 void Server::LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId,
-    proto::ConcurrencyControl::Result &myResult) {
+    proto::ConcurrencyControl::Result &myResult) const {
   myProcessId = -1;
   // see if we participated in this decision
   auto p1DecisionItr = p1Decisions.find(txnDigest);
@@ -1040,7 +1038,7 @@ void Server::LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId
 }
 
 void Server::LookupP2Decision(const std::string &txnDigest, int64_t &myProcessId,
-    proto::CommitDecision &myDecision) {
+    proto::CommitDecision &myDecision) const {
   myProcessId = -1;
   // see if we participated in this decision
   auto p2DecisionItr = p2Decisions.find(txnDigest);
@@ -1049,6 +1047,24 @@ void Server::LookupP2Decision(const std::string &txnDigest, int64_t &myProcessId
     myDecision = p2DecisionItr->second;
   }
 
+}
+
+uint64_t Server::DependencyDepth(const proto::Transaction *txn) const {
+  uint64_t maxDepth = 0;
+  std::queue<std::pair<const proto::Transaction *, uint64_t>> q;
+  q.push(std::make_pair(txn, 0UL));
+  while (!q.empty()) {
+    std::pair<const proto::Transaction *, uint64_t> curr = q.front();
+    q.pop();
+    maxDepth = std::max(maxDepth, curr.second);
+    for (const auto &dep : curr.first->deps()) {
+      auto oitr = ongoing.find(dep.write().prepared_txn_digest());
+      if (oitr != ongoing.end()) {
+        q.push(std::make_pair(oitr->second, curr.second + 1));
+      }
+    }
+  }
+  return maxDepth;
 }
 
 } // namespace indicusstore

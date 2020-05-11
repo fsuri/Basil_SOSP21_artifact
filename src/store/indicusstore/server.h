@@ -139,9 +139,10 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void Clean(const std::string &txnDigest);
   void CleanDependencies(const std::string &txnDigest);
   void LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId,
-      proto::ConcurrencyControl::Result &myResult);
+      proto::ConcurrencyControl::Result &myResult) const;
   void LookupP2Decision(const std::string &txnDigest,
-      int64_t &myProcessId, proto::CommitDecision &myDecision);
+      int64_t &myProcessId, proto::CommitDecision &myDecision) const;
+  uint64_t DependencyDepth(const proto::Transaction *txn) const;
 
   inline bool IsKeyOwned(const std::string &key) const {
     return static_cast<int>((*part)(key, numShards, groupIdx, dummyTxnGroups) % numGroups) == groupIdx;
@@ -161,6 +162,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   const bool validateProofs;
   const bool hashDigest;
   const bool verifyDeps;
+  int64_t maxDepDepth;
   KeyManager *keyManager;
   const uint64_t timeDelta;
   TrueTime timeServer;
@@ -177,7 +179,6 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   proto::Phase1Reply phase1Reply;
   proto::Phase2Reply phase2Reply;
 
-  proto::Transaction mostRecent;
   proto::Write preparedWrite;
   proto::CommittedProof committedProof;
   proto::ConcurrencyControl concurrencyControl;
