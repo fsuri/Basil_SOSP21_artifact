@@ -154,31 +154,33 @@ void Server::HandleRead(const TransportAddress &remote,
     rts[msg.key()].insert(ts);
 
     /* add prepared deps */
-    const proto::Transaction *mostRecent;
+    const proto::Transaction *mostRecent = nullptr;
     auto itr = preparedWrites.find(msg.key());
     if (itr != preparedWrites.end() && itr->second.size() > 0) {
       // there is a prepared write for the key being read
       for (const auto &t : itr->second) {
-        if (t.first > Timestamp(mostRecent->timestamp())) {
+        if (mostRecent == nullptr || t.first > Timestamp(mostRecent->timestamp())) {
           mostRecent = t.second;
         }
       }
 
-      std::string preparedValue;
-      for (const auto &w : mostRecent->write_set()) {
-        if (w.key() == msg.key()) {
-          preparedValue = w.value();
-          break;
+      if (mostRecent != nullptr) {
+        std::string preparedValue;
+        for (const auto &w : mostRecent->write_set()) {
+          if (w.key() == msg.key()) {
+            preparedValue = w.value();
+            break;
+          }
         }
-      }
 
-      Debug("Prepared write with most recent ts %lu.%lu.",
-          mostRecent->timestamp().timestamp(), mostRecent->timestamp().id());
+        Debug("Prepared write with most recent ts %lu.%lu.",
+            mostRecent->timestamp().timestamp(), mostRecent->timestamp().id());
 
-      if (params.maxDepDepth == -1 || DependencyDepth(mostRecent) <= params.maxDepDepth) {
-        readReply.mutable_write()->set_prepared_value(preparedValue);
-        *readReply.mutable_write()->mutable_prepared_timestamp() = mostRecent->timestamp();
-        *readReply.mutable_write()->mutable_prepared_txn_digest() = TransactionDigest(*mostRecent, params.hashDigest);
+        if (params.maxDepDepth == -1 || DependencyDepth(mostRecent) <= params.maxDepDepth) {
+          readReply.mutable_write()->set_prepared_value(preparedValue);
+          *readReply.mutable_write()->mutable_prepared_timestamp() = mostRecent->timestamp();
+          *readReply.mutable_write()->mutable_prepared_txn_digest() = TransactionDigest(*mostRecent, params.hashDigest);
+        }
       }
     }
   }

@@ -312,6 +312,8 @@ int main(int argc, char **argv) {
 "           processing system.");
 	gflags::ParseCommandLineFlags(&argc, &argv, true);
 
+  Notice("Starting server.");
+
   // parse configuration
   std::ifstream configStream(FLAGS_config_path);
   if (configStream.fail()) {
