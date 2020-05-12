@@ -42,7 +42,7 @@ class PingInitiator {
   const uint64_t length;
 
   bool done;
-  std::random_device rd;
+  std::mt19937 rd;
   std::map<uint64_t, std::pair<size_t, struct timespec>> outstandingSalts;
   std::map<size_t, uint64_t> roundTripEstimates;
 

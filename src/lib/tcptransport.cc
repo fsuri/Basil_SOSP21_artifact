@@ -157,7 +157,8 @@ BindToPort(int fd, const string &host, const string &port)
     Debug("Binding to %s %d TCP", inet_ntoa(sin.sin_addr), htons(sin.sin_port));
 
     if (bind(fd, (sockaddr *)&sin, sizeof(sin)) < 0) {
-        PPanic("Failed to bind to socket");
+        PPanic("Failed to bind to socket: %s:%d", inet_ntoa(sin.sin_addr),
+            htons(sin.sin_port));
     }
 }
 
@@ -313,7 +314,7 @@ TCPTransport::Register(TransportReceiver *receiver,
     }
 
     // Set SO_REUSEADDR
-    int n;
+    int n = 1;
     if (setsockopt(fd, SOL_SOCKET,
                    SO_REUSEADDR, (char *)&n, sizeof(n)) < 0) {
         PWarning("Failed to set SO_REUSEADDR on TCP listening socket");
@@ -460,21 +461,39 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
 void
 TCPTransport::Run()
 {
+    stopped = false;
     int ret = event_base_dispatch(libeventBase);
     Debug("event_base_dispatch returned %d.", ret);
 }
 
 void
-TCPTransport::Stop()
+TCPTransport::Stop(bool immediately)
 {
-  tp.stop();
-  Timer(500, [this](){
-    for (const auto &outgoing : tcpOutgoing) {
-      bufferevent_free(outgoing.second);
+  // TODO: cleaning up TCP connections needs to be done better
+  // - We want to close connections from client side when we kill clients so that
+  //   server doesn't see many connections in TIME_WAIT and run out of file descriptors
+  // - This is mainly a problem if the client is still running long after it should have
+  //   finished (due to abort loops)
+  if (!stopped) {
+    tp.stop();
+    auto stopFn = [this](){
+      if (!stopped) {
+        stopped = true;
+        for (auto itr = tcpOutgoing.begin(); itr != tcpOutgoing.end(); ) {
+          tcpAddresses.erase(itr->second);
+          bufferevent_free(itr->second);
+          itr = tcpOutgoing.erase(itr);
+        }
+        event_base_dump_events(libeventBase, stderr);
+        event_base_loopbreak(libeventBase);
+      }
+    };
+    if (immediately) {
+      stopFn();
+    } else {
+      Timer(500, stopFn);
     }
-    event_base_dump_events(libeventBase, stderr);
-    event_base_loopbreak(libeventBase);
-  });
+  }
 }
 
 int

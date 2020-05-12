@@ -607,6 +607,7 @@ void Cleanup(int signal) {
     delete replica;
   }
   if (tport != nullptr) {
+    tport->Stop(true);
     delete tport;
   }
   exit(0);

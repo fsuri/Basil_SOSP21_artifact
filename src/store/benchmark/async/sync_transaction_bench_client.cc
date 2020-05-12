@@ -14,7 +14,7 @@ SyncTransactionBenchClient::SyncTransactionBenchClient(SyncClient &client,
         warmupSec, cooldownSec, tputInterval, latencyFilename), client(client),
     abortBackoff(abortBackoff), retryAborted(retryAborted), maxBackoff(maxBackoff),
     maxAttempts(maxAttempts), timeout(timeout), currTxn(nullptr),
-    currTxnAttempts(0L) {
+    currTxnAttempts(0UL) {
 }
 
 SyncTransactionBenchClient::~SyncTransactionBenchClient() {
@@ -34,7 +34,7 @@ void SyncTransactionBenchClient::SendNext(transaction_status_t *result) {
     stats.Increment(GetLastOp() + "_attempts", 1);
     ++currTxnAttempts;
     if (*result == COMMITTED || *result == ABORTED_USER
-        || (maxAttempts != -1 && currTxnAttempts >= maxAttempts)
+        || (maxAttempts != -1 && currTxnAttempts >= static_cast<uint64_t>(maxAttempts))
         || !retryAborted) {
       if (*result == COMMITTED) {
         stats.Increment(GetLastOp() + "_committed", 1);
@@ -52,8 +52,9 @@ void SyncTransactionBenchClient::SendNext(transaction_status_t *result) {
       uint64_t backoff = 0;
       if (abortBackoff > 0) {
         uint64_t exp = std::min(currTxnAttempts - 1UL, 56UL);
-        uint64_t upper = std::min((1 << exp) * abortBackoff, maxBackoff);
-        backoff = std::uniform_int_distribution<uint64_t>(upper >> 1, upper)(GetRand());
+        uint64_t upper = std::min((1UL << exp) * static_cast<uint64_t>(abortBackoff),
+            maxBackoff);
+        backoff = std::uniform_int_distribution<uint64_t>(0UL, upper)(GetRand());
         stats.Increment(GetLastOp() + "_backoff", backoff);
         Debug("Backing off for %lums", backoff);
       }

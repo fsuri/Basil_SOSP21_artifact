@@ -250,6 +250,7 @@ bool ShardClient::SendPing(size_t replica, const PingMessage &ping) {
   string request_str;
   Request request;
   request.set_op(Request::PING);
+  request.set_txnid(0);
   *request.mutable_ping() = ping;
   request.SerializeToString(&request_str);
 

@@ -80,7 +80,7 @@ public:
         const std::vector<int> &groups, const Message &m) override;
 
     virtual void Run() override;
-    virtual void Stop() override;
+    virtual void Stop(bool immediately = false) override;
     virtual int Timer(uint64_t ms, timer_callback_t cb) override;
     virtual bool CancelTimer(int id) override;
     virtual void CancelAllTimers() override;
@@ -131,6 +131,7 @@ private:
     std::map<struct bufferevent *, std::pair<TCPTransportAddress, TransportReceiver *>> tcpAddresses;
     Latency_t sockWriteLat;
     ThreadPool tp;
+    bool stopped;
 
     virtual bool SendMessageInternal(TransportReceiver *src,
                              const TCPTransportAddress &dst,

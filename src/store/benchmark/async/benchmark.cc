@@ -326,12 +326,12 @@ DEFINE_uint64(delay, 0, "simulated communication delay");
 DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
 DEFINE_int32(clock_error, 0, "maximum error for clock");
 DEFINE_string(stats_file, "", "path to output stats file.");
-DEFINE_int32(abort_backoff, 100, "sleep exponentially increasing amount after abort.");
+DEFINE_uint64(abort_backoff, 100, "sleep exponentially increasing amount after abort.");
 DEFINE_bool(retry_aborted, true, "retry aborted transactions.");
-DEFINE_int32(max_attempts, -1, "max number of attempts per transaction (or -1"
+DEFINE_int64(max_attempts, -1, "max number of attempts per transaction (or -1"
     " for unlimited).");
-DEFINE_int32(message_timeout, 10000, "length of timeout for messages in ms.");
-DEFINE_int32(max_backoff, 5000, "max time to sleep after aborting.");
+DEFINE_uint64(message_timeout, 10000, "length of timeout for messages in ms.");
+DEFINE_uint64(max_backoff, 5000, "max time to sleep after aborting.");
 
 const std::string partitioner_args[] = {
 	"default",
@@ -1019,6 +1019,7 @@ void Cleanup(int signal) {
   for (auto i : benchClients) {
     delete i;
   }
+  tport->Stop(true);
   delete tport;
   delete part;
 }

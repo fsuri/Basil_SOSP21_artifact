@@ -117,6 +117,7 @@ Server::UnloggedUpcall(const string &str1, string &str2)
       *reply.mutable_ping() = request.ping();
       reply.set_status(REPLY_OK);
       reply.SerializeToString(&str2);
+      break;
     case tapirstore::proto::Request::GET:
         if (request.get().has_timestamp()) {
             pair<Timestamp, string> val;
