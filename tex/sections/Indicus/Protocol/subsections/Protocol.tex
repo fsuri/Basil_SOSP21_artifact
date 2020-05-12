@@ -51,13 +51,25 @@ Finally, the client adds the chosen version to its read set \textit{ReadSet = Re
 \par \textbf{Abort()} Upon instead reading an abort request,
 the client sends a message to replicas to remove its read timestamps from all keys in $ReadSet$. No actions need to be taken for writes, as \sys buffers writes during execution.
 
-\subsection{Validation (Prepare?) Phase}
+\subsection{Prepare Phase}
 The prepare phase for a transaction $T$ has two-steps: first,
-each replica must determine whether committing $T$ would violate serializability. This is a local decision in the form of a concurrency control check. Second, the set of replicas within
-each shard must agree to a common decision that will be preserved across failures. 
+each replica must determine whether committing $T$ would violate serializability. This is a local decision in the form of a concurrency control check. Second, replicas within a shard must reach a global and unanimous decision on whether to commit a transaction that will be preserved across failures.
 
-\par \textbf{Concurrency control check}
+\par \textbf{Concurrency control check} Traditional, non-replicated, MVTSO does not require any validation as transactions are guaranteed to observe all the writes that precede them in the serialization order (any "late" write is detected by read timestamps and the corresponding transaction is aborted). This is no longer true in a replicated system as reads could have failed to observe a write committing on a different replica. To preserve serializability
+and determine whether a transaction $T$ should commit, the concurrency control check proceeds (atomically) in five steps (pseudocode is in Figure~\ref{mvtso}): first, it verifies that the transaction's timestamp is within the replica's timebound (Lines 1-2). Second, it verifies that reads in $T$ did not miss any writes. Specifically, the algorithm (Lines 3-5 )checks that there does exist a write 
+from a committed or prepared transaction $TS$ that is more recent than the version that $T$ read but a timestamp $TS$ smaller that $T$ (that $T$ should therefore have observed).
+Third, the algorithm verifies that writes in $T$ would not cause reads in \textit{other} prepared
+or committed transactions to miss any writes (Lines 7-9). It similarly checks that $T$'s writes would not cause \textit{ongoing} transactions to miss a write by aborting $T$ if there exists an RTS greater than $T$'s timestamp (Line 10). Finally, the algorithm checks that $T$'s dependencies are valid (they contain proof of f+1 matching reads), and waits for these dependencies to finish (Lines 14-20). $T$ commmits if all of its dependencies commits  or otherwise aborts.
 
-\par \textbf{Achieving agreement across replicas}
+\begin{theorem}
+The set of transactions for which the MVTSO-Check returns Commit is Byzantine-Serializable. 
+\end{theorem}
+\begin{proof}
+\tr{Proof in Appendix~\ref{}}{Proof in TR~\ref{}}
+\end{proof}
+
+\par \textbf{Achieving agreement across replicas} Once each replica has determined whether a transaction should abort or commit, it must reach agreement with all other replicas. \sys{} ensures that this process remains leaderless and preserves independent operability. For performance, \sys{} further allows replicas to process requests out of order while ensuring that the end result is consistent across replicas nonetheless. To achieve this, \sys{} designates clients as the
+coordinators for their own transactions, and proceeds in two steps: a first \textit{voting} step ensures that replicas reach consensus on an abort/commit decision, while a second \textit{logging} phase guarantees that the decision will be persisted across failures. Both phases require at most a single round-trip. In the absence of contention or failures, transations can commit on a \textit{fast path} in a single round-trip as an explicit logging round is not
+necessary. The protocol is as follows, for a set of 5f+1 replicas and a single shard $S$ \nc{this reminds me that we never actually mention in the intro that we can commit transactions in a single round-trip! Tapir emphasised this so much, we probably want to at least mention it}
 
 \subsection{Writeback phase}
