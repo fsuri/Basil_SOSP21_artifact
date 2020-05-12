@@ -298,6 +298,8 @@ void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
   }
 
   Warning("PHASE1[%lu:%lu] group %d timed out.", client_id, txnId, group);
+
+  Phase1(req);
 }
 
 void Client::HandleAllPhase1Received(PendingRequest *req) {
@@ -387,6 +389,8 @@ void Client::Phase2TimeoutCallback(int group, uint64_t txnId, int status) {
   }
 
   Warning("PHASE2[%lu:%lu] group %d timed out.", client_id, txnId, group);
+
+  Phase2(req);
 }
 
 void Client::Writeback(PendingRequest *req) {

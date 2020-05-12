@@ -201,11 +201,10 @@ TCPTransport::~TCPTransport()
     Latency_Dump(&sockWriteLat);
 }
 
-void
-TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
-{
-  Debug("Opening new TCP connection to %s:%d", inet_ntoa(dst.addr.sin_addr),
-        htons(dst.addr.sin_port));
+void TCPTransport::ConnectTCP(
+    const std::pair<TCPTransportAddress, TransportReceiver *> &dstSrc) {
+  Debug("Opening new TCP connection to %s:%d", inet_ntoa(dstSrc.first.addr.sin_addr),
+        htons(dstSrc.first.addr.sin_port));
 
     // Create socket
     int fd;
@@ -237,7 +236,7 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
     TCPTransportTCPListener *info = new TCPTransportTCPListener();
     info->transport = this;
     info->acceptFd = 0;
-    info->receiver = src;
+    info->receiver = dstSrc.second;
     info->replicaIdx = -1;
     info->acceptEvent = NULL;
 
@@ -248,19 +247,19 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
                                BEV_OPT_CLOSE_ON_FREE);
 
     // mtx.lock();
-    tcpOutgoing[dst] = bev;
-    tcpAddresses.insert(pair<struct bufferevent*, TCPTransportAddress>(bev,dst));
+    tcpOutgoing[dstSrc] = bev;
+    tcpAddresses.insert(pair<struct bufferevent*, pair<TCPTransportAddress, TransportReceiver*>>(bev, dstSrc));
     // mtx.unlock();
 
     bufferevent_setcb(bev, TCPReadableCallback, NULL,
                       TCPOutgoingEventCallback, info);
     if (bufferevent_socket_connect(bev,
-                                   (struct sockaddr *)&(dst.addr),
-                                   sizeof(dst.addr)) < 0) {
+                                   (struct sockaddr *)&(dstSrc.first.addr),
+                                   sizeof(dstSrc.first.addr)) < 0) {
         bufferevent_free(bev);
 
         // mtx.lock();
-        tcpOutgoing.erase(dst);
+        tcpOutgoing.erase(dstSrc);
         tcpAddresses.erase(bev);
         // mtx.unlock();
 
@@ -279,11 +278,11 @@ TCPTransport::ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst)
         PPanic("Failed to get socket name");
     }
     TCPTransportAddress *addr = new TCPTransportAddress(sin);
-    src->SetAddress(addr);
+    dstSrc.second->SetAddress(addr);
 
 
     Debug("Opened TCP connection to %s:%d",
-	  inet_ntoa(dst.addr.sin_addr), htons(dst.addr.sin_port));
+	  inet_ntoa(dstSrc.first.addr.sin_addr), htons(dstSrc.first.addr.sin_port));
 }
 
 void
@@ -394,11 +393,12 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     Debug("Sending %s message over TCP to %s:%d",
         m.GetTypeName().c_str(), inet_ntoa(dst.addr.sin_addr),
         htons(dst.addr.sin_port));
-    auto kv = tcpOutgoing.find(dst);
+    auto dstSrc = std::make_pair(dst, src);
+    auto kv = tcpOutgoing.find(dstSrc);
     // See if we have a connection open
     if (kv == tcpOutgoing.end()) {
-        ConnectTCP(src, dst);
-        kv = tcpOutgoing.find(dst);
+        ConnectTCP(dstSrc);
+        kv = tcpOutgoing.find(dstSrc);
     }
 
     struct bufferevent *ev = kv->second;
@@ -642,9 +642,10 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
 	TCPTransportAddress client = TCPTransportAddress(sin);
 
   //transport->mtx.lock();
-	transport->tcpOutgoing[client] = bev;
+  auto dstSrc = std::make_pair(client, info->receiver);
+	transport->tcpOutgoing[dstSrc] = bev;
 	transport->tcpAddresses.insert(pair<struct bufferevent*,
-        TCPTransportAddress>(bev,client));
+        pair<TCPTransportAddress, TransportReceiver *>>(bev, dstSrc));
   //transport->mtx.unlock();
 
     Debug("Opened incoming TCP connection from %s:%d",
@@ -713,7 +714,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         UW_ASSERT(addr != transport->tcpAddresses.end());
 
         // Dispatch
-        info->receiver->ReceiveMessage(addr->second, msgType, msg, nullptr);
+        info->receiver->ReceiveMessage(addr->second.first, msgType, msg, nullptr);
         // Debug("Done processing large %s message", msgType.c_str());
     }
 }
@@ -744,7 +745,7 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
     auto it = transport->tcpAddresses.find(bev);
     //transport->mtx.unlock();
     UW_ASSERT(it != transport->tcpAddresses.end());
-    TCPTransportAddress addr = it->second;
+    TCPTransportAddress addr = it->second.first;
 
     if (what & BEV_EVENT_CONNECTED) {
         Debug("Established outgoing TCP connection to server");
@@ -754,7 +755,7 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
         bufferevent_free(bev);
 
         //transport->mtx.lock();
-        auto it2 = transport->tcpOutgoing.find(addr);
+        auto it2 = transport->tcpOutgoing.find(std::make_pair(addr, info->receiver));
         transport->tcpOutgoing.erase(it2);
         transport->tcpAddresses.erase(bev);
         //transport->mtx.unlock();
@@ -765,7 +766,7 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
         bufferevent_free(bev);
 
         //transport->mtx.lock();
-        auto it2 = transport->tcpOutgoing.find(addr);
+        auto it2 = transport->tcpOutgoing.find(std::make_pair(addr, info->receiver));
         transport->tcpOutgoing.erase(it2);
         transport->tcpAddresses.erase(bev);
         //transport->mtx.unlock();

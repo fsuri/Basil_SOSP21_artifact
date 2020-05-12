@@ -127,8 +127,8 @@ private:
     int lastTimerId;
     std::map<int, TCPTransportTimerInfo *> timers;
     std::list<TCPTransportTCPListener *> tcpListeners;
-    std::map<TCPTransportAddress, struct bufferevent *> tcpOutgoing;
-    std::map<struct bufferevent *, TCPTransportAddress> tcpAddresses;
+    std::map<std::pair<TCPTransportAddress, TransportReceiver *>, struct bufferevent *> tcpOutgoing;
+    std::map<struct bufferevent *, std::pair<TCPTransportAddress, TransportReceiver *>> tcpAddresses;
     Latency_t sockWriteLat;
     ThreadPool tp;
 
@@ -145,7 +145,7 @@ private:
       return nullptr;
     }
 
-    void ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst);
+    void ConnectTCP(const std::pair<TCPTransportAddress, TransportReceiver *> &dstSrc);
     void OnTimer(TCPTransportTimerInfo *info);
     static void TimerCallback(evutil_socket_t fd,
                               short what, void *arg);
