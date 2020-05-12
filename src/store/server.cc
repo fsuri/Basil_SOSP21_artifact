@@ -239,7 +239,8 @@ DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
 DEFINE_int64(indicus_max_dep_depth, -1, "maximum length of dependency chain"
     " allowed by honest replicas [-1 is no maximum, -2 is no deps] (for Indicus)");
-
+DEFINE_uint64(indicus_key_type, 2, "key type (see create keys for mappings)"
+    " key type (for Indicus)");
 const std::string occ_type_args[] = {
 	"tapir",
   "mvtso"
@@ -432,7 +433,24 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  KeyManager keyManager(FLAGS_indicus_key_path, crypto::ED25, true);
+	crypto::KeyType keyType;
+  switch (FLAGS_indicus_key_type) {
+  case 0:
+    keyType = crypto::RSA;
+    break;
+  case 1:
+    keyType = crypto::ECDSA;
+    break;
+  case 2:
+    keyType = crypto::ED25;
+    break;
+  case 3:
+    keyType = crypto::SECP;
+    break;
+  default:
+    throw "unimplemented";
+  }
+  KeyManager keyManager(FLAGS_indicus_key_path, keyType, true);
 
   switch (proto) {
     case PROTO_TAPIR: {

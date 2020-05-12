@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
 
   std::random_device rd;
 
-  crypto::KeyType keyType = crypto::ED25;
+  crypto::KeyType keyType = crypto::SECP;
   bool precompute = true;
 
   std::pair<crypto::PrivKey*, crypto::PubKey*> keypair = crypto::GenerateKeypair(keyType, precompute);
@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     std::string sig(crypto::Sign(privKey, s));
     Latency_End(&signLat);
     Latency_Start(&verifyLat);
-    crypto::Verify(pubKey, s, sig);
+    assert(crypto::Verify(pubKey, s, sig));
     Latency_End(&verifyLat);
 
     std::string hs;
