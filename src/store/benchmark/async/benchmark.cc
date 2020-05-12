@@ -194,6 +194,8 @@ DEFINE_bool(indicus_verify_deps, true, "check signatures of transaction"
     " depdendencies (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
+DEFINE_int64(indicus_max_dep_depth, -1, "maximum length of dependency chain"
+    " allowed by honest replicas [-1 is no maximum, -2 is no deps] (for Indicus)");
 
 DEFINE_bool(debug_stats, false, "record stats related to debugging");
 
@@ -796,7 +798,7 @@ int main(int argc, char **argv) {
 
 				indicusstore::Parameters params(FLAGS_indicus_sign_messages,
 					FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
-					FLAGS_indicus_verify_deps, 1, 0, readDepSize);
+					FLAGS_indicus_verify_deps, 1, FLAGS_indicus_max_dep_depth, readDepSize);
 
         client = new indicusstore::Client(config, clientId,
             FLAGS_num_shards,

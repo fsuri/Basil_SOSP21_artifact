@@ -238,7 +238,7 @@ DEFINE_bool(indicus_verify_deps, true, "check signatures of transaction"
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
 DEFINE_int64(indicus_max_dep_depth, -1, "maximum length of dependency chain"
-    " allowed by honest replicas [-1 is no maximum] (for Indicus)");
+    " allowed by honest replicas [-1 is no maximum, -2 is no deps] (for Indicus)");
 
 const std::string occ_type_args[] = {
 	"tapir",

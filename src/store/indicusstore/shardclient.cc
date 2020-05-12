@@ -349,7 +349,8 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     req->firstCommittedReply = false;
   }
 
-  if (write->has_prepared_value() && write->has_prepared_timestamp() &&
+  if (params.maxDepDepth > -2 && write->has_prepared_value() &&
+      write->has_prepared_timestamp() &&
       write->has_prepared_txn_digest()) {
     Timestamp preparedTs(write->prepared_timestamp());
     Debug("[group %i] ReadReply for %lu with prepared %lu byte value and ts"
@@ -371,22 +372,24 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   }
 
   if (req->numReplies >= req->rqs) {
-    for (auto preparedItr = req->prepared.rbegin();
-        preparedItr != req->prepared.rend(); ++preparedItr) {
-      if (preparedItr->first < req->maxTs) {
-        break;
-      }
-
-      if (preparedItr->second.second >= req->rds) {
-        req->maxTs = preparedItr->first;
-        req->maxValue = preparedItr->second.first.prepared_value();
-        *req->dep.mutable_write() = preparedItr->second.first;
-        if (params.validateProofs && params.signedMessages && params.verifyDeps) {
-          *req->dep.mutable_write_sigs() = req->preparedSigs[preparedItr->first];
+    if (params.maxDepDepth > -2) {
+      for (auto preparedItr = req->prepared.rbegin();
+          preparedItr != req->prepared.rend(); ++preparedItr) {
+        if (preparedItr->first < req->maxTs) {
+          break;
         }
-        req->dep.set_involved_group(group);
-        req->hasDep = true;
-        break;
+
+        if (preparedItr->second.second >= req->rds) {
+          req->maxTs = preparedItr->first;
+          req->maxValue = preparedItr->second.first.prepared_value();
+          *req->dep.mutable_write() = preparedItr->second.first;
+          if (params.validateProofs && params.signedMessages && params.verifyDeps) {
+            *req->dep.mutable_write_sigs() = req->preparedSigs[preparedItr->first];
+          }
+          req->dep.set_involved_group(group);
+          req->hasDep = true;
+          break;
+        }
       }
     }
     pendingGets.erase(itr);
