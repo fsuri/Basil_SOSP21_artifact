@@ -18,7 +18,7 @@
   "client_retry_aborted": true,
   "client_max_attempts": -1,
   "client_max_backoff": 2500,
-  "client_message_timeout": 30000,
+  "client_message_timeout": 60000,
   "run_locally": false,
   "replication_protocol_settings": [
     {
@@ -30,6 +30,8 @@
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
+      "read_messages": "read-quorum",
+      "max_dep_depth": -1,
       "validate_proofs": false,
       "sign_messages": false,
       "hash_digest": true,
@@ -41,6 +43,8 @@
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
+      "read_messages": "read-quorum",
+      "max_dep_depth": -1,
       "validate_proofs": true,
       "sign_messages": false,
       "hash_digest": true,
@@ -52,6 +56,8 @@
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
+      "read_messages": "read-quorum",
+      "max_dep_depth": -1,
       "validate_proofs": true,
       "sign_messages": true,
       "hash_digest": true,
@@ -177,7 +183,7 @@
       "ap-southeast-2": 0
     }
   },
-  "server_emulate_wan": false,
+  "server_emulate_wan": true,
   "plots": [
     {
       "name": "lat-tput",
@@ -248,7 +254,7 @@
   "client_name_format_str": "client-%d-%d",
   "emulab_user": "matthelb",
   "max_bandwidth": "1gibps",
-  "max_file_descriptors": 65535,
+  "max_file_descriptors": 1000000,
   "max_retries": 1,
   "num_experiment_runs": 1,
   "out_directory_name": "out",
