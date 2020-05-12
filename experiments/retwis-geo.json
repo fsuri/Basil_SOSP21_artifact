@@ -22,11 +22,11 @@
   "run_locally": false,
   "replication_protocol_settings": [
     {
-      "message_transport_type": "udp",
+      "message_transport_type": "tcp",
       "strictly_serializable": false
     },
     {
-      "message_transport_type": "udp",
+      "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
@@ -37,7 +37,7 @@
       "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
-      "message_transport_type": "udp",
+      "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
@@ -48,7 +48,7 @@
       "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
-      "message_transport_type": "udp",
+      "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
@@ -65,10 +65,10 @@
   "client_processes_per_client_node": 8,
   "client_nodes_per_server": 1,
   "client_threads_per_process": [
-      [2, 4, 6, 8, 12, 14, 18],
-      [1, 2, 3, 4, 6, 7, 9],
-      [1, 2, 3, 4, 6, 7, 9],
-      [1, 2, 3, 4, 6, 7, 9]
+      [2, 8, 12, 14, 18, 24, 30],
+      [1, 4, 6, 7, 9, 12, 15],
+      [1, 4, 6, 7, 9, 12, 15],
+      [1, 4, 6, 7, 9, 12, 15]
   ],
   "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],
   "pin_client_processes": [0, 1, 2, 3, 4, 5, 6, 7],

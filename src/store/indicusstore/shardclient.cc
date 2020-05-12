@@ -108,10 +108,10 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   read.set_key(key);
   *read.mutable_timestamp() = ts;
 
-  UW_ASSERT(rqs <= closestReplicas.size());
+  UW_ASSERT(readMessages <= closestReplicas.size());
   for (size_t i = 0; i < readMessages; ++i) {
-    Debug("[group %i] Sending GET to replica %d", group, closestReplicas[i]);
-    transport->SendMessageToReplica(this, group, closestReplicas[i], read);
+    Debug("[group %i] Sending GET to replica %lu", group, GetNthClosestReplica(i));
+    transport->SendMessageToReplica(this, group, GetNthClosestReplica(i), read);
   }
 
   Debug("[group %i] Sent GET [%lu : %lu]", group, id, reqId);

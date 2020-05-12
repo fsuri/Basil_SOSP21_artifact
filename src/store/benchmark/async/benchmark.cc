@@ -774,14 +774,15 @@ int main(int argc, char **argv) {
             readMessages = readQuorumSize;
             break;
           case READ_MESSAGES_MAJORITY:
-            readQuorumSize = (config->n + 1) / 2;
+            readMessages = (config->n + 1) / 2;
             break;
           case READ_MESSAGES_ALL:
-            readQuorumSize = config->n;
+            readMessages = config->n;
             break;
           default:
             NOT_REACHABLE();
         }
+        Debug("Configuring Indicus to send read messages to %lu replicas and wait for %lu replies.", readMessages, readQuorumSize);
         UW_ASSERT(readMessages >= readQuorumSize);
 
         uint64_t readDepSize = 0;
