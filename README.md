@@ -64,6 +64,15 @@ In addition, you need to install the following libraries from source:
 - [googletest-1.10](https://github.com/google/googletest/releases/tag/release-1.10.0)
 - [protobuf-3.5.1](https://github.com/protocolbuffers/protobuf/releases/tag/v3.5.1)
 - [cryptopp-8.2](htps://cryptopp.com/cryptopp820.zip)
+- [bitcoin-core/secp256k1](https://github.com/bitcoin-core/secp256k1/)
+- [BLAKE3](https://github.com/BLAKE3-team/BLAKE3)
+
+To install BLAKE3
+1. `git clone https://github.com/BLAKE3-team/BLAKE3`
+2. `cd BLAKE3/c`
+3. `gcc -fPIC -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S`
+4. `sudo cp libblake3.so /usr/local/lib/`
+5. `sudo ldconfig`
 
 ### On Mac
 The known Mac equivalents for the above packages, available through `brew install` are:
