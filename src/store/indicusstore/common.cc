@@ -163,7 +163,7 @@ bool ValidateP1Replies(proto::CommitDecision decision,
         }
       }
 
-      Debug("Verifying %lu byte signature from replica %lu in group %lu.",
+      Debug("Verifying %lu CryptoPP::byte signature from replica %lu in group %lu.",
           sig.signature().size(), sig.process_id(), sigs.first);
       //Latency_Start(&lat);
       if (!skip && !Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
@@ -357,37 +357,37 @@ std::string TransactionDigest(const proto::Transaction &txn, bool hashDigest) {
 
     uint64_t client_id = txn.client_id();
     uint64_t client_seq_num = txn.client_seq_num();
-    hash.Update((const byte*) &client_id, sizeof(client_id));
-    hash.Update((const byte*) &client_seq_num, sizeof(client_seq_num));
+    hash.Update((const CryptoPP::byte*) &client_id, sizeof(client_id));
+    hash.Update((const CryptoPP::byte*) &client_seq_num, sizeof(client_seq_num));
     for (const auto &group : txn.involved_groups()) {
-      hash.Update((const byte*) &group, sizeof(group));
+      hash.Update((const CryptoPP::byte*) &group, sizeof(group));
     }
     for (const auto &read : txn.read_set()) {
       uint64_t readtimeId = read.readtime().id();
       uint64_t readtimeTs = read.readtime().timestamp();
-      hash.Update((const byte*) &read.key()[0], read.key().length());
-      hash.Update((const byte*) &readtimeId,
+      hash.Update((const CryptoPP::byte*) &read.key()[0], read.key().length());
+      hash.Update((const CryptoPP::byte*) &readtimeId,
           sizeof(read.readtime().id()));
-      hash.Update((const byte*) &readtimeTs,
+      hash.Update((const CryptoPP::byte*) &readtimeTs,
           sizeof(read.readtime().timestamp()));
     }
     for (const auto &write : txn.write_set()) {
-      hash.Update((const byte*) &write.key()[0], write.key().length());
-      hash.Update((const byte*) &write.value()[0], write.value().length());
+      hash.Update((const CryptoPP::byte*) &write.key()[0], write.key().length());
+      hash.Update((const CryptoPP::byte*) &write.value()[0], write.value().length());
     }
     for (const auto &dep : txn.deps()) {
-      hash.Update((const byte*) &dep.prepared().txn_digest()[0],
+      hash.Update((const CryptoPP::byte*) &dep.prepared().txn_digest()[0],
           dep.prepared().txn_digest().length());
     }
     uint64_t timestampId = txn.timestamp().id();
     uint64_t timestampTs = txn.timestamp().timestamp();
-    hash.Update((const byte*) &timestampId,
+    hash.Update((const CryptoPP::byte*) &timestampId,
         sizeof(timestampId));
-    hash.Update((const byte*) &timestampTs,
+    hash.Update((const CryptoPP::byte*) &timestampTs,
         sizeof(timestampTs));
 
     digest.resize(hash.DigestSize());
-    hash.Final((byte*) &digest[0]);
+    hash.Final((CryptoPP::byte*) &digest[0]);
 
     return digest;
   } else {

@@ -79,30 +79,30 @@ std::string TransactionDigest(const proto::Transaction &txn) {
   std::string digest;
 
   for (const auto &group : txn.participating_shards()) {
-    hash.Update((const byte*) &group, sizeof(group));
+    hash.Update((const CryptoPP::byte*) &group, sizeof(group));
   }
   for (const auto &read : txn.readset()) {
     uint64_t readtimeId = read.readtime().id();
     uint64_t readtimeTs = read.readtime().timestamp();
-    hash.Update((const byte*) &read.key()[0], read.key().length());
-    hash.Update((const byte*) &readtimeId,
+    hash.Update((const CryptoPP::byte*) &read.key()[0], read.key().length());
+    hash.Update((const CryptoPP::byte*) &readtimeId,
         sizeof(read.readtime().id()));
-    hash.Update((const byte*) &readtimeTs,
+    hash.Update((const CryptoPP::byte*) &readtimeTs,
         sizeof(read.readtime().timestamp()));
   }
   for (const auto &write : txn.writeset()) {
-    hash.Update((const byte*) &write.key()[0], write.key().length());
-    hash.Update((const byte*) &write.value()[0], write.value().length());
+    hash.Update((const CryptoPP::byte*) &write.key()[0], write.key().length());
+    hash.Update((const CryptoPP::byte*) &write.value()[0], write.value().length());
   }
   uint64_t timestampId = txn.timestamp().id();
   uint64_t timestampTs = txn.timestamp().timestamp();
-  hash.Update((const byte*) &timestampId,
+  hash.Update((const CryptoPP::byte*) &timestampId,
       sizeof(timestampId));
-  hash.Update((const byte*) &timestampTs,
+  hash.Update((const CryptoPP::byte*) &timestampTs,
       sizeof(timestampTs));
 
   digest.resize(hash.DigestSize());
-  hash.Final((byte*) &digest[0]);
+  hash.Final((CryptoPP::byte*) &digest[0]);
 
   return digest;
 }
@@ -114,11 +114,11 @@ std::string BatchedDigest(proto::BatchedRequest& breq) {
 
   for (int i = 0; i < breq.digests_size(); i++) {
     std::string dig = (*breq.mutable_digests())[i];
-    hash.Update((byte*) &dig[0], dig.length());
+    hash.Update((CryptoPP::byte*) &dig[0], dig.length());
   }
 
   digest.resize(hash.DigestSize());
-  hash.Final((byte*) &digest[0]);
+  hash.Final((CryptoPP::byte*) &digest[0]);
 
   return digest;
 }

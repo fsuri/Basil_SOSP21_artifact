@@ -33,7 +33,7 @@ LIBSSL_LDFLAGS := $(shell pkg-config --libs openssl)
 CFLAGS += $(LIBSSL_CFLAGS)
 LDFLAGS += $(LIBSSL_LDFLAGS)
 # cryptopp
-LDFLAGS += -l:libcryptopp.so
+LDFLAGS += -lcryptopp
 # libsodium
 LDFLAGS += -lsodium
 LDFLAGS += -L ./lib/ -lblake3
