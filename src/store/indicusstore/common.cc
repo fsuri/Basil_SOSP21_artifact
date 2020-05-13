@@ -164,7 +164,7 @@ bool ValidateP1Replies(proto::CommitDecision decision,
         }
       }
 
-      Debug("Verifying %lu byte signature from replica %lu in group %lu.",
+      Debug("Verifying %lu CryptoPP::byte signature from replica %lu in group %lu.",
           sig.signature().size(), sig.process_id(), sigs.first);
       //Latency_Start(&lat);
       if (!skip && !Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
