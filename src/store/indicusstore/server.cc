@@ -187,9 +187,9 @@ void Server::HandleRead(const TransportAddress &remote,
               mostRecent->timestamp().timestamp(), mostRecent->timestamp().id());
 
           if (params.maxDepDepth == -1 || DependencyDepth(mostRecent) <= params.maxDepDepth) {
-            readReply.mutable_write()->set_prepared_value(preparedValue);
-            *readReply.mutable_write()->mutable_prepared_timestamp() = mostRecent->timestamp();
-            *readReply.mutable_write()->mutable_prepared_txn_digest() = TransactionDigest(*mostRecent, params.hashDigest);
+            readReply->mutable_write()->set_prepared_value(preparedValue);
+            *readReply->mutable_write()->mutable_prepared_timestamp() = mostRecent->timestamp();
+            *readReply->mutable_write()->mutable_prepared_txn_digest() = TransactionDigest(*mostRecent, params.hashDigest);
           }
         }
       }
@@ -197,14 +197,17 @@ void Server::HandleRead(const TransportAddress &remote,
   }
 
   if (params.validateProofs && params.signedMessages &&
-      (readReply.write().has_committed_value() || (params.verifyDeps && readReply.write().has_prepared_value()))) {
-    proto::Write write(readReply.write());
+      (readReply->write().has_committed_value() || (params.verifyDeps && readReply->write().has_prepared_value()))) {
+    proto::Write* write = new proto::Write(readReply->write());
     //Latency_Start(&signLat);
-    SignMessage(write, keyManager->GetPrivateKey(id), id,
-        readReply.mutable_signed_write());
+    MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
+      sendCB();
+      delete write;
+    });
     //Latency_End(&signLat);
   }
-  transport->SendMessage(this, remote, readReply);
+
+  sendCB();
 }
 
 void Server::HandlePhase1(const TransportAddress &remote,
