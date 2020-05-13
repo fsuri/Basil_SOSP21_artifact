@@ -30,11 +30,11 @@
   "run_locally": false,
   "replication_protocol_settings": [
     {
-      "message_transport_type": "tcp",
+      "message_transport_type": "udp",
       "strictly_serializable": false
     },
     {
-      "message_transport_type": "tcp",
+      "message_transport_type": "udp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
@@ -45,7 +45,7 @@
       "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
-      "message_transport_type": "tcp",
+      "message_transport_type": "udp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
@@ -56,7 +56,7 @@
       "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
-      "message_transport_type": "tcp",
+      "message_transport_type": "udp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
@@ -117,8 +117,8 @@
   "fault_tolerance": 1,
   "server_names": [
     ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
-    "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
-    "ap-northeast-1-2"],
+    "eu-west-1-1", "eu-west-1-2", "us-west-1-0", "us-west-1-1",
+    "us-west-1-2"],
     ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
     "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
     "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2",
@@ -139,8 +139,8 @@
     {
       "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2"],
       "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
-      "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
-        "ap-northeast-1-2"]
+      "us-west-1": ["us-west-1-0", "us-west-1-1",
+        "us-west-1-2"]
     },
     {
       "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2", "ap-northeast-1-0", "ap-northeast-1-1", "ap-northeast-1-2"],

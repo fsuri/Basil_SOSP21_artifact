@@ -91,9 +91,9 @@
   "project_name": "morty-pg0",
   "fault_tolerance": 1,
   "server_names": [
-    ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
-    "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
-    "ap-northeast-1-2"],
+    ["us-east-1-0", "us-east-1-1", "us-east-1-2",
+     "eu-west-1-0", "eu-west-1-1", "eu-west-1-2",
+     "us-west-1-0", "us-west-1-1", "us-west-1-2"],
     ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
     "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
     "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2",
@@ -114,8 +114,7 @@
     {
       "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2"],
       "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
-      "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
-        "ap-northeast-1-2"]
+      "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2"]
     },
     {
       "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2", "ap-northeast-1-0", "ap-northeast-1-1", "ap-northeast-1-2"],
@@ -254,7 +253,7 @@
   "client_name_format_str": "client-%d-%d",
   "emulab_user": "matthelb",
   "max_bandwidth": "1gibps",
-  "max_file_descriptors": 1000000,
+  "max_file_descriptors": 6000000,
   "max_retries": 1,
   "num_experiment_runs": 1,
   "out_directory_name": "out",
