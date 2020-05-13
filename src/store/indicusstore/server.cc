@@ -150,7 +150,7 @@ void Server::HandleRead(const TransportAddress &remote,
     }
   }
 
-  TransportAddress* remoteCopy = remote.clone();
+  TransportAddress *remoteCopy = remote.clone();
   auto sendCB = [this, remoteCopy, readReply]() {
     this->transport->SendMessage(this, *remoteCopy, *readReply);
     delete remoteCopy;
@@ -205,9 +205,9 @@ void Server::HandleRead(const TransportAddress &remote,
       delete write;
     });
     //Latency_End(&signLat);
+  } else {
+    sendCB();
   }
-
-  sendCB();
 }
 
 void Server::HandlePhase1(const TransportAddress &remote,
@@ -289,11 +289,9 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   proto::Phase2Reply* phase2Reply = new proto::Phase2Reply();
 
-  TransportAddress* remoteCopy = remote.clone();
-  auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
+  auto sendCB = [this, remoteCopy = &remote, phase2Reply, txnDigest]() {
     this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
-    delete remoteCopy;
     delete phase2Reply;
   };
 
@@ -468,6 +466,7 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
 }
 
 void Server::SignBatch() {
+  GetStats().Increment("sig_batch_" + std::to_string(pendingBatchMessages.size()));
   SignMessages(pendingBatchMessages, keyManager->GetPrivateKey(id), id,
     pendingBatchSignedMessages);
   pendingBatchMessages.clear();
@@ -1061,10 +1060,8 @@ void Server::SendPhase1Reply(uint64_t reqId,
   proto::Phase1Reply* phase1Reply = new proto::Phase1Reply();
   phase1Reply->set_req_id(reqId);
 
-  TransportAddress* remoteCopy = remote.clone();
-  auto sendCB = [remoteCopy, this, phase1Reply]() {
+  auto sendCB = [remoteCopy = &remote, this, phase1Reply]() {
     this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
-    delete remoteCopy;
   };
 
   phase1Reply->mutable_cc()->set_ccr(result);
