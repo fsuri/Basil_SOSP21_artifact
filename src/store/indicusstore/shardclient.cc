@@ -224,7 +224,7 @@ void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
 
   if (params.validateProofs && params.signedMessages) {
     proto::AbortInternal internal(abort.internal());
-    SignMessage(internal, keyManager->GetPrivateKey(client_id), client_id,
+    SignMessage(internal, keyManager->GetPrivateKey(client_id % 1024), client_id % 1024,
         abort.mutable_signed_internal());
   }
 
