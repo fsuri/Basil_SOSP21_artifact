@@ -7,8 +7,8 @@
     ["client_total", "client_processes_per_client_node",
       "client_nodes_per_server"]
   ],
-  "replication_protocol": ["tapir", "indicus", "indicus", "indicus"],
-  "client_protocol_mode": ["txn-l", "indicus", "indicus", "indicus"],
+  "replication_protocol": ["tapir", "indicus", "indicus"],
+  "client_protocol_mode": ["txn-l", "indicus", "indicus"],
   "num_shards": 24,
   "num_groups": 24,
   "benchmark_name": "tpcc-sync",
@@ -30,22 +30,11 @@
   "run_locally": false,
   "replication_protocol_settings": [
     {
-      "message_transport_type": "udp",
+      "message_transport_type": "tcp",
       "strictly_serializable": false
     },
     {
-      "message_transport_type": "udp",
-      "watermark_time_delta": 30000,
-      "read_quorum": "one-honest",
-      "read_dep": "one-honest",
-      "hash_digest": true,
-      "validate_proofs": false,
-      "sign_messages": false,
-      "verify_deps": false,
-      "key_path": "/usr/local/etc/indicus-keys/sodium"
-    },
-    {
-      "message_transport_type": "udp",
+      "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
@@ -56,7 +45,7 @@
       "key_path": "/usr/local/etc/indicus-keys/sodium"
     },
     {
-      "message_transport_type": "udp",
+      "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
@@ -73,29 +62,14 @@
   "client_total": [
     [1, 9, 18, 36, 72, 144],
     [1, 9, 18, 36, 72, 144],
-    [1, 9, 18, 36, 72, 144],
     [1, 9, 18, 36, 72, 144]
   ],
   "client_processes_per_client_node": [
       [1, 1, 2, 4, 8, 16],
       [1, 1, 1, 2, 4, 8],
-      [1, 1, 1, 2, 4, 8],
       [1, 1, 1, 2, 4, 8]
   ],
-  "_client_total": [
-    [90, 270, 450, 630, 900, 1170],
-    [90, 270, 450, 630, 900, 1170],
-    [90, 270, 450, 630, 900, 1170],
-    [90, 270, 450, 630, 900, 1170]
-  ],
-  "_client_processes_per_client_node": [
-      [10, 30, 50, 70, 100, 130],
-      [5, 15, 25, 35, 50, 65],
-      [5, 15, 25, 35, 50, 65],
-      [5, 15, 25, 35, 50, 65]
-  ],
   "client_nodes_per_server": [
-    [1, 1, 1, 1, 1, 1],
     [1, 1, 1, 1, 1, 1],
     [1, 1, 1, 1, 1, 1],
     [1, 1, 1, 1, 1, 1]
@@ -128,11 +102,6 @@
     "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
     "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2",
     "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
-    "ap-southeast-2-1", "ap-southeast-2-2"],
-    ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
-    "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
-    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2",
-    "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
     "ap-southeast-2-1", "ap-southeast-2-2"]
   ],
   "server_regions": [
@@ -141,11 +110,6 @@
       "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
       "us-west-1": ["us-west-1-0", "us-west-1-1",
         "us-west-1-2"]
-    },
-    {
-      "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2", "ap-northeast-1-0", "ap-northeast-1-1", "ap-northeast-1-2"],
-      "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2", "eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
-      "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2", "ap-southeast-2-0", "ap-southeast-2-1", "ap-southeast-2-2"]
     },
     {
       "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2", "ap-northeast-1-0", "ap-northeast-1-1", "ap-northeast-1-2"],
