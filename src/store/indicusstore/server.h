@@ -61,7 +61,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   Server(const transport::Configuration &config, int groupIdx, int idx,
       int numShards, int numGroups,
       Transport *transport, KeyManager *keyManager, Parameters params, uint64_t timeDelta,
-      OCCType occType, Partitioner *part, uint64_t readDepSize, unsigned int batchTimeoutMS,
+      OCCType occType, Partitioner *part, unsigned int batchTimeoutMS,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
@@ -100,13 +100,14 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void SignBatch();
 
 //Fallback protocol components
+// Edit MVTSO-check: When we suspend a transaction waiting for a dependency, then after some timeout, we should send the full TX to the client (IF we have it - 1 correct replica is guaranteed to have it.)
 // void HandleP1_Rec -> exec p1 if unreceived, reply with p1r, or p2r + dec_view  (Need to modify normal P2R message to contain view=0), current view
 // void HandleP2_Rec -> Reply with p2 decision
-// void HandleFB_Invoke -> send Elect message to FB based on views
-// void HandleFB_Dec -> receive FB decision and send to all interested
+// void HandleFB_Invoke -> send Elect message to FB based on views received. OR: Send all to all to other replicas (can use MACs to all replicas BESIDES the To-be-fallback) for next replica to elect.
+// void HandleFB_Dec -> receive FB decision, verify whether majority was indeed confirmed and sends signed P2R to all interested clients (this must include the view from the decision)
 
 //Fallback responsibilities
-//void HandleFB_Elect: If 4f+1 received -> send HandleFB_Dec to all replicas in logging shard
+//void HandleFB_Elect: If 4f+1 Elect messages received -> form Decision based on majority, and forward the elect set (send FB_Dec) to all replicas in logging shard. (This includes the FB replica itself - Just skip ahead to HandleFB_Dec automatically: send P2R to clients)
 
   proto::ConcurrencyControl::Result DoOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
@@ -120,9 +121,9 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       const std::string &txnDigest, const proto::Transaction &txn,
       proto::CommittedProof &conflict);
 
-  void GetPreparedWriteTimestamps(
+  void GetWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
-  void GetPreparedWrites(
+  void GetWrites(
       std::unordered_map<std::string, std::vector<const proto::Transaction *>> &writes);
   void GetPreparedReadTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &reads);
@@ -147,9 +148,10 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void Clean(const std::string &txnDigest);
   void CleanDependencies(const std::string &txnDigest);
   void LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId,
-      proto::ConcurrencyControl::Result &myResult);
+      proto::ConcurrencyControl::Result &myResult) const;
   void LookupP2Decision(const std::string &txnDigest,
-      int64_t &myProcessId, proto::CommitDecision &myDecision);
+      int64_t &myProcessId, proto::CommitDecision &myDecision) const;
+  uint64_t DependencyDepth(const proto::Transaction *txn) const;
 
   inline bool IsKeyOwned(const std::string &key) const {
     return static_cast<int>((*part)(key, numShards, groupIdx, dummyTxnGroups) % numGroups) == groupIdx;
@@ -164,7 +166,6 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   Transport *transport;
   const OCCType occType;
   Partitioner *part;
-  const uint64_t readDepSize;
   const Parameters params;
   KeyManager *keyManager;
   const uint64_t timeDelta;
@@ -179,8 +180,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   proto::Writeback writeback;
   proto::Abort abort;
 
-  proto::Transaction mostRecent;
-  proto::PreparedWrite preparedWrite;
+  proto::Write preparedWrite;
   proto::CommittedProof committedProof;
   proto::ConcurrencyControl concurrencyControl;
   proto::AbortInternal abortInternal;

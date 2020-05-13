@@ -250,7 +250,7 @@ void ReplTransport::Run() {
     }
 }
 
-void ReplTransport::Stop() {
+void ReplTransport::Stop(bool immediately) {
 }
 
 bool ReplTransport::SendMessageInternal(TransportReceiver *src,

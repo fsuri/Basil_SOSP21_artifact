@@ -67,7 +67,7 @@ Server::ExecInconsistentUpcall(const string &str1)
         store->Abort(request.txnid(), Transaction(request.abort().txn()));
         break;
     default:
-        Panic("Unrecognized inconsisternt operation.");
+        Panic("Unrecognized inconsisternt operation %d.", request.op());
     }
 }
 
@@ -113,6 +113,11 @@ Server::UnloggedUpcall(const string &str1, string &str2)
     request.ParseFromString(str1);
 
     switch (request.op()) {
+    case tapirstore::proto::Request::PING:
+      *reply.mutable_ping() = request.ping();
+      reply.set_status(REPLY_OK);
+      reply.SerializeToString(&str2);
+      break;
     case tapirstore::proto::Request::GET:
         if (request.get().has_timestamp()) {
             pair<Timestamp, string> val;

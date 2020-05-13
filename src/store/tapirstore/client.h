@@ -57,7 +57,7 @@ namespace tapirstore {
 class Client : public ::Client {
  public:
   Client(transport::Configuration *config, uint64_t id, int nShards, int nGroups,
-      int closestReplica, Transport *transport, Partitioner *part,
+      int closestReplica, Transport *transport, Partitioner *part, bool pingReplicas,
       bool syncCommit, TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 
@@ -133,10 +133,13 @@ class Client : public ::Client {
   
   // Buffering client for each shard.
   std::vector<BufferClient *> bclient;
+  std::vector<ShardClient *> sclient;
 
   Partitioner *part;
   
+  const bool pingReplicas;
   bool syncCommit;
+
 
   // TrueTime server.
   TrueTime timeServer;
@@ -144,6 +147,9 @@ class Client : public ::Client {
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
   std::unordered_map<std::string, uint32_t> statInts;
+
+  bool first;
+  bool startedPings;
 };
 
 } // namespace tapirstore

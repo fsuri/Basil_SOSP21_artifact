@@ -71,6 +71,10 @@ class Client {
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
       uint32_t timeout) = 0;
 
+  inline const Stats &GetStats() const { return stats; }
+
+ protected:
+  Stats stats;
 };
 
 #endif /* _CLIENT_API_H_ */

@@ -18,7 +18,7 @@ class AsyncPayment : public AsyncTPCCTransaction, public Payment {
       uint32_t num_warehouses, std::mt19937 &gen);
   virtual ~AsyncPayment();
 
-  Operation GetNextOperation(size_t opCount,
+  Operation GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
       std::map<std::string, std::string> readValues);
 
  private:

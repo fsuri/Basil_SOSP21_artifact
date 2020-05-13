@@ -24,7 +24,7 @@ class AsyncDelivery : public AsyncTPCCTransaction, public Delivery {
   AsyncDelivery(uint32_t w_id, uint32_t d_id, std::mt19937 &gen);
   virtual ~AsyncDelivery();
 
-  Operation GetNextOperation(size_t opCount,
+  Operation GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
       std::map<std::string, std::string> readValues);
 
  private:

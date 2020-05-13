@@ -17,15 +17,15 @@ AsyncStockLevel::AsyncStockLevel(uint32_t w_id, uint32_t d_id,
 AsyncStockLevel::~AsyncStockLevel() {
 }
 
-Operation AsyncStockLevel::GetNextOperation(size_t opCount,
+Operation AsyncStockLevel::GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
   std::map<std::string, std::string> readValues) {
-  if (opCount == 0) {
+  if (finishedOpCount == 0) {
     Debug("STOCK_LEVEL");
     Debug("Warehouse: %u", w_id);
     Debug("District: %u", d_id);
     return Get(DistrictRowKey(w_id, d_id));
   } else if (readAllOrderLines == 0) {
-    if (opCount == 1) {
+    if (finishedOpCount == 1) {
       std::string d_key = DistrictRowKey(w_id, d_id);
       auto d_row_itr = readValues.find(d_key);
       UW_ASSERT(d_row_itr != readValues.end());
@@ -61,15 +61,17 @@ Operation AsyncStockLevel::GetNextOperation(size_t opCount,
       ++currOrderLineIdx;
       return Get(ol_key);
     } else {
-      readAllOrderLines = opCount;
+      readAllOrderLines = finishedOpCount;
     }
   }
   UW_ASSERT(readAllOrderLines > 0);
-  uint32_t orderLineIdx = opCount - readAllOrderLines;
+  uint32_t orderLineIdx = finishedOpCount - readAllOrderLines;
   if (orderLineIdx < orderLines.size()) {
     return Get(StockRowKey(w_id, orderLines[orderLineIdx].i_id()));
-  } else {
+  } else if (orderLineIdx == orderLines.size()) {
     return Commit();
+  } else {
+    return Wait();
   }
 }
 

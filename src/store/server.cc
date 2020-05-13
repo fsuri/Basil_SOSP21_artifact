@@ -241,6 +241,10 @@ DEFINE_uint64(indicus_sig_batch_timeout, 10, "signature batch timeout ms"
     " sig batch timeout (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
+DEFINE_int64(indicus_max_dep_depth, -1, "maximum length of dependency chain"
+    " allowed by honest replicas [-1 is no maximum, -2 is no deps] (for Indicus)");
+DEFINE_uint64(indicus_key_type, 2, "key type (see create keys for mappings)"
+    " key type (for Indicus)");
 const std::string occ_type_args[] = {
 	"tapir",
   "mvtso"
@@ -312,6 +316,8 @@ int main(int argc, char **argv) {
            "runs a replica for a distributed replicated transaction\n"
 "           processing system.");
 	gflags::ParseCommandLineFlags(&argc, &argv, true);
+
+  Notice("Starting server.");
 
   // parse configuration
   std::ifstream configStream(FLAGS_config_path);
@@ -431,7 +437,24 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  KeyManager keyManager(FLAGS_indicus_key_path, crypto::ED25, true);
+	crypto::KeyType keyType;
+  switch (FLAGS_indicus_key_type) {
+  case 0:
+    keyType = crypto::RSA;
+    break;
+  case 1:
+    keyType = crypto::ECDSA;
+    break;
+  case 2:
+    keyType = crypto::ED25;
+    break;
+  case 3:
+    keyType = crypto::SECP;
+    break;
+  default:
+    throw "unimplemented";
+  }
+  KeyManager keyManager(FLAGS_indicus_key_path, keyType, true);
 
   switch (proto) {
     case PROTO_TAPIR: {
@@ -487,10 +510,10 @@ int main(int argc, char **argv) {
       timeDelta = timeDelta | (FLAGS_indicus_time_delta % 1000) * 1000;
 			indicusstore::Parameters params(FLAGS_indicus_sign_messages,
 				FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
-				FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch);
+				FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch, FLAGS_indicus_max_dep_depth, readDepSize);
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
-          tport, &keyManager, params, timeDelta, indicusOCCType, part, readDepSize, FLAGS_indicus_sig_batch_timeout);
+          tport, &keyManager, params, timeDelta, indicusOCCType, part, FLAGS_indicus_sig_batch_timeout);
       break;
     }
 		case PROTO_PBFT: {
@@ -588,6 +611,7 @@ void Cleanup(int signal) {
     delete replica;
   }
   if (tport != nullptr) {
+    tport->Stop(true);
     delete tport;
   }
   exit(0);

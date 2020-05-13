@@ -105,6 +105,7 @@ DEFINE_uint64(client_id, 0, "unique identifier for client");
 DEFINE_string(config_path, "", "path to shard configuration file");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
 DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
+DEFINE_bool(ping_replicas, false, "determine latency to replicas via pings");
 
 DEFINE_bool(tapir_sync_commit, true, "wait until commit phase completes before"
     " sending additional transactions (for TAPIR)");
@@ -195,6 +196,10 @@ DEFINE_uint64(indicus_sig_batch, 1, "signature batch size"
     " sig batch size (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
+DEFINE_int64(indicus_max_dep_depth, -1, "maximum length of dependency chain"
+    " allowed by honest replicas [-1 is no maximum, -2 is no deps] (for Indicus)");
+DEFINE_uint64(indicus_key_type, 2, "key type (see create keys for mappings)"
+    " key type (for Indicus)");
 
 DEFINE_bool(debug_stats, false, "record stats related to debugging");
 
@@ -323,12 +328,12 @@ DEFINE_uint64(delay, 0, "simulated communication delay");
 DEFINE_int32(clock_skew, 0, "difference between real clock and TrueTime");
 DEFINE_int32(clock_error, 0, "maximum error for clock");
 DEFINE_string(stats_file, "", "path to output stats file.");
-DEFINE_int32(abort_backoff, 100, "sleep exponentially increasing amount after abort.");
+DEFINE_uint64(abort_backoff, 100, "sleep exponentially increasing amount after abort.");
 DEFINE_bool(retry_aborted, true, "retry aborted transactions.");
-DEFINE_int32(max_attempts, -1, "max number of attempts per transaction (or -1"
+DEFINE_int64(max_attempts, -1, "max number of attempts per transaction (or -1"
     " for unlimited).");
-DEFINE_int32(message_timeout, 10000, "length of timeout for messages in ms.");
-DEFINE_int32(max_backoff, 5000, "max time to sleep after aborting.");
+DEFINE_uint64(message_timeout, 10000, "length of timeout for messages in ms.");
+DEFINE_uint64(max_backoff, 5000, "max time to sleep after aborting.");
 
 const std::string partitioner_args[] = {
 	"default",
@@ -699,7 +704,25 @@ int main(int argc, char **argv) {
     return -1;
   }
   config = new transport::Configuration(configStream);
-  keyManager = new KeyManager(FLAGS_indicus_key_path, crypto::ED25, true);
+
+	crypto::KeyType keyType;
+  switch (FLAGS_indicus_key_type) {
+  case 0:
+    keyType = crypto::RSA;
+    break;
+  case 1:
+    keyType = crypto::ECDSA;
+    break;
+  case 2:
+    keyType = crypto::ED25;
+    break;
+  case 3:
+    keyType = crypto::SECP;
+    break;
+  default:
+    throw "unimplemented";
+  }
+  KeyManager* keyManager = new KeyManager(FLAGS_indicus_key_path, keyType, true);
 
   if (closestReplicas.size() > 0 && closestReplicas.size() != static_cast<size_t>(config->n)) {
     std::cerr << "If specifying closest replicas, must specify all "
@@ -714,11 +737,13 @@ int main(int argc, char **argv) {
     SyncClient *syncClient = nullptr;
     OneShotClient *oneShotClient = nullptr;
 
+    uint64_t clientId = (FLAGS_client_id << 32) | i;
     switch (mode) {
       case PROTO_TAPIR: {
-        client = new tapirstore::Client(config, (FLAGS_client_id << 3) | i,
+        client = new tapirstore::Client(config, clientId,
             FLAGS_num_shards, FLAGS_num_groups, FLAGS_closest_replica,
-            tport, part, FLAGS_tapir_sync_commit, TrueTime(FLAGS_clock_skew,
+            tport, part, FLAGS_ping_replicas, FLAGS_tapir_sync_commit,
+            TrueTime(FLAGS_clock_skew,
               FLAGS_clock_error));
         break;
       }
@@ -739,7 +764,7 @@ int main(int argc, char **argv) {
       }*/
       case PROTO_MORTY: {
         asyncClient = new mortystore::Client(config,
-            (FLAGS_client_id << 3) | i, FLAGS_num_shards, FLAGS_num_groups,
+            clientId, FLAGS_num_shards, FLAGS_num_groups,
             FLAGS_closest_replica, tport, part, FLAGS_debug_stats);
         break;
       }
@@ -771,14 +796,15 @@ int main(int argc, char **argv) {
             readMessages = readQuorumSize;
             break;
           case READ_MESSAGES_MAJORITY:
-            readQuorumSize = (config->n + 1) / 2;
+            readMessages = (config->n + 1) / 2;
             break;
           case READ_MESSAGES_ALL:
-            readQuorumSize = config->n;
+            readMessages = config->n;
             break;
           default:
             NOT_REACHABLE();
         }
+        Debug("Configuring Indicus to send read messages to %lu replicas and wait for %lu replies.", readMessages, readQuorumSize);
         UW_ASSERT(readMessages >= readQuorumSize);
 
         uint64_t readDepSize = 0;
@@ -795,12 +821,12 @@ int main(int argc, char **argv) {
 
 				indicusstore::Parameters params(FLAGS_indicus_sign_messages,
 					FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
-					FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch);
+					FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch, FLAGS_indicus_max_dep_depth, readDepSize);
 
-        client = new indicusstore::Client(config, (FLAGS_client_id << 3),
+        client = new indicusstore::Client(config, clientId,
             FLAGS_num_shards,
-            FLAGS_num_groups, closestReplicas, tport, part,
-            FLAGS_tapir_sync_commit, readMessages, readQuorumSize, readDepSize,
+            FLAGS_num_groups, closestReplicas, FLAGS_ping_replicas, tport, part,
+            FLAGS_tapir_sync_commit, readMessages, readQuorumSize,
             params, keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
       }
@@ -995,6 +1021,7 @@ void Cleanup(int signal) {
   for (auto i : benchClients) {
     delete i;
   }
+  tport->Stop(true);
   delete tport;
   delete part;
 }
@@ -1008,6 +1035,10 @@ void FlushStats() {
     for (unsigned int i = 0; i < asyncClients.size(); i++) {
       total.Merge(asyncClients[i]->GetStats());
     }
+    for (unsigned int i = 0; i < clients.size(); i++) {
+      total.Merge(clients[i]->GetStats());
+    }
+
     total.ExportJSON(FLAGS_stats_file);
   }
 }

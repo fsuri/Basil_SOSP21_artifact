@@ -8,7 +8,7 @@ LD = g++
 EXPAND = lib/tmpl/expand
 
 #CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNUW_ASSERT
-CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized
+CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O3
 CXXFLAGS := -g -std=c++17
 LDFLAGS := -levent_pthreads
 ## Debian package: check
@@ -33,11 +33,16 @@ LIBSSL_LDFLAGS := $(shell pkg-config --libs openssl)
 CFLAGS += $(LIBSSL_CFLAGS)
 LDFLAGS += $(LIBSSL_LDFLAGS)
 # cryptopp
-LDFLAGS += -l:libcryptopp.so
+LDFLAGS += -l:libcryptopp.a
 # libsodium
 LDFLAGS += -lsodium
-LDFLAGS += -L ./lib/ -lblake3
-
+# blake3
+LDFLAGS += -lblake3
+# bitcoin-core/secp256k1
+LIBSECP256K1_CFLAGS := $(shell pkg-config --cflags libsecp256k1)
+LIBSECP256K1_LDFLAGS := $(shell pkg-config --libs libsecp256k1)
+CFLAGS += $(LIBSECP256K1_CFLAGS)
+LDFLAGS += $(LIBSECP256K1_LDFLAGS)
 
 # Google test framework. This doesn't use pkgconfig
 GTEST_DIR := /usr/src/gtest-1.10.0/googletest

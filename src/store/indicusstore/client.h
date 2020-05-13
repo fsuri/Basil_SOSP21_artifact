@@ -59,9 +59,9 @@ namespace indicusstore {
 class Client : public ::Client {
  public:
   Client(transport::Configuration *config, uint64_t id, int nShards,
-      int nGroups, const std::vector<int> &closestReplicas,
+      int nGroups, const std::vector<int> &closestReplicas, bool pingReplicas,
       Transport *transport, Partitioner *part, bool syncCommit,
-      uint64_t readMessages, uint64_t readQuorumSize, uint64_t readDepSize,
+      uint64_t readMessages, uint64_t readQuorumSize,
       Parameters params, KeyManager *keyManager,
       TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
@@ -133,13 +133,26 @@ class Client : public ::Client {
   void Phase2TimeoutCallback(int group, uint64_t reqId, int status);
 
   // Fallback logic
-  //void Receive Full Dep or Receive Full Conflict.
-  //void Phase1_Rec   P1 do not need to be signed
-  //void Phase1_Rec_Callback
-  //void Phase2_Rec    P2 need to be signed in order to enforce time-out, replicas will buffer until time-out.
-  //void Phase2_Rec_Callback
-  //void InvokeFallback
-  //void ReceiveNewView.
+  
+  //void Receive Full Dep or Receive Full Conflict. (this should be received as answer from a replica instead of P1R if tx is stalled on a dependency. Alternatively, this is the conflicting TX)
+  //void Phase1_Rec   P1 do not need to be signed. Send p1 rec request to every replica in every involved shard.
+
+  //void Phase1_Rec_Callback: Wait for either: Fast Path or Slow Path of p1r quorums. OR: if received p2r replies: Use those if f+1 received, or start election if inconsistent received.  P1_recR := (p1R, optional: p2R)_R.
+  //We need to extend p2R messages to include views  (can interpret no view = v0 if that makes it easiest to not change current code).      Replicas must keep track of curr_view per TX as well.
+
+
+  // 2 cases:
+     //void Phase2_Rec    P2 need to be signed in order to enforce time-out, replicas will buffer until time-out.
+  // 1: normal P2 (includes as proof P1R Quorum from all shards, or f+1 P2R from loggin shard)
+    //void InvokeFallback
+  // 2: Invoke election: Include signed Quorum of replica current views. Alternatively, if it makes things easier: Just send request to all replicas and have replicas use all to all. In this case we do not need signature proofs AND we can use Macs between replicas.
+
+
+  //void Phase2_Rec_Callback: Receive a P2 from a view > 0. Try to assemble 4f+1 matching. (Keep a mapping from views to Sets in order to potentially do this for multiple views; GC old ones.)
+
+
+  //void ReceiveNewView.  (Only necessary if doing the client driven view change. This happens if replicas tried to elect a FB, but timed out on a response because the FB is byz or crashed or whatever) Receive 3f+1 matching from higher view than last and start new Invocation
+  //void FBWriteback: Should just be the normal writeback
 
   void Writeback(PendingRequest *req);
 
@@ -159,14 +172,17 @@ class Client : public ::Client {
   std::vector<ShardClient *> bclient;
   Partitioner *part;
   bool syncCommit;
+  const bool pingReplicas;
   const uint64_t readMessages;
   const uint64_t readQuorumSize;
-  const uint64_t readDepSize;
   const Parameters params;
   KeyManager *keyManager;
   // TrueTime server.
   TrueTime timeServer;
 
+
+  bool first;
+  bool startedPings;
 
   /* Transaction Execution State */
   // Ongoing transaction ID.

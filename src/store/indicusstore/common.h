@@ -103,9 +103,9 @@ bool ValidateDependency(const proto::Dependency &dep,
     const transport::Configuration *config, uint64_t readDepSize,
     KeyManager *keyManager, unsigned int sigBatchSize);
 
-bool operator==(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2);
+bool operator==(const proto::Write &pw1, const proto::Write &pw2);
 
-bool operator!=(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2);
+bool operator!=(const proto::Write &pw1, const proto::Write &pw2);
 
 std::string TransactionDigest(const proto::Transaction &txn, bool hashDigest);
 
@@ -127,11 +127,14 @@ typedef struct Parameters {
   const bool hashDigest;
   const bool verifyDeps;
   const int signatureBatchSize;
+  const int64_t maxDepDepth;
+  const uint64_t readDepSize;
 
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
-    int signatureBatchSize) :
+    int signatureBatchSize, int64_t maxDepDepth, uint64_t readDepSize) :
     signedMessages(signedMessages), validateProofs(validateProofs),
-    hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize) {}
+    hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
+    maxDepDepth(maxDepDepth), readDepSize(readDepSize) { }
 } Parameters;
 
 } // namespace indicusstore

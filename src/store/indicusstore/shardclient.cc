@@ -39,10 +39,11 @@ namespace indicusstore {
 
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int group, const std::vector<int> &closestReplicas_,
+    bool pingReplicas,
     Parameters params, KeyManager *keyManager, TrueTime &timeServer) :
-    PingInitiator(transport, config->n),
+    PingInitiator(this, transport, config->n),
     client_id(client_id), transport(transport), config(config), group(group),
-    timeServer(timeServer), params(params),
+    timeServer(timeServer), pingReplicas(pingReplicas), params(params),
     keyManager(keyManager), phase1DecisionTimeout(1000UL), lastReqId(0UL) {
   transport->Register(this, *config, -1, -1);
 
@@ -51,7 +52,7 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
       closestReplicas.push_back((i + client_id) % config->n);
     }
   } else {
-    closestReplicas = closestReplicas;
+    closestReplicas = closestReplicas_;
   }
 }
 
@@ -60,12 +61,6 @@ ShardClient::~ShardClient() {
 
 void ShardClient::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
-  proto::SignedMessage signedMessage;
-  proto::ReadReply readReply;
-  proto::Phase1Reply phase1Reply;
-  proto::Phase2Reply phase2Reply;
-  PingMessage ping;
-
   if (type == readReply.GetTypeName()) {
     readReply.ParseFromString(data);
     HandleReadReply(readReply);
@@ -77,7 +72,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
     HandlePhase2Reply(phase2Reply);
   } else if (type == ping.GetTypeName()) {
     ping.ParseFromString(data);
-    HandlePingResponse(this, remote, ping);
+    HandlePingResponse(ping);
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
@@ -86,7 +81,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
 void ShardClient::Begin(uint64_t id) {
   Debug("[group %i] BEGIN: %lu", group, id);
 
-  txn = proto::Transaction();
+  txn.Clear();
   readValues.clear();
 }
 
@@ -108,15 +103,15 @@ void ShardClient::Get(uint64_t id, const std::string &key,
   pendingGet->gcb = gcb;
   pendingGet->gtcb = gtcb;
 
-  proto::Read read;
+  read.Clear();
   read.set_req_id(reqId);
   read.set_key(key);
   *read.mutable_timestamp() = ts;
 
-  UW_ASSERT(rqs <= closestReplicas.size());
+  UW_ASSERT(readMessages <= closestReplicas.size());
   for (size_t i = 0; i < readMessages; ++i) {
-    Debug("[group %i] Sending GET to replica %d", group, closestReplicas[i]);
-    transport->SendMessageToReplica(this, group, closestReplicas[i], read);
+    Debug("[group %i] Sending GET to replica %lu", group, GetNthClosestReplica(i));
+    transport->SendMessageToReplica(this, group, GetNthClosestReplica(i), read);
   }
 
   Debug("[group %i] Sent GET [%lu : %lu]", group, id, reqId);
@@ -153,7 +148,7 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
   });
 
   // create prepare request
-  proto::Phase1 phase1;
+  phase1.Clear();
   phase1.set_req_id(reqId);
   *phase1.mutable_txn() = transaction;
 
@@ -185,7 +180,7 @@ void ShardClient::Phase2(uint64_t id,
       ptcb(REPLY_TIMEOUT);
   });
 
-  proto::Phase2 phase2;
+  phase2.Clear();
   phase2.set_req_id(reqId);
   phase2.set_decision(decision);
   *phase2.mutable_txn_digest() = txnDigest;
@@ -202,8 +197,8 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
     proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
     const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs) {
 
+  writeback.Clear();
   // create commit request
-  proto::Writeback writeback;
   writeback.set_decision(decision);
   if (params.validateProofs && params.signedMessages) {
     if (fast && decision == proto::COMMIT) {
@@ -221,7 +216,7 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
 }
 
 void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
-  proto::Abort abort;
+  abort.Clear();
   *abort.mutable_internal()->mutable_ts() = ts;
   for (const auto &read : txn.read_set()) {
     *abort.mutable_internal()->add_read_set() = read.key();
@@ -230,12 +225,12 @@ void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
   if (params.validateProofs && params.signedMessages) {
     proto::AbortInternal internal(abort.internal());
     if (params.signatureBatchSize == 1) {
-      SignMessage(&internal, keyManager->GetPrivateKey(client_id), client_id,
+      SignMessage(&internal, keyManager->GetPrivateKey(client_id % 1024), client_id % 1024,
           abort.mutable_signed_internal());
     } else {
       std::vector<::google::protobuf::Message*> messages = {&internal};
       std::vector<proto::SignedMessage*> signedMessages = {abort.mutable_signed_internal()};
-      SignMessages(messages, keyManager->GetPrivateKey(client_id), client_id,
+      SignMessages(messages, keyManager->GetPrivateKey(client_id % 1024), client_id % 1024,
           signedMessages);
     }
   }
@@ -244,6 +239,12 @@ void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
 
   Debug("[group %i] Sent ABORT[%lu]", group, id);
 }
+
+bool ShardClient::SendPing(size_t replica, const PingMessage &ping) {
+  transport->SendMessageToReplica(this, group, replica, ping);
+  return true;
+}
+
 
 bool ShardClient::BufferGet(const std::string &key, read_callback rcb) {
   for (const auto &write : txn.write_set()) {
@@ -291,14 +292,51 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   PendingQuorumGet *req = itr->second;
   Debug("[group %i] ReadReply for %lu.", group, reply.req_id());
 
+  const proto::Write *write;
+  if (params.validateProofs && params.signedMessages) {
+    if (reply.has_signed_write()) {
+      if (!Verify(keyManager->GetPublicKey(reply.signed_write().process_id()),
+              reply.signed_write().data(), reply.signed_write().signature(), params.signatureBatchSize)) {
+          return;
+      }
+      
+      if(!validatedPrepared.ParseFromString(reply.signed_write().data())) {
+        return;
+      }
+
+      write = &validatedPrepared;
+    } else {
+      if (reply.has_write() && reply.write().has_committed_value()) {
+        Debug("[group %i] Reply contains unsigned committed value.", group);
+        return;
+      }
+
+      if (params.verifyDeps && reply.has_write() && reply.write().has_prepared_value()) {
+        Debug("[group %i] Reply contains unsigned prepared value.", group);
+        return;
+      }
+
+      write = &reply.write();
+      UW_ASSERT(!write->has_committed_value());
+      UW_ASSERT(!write->has_prepared_value() || !params.verifyDeps);
+    }
+  } else {
+    write = &reply.write();
+  }
+
   // value and timestamp are valid
   req->numReplies++;
-  if (reply.has_committed()) {
+  if (write->has_committed_value() && write->has_committed_timestamp()) {
     if (params.validateProofs) {
-      std::string committedTxnDigest = TransactionDigest(reply.committed().proof().txn(), params.hashDigest);
-      if (!ValidateTransactionWrite(reply.committed().proof(), &committedTxnDigest,
-            req->key, reply.committed().value(), reply.committed().timestamp(), config,
-            params.signedMessages, keyManager, params.signatureBatchSize)) {
+      if (!reply.has_proof()) {
+        return;
+      }
+
+      std::string committedTxnDigest = TransactionDigest(
+          reply.proof().txn(), params.hashDigest);
+      if (!ValidateTransactionWrite(reply.proof(), &committedTxnDigest,
+            req->key, write->committed_value(), write->committed_timestamp(),
+            config, params.signedMessages, keyManager, params.signatureBatchSize)) {
         Debug("[group %i] Failed to validate committed value for read %lu.",
             group, reply.req_id());
         // invalid replies can be treated as if we never received a reply from
@@ -307,81 +345,58 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
       }
     }
 
-    Timestamp replyTs(reply.committed().timestamp());
+    Timestamp replyTs(write->committed_timestamp());
     Debug("[group %i] ReadReply for %lu with committed %lu byte value and ts"
-        " %lu.%lu.", group, reply.req_id(), reply.committed().value().length(),
+        " %lu.%lu.", group, reply.req_id(), write->committed_value().length(),
         replyTs.getTimestamp(), replyTs.getID());
     if (req->firstCommittedReply || req->maxTs < replyTs) {
       req->maxTs = replyTs;
-      req->maxValue = reply.committed().value();
+      req->maxValue = write->committed_value();
     }
     req->firstCommittedReply = false;
   }
 
-  const proto::PreparedWrite *prepared;
-  proto::PreparedWrite validatedPrepared;
-  bool hasPrepared = false;
-  if (params.validateProofs && params.signedMessages && params.verifyDeps) {
-    if (reply.has_signed_prepared()) {
-      if (!Verify(keyManager->GetPublicKey(
-              reply.signed_prepared().process_id()),
-              reply.signed_prepared().data(),
-              reply.signed_prepared().signature(),
-              params.signatureBatchSize)) {
-          return;
-      }
-
-      if(!validatedPrepared.ParseFromString(reply.signed_prepared().data())) {
-        return;
-      }
-
-      prepared = &validatedPrepared;
-      hasPrepared = true;
-    }
-  } else {
-    if (reply.has_prepared()) {
-      hasPrepared = true;
-      prepared = &reply.prepared();
-    }
-  }
-
-  if (hasPrepared) {
-    Timestamp preparedTs(prepared->timestamp());
+  if (params.maxDepDepth > -2 && write->has_prepared_value() &&
+      write->has_prepared_timestamp() &&
+      write->has_prepared_txn_digest()) {
+    Timestamp preparedTs(write->prepared_timestamp());
     Debug("[group %i] ReadReply for %lu with prepared %lu byte value and ts"
-        " %lu.%lu.", group, reply.req_id(), prepared->value().length(),
+        " %lu.%lu.", group, reply.req_id(), write->prepared_value().length(),
         preparedTs.getTimestamp(), preparedTs.getID());
     auto preparedItr = req->prepared.find(preparedTs);
     if (preparedItr == req->prepared.end()) {
       req->prepared.insert(std::make_pair(preparedTs,
-            std::make_pair(*prepared, 1)));
-    } else if (preparedItr->second.first == *prepared) {
+            std::make_pair(*write, 1)));
+    } else if (preparedItr->second.first == *write) {
       preparedItr->second.second += 1;
     }
 
-    if (params.validateProofs && params.signedMessages) {
+    if (params.validateProofs && params.signedMessages && params.verifyDeps) {
       proto::Signature *sig = req->preparedSigs[preparedTs].add_sigs();
-      sig->set_process_id(reply.signed_prepared().process_id());
-      *sig->mutable_signature() = reply.signed_prepared().signature();
+      sig->set_process_id(reply.signed_write().process_id());
+      *sig->mutable_signature() = reply.signed_write().signature();
     }
   }
 
   if (req->numReplies >= req->rqs) {
-    for (auto preparedItr = req->prepared.rbegin();
-        preparedItr != req->prepared.rend(); ++preparedItr) {
-      if (preparedItr->first < req->maxTs) {
-        break;
-      }
-
-      if (preparedItr->second.second >= req->rds) {
-        req->maxTs = preparedItr->first;
-        req->maxValue = preparedItr->second.first.value();
-        *req->dep.mutable_prepared() = preparedItr->second.first;
-        if (params.validateProofs && params.signedMessages && params.verifyDeps) {
-          *req->dep.mutable_prepared_sigs() = req->preparedSigs[preparedItr->first];
+    if (params.maxDepDepth > -2) {
+      for (auto preparedItr = req->prepared.rbegin();
+          preparedItr != req->prepared.rend(); ++preparedItr) {
+        if (preparedItr->first < req->maxTs) {
+          break;
         }
-        req->dep.set_involved_group(group);
-        req->hasDep = true;
-        break;
+
+        if (preparedItr->second.second >= req->rds) {
+          req->maxTs = preparedItr->first;
+          req->maxValue = preparedItr->second.first.prepared_value();
+          *req->dep.mutable_write() = preparedItr->second.first;
+          if (params.validateProofs && params.signedMessages && params.verifyDeps) {
+            *req->dep.mutable_write_sigs() = req->preparedSigs[preparedItr->first];
+          }
+          req->dep.set_involved_group(group);
+          req->hasDep = true;
+          break;
+        }
       }
     }
     pendingGets.erase(itr);
@@ -406,7 +421,6 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
   bool hasSigned = (params.validateProofs && params.signedMessages) && (!reply.has_cc() || reply.cc().ccr() != proto::ConcurrencyControl::ABORT);
 
   const proto::ConcurrencyControl *cc = nullptr;
-  proto::ConcurrencyControl validatedCC;
   if (hasSigned) {
     Debug("[group %i] Verifying signed_cc because has_cc %d and ccr %d.",
         group,
@@ -532,7 +546,6 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
   }
 
   const proto::Phase2Decision *p2Decision = nullptr;
-  proto::Phase2Decision validatedP2Decision;
   if (params.validateProofs && params.signedMessages) {
     if (!reply.has_signed_p2_decision()) {
       Debug("[group %i] Phase2Reply missing signed_p2_decision.", group);

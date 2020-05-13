@@ -70,10 +70,11 @@ typedef std::function<void(int)> phase2_timeout_callback;
 typedef std::function<void()> writeback_callback;
 typedef std::function<void(int)> writeback_timeout_callback;
 
-class ShardClient : public TransportReceiver, public PingInitiator {
+class ShardClient : public TransportReceiver, public PingInitiator, public PingTransport {
  public:
   ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int group, const std::vector<int> &closestReplicas,
+      bool pingReplicas,
       Parameters params, KeyManager *keyManager, TrueTime &timeServer);
   virtual ~ShardClient();
 
@@ -109,6 +110,7 @@ class ShardClient : public TransportReceiver, public PingInitiator {
       const proto::GroupedSignatures &p2Sigs);
 
   virtual void Abort(uint64_t id, const TimestampMessage &ts);
+  virtual bool SendPing(size_t replica, const PingMessage &ping); 
  private:
   struct PendingQuorumGet {
     PendingQuorumGet(uint64_t reqId) : reqId(reqId),
@@ -124,7 +126,7 @@ class ShardClient : public TransportReceiver, public PingInitiator {
     std::string maxValue;
     uint64_t numReplies;
     uint64_t numOKReplies;
-    std::map<Timestamp, std::pair<proto::PreparedWrite, uint64_t>> prepared;
+    std::map<Timestamp, std::pair<proto::Write, uint64_t>> prepared;
     std::map<Timestamp, proto::Signatures> preparedSigs;
     proto::Dependency dep;
     bool hasDep;
@@ -211,18 +213,20 @@ class ShardClient : public TransportReceiver, public PingInitiator {
   void Phase1Decision(
       std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
 
-  /* Helper Functions for starting and finishing requests */
-  void StartRequest();
-  void WaitForResponse();
-  void FinishRequest(const std::string &reply_str);
-  void FinishRequest();
-  int SendGet(const std::string &request_str);
+  inline size_t GetNthClosestReplica(size_t idx) const {
+    if (pingReplicas && GetOrderedReplicas().size() > 0) {
+      return GetOrderedReplicas()[idx];
+    } else {
+      return closestReplicas[idx];
+    }
+  }
 
   const uint64_t client_id; // Unique ID for this client.
   Transport *transport; // Transport layer.
   transport::Configuration *config;
   const int group; // which shard this client accesses
   TrueTime &timeServer;
+  const bool pingReplicas;
   const Parameters params;
   KeyManager *keyManager;
   const uint64_t phase1DecisionTimeout;
@@ -236,6 +240,20 @@ class ShardClient : public TransportReceiver, public PingInitiator {
   std::unordered_map<uint64_t, PendingPhase1 *> pendingPhase1s;
   std::unordered_map<uint64_t, PendingPhase2 *> pendingPhase2s;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
+
+  proto::Read read;
+  proto::Phase1 phase1;
+  proto::Phase2 phase2;
+  proto::Writeback writeback;
+  proto::Abort abort;
+  proto::ReadReply readReply;
+  proto::Phase1Reply phase1Reply;
+  proto::Phase2Reply phase2Reply;
+  PingMessage ping;
+  
+  proto::Write validatedPrepared;
+  proto::ConcurrencyControl validatedCC;
+  proto::Phase2Decision validatedP2Decision;
 };
 
 } // namespace indicusstore

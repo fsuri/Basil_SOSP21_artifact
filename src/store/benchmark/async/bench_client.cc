@@ -174,7 +174,7 @@ void BenchmarkClient::IncrementSent(int result) {
           gettimeofday(&startMeasureTime, NULL);
           startMeasureTime.tv_sec -= ns / 1000000000ULL;
           startMeasureTime.tv_usec -= (ns % 1000000000ULL) / 1000ULL;
-          std::cout << "#start," << startMeasureTime.tv_sec << "," << startMeasureTime.tv_usec << std::endl;
+          //std::cout << "#start," << startMeasureTime.tv_sec << "," << startMeasureTime.tv_usec << std::endl;
         }
         uint64_t currNanos = curr.tv_sec * 1000000000ULL + curr.tv_nsec;
         std::cout << GetLastOp() << ',' << ns << ',' << currNanos << std::endl;

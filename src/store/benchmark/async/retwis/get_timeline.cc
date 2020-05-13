@@ -9,13 +9,16 @@ GetTimeline::GetTimeline(KeySelector *keySelector, std::mt19937 &rand)
 GetTimeline::~GetTimeline() {
 }
 
-Operation GetTimeline::GetNextOperation(size_t opCount,
+Operation GetTimeline::GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
       std::map<std::string, std::string> readValues) {
+  Debug("GET_TIMELINE %lu %lu", outstandingOpCount, finishedOpCount);
   std::string value;
-  if (opCount < GetNumKeys()) {
-    return Get(GetKey(opCount));
-  } else {
+  if (outstandingOpCount < GetNumKeys()) {
+    return Get(GetKey(outstandingOpCount));
+  } else if (outstandingOpCount == finishedOpCount) {
     return Commit();
+  } else {
+    return Wait();
   }
 }
 

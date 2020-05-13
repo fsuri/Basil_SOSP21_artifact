@@ -8,30 +8,46 @@
 #include "lib/transport.h"
 #include "store/common/common-proto.pb.h"
 
+class PingTransport {
+ public:
+  PingTransport() { }
+  virtual ~PingTransport() { }
+  
+  virtual bool SendPing(size_t replica, const PingMessage &ping) = 0;
+};
+
 class PingInitiator {
  public:
-  PingInitiator(Transport *transport, size_t numReplicas);
+  PingInitiator(PingTransport *pingTransport, Transport *transport,
+      size_t numReplicas);
   virtual ~PingInitiator();
 
-  void Start(TransportReceiver *receiver);
-  void SendPing(TransportReceiver *receiver, size_t replica);
-  void HandlePingResponse(TransportReceiver *receiver, 
-      const TransportAddress &remote, const PingMessage &ping);
+  void StartPings();
+
+ protected:
+  inline const std::vector<size_t> &GetOrderedReplicas() const { return orderedReplicas; }
+  
+  void HandlePingResponse(const PingMessage &ping);
 
  private:
+  void SendPing(size_t replica);
+
   static uint64_t timespec_delta(const struct timespec &a,
       const struct timespec &b);
+
+  PingTransport *pingTransport;
   Transport *transport;
   const size_t numReplicas;
   const double alpha;
   const uint64_t length;
 
   bool done;
-  std::random_device rd;
+  std::mt19937 rd;
   std::map<uint64_t, std::pair<size_t, struct timespec>> outstandingSalts;
   std::map<size_t, uint64_t> roundTripEstimates;
 
   std::vector<size_t> orderedReplicas;
+
 
   PingMessage ping;
 };

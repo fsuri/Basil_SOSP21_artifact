@@ -20,6 +20,9 @@ int main(int argc, char** argv) {
   case 2:
     t = crypto::ED25;
     break;
+  case 3:
+    t = crypto::SECP;
+    break;
   default:
     throw "unimplemented";
   }

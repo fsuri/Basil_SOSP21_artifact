@@ -2,6 +2,7 @@
 #include "lib/crypto.h"
 #include "lib/batched_sigs.h"
 #include "lib/blake3.h"
+#include "lib/message.h"
 
 #include <gflags/gflags.h>
 
@@ -9,6 +10,7 @@
 
 DEFINE_uint64(size, 1000, "size of data to verify.");
 DEFINE_uint64(iterations, 100, "number of iterations to measure.");
+DEFINE_string(signature_alg, "ecdsa", "algorithm to benchmark (options: ecdsa, ed25519, rsa, secp256k1)");
 
 void GenerateRandomString(uint64_t size, std::random_device &rd, std::string &s) {
   s.clear();
@@ -30,7 +32,19 @@ int main(int argc, char *argv[]) {
 
   std::random_device rd;
 
-  crypto::KeyType keyType = crypto::ED25;
+  crypto::KeyType keyType;
+  if (FLAGS_signature_alg == "ecdsa") {
+    keyType = crypto::ECDSA;
+  } else if (FLAGS_signature_alg == "rsa") {
+    keyType = crypto::RSA;
+  } else if (FLAGS_signature_alg == "ed25519") {
+    keyType = crypto::ED25;
+  } else if (FLAGS_signature_alg == "secp256k1") {
+    keyType = crypto::SECP;
+  } else {
+    Panic("Unknown signature algorithm: %s.", FLAGS_signature_alg.c_str());
+  }
+
   bool precompute = true;
 
   std::pair<crypto::PrivKey*, crypto::PubKey*> keypair = crypto::GenerateKeypair(keyType, precompute);
@@ -60,6 +74,9 @@ int main(int argc, char *argv[]) {
     sigs.push_back(new std::string());
   }
 
+  Notice("===================================");
+  Notice("Running %s for %lu iterations with data size %lu.", FLAGS_signature_alg.c_str(),
+      FLAGS_iterations, FLAGS_size);
   for (uint64_t i = 0; i < FLAGS_iterations; ++i) {
     std::string s;
     GenerateRandomString(FLAGS_size, rd, s);
@@ -67,10 +84,10 @@ int main(int argc, char *argv[]) {
     std::string sig(crypto::Sign(privKey, s));
     Latency_End(&signLat);
     Latency_Start(&verifyLat);
-    crypto::Verify(pubKey, s, sig);
+    assert(crypto::Verify(pubKey, s, sig));
     Latency_End(&verifyLat);
 
-    std::string hs;
+    /*std::string hs;
     GenerateRandomString(FLAGS_size, rd, hs);
 
     Latency_Start(&hashLat);
@@ -105,14 +122,15 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < batchSize; i++) {
       assert(BatchedSigs::verifyBatchedSignature(sigs[i], messages[i], pubKey));
     }
-    Latency_End(&verifyBLat);
+    Latency_End(&verifyBLat);*/
 
   }
   Latency_Dump(&signLat);
   Latency_Dump(&verifyLat);
-  Latency_Dump(&signBLat);
-  Latency_Dump(&verifyBLat);
-  Latency_Dump(&hashLat);
-  Latency_Dump(&blake3Lat);
+  Notice("===================================");
+  //Latency_Dump(&signBLat);
+  //Latency_Dump(&verifyBLat);
+  //Latency_Dump(&hashLat);
+  //Latency_Dump(&blake3Lat);
   return 0;
 }

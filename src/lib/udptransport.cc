@@ -659,7 +659,7 @@ UDPTransport::Run()
 }
 
 void
-UDPTransport::Stop()
+UDPTransport::Stop(bool immediately)
 {
     tp.stop();
     event_base_loopbreak(libeventBase);

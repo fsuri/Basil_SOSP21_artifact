@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include <cryptopp/sha.h>
+#include <cryptopp/blake2.h>
 
 #include "store/common/timestamp.h"
 #include "store/common/transaction.h"
@@ -324,70 +325,73 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
 bool ValidateDependency(const proto::Dependency &dep,
     const transport::Configuration *config, uint64_t readDepSize,
     KeyManager *keyManager, unsigned int sigBatchSize) {
-  if (dep.prepared_sigs().sigs_size() < readDepSize) {
+  if (dep.write_sigs().sigs_size() < readDepSize) {
     return false;
   }
 
   std::string preparedData;
-  dep.prepared().SerializeToString(&preparedData);
-  for (const auto &sig : dep.prepared_sigs().sigs()) {
+  dep.write().SerializeToString(&preparedData);
+  for (const auto &sig : dep.write_sigs().sigs()) {
     if (!Verify(keyManager->GetPublicKey(sig.process_id()), preparedData,
           sig.signature(), sigBatchSize)) {
-      return false;
+      return false;    
     }
   }
   return true;
 }
 
-bool operator==(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2) {
-  return pw1.value() == pw2.value() &&
-    pw1.timestamp().timestamp() == pw2.timestamp().timestamp() &&
-    pw1.timestamp().id() == pw2.timestamp().id() &&
-    pw1.txn_digest() == pw2.txn_digest();
+bool operator==(const proto::Write &pw1, const proto::Write &pw2) {
+  return pw1.committed_value() == pw2.committed_value() &&
+    pw1.committed_timestamp().timestamp() == pw2.committed_timestamp().timestamp() &&
+    pw1.committed_timestamp().id() == pw2.committed_timestamp().id() &&
+    pw1.prepared_value() == pw2.prepared_value() &&
+    pw1.prepared_timestamp().timestamp() == pw2.prepared_timestamp().timestamp() &&
+    pw1.prepared_timestamp().id() == pw2.prepared_timestamp().id() &&
+    pw1.prepared_txn_digest() == pw2.prepared_txn_digest();
 }
 
-bool operator!=(const proto::PreparedWrite &pw1, const proto::PreparedWrite &pw2) {
+bool operator!=(const proto::Write &pw1, const proto::Write &pw2) {
   return !(pw1 == pw2);
 }
 
 std::string TransactionDigest(const proto::Transaction &txn, bool hashDigest) {
   if (hashDigest) {
-    CryptoPP::SHA256 hash;
+    CryptoPP::BLAKE2b hash;
     std::string digest;
 
     uint64_t client_id = txn.client_id();
     uint64_t client_seq_num = txn.client_seq_num();
-    hash.Update((const byte*) &client_id, sizeof(client_id));
-    hash.Update((const byte*) &client_seq_num, sizeof(client_seq_num));
+    hash.Update((const CryptoPP::byte*) &client_id, sizeof(client_id));
+    hash.Update((const CryptoPP::byte*) &client_seq_num, sizeof(client_seq_num));
     for (const auto &group : txn.involved_groups()) {
-      hash.Update((const byte*) &group, sizeof(group));
+      hash.Update((const CryptoPP::byte*) &group, sizeof(group));
     }
     for (const auto &read : txn.read_set()) {
       uint64_t readtimeId = read.readtime().id();
       uint64_t readtimeTs = read.readtime().timestamp();
-      hash.Update((const byte*) &read.key()[0], read.key().length());
-      hash.Update((const byte*) &readtimeId,
+      hash.Update((const CryptoPP::byte*) &read.key()[0], read.key().length());
+      hash.Update((const CryptoPP::byte*) &readtimeId,
           sizeof(read.readtime().id()));
-      hash.Update((const byte*) &readtimeTs,
+      hash.Update((const CryptoPP::byte*) &readtimeTs,
           sizeof(read.readtime().timestamp()));
     }
     for (const auto &write : txn.write_set()) {
-      hash.Update((const byte*) &write.key()[0], write.key().length());
-      hash.Update((const byte*) &write.value()[0], write.value().length());
+      hash.Update((const CryptoPP::byte*) &write.key()[0], write.key().length());
+      hash.Update((const CryptoPP::byte*) &write.value()[0], write.value().length());
     }
     for (const auto &dep : txn.deps()) {
-      hash.Update((const byte*) &dep.prepared().txn_digest()[0],
-          dep.prepared().txn_digest().length());
+      hash.Update((const CryptoPP::byte*) &dep.write().prepared_txn_digest()[0],
+          dep.write().prepared_txn_digest().length());
     }
     uint64_t timestampId = txn.timestamp().id();
     uint64_t timestampTs = txn.timestamp().timestamp();
-    hash.Update((const byte*) &timestampId,
+    hash.Update((const CryptoPP::byte*) &timestampId,
         sizeof(timestampId));
-    hash.Update((const byte*) &timestampTs,
+    hash.Update((const CryptoPP::byte*) &timestampTs,
         sizeof(timestampTs));
 
     digest.resize(hash.DigestSize());
-    hash.Final((byte*) &digest[0]);
+    hash.Final((CryptoPP::byte*) &digest[0]);
 
     return digest;
   } else {

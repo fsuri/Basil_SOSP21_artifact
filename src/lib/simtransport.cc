@@ -288,7 +288,7 @@ SimulatedTransport::CancelAllTimers()
 }
 
 void
-SimulatedTransport::Stop() {
+SimulatedTransport::Stop(bool immediately) {
     running = false;
 }
 

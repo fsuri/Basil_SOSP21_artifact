@@ -17,9 +17,9 @@ AsyncOrderStatus::AsyncOrderStatus(uint32_t w_id, uint32_t c_c_last,
 AsyncOrderStatus::~AsyncOrderStatus() {
 }
 
-Operation AsyncOrderStatus::GetNextOperation(size_t opCount,
+Operation AsyncOrderStatus::GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
   std::map<std::string, std::string> readValues) {
-  if (opCount == 0) {
+  if (finishedOpCount == 0) {
     Debug("ORDER_STATUS");
     Debug("Warehouse: %u", c_w_id);
     Debug("District: %u", c_d_id);
@@ -33,7 +33,7 @@ Operation AsyncOrderStatus::GetNextOperation(size_t opCount,
   } else {
     uint32_t count;
     if (c_by_last_name) {
-      if (opCount == 1) {
+      if (finishedOpCount == 1) {
         std::string cbn_key = CustomerByNameRowKey(c_w_id, c_d_id, c_last);
         auto cbn_row_itr = readValues.find(cbn_key);
         UW_ASSERT(cbn_row_itr != readValues.end());
@@ -48,9 +48,9 @@ Operation AsyncOrderStatus::GetNextOperation(size_t opCount,
 
         return Get(CustomerRowKey(c_w_id, c_d_id, c_id));
       }
-      count = opCount - 1;
+      count = finishedOpCount - 1;
     } else {
-      count = opCount;
+      count = finishedOpCount;
     }
 
     if (count == 1) {
@@ -88,9 +88,11 @@ Operation AsyncOrderStatus::GetNextOperation(size_t opCount,
       if (count < 2 + o_row.ol_cnt()) {
         uint32_t ol_number = count - 2;
         return Get(OrderLineRowKey(c_w_id, c_d_id, o_id, ol_number));
-      } else {
+      } else if (count == 2 + o_row.ol_cnt()) {
         Debug("COMMIT");
         return Commit();
+      } else {
+        return Wait();
       }
     }
   }

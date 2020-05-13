@@ -9,21 +9,24 @@ PostTweet::PostTweet(KeySelector *keySelector, std::mt19937 &rand) :
 PostTweet::~PostTweet() {
 }
 
-Operation PostTweet::GetNextOperation(size_t opCount,
+Operation PostTweet::GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
       std::map<std::string, std::string> readValues) {
-  if (opCount < 6) {
-    int k = opCount / 2;
-    if (opCount % 2 == 0) {
+  Debug("POST_TWEET %lu %lu", outstandingOpCount, finishedOpCount);
+  if (outstandingOpCount < 6) {
+    int k = outstandingOpCount / 2;
+    if (outstandingOpCount % 2 == 0) {
       return Get(GetKey(k));
     } else {
       return Put(GetKey(k), GetKey(k));
     }
-  } else if (opCount == 6) {
+  } else if (outstandingOpCount == 6) {
     return Put(GetKey(3), GetKey(3));
-  } else if (opCount == 7) {
+  } else if (outstandingOpCount == 7) {
     return Put(GetKey(4), GetKey(4));
-  } else {
+  } else if (outstandingOpCount == finishedOpCount) {
     return Commit();
+  } else {
+    return Wait();
   }
 }
 

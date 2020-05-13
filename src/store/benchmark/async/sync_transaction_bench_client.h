@@ -32,7 +32,7 @@ class SyncTransactionBenchClient : public BenchmarkClient {
   int64_t maxAttempts;
   uint64_t timeout;
   SyncTransaction *currTxn;
-  int64_t currTxnAttempts;
+  uint64_t currTxnAttempts;
 
 };
 

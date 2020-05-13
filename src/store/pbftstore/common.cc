@@ -8,6 +8,8 @@
 
 namespace pbftstore {
 
+using namespace CryptoPP;
+
 bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager, ::google::protobuf::Message &plaintextMsg) {
   proto::PackedMessage packedMessage;

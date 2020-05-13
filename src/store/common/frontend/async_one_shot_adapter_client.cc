@@ -13,7 +13,7 @@ void AsyncOneShotAdapterClient::Execute(AsyncTransaction *txn,
   Operation op;
   std::map<std::string, std::string> emptyReadValues;
   for (size_t opCount = 0; ; ++opCount) {
-    op = txn->GetNextOperation(opCount, emptyReadValues);
+    op = txn->GetNextOperation(opCount, 0UL, emptyReadValues);
     if (op.type == COMMIT || op.type == ABORT) {
       break;
     } else if (op.type == GET) {

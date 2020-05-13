@@ -10,11 +10,23 @@
 #include <cryptopp/oids.h>
 #include <cryptopp/osrng.h>
 #include <cryptopp/sha.h>
+#include <random>
+#include "lib/secp256k1.h"
+#include "lib/blake3.h"
+#include "lib/static_block.h"
 
 namespace crypto {
 
 using namespace CryptoPP;
 using namespace std;
+
+secp256k1_context *secpCTX;
+// hasher struct
+blake3_hasher hasher;
+
+static_block {
+  secpCTX = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
+}
 
 struct PubKey {
   KeyType t;
@@ -22,6 +34,7 @@ struct PubKey {
     RSA::PublicKey* rsaKey;
     CryptoPP::ECDSA<ECP, SHA256>::PublicKey* ecdsaKey;
     unsigned char* ed25Key;
+    unsigned char* secpKey;
   };
 };
 
@@ -31,6 +44,7 @@ struct PrivKey {
     RSA::PrivateKey* rsaKey;
     CryptoPP::ECDSA<ECP, SHA256>::PrivateKey* ecdsaKey;
     unsigned char* ed25Key;
+    unsigned char* secpKey;
   };
 };
 
@@ -75,6 +89,16 @@ string Sign(PrivKey* privateKey, const string &message) {
     crypto_sign_detached((unsigned char*) &signature[0], NULL, (unsigned char*) &message[0], message.length(), privateKey->ed25Key);
     return signature;
   }
+  case SECP: {
+    std::string signature;
+    signature.resize(64);
+    blake3_hasher_init(&hasher);
+    blake3_hasher_update(&hasher, (unsigned char*) &message[0], message.length());
+    unsigned char out[BLAKE3_OUT_LEN];
+    blake3_hasher_finalize(&hasher, out, BLAKE3_OUT_LEN);
+    secp256k1_ecdsa_sign(secpCTX, (secp256k1_ecdsa_signature*) &signature[0], out, privateKey->secpKey, NULL, NULL);
+    return signature;
+  }
   default: {
     Panic("unimplemented");
   }
@@ -91,6 +115,9 @@ size_t SigSize(KeyType t) {
   }
   case ED25: {
     return crypto_sign_BYTES;
+  }
+  case SECP: {
+    return sizeof(secp256k1_ecdsa_signature);
   }
   default: {
     Panic("unimplemented");
@@ -129,6 +156,14 @@ bool Verify(PubKey* publicKey, const string &message, const string &signature) {
   case ED25: {
     return crypto_sign_verify_detached((unsigned char*) &signature[0], (unsigned char*) &message[0], message.length(), publicKey->ed25Key) == 0;
   }
+  case SECP: {
+    blake3_hasher_init(&hasher);
+    blake3_hasher_update(&hasher, (unsigned char*) &message[0], message.length());
+    unsigned char out[BLAKE3_OUT_LEN];
+    blake3_hasher_finalize(&hasher, out, BLAKE3_OUT_LEN);
+    return secp256k1_ecdsa_verify(secpCTX, (secp256k1_ecdsa_signature*) &signature[0], out, (secp256k1_pubkey*) publicKey->secpKey) == 1;
+  }
+
   }
   Panic("unimplemented");
 }
@@ -166,6 +201,10 @@ void SavePublicKey(const string &filename, PubKey* key) {
     SaveCFile(filename, key->ed25Key, crypto_sign_PUBLICKEYBYTES);
     break;
   }
+  case SECP: {
+    SaveCFile(filename, key->secpKey, sizeof(secp256k1_pubkey));
+    break;
+  }
   default: {
     Panic("unimplemented");
   }
@@ -189,7 +228,11 @@ void SavePrivateKey(const std::string &filename, PrivKey* key) {
     break;
   }
   case ED25: {
-    SaveCFile(filename, key->ed25Key, crypto_sign_PUBLICKEYBYTES);
+    SaveCFile(filename, key->ed25Key, crypto_sign_SECRETKEYBYTES);
+    break;
+  }
+  case SECP: {
+    SaveCFile(filename, key->secpKey, 32);
     break;
   }
   default: {
@@ -206,7 +249,7 @@ void Load(const string &filename, BufferedTransformation &bt) {
 }
 
 void LoadCFile(const std::string &filename, unsigned char* bytes, size_t length) {
-  FILE * file = fopen(filename.c_str(), "r+");
+  FILE * file = fopen(filename.c_str(), "r");
   if (file == NULL) {
     Panic("Invalid filename %s", filename.c_str());
   }
@@ -242,6 +285,11 @@ PubKey* LoadPublicKey(const string &filename, KeyType t, bool precompute) {
     LoadCFile(filename, key->ed25Key, crypto_sign_PUBLICKEYBYTES);
     break;
   }
+  case SECP: {
+    key->ed25Key = (unsigned char*) malloc(sizeof(secp256k1_pubkey));
+    LoadCFile(filename, key->ed25Key, sizeof(secp256k1_pubkey));
+    break;
+  }
   default: {
     Panic("unimplemented");
   }
@@ -275,6 +323,11 @@ PrivKey* LoadPrivateKey(const string &filename, KeyType t, bool precompute) {
   case ED25: {
     key->ed25Key = (unsigned char*) malloc(crypto_sign_SECRETKEYBYTES);
     LoadCFile(filename, key->ed25Key, crypto_sign_SECRETKEYBYTES);
+    break;
+  }
+  case SECP: {
+    key->ed25Key = (unsigned char*) malloc(32);
+    LoadCFile(filename, key->ed25Key, 32);
     break;
   }
   default: {
@@ -330,6 +383,19 @@ std::pair<PrivKey*, PubKey*> GenerateKeypair(KeyType t, bool precompute) {
     pubKey->ed25Key = (unsigned char*) malloc(crypto_sign_PUBLICKEYBYTES);
     privKey->ed25Key = (unsigned char*) malloc(crypto_sign_SECRETKEYBYTES);
     crypto_sign_keypair(pubKey->ed25Key, privKey->ed25Key);
+    break;
+  }
+  case SECP: {
+    pubKey->secpKey = (unsigned char*) malloc(sizeof(secp256k1_pubkey));
+    privKey->secpKey = (unsigned char*) malloc(32);
+    // TODO prolly not secure random but meh
+    std::random_device rd;
+    for (int i = 0; i < 32; i++) {
+      privKey->secpKey[i] = static_cast<char>(rd());
+    }
+    if (secp256k1_ec_pubkey_create(secpCTX, (secp256k1_pubkey*) pubKey->secpKey, privKey->secpKey) == 0) {
+      Panic("Unable to create pub key");
+    };
     break;
   }
   default: {

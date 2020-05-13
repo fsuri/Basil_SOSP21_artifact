@@ -1,7 +1,7 @@
 #include "store/common/frontend/async_adapter_client.h"
 
 AsyncAdapterClient::AsyncAdapterClient(Client *client, uint32_t timeout) :
-    client(client), timeout(timeout), opCount(0UL) {
+    client(client), timeout(timeout), outstandingOpCount(0UL), finishedOpCount(0UL) {
 }
 
 AsyncAdapterClient::~AsyncAdapterClient() {
@@ -11,7 +11,8 @@ void AsyncAdapterClient::Execute(AsyncTransaction *txn,
     execute_callback ecb) {
   currEcb = ecb;
   currTxn = txn;
-  opCount = 0UL;
+  outstandingOpCount = 0UL;
+  finishedOpCount = 0UL;
   readValues.clear();
   client->Begin([this](uint64_t id) {
     ExecuteNextOperation();
@@ -19,14 +20,17 @@ void AsyncAdapterClient::Execute(AsyncTransaction *txn,
 }
 
 void AsyncAdapterClient::ExecuteNextOperation() {
-  Operation op = currTxn->GetNextOperation(opCount, readValues);
+  Operation op = currTxn->GetNextOperation(outstandingOpCount, finishedOpCount,
+      readValues);
   switch (op.type) {
     case GET: {
       client->Get(op.key, std::bind(&AsyncAdapterClient::GetCallback, this,
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
         std::placeholders::_4), std::bind(&AsyncAdapterClient::GetTimeout, this,
           std::placeholders::_1, std::placeholders::_2), timeout);
+      ++outstandingOpCount;
       // timeout doesn't really matter?
+      ExecuteNextOperation();
       break;
     }
     case PUT: {
@@ -35,7 +39,9 @@ void AsyncAdapterClient::ExecuteNextOperation() {
             std::placeholders::_3), std::bind(&AsyncAdapterClient::PutTimeout,
               this, std::placeholders::_1, std::placeholders::_2,
               std::placeholders::_3), timeout);
+      ++outstandingOpCount;
       // timeout doesn't really matter?
+      ExecuteNextOperation();
       break;
     }
     case COMMIT: {
@@ -52,6 +58,8 @@ void AsyncAdapterClient::ExecuteNextOperation() {
       currEcb(ABORTED_USER, std::map<std::string, std::string>());
       break;
     }
+    case WAIT:
+      break;
     default:
       NOT_REACHABLE();
   }
@@ -60,25 +68,27 @@ void AsyncAdapterClient::ExecuteNextOperation() {
 void AsyncAdapterClient::GetCallback(int status, const std::string &key,
     const std::string &val, Timestamp ts) {
   Debug("Get(%s) callback.", key.c_str());
-  opCount++;
   readValues.insert(std::make_pair(key, val));
+  finishedOpCount++;
   ExecuteNextOperation();
 }
 
 void AsyncAdapterClient::GetTimeout(int status, const std::string &key) {
   Warning("Get(%s) timed out :(", key.c_str());
+  outstandingOpCount--;
 }
 
 void AsyncAdapterClient::PutCallback(int status, const std::string &key,
     const std::string &val) {
   Debug("Put(%s,%s) callback.", key.c_str(), val.c_str());
-  opCount++;
+  finishedOpCount++;
   ExecuteNextOperation();
 }
 
 void AsyncAdapterClient::PutTimeout(int status, const std::string &key,
     const std::string &val) {
   Warning("Put(%s,%s) timed out :(", key.c_str(), val.c_str());
+  outstandingOpCount--;
 }
 
 void AsyncAdapterClient::CommitCallback(transaction_status_t result) {

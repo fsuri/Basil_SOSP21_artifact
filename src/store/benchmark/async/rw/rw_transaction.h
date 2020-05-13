@@ -14,7 +14,7 @@ class RWTransaction : public AsyncTransaction {
   RWTransaction(KeySelector *keySelector, int numOps, std::mt19937 &rand);
   virtual ~RWTransaction();
 
-  virtual Operation GetNextOperation(size_t opCount,
+  virtual Operation GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
       std::map<std::string, std::string> readValues);
  protected:
   inline const std::string &GetKey(int i) const {

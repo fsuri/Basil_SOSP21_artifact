@@ -78,7 +78,7 @@ public:
                                   const std::vector<int> &groups,
                                   const Message &m) override;
     void Run() override;
-    void Stop() override;
+    void Stop(bool immediately = false) override;
     int Timer(uint64_t ms, timer_callback_t cb) override;
     bool CancelTimer(int id) override;
     void CancelAllTimers() override;

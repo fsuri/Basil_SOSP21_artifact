@@ -80,7 +80,7 @@ public:
         const std::vector<int> &groups, const Message &m) override;
 
     virtual void Run() override;
-    virtual void Stop() override;
+    virtual void Stop(bool immediately = false) override;
     virtual int Timer(uint64_t ms, timer_callback_t cb) override;
     virtual bool CancelTimer(int id) override;
     virtual void CancelAllTimers() override;
@@ -127,10 +127,11 @@ private:
     int lastTimerId;
     std::map<int, TCPTransportTimerInfo *> timers;
     std::list<TCPTransportTCPListener *> tcpListeners;
-    std::map<TCPTransportAddress, struct bufferevent *> tcpOutgoing;
-    std::map<struct bufferevent *, TCPTransportAddress> tcpAddresses;
+    std::map<std::pair<TCPTransportAddress, TransportReceiver *>, struct bufferevent *> tcpOutgoing;
+    std::map<struct bufferevent *, std::pair<TCPTransportAddress, TransportReceiver *>> tcpAddresses;
     Latency_t sockWriteLat;
     ThreadPool tp;
+    bool stopped;
 
     virtual bool SendMessageInternal(TransportReceiver *src,
                              const TCPTransportAddress &dst,
@@ -145,7 +146,7 @@ private:
       return nullptr;
     }
 
-    void ConnectTCP(TransportReceiver *src, const TCPTransportAddress &dst);
+    void ConnectTCP(const std::pair<TCPTransportAddress, TransportReceiver *> &dstSrc);
     void OnTimer(TCPTransportTimerInfo *info);
     static void TimerCallback(evutil_socket_t fd,
                               short what, void *arg);

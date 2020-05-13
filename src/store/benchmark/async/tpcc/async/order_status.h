@@ -18,7 +18,7 @@ class AsyncOrderStatus : public AsyncTPCCTransaction, public OrderStatus {
       std::mt19937 &gen);
   virtual ~AsyncOrderStatus();
 
-  Operation GetNextOperation(size_t opCount,
+  Operation GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
       std::map<std::string, std::string> readValues);
 
  private:
