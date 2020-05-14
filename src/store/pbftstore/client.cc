@@ -53,94 +53,101 @@ Client::~Client()
  * abort() are part of this transaction.
  */
 void Client::Begin(begin_callback bcb, begin_timeout_callback btcb, uint32_t timeout) {
-  Debug("BEGIN tx");
+  transport->Timer(0, [this, bcb, btcb, timeout]() {
+    Debug("BEGIN tx");
 
-  client_seq_num++;
-  currentTxn = proto::Transaction();
-  // Optimistically choose a read timestamp for all reads in this transaction
-  currentTxn.mutable_timestamp()->set_timestamp(timeServer.GetTime());
-  currentTxn.mutable_timestamp()->set_id(client_id);
-  bcb(client_seq_num);
+    client_seq_num++;
+    currentTxn = proto::Transaction();
+    // Optimistically choose a read timestamp for all reads in this transaction
+    currentTxn.mutable_timestamp()->set_timestamp(timeServer.GetTime());
+    currentTxn.mutable_timestamp()->set_id(client_id);
+    bcb(client_seq_num);
+  });
 }
 
 void Client::Get(const std::string &key, get_callback gcb,
     get_timeout_callback gtcb, uint32_t timeout) {
-  Debug("GET [%s]", key.c_str());
+  transport->Timer(0, [this, key, gcb, gtcb, timeout]() {
+    Debug("GET [%s]", key.c_str());
 
-  // Contact the appropriate shard to get the value.
-  std::vector<int> txnGroups;
-  int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
+    // Contact the appropriate shard to get the value.
+    std::vector<int> txnGroups;
+    int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
 
-  // If needed, add this shard to set of participants and send BEGIN.
-  if (!IsParticipant(i)) {
-    currentTxn.add_participating_shards(i);
-  }
-
-  read_callback rcb = [gcb, this](int status, const std::string &key,
-      const std::string &val, const Timestamp &ts) {
-    if (status == REPLY_OK) {
-      ReadMessage *read = currentTxn.add_readset();
-      read->set_key(key);
-      ts.serialize(read->mutable_readtime());
+    // If needed, add this shard to set of participants and send BEGIN.
+    if (!IsParticipant(i)) {
+      currentTxn.add_participating_shards(i);
     }
-    gcb(status, key, val, ts);
-  };
-  read_timeout_callback rtcb = gtcb;
 
-  // Send the GET operation to appropriate shard.
-  bclient[i]->Get(key, currentTxn.timestamp(), readQuorumSize, rcb,
-      rtcb, timeout);
+    read_callback rcb = [gcb, this](int status, const std::string &key,
+        const std::string &val, const Timestamp &ts) {
+      if (status == REPLY_OK) {
+        ReadMessage *read = currentTxn.add_readset();
+        read->set_key(key);
+        ts.serialize(read->mutable_readtime());
+      }
+      gcb(status, key, val, ts);
+    };
+    read_timeout_callback rtcb = gtcb;
+
+    // Send the GET operation to appropriate shard.
+    bclient[i]->Get(key, currentTxn.timestamp(), readQuorumSize, rcb,
+        rtcb, timeout);
+  });
 }
 
 void Client::Put(const std::string &key, const std::string &value,
     put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
-  // Contact the appropriate shard to set the value.
-  std::vector<int> txnGroups;
-  int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
+  transport->Timer(0, [this, key, value, pcb, ptcb, timeout]() {
+    // Contact the appropriate shard to set the value.
+    std::vector<int> txnGroups;
+    int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
 
-  // If needed, add this shard to set of participants and send BEGIN.
-  if (!IsParticipant(i)) {
-    currentTxn.add_participating_shards(i);
-  }
+    // If needed, add this shard to set of participants and send BEGIN.
+    if (!IsParticipant(i)) {
+      currentTxn.add_participating_shards(i);
+    }
 
-  WriteMessage *write = currentTxn.add_writeset();
-  write->set_key(key);
-  write->set_value(value);
-  // Buffering, so no need to wait.
-  pcb(REPLY_OK, key, value);
+    WriteMessage *write = currentTxn.add_writeset();
+    write->set_key(key);
+    write->set_value(value);
+    // Buffering, so no need to wait.
+    pcb(REPLY_OK, key, value);
+  });
 }
 
 void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     uint32_t timeout) {
-  std::string digest = TransactionDigest(currentTxn);
-  if (pendingPrepares.find(digest) == pendingPrepares.end()) {
-    PendingPrepare pendingPrepare;
-    pendingPrepare.ccb = ccb;
-    pendingPrepare.ctcb = ctcb;
-    pendingPrepare.timeout = timeout;
-    // should do a copy
-    pendingPrepare.txn = currentTxn;
-    pendingPrepares[digest] = pendingPrepare;
+  transport->Timer(0, [this, ccb, ctcb, timeout]() {
+    std::string digest = TransactionDigest(currentTxn);
+    if (pendingPrepares.find(digest) == pendingPrepares.end()) {
+      PendingPrepare pendingPrepare;
+      pendingPrepare.ccb = ccb;
+      pendingPrepare.ctcb = ctcb;
+      pendingPrepare.timeout = timeout;
+      // should do a copy
+      pendingPrepare.txn = currentTxn;
+      pendingPrepares[digest] = pendingPrepare;
 
-    for (const auto& shard_id : currentTxn.participating_shards()) {
+      for (const auto& shard_id : currentTxn.participating_shards()) {
 
-      prepare_timeout_callback pcbt = [](int s) {
-        Debug("prepare timeout called");
-      };
-      if (signMessages) {
-        signed_prepare_callback pcb = std::bind(&Client::HandleSignedPrepareReply,
-          this, digest, shard_id, std::placeholders::_1, std::placeholders::_2);
+        prepare_timeout_callback pcbt = [](int s) {
+          Debug("prepare timeout called");
+        };
+        if (signMessages) {
+          signed_prepare_callback pcb = std::bind(&Client::HandleSignedPrepareReply,
+            this, digest, shard_id, std::placeholders::_1, std::placeholders::_2);
 
-        bclient[shard_id]->SignedPrepare(currentTxn, pcb, pcbt, timeout);
-      } else {
-        prepare_callback pcb = std::bind(&Client::HandlePrepareReply,
-          this, digest, shard_id, std::placeholders::_1, std::placeholders::_2);
+          bclient[shard_id]->SignedPrepare(currentTxn, pcb, pcbt, timeout);
+        } else {
+          prepare_callback pcb = std::bind(&Client::HandlePrepareReply,
+            this, digest, shard_id, std::placeholders::_1, std::placeholders::_2);
 
-        bclient[shard_id]->Prepare(currentTxn, pcb, pcbt, timeout);
+          bclient[shard_id]->Prepare(currentTxn, pcb, pcbt, timeout);
+        }
       }
     }
-  }
-
+  });
 }
 
 void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int status, const proto::GroupedSignedMessage& gsm) {
@@ -275,9 +282,11 @@ void Client::HandleWritebackReply(std::string digest, uint64_t shard_id, int sta
 
 void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
     uint32_t timeout) {
-  AbortTxn(currentTxn);
-  // immediately invoke callback
-  acb();
+  transport->Timer(0, [this, acb, atcb, timeout]() {
+    AbortTxn(currentTxn);
+    // immediately invoke callback
+    acb();
+  });
 }
 
 void Client::AbortTxn(const proto::Transaction& txn) {
