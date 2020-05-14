@@ -25,6 +25,7 @@ class Stats {
   std::mutex mtx;
   std::unordered_map<std::string, int> statInts;
   std::unordered_map<std::string, std::vector<int>> statLists;
+  std::unordered_map<std::string, std::vector<int>> statIncLists;
   std::unordered_map<std::string, std::vector<std::vector<uint64_t>>> statLoLs;
 };
 #endif /* _STATS_H_ */

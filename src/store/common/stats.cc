@@ -19,10 +19,10 @@ void Stats::Increment(const std::string &key, int amount) {
 
 void Stats::IncrementList(const std::string &key, size_t idx, int amount) {
   std::lock_guard<std::mutex> lock(mtx);
-  if (statLists[key].size() <= idx) {
-    statLists[key].resize(idx + 1);
+  if (statIncLists[key].size() <= idx) {
+    statIncLists[key].resize(idx + 1);
   }
-  statLists[key][idx] += amount;
+  statIncLists[key][idx] += amount;
 }
 
 void Stats::Add(const std::string &key, int value) {
@@ -59,7 +59,23 @@ void Stats::ExportJSON(std::ostream &os) {
       }
     }
     os << "]";
-    if (std::next(itr) != statLists.end() || statLoLs.size() > 0) {
+    if (std::next(itr) != statLists.end() || statIncLists.size() > 0) {
+      os << ",";
+    }
+    os << std::endl;
+  }
+  for (auto itr = statIncLists.begin(); itr != statIncLists.end(); ++itr) {
+    Debug("Writing stat list %s of length %lu.", itr->first.c_str(),
+        itr->second.size());
+    os << "    \"" << itr->first << "\": [";
+    for (auto jtr = itr->second.begin(); jtr != itr->second.end(); ++jtr) {
+      os << *jtr;
+      if (std::next(jtr) != itr->second.end()) {
+        os << ", ";
+      }
+    }
+    os << "]";
+    if (std::next(itr) != statIncLists.end() || statLoLs.size() > 0) {
       os << ",";
     }
     os << std::endl;
@@ -101,6 +117,14 @@ void Stats::Merge(const Stats &other) {
   std::lock_guard<std::mutex> lock(mtx);
   for (const auto &s : other.statInts) {
     statInts[s.first] += s.second;
+  }
+  for (const auto &l : other.statIncLists) {
+    if (statIncLists[l.first].size() < l.second.size()) {
+      statIncLists[l.first].resize(l.second.size());
+    }
+    for (size_t i = 0; i < l.second.size(); ++i) {
+      statIncLists[l.first][i] += l.second[i];
+    }
   }
   for (const auto &l : other.statLists) {
     statLists[l.first].insert(statLists[l.first].end(), l.second.begin(),
