@@ -204,6 +204,7 @@ void Server::HandleRead(const TransportAddress &remote,
       sendCB();
       delete write;
     });
+    return;
     //Latency_End(&signLat);
   }
 
