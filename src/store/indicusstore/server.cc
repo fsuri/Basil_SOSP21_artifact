@@ -634,181 +634,183 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       BytesToHex(txnDigest, 16).c_str(),
       txn.timestamp().timestamp(), txn.timestamp().id());
   Timestamp ts(txn.timestamp());
-  if (CheckHighWatermark(ts)) {
-    Debug("[%lu:%lu][%s] ABSTAIN ts %lu beyond high watermark.",
-        txn.client_id(), txn.client_seq_num(),
-        BytesToHex(txnDigest, 16).c_str(),
-        ts.getTimestamp());
-    stats.Increment("cc_abstains", 1);
-    stats.Increment("cc_abstains_watermark", 1);
-    return proto::ConcurrencyControl::ABSTAIN;
-  }
 
-
-  for (const auto &read : txn.read_set()) {
-    // TODO: remove this check when txns only contain read set/write set for the
-    //   shards stored at this replica
-    if (!IsKeyOwned(read.key())) {
-      continue;
+  if (prepared.find(txnDigest) != prepared.end()) {
+    if (CheckHighWatermark(ts)) {
+      Debug("[%lu:%lu][%s] ABSTAIN ts %lu beyond high watermark.",
+          txn.client_id(), txn.client_seq_num(),
+          BytesToHex(txnDigest, 16).c_str(),
+          ts.getTimestamp());
+      stats.Increment("cc_abstains", 1);
+      stats.Increment("cc_abstains_watermark", 1);
+      return proto::ConcurrencyControl::ABSTAIN;
     }
 
-    std::vector<std::pair<Timestamp, Server::Value>> committedWrites;
-    GetCommittedWrites(read.key(), read.readtime(), committedWrites);
-    for (const auto &committedWrite : committedWrites) {
-      // readVersion < committedTs < ts
-      //     GetCommittedWrites only returns writes larger than readVersion
-      if (committedWrite.first < ts) {
-        if (params.validateProofs) {
-          conflict = *committedWrite.second.proof;
-        }
-        Debug("[%lu:%lu][%s] ABORT wr conflict committed write for key %s:"
-            " this txn's read ts %lu.%lu < committed ts %lu.%lu < this txn's ts %lu.%lu.",
-            txn.client_id(),
-            txn.client_seq_num(),
-            BytesToHex(txnDigest, 16).c_str(),
-            BytesToHex(read.key(), 16).c_str(),
-            read.readtime().timestamp(),
-            read.readtime().id(), committedWrite.first.getTimestamp(),
-            committedWrite.first.getID(), ts.getTimestamp(), ts.getID());
-        stats.Increment("cc_aborts", 1);
-        stats.Increment("cc_aborts_wr_conflict", 1);
-        return proto::ConcurrencyControl::ABORT;
+
+    for (const auto &read : txn.read_set()) {
+      // TODO: remove this check when txns only contain read set/write set for the
+      //   shards stored at this replica
+      if (!IsKeyOwned(read.key())) {
+        continue;
       }
-    }
 
-    const auto preparedWritesItr = preparedWrites.find(read.key());
-    if (preparedWritesItr != preparedWrites.end()) {
-      for (const auto &preparedTs : preparedWritesItr->second) {
-        if (Timestamp(read.readtime()) < preparedTs.first && preparedTs.first < ts) {
-          Debug("[%lu:%lu][%s] ABSTAIN wr conflict prepared write for key %s:"
-            " this txn's read ts %lu.%lu < prepared ts %lu.%lu < this txn's ts %lu.%lu.",
+      std::vector<std::pair<Timestamp, Server::Value>> committedWrites;
+      GetCommittedWrites(read.key(), read.readtime(), committedWrites);
+      for (const auto &committedWrite : committedWrites) {
+        // readVersion < committedTs < ts
+        //     GetCommittedWrites only returns writes larger than readVersion
+        if (committedWrite.first < ts) {
+          if (params.validateProofs) {
+            conflict = *committedWrite.second.proof;
+          }
+          Debug("[%lu:%lu][%s] ABORT wr conflict committed write for key %s:"
+              " this txn's read ts %lu.%lu < committed ts %lu.%lu < this txn's ts %lu.%lu.",
               txn.client_id(),
               txn.client_seq_num(),
               BytesToHex(txnDigest, 16).c_str(),
               BytesToHex(read.key(), 16).c_str(),
               read.readtime().timestamp(),
-              read.readtime().id(), preparedTs.first.getTimestamp(),
-              preparedTs.first.getID(), ts.getTimestamp(), ts.getID());
-          stats.Increment("cc_abstains", 1);
-          stats.Increment("cc_abstains_wr_conflict", 1);
-          return proto::ConcurrencyControl::ABSTAIN;
-        }
-      }
-    }
-  }
-
-  for (const auto &write : txn.write_set()) {
-    if (!IsKeyOwned(write.key())) {
-      continue;
-    }
-
-    auto committedReadsItr = committedReads.find(write.key());
-
-    if (committedReadsItr != committedReads.end() && committedReadsItr->second.size() > 0) {
-      for (auto ritr = committedReadsItr->second.rbegin();
-          ritr != committedReadsItr->second.rend(); ++ritr) {
-        if (ts >= std::get<0>(*ritr)) {
-          // iterating over committed reads from largest to smallest committed txn ts
-          //    if ts is larger than current itr, it is also larger than all subsequent itrs
-          break;
-        } else if (std::get<1>(*ritr) < ts) {
-          if (params.validateProofs) {
-            conflict = *std::get<2>(*ritr);
-          }
-          Debug("[%lu:%lu][%s] ABORT rw conflict committed read for key %s: committed"
-              " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
-              txn.client_id(),
-              txn.client_seq_num(),
-              BytesToHex(txnDigest, 16).c_str(),
-              BytesToHex(write.key(), 16).c_str(),
-              std::get<1>(*ritr).getTimestamp(),
-              std::get<1>(*ritr).getID(), ts.getTimestamp(),
-              ts.getID(), std::get<0>(*ritr).getTimestamp(),
-              std::get<0>(*ritr).getID());
+              read.readtime().id(), committedWrite.first.getTimestamp(),
+              committedWrite.first.getID(), ts.getTimestamp(), ts.getID());
           stats.Increment("cc_aborts", 1);
-          stats.Increment("cc_aborts_rw_conflict", 1);
+          stats.Increment("cc_aborts_wr_conflict", 1);
           return proto::ConcurrencyControl::ABORT;
         }
       }
-    }
 
-    const auto preparedReadsItr = preparedReads.find(write.key());
-    if (preparedReadsItr != preparedReads.end()) {
-      for (const auto preparedReadTxn : preparedReadsItr->second) {
-        bool isDep = false;
-        for (const auto &dep : preparedReadTxn->deps()) {
-          if (txnDigest == dep.write().prepared_txn_digest()) {
-            isDep = true;
-            break;
-          }
-        }
-
-        bool isReadVersionEarlier = false;
-        Timestamp readTs;
-        for (const auto &read : preparedReadTxn->read_set()) {
-          if (read.key() == write.key()) {
-            readTs = Timestamp(read.readtime());
-            isReadVersionEarlier = readTs < ts;
-            break;
-          }
-        }
-        if (!isDep && isReadVersionEarlier &&
-            ts < Timestamp(preparedReadTxn->timestamp())) {
-          Debug("[%lu:%lu][%s] ABSTAIN rw conflict prepared read for key %s: prepared"
-              " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
-              txn.client_id(),
-              txn.client_seq_num(),
-              BytesToHex(txnDigest, 16).c_str(),
-              BytesToHex(write.key(), 16).c_str(),
-              readTs.getTimestamp(),
-              readTs.getID(), ts.getTimestamp(),
-              ts.getID(), preparedReadTxn->timestamp().timestamp(),
-              preparedReadTxn->timestamp().id());
-          stats.Increment("cc_abstains", 1);
-          stats.Increment("cc_abstains_rw_conflict", 1);
-          return proto::ConcurrencyControl::ABSTAIN;
-        }
-      }
-    }
-
-    auto rtsItr = rts.find(write.key());
-    if (rtsItr != rts.end()) {
-      auto rtsRBegin = rtsItr->second.rbegin();
-      if (rtsRBegin != rtsItr->second.rend()) {
-        Debug("Largest rts for write to key %s: %lu.%lu.",
-          BytesToHex(write.key(), 16).c_str(), rtsRBegin->getTimestamp(),
-          rtsRBegin->getID());
-      }
-      auto rtsLB = rtsItr->second.lower_bound(ts);
-      if (rtsLB != rtsItr->second.end()) {
-        Debug("Lower bound rts for write to key %s: %lu.%lu.",
-          BytesToHex(write.key(), 16).c_str(), rtsLB->getTimestamp(),
-          rtsLB->getID());
-        if (*rtsLB == ts) {
-          rtsLB++;
-        }
-        if (rtsLB != rtsItr->second.end()) {
-          if (*rtsLB > ts) {
-            Debug("[%lu:%lu][%s] ABSTAIN larger rts acquired for key %s: rts %lu.%lu >"
-                " this txn's ts %lu.%lu.",
+      const auto preparedWritesItr = preparedWrites.find(read.key());
+      if (preparedWritesItr != preparedWrites.end()) {
+        for (const auto &preparedTs : preparedWritesItr->second) {
+          if (Timestamp(read.readtime()) < preparedTs.first && preparedTs.first < ts) {
+            Debug("[%lu:%lu][%s] ABSTAIN wr conflict prepared write for key %s:"
+              " this txn's read ts %lu.%lu < prepared ts %lu.%lu < this txn's ts %lu.%lu.",
                 txn.client_id(),
                 txn.client_seq_num(),
                 BytesToHex(txnDigest, 16).c_str(),
-                BytesToHex(write.key(), 16).c_str(),
-                rtsLB->getTimestamp(),
-                rtsLB->getID(), ts.getTimestamp(), ts.getID());
+                BytesToHex(read.key(), 16).c_str(),
+                read.readtime().timestamp(),
+                read.readtime().id(), preparedTs.first.getTimestamp(),
+                preparedTs.first.getID(), ts.getTimestamp(), ts.getID());
             stats.Increment("cc_abstains", 1);
-            stats.Increment("cc_abstains_rts", 1);
+            stats.Increment("cc_abstains_wr_conflict", 1);
             return proto::ConcurrencyControl::ABSTAIN;
           }
         }
       }
     }
-    // TODO: add additional rts dep check to shrink abort window
-    //    Is this still a thing?
-  }
 
-  Prepare(txnDigest, txn);
+    for (const auto &write : txn.write_set()) {
+      if (!IsKeyOwned(write.key())) {
+        continue;
+      }
+
+      auto committedReadsItr = committedReads.find(write.key());
+
+      if (committedReadsItr != committedReads.end() && committedReadsItr->second.size() > 0) {
+        for (auto ritr = committedReadsItr->second.rbegin();
+            ritr != committedReadsItr->second.rend(); ++ritr) {
+          if (ts >= std::get<0>(*ritr)) {
+            // iterating over committed reads from largest to smallest committed txn ts
+            //    if ts is larger than current itr, it is also larger than all subsequent itrs
+            break;
+          } else if (std::get<1>(*ritr) < ts) {
+            if (params.validateProofs) {
+              conflict = *std::get<2>(*ritr);
+            }
+            Debug("[%lu:%lu][%s] ABORT rw conflict committed read for key %s: committed"
+                " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
+                txn.client_id(),
+                txn.client_seq_num(),
+                BytesToHex(txnDigest, 16).c_str(),
+                BytesToHex(write.key(), 16).c_str(),
+                std::get<1>(*ritr).getTimestamp(),
+                std::get<1>(*ritr).getID(), ts.getTimestamp(),
+                ts.getID(), std::get<0>(*ritr).getTimestamp(),
+                std::get<0>(*ritr).getID());
+            stats.Increment("cc_aborts", 1);
+            stats.Increment("cc_aborts_rw_conflict", 1);
+            return proto::ConcurrencyControl::ABORT;
+          }
+        }
+      }
+
+      const auto preparedReadsItr = preparedReads.find(write.key());
+      if (preparedReadsItr != preparedReads.end()) {
+        for (const auto preparedReadTxn : preparedReadsItr->second) {
+          bool isDep = false;
+          for (const auto &dep : preparedReadTxn->deps()) {
+            if (txnDigest == dep.write().prepared_txn_digest()) {
+              isDep = true;
+              break;
+            }
+          }
+
+          bool isReadVersionEarlier = false;
+          Timestamp readTs;
+          for (const auto &read : preparedReadTxn->read_set()) {
+            if (read.key() == write.key()) {
+              readTs = Timestamp(read.readtime());
+              isReadVersionEarlier = readTs < ts;
+              break;
+            }
+          }
+          if (!isDep && isReadVersionEarlier &&
+              ts < Timestamp(preparedReadTxn->timestamp())) {
+            Debug("[%lu:%lu][%s] ABSTAIN rw conflict prepared read for key %s: prepared"
+                " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
+                txn.client_id(),
+                txn.client_seq_num(),
+                BytesToHex(txnDigest, 16).c_str(),
+                BytesToHex(write.key(), 16).c_str(),
+                readTs.getTimestamp(),
+                readTs.getID(), ts.getTimestamp(),
+                ts.getID(), preparedReadTxn->timestamp().timestamp(),
+                preparedReadTxn->timestamp().id());
+            stats.Increment("cc_abstains", 1);
+            stats.Increment("cc_abstains_rw_conflict", 1);
+            return proto::ConcurrencyControl::ABSTAIN;
+          }
+        }
+      }
+
+      auto rtsItr = rts.find(write.key());
+      if (rtsItr != rts.end()) {
+        auto rtsRBegin = rtsItr->second.rbegin();
+        if (rtsRBegin != rtsItr->second.rend()) {
+          Debug("Largest rts for write to key %s: %lu.%lu.",
+            BytesToHex(write.key(), 16).c_str(), rtsRBegin->getTimestamp(),
+            rtsRBegin->getID());
+        }
+        auto rtsLB = rtsItr->second.lower_bound(ts);
+        if (rtsLB != rtsItr->second.end()) {
+          Debug("Lower bound rts for write to key %s: %lu.%lu.",
+            BytesToHex(write.key(), 16).c_str(), rtsLB->getTimestamp(),
+            rtsLB->getID());
+          if (*rtsLB == ts) {
+            rtsLB++;
+          }
+          if (rtsLB != rtsItr->second.end()) {
+            if (*rtsLB > ts) {
+              Debug("[%lu:%lu][%s] ABSTAIN larger rts acquired for key %s: rts %lu.%lu >"
+                  " this txn's ts %lu.%lu.",
+                  txn.client_id(),
+                  txn.client_seq_num(),
+                  BytesToHex(txnDigest, 16).c_str(),
+                  BytesToHex(write.key(), 16).c_str(),
+                  rtsLB->getTimestamp(),
+                  rtsLB->getID(), ts.getTimestamp(), ts.getID());
+              stats.Increment("cc_abstains", 1);
+              stats.Increment("cc_abstains_rts", 1);
+              return proto::ConcurrencyControl::ABSTAIN;
+            }
+          }
+        }
+      }
+      // TODO: add additional rts dep check to shrink abort window
+      //    Is this still a thing?
+    }
+    Prepare(txnDigest, txn);
+  }
 
   bool allFinished = true;
   for (const auto &dep : txn.deps()) {

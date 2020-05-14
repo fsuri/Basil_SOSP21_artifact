@@ -299,6 +299,13 @@ void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
 
   Warning("PHASE1[%lu:%lu] group %d timed out.", client_id, txnId, group);
 
+  req->outstandingPhase1s = 0;
+  if (params.validateProofs && params.signedMessages) {
+    req->slowAbortGroup = -1;
+    req->p1ReplySigsGrouped.mutable_grouped_sigs()->clear();
+    req->fast = true;
+    req->decision = proto::COMMIT;
+  }
   Phase1(req);
 }
 
