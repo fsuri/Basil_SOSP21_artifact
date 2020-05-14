@@ -196,6 +196,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
 
   std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
+  std::unordered_map<std::string, proto::CommittedProof> p1Conflicts;
   std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
   std::unordered_map<std::string, proto::CommittedProof *> committed;
   std::unordered_set<std::string> aborted;    //ADD Aborted proof to it.(in order to reply to Fallback)

@@ -99,6 +99,7 @@ message Phase1FBReply {
   required uint64 req_id = 1;
   optional Phase1Reply p1r;
   optional Phase2Reply p2r;
+  optional Writeback wb;
 }
 
 //fallback Phase2

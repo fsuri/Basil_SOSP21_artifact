@@ -283,15 +283,122 @@ void Server::HandlePhase1FB(const TransportAddress &remote,
     else if(p1Decisions.end() != p1Decisions.find(txnDigest)){
         proto::ConcurrencyControl::Result result = p1Decisions[txnDigest];
         if (result != proto::ConcurrencyControl::WAIT) {
-          SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);  //PROBLEM: you dont have access to committedProof anymore in case the result was Abort. Must either transalte Abort results to Abstain, or save conflict proof. (the latter is probably mre efficient) OR: Just find the committed Proof agian
+          proto::CommittedProof conflict;
+          //recover stored commit proof.
+          if(result == proto::ConcurrencyControl::ABORT){
+            conflict = p1Conflicts[txnDigest];
+          }
+          /////////////////////// refactor this into seperate function
+
+          SetP1(msg.req_id(), txnDigest, result, conflict);
+
+          SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote, 4);
+          //SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);    //need to distinguish between P1 and fallback p1? or do we spawn a seperate client that does not "know" about anything else than its current state.
         }
     }
     //Else Do p1 normally. Just call HandlePhase1(remote, msg)   // might need to change it though, so the receiving client knows its a p1FB? It should know that anyways though..
     else{
-      HandlePhase1(remote, msg);
+      std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
+      Debug("FB exec PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
+          msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
+          msg.txn().timestamp().timestamp());
 
+      if (params.validateProofs && params.signedMessages && params.verifyDeps) {
+        for (const auto &dep : msg.txn().deps()) {
+          if (!dep.has_write_sigs()) {
+            Debug("Dep for txn %s missing signatures.",
+              BytesToHex(txnDigest, 16).c_str());
+            return;
+          }
+          if (!ValidateDependency(dep, &config, params.readDepSize, keyManager)) {
+            Debug("VALIDATE Dependency failed for txn %s.",
+                BytesToHex(txnDigest, 16).c_str());
+            // safe to ignore Byzantine client
+            return;
+          }
+        }
+      }
+
+      proto::Transaction *txn = msg.release_txn();
+      ongoing[txnDigest] = txn;
+
+      Timestamp retryTs;
+      proto::ConcurrencyControl::Result result = DoOCCCheck(msg.req_id(),
+          remote, txnDigest, *txn, retryTs, committedProof);
+
+      p1Decisions[txnDigest] = result;
+      if(result == proto::ConcurrencyControl::ABORT){
+        p1Conflicts[txnDigest] = committedProof;  //does this work this way for CbR
+      }
+
+      SetP1(msg.req_id(), txnDigest, result, committedProof);
+
+      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote, 4);
+      //want to sendPhase1FBReply with the content from HandlePhase1.
   }
 }
+
+//could be void right?
+void SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Result &result, proto::CommittedProof &conflict){}
+  //message Phase1FBReply {
+  //  required uint64 req_id = 1;
+  //  optional Phase1Reply p1r;
+  //  optional Phase2Reply p2r;
+  //}
+  phase1Reply.Clear();
+  phase1Reply.set_req_id(reqId;)
+  phase1Reply.mutable_cc()->set_ccr(result);
+  if (params.validateProofs) {
+    *phase1Reply.mutable_cc()->mutable_txn_digest() = txnDigest;
+    if (result == proto::ConcurrencyControl::ABORT) {
+      *phase1Reply.mutable_cc()->mutable_committed_conflict() = conflict;
+    } else if (params.signedMessages) {
+      proto::ConcurrencyControl cc(phase1Reply.cc());
+      //Latency_Start(&signLat);
+      SignMessage(cc, keyManager->GetPrivateKey(id), id,
+          phase1Reply.mutable_signed_cc());
+      Debug("PHASE1FB[%s] Adding FB Phase1Reply with signature %s from priv key %d.",
+          BytesToHex(txnDigest, 16).c_str(),
+          BytesToHex(phase1Reply.signed_cc().signature(), 100).c_str(), id);
+      //Latency_End(&signLat);
+    }
+  }
+
+}
+
+void Server::SendPhase1FBReply(uint64_t reqId,
+    proto::phase1Reply &p1r, proto::phase2Reply &p2r, proto::Writeback &wb.
+    const TransportAddress &remote, uint32_t response_case ) {
+
+
+  //update fb response set to reply quickly for repetitions
+
+  phase1FBReply.Clear();
+  phase1FBReply.set_req_id(reqId);
+
+  switch(response_case){
+    //commit or abort done --> writeback
+    case 1:
+        phase1FBReply.set_wb(wb);
+        break;
+    //p2 and p1 decision.
+    case 2:
+        phase1FBReply.set_p2r(p2r);
+        phase1FBReply.set_p1r(p1r);
+        break;
+    //p2 only
+    case 3:
+        phase1FBReply.set_p2r(p2r);
+        break;
+    //p1 only
+    case 4:
+        phase1FBReply.set_p1r(p1r);
+        break;
+  }
+
+  transport->SendMessage(this, remote, phase1FBReply);
+}
+
 
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
@@ -1050,6 +1157,12 @@ void Server::SendPhase1Reply(uint64_t reqId,
     const proto::CommittedProof &conflict, const std::string &txnDigest,
     const TransportAddress &remote) {
   p1Decisions[txnDigest] = result;
+
+  //add abort proof so we can use it for fallbacks easily.
+  if(result == proto::ConcurrencyControl::ABORT){
+    p1Conflicts[txnDigest] = conflict;  //does this work this way for CbR
+  }
+
 
   phase1Reply.Clear();
   phase1Reply.set_req_id(reqId);
