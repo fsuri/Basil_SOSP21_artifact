@@ -197,7 +197,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     req->callbackInvoked = false;
     req->txnDigest = TransactionDigest(txn, params.hashDigest);
     req->timeout = timeout;
-    stats.Increment("txn_groups_" + std::to_string(txn.involved_groups().size()));
+    stats.IncrementList("txn_groups", txn.involved_groups().size());
     Phase1(req);
   });
 }

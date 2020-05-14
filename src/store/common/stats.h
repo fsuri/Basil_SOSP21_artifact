@@ -13,6 +13,7 @@ class Stats {
   virtual ~Stats();
 
   void Increment(const std::string &key, int amount = 1);
+  void IncrementList(const std::string &key, size_t idx, int amount = 1);
   void Add(const std::string &key, int value);
   void AddList(const std::string &key, size_t idx, uint64_t value);
 

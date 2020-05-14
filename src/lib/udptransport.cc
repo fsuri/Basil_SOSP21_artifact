@@ -907,15 +907,25 @@ deliver:
     }
 }
 
-int
-UDPTransport::Timer(uint64_t ms, timer_callback_t cb)
-{
+int UDPTransport::Timer(uint64_t ms, timer_callback_t cb) {
+  struct timeval tv;
+  tv.tv_sec = ms / 1000;
+  tv.tv_usec = (ms % 1000) * 1000;
+
+  return TimerInternal(tv, cb);
+}
+
+int UDPTransport::TimerMicro(uint64_t us, timer_callback_t cb) {
+  struct timeval tv;
+  tv.tv_sec = us / 1000000UL;
+  tv.tv_usec = us % 1000000UL;
+
+  return TimerInternal(tv, cb);
+}
+
+int UDPTransport::TimerInternal(struct timeval &tv, timer_callback_t cb) {
     std::lock_guard<std::mutex> lck(this->timersLock);
     UDPTransportTimerInfo *info = new UDPTransportTimerInfo();
-
-    struct timeval tv;
-    tv.tv_sec = ms / 1000;
-    tv.tv_usec = (ms % 1000) * 1000;
 
     ++lastTimerId;
 

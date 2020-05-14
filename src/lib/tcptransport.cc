@@ -496,30 +496,39 @@ TCPTransport::Stop(bool immediately)
   }
 }
 
-int
-TCPTransport::Timer(uint64_t ms, timer_callback_t cb)
-{
-    std::lock_guard<std::mutex> lck(mtx);
+int TCPTransport::Timer(uint64_t ms, timer_callback_t cb) {
+  struct timeval tv;
+  tv.tv_sec = ms/1000;
+  tv.tv_usec = (ms % 1000) * 1000;
 
-    TCPTransportTimerInfo *info = new TCPTransportTimerInfo();
+  return TimerInternal(tv, cb);
+}
 
-    struct timeval tv;
-    tv.tv_sec = ms/1000;
-    tv.tv_usec = (ms % 1000) * 1000;
+int TCPTransport::TimerMicro(uint64_t us, timer_callback_t cb) {
+  struct timeval tv;
+  tv.tv_sec = us / 1000000UL;
+  tv.tv_usec = us % 1000000UL;
 
-    ++lastTimerId;
+  return TimerInternal(tv, cb);
+}
 
-    info->transport = this;
-    info->id = lastTimerId;
-    info->cb = cb;
-    info->ev = event_new(libeventBase, -1, 0,
-                         TimerCallback, info);
+int TCPTransport::TimerInternal(struct timeval &tv, timer_callback_t cb) {
+  std::lock_guard<std::mutex> lck(mtx);
 
-    timers[info->id] = info;
+  TCPTransportTimerInfo *info = new TCPTransportTimerInfo();
 
-    event_add(info->ev, &tv);
+  ++lastTimerId;
 
-    return info->id;
+  info->transport = this;
+  info->id = lastTimerId;
+  info->cb = cb;
+  info->ev = event_new(libeventBase, -1, 0, TimerCallback, info);
+
+  timers[info->id] = info;
+
+  event_add(info->ev, &tv);
+
+  return info->id;
 }
 
 bool

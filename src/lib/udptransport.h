@@ -77,15 +77,17 @@ public:
     virtual bool OrderedMulticast(TransportReceiver *src,
                                   const std::vector<int> &groups,
                                   const Message &m) override;
-    void Run() override;
-    void Stop(bool immediately = false) override;
-    int Timer(uint64_t ms, timer_callback_t cb) override;
-    bool CancelTimer(int id) override;
-    void CancelAllTimers() override;
+    virtual void Run() override;
+    virtual void Stop(bool immediately = false) override;
+    virtual int Timer(uint64_t ms, timer_callback_t cb) override;
+    virtual int TimerMicro(uint64_t us, timer_callback_t cb) override;
+    virtual bool CancelTimer(int id) override;
+    virtual void CancelAllTimers() override;
 
     virtual void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) override;
 
 private:
+    int TimerInternal(struct timeval &tv, timer_callback_t cb);
     struct UDPTransportTimerInfo
     {
         UDPTransport *transport;

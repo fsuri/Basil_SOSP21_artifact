@@ -456,8 +456,9 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
     } else if (!batchTimerRunning) {
       batchTimerRunning = true;
       Debug("Starting batch timer");
-      batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
-        Debug("Batch timer expired with %lu items, sending", this->pendingBatchMessages.size());
+      batchTimerId = transport->TimerMicro(batchTimeoutMS, [this]() {
+        Debug("Batch timer expired with %lu items, sending",
+            this->pendingBatchMessages.size());
         this->batchTimerRunning = false;
         this->SignBatch();
       });
@@ -466,7 +467,7 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
 }
 
 void Server::SignBatch() {
-  GetStats().Increment("sig_batch_" + std::to_string(pendingBatchMessages.size()));
+  GetStats().IncrementList("sig_batch", pendingBatchMessages.size());
   SignMessages(pendingBatchMessages, keyManager->GetPrivateKey(id), id,
     pendingBatchSignedMessages);
   pendingBatchMessages.clear();

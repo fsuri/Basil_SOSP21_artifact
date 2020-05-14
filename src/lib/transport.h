@@ -126,6 +126,7 @@ public:
     virtual bool SendMessageToFC(TransportReceiver *src,
                                  const Message &m) = 0;
     virtual int Timer(uint64_t ms, timer_callback_t cb) = 0;
+    virtual int TimerMicro(uint64_t us, timer_callback_t cb) = 0;
     virtual bool CancelTimer(int id) = 0;
     virtual void CancelAllTimers() = 0;
     virtual void Run() = 0;

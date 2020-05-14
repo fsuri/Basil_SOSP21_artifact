@@ -208,6 +208,10 @@ public:
                   int groupIdx,
                   int replicaIdx) override;
     virtual int Timer(uint64_t ms, timer_callback_t cb) override;
+    virtual int TimerMicro(uint64_t ms, timer_callback_t cb) override {
+      return Timer(0, cb);
+    }
+
     virtual bool CancelTimer(int id) override;
     virtual void CancelAllTimers() override;
     

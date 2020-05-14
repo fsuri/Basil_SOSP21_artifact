@@ -17,6 +17,14 @@ void Stats::Increment(const std::string &key, int amount) {
   statInts[key] += amount;
 }
 
+void Stats::IncrementList(const std::string &key, size_t idx, int amount) {
+  std::lock_guard<std::mutex> lock(mtx);
+  if (statLists[key].size() <= idx) {
+    statLists[key].resize(idx + 1);
+  }
+  statLists[key][idx] += amount;
+}
+
 void Stats::Add(const std::string &key, int value) {
   std::lock_guard<std::mutex> lock(mtx);
   statLists[key].push_back(value);

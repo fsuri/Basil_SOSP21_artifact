@@ -82,6 +82,7 @@ public:
     virtual void Run() override;
     virtual void Stop(bool immediately = false) override;
     virtual int Timer(uint64_t ms, timer_callback_t cb) override;
+    virtual int TimerMicro(uint64_t us, timer_callback_t cb) override;
     virtual bool CancelTimer(int id) override;
     virtual void CancelAllTimers() override;
 
@@ -101,6 +102,7 @@ public:
 
 
 private:
+    int TimerInternal(struct timeval &tv, timer_callback_t cb);
     std::mutex mtx;
     struct TCPTransportTimerInfo
     {
