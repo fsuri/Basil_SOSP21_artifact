@@ -84,6 +84,8 @@ class ShardClient : public TransportReceiver {
 
     read_callback rcb;
     uint64_t numResultsRequired;
+
+    Timeout* timeout;
   };
 
   void HandleReadReply(const proto::ReadReply& reply, const proto::SignedMessage& signedMsg);
@@ -97,6 +99,8 @@ class ShardClient : public TransportReceiver {
     // else, once we get f+1 failures -> return failed
     std::unordered_set<uint64_t> receivedFailedIds;
     prepare_callback pcb;
+
+    Timeout* timeout;
   };
 
   struct PendingSignedPrepare {
@@ -106,6 +110,8 @@ class ShardClient : public TransportReceiver {
     std::unordered_map<uint64_t, std::string> receivedValidSigs;
     std::unordered_set<uint64_t> receivedFailedIds;
     signed_prepare_callback pcb;
+
+    Timeout* timeout;
   };
 
   void HandleTransactionDecision(const proto::TransactionDecision& transactionDecision, const proto::SignedMessage& signedMsg);
@@ -115,6 +121,8 @@ class ShardClient : public TransportReceiver {
     std::unordered_set<uint64_t> receivedAcks;
     std::unordered_set<uint64_t> receivedFails;
     writeback_callback wcb;
+
+    Timeout* timeout;
   };
 
   void HandleWritebackReply(const proto::GroupedDecisionAck& groupedDecisionAck, const proto::SignedMessage& signedMsg);

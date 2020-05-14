@@ -141,21 +141,26 @@ bool Replica::sendMessageToPrimary(const ::google::protobuf::Message& msg) {
 bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
 
   if (signMessages) {
-    ::google::protobuf::Message* copy = msg.New();
-    copy->CopyFrom(msg);
-    transport->DispatchTP([this, copy] {
-      proto::SignedMessage* signedMsg = new proto::SignedMessage();
-      SignMessage(*copy, this->keyManager->GetPrivateKey(this->id), this->id, *signedMsg);
-      delete copy;
-      return (void*) signedMsg;
-    }, [this](void* ret) {
-      proto::SignedMessage* signedMsg = (proto::SignedMessage*) ret;
-      // send to everyone and to me
-      this->transport->SendMessageToGroup(this, this->groupIdx, *signedMsg);
-      this->transport->SendMessageToReplica(this, this->groupIdx, this->idx, *signedMsg);
-      delete signedMsg;
-    });
-    return true;
+    // ::google::protobuf::Message* copy = msg.New();
+    // copy->CopyFrom(msg);
+    // transport->DispatchTP([this, copy] {
+    //   proto::SignedMessage* signedMsg = new proto::SignedMessage();
+    //   SignMessage(*copy, this->keyManager->GetPrivateKey(this->id), this->id, *signedMsg);
+    //   delete copy;
+    //   return (void*) signedMsg;
+    // }, [this](void* ret) {
+    //   proto::SignedMessage* signedMsg = (proto::SignedMessage*) ret;
+    //   // send to everyone and to me
+    //   this->transport->SendMessageToGroup(this, this->groupIdx, *signedMsg);
+    //   this->transport->SendMessageToReplica(this, this->groupIdx, this->idx, *signedMsg);
+    //   delete signedMsg;
+    // });
+    // return true;
+    proto::SignedMessage signedMsg;
+    SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMsg);
+
+    return this->transport->SendMessageToGroup(this, groupIdx, signedMsg) &&
+           this->transport->SendMessageToReplica(this, groupIdx, idx, signedMsg);
   } else {
     // send to everyone and to me
     return transport->SendMessageToGroup(this, groupIdx, msg) &&
