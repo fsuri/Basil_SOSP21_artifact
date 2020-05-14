@@ -35,7 +35,7 @@
 #include "lib/configuration.h"
 #include "lib/transport.h"
 #include "lib/transportcommon.h"
-#include "lib/threadpool.h"
+// #include "lib/threadpool.h"
 
 #include <event2/event.h>
 
@@ -126,7 +126,7 @@ private:
         string data;
     };
     std::map<UDPTransportAddress, UDPTransportFragInfo> fragInfo;
-    ThreadPool tp;
+    // ThreadPool tp;
 
     bool _SendMessageInternal(TransportReceiver *src,
                               const UDPTransportAddress &dst,

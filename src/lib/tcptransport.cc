@@ -475,7 +475,7 @@ TCPTransport::Stop(bool immediately)
   // - This is mainly a problem if the client is still running long after it should have
   //   finished (due to abort loops)
   if (!stopped) {
-    tp.stop();
+    // tp.stop();
     auto stopFn = [this](){
       if (!stopped) {
         stopped = true;
@@ -577,7 +577,8 @@ TCPTransport::TimerCallback(evutil_socket_t fd, short what, void *arg)
 }
 
 void TCPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {
-  tp.dispatch(f, cb, libeventBase);
+  // tp.dispatch(f, cb, libeventBase);
+  Panic("unimplemented");
 }
 
 void
