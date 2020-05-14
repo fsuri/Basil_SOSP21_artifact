@@ -95,6 +95,26 @@ void Server::ReceiveMessage(const TransportAddress &remote,
   } else if (type == ping.GetTypeName()) {
     ping.ParseFromString(data);
     HandlePingMessage(this, remote, ping);
+
+// Add all Fallback signedMessages
+} else if (type == phase1FB.GetTypeName()) {
+    phase1FB.ParseFromString(data);
+    HandlePhase1FB(this, remote, phase1FB.);
+  } else if (type == phase2FB.GetTypeName()) {
+    phase2FB.ParseFromString(data);
+    HandlePhase2FB(this, remote, phase2FB);
+  } else if (type == invokeFB.GetTypeName()) {
+    invokeFB.ParseFromString(data);
+    HandleInvokeFB(this, remote, invokeFB); //DONT send back to remote, but instead to FB, calculate based on view. (need to include this in TX state thats kept locally.)
+  } else if (type == electFB.GetTypeName()) {
+    electFB.ParseFromString(data);
+    HandleElectFB(this, remote, electFB);
+  } else if (type == decisionFB.GetTypeName()) {
+    decisionFB.ParseFromString(data);
+    HandleDecisionFB(this, remote, decisionFB); //DONT send back to remote, but instead to interested clients. (need to include list of interested clients as part of local tx state)
+  } else if (type == moveView.GetTypeName()) {
+    moveView.ParseFromString(data);
+    HandleMoveView(this, remote, moveView); //Send only to other replicas
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
@@ -230,6 +250,46 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
   if (result != proto::ConcurrencyControl::WAIT) {
     SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);
+  }
+}
+
+//FALLBACK PHASE1
+void Server::HandlePhase1FB(const TransportAddress &remote,
+    proto::Phase1 &msg) {
+  std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
+  Debug("PHASE1FB[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
+      msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
+      msg.txn().timestamp().timestamp());
+
+
+//check these:
+//check if already committed. reply with whole proof so client can forward that.     committed aborted
+    if( (committed.end() != committed.find(txnDigest))) {
+      proto::CommittedProof* proof = committed[txnDigest];
+    }
+
+    else if(aborted.end() != aborted.find(txnDigest) ){
+
+    }
+
+
+//If(p2stored)   Check whether already did p2      p2Decisions
+    else if(p2Decisions.end() != p2Decisions.find(txnDigest)){
+       proto::CommitDecision decision = p2Decisions[txnDigest];    //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself. Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
+
+    }
+    //Else if: Check whether already did p1 but no p2     p1Decisions
+
+    else if(p1Decisions.end() != p1Decisions.find(txnDigest)){
+        proto::ConcurrencyControl::Result result = p1Decisions[txnDigest];
+        if (result != proto::ConcurrencyControl::WAIT) {
+          SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);  //PROBLEM: you dont have access to committedProof anymore in case the result was Abort. Must either transalte Abort results to Abstain, or save conflict proof. (the latter is probably mre efficient) OR: Just find the committed Proof agian
+        }
+    }
+    //Else Do p1 normally. Just call HandlePhase1(remote, msg)   // might need to change it though, so the receiving client knows its a p1FB? It should know that anyways though..
+    else{
+      HandlePhase1(remote, msg);
+
   }
 }
 

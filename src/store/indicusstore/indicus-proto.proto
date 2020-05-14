@@ -4,6 +4,7 @@ import "store/common/common-proto.proto";
 
 package indicusstore.proto;
 
+
 enum CommitDecision {
   COMMIT = 0;
   ABORT = 1;
@@ -86,6 +87,63 @@ message Phase1 {
   required Transaction txn = 2;
 }
 
+
+// fallback Phase1
+message Phase1FB {
+  required uint64 req_id =1;
+  required Transaction txn = txn =2;
+}
+
+//fallback Phase1 reply
+message Phase1FBReply {
+  required uint64 req_id = 1;
+  optional Phase1Reply p1r;
+  optional Phase2Reply p2r;
+}
+
+//fallback Phase2
+message Phase2FB {
+  required uint64 req_id = 1;
+  required CommitDecision decision = 2;
+  optional Transaction txn = 3;
+  optional bytes txn_digest = 4;
+  optional GroupedSignatures grouped_sigs = 5;
+}
+//fallback phase2R: Can be the same Phase2R as normal.
+
+//fallback Invoke; info from p2fb is sort of redundant
+message InvokeFB {
+  required uint64 req_id = 1
+  optional bytes txn_digest = 2;
+  optional Phase2FB p2fb = 2;
+}
+
+
+// all to all move to new views; upon reception of a InvokeFB request and timeout on FB result message reception, this message is sent to all replicas, and forwarded if f+1 are received. Only forward once per view.
+// Just assume for simplicty that only honest clients start invocations and therefore this message is never necessary. (Its fine if we always send it, but it might be unecessary and requires us to implement MACs too; or pay heavy signature price.)
+message MoveView {
+  required uint64 req_id = 1
+  required bytes txn_digest = 2;
+  required uint64 view = 3;
+}
+
+
+#fallback elect. Send this message to replica at view = v upon reception of InvokeFB or f+1 MoveView requests.
+message ElectFB {
+  required uint64 req_id = 1
+  required bytes txn_digest = 2;
+  required CommitDecision dec = 3;
+  required uint64 view = 4; //dont need this for decision, just for round robin iteration mapping.
+}
+
+message DecisionFB {
+  required uint64 req_id = 1
+  required bytes txn_digest = 2;
+  required CommitDecision dec = 3;
+  required uint64 view = 4;
+  repeated SignedMessage elect_sigs // want to send the Quorum of ElectFB messages. not sure if this is the correct way
+}
+
 message ConcurrencyControl {
   enum Result {
     COMMIT = 0;
@@ -120,9 +178,11 @@ message Phase2 {
   optional GroupedSignatures grouped_sigs = 5;
 }
 
+//ADD MATCHING VIEW, make it required?
 message Phase2Decision {
   required CommitDecision decision = 2;
   optional bytes txn_digest = 3;
+  optional uint64 view = 4;
 }
 
 message Phase2Reply {

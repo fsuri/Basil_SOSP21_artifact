@@ -194,10 +194,11 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
 
 
+
   std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
   std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
   std::unordered_map<std::string, proto::CommittedProof *> committed;
-  std::unordered_set<std::string> aborted;
+  std::unordered_set<std::string> aborted;    //ADD Aborted proof to it.(in order to reply to Fallback)
   std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
   struct WaitingDependency {
     uint64_t reqId;
