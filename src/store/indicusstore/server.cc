@@ -264,19 +264,28 @@ void Server::HandlePhase1FB(const TransportAddress &remote,
 
 //check these:
 //check if already committed. reply with whole proof so client can forward that.     committed aborted
-    if( (committed.end() != committed.find(txnDigest))) {
-      proto::CommittedProof* proof = committed[txnDigest];
+    //if(committed.end() != committed.find(txnDigest) )) {
+    //  proto::CommittedProof* proof = committed[txnDigest];
+    //}
+
+    //else if(aborted.end() != aborted.find(txnDigest) ){
+
+    //}
+
+    if(writebackMessages.find(txnDigest) != writebackMessages.end()){
+      proto::Writeback wb = writebackMessages[txnDigest];
+      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, wb, 1);
     }
 
-    else if(aborted.end() != aborted.find(txnDigest) ){
 
-    }
-
+//add case where there is both p2 and p1
 
 //If(p2stored)   Check whether already did p2      p2Decisions
-    else if(p2Decisions.end() != p2Decisions.find(txnDigest)){
+    else if(p2Decisions.end() != p2Decisions.find(txnDigest) && p1Decisions.end() != p1Decisions.find(txnDigest) ){
        proto::CommitDecision decision = p2Decisions[txnDigest];    //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself. Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
 
+       SetP2(msg.req_id(), txnDigest, decision);
+       SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote, 2);
     }
     //Else if: Check whether already did p1 but no p2     p1Decisions
 
@@ -360,6 +369,30 @@ void SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Res
       Debug("PHASE1FB[%s] Adding FB Phase1Reply with signature %s from priv key %d.",
           BytesToHex(txnDigest, 16).c_str(),
           BytesToHex(phase1Reply.signed_cc().signature(), 100).c_str(), id);
+      //Latency_End(&signLat);
+    }
+  }
+
+}
+
+/could be void right?
+void SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision decision){
+  //message Phase1FBReply {
+  //  required uint64 req_id = 1;
+  //  optional Phase1Reply p1r;
+  //  optional Phase2Reply p2r;
+  //}
+  phase2Reply.Clear();
+  phase2Reply.set_req_id(reqId);
+  phase2Reply.mutable_p2_decision()->set_decision(decision;
+  if (params.validateProofs) {
+    *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
+
+    if (params.signedMessages) {
+      proto::Phase2Decision p2Decision(phase2Reply.p2_decision());
+      //Latency_Start(&signLat);
+      SignMessage(p2Decision, keyManager->GetPrivateKey(id), id,
+          phase2Reply.mutable_signed_p2_decision());
       //Latency_End(&signLat);
     }
   }
@@ -531,6 +564,8 @@ void Server::HandleWriteback(const TransportAddress &remote,
       return;
     }
   }
+
+  writebackMessages[txnDigest] = msg;
 
   if (msg.decision() == proto::COMMIT) {
     Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());

@@ -200,6 +200,9 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
   std::unordered_map<std::string, proto::CommittedProof *> committed;
   std::unordered_set<std::string> aborted;    //ADD Aborted proof to it.(in order to reply to Fallback)
+  //creating new map to store writeback messages..  Need to find a better way, but suffices as placeholder
+  std::unordered_map<std::string, proto::Writeback> writebackMessages;
+
   std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
   struct WaitingDependency {
     uint64_t reqId;
