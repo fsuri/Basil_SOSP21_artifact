@@ -96,7 +96,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   std::vector<proto::SignedMessage*> pendingBatchSignedMessages;
   std::vector<signedCallback> pendingBatchCallbacks;
   void MessageToSign(::google::protobuf::Message* msg,
-      proto::SignedMessage *signedMessage, signedCallback cb);
+      proto::SignedMessage *signedMessage, signedCallback cb,
+      bool finishBatch = false);
   void SignBatch();
 
 //Fallback protocol components

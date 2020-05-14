@@ -203,7 +203,7 @@ void Server::HandleRead(const TransportAddress &remote,
     MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
       sendCB();
       delete write;
-    });
+    }, !params.readReplyBatch);
     //Latency_End(&signLat);
   } else {
     sendCB();
@@ -435,7 +435,7 @@ void Server::HandleAbort(const TransportAddress &remote,
 }
 
 void Server::MessageToSign(::google::protobuf::Message* msg,
-    proto::SignedMessage *signedMessage, signedCallback cb) {
+    proto::SignedMessage *signedMessage, signedCallback cb, bool finishBatch) {
   if (params.signatureBatchSize == 1) {
     Debug("Batch size = 1, immediately signing");
     SignMessage(msg, keyManager->GetPrivateKey(id), id,
@@ -446,7 +446,7 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
     pendingBatchSignedMessages.push_back(signedMessage);
     pendingBatchCallbacks.push_back(cb);
 
-    if (pendingBatchMessages.size() >= params.signatureBatchSize) {
+    if (finishBatch || pendingBatchMessages.size() >= params.signatureBatchSize) {
       Debug("Batch is full, sending");
       if (batchTimerRunning) {
         transport->CancelTimer(batchTimerId);
