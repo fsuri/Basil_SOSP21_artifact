@@ -381,4 +381,8 @@ Stats &Server::GetStats() {
   return stats;
 }
 
+Stats* Server::mutableStats() {
+  return &stats;
+}
+
 }

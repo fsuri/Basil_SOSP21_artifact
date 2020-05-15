@@ -46,6 +46,8 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   nextBatchNum = 0;
 
   Debug("Initialized replica at %d %d", groupIdx, idx);
+
+  stats = app->mutableStats();
 }
 
 Replica::~Replica() {}

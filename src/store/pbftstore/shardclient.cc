@@ -6,11 +6,11 @@ namespace pbftstore {
 ShardClient::ShardClient(const transport::Configuration& config, Transport *transport,
     uint64_t group_idx,
     bool signMessages, bool validateProofs,
-    KeyManager *keyManager) :
+    KeyManager *keyManager, Stats* stats) :
     config(config), transport(transport),
     group_idx(group_idx),
     signMessages(signMessages), validateProofs(validateProofs),
-    keyManager(keyManager) {
+    keyManager(keyManager), stats(stats) {
   transport->Register(this, config, -1, -1);
   readReq = 0;
 }
@@ -369,6 +369,7 @@ void ShardClient::Get(const std::string &key, const Timestamp &ts,
   Debug("Get timeout called with %d", timeout);
   pr.timeout = new Timeout(transport, timeout, [this, reqId, gtcb]() {
     Debug("Get timeout called (but nothing was done)");
+      stats->Increment("g_tout", 1);
     // this->pendingReads.erase(reqId);
     // gtcb(reqId, key);
   });
@@ -417,6 +418,7 @@ void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
     pp.validDecision = validDecision;
     pp.timeout = new Timeout(transport, timeout, [this, digest, ptcb]() {
       Debug("Prepare timeout called (but nothing was done)");
+      stats->Increment("p_tout", 1);
       // this->pendingPrepares.erase(digest);
       // ptcb(REPLY_FAIL);
     });
@@ -449,6 +451,7 @@ void ShardClient::SignedPrepare(const proto::Transaction& txn, signed_prepare_ca
     psp.validDecisionPacked = CreateValidPackedDecision(digest);
     psp.timeout = new Timeout(transport, timeout, [this, digest, ptcb]() {
       Debug("Prepare signed timeout called (but nothing was done)");
+      stats->Increment("ps_tout", 1);
       // this->pendingSignedPrepares.erase(digest);
       // ptcb(REPLY_FAIL);
     });
@@ -478,6 +481,7 @@ void ShardClient::Commit(const std::string& txn_digest, const proto::ShardDecisi
     pwr.wcb = wcb;
     pwr.timeout = new Timeout(transport, timeout, [this, txn_digest, wtcp]() {
       Debug("Writeback timeout called (but nothing was done)");
+      stats->Increment("c_tout", 1);
       // this->pendingWritebacks.erase(digest);
       // wtcp(REPLY_FAIL);
     });
@@ -507,6 +511,7 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
     pwr.wcb = wcb;
     pwr.timeout = new Timeout(transport, timeout, [this, txn_digest, wtcp]() {
       Debug("Writeback signed timeout called (but nothing was done)");
+      stats->Increment("cs_tout", 1);
       // this->pendingWritebacks.erase(digest);
       // wtcp(REPLY_FAIL);
     });

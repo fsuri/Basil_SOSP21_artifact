@@ -35,7 +35,7 @@ Client::Client(const transport::Configuration& config, int nGroups, int nShards,
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
     bclient[i] = new ShardClient(config, transport, i,
-        signMessages, validateProofs, keyManager);
+        signMessages, validateProofs, keyManager, &stats);
   }
 
   Debug("PBFT client [%lu] created! %lu %lu", client_id, ngroups,
@@ -290,15 +290,11 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
 }
 
 void Client::AbortTxn(const proto::Transaction& txn) {
+  stats.Increment("abort", 1);
   std::string digest = TransactionDigest(txn);
   for (const auto& shard_id : txn.participating_shards()) {
     bclient[shard_id]->Abort(digest);
   }
-}
-
-vector<int> Client::Stats() {
-    vector<int> v;
-    return v;
 }
 
 bool Client::IsParticipant(int g) {

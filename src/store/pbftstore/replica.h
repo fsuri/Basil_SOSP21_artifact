@@ -11,6 +11,7 @@
 #include "lib/crypto.h"
 #include "lib/keymanager.h"
 
+#include "store/common/stats.h"
 #include "store/pbftstore/pbft-proto.pb.h"
 #include "store/pbftstore/slots.h"
 #include "store/pbftstore/app.h"
@@ -94,6 +95,8 @@ public:
   void testSlot(uint64_t seqnum, uint64_t viewnum, std::string digest, bool gotPrepare);
 
   void executeSlots();
+
+  Stats* stats;
 };
 
 } // namespace pbftstore

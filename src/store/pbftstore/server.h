@@ -29,6 +29,8 @@ public:
 
   Stats &GetStats();
 
+  Stats* mutableStats();
+
 private:
   Stats stats;
   transport::Configuration config;
