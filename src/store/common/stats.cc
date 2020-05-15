@@ -43,7 +43,8 @@ void Stats::ExportJSON(std::ostream &os) {
   os << "{" << std::endl;
   for (auto itr = statInts.begin(); itr != statInts.end(); ++itr) {
     os << "    \"" << itr->first << "\": " << itr->second;
-    if (std::next(itr) != statInts.end() || statLists.size() > 0) {
+    if (std::next(itr) != statInts.end() || statLists.size() > 0 ||
+        statIncLists.size() > 0 || statLoLs.size() > 0) {
       os << ",";
     }
     os << std::endl;
@@ -59,7 +60,8 @@ void Stats::ExportJSON(std::ostream &os) {
       }
     }
     os << "]";
-    if (std::next(itr) != statLists.end() || statIncLists.size() > 0) {
+    if (std::next(itr) != statLists.end() || statIncLists.size() > 0 ||
+        statLoLs.size() > 0) {
       os << ",";
     }
     os << std::endl;
