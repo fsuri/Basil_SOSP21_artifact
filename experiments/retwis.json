@@ -7,8 +7,8 @@
     ["client_total", "client_processes_per_client_node",
       "client_nodes_per_server"]
   ],
-  "replication_protocol": ["tapir", "indicus", "indicus", "indicus"],
-  "client_protocol_mode": ["txn-l", "indicus", "indicus", "indicus"],
+  "replication_protocol": ["tapir", "indicus", "indicus"],
+  "client_protocol_mode": ["txn-l", "indicus", "indicus"],
   "num_shards": 24,
   "num_groups": 24,
   "client_num_keys": 10000000,
@@ -34,11 +34,9 @@
       "read_dep": "one-honest",
       "read_messages": "read-quorum",
       "max_dep_depth": -1,
-      "validate_proofs": false,
+      "validate_proofs": true,
       "sign_messages": false,
-      "hash_digest": true,
-      "verify_deps": false,
-      "key_path": "/usr/local/etc/indicus-keys/sodium"
+      "hash_digest": true
     },
     {
       "message_transport_type": "tcp",
@@ -48,39 +46,27 @@
       "read_messages": "read-quorum",
       "max_dep_depth": -1,
       "validate_proofs": true,
-      "sign_messages": false,
       "hash_digest": true,
       "verify_deps": false,
-      "key_path": "/usr/local/etc/indicus-keys/sodium"
-    },
-    {
-      "message_transport_type": "tcp",
-      "watermark_time_delta": 30000,
-      "read_quorum": "one-honest",
-      "read_dep": "one-honest",
-      "read_messages": "read-quorum",
-      "max_dep_depth": -1,
-      "validate_proofs": true,
       "sign_messages": true,
-      "hash_digest": true,
-      "verify_deps": false,
-      "key_path": "/usr/local/etc/indicus-keys/sodium"
+      "signature_type": 3,
+      "sig_batch": 100,
+      "sig_batch_timeout": 10000,
+      "read_reply_batch": false,
+      "key_path": "/usr/local/etc/indicus-keys/secp256k1"
     }
   ],
   "experiment_name": "indicus",
   "codebase_name": "indicus",
   "client_total": [
       [18, 27, 36, 63, 90, 108, 126],
-      [18, 27, 36, 63, 90, 108, 126],
       [1, 3, 9, 18, 27, 36, 63],
       [3, 9, 18, 27, 36, 63, 90]],
   "client_processes_per_client_node": [
       [2, 3, 4, 7, 10, 12, 14],
-      [1, 2, 2, 4, 5, 6, 7],
       [1, 1, 1, 2, 2, 4, 5],
       [1, 1, 1, 2, 2, 4, 5]],
   "client_nodes_per_server": [
-      [1, 1, 1, 1, 1, 1, 1],
       [1, 1, 1, 1, 1, 1, 1],
       [1, 1, 1, 1, 1, 1, 1],
       [1, 1, 1, 1, 1, 1, 1]],
@@ -91,9 +77,9 @@
   "server_debug_output": false,
   "server_debug_stats": false,
   "client_debug_stats": false,
-  "client_experiment_length": 60,
-  "client_ramp_down": 10,
-  "client_ramp_up": 10,
+  "client_experiment_length": 30,
+  "client_ramp_down": 5,
+  "client_ramp_up": 5,
   "default_remote_shell": "bash",
   "server_host_format_str": "%s.%s.%s.utah.cloudlab.us",
   "client_host_format_str": "client-%d-%d.%s.%s.utah.cloudlab.us",
@@ -112,11 +98,6 @@
     "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
     "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2",
     "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
-    "ap-southeast-2-1", "ap-southeast-2-2"],
-    ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
-    "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
-    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2",
-    "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
     "ap-southeast-2-1", "ap-southeast-2-2"]
   ],
   "server_regions": [
@@ -125,15 +106,6 @@
       "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
       "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
         "ap-northeast-1-2"]
-    },
-    {
-      "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2"],
-      "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
-      "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
-        "ap-northeast-1-2"],
-      "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2"],
-      "eu-central-1": ["eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
-      "ap-southeast-2": ["ap-southeast-2-0", "ap-southeast-2-1", "ap-southeast-2-2"]
     },
     {
       "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2"],
@@ -212,7 +184,7 @@
       "height": 600,
       "width": 800,
       "series_indep_vars_idx": 0,
-      "series_titles": ["TAPIR", "Indicus-NoProofsNoSigs", "Indicus-NoSigs", "Indicus"],
+      "series_titles": ["TAPIR", "Indicus-NoSigs", "Indicus"],
       "x_var_is_config": false,
       "x_var": ["run_stats", "combined", "tput", "p50"],
       "x_label": "Throughput (txn/s)",
@@ -226,7 +198,7 @@
       "height": 600,
       "width": 800,
       "series_indep_vars_idx": 0,
-      "series_titles": ["TAPIR", "Indicus-NoProofsNoSigs", "Indicus-NoSigs", "Indicus"],
+      "series_titles": ["TAPIR", "Indicus-NoSigs", "Indicus"],
       "x_var_is_config": true,
       "x_var": ["client_total"],
       "x_label": "Number of Clients",
