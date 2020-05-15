@@ -42,6 +42,7 @@
 #include "store/indicusstore/common.h"
 #include "store/indicusstore/store.h"
 #include "store/indicusstore/indicus-proto.pb.h"
+#include "store/indicusstore/batchsigner.h"
 
 #include <set>
 #include <unordered_map>
@@ -89,15 +90,6 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void HandleWriteback(const TransportAddress &remote,
       proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
-
-  int batchTimerId;
-  std::vector<::google::protobuf::Message*> pendingBatchMessages;
-  std::vector<proto::SignedMessage*> pendingBatchSignedMessages;
-  std::vector<signedCallback> pendingBatchCallbacks;
-  void MessageToSign(::google::protobuf::Message* msg,
-      proto::SignedMessage *signedMessage, signedCallback cb,
-      bool finishBatch = false);
-  void SignBatch();
 
 //Fallback protocol components
 // Edit MVTSO-check: When we suspend a transaction waiting for a dependency, then after some timeout, we should send the full TX to the client (IF we have it - 1 correct replica is guaranteed to have it.)
@@ -152,7 +144,6 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void LookupP2Decision(const std::string &txnDigest,
       int64_t &myProcessId, proto::CommitDecision &myDecision) const;
   uint64_t DependencyDepth(const proto::Transaction *txn) const;
-  void AdjustBatchSize();
 
   inline bool IsKeyOwned(const std::string &key) const {
     return static_cast<int>((*part)(key, numShards, groupIdx, dummyTxnGroups) % numGroups) == groupIdx;
@@ -170,12 +161,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   const Parameters params;
   KeyManager *keyManager;
   const uint64_t timeDelta;
-  const unsigned int batchTimeoutMS;
-  bool batchTimerRunning;
-  uint64_t dynamicBatchSize;
-  uint64_t messagesBatchedInterval;
   TrueTime timeServer;
-  uint64_t counter;
+  BatchSigner *batchSigner;
 
   /* Declare protobuf objects as members to avoid stack alloc/dealloc costs */
   proto::SignedMessage signedMessage;

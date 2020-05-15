@@ -44,21 +44,22 @@ namespace indicusstore {
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     int numShards, int numGroups, Transport *transport, KeyManager *keyManager,
     Parameters params, uint64_t timeDelta, OCCType occType, Partitioner *part,
-    unsigned int batchTimeoutMS, TrueTime timeServer) : PingServer(transport),
+    unsigned int batchTimeoutMicro, TrueTime timeServer) : PingServer(transport),
     config(config), groupIdx(groupIdx), idx(idx), numShards(numShards),
     numGroups(numGroups), id(groupIdx * config.n + idx),
     transport(transport), occType(occType), part(part),
     params(params), keyManager(keyManager),
-    timeDelta(timeDelta), batchTimeoutMS(batchTimeoutMS),
-    batchTimerRunning(false),
-    dynamicBatchSize(params.signatureBatchSize),
-    messagesBatchedInterval(0UL),
+    timeDelta(timeDelta),
     timeServer(timeServer) {
   transport->Register(this, config, groupIdx, idx);
   _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
   _Latency_Init(&verifyLat, "verify_lat");
   _Latency_Init(&signLat, "sign_lat");
 
+  batchSigner = new BatchSigner(transport, keyManager, GetStats(),
+      batchTimeoutMicro, params.signatureBatchSize, id,
+      params.validateProofs && params.signedMessages &&
+      params.signatureBatchSize > 1 && params.adjustBatchSize);
   // this is needed purely from loading data without executing transactions
   proto::CommittedProof *proof = new proto::CommittedProof();
   proof->mutable_txn()->set_client_id(0);
@@ -66,13 +67,6 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   proof->mutable_txn()->mutable_timestamp()->set_timestamp(0);
   proof->mutable_txn()->mutable_timestamp()->set_id(0);
   committed.insert(std::make_pair("", proof));
-
-  counter = 0UL;
-  if (params.validateProofs && params.signedMessages &&
-      params.signatureBatchSize > 1 && params.adjustBatchSize) {
-    transport->TimerMicro(batchTimeoutMS, std::bind(
-          &Server::AdjustBatchSize, this));
-  }
 }
 
 Server::~Server() {
@@ -82,6 +76,7 @@ Server::~Server() {
   for (const auto &o : ongoing) {
     delete o.second;
   }
+  delete batchSigner;
   Latency_Dump(&verifyLat);
   Latency_Dump(&signLat);
 }
@@ -210,7 +205,7 @@ void Server::HandleRead(const TransportAddress &remote,
     proto::Write* write = new proto::Write(readReply->write());
     //Latency_Start(&signLat);
     if (params.readReplyBatch) {
-      MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
+      batchSigner->MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
         sendCB();
         delete write;
       });
@@ -322,7 +317,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
     if (params.signedMessages) {
       proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
       //Latency_Start(&signLat);
-      MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
+      batchSigner->MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
         [sendCB, p2Decision]() {
           sendCB();
           delete p2Decision;
@@ -451,51 +446,6 @@ void Server::HandleAbort(const TransportAddress &remote,
   for (const auto &read : abort->read_set()) {
     rts[read].erase(abort->ts());
   }
-}
-
-void Server::MessageToSign(::google::protobuf::Message* msg,
-    proto::SignedMessage *signedMessage, signedCallback cb, bool finishBatch) {
-  if (params.signatureBatchSize == 1) {
-    Debug("Batch size = 1, immediately signing");
-    SignMessage(msg, keyManager->GetPrivateKey(id), id,
-        signedMessage);
-    cb();
-  } else {
-    messagesBatchedInterval++;
-    pendingBatchMessages.push_back(msg);
-    pendingBatchSignedMessages.push_back(signedMessage);
-    pendingBatchCallbacks.push_back(cb);
-
-    if (finishBatch || pendingBatchMessages.size() >= dynamicBatchSize) {
-      Debug("Batch is full, sending");
-      if (batchTimerRunning) {
-        transport->CancelTimer(batchTimerId);
-        batchTimerRunning = false;
-      }
-      SignBatch();
-    } else if (!batchTimerRunning) {
-      batchTimerRunning = true;
-      Debug("Starting batch timer");
-      batchTimerId = transport->TimerMicro(batchTimeoutMS, [this]() {
-        Debug("Batch timer expired with %lu items, sending",
-            this->pendingBatchMessages.size());
-        this->batchTimerRunning = false;
-        this->SignBatch();
-      });
-    }
-  }
-}
-
-void Server::SignBatch() {
-  GetStats().IncrementList("sig_batch", pendingBatchMessages.size());
-  SignMessages(pendingBatchMessages, keyManager->GetPrivateKey(id), id,
-    pendingBatchSignedMessages);
-  pendingBatchMessages.clear();
-  pendingBatchSignedMessages.clear();
-  for (const auto& cb : pendingBatchCallbacks) {
-    cb();
-  }
-  pendingBatchCallbacks.clear();
 }
 
 proto::ConcurrencyControl::Result Server::DoOCCCheck(
@@ -1095,7 +1045,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
     } else if (params.signedMessages) {
       proto::ConcurrencyControl* cc = new proto::ConcurrencyControl(phase1Reply->cc());
       //Latency_Start(&signLat);
-      MessageToSign(cc, phase1Reply->mutable_signed_cc(),
+      batchSigner->MessageToSign(cc, phase1Reply->mutable_signed_cc(),
         [sendCB, cc, txnDigest, this, phase1Reply]() {
           Debug("PHASE1[%s] Sending Phase1Reply with signature %s from priv key %d.",
             BytesToHex(txnDigest, 16).c_str(),
@@ -1164,12 +1114,6 @@ uint64_t Server::DependencyDepth(const proto::Transaction *txn) const {
     }
   }
   return maxDepth;
-}
-
-void Server::AdjustBatchSize() {
-  dynamicBatchSize = (0.75 * dynamicBatchSize) + (0.25 * messagesBatchedInterval);
-  messagesBatchedInterval = 0;
-  transport->TimerMicro(batchTimeoutMS, std::bind(&Server::AdjustBatchSize, this));
 }
 
 } // namespace indicusstore
