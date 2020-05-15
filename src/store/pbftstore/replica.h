@@ -22,7 +22,7 @@ class Replica : public TransportReceiver {
 public:
   Replica(const transport::Configuration &config, KeyManager *keyManager,
     App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
-    bool primaryCoordinator, Transport *transport);
+    uint64_t batchTimeoutMS, bool primaryCoordinator, Transport *transport);
   ~Replica();
 
   // Message handlers.
@@ -53,6 +53,7 @@ public:
   int id; // unique replica id (across all shards)
   bool signMessages;
   uint64_t maxBatchSize;
+  uint64_t batchTimeoutMS;
   bool primaryCoordinator;
   Transport *transport;
   int currentView;

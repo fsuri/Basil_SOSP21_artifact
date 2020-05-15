@@ -29,10 +29,10 @@ using namespace std;
 
 Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
-  bool primaryCoordinator, Transport *transport)
+  uint64_t batchTimeoutMS, bool primaryCoordinator, Transport *transport)
     : config(config), keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
     id(groupIdx * config.n + idx), signMessages(signMessages), maxBatchSize(maxBatchSize),
-    primaryCoordinator(primaryCoordinator), transport(transport) {
+    batchTimeoutMS(batchTimeoutMS), primaryCoordinator(primaryCoordinator), transport(transport) {
   transport->Register(this, config, groupIdx, idx);
 
   // intial view
@@ -193,10 +193,9 @@ void Replica::HandleRequest(const TransportAddress &remote,
         }
         sendBatchedPreprepare();
       } else if (!batchTimerRunning) {
-        // start the timer, 10ms should be a good amount
         batchTimerRunning = true;
         Debug("Starting batch timer");
-        batchTimerId = transport->Timer(4, [this]() {
+        batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
           Debug("Batch timer expired, sending");
           this->batchTimerRunning = false;
           this->sendBatchedPreprepare();
