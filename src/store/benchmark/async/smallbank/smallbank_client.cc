@@ -27,7 +27,7 @@
 namespace smallbank {
 
 SmallbankClient::SmallbankClient(
-    SyncClient &client, Transport &transport, uint32_t seed,
+    SyncClient &client, Transport &transport, uint64_t id,
     int numRequests, int expDuration, uint64_t delay, int warmupSec,
     int cooldownSec, int tputInterval, uint32_t abortBackoff, bool retryAborted,
     uint32_t maxBackoff, uint32_t maxAttempts,
@@ -37,7 +37,7 @@ SmallbankClient::SmallbankClient(
     const uint32_t num_non_hotspot_keys, const double hotspot_probability,
     const std::string &customer_name_file_path,
     const std::string &latencyFilename)
-    : SyncTransactionBenchClient(client, transport, seed, numRequests,
+    : SyncTransactionBenchClient(client, transport, id, numRequests,
                                  expDuration, delay, warmupSec, cooldownSec,
                                  tputInterval, abortBackoff, retryAborted, maxBackoff, maxAttempts, timeout,
                                  latencyFilename),

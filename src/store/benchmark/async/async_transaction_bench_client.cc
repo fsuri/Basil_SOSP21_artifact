@@ -4,11 +4,11 @@
 #include <random>
 
 AsyncTransactionBenchClient::AsyncTransactionBenchClient(AsyncClient &client,
-    Transport &transport, uint32_t seed, int numRequests, int expDuration,
+    Transport &transport, uint64_t id, int numRequests, int expDuration,
     uint64_t delay, int warmupSec, int cooldownSec, int tputInterval,
     uint64_t abortBackoff, bool retryAborted, uint64_t maxBackoff,
     int64_t maxAttempts, const std::string &latencyFilename) :
-      BenchmarkClient(transport, seed,
+      BenchmarkClient(transport, id,
       numRequests, expDuration, delay, warmupSec, cooldownSec, tputInterval,
       latencyFilename), client(client), maxBackoff(maxBackoff), abortBackoff(abortBackoff),
       retryAborted(retryAborted), maxAttempts(maxAttempts), currTxn(nullptr),

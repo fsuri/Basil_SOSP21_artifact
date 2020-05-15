@@ -10,7 +10,8 @@ namespace tpcc {
 
 class AsyncTPCCClient : public AsyncTransactionBenchClient, public TPCCClient {
  public:
-  AsyncTPCCClient(AsyncClient &client, Transport &transport, uint32_t seed, int numRequests,
+  AsyncTPCCClient(AsyncClient &client, Transport &transport, uint64_t id,
+      int numRequests,
       int expDuration, uint64_t delay, int warmupSec, int cooldownSec,
       int tputInterval, uint32_t num_warehouses, uint32_t w_id,
       uint32_t C_c_id, uint32_t C_c_last, uint32_t new_order_ratio,

@@ -10,7 +10,7 @@
 class SyncTransactionBenchClient : public BenchmarkClient {
  public:
   SyncTransactionBenchClient(SyncClient &client, Transport &transport,
-      uint32_t seed, int numRequests, int expDuration, uint64_t delay,
+      uint64_t id, int numRequests, int expDuration, uint64_t delay,
       int warmupSec,
       int cooldownSec, int tputInterval, uint64_t abortBackoff,
       bool retryAborted, uint64_t maxBackoff, int64_t maxAttempts, uint64_t timeout,

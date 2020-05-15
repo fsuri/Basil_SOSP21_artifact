@@ -42,12 +42,13 @@
 
 DEFINE_LATENCY(op);
 
-BenchmarkClient::BenchmarkClient(Transport &transport, uint32_t seed,
+BenchmarkClient::BenchmarkClient(Transport &transport, uint64_t id,
 		int numRequests, int expDuration, uint64_t delay, int warmupSec,
     int cooldownSec, int tputInterval, const std::string &latencyFilename) :
+    id(id),
     tputInterval(tputInterval),
     transport(transport),
-    rand(seed),
+    rand(id),
     numRequests(numRequests), expDuration(expDuration),	delay(delay),
     warmupSec(warmupSec), cooldownSec(cooldownSec),
     latencyFilename(latencyFilename) {
@@ -177,7 +178,7 @@ void BenchmarkClient::IncrementSent(int result) {
           //std::cout << "#start," << startMeasureTime.tv_sec << "," << startMeasureTime.tv_usec << std::endl;
         }
         uint64_t currNanos = curr.tv_sec * 1000000000ULL + curr.tv_nsec;
-        std::cout << GetLastOp() << ',' << ns << ',' << currNanos << std::endl;
+        std::cout << GetLastOp() << ',' << ns << ',' << currNanos << ',' << id << std::endl;
         latencies.push_back(ns);
       }
     }
@@ -208,7 +209,7 @@ void BenchmarkClient::Finish() {
   gettimeofday(&endTime, NULL);
   struct timeval diff = timeval_sub(endTime, startMeasureTime);
 
-  std::cout << "#end," << diff.tv_sec << "," << diff.tv_usec << std::endl;
+  std::cout << "#end," << diff.tv_sec << "," << diff.tv_usec << "," << id << std::endl;
 
   Notice("Completed %d requests in " FMT_TIMEVAL_DIFF " seconds", n,
       VA_TIMEVAL_DIFF(diff));
