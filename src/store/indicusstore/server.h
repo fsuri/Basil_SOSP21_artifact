@@ -90,7 +90,6 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
-  bool batchTimerRunning;
   int batchTimerId;
   std::vector<::google::protobuf::Message*> pendingBatchMessages;
   std::vector<proto::SignedMessage*> pendingBatchSignedMessages;
@@ -153,6 +152,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void LookupP2Decision(const std::string &txnDigest,
       int64_t &myProcessId, proto::CommitDecision &myDecision) const;
   uint64_t DependencyDepth(const proto::Transaction *txn) const;
+  void AdjustBatchSize();
 
   inline bool IsKeyOwned(const std::string &key) const {
     return static_cast<int>((*part)(key, numShards, groupIdx, dummyTxnGroups) % numGroups) == groupIdx;
@@ -171,7 +171,11 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   KeyManager *keyManager;
   const uint64_t timeDelta;
   const unsigned int batchTimeoutMS;
+  bool batchTimerRunning;
+  uint64_t dynamicBatchSize;
+  uint64_t messagesBatchedInterval;
   TrueTime timeServer;
+  uint64_t counter;
 
   /* Declare protobuf objects as members to avoid stack alloc/dealloc costs */
   proto::SignedMessage signedMessage;

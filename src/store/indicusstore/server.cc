@@ -49,7 +49,11 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     numGroups(numGroups), id(groupIdx * config.n + idx),
     transport(transport), occType(occType), part(part),
     params(params), keyManager(keyManager),
-    timeDelta(timeDelta), batchTimeoutMS(batchTimeoutMS), timeServer(timeServer) {
+    timeDelta(timeDelta), batchTimeoutMS(batchTimeoutMS),
+    batchTimerRunning(false),
+    dynamicBatchSize(params.signatureBatchSize),
+    messagesBatchedInterval(0UL),
+    timeServer(timeServer) {
   transport->Register(this, config, groupIdx, idx);
   _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
   _Latency_Init(&verifyLat, "verify_lat");
@@ -63,7 +67,12 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   proof->mutable_txn()->mutable_timestamp()->set_id(0);
   committed.insert(std::make_pair("", proof));
 
-  batchTimerRunning = false;
+  counter = 0UL;
+  if (params.validateProofs && params.signedMessages &&
+      params.signatureBatchSize > 1 && params.adjustBatchSize) {
+    transport->TimerMicro(batchTimeoutMS, std::bind(
+          &Server::AdjustBatchSize, this));
+  }
 }
 
 Server::~Server() {
@@ -452,11 +461,12 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
         signedMessage);
     cb();
   } else {
+    messagesBatchedInterval++;
     pendingBatchMessages.push_back(msg);
     pendingBatchSignedMessages.push_back(signedMessage);
     pendingBatchCallbacks.push_back(cb);
 
-    if (finishBatch || pendingBatchMessages.size() >= params.signatureBatchSize) {
+    if (finishBatch || pendingBatchMessages.size() >= dynamicBatchSize) {
       Debug("Batch is full, sending");
       if (batchTimerRunning) {
         transport->CancelTimer(batchTimerId);
@@ -1154,6 +1164,16 @@ uint64_t Server::DependencyDepth(const proto::Transaction *txn) const {
     }
   }
   return maxDepth;
+}
+
+void Server::AdjustBatchSize() {
+  dynamicBatchSize = (0.75 * dynamicBatchSize) + (0.25 * messagesBatchedInterval);
+  messagesBatchedInterval = 0;
+  ++counter;
+  if (counter % 100 == 0) {
+    Notice("Adjusted batch size to %lu.", dynamicBatchSize);
+  }
+  transport->TimerMicro(batchTimeoutMS, std::bind(&Server::AdjustBatchSize, this));
 }
 
 } // namespace indicusstore

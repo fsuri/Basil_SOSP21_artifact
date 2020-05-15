@@ -237,6 +237,8 @@ DEFINE_bool(indicus_verify_deps, true, "check signatures of transaction"
     " depdendencies (for Indicus)");
 DEFINE_bool(indicus_read_reply_batch, false, "wait to reply to reads until batch"
     " is ready (for Indicus)");
+DEFINE_bool(indicus_adjust_batch_size, false, "dynamically adjust batch size"
+    " every sig_batch_timeout (for Indicus)");
 DEFINE_uint64(indicus_sig_batch, 1, "signature batch size"
     " sig batch size (for Indicus)");
 DEFINE_uint64(indicus_sig_batch_timeout, 10, "signature batch timeout ms"
@@ -512,8 +514,9 @@ int main(int argc, char **argv) {
       timeDelta = timeDelta | (FLAGS_indicus_time_delta % 1000) * 1000;
 			indicusstore::Parameters params(FLAGS_indicus_sign_messages,
 				FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
-				FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch, FLAGS_indicus_max_dep_depth, readDepSize,
-        FLAGS_indicus_read_reply_batch);
+				FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
+        FLAGS_indicus_max_dep_depth, readDepSize,
+        FLAGS_indicus_read_reply_batch, FLAGS_indicus_adjust_batch_size);
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
           tport, &keyManager, params, timeDelta, indicusOCCType, part, FLAGS_indicus_sig_batch_timeout);
