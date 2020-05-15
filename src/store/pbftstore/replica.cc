@@ -258,6 +258,7 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
                                 const proto::SignedMessage& signedMsg) {
   Debug("Handling preprepare message");
 
+
   int primaryIdx = config.GetLeaderIndex(currentView);
   int primaryId = groupIdx * config.n + primaryIdx;
 
@@ -275,7 +276,7 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
       return;
     }
   } else {
-    if (!slots.setPreprepare(preprepare, primaryId)) {
+    if (!slots.setPreprepare(preprepare)) {
       return;
     }
   }
