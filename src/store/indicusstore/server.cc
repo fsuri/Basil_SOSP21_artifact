@@ -200,10 +200,20 @@ void Server::HandleRead(const TransportAddress &remote,
       (readReply->write().has_committed_value() || (params.verifyDeps && readReply->write().has_prepared_value()))) {
     proto::Write* write = new proto::Write(readReply->write());
     //Latency_Start(&signLat);
-    MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
+    if (params.readReplyBatch) {
+      MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
+        sendCB();
+        delete write;
+      });
+    } else {
+      proto::Write write(readReply->write());
+      std::vector<::google::protobuf::Message *> msgs;
+      msgs.push_back(&write);
+      std::vector<proto::SignedMessage *> smsgs;
+      smsgs.push_back(readReply->mutable_signed_write());
+      SignMessages(msgs, keyManager->GetPrivateKey(id), id, smsgs);
       sendCB();
-      delete write;
-    }, !params.readReplyBatch);
+    }
     //Latency_End(&signLat);
   } else {
     sendCB();
