@@ -93,6 +93,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 //Fallback protocol components
 // Edit MVTSO-check: When we suspend a transaction waiting for a dependency, then after some timeout, we should send the full TX to the client (IF we have it - 1 correct replica is guaranteed to have it.)
 // void HandleP1_Rec -> exec p1 if unreceived, reply with p1r, or p2r + dec_view  (Need to modify normal P2R message to contain view=0), current view
+void HandlePhase1FB(const TransportAddress &remote,proto::Phase1 &msg);
 // void HandleP2_Rec -> Reply with p2 decision
 // void HandleFB_Invoke -> send Elect message to FB based on views received. OR: Send all to all to other replicas (can use MACs to all replicas BESIDES the To-be-fallback) for next replica to elect.
 // void HandleFB_Dec -> receive FB decision, verify whether majority was indeed confirmed and sends signed P2R to all interested clients (this must include the view from the decision)

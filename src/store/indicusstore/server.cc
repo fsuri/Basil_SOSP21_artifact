@@ -261,31 +261,33 @@ void Server::HandlePhase1FB(const TransportAddress &remote,
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
 
-
-//check these:
 //check if already committed. reply with whole proof so client can forward that.     committed aborted
     //if(committed.end() != committed.find(txnDigest) )) {
     //  proto::CommittedProof* proof = committed[txnDigest];
     //}
-
     //else if(aborted.end() != aborted.find(txnDigest) ){
-
     //}
 
+//currently for simplicity just forward writeback message that we received and stored.
     if(writebackMessages.find(txnDigest) != writebackMessages.end()){
       proto::Writeback wb = writebackMessages[txnDigest];
       SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, wb, 1);
     }
 
-
-//add case where there is both p2 and p1
-
-//If(p2stored)   Check whether already did p2      p2Decisions
+    //add case where there is both p2 and p1
     else if(p2Decisions.end() != p2Decisions.find(txnDigest) && p1Decisions.end() != p1Decisions.find(txnDigest) ){
-       proto::CommitDecision decision = p2Decisions[txnDigest];    //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself. Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
+      proto::CommitDecision decision = p2Decisions[txnDigest];    //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself. Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
 
+      SetP1(msg.req_id(), txnDigest, result, conflict);
        SetP2(msg.req_id(), txnDigest, decision);
        SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote, 2);
+    }
+
+//  Check whether already did p2, but was not part of p1
+    else if(p2Decisions.end() != p2Decisions.find(txnDigest)){
+       proto::CommitDecision decision = p2Decisions[txnDigest];
+       SetP2(msg.req_id(), txnDigest, decision);
+       SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote, 3);
     }
     //Else if: Check whether already did p1 but no p2     p1Decisions
 
@@ -297,15 +299,11 @@ void Server::HandlePhase1FB(const TransportAddress &remote,
           if(result == proto::ConcurrencyControl::ABORT){
             conflict = p1Conflicts[txnDigest];
           }
-          /////////////////////// refactor this into seperate function
-
           SetP1(msg.req_id(), txnDigest, result, conflict);
-
           SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote, 4);
-          //SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);    //need to distinguish between P1 and fallback p1? or do we spawn a seperate client that does not "know" about anything else than its current state.
         }
     }
-    //Else Do p1 normally. Just call HandlePhase1(remote, msg)   // might need to change it though, so the receiving client knows its a p1FB? It should know that anyways though..
+    //Else Do p1 normally. copied logic from HandlePhase1(remote, msg)
     else{
       std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
       Debug("FB exec PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
@@ -327,7 +325,6 @@ void Server::HandlePhase1FB(const TransportAddress &remote,
           }
         }
       }
-
       proto::Transaction *txn = msg.release_txn();
       ongoing[txnDigest] = txn;
 
@@ -339,21 +336,13 @@ void Server::HandlePhase1FB(const TransportAddress &remote,
       if(result == proto::ConcurrencyControl::ABORT){
         p1Conflicts[txnDigest] = committedProof;  //does this work this way for CbR
       }
-
       SetP1(msg.req_id(), txnDigest, result, committedProof);
-
       SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote, 4);
       //want to sendPhase1FBReply with the content from HandlePhase1.
   }
 }
 
-//could be void right?
-void SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Result &result, proto::CommittedProof &conflict){}
-  //message Phase1FBReply {
-  //  required uint64 req_id = 1;
-  //  optional Phase1Reply p1r;
-  //  optional Phase2Reply p2r;
-  //}
+void Server::SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Result &result, proto::CommittedProof &conflict){}
   phase1Reply.Clear();
   phase1Reply.set_req_id(reqId;)
   phase1Reply.mutable_cc()->set_ccr(result);
@@ -372,22 +361,14 @@ void SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Res
       //Latency_End(&signLat);
     }
   }
-
 }
 
-/could be void right?
-void SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision decision){
-  //message Phase1FBReply {
-  //  required uint64 req_id = 1;
-  //  optional Phase1Reply p1r;
-  //  optional Phase2Reply p2r;
-  //}
+void Server::SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision &decision){
   phase2Reply.Clear();
   phase2Reply.set_req_id(reqId);
-  phase2Reply.mutable_p2_decision()->set_decision(decision;
+  phase2Reply.mutable_p2_decision()->set_decision(decision);
   if (params.validateProofs) {
     *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
-
     if (params.signedMessages) {
       proto::Phase2Decision p2Decision(phase2Reply.p2_decision());
       //Latency_Start(&signLat);
@@ -396,43 +377,42 @@ void SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision decision
       //Latency_End(&signLat);
     }
   }
-
 }
+
 
 void Server::SendPhase1FBReply(uint64_t reqId,
     proto::phase1Reply &p1r, proto::phase2Reply &p2r, proto::Writeback &wb.
     const TransportAddress &remote, uint32_t response_case ) {
 
+    //TODO? update fb response set to reply quickly for repetitions?
 
-  //update fb response set to reply quickly for repetitions
+    phase1FBReply.Clear();
+    phase1FBReply.set_req_id(reqId);
 
-  phase1FBReply.Clear();
-  phase1FBReply.set_req_id(reqId);
+    switch(response_case){
+      //commit or abort done --> writeback
+      case 1:
+          phase1FBReply.set_wb(wb);
+          break;
+      //p2 and p1 decision.
+      case 2:
+          phase1FBReply.set_p2r(p2r);
+          phase1FBReply.set_p1r(p1r);
+          break;
+      //p2 only
+      case 3:
+          phase1FBReply.set_p2r(p2r);
+          break;
+      //p1 only
+      case 4:
+          phase1FBReply.set_p1r(p1r);
+          break;
+    }
 
-  switch(response_case){
-    //commit or abort done --> writeback
-    case 1:
-        phase1FBReply.set_wb(wb);
-        break;
-    //p2 and p1 decision.
-    case 2:
-        phase1FBReply.set_p2r(p2r);
-        phase1FBReply.set_p1r(p1r);
-        break;
-    //p2 only
-    case 3:
-        phase1FBReply.set_p2r(p2r);
-        break;
-    //p1 only
-    case 4:
-        phase1FBReply.set_p1r(p1r);
-        break;
-  }
-
-  transport->SendMessage(this, remote, phase1FBReply);
+    transport->SendMessage(this, remote, phase1FBReply);
 }
 
-
+//TODO: Add no-replays property, i.e. recover existing decision/result from storage (do this for HandlePhase1 as well.)
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
   const proto::Transaction *txn;
@@ -492,6 +472,41 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   transport->SendMessage(this, remote, phase2Reply);
   Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
+}
+
+void Server::HandlePhase2FB(const TransportAddress &remote,
+    proto::Phase2FB &msg) {
+  std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
+  Debug("PHASE2FB[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
+      msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
+      msg.txn().timestamp().timestamp());
+
+
+//currently for simplicity just forward writeback message that we received and stored.
+//TODO: Create a seperate message explicitly for writeback: This suffices to finish all fallback procedures
+    if(writebackMessages.find(txnDigest) != writebackMessages.end()){
+      proto::Writeback wb = writebackMessages[txnDigest];
+      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, wb, 1);
+    }
+
+    //p2 decision already exists. Just return it.
+    else if(p2Decisions.end() != p2Decisions.find(txnDigest)){
+      proto::CommitDecision decision = p2Decisions[txnDigest];    //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself. Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
+      SetP2(msg.req_id(), txnDigest, decision);
+      transport->SendMessage(this, remote, phase2Reply);
+      Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
+      //just do normal handle p2 otherwise after timeout
+    }
+    else{
+      //send back request to do normal Phase2 ourselves after a timeout. Try to schedule HandlePhase2 for a later time, include orignial remote address as return.  (Or schedule HandlePhase2FB again for later.)
+      //TODO: keep track of a timeout on original client upon his first message: schedule this request to be processed only after that timeout is expired
+      //USE:  transport->Timer(miliseconds, [](){ doSomething(); })     Where miliseconds =  Timeout - elapsed time,  elapsed time = (current_time - timer start)
+      // doSomething = HandlePhase2FB
+    }
+
+
+
+
 }
 
 void Server::HandleWriteback(const TransportAddress &remote,
