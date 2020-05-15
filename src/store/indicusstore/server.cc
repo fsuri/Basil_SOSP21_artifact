@@ -1169,10 +1169,6 @@ uint64_t Server::DependencyDepth(const proto::Transaction *txn) const {
 void Server::AdjustBatchSize() {
   dynamicBatchSize = (0.75 * dynamicBatchSize) + (0.25 * messagesBatchedInterval);
   messagesBatchedInterval = 0;
-  ++counter;
-  if (counter % 100 == 0) {
-    Notice("Adjusted batch size to %lu.", dynamicBatchSize);
-  }
   transport->TimerMicro(batchTimeoutMS, std::bind(&Server::AdjustBatchSize, this));
 }
 

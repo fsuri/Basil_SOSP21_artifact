@@ -75,7 +75,10 @@ void AsyncAdapterClient::GetCallback(int status, const std::string &key,
 
 void AsyncAdapterClient::GetTimeout(int status, const std::string &key) {
   Warning("Get(%s) timed out :(", key.c_str());
-  outstandingOpCount--;
+  client->Get(key, std::bind(&AsyncAdapterClient::GetCallback, this,
+        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
+        std::placeholders::_4), std::bind(&AsyncAdapterClient::GetTimeout, this,
+          std::placeholders::_1, std::placeholders::_2), timeout);
 }
 
 void AsyncAdapterClient::PutCallback(int status, const std::string &key,
@@ -88,7 +91,6 @@ void AsyncAdapterClient::PutCallback(int status, const std::string &key,
 void AsyncAdapterClient::PutTimeout(int status, const std::string &key,
     const std::string &val) {
   Warning("Put(%s,%s) timed out :(", key.c_str(), val.c_str());
-  outstandingOpCount--;
 }
 
 void AsyncAdapterClient::CommitCallback(transaction_status_t result) {
