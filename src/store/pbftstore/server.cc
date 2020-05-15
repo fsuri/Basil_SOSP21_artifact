@@ -14,7 +14,17 @@ Server::Server(const transport::Configuration& config, KeyManager *keyManager,
   groupIdx(groupIdx), idx(idx), id(groupIdx * config.n + idx),
   numShards(numShards), numGroups(numGroups), signMessages(signMessages),
   validateProofs(validateProofs),  timeDelta(timeDelta), part(part),
-  timeServer(timeServer) {}
+  timeServer(timeServer) {
+  dummyProof = std::make_shared<proto::CommitProof>();
+
+  dummyProof->mutable_writeback_message()->set_status(REPLY_OK);
+  dummyProof->mutable_writeback_message()->set_txn_digest("");
+  proto::ShardSignedDecisions dec;
+  *dummyProof->mutable_writeback_message()->mutable_signed_decisions() = dec;
+
+  dummyProof->mutable_txn()->mutable_timestamp()->set_timestamp(0);
+  dummyProof->mutable_txn()->mutable_timestamp()->set_id(0);
+}
 
 Server::~Server() {}
 
@@ -363,6 +373,7 @@ void Server::Load(const string &key, const string &value,
     const Timestamp timestamp) {
   ValueAndProof val;
   val.value = value;
+  val.commitProof = dummyProof;
   commitStore.put(key, val, timestamp);
 }
 

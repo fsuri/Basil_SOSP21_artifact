@@ -19,6 +19,12 @@ ShardClient::~ShardClient() {}
 
 bool ShardClient::validateReadProof(const proto::CommitProof& commitProof, const std::string& key,
   const std::string& value, const Timestamp& timestamp) {
+    // hack for load:
+    if (timestamp.getID() == 0 && timestamp.getTimestamp() == 0) {
+      Debug("Using preloaded key");
+      return true;
+    }
+
     // First, verify the transaction
     Debug("Validating read proof");
 

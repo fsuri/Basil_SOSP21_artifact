@@ -49,6 +49,8 @@ private:
     std::shared_ptr<proto::CommitProof> commitProof;
   };
 
+  std::shared_ptr<proto::CommitProof> dummyProof;
+
   VersionedKVStore<Timestamp, ValueAndProof> commitStore;
 
 
