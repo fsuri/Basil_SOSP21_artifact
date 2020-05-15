@@ -655,7 +655,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       txn.timestamp().timestamp(), txn.timestamp().id());
   Timestamp ts(txn.timestamp());
 
-  if (prepared.find(txnDigest) != prepared.end()) {
+  if (prepared.find(txnDigest) == prepared.end()) {
     if (CheckHighWatermark(ts)) {
       Debug("[%lu:%lu][%s] ABSTAIN ts %lu beyond high watermark.",
           txn.client_id(), txn.client_seq_num(),
