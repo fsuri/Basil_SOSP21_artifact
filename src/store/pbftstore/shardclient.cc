@@ -137,6 +137,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply& readReply, const proto
 
   // get the read request id from the reply
   uint64_t reqId = readReply.req_id();
+  Debug("Read red id: %lu", reqId);
 
   // try and find a matching pending read based on the request
   if (pendingReads.find(reqId) != pendingReads.end()) {
@@ -355,6 +356,7 @@ void ShardClient::Get(const std::string &key, const Timestamp &ts,
 
   proto::Read read;
   uint64_t reqId = readReq++;
+  Debug("Get id: %lu", reqId);
   read.set_req_id(reqId);
   read.set_key(key);
   ts.serialize(read.mutable_timestamp());

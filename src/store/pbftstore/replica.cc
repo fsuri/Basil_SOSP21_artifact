@@ -236,7 +236,7 @@ void Replica::SendPreprepare(uint64_t seqnum, const proto::Preprepare& preprepar
   sendMessageToAll(preprepare);
 
   // wait 300 ms for tx to complete
-  seqnumCommitTimers[seqnum] = transport->Timer(2000, [this, seqnum, preprepare]() {
+  seqnumCommitTimers[seqnum] = transport->Timer(20000, [this, seqnum, preprepare]() {
     Debug("Primary commit timer expired, resending preprepare");
     this->SendPreprepare(seqnum, preprepare);
   });
@@ -281,6 +281,7 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
   }
 
   uint64_t seqnum = preprepare.seqnum();
+  Debug("PP (preprepare) seq num: %lu", seqnum);
   uint64_t viewnum = preprepare.viewnum();
   string digest = preprepare.digest();
 
@@ -321,6 +322,7 @@ void Replica::HandlePrepare(const TransportAddress &remote,
   }
 
   uint64_t seqnum = prepare.seqnum();
+  Debug("prepare seq num: %lu", seqnum);
   uint64_t viewnum = prepare.viewnum();
   string digest = prepare.digest();
 
@@ -347,6 +349,7 @@ void Replica::HandleCommit(const TransportAddress &remote,
   }
 
   uint64_t seqnum = commit.seqnum();
+  Debug("commit seq num: %lu", seqnum);
   uint64_t viewnum = commit.viewnum();
   string digest = commit.digest();
 
@@ -398,7 +401,6 @@ void Replica::HandleGrouped(const TransportAddress &remote,
           }
         }
       }
-
     }
   }
 
