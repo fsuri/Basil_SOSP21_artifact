@@ -33,6 +33,9 @@
 
 #include <bitset>
 #include <queue>
+#include <ctime>
+#include <chrono>
+#include <sys/time.h>
 
 #include "lib/assert.h"
 #include "lib/tcptransport.h"
@@ -220,6 +223,16 @@ void Server::HandleRead(const TransportAddress &remote,
 
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
+
+  // no-replays property, i.e. recover existing decision/result from storage
+  if(p1Decisions.find(msg.txn_digest()) != p1Decisions.end()){
+        proto::ConcurrencyControl::Result result  =p1Decisions[msg.txn_digest();
+        //KEEP track of interested client
+        interestedClients[txnDigest].insert(remote);
+  }
+
+
+ else{
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
@@ -240,6 +253,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
       }
     }
   }
+  //KEEP track of interested client
+  interestedClients[txnDigest].insert(remote);
 
   proto::Transaction *txn = msg.release_txn();
   ongoing[txnDigest] = txn;
@@ -248,9 +263,18 @@ void Server::HandlePhase1(const TransportAddress &remote,
   proto::ConcurrencyControl::Result result = DoOCCCheck(msg.req_id(),
       remote, txnDigest, *txn, retryTs, committedProof);
 
+  }
+
   if (result != proto::ConcurrencyControl::WAIT) {
+    if(FBclient_elapsed.find(txnDigest) == FBclient_elapsed.end()){}
+      struct timeval tv;
+      gettimeofday(&tv, NULL);
+      uint64_t start_time = tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+      FBclient_elapsed[txnDigest] = start_time;
+    }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
     SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);
   }
+
 }
 
 //FALLBACK PHASE1
@@ -325,6 +349,9 @@ void Server::HandlePhase1FB(const TransportAddress &remote,
           }
         }
       }
+      //KEEP track of interested client
+      interestedClients[txnDigest].insert(remote);
+
       proto::Transaction *txn = msg.release_txn();
       ongoing[txnDigest] = txn;
 
@@ -336,8 +363,18 @@ void Server::HandlePhase1FB(const TransportAddress &remote,
       if(result == proto::ConcurrencyControl::ABORT){
         p1Conflicts[txnDigest] = committedProof;  //does this work this way for CbR
       }
-      SetP1(msg.req_id(), txnDigest, result, committedProof);
-      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote, 4);
+
+//TODO: WHen will it be sent if its WAIT?  --> will be in some notify function. NEED TO EDIT THAT TO SEND TO ALL INTERESTED CLIENTS!!!
+  if (result != proto::ConcurrencyControl::WAIT) {
+        SetP1(msg.req_id(), txnDigest, result, committedProof);
+        if(FBclient_elapsed.find(txnDigest) == FBclient_elapsed.end()){}
+          struct timeval tv;
+          gettimeofday(&tv, NULL);
+          uint64_t start_time = tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+          FBclient_elapsed[txnDigest] = start_time;
+        }
+        SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote, 4);
+      }
       //want to sendPhase1FBReply with the content from HandlePhase1.
   }
 }
@@ -366,6 +403,7 @@ void Server::SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyCont
 void Server::SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision &decision){
   phase2Reply.Clear();
   phase2Reply.set_req_id(reqId);
+  //TODO: ADD VIEW?
   phase2Reply.mutable_p2_decision()->set_decision(decision);
   if (params.validateProofs) {
     *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
@@ -412,51 +450,83 @@ void Server::SendPhase1FBReply(uint64_t reqId,
     transport->SendMessage(this, remote, phase1FBReply);
 }
 
-//TODO: Add no-replays property, i.e. recover existing decision/result from storage (do this for HandlePhase1 as well.)
+
+
+//TODO: ADD AUTHENTICATION IN ORDER TO ENFORCE TIMEOUTS. ANYBODY THAT IS NOT THE ORIGINAL CLIENT SHOULD ONLY BE ABLE TO SEND P2FB messages and NOT normal P2!!!!!!
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
-  const proto::Transaction *txn;
-  std::string computedTxnDigest;
-  const std::string *txnDigest = &computedTxnDigest;
-  if (params.validateProofs) {
-    if (!msg.has_txn() && !msg.has_txn_digest()) {
-      Debug("PHASE2 message contains neither txn nor txn_digest.");
-      return;
-    }
 
-    if (msg.has_txn_digest()) {
-      auto txnItr = ongoing.find(msg.txn_digest());
-      if (txnItr == ongoing.end()) {
-        Debug("PHASE2[%s] message does not contain txn, but have not seen"
-            " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
+        // no-replays property, i.e. recover existing decision/result from storage (do this for HandlePhase1 as well.)
+    if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
+      proto::CommitDecision decision =p2Decisions[msg.txn_digest()]
+      phase2Reply.Clear();
+      phase2Reply.set_req_id(msg.req_id());
+      //TODO: ADD VIEW?
+      phase2Reply.mutable_p2_decision()->set_decision(decision);
+      if (params.validateProofs) {
+        *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
+
+        if (params.signedMessages) {
+          proto::Phase2Decision p2Decision(phase2Reply.p2_decision());
+          //Latency_Start(&signLat);
+          SignMessage(p2Decision, keyManager->GetPrivateKey(id), id, phase2Reply.mutable_signed_p2_decision());
+          //Latency_End(&signLat);
+        }
+      }
+        }
+else{
+
+      const proto::Transaction *txn;
+      std::string computedTxnDigest;
+      const std::string *txnDigest = &computedTxnDigest;
+      if (params.validateProofs) {
+        if (!msg.has_txn() && !msg.has_txn_digest()) {
+          Debug("PHASE2 message contains neither txn nor txn_digest.");
+          return;
+        }
+
+        if (msg.has_txn_digest()) {
+          auto txnItr = ongoing.find(msg.txn_digest());
+          if (txnItr == ongoing.end()) {
+            Debug("PHASE2[%s] message does not contain txn, but have not seen"
+                " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
+            return;
+          }
+
+          txn = txnItr->second;
+          txnDigest = &msg.txn_digest();
+        } else {
+          txn = &msg.txn();
+          computedTxnDigest = TransactionDigest(msg.txn(), params.hashDigest);
+          txnDigest = &computedTxnDigest;
+        }
+      }
+Double check all signatures
+      Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
+
+      int64_t myProcessId;
+      proto::ConcurrencyControl::Result myResult;
+      LookupP1Decision(*txnDigest, myProcessId, myResult);
+      if (params.validateProofs && params.signedMessages && !ValidateP1Replies(msg.decision(),
+            false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
+            myResult)) {
+        Debug("VALIDATE P1Replies failed.");
         return;
       }
 
-      txn = txnItr->second;
-      txnDigest = &msg.txn_digest();
-    } else {
-      txn = &msg.txn();
-      computedTxnDigest = TransactionDigest(msg.txn(), params.hashDigest);
-      txnDigest = &computedTxnDigest;
-    }
+      p2Decisions[*txnDigest] = msg.decision();   //is this correct
+
+      if(FBclient_elapsed.find(txnDigest) == FBclient_elapsed.end()){}
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        uint64_t start_time = tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+        FBclient_elapsed[txnDigest] = start_time;
+      }
   }
-
-  Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
-
-  int64_t myProcessId;
-  proto::ConcurrencyControl::Result myResult;
-  LookupP1Decision(*txnDigest, myProcessId, myResult);
-  if (params.validateProofs && params.signedMessages && !ValidateP1Replies(msg.decision(),
-        false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
-        myResult)) {
-    Debug("VALIDATE P1Replies failed.");
-    return;
-  }
-
-  p2Decisions[*txnDigest] = msg.decision();
 
   phase2Reply.Clear();
   phase2Reply.set_req_id(msg.req_id());
+  //TODO: ADD VIEW?
   phase2Reply.mutable_p2_decision()->set_decision(msg.decision());
   if (params.validateProofs) {
     *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
@@ -464,8 +534,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
     if (params.signedMessages) {
       proto::Phase2Decision p2Decision(phase2Reply.p2_decision());
       //Latency_Start(&signLat);
-      SignMessage(p2Decision, keyManager->GetPrivateKey(id), id,
-          phase2Reply.mutable_signed_p2_decision());
+      SignMessage(p2Decision, keyManager->GetPrivateKey(id), id, phase2Reply.mutable_signed_p2_decision());
       //Latency_End(&signLat);
     }
   }
@@ -474,6 +543,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void Server::HandlePhase2FB(const TransportAddress &remote,
     proto::Phase2FB &msg) {
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
@@ -481,33 +551,94 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
 
-
-//currently for simplicity just forward writeback message that we received and stored.
-//TODO: Create a seperate message explicitly for writeback: This suffices to finish all fallback procedures
+      //currently for simplicity just forward writeback message that we received and stored.
     if(writebackMessages.find(txnDigest) != writebackMessages.end()){
       proto::Writeback wb = writebackMessages[txnDigest];
-      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, wb, 1);
+      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, wb, 1); //TODO: Create a seperate message explicitly for writeback: This suffices to finish all fallback procedures
     }
 
-    //p2 decision already exists. Just return it.
-    else if(p2Decisions.end() != p2Decisions.find(txnDigest)){
-      proto::CommitDecision decision = p2Decisions[txnDigest];    //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself. Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
-      SetP2(msg.req_id(), txnDigest, decision);
-      transport->SendMessage(this, remote, phase2Reply);
-      Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
+    //p2 decision already exists. Just return it.   CAN CUT THIS, REDUNDANT
+    //else if(p2Decisions.end() != p2Decisions.find(txnDigest)){
+
+    //  HandlePhase2(remote, msg);
+      //TODO: Clean up HandePhase2 so it just returns the existing message if .
+      //proto::CommitDecision decision = p2Decisions[txnDigest];
+      //SetP2(msg.req_id(), txnDigest, decision);
+      //transport->SendMessage(this, remote, phase2Reply);
+      //Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
+
       //just do normal handle p2 otherwise after timeout
     }
     else{
-      //send back request to do normal Phase2 ourselves after a timeout. Try to schedule HandlePhase2 for a later time, include orignial remote address as return.  (Or schedule HandlePhase2FB again for later.)
-      //TODO: keep track of a timeout on original client upon his first message: schedule this request to be processed only after that timeout is expired
-      //USE:  transport->Timer(miliseconds, [](){ doSomething(); })     Where miliseconds =  Timeout - elapsed time,  elapsed time = (current_time - timer start)
-      // doSomething = HandlePhase2FB
+      //TODO: The timer should start running AFTER the Mvtso check returns. so add it there.
+      // I could make the timeout window 0 if I dont expect byz clients. An honest client will likely only ever start this on conflict.
+      //std::chrono::high_resolution_clock::time_point current_time = high_resolution_clock::now();
+      struct timeval tv;
+      gettimeofday(&tv, NULL);
+      uint64_t current_time = tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+
+
+      //std::time_t current_time;
+      //std::chrono::high_resolution_clock::time_point
+      uint64_t elapsed;
+      if(FBclient_elapsed.find(txnDigest) != FBclient_elapsed.end())
+          elapsed = current_time - FBclient_elapsed[txnDigest];
+      else{
+        //PANIC, have never seen the tx that is mentioned. Start timer ourselves.
+        FBclient_elapsed[txnDigest] = current_time;
+        transport->Timer((CLIENTTIMEOUT), [](){HandlePhase2FB(remote, msg);});
+
+      }
+
+	    //current_time = time(NULL);
+      //std::time_t elapsed = current_time - FBclient_timeouts[txnDigest];
+      //TODO: Replay this toy time logic with proper MS timer.
+      if (elapsed >= CLIENTTIMEOUT){
+        HandlePhase2(remote, msg);
+      }
+      else{
+        //schedule for once original client has timed out.
+        transport->Timer((CLIENTTIMEOUT-elapsed), [](){HandlePhase2FB(remote, msg);});
+      }
     }
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+//TODO remove remote argument, it is useless here. Instead add and keep track of INTERESTED CLIENTS REMOTE MAP
+void Server::InvokeFB(const TransportAddress &remote, proto::InvokeFB &msg) {
 
+      //TODO: CHECK if part of logging shard. (this needs to be done at all p2s, reject if its not ourselves)
+      //TODO: 1) Compute new views
+      //TODO 2) Schedule request for when current leader timeout is complete
+      //TODO 3) Form and send ElectFB message to all replicas within logging shard.
+      //TODO 4) Send MoveView message for new view to all other replicas
+}
 
+//TODO remove remote argument
+void Server::ElectFB(const TransportAddress &remote, proto::ElectFB &msg){
+
+    //TODO: 1) process validate incoming messages
+    //TODO: 2) update state, keep counter of received ElectFbs  --> last one executes the function
+
+    //TODO: 3) form new decision, and send DecisionFB message to all replicas
 
 }
+
+void Server::DecisionFB(){
+
+  //TODO: 1) verify signatures, Ignore if from view < current
+  //TODO: 2) Send Phase2Reply message to all interested clients (check list interestedClients for all remote addresses)
+  //TODO: 3) send current views to client (in case there was no consensus, so the client can start a new round.)
+}
+
+
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {

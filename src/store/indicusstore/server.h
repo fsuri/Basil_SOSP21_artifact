@@ -31,6 +31,7 @@
 
 #ifndef _INDICUS_SERVER_H_
 #define _INDICUS_SERVER_H_
+#define CLIENTTIMEOUT  1000    //currently miliseconds; adjust to whatever is a sensible time: dont know what is expected latency for 1 op
 
 #include "lib/latency.h"
 #include "lib/transport.h"
@@ -42,10 +43,12 @@
 #include "store/indicusstore/common.h"
 #include "store/indicusstore/store.h"
 #include "store/indicusstore/indicus-proto.pb.h"
+#include <sys/time.h>
 
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <ctime>
 
 namespace indicusstore {
 
@@ -202,6 +205,21 @@ void HandlePhase1FB(const TransportAddress &remote,proto::Phase1 &msg);
   std::unordered_map<std::string, proto::CommittedProof *> committed;
   std::unordered_set<std::string> aborted;    //ADD Aborted proof to it.(in order to reply to Fallback)
   //creating new map to store writeback messages..  Need to find a better way, but suffices as placeholder
+
+  //keep list of all remote addresses == interested client_seq_num
+  std::unordered_map<std::string, std::unordered_set<TransportAddress>> interestedClients;
+  //keep list of timeouts
+  //std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> FBclient_timeouts;
+  std::unordered_map<std::string, uint64_t> FBclient_elapsed;
+
+  //keep list for exponential timeouts for views.
+  std::unordered_map<std::string, std::time_t> exp_timeouts;
+
+  //keep list for current view.
+  std::unordered_map<std::string, uint64_t> current_view;
+  //keep list of the views in which the p2Decision is from: //TODO: add this to p2Decisions directly - doing this here so I do not touch any existing code.
+  std::unordered_map<std::string, uint64_t> decision_view;
+
   std::unordered_map<std::string, proto::Writeback> writebackMessages;
 
   std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
