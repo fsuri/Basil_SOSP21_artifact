@@ -97,6 +97,7 @@ message ConcurrencyControl {
   required Result ccr = 2;
   optional CommittedProof committed_conflict = 3;
   optional bytes txn_digest = 4;
+  optional uint64 involved_group = 5;
 }
 
 message Phase1Reply {
@@ -121,8 +122,9 @@ message Phase2 {
 }
 
 message Phase2Decision {
-  required CommitDecision decision = 2;
-  optional bytes txn_digest = 3;
+  required CommitDecision decision = 1;
+  optional bytes txn_digest = 2;
+  optional uint64 involved_group = 3;
 }
 
 message Phase2Reply {

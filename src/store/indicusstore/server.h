@@ -70,7 +70,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       const std::string &type, const std::string &data,
       void *meta_data) override;
 
-  virtual void Load(const string &key, const string &value,
+  virtual void Load(const std::string &key, const std::string &value,
       const Timestamp timestamp) override;
 
   virtual inline Stats &GetStats() override { return stats; }

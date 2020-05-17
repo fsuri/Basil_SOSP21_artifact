@@ -297,10 +297,12 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     if (reply.has_signed_write()) {
       if (!Verify(keyManager->GetPublicKey(reply.signed_write().process_id()),
               reply.signed_write().data(), reply.signed_write().signature(), params.signatureBatchSize)) {
-          return;
+        Debug("[group %i] Failed to validate signature for write.", group);
+        return;
       }
       
       if(!validatedPrepared.ParseFromString(reply.signed_write().data())) {
+        Debug("[group %i] Invalid serialization of write.", group);
         return;
       }
 
@@ -329,6 +331,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   if (write->has_committed_value() && write->has_committed_timestamp()) {
     if (params.validateProofs) {
       if (!reply.has_proof()) {
+        Debug("[group %i] Missing proof for committed write.", group);
         return;
       }
 

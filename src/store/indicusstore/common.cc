@@ -29,19 +29,18 @@ void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
     const std::vector<proto::SignedMessage*>& signedMessages) {
   UW_ASSERT(msgs.size() == signedMessages.size());
 
-  std::vector<std::string*> messageStrs;
+  std::vector<const std::string*> messageStrs;
   for (unsigned int i = 0; i < msgs.size(); i++) {
     signedMessages[i]->set_process_id(processId);
     UW_ASSERT(msgs[i]->SerializeToString(signedMessages[i]->mutable_data()));
-    messageStrs.push_back(signedMessages[i]->mutable_data());
+    messageStrs.push_back(&signedMessages[i]->data());
   }
 
-  std::vector<std::string*> sigs;
-  for (unsigned int i = 0; i < msgs.size(); i++) {
-    sigs.push_back(signedMessages[i]->mutable_signature());
-  }
-
+  std::vector<std::string> sigs;
   BatchedSigs::generateBatchedSignatures(messageStrs, privateKey, sigs);
+  for (unsigned int i = 0; i < msgs.size(); i++) {
+    *signedMessages[i]->mutable_signature() = sigs[i];
+  }
 }
 
 bool Verify(crypto::PubKey* publicKey, const string &message, const string &signature,
@@ -88,8 +87,8 @@ bool ValidateCommittedProof(const proto::CommittedProof &proof,
     return ValidateP1Replies(proto::COMMIT, true, &proof.txn(), committedTxnDigest,
         proof.p1_sigs(), keyManager, config, -1, proto::ConcurrencyControl::ABORT, sigBatchSize);
   } else if (proof.has_p2_sigs()) {
-    return ValidateP2Replies(proto::COMMIT, committedTxnDigest, proof.p2_sigs(),
-        keyManager, config, -1, proto::ABORT, sigBatchSize);
+    return ValidateP2Replies(proto::COMMIT, &proof.txn(), committedTxnDigest,
+        proof.p2_sigs(), keyManager, config, -1, proto::ABORT, sigBatchSize);
   } else {
     Debug("Proof has neither P1 nor P2 sigs.");
     return false;
@@ -137,12 +136,13 @@ bool ValidateP1Replies(proto::CommitDecision decision,
     return false;
   }
 
-  std::string ccMsg;
-  concurrencyControl.SerializeToString(&ccMsg);
 
   std::set<int> groupsVerified;
-  std::set<uint64_t> replicasVerified;
   for (const auto &sigs : groupedSigs.grouped_sigs()) {
+    concurrencyControl.set_involved_group(sigs.first);
+    std::string ccMsg;
+    concurrencyControl.SerializeToString(&ccMsg);
+    std::set<uint64_t> replicasVerified;
     uint32_t verified = 0;
     for (const auto &sig : sigs.second.sigs()) {
 
@@ -153,6 +153,9 @@ bool ValidateP1Replies(proto::CommitDecision decision,
       }
 
       bool skip = false;
+      /* TODO: remove logic for avoiding verifying our own result for now.
+       *   It's more complicated with shards on the same machine signing each other's
+       *   messages.
       if (sig.process_id() == myProcessId && myProcessId >= 0) {
         if (concurrencyControl.ccr() == myResult) {
           skip = true;
@@ -162,9 +165,9 @@ bool ValidateP1Replies(proto::CommitDecision decision,
               sig.process_id(), myProcessId, concurrencyControl.ccr());
           return false;
         }
-      }
+      }*/
 
-      Debug("Verifying %lu CryptoPP::byte signature from replica %lu in group %lu.",
+      Debug("Verifying %lu byte signature from replica %lu in group %lu.",
           sig.signature().size(), sig.process_id(), sigs.first);
       //Latency_Start(&lat);
       if (!skip && !Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
@@ -206,16 +209,18 @@ bool ValidateP1Replies(proto::CommitDecision decision,
 }
 
 bool ValidateP2Replies(proto::CommitDecision decision,
+    const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::CommitDecision myDecision, unsigned int sigBatchSize) {
   Latency_t dummyLat;
   //_Latency_Init(&dummyLat, "dummy_lat");
-  return ValidateP2Replies(decision, txnDigest, groupedSigs,
+  return ValidateP2Replies(decision, txn, txnDigest, groupedSigs,
       keyManager, config, myProcessId, myDecision, dummyLat, sigBatchSize);
 }
 
 bool ValidateP2Replies(proto::CommitDecision decision,
+    const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::CommitDecision myDecision,
@@ -223,6 +228,7 @@ bool ValidateP2Replies(proto::CommitDecision decision,
   proto::Phase2Decision p2Decision;
   p2Decision.Clear();
   p2Decision.set_decision(decision);
+  p2Decision.set_involved_group(GetLogGroup(*txn, *txnDigest));
   *p2Decision.mutable_txn_digest() = *txnDigest;
 
   std::string p2DecisionMsg;
@@ -257,6 +263,7 @@ bool ValidateP2Replies(proto::CommitDecision decision,
     //Latency_End(&lat);
 
     if (!replicasVerified.insert(sig.process_id()).second) {
+      Debug("Already verified signature from %lu.", sig.process_id());
       return false;
     }
     verified++;
@@ -457,7 +464,21 @@ uint64_t SlowAbortQuorumSize(const transport::Configuration *config) {
 
 bool IsReplicaInGroup(uint64_t id, uint32_t group,
     const transport::Configuration *config) {
-  return id / config->n == group;
+  uint64_t replicaGroup = id / config->n;
+  const std::string &host = config->replica(id / config->n, id % config->n).host;
+  for (int i = 0; i < config->n; ++i) {
+    if (config->replica(group, i).host == host) {
+      return true;
+    }
+  }
+  return false;
+}
+
+int64_t GetLogGroup(const proto::Transaction &txn, const std::string &txnDigest) {
+  uint8_t groupIdx = txnDigest[0];
+  groupIdx = groupIdx % txn.involved_groups_size();
+  UW_ASSERT(groupIdx < txn.involved_groups_size());
+  return txn.involved_groups(groupIdx);
 }
 
 } // namespace indicusstore

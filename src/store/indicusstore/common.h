@@ -52,11 +52,13 @@ bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
     Latency_t &lat, unsigned int sigBatchSize);
 
 bool ValidateP2Replies(proto::CommitDecision decision,
+    const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::CommitDecision myDecision, unsigned int sigBatchSize);
 
 bool ValidateP2Replies(proto::CommitDecision decision,
+    const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::CommitDecision myDecision,
@@ -121,6 +123,8 @@ uint64_t SlowAbortQuorumSize(const transport::Configuration *config);
 bool IsReplicaInGroup(uint64_t id, uint32_t group,
     const transport::Configuration *config);
 
+int64_t GetLogGroup(const proto::Transaction &txn, const std::string &txnDigest);
+
 typedef struct Parameters {
   const bool signedMessages;
   const bool validateProofs;
@@ -131,6 +135,7 @@ typedef struct Parameters {
   const uint64_t readDepSize;
   const bool readReplyBatch;
   const bool adjustBatchSize;
+  const bool sharedMemBatches;
 
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     int signatureBatchSize, int64_t maxDepDepth, uint64_t readDepSize,
@@ -138,7 +143,8 @@ typedef struct Parameters {
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
     maxDepDepth(maxDepDepth), readDepSize(readDepSize),
-    readReplyBatch(readReplyBatch), adjustBatchSize(adjustBatchSize) { }
+    readReplyBatch(readReplyBatch), adjustBatchSize(adjustBatchSize),
+    sharedMemBatches(true) { }
 } Parameters;
 
 } // namespace indicusstore

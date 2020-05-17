@@ -64,7 +64,7 @@ static inline uint32_t log2(const uint32_t x) {
 }
 
 // generate batches signatures for every message in [messages] using [privateKey]
-void generateBatchedSignatures(std::vector<std::string*> messages, crypto::PrivKey* privateKey, std::vector<std::string*> sigs) {
+void generateBatchedSignatures(const std::vector<const std::string*> &messages, crypto::PrivKey* privateKey, std::vector<std::string> &sigs) {
   unsigned int n = messages.size();
   assert(n > 0);
   size_t hash_size = BLAKE3_OUT_LEN;
@@ -97,6 +97,8 @@ void generateBatchedSignatures(std::vector<std::string*> messages, crypto::PrivK
   unsigned int starting_pos = sig_size + 8;
 
   for (unsigned int i = 0; i < n; i++) {
+    sigs.push_back(std::string());
+    std::string *sigsi = &sigs[sigs.size() - 1];
     // add the message's index to the signature
     packInt(i, &sig[sig_size+4]);
     // h is the number of hashes already appended to the signature
@@ -110,8 +112,8 @@ void generateBatchedSignatures(std::vector<std::string*> messages, crypto::PrivK
       h++;
     }
     // replace the sig with the raw signature bytes (performs a copy)
-    sigs[i]->replace(0, starting_pos + h*hash_size, reinterpret_cast<const char*>(&sig[0]), starting_pos + h*hash_size);
-    assert(sigs[i]->size() == starting_pos + h*hash_size);
+    sigsi->replace(0, starting_pos + h*hash_size, reinterpret_cast<const char*>(&sig[0]), starting_pos + h*hash_size);
+    assert(sigsi->size() == starting_pos + h*hash_size);
   }
 }
 

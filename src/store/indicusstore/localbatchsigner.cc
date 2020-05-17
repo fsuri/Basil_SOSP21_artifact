@@ -1,28 +1,26 @@
-#include "store/indicusstore/batchsigner.h"
+#include "store/indicusstore/localbatchsigner.h"
 
 #include "store/indicusstore/common.h"
 
 namespace indicusstore {
 
-BatchSigner::BatchSigner(Transport *transport, KeyManager *keyManager, Stats &stats,
+LocalBatchSigner::LocalBatchSigner(Transport *transport, KeyManager *keyManager, Stats &stats,
     uint64_t batchTimeoutMicro, uint64_t batchSize, uint64_t id,
-    bool adjustBatchSize) :
-    transport(transport), keyManager(keyManager), stats(stats),
-    batchTimeoutMicro(batchTimeoutMicro), initialBatchSize(batchSize),
-    id(id), adjustBatchSize(adjustBatchSize), 
+    bool adjustBatchSize) : BatchSigner(transport, keyManager, stats,
+      batchTimeoutMicro, batchSize, id, adjustBatchSize),
     batchTimerRunning(false),
     batchSize(batchSize),
     messagesBatchedInterval(0UL) {
   if (adjustBatchSize) {
     transport->TimerMicro(batchTimeoutMicro, std::bind(
-        &BatchSigner::AdjustBatchSize, this));
+        &LocalBatchSigner::AdjustBatchSize, this));
   }
 }
 
-BatchSigner::~BatchSigner() {
+LocalBatchSigner::~LocalBatchSigner() {
 }
 
-void BatchSigner::MessageToSign(::google::protobuf::Message* msg,
+void LocalBatchSigner::MessageToSign(::google::protobuf::Message* msg,
     proto::SignedMessage *signedMessage, signedCallback cb, bool finishBatch) {
   if (initialBatchSize == 1) {
     Debug("Initial batch size = 1, immediately signing");
@@ -54,7 +52,7 @@ void BatchSigner::MessageToSign(::google::protobuf::Message* msg,
     }
   }
 }
-void BatchSigner::SignBatch() {
+void LocalBatchSigner::SignBatch() {
   stats.IncrementList("sig_batch", pendingBatchMessages.size());
   SignMessages(pendingBatchMessages, keyManager->GetPrivateKey(id), id,
     pendingBatchSignedMessages);
@@ -66,10 +64,10 @@ void BatchSigner::SignBatch() {
   pendingBatchCallbacks.clear();
 }
 
-void BatchSigner::AdjustBatchSize() {
+void LocalBatchSigner::AdjustBatchSize() {
   batchSize = (0.75 * batchSize) + (0.25 * messagesBatchedInterval);
   messagesBatchedInterval = 0;
-  transport->TimerMicro(batchTimeoutMicro, std::bind(&BatchSigner::AdjustBatchSize,
+  transport->TimerMicro(batchTimeoutMicro, std::bind(&LocalBatchSigner::AdjustBatchSize,
         this));
 }
 

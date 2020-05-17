@@ -7,7 +7,7 @@
 
 namespace BatchedSigs {
 
-void generateBatchedSignatures(std::vector<std::string*> messages, crypto::PrivKey* privateKey, std::vector<std::string*> sigs);
+void generateBatchedSignatures(const std::vector<const std::string*> &messages, crypto::PrivKey* privateKey, std::vector<std::string> &sigs);
 
 bool verifyBatchedSignature(const std::string* signature, const std::string* message, crypto::PubKey* publicKey);
 

@@ -320,10 +320,7 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
 }
 
 void Client::Phase2(PendingRequest *req) {
-  uint8_t groupIdx = req->txnDigest[0];
-  groupIdx = groupIdx % txn.involved_groups_size();
-  UW_ASSERT(groupIdx < txn.involved_groups_size());
-  int64_t logGroup = txn.involved_groups(groupIdx);
+  int64_t logGroup = GetLogGroup(txn, req->txnDigest);
 
   Debug("PHASE2[%lu:%lu][%s] logging to group %ld", client_id, client_seq_num,
       BytesToHex(req->txnDigest, 16).c_str(), logGroup);

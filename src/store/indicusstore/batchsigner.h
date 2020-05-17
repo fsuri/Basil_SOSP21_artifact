@@ -4,6 +4,10 @@
 #include <functional>
 #include <vector>
 
+#include <boost/interprocess/containers/vector.hpp>
+#include <boost/interprocess/allocators/allocator.hpp>
+#include <boost/interprocess/managed_shared_memory.hpp>
+
 #include "lib/transport.h"
 #include "lib/keymanager.h"
 #include "store/indicusstore/indicus-proto.pb.h"
@@ -16,17 +20,16 @@ class BatchSigner {
  public:
   BatchSigner(Transport *transport, KeyManager *keyManager, Stats &stats,
       uint64_t batchTimeoutMicro, uint64_t batchSize, uint64_t id,
-      bool adjustBatchSize);
-  virtual ~BatchSigner();
+      bool adjustBatchSize) : transport(transport), keyManager(keyManager),
+      stats(stats), batchTimeoutMicro(batchTimeoutMicro),
+      initialBatchSize(batchSize), id(id), adjustBatchSize(adjustBatchSize) { }
+  virtual ~BatchSigner() { }
 
-  void MessageToSign(::google::protobuf::Message* msg,
+  virtual void MessageToSign(::google::protobuf::Message* msg,
       proto::SignedMessage *signedMessage, signedCallback cb,
-      bool finishBatch = false);
+      bool finishBatch = false) = 0;
 
- private:
-  void SignBatch();
-  void AdjustBatchSize();
-
+ protected:
   Transport *transport;
   KeyManager *keyManager;
   Stats &stats;
@@ -34,14 +37,6 @@ class BatchSigner {
   const uint64_t initialBatchSize;
   const uint64_t id;
   const bool adjustBatchSize;
-  bool batchTimerRunning;
-  uint64_t batchSize;
-  uint64_t messagesBatchedInterval;
-
-  int batchTimerId;
-  std::vector<::google::protobuf::Message*> pendingBatchMessages;
-  std::vector<proto::SignedMessage*> pendingBatchSignedMessages;
-  std::vector<signedCallback> pendingBatchCallbacks;
 
 };
 

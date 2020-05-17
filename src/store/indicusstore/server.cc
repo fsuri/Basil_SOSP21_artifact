@@ -38,6 +38,8 @@
 #include "lib/tcptransport.h"
 #include "store/indicusstore/common.h"
 #include "store/indicusstore/phase1validator.h"
+#include "store/indicusstore/localbatchsigner.h"
+#include "store/indicusstore/sharedbatchsigner.h"
 
 namespace indicusstore {
 
@@ -56,10 +58,17 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   _Latency_Init(&verifyLat, "verify_lat");
   _Latency_Init(&signLat, "sign_lat");
 
-  batchSigner = new BatchSigner(transport, keyManager, GetStats(),
-      batchTimeoutMicro, params.signatureBatchSize, id,
-      params.validateProofs && params.signedMessages &&
-      params.signatureBatchSize > 1 && params.adjustBatchSize);
+  if (params.sharedMemBatches) {
+    batchSigner = new SharedBatchSigner(transport, keyManager, GetStats(),
+        batchTimeoutMicro, params.signatureBatchSize, id,
+        params.validateProofs && params.signedMessages &&
+        params.signatureBatchSize > 1 && params.adjustBatchSize);
+  } else {
+    batchSigner = new LocalBatchSigner(transport, keyManager, GetStats(),
+        batchTimeoutMicro, params.signatureBatchSize, id,
+        params.validateProofs && params.signedMessages &&
+        params.signatureBatchSize > 1 && params.adjustBatchSize);
+  }
   // this is needed purely from loading data without executing transactions
   proto::CommittedProof *proof = new proto::CommittedProof();
   proof->mutable_txn()->set_client_id(0);
@@ -107,7 +116,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
 }
 
 
-void Server::Load(const string &key, const string &value,
+void Server::Load(const std::string &key, const std::string &value,
     const Timestamp timestamp) {
   Value val;
   val.val = value;
@@ -202,13 +211,18 @@ void Server::HandleRead(const TransportAddress &remote,
 
   if (params.validateProofs && params.signedMessages &&
       (readReply->write().has_committed_value() || (params.verifyDeps && readReply->write().has_prepared_value()))) {
-    proto::Write* write = new proto::Write(readReply->write());
     //Latency_Start(&signLat);
     if (params.readReplyBatch) {
+      proto::Write* write = new proto::Write(readReply->write());
       batchSigner->MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
         sendCB();
         delete write;
       });
+    } else if (params.signatureBatchSize == 1) {
+      proto::Write write(readReply->write());
+      SignMessage(&write, keyManager->GetPrivateKey(id), id,
+          readReply->mutable_signed_write());
+      sendCB();
     } else {
       proto::Write write(readReply->write());
       std::vector<::google::protobuf::Message *> msgs;
@@ -313,7 +327,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   phase2Reply->mutable_p2_decision()->set_decision(msg.decision());
   if (params.validateProofs) {
     *phase2Reply->mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
-
+    phase2Reply->mutable_p2_decision()->set_involved_group(groupIdx);
     if (params.signedMessages) {
       proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
       //Latency_Start(&signLat);
@@ -378,7 +392,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
       proto::CommitDecision myDecision;
       LookupP2Decision(*txnDigest, myProcessId, myDecision);
 
-      if (!ValidateP2Replies(msg.decision(), txnDigest, msg.p2_sigs(),
+      if (!ValidateP2Replies(msg.decision(), txn, txnDigest, msg.p2_sigs(),
             keyManager, &config, myProcessId, myDecision, verifyLat, params.signatureBatchSize)) {
         Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
             BytesToHex(*txnDigest, 16).c_str(), msg.decision());
@@ -479,7 +493,7 @@ proto::ConcurrencyControl::Result Server::DoTAPIROCCCheck(
   }
 
   // do OCC checks
-  std::unordered_map<string, std::set<Timestamp>> pReads;
+  std::unordered_map<std::string, std::set<Timestamp>> pReads;
   GetPreparedReadTimestamps(pReads);
 
   // check for conflicts with the read set
@@ -1040,6 +1054,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
   phase1Reply->mutable_cc()->set_ccr(result);
   if (params.validateProofs) {
     *phase1Reply->mutable_cc()->mutable_txn_digest() = txnDigest;
+    phase1Reply->mutable_cc()->set_involved_group(groupIdx);
     if (result == proto::ConcurrencyControl::ABORT) {
       *phase1Reply->mutable_cc()->mutable_committed_conflict() = conflict;
     } else if (params.signedMessages) {
