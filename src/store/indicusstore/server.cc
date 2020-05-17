@@ -221,6 +221,8 @@ void Server::HandleRead(const TransportAddress &remote,
   transport->SendMessage(this, remote, readReply);
 }
 
+//////////////////////
+
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
 
