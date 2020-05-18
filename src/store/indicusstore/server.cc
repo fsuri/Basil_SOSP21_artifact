@@ -636,7 +636,7 @@ void Server::HandleP2FB(const TransportAddress &remote, std::string txnDigest, p
    proto::GroupedP1FBreplies groupedSigs = p2fb.grp_p1_fb();
    proto::P1FBreplies loggedSigs = groupedSigs[logGroup];
 
-   uint32_t counter = f+1; //TODO FILL IN F!!!
+   uint32_t counter = config.f()+ 1  //or config.QuorumSize()
    for(const auto &p1fbr : loggedSigs.fbreplies()){
       if(p1fbr.has_p2r()){
         if(p1fbr.p2r()->decision() == p2fb.decision()){
@@ -697,27 +697,9 @@ void Server::HandleP2FB(const TransportAddress &remote, std::string txnDigest, p
 
 
 if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
-      keyManager, &config, myProcessId, myResult, verifyLat))
-
-message Signature {
-  required uint64 process_id = 1;
-  required bytes signature = 2;
-}
-
-message Signatures {
-  repeated Signature sigs = 1;
-}
-
-message Read {
-  required uint64 req_id = 1;
-  required bytes key = 2;
-  required TimestampMessage timestamp = 3;
-}
-
-message GroupedSignatures {
-  map<uint64, Signatures> grouped_sigs = 1;
-}
-
+      keyManager, &config, myProcessId, myResult, verifyLat)){
+         return; //Invalid signatures
+      }
 
 }
 
@@ -794,10 +776,12 @@ void Server::InvokeFB(const TransportAddress &remote, proto::InvokeFB &msg) {
         if(p2Decisions.find[txnDigest] != p2Decisions.end()){
           //TODO: extract all p1s as proof and call HandleP2
         }
+
+      //verify that all views are correct. --> expect 3f+1 or f+1 matching.
       //TODO: 1) Compute new views
-      //TODO 2) Schedule request for when current leader timeout is complete
+      //TODO 2) Schedule request for when current leader timeout is complete --> check exp timeouts; then set new one.
       //TODO 3) Form and send ElectFB message to all replicas within logging shard.
-      //TODO 4) Send MoveView message for new view to all other replicas
+      //(TODO 4) Send MoveView message for new view to all other replicas)
 }
 
 //TODO remove remote argument
