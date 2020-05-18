@@ -630,7 +630,7 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Server::HandleP2FB(std::string txnDigest, proto::Phase2FB &p2fb){
+void Server::HandleP2FB(const TransportAddress &remote, std::string txnDigest, proto::Phase2FB &p2fb){
   //TODO: REFACTOR INTO HandlePhase2FB
 
    proto::GroupedP1FBreplies groupedSigs = p2fb.grp_p1_fb();
@@ -682,8 +682,16 @@ void Server::HandleP2FB(std::string txnDigest, proto::Phase2FB &p2fb){
     proto::ConcurrencyControl::Result myResult;
     LookupP1Decision(*txnDigest, myProcessId, myResult);
 
-    ValidateP1Replies(p2fb.decision(), false, txn, txnDigest, grpSigs, keyManager, &config, myProcessId, myResult, verifyLat);
-        
+    if(!ValidateP1Replies(p2fb.decision(), false, txn, txnDigest, grpSigs, keyManager, &config, myProcessId, myResult, verifyLat)){
+      return; //INVALID SIGS
+    }
+    p2Decisions[txnDigest] = p2fb.decision();
+
+    //TODO: form p2r and send it
+    SetP2(txnDigest, p2fb.decision());
+    transport->SendMessage(this, remote, phase2Reply);
+    Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
+
 }
 
 
@@ -752,7 +760,7 @@ void Server::InvokeFB(const TransportAddress &remote, proto::InvokeFB &msg) {
 
 //process decision if one does not have any yet.
       if(p2Decisions.find(txnDigest) == p2Decisions.end()){
-        HandleP2FB(txnDigest, msg.p2fb());
+        HandleP2FB(remote, txnDigest, msg.p2fb());
         if(p2Decisions.find(txnDigest) == p2Decisions.end()){
           return; //learning decision failed.
         }
