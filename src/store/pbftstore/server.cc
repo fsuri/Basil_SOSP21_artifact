@@ -192,7 +192,7 @@ bool Server::CCC(const proto::Transaction& txn) {
   }
 }
 
-::google::protobuf::Message* Server::Execute(const string& type, const string& msg) {
+std::vector<::google::protobuf::Message*> Server::Execute(const string& type, const string& msg) {
   Debug("Execute: %s", type.c_str());
 
   proto::Transaction transaction;
@@ -201,12 +201,18 @@ bool Server::CCC(const proto::Transaction& txn) {
 
     return HandleTransaction(transaction);
   }
-  return nullptr;
+  std::vector<::google::protobuf::Message*> results;
+  results.push_back(nullptr);
+  return results;
 }
 
-::google::protobuf::Message* Server::HandleTransaction(const proto::Transaction& transaction) {
+std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto::Transaction& transaction) {
+  std::vector<::google::protobuf::Message*> results;
   proto::TransactionDecision* decision = new proto::TransactionDecision();
+
   string digest = TransactionDigest(transaction);
+  Debug("Handling transaction");
+  DebugHash(digest);
   decision->set_txn_digest(digest);
   decision->set_shard_id(groupIdx);
   // OCC check
@@ -230,12 +236,21 @@ bool Server::CCC(const proto::Transaction& txn) {
       preparedReads[read.key()][txTs] = read.readtime();
     }
 
+    // check for buffered gdecision
+    if (bufferedGDecs.find(digest) != bufferedGDecs.end()) {
+      Debug("found buffered gdecision");
+      results.push_back(HandleGroupedDecision(bufferedGDecs[digest]));
+      bufferedGDecs.erase(digest);
+    }
+
   } else {
     Debug("ccc failed");
     decision->set_status(REPLY_FAIL);
   }
 
-  return returnMessage(decision);
+  results.push_back(returnMessage(decision));
+
+  return results;
 }
 
 ::google::protobuf::Message* Server::HandleMessage(const string& type, const string& msg) {
@@ -263,6 +278,7 @@ bool Server::CCC(const proto::Transaction& txn) {
   bool exists = commitStore.get(read.key(), ts, result);
 
   proto::ReadReply* readReply = new proto::ReadReply();
+  Debug("Handle read req id %lu", read.req_id());
   readReply->set_req_id(read.req_id());
   readReply->set_key(read.key());
   if (exists) {
@@ -284,13 +300,21 @@ bool Server::CCC(const proto::Transaction& txn) {
 
 ::google::protobuf::Message* Server::HandleGroupedDecision(const proto::GroupedDecision& gdecision) {
   proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
+  Debug("Handling Grouped Decision");
 
   string digest = gdecision.txn_digest();
+  DebugHash(digest);
+  if (pendingTransactions.find(digest) == pendingTransactions.end()) {
+    Debug("Buffering gdecision");
+    // we haven't yet received the tx so buffer this gdecision until we get it
+    bufferedGDecs[digest] = gdecision;
+    return nullptr;
+  }
+
   groupedDecisionAck->set_txn_digest(digest);
   if (gdecision.status() == REPLY_OK) {
     // verify gdecision
-    if (pendingTransactions.find(digest) != pendingTransactions.end() &&
-        verifyGDecision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)) {
+    if (verifyGDecision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)) {
       proto::Transaction txn = pendingTransactions[digest];
       Timestamp ts(txn.timestamp());
       // apply tx

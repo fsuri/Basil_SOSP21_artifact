@@ -196,6 +196,7 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
   Debug("Handling transaction decision");
 
   std::string digest = transactionDecision.txn_digest();
+  DebugHash(digest);
   // only handle decisions for my shard
   // NOTE: makes the assumption that numshards == numgroups
   if (transactionDecision.shard_id() == (uint64_t) group_idx) {
@@ -302,6 +303,7 @@ void ShardClient::HandleWritebackReply(const proto::GroupedDecisionAck& groupedD
   Debug("Handling Writeback reply");
 
   std::string digest = groupedDecisionAck.txn_digest();
+  DebugHash(digest);
   if (pendingWritebacks.find(digest) != pendingWritebacks.end()) {
     PendingWritebackReply* pw = &pendingWritebacks[digest];
 
@@ -368,7 +370,6 @@ void ShardClient::Get(const std::string &key, const Timestamp &ts,
   pr.status = REPLY_FAIL;
   // every ts should be bigger than this one
   pr.maxTs = Timestamp();
-  Debug("Get timeout called with %d", timeout);
   pr.timeout = new Timeout(transport, timeout, [this, reqId, gtcb]() {
     Debug("Get timeout called (but nothing was done)");
       stats->Increment("g_tout", 1);

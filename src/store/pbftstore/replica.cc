@@ -478,13 +478,15 @@ void Replica::executeSlots() {
       if (requests.find(digest) != requests.end()) {
         Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
         proto::PackedMessage packedMsg = requests[digest];
-        ::google::protobuf::Message* reply = app->Execute(packedMsg.type(), packedMsg.msg());
-        if (reply != nullptr) {
-          Debug("Sending reply");
-          transport->SendMessage(this, *replyAddrs[digest], *reply);
-          delete reply;
-        } else {
-          Debug("Invalid execution");
+        std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
+        for (const auto& reply : replies) {
+          if (reply != nullptr) {
+            Debug("Sending reply");
+            transport->SendMessage(this, *replyAddrs[digest], *reply);
+            delete reply;
+          } else {
+            Debug("Invalid execution");
+          }
         }
 
         execBatchNum++;
