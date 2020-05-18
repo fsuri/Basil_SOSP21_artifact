@@ -210,15 +210,19 @@ void HandlePhase1FB(const TransportAddress &remote,proto::Phase1 &msg);
   std::unordered_map<std::string, std::unordered_set<TransportAddress>> interestedClients;
   //keep list of timeouts
   //std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> FBclient_timeouts;
-  std::unordered_map<std::string, uint64_t> FBclient_elapsed;
+  std::unordered_map<std::string, uint64_t> client_starttime;
 
   //keep list for exponential timeouts for views.
-  std::unordered_map<std::string, std::time_t> exp_timeouts;
+  std::unordered_map<std::string, uint64_t> FBtimeouts_start; //Timer start time
+  std::unordered_map<std::string, uint64_t> exp_timeouts; //current exp timeout size.
 
   //keep list for current view.
   std::unordered_map<std::string, uint64_t> current_views;
   //keep list of the views in which the p2Decision is from: //TODO: add this to p2Decisions directly - doing this here so I do not touch any existing code.
   std::unordered_map<std::string, uint64_t> decision_views;
+
+  std::unordered_map<std::string, std::unordered_set<proto::signedMessage>> ElectQuorum;  //tuple contains view entry, set for that view and count of Commit vs Abort.
+  std::unordered_map<std::string, std:pair<uint64_t, uint64_t>> ElectQuorum_meta;
 
   std::unordered_map<std::string, proto::Writeback> writebackMessages;
 
