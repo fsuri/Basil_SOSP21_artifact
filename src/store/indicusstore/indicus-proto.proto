@@ -35,6 +35,7 @@ message GroupedSignatures {
   map<uint64, Signatures> grouped_sigs = 1;
 }
 
+
 message CommittedProof {
   required Transaction txn = 1;
   oneof reply_oneof {
@@ -94,13 +95,30 @@ message Phase1FB {
   required Transaction txn = txn =2;
 }
 
+message CurrentView{
+  required uint64_t current_view = 1;
+  optional bytes txn_digest = 2;
+}
+
 //fallback Phase1 reply
 message Phase1FBReply {
   required uint64 req_id = 1;
   optional Phase1Reply p1r =2;
   optional Phase2Reply p2r =3;
   optional Writeback wb =4;
-  optional uint64_t current_view = 5;
+  oneof current_view_oneof {
+    CurrentView current_view = 5;
+    SignedMessage signed_current_view = 6;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
+  }
+
+}
+
+message P1FBreplies {
+  repeated Phase1FBReply fbreplies = 1;
+}
+
+message GroupedP1FBreplies{
+    map<uint64, P1FBreplies> grouped_fbreplies = 1;
 }
 
 //TODO: Needs to include the p1 or p2 proofs necessary to write a p2.
@@ -110,7 +128,8 @@ message Phase2FB {
   required CommitDecision decision = 2;
   optional Transaction txn = 3;
   optional bytes txn_digest = 4;
-  optional GroupedSignatures grouped_sigs = 5;
+  optional GroupedF1Breplies grp_p1_fb = 5;
+  //optional GroupedSignatures grouped_sigs = 5;
 }
 //fallback phase2R: Can be the same Phase2R as normal.
 

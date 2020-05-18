@@ -256,6 +256,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
     }
   }
   //KEEP track of interested client
+  current_views[txnDigest] = 0;
   interestedClients[txnDigest].insert(remote);
 
   proto::Transaction *txn = msg.release_txn();
@@ -353,6 +354,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote,
       }
       //KEEP track of interested client
       interestedClients[txnDigest].insert(remote);
+      current_views[txnDigest] = 0;
 
       proto::Transaction *txn = msg.release_txn();
       ongoing[txnDigest] = txn;
@@ -405,8 +407,10 @@ void Server::SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyCont
 void Server::SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision &decision){
   phase2Reply.Clear();
   phase2Reply.set_req_id(reqId);
-  //TODO: ADD VIEW?
+
   phase2Reply.mutable_p2_decision()->set_decision(decision);
+  //TODO: ADD VIEW. Is this the right notation?
+  phase2Reply.mutable_p2_decision()->set_view(decision_views[txnDigest]);
   if (params.validateProofs) {
     *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
     if (params.signedMessages) {
@@ -448,6 +452,19 @@ void Server::SendPhase1FBReply(uint64_t reqId,
           phase1FBReply.set_p1r(p1r);
           break;
     }
+    phase1FBReply.mutable_current_view()->set_current_view(current_views[txnDigest]);
+
+//SIGN IT:  //TODO: Want to add this to p2 also, in case fallback is faulty - for simplicity assume only correct fallbacks for now.
+    if (params.validateProofs) {
+      *phase1FBReply.mutable_current_view()->mutable_txn_digest() = *txnDigest;
+
+      if (params.signedMessages) {
+        proto::CurrentView cView(phase1FBReply.current_view()));
+        //Latency_Start(&signLat);
+        SignMessage(cView, keyManager->GetPrivateKey(id), id, phase1FBReply.mutable_signed_current_view());
+        //Latency_End(&signLat);
+      }
+    }
 
     transport->SendMessage(this, remote, phase1FBReply);
 }
@@ -463,8 +480,10 @@ void Server::HandlePhase2(const TransportAddress &remote,
       proto::CommitDecision decision =p2Decisions[msg.txn_digest()]
       phase2Reply.Clear();
       phase2Reply.set_req_id(msg.req_id());
-      //TODO: ADD VIEW?
+
       phase2Reply.mutable_p2_decision()->set_decision(decision);
+      //TODO: ADD VIEW. Is this the right notation?
+      phase2Reply.mutable_p2_decision()->set_view(decision_views[txnDigest]);
       if (params.validateProofs) {
         *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
 
@@ -503,7 +522,7 @@ else{
           txnDigest = &computedTxnDigest;
         }
       }
-Double check all signatures
+
       Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
 
       int64_t myProcessId;
@@ -517,6 +536,8 @@ Double check all signatures
       }
 
       p2Decisions[*txnDigest] = msg.decision();   //is this correct
+      current_views[txnDigest] = 0;
+      decision_views[txnDigest] = 0;
 
       if(FBclient_elapsed.find(txnDigest) == FBclient_elapsed.end()){}
         struct timeval tv;
@@ -528,8 +549,11 @@ Double check all signatures
 
   phase2Reply.Clear();
   phase2Reply.set_req_id(msg.req_id());
-  //TODO: ADD VIEW?
+
+
   phase2Reply.mutable_p2_decision()->set_decision(msg.decision());
+  //TODO: ADD VIEW. Is this the right notation?
+  phase2Reply.mutable_p2_decision()->set_view(decision_views[txnDigest]);
   if (params.validateProofs) {
     *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
 
@@ -606,10 +630,162 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+void Server::HandleP2FB(std::string txnDigest, proto::Phase2FB &p2fb){
+  //TODO: REFACTOR INTO HandlePhase2FB
+
+   proto::GroupedP1FBreplies groupedSigs = p2fb.grp_p1_fb();
+   proto::P1FBreplies loggedSigs = groupedSigs[logGroup];
+
+   uint32_t counter = f+1; //TODO FILL IN F!!!
+   for(const auto &p1fbr : loggedSigs.fbreplies()){
+      if(p1fbr.has_p2r()){
+        if(p1fbr.p2r()->decision() == p2fb.decision()){
+          //TODO validate signatures
+
+          counter --
+        }
+      }
+      if(counter == 0){
+        p2Decisions[txnDigest] = p2fb.decision();
+        decision_views[txnDigest] = 0;
+      }
+    }
+    //still no decision --> check all p1s.
+    proto::GroupedSignatures grpSigs;
+    unordered_map<uint64_t, proto::Signatures> grp_sigs;
+
+
+    if(p2Decisions.find(txnDigest) != p2Decisions.end()){
+      //TODO: extract all p1s as proof and call HandleP2
+      for(auto auto & [ key, group_replies ]: p2fb.grp_p1_f()->grouped_fbreplies()){
+        proto::Signatures sig_collection;
+        for(auto p1fbr: group_replies.second()){
+          proto::Signature* new_sig = sig_collection->add_sigs();
+          new_sig.mutable_signature(p1fbr.p1r()->signed_cc()->signature());
+        }
+        grp_sigs[key] = sig_collection;
+      }
+    grpSigs.mutable_grouped_sigs(grp_sigs);
+
+    proto::Transaction txn;
+    if(ongoing.find(txnDigest) != ongoing.end()){
+      proto::Transaction txn = ongoing[txnDigest];
+    }
+    else if(p2fb.has_txn()){
+          proto::Transaction txn = p2fb.txn();
+    }
+    else{
+      return; //TXN unseen.
+    }
+
+    int64_t myProcessId;
+    proto::ConcurrencyControl::Result myResult;
+    LookupP1Decision(*txnDigest, myProcessId, myResult);
+
+    ValidateP1Replies(p2fb.decision(), false, txn, txnDigest, grpSigs, keyManager, &config, myProcessId, myResult, verifyLat);
+        
+}
+
+
+
+if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
+      keyManager, &config, myProcessId, myResult, verifyLat))
+
+message Signature {
+  required uint64 process_id = 1;
+  required bytes signature = 2;
+}
+
+message Signatures {
+  repeated Signature sigs = 1;
+}
+
+message Read {
+  required uint64 req_id = 1;
+  required bytes key = 2;
+  required TimestampMessage timestamp = 3;
+}
+
+message GroupedSignatures {
+  map<uint64, Signatures> grouped_sigs = 1;
+}
+
+
+}
+
 //TODO remove remote argument, it is useless here. Instead add and keep track of INTERESTED CLIENTS REMOTE MAP
 void Server::InvokeFB(const TransportAddress &remote, proto::InvokeFB &msg) {
+//Expect the invokeFB message to contain a P2 message if not seen a decision ourselves.
+//If that is not the case: CALL HAndle Phase2B. This in turn should check if there are f+1 matching p2, and otherwise call HandlePhase2 by passing the args.
 
-      //TODO: CHECK if part of logging shard. (this needs to be done at all p2s, reject if its not ourselves)
+      auto txnDigest = msg.txn_digest();
+      uint8_t groupIndex = txnDigest[0];
+      int64_t logGroup;
+      // find txn. that maps to txnDigest. if not stored locally, and not part of the msg, reject msg.
+      //TODO: refactor this into common function
+      if(ongoing.find(txnDigest) != ongoing.end()){
+        proto::Transaction txn = ongoing[txnDigest];
+        groupIdx = groupIndex % txn.involved_groups_size();
+        UW_ASSERT(groupIndex < txn.involved_groups_size());
+        logGroup = txn.involved_groups(groupIndex);
+      }
+      else if(msg.has_p2fb()){
+        proto::Phase2FB p2fb = msg.p2bf();
+        if(p2fb.has_txn()){
+            proto::Transaction txn = p2fb.txn();
+            groupIdx = groupIndex % txn.involved_groups_size();
+            UW_ASSERT(groupIndex < txn.involved_groups_size());
+            logGroup = txn.involved_groups(groupIndex);
+          }
+        else{
+          return; //REPLICA HAS NEVER SEEN THIS TXN
+        }
+      }
+      else{
+        return; //REPLICA HAS NEVER SEEN THIS TXN
+      }
+
+      // CHECK if part of logging shard. (this needs to be done at all p2s, reject if its not ourselves)
+      if(groupIdx != logGroup){
+          return;  //This replica is not part of the shard responsible for Fallback.
+      }
+
+//process decision if one does not have any yet.
+      if(p2Decisions.find(txnDigest) == p2Decisions.end()){
+        HandleP2FB(txnDigest, msg.p2fb());
+        if(p2Decisions.find(txnDigest) == p2Decisions.end()){
+          return; //learning decision failed.
+        }
+      }
+
+
+
+
+          //for (const auto &sigs : groupedSigs.grouped_sigs()) {
+
+//TODO: REFACTOR INTO HandlePhase2FB
+
+       groupedSigs = msg.p2fb()->grp_p1_fb();
+       loggedSigs = groupedSigs[logGroup];
+
+       uint32_t counter = f+1; //TODO FILL IN F!!!
+       for(const auto &p1fbr : loggedSigs.fbreplies()){
+          if(p1fbr.has_p2r()){
+            if(p1fbr.p2r()->decision() == msg.p2fb()->decision()){
+              //TODO validate signatures
+
+              counter --
+            }
+          }
+          if(counter == 0){
+            p2Decisions[txnDigest] = msg.p2fb()->decision();
+            decision_views[txnDigest] = 0;
+          }
+        }
+        //still no decision --> check all p1s.
+        if(p2Decisions.find[txnDigest] != p2Decisions.end()){
+          //TODO: extract all p1s as proof and call HandleP2
+        }
       //TODO: 1) Compute new views
       //TODO 2) Schedule request for when current leader timeout is complete
       //TODO 3) Form and send ElectFB message to all replicas within logging shard.

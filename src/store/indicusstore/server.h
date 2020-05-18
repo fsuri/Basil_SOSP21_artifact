@@ -216,9 +216,9 @@ void HandlePhase1FB(const TransportAddress &remote,proto::Phase1 &msg);
   std::unordered_map<std::string, std::time_t> exp_timeouts;
 
   //keep list for current view.
-  std::unordered_map<std::string, uint64_t> current_view;
+  std::unordered_map<std::string, uint64_t> current_views;
   //keep list of the views in which the p2Decision is from: //TODO: add this to p2Decisions directly - doing this here so I do not touch any existing code.
-  std::unordered_map<std::string, uint64_t> decision_view;
+  std::unordered_map<std::string, uint64_t> decision_views;
 
   std::unordered_map<std::string, proto::Writeback> writebackMessages;
 
