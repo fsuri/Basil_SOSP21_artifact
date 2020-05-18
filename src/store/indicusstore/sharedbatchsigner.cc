@@ -10,8 +10,10 @@ SharedBatchSigner::SharedBatchSigner(Transport *transport,
     KeyManager *keyManager, Stats &stats, uint64_t batchTimeoutMicro,
     uint64_t batchSize, uint64_t id, bool adjustBatchSize) : BatchSigner(
       transport, keyManager, stats, batchTimeoutMicro, batchSize, id,
-      adjustBatchSize), batchTimerRunning(false), batchSize(batchSize),
+      adjustBatchSize), batchSize(batchSize), batchTimerId(0),
       alive(false) {
+  boost::interprocess::named_mutex::remove(("completion_queue_mtx_" + std::to_string(id)).c_str());
+  boost::interprocess::named_condition::remove(("completion_queue_condition_" + std::to_string(id)).c_str());
   segment = new managed_shared_memory(open_or_create, "MySharedMemory", 65536);//67108864); // 64 MB
   alloc_inst = new void_allocator(segment->get_segment_manager());
   sharedWorkQueueMtx = new named_mutex(open_or_create, "shared_work_queue_mtx");
@@ -24,9 +26,14 @@ SharedBatchSigner::SharedBatchSigner(Transport *transport,
 
 SharedBatchSigner::~SharedBatchSigner() {
   alive = false;
-  GetCompletionQueueCondition(id)->notify_one();
+  auto cqc = GetCompletionQueueCondition(id);
+  cqc->notify_one();
   signedCallbackThread->join();
   delete signedCallbackThread;
+  delete cqc;
+  delete GetCompletionQueueMutex(id);
+  delete GetCompletionQueueCondition(id);
+
   segment->destroy<SignatureWorkQueue>(
       ("completion_queue_" + std::to_string(id)).c_str());
   delete segment;
@@ -41,6 +48,7 @@ void SharedBatchSigner::MessageToSign(::google::protobuf::Message* msg,
     cb();
   } else {
     pendingBatchMtx.lock();
+    Debug("Adding message to shared work queue.");
     pendingBatchSignedMessages.push(signedMessage);
     pendingBatchCallbacks.push(cb);
     pendingBatchMtx.unlock();
@@ -51,37 +59,46 @@ void SharedBatchSigner::MessageToSign(::google::protobuf::Message* msg,
     sharedWorkQueue->push_back(SignatureWork(*alloc_inst, &msgData[0], msgData.size(), id));
     if (sharedWorkQueue->size() >= batchSize) {
       Debug("Batch is full, sending");
-      if (batchTimerRunning) {
+      if (batchTimerId > 0) {
         transport->CancelTimer(batchTimerId);
-        batchTimerRunning = false;
+        batchTimerId = 0;
       }
 
       SignBatch(); 
       return;
-    } else if (!batchTimerRunning) {
-      batchTimerRunning = true;
-      Debug("Starting batch timer");
-      batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this]() {
-        sharedWorkQueueMtx->lock();
-        Debug("Batch timer expired with %lu items, sending",
-            this->sharedWorkQueue->size());
-        this->batchTimerRunning = false;
-
-        if (sharedWorkQueue->size() > 0) {
-          this->SignBatch();
-          return;
-        }
-        sharedWorkQueueMtx->unlock();
-      });
+    } else {
+      sharedWorkQueueMtx->unlock();
+      if (batchTimerId == 0) {
+        Debug("Starting batch timeout.");
+        batchTimerId = transport->TimerMicro(batchTimeoutMicro,
+            std::bind(&SharedBatchSigner::BatchTimeout, this));
+      }
     }
-    sharedWorkQueueMtx->unlock();
-
   }
 }
 
+void SharedBatchSigner::BatchTimeout() {
+  batchTimerId = 0;
+  pendingBatchMtx.lock();
+  if (pendingBatchSignedMessages.size() == 0) {
+    pendingBatchMtx.unlock();
+    Debug("Not signing batch because have no outstanding messages.");
+    return;
+  }
+  pendingBatchMtx.unlock();
+
+  sharedWorkQueueMtx->lock();
+  Debug("Batch timer expired with %lu items.", this->sharedWorkQueue->size());
+
+  if (sharedWorkQueue->size() > 0) {
+    this->SignBatch();
+    return;
+  }
+  sharedWorkQueueMtx->unlock();
+}
 // must have lock on sharedWorkQueue
 void SharedBatchSigner::SignBatch() {
-  stats.IncrementList("sig_batch", sharedWorkQueue->size());
+  size_t batchSize = sharedWorkQueue->size();
 
   std::vector<const std::string *> batchMessages;
   crypto::PrivKey *privKey = keyManager->GetPrivateKey(id);
@@ -95,11 +112,12 @@ void SharedBatchSigner::SignBatch() {
       sharedWorkQueue->pop_front();
       batchMessages.push_back(new std::string(work.data.begin(), work.data.end()));
       pids.push_back(work.pid);
-      Debug("Signing messages from process %lu in batch.", work.pid);
+      Debug("Signing message from process %lu in batch.", work.pid);
       pidsUnique.insert(work.pid);
   }
 
   sharedWorkQueueMtx->unlock();
+  stats.IncrementList("sig_batch", batchSize);
 
   BatchedSigs::generateBatchedSignatures(batchMessages, privKey, batchSignatures);
   for (auto msg : batchMessages) {
@@ -108,38 +126,49 @@ void SharedBatchSigner::SignBatch() {
 
   for (size_t i = 0; i < batchSignatures.size(); ++i) {
     scoped_lock<named_mutex> lock(*GetCompletionQueueMutex(pids[i]));
+    Debug("Adding signature to completion queue for %lu.", pids[i]);
     GetCompletionQueue(pids[i])->push_back(SignatureWork(*alloc_inst, &batchSignatures[i][0], batchSignatures[i].size(), id));
   }
 
   for (auto pid : pidsUnique) {
     scoped_lock<named_mutex> lock(*GetCompletionQueueMutex(pid));
+    Debug("Notfying %lu of completed signatures.", pid);
     GetCompletionQueueCondition(pid)->notify_one();
   }
 }
 
 void SharedBatchSigner::RunSignedCallbackConsumer() {
+  Debug("Starting signed callback consumer thread.");
   while (alive) {
     scoped_lock<named_mutex> l(*GetCompletionQueueMutex(id));
     while (alive && GetCompletionQueue(id)->empty()) {
+      Debug("Waiting for completed signatures.");
       GetCompletionQueueCondition(id)->wait(l);
+    }
+
+    if (alive) {
+      Debug("Done waiting for completed signatures.");
     }
 
     pendingBatchMtx.lock();
     while (alive && !GetCompletionQueue(id)->empty()) {
-      proto::SignedMessage *signedMessage = pendingBatchSignedMessages.front();
-      signedCallback cb = pendingBatchCallbacks.front();
-      pendingBatchSignedMessages.pop();
-      pendingBatchCallbacks.pop();
-
       SignatureWork work = GetCompletionQueue(id)->front();
       GetCompletionQueue(id)->pop_front();
-
       Debug("Received signature computed by process %lu.", work.pid);
+      
+      if (pendingBatchSignedMessages.size() > 0) {
+        UW_ASSERT(pendingBatchCallbacks.size() > 0);
+        proto::SignedMessage *signedMessage = pendingBatchSignedMessages.front();
+        signedCallback cb = pendingBatchCallbacks.front();
+        pendingBatchSignedMessages.pop();
+        pendingBatchCallbacks.pop();
 
-      signedMessage->set_process_id(work.pid);
-      *signedMessage->mutable_signature() = std::string(work.data.begin(), work.data.end());
-
-      transport->Timer(0, [cb](){ cb(); });
+        signedMessage->set_process_id(work.pid);
+        *signedMessage->mutable_signature() = std::string(work.data.begin(), work.data.end());
+        transport->Timer(0, [cb](){ cb(); });
+      } else {
+        Debug("Signature is from stale run.");
+      }
     }
     pendingBatchMtx.unlock();
   }

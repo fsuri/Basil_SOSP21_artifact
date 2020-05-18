@@ -53,6 +53,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     params(params), keyManager(keyManager),
     timeDelta(timeDelta),
     timeServer(timeServer) {
+  Debug("Starting Indicus replica %lu.", id);
   transport->Register(this, config, groupIdx, idx);
   _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
   _Latency_Init(&verifyLat, "verify_lat");
@@ -329,13 +330,13 @@ void Server::HandlePhase2(const TransportAddress &remote,
     if (params.signedMessages) {
       proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
 
-      Latency_Start(&signLat);
+      //Latency_Start(&signLat);
       batchSigner->MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
         [sendCB, p2Decision]() {
           sendCB();
           delete p2Decision;
         });
-      Latency_End(&signLat);
+      //Latency_End(&signLat);
       return;
     }
   }
@@ -1058,7 +1059,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
       *phase1Reply->mutable_cc()->mutable_committed_conflict() = conflict;
     } else if (params.signedMessages) {
       proto::ConcurrencyControl* cc = new proto::ConcurrencyControl(phase1Reply->cc());
-      Latency_Start(&signLat);
+      //Latency_Start(&signLat);
       batchSigner->MessageToSign(cc, phase1Reply->mutable_signed_cc(),
         [sendCB, cc, txnDigest, this, phase1Reply]() {
           Debug("PHASE1[%s] Sending Phase1Reply with signature %s from priv key %d.",
@@ -1067,7 +1068,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
           sendCB();
           delete cc;
         });
-      Latency_End(&signLat);
+      //Latency_End(&signLat);
       return;
     }
   }

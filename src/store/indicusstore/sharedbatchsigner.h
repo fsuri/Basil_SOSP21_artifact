@@ -39,15 +39,13 @@ class SharedBatchSigner : public BatchSigner {
       bool finishBatch = false) override;
 
  private:
+  void BatchTimeout();
   void SignBatch();
 
   void RunSignedCallbackConsumer();
 
-  bool batchTimerRunning;
   uint64_t batchSize;
-
   int batchTimerId;
-  
 
   std::mutex pendingBatchMtx;
   std::queue<signedCallback> pendingBatchCallbacks;
