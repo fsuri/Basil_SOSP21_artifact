@@ -822,7 +822,7 @@ int main(int argc, char **argv) {
 				indicusstore::Parameters params(FLAGS_indicus_sign_messages,
 					FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
 					FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
-          FLAGS_indicus_max_dep_depth, readDepSize, false, false);
+          FLAGS_indicus_max_dep_depth, readDepSize, false, false, false);
 
         client = new indicusstore::Client(config, clientId,
             FLAGS_num_shards,
