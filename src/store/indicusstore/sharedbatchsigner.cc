@@ -124,6 +124,11 @@ void SharedBatchSigner::SignBatch() {
 
   sharedWorkQueueMtx->unlock();
   stats.IncrementList("sig_batch", batchSize);
+  stats.Add("sig_batch_sizes", batchSize);
+  struct timeval curr;
+  gettimeofday(&curr, NULL);
+  uint64_t currMicros = curr.tv_sec * 1000000ULL + curr.tv_usec;
+  stats.Add("sig_batch_sizes_ts",  currMicros);
 
   BatchedSigs::generateBatchedSignatures(batchMessages, privKey, batchSignatures);
 

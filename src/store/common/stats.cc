@@ -25,7 +25,7 @@ void Stats::IncrementList(const std::string &key, size_t idx, int amount) {
   statIncLists[key][idx] += amount;
 }
 
-void Stats::Add(const std::string &key, int value) {
+void Stats::Add(const std::string &key, int64_t value) {
   std::lock_guard<std::mutex> lock(mtx);
   statLists[key].push_back(value);
 }
