@@ -236,7 +236,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
       }
       preparedReads[read.key()][txTs] = read.readtime();
     }
-
+    
     // check for buffered gdecision
     if (bufferedGDecs.find(digest) != bufferedGDecs.end()) {
       stats.Increment("used_buffered_gdec",1);
@@ -244,12 +244,12 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
       results.push_back(HandleGroupedDecision(bufferedGDecs[digest]));
       bufferedGDecs.erase(digest);
     }
-
   } else {
     Debug("ccc failed");
     stats.Increment("ccc_fail",1);
     decision->set_status(REPLY_FAIL);
   }
+
 
   results.push_back(returnMessage(decision));
 
@@ -308,18 +308,19 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
   string digest = gdecision.txn_digest();
   DebugHash(digest);
-  if (pendingTransactions.find(digest) == pendingTransactions.end()) {
-    Debug("Buffering gdecision");
-    stats.Increment("buff_dec",1);
-    // we haven't yet received the tx so buffer this gdecision until we get it
-    bufferedGDecs[digest] = gdecision;
-    return nullptr;
-  }
 
   groupedDecisionAck->set_txn_digest(digest);
   if (gdecision.status() == REPLY_OK) {
+    if (pendingTransactions.find(digest) == pendingTransactions.end()) {
+      Debug("Buffering gdecision");
+      stats.Increment("buff_dec",1);
+      // we haven't yet received the tx so buffer this gdecision until we get it
+      bufferedGDecs[digest] = gdecision;
+      return nullptr;
+    }
     // verify gdecision
     if (verifyGDecision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)) {
+      stats.Increment("apply_tx",1);
       proto::Transaction txn = pendingTransactions[digest];
       Timestamp ts(txn.timestamp());
       // apply tx
