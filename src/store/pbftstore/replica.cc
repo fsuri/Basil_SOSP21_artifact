@@ -320,6 +320,7 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
   Debug("PP (preprepare) seq num: %lu", seqnum);
   uint64_t viewnum = preprepare.viewnum();
   string digest = preprepare.digest();
+  startActionTimer(seqnum, viewnum, digest);
 
   // if I am the primary, I shouldn't be sending a prepare
   if (idx != primaryIdx) {
@@ -453,6 +454,8 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
   // which would just loop forever
   if (gotPrepare && slots.Prepared(seqnum, viewnum, config.f)) {
     Debug("Sending commit to everyone");
+    cancelActionTimer(seqnum, viewnum, digest);
+    startActionTimer(seqnum, viewnum, digest);
 
     // Multicast commit to everyone
     proto::Commit commit;
@@ -479,6 +482,7 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
   // clear timer
   if (slots.CommittedLocal(seqnum, viewnum, config.f)) {
     Debug("Committed message");
+    cancelActionTimer(seqnum, viewnum, digest);
 
     if (primaryCoordinator) {
       int primaryIdx = config.GetLeaderIndex(currentView);
