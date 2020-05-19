@@ -32,6 +32,12 @@ message RequestRequest {
   required bytes digest = 1;
 }
 
+message ABRequest {
+  required uint64 seqnum = 1;
+  required uint64 viewnum = 2;
+  required bytes digest = 3;
+}
+
 // The primary can collect N requests and assign them batched sequence
 // numbers to them in 0..N-1
 // Primary then sends out preprepare for batched requests, where the digest

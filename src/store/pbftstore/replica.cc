@@ -85,6 +85,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   proto::BatchedRequest batchedRequest;
   proto::GroupedSignedMessage grouped;
   proto::RequestRequest rr;
+  proto::ABRequest ab;
 
   if (type == request.GetTypeName()) {
     request.ParseFromString(data);
@@ -92,6 +93,19 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   } else if (type == batchedRequest.GetTypeName()) {
     batchedRequest.ParseFromString(data);
     HandleBatchedRequest(remote, batchedRequest);
+  } else if (type == ab.GetTypeName()) {
+    ab.ParseFromString(data);
+    if (slots.getSlotDigest(ab.seqnum(), ab.viewnum()) == ab.digest()) {
+      stats->Increment("valid_ab", 1);
+
+      proto::Preprepare preprepare;
+      preprepare.set_seqnum(ab.seqnum());
+      preprepare.set_viewnum(ab.viewnum());
+      preprepare.set_digest(ab.digest());
+      sendMessageToAll(preprepare);
+    } else {
+      stats->Increment("invalid_ab", 1);
+    }
   } else if (type == rr.GetTypeName()) {
     rr.ParseFromString(data);
     std::string digest = rr.digest();
@@ -537,5 +551,26 @@ void Replica::executeSlots() {
     }
   }
 }
+
+void Replica::startActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest) {
+  actionTimers[seq_num][viewnum][digest] = transport->Timer(10, [seq_num, viewnum, digest, this]() {
+    Debug("action timer expired, sending");
+    proto::ABRequest abreq;
+    abreq.set_seqnum(seq_num);
+    abreq.set_viewnum(viewnum);
+    abreq.set_digest(digest);
+    int primaryIdx = this->config.GetLeaderIndex(this->currentView);
+    this->stats->Increment("sent_ab_req",1);
+    this->transport->SendMessageToReplica(this, this->groupIdx, primaryIdx, abreq);
+  });
+}
+
+void Replica::cancelActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest) {
+  if (actionTimers[seq_num][viewnum].find(digest) != actionTimers[seq_num][viewnum].end()) {
+    transport->CancelTimer(actionTimers[seq_num][viewnum][digest]);
+    actionTimers[seq_num][viewnum].erase(digest);
+  }
+}
+
 
 }  // namespace pbftstore

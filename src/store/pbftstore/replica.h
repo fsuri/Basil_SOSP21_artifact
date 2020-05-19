@@ -96,6 +96,13 @@ public:
 
   void executeSlots();
 
+  // map from seqnum to view num to
+  std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::unordered_map<std::string, int>>> actionTimers;
+
+  void startActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest);
+
+  void cancelActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest);
+
   Stats* stats;
 };
 
