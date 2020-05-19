@@ -429,7 +429,7 @@ void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
     pp.timeout = new Timeout(transport, timeout, [this, digest, ptcb]() {
       Debug("Prepare timeout called (but nothing was done)");
       stats->Increment("p_tout", 1);
-      fprintf(stderr,"p_tout recv %d\n", groupIdx);
+      fprintf(stderr,"p_tout recv %d\n", group_idx);
       fprintf(stderr,"ack\n");
       for (const auto& recv : this->pendingPrepares[digest].receivedOkIds) {
         fprintf(stderr,"%lu\n", recv);
