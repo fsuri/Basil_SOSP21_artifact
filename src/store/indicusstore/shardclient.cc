@@ -441,7 +441,8 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
 
     if (!Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
           reply.signed_cc().data(), reply.signed_cc().signature(), params.signatureBatchSize)) {
-      Debug("[group %i] Signature %s from replica %lu is not valid.", group,
+      Debug("[group %i] Signature %s %s from replica %lu is not valid.", group,
+            BytesToHex(reply.signed_cc().data(), 100).c_str(),
             BytesToHex(reply.signed_cc().signature(), 100).c_str(),
             reply.signed_cc().process_id());
 

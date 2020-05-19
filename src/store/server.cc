@@ -614,14 +614,19 @@ void Cleanup(int signal) {
   if (FLAGS_stats_file.size() > 0) {
     server->GetStats().ExportJSON(FLAGS_stats_file);
   }
-  delete server;
-  delete part;
+  if (server != nullptr) {
+    delete server;
+    delete part;
+    server = nullptr;
+  }
   if (replica != nullptr) {
     delete replica;
+    replica = nullptr;
   }
   if (tport != nullptr) {
     tport->Stop(true);
     delete tport;
+    tport = nullptr;
   }
   exit(0);
 }

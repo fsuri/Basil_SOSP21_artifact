@@ -53,7 +53,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     params(params), keyManager(keyManager),
     timeDelta(timeDelta),
     timeServer(timeServer) {
-  Debug("Starting Indicus replica %lu.", id);
+  Debug("Starting Indicus replica %d.", id);
   transport->Register(this, config, groupIdx, idx);
   _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
   _Latency_Init(&verifyLat, "verify_lat");
@@ -315,11 +315,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
   p2Decisions[*txnDigest] = msg.decision();
 
   proto::Phase2Reply* phase2Reply = new proto::Phase2Reply();
-
-  auto sendCB = [this, remoteCopy = &remote, phase2Reply, txnDigest]() {
+  TransportAddress *remoteCopy = remote.clone();
+  auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
     this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
     delete phase2Reply;
+    delete remoteCopy;
   };
 
   phase2Reply->set_req_id(msg.req_id());
@@ -1046,9 +1047,12 @@ void Server::SendPhase1Reply(uint64_t reqId,
 
   proto::Phase1Reply* phase1Reply = new proto::Phase1Reply();
   phase1Reply->set_req_id(reqId);
+  TransportAddress *remoteCopy = remote.clone();
 
-  auto sendCB = [remoteCopy = &remote, this, phase1Reply]() {
+  auto sendCB = [remoteCopy, this, phase1Reply]() {
     this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
+    delete phase1Reply;
+    delete remoteCopy;
   };
 
   phase1Reply->mutable_cc()->set_ccr(result);
@@ -1062,9 +1066,9 @@ void Server::SendPhase1Reply(uint64_t reqId,
       //Latency_Start(&signLat);
       batchSigner->MessageToSign(cc, phase1Reply->mutable_signed_cc(),
         [sendCB, cc, txnDigest, this, phase1Reply]() {
-          Debug("PHASE1[%s] Sending Phase1Reply with signature %s from priv key %d.",
+          Debug("PHASE1[%s] Sending Phase1Reply with signature %s from priv key %lu.",
             BytesToHex(txnDigest, 16).c_str(),
-            BytesToHex(phase1Reply->signed_cc().signature(), 100).c_str(), this->id);
+            BytesToHex(phase1Reply->signed_cc().signature(), 100).c_str(), phase1Reply->signed_cc().process_id());
           sendCB();
           delete cc;
         });

@@ -48,8 +48,18 @@ class SharedBatchSigner : public BatchSigner {
   int batchTimerId;
 
   std::mutex pendingBatchMtx;
-  std::queue<signedCallback> pendingBatchCallbacks;
-  std::queue<proto::SignedMessage*> pendingBatchSignedMessages;
+  struct PendingBatchItem {
+    PendingBatchItem(uint64_t id, signedCallback cb,
+        proto::SignedMessage *signedMessage) : id(id), cb(cb),
+        signedMessage(signedMessage) {
+    }
+
+    uint64_t id;
+    signedCallback cb;
+    proto::SignedMessage *signedMessage;
+  };
+  uint64_t nextPendingBatchId;
+  std::map<uint64_t, PendingBatchItem> pendingBatch;
 
 
   bool alive;
@@ -63,9 +73,10 @@ class SharedBatchSigner : public BatchSigner {
   struct SignatureWork {
     MyShmString data;
     uint64_t pid;
+    uint64_t id;
 
     SignatureWork(const void_allocator &void_alloc, const char * data, uint64_t dataLen,
-        uint64_t pid) : data(data, dataLen, void_alloc), pid(pid) { }
+        uint64_t pid, uint64_t id) : data(data, dataLen, void_alloc), pid(pid), id(id) { }
   };
 
   typedef allocator<SignatureWork, managed_shared_memory::segment_manager> ShmemAllocator;
