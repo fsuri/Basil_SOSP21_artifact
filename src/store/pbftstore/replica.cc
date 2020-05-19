@@ -220,7 +220,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
 
     int currentPrimaryIdx = config.GetLeaderIndex(currentView);
     if (currentPrimaryIdx == idx) {
-      stats.Increment("handle_request",1);
+      stats->Increment("handle_request",1);
       pendingBatchedDigests[nextBatchNum++] = digest;
       if (pendingBatchedDigests.size() >= maxBatchSize) {
         Debug("Batch is full, sending");
@@ -517,7 +517,7 @@ void Replica::executeSlots() {
       DebugHash(digest);
       // only execute if we have the full request
       if (requests.find(digest) != requests.end()) {
-        stats.Increment("exec_request",1);
+        stats->Increment("exec_request",1);
         Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
         proto::PackedMessage packedMsg = requests[digest];
         std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
