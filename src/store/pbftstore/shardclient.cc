@@ -374,6 +374,10 @@ void ShardClient::Get(const std::string &key, const Timestamp &ts,
   pr.timeout = new Timeout(transport, timeout, [this, reqId, gtcb]() {
     Debug("Get timeout called (but nothing was done)");
       stats->Increment("g_tout", 1);
+      printf("g_tout recv %lu\n",  this->pendingReads[reqId].numResultsRequired);
+      for (const auto& recv : this->pendingReads[reqId].receivedReplies) {
+        printf("%lu\n", recv);
+      }
     // this->pendingReads.erase(reqId);
     // gtcb(reqId, key);
   });
@@ -424,6 +428,14 @@ void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
     pp.timeout = new Timeout(transport, timeout, [this, digest, ptcb]() {
       Debug("Prepare timeout called (but nothing was done)");
       stats->Increment("p_tout", 1);
+      printf("p_tout recv\n");
+      for (const auto& recv : this->pendingPrepares[digest].receivedOkIds) {
+        printf("%lu\n", recv);
+      }
+      printf("nak:\n");
+      for (const auto& recv : this->pendingPrepares[digest].receivedFailedIds) {
+        printf("%lu\n", recv);
+      }
       // this->pendingPrepares.erase(digest);
       // ptcb(REPLY_FAIL);
     });
