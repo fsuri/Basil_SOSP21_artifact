@@ -245,10 +245,6 @@ DEFINE_int64(indicus_max_dep_depth, -1, "maximum length of dependency chain"
     " allowed by honest replicas [-1 is no maximum, -2 is no deps] (for Indicus)");
 DEFINE_uint64(indicus_key_type, 2, "key type (see create keys for mappings)"
     " key type (for Indicus)");
-DEFINE_uint64(indicus_batch_timeout, 1, "signature timeout ms"
-    " signature timeout ms (for Indicus)");
-DEFINE_uint64(indicus_batch_size, 1, "signature batch size"
-    " signature batch size (for Indicus)");
 DEFINE_uint64(indicus_use_coordinator, false, "use coordinator"
     " make primary the coordinator for atomic broadcast (for Indicus)");
 const std::string occ_type_args[] = {
@@ -529,8 +525,8 @@ int main(int argc, char **argv) {
 				part);
 			replica = new pbftstore::Replica(config, &keyManager,
 				dynamic_cast<pbftstore::App *>(server),
-				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, FLAGS_indicus_batch_timeout,
-				FLAGS_indicus_batch_size, FLAGS_indicus_use_coordinator, tport);
+				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, FLAGS_indicus_sig_batch_timeout,
+				FLAGS_indicus_sig_batch, FLAGS_indicus_use_coordinator, tport);
 			break;
 		}
     default: {

@@ -238,6 +238,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
     // check for buffered gdecision
     if (bufferedGDecs.find(digest) != bufferedGDecs.end()) {
+      stats.Increment("used_buffered_gdec",1);
       Debug("found buffered gdecision");
       results.push_back(HandleGroupedDecision(bufferedGDecs[digest]));
       bufferedGDecs.erase(digest);
@@ -245,6 +246,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
   } else {
     Debug("ccc failed");
+    stats.Increment("ccc_fail",1);
     decision->set_status(REPLY_FAIL);
   }
 
@@ -291,6 +293,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
       *readReply->mutable_commit_proof() = *result.second.commitProof;
     }
   } else {
+    stats.Increment("read_dne",1);
     Debug("Read does not exit for key: %s", read.key().c_str());
     readReply->set_status(REPLY_FAIL);
   }
@@ -306,6 +309,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   DebugHash(digest);
   if (pendingTransactions.find(digest) == pendingTransactions.end()) {
     Debug("Buffering gdecision");
+    stats.Increment("buff_dec",1);
     // we haven't yet received the tx so buffer this gdecision until we get it
     bufferedGDecs[digest] = gdecision;
     return nullptr;
@@ -359,9 +363,11 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
       cleanupPendingTx(digest);
       groupedDecisionAck->set_status(REPLY_OK);
     } else {
+      stats.Increment("gdec_failed_valid",1);
       groupedDecisionAck->set_status(REPLY_FAIL);
     }
   } else {
+    stats.Increment("gdec_failed",1);
     // abort the tx
     cleanupPendingTx(digest);
     groupedDecisionAck->set_status(REPLY_FAIL);

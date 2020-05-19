@@ -97,6 +97,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     std::string digest = rr.digest();
     if (requests.find(digest) != requests.end()) {
       Debug("Resending request");
+      stats->Increment("request_rr",1);
       DebugHash(digest);
       proto::Request reqReply;
       reqReply.set_digest(digest);
@@ -105,6 +106,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     }
     if (batchedRequests.find(digest) != batchedRequests.end()) {
       Debug("Resending batch");
+      stats->Increment("batch_rr",1);
       DebugHash(digest);
       transport->SendMessage(this, remote, batchedRequests[digest]);
     }
@@ -254,8 +256,9 @@ void Replica::SendPreprepare(uint64_t seqnum, const proto::Preprepare& preprepar
   sendMessageToAll(preprepare);
 
   // wait 300 ms for tx to complete
-  seqnumCommitTimers[seqnum] = transport->Timer(20000, [this, seqnum, preprepare]() {
+  seqnumCommitTimers[seqnum] = transport->Timer(2000, [this, seqnum, preprepare]() {
     Debug("Primary commit timer expired, resending preprepare");
+    stats->Increment("prim_expired",1);
     this->SendPreprepare(seqnum, preprepare);
   });
 }
@@ -516,6 +519,7 @@ void Replica::executeSlots() {
         }
       } else {
         Debug("request from batch %lu not yet received", execSeqNum);
+        stats->Increment("req_txn",1);
         proto::RequestRequest rr;
         rr.set_digest(digest);
         int primaryIdx = config.GetLeaderIndex(currentView);
@@ -524,6 +528,7 @@ void Replica::executeSlots() {
       }
     } else {
       Debug("Batch request not yet received");
+      stats->Increment("req_batch",1);
       proto::RequestRequest rr;
       rr.set_digest(batchDigest);
       int primaryIdx = config.GetLeaderIndex(currentView);
