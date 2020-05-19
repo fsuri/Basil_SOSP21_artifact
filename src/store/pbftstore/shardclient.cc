@@ -258,6 +258,7 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
       }
     } else {
       if (pendingPrepares.find(digest) != pendingPrepares.end()) {
+        stats.Increment("handle_tx_dec",1);
         PendingPrepare* pp = &pendingPrepares[digest];
         if (transactionDecision.status() == REPLY_OK) {
           uint64_t add_id = pp->receivedOkIds.size();

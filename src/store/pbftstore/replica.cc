@@ -220,6 +220,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
 
     int currentPrimaryIdx = config.GetLeaderIndex(currentView);
     if (currentPrimaryIdx == idx) {
+      stats.Increment("handle_request",1);
       pendingBatchedDigests[nextBatchNum++] = digest;
       if (pendingBatchedDigests.size() >= maxBatchSize) {
         Debug("Batch is full, sending");
@@ -516,6 +517,7 @@ void Replica::executeSlots() {
       DebugHash(digest);
       // only execute if we have the full request
       if (requests.find(digest) != requests.end()) {
+        stats.Increment("exec_request",1);
         Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
         proto::PackedMessage packedMsg = requests[digest];
         std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
@@ -557,23 +559,23 @@ void Replica::executeSlots() {
 }
 
 void Replica::startActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest) {
-  actionTimers[seq_num][viewnum][digest] = transport->Timer(10, [seq_num, viewnum, digest, this]() {
-    Debug("action timer expired, sending");
-    proto::ABRequest abreq;
-    abreq.set_seqnum(seq_num);
-    abreq.set_viewnum(viewnum);
-    abreq.set_digest(digest);
-    int primaryIdx = this->config.GetLeaderIndex(this->currentView);
-    this->stats->Increment("sent_ab_req",1);
-    this->transport->SendMessageToReplica(this, this->groupIdx, primaryIdx, abreq);
-  });
+  // actionTimers[seq_num][viewnum][digest] = transport->Timer(10, [seq_num, viewnum, digest, this]() {
+  //   Debug("action timer expired, sending");
+  //   proto::ABRequest abreq;
+  //   abreq.set_seqnum(seq_num);
+  //   abreq.set_viewnum(viewnum);
+  //   abreq.set_digest(digest);
+  //   int primaryIdx = this->config.GetLeaderIndex(this->currentView);
+  //   this->stats->Increment("sent_ab_req",1);
+  //   this->transport->SendMessageToReplica(this, this->groupIdx, primaryIdx, abreq);
+  // });
 }
 
 void Replica::cancelActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest) {
-  if (actionTimers[seq_num][viewnum].find(digest) != actionTimers[seq_num][viewnum].end()) {
-    transport->CancelTimer(actionTimers[seq_num][viewnum][digest]);
-    actionTimers[seq_num][viewnum].erase(digest);
-  }
+  // if (actionTimers[seq_num][viewnum].find(digest) != actionTimers[seq_num][viewnum].end()) {
+  //   transport->CancelTimer(actionTimers[seq_num][viewnum][digest]);
+  //   actionTimers[seq_num][viewnum].erase(digest);
+  // }
 }
 
 

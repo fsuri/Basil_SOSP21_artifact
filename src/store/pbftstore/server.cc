@@ -213,6 +213,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   string digest = TransactionDigest(transaction);
   Debug("Handling transaction");
   DebugHash(digest);
+  stats.Increment("handle_tx",1);
   decision->set_txn_digest(digest);
   decision->set_shard_id(groupIdx);
   // OCC check
