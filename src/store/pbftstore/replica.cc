@@ -543,6 +543,9 @@ void Replica::executeSlots() {
         proto::RequestRequest rr;
         rr.set_digest(digest);
         int primaryIdx = config.GetLeaderIndex(currentView);
+        if (primaryIdx == idx) {
+          stats->Increment("primary_req_txn",1);
+        }
         transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
         break;
       }
