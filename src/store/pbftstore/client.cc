@@ -129,6 +129,11 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
       pendingPrepare.txn = currentTxn;
       pendingPrepares[digest] = pendingPrepare;
 
+      if (currentTxn.participating_shards_size() == 0) {
+        fprintf(stderr, "0 participating shards\n");
+      }
+      stats.Increment("called_commit",1);
+
       for (const auto& shard_id : currentTxn.participating_shards()) {
 
         prepare_timeout_callback pcbt = [](int s) {
@@ -146,6 +151,8 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
           bclient[shard_id]->Prepare(currentTxn, pcb, pcbt, timeout);
         }
       }
+    } else {
+      fprintf(stderr, "already committed\n");
     }
   });
 }

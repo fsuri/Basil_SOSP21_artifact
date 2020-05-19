@@ -408,6 +408,7 @@ void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
 
   std::string digest = TransactionDigest(txn);
   if (pendingPrepares.find(digest) == pendingPrepares.end()) {
+    stats->Increment("shard_prepare",1);
     proto::Request request;
     DebugHash(digest);
     request.set_digest(digest);
