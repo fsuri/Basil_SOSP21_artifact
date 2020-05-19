@@ -14,7 +14,7 @@ SharedBatchSigner::SharedBatchSigner(Transport *transport,
       alive(false) {
   boost::interprocess::named_mutex::remove(("completion_queue_mtx_" + std::to_string(id)).c_str());
   boost::interprocess::named_condition::remove(("completion_queue_condition_" + std::to_string(id)).c_str());
-  segment = new managed_shared_memory(open_or_create, "MySharedMemory", 65536);//67108864); // 64 MB
+  segment = new managed_shared_memory(open_or_create, "MySharedMemory", 33554432);//67108864); // 64 MB
   alloc_inst = new void_allocator(segment->get_segment_manager());
   sharedWorkQueueMtx = new named_mutex(open_or_create, "shared_work_queue_mtx");
   sharedWorkQueue = segment->find_or_construct<SignatureWorkQueue>("shared_work_queue")(*alloc_inst);
