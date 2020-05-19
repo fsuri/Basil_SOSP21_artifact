@@ -744,13 +744,13 @@ TCPTransport::TCPIncomingEventCallback(struct bufferevent *bev,
                                        short what, void *arg)
 {
     if (what & BEV_EVENT_ERROR) {
-      printf("tcp incoming error\n");
+      fprintf(stderr,"tcp incoming error\n");
         Debug("Error on incoming TCP connection: %s\n",
                 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
         bufferevent_free(bev);
         return;
     } else if (what & BEV_EVENT_ERROR) {
-      printf("tcp incoming eof\n");
+      fprintf(stderr,"tcp incoming eof\n");
         Debug("EOF on incoming TCP connection\n");
         bufferevent_free(bev);
         return;
@@ -770,10 +770,10 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
     TCPTransportAddress addr = it->second.first;
 
     if (what & BEV_EVENT_CONNECTED) {
-      printf("tcp  outgoing error\n");
+      fprintf(stderr,"tcp  outgoing error\n");
         Debug("Established outgoing TCP connection to server");
     } else if (what & BEV_EVENT_ERROR) {
-      printf("tcp  outgoing eof\n");
+      fprintf(stderr,"tcp  outgoing eof\n");
         Warning("Error on outgoing TCP connection to server: %s",
                 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
         bufferevent_free(bev);
