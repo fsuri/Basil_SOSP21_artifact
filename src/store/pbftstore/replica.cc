@@ -524,6 +524,7 @@ void Replica::executeSlots() {
         for (const auto& reply : replies) {
           if (reply != nullptr) {
             Debug("Sending reply");
+            stats->Increment("execs_sent",1);
             transport->SendMessage(this, *replyAddrs[digest], *reply);
             delete reply;
           } else {
