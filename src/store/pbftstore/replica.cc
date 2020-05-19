@@ -539,23 +539,23 @@ void Replica::executeSlots() {
         }
       } else {
         Debug("request from batch %lu not yet received", execSeqNum);
-        stats->Increment("req_txn",1);
-        proto::RequestRequest rr;
-        rr.set_digest(digest);
-        int primaryIdx = config.GetLeaderIndex(currentView);
-        if (primaryIdx == idx) {
-          stats->Increment("primary_req_txn",1);
-        }
-        transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+        // stats->Increment("req_txn",1);
+        // proto::RequestRequest rr;
+        // rr.set_digest(digest);
+        // int primaryIdx = config.GetLeaderIndex(currentView);
+        // if (primaryIdx == idx) {
+        //   stats->Increment("primary_req_txn",1);
+        // }
+        // transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
         break;
       }
     } else {
       Debug("Batch request not yet received");
-      stats->Increment("req_batch",1);
-      proto::RequestRequest rr;
-      rr.set_digest(batchDigest);
-      int primaryIdx = config.GetLeaderIndex(currentView);
-      transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+      // stats->Increment("req_batch",1);
+      // proto::RequestRequest rr;
+      // rr.set_digest(batchDigest);
+      // int primaryIdx = config.GetLeaderIndex(currentView);
+      // transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
       break;
     }
   }
