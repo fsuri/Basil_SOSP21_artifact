@@ -297,6 +297,8 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
         }
       }
     }
+  } else {
+    stats->Increment("wrong_dec_shard",1);
   }
 }
 
@@ -502,6 +504,16 @@ void ShardClient::Commit(const std::string& txn_digest, const proto::ShardDecisi
     pwr.timeout = new Timeout(transport, timeout, [this, txn_digest, wtcp]() {
       Debug("Writeback timeout called (but nothing was done)");
       stats->Increment("c_tout", 1);
+      fprintf(stderr,"c_tout recv %d\n", group_idx);
+      fprintf(stderr,"ack\n");
+      for (const auto& recv : this->pendingWritebacks[digest].receivedAcks) {
+        fprintf(stderr,"%lu\n", recv);
+      }
+      fprintf(stderr,"nak:\n");
+      for (const auto& recv : this->pendingWritebacks[digest].receivedFails) {
+        fprintf(stderr,"%lu\n", recv);
+      }
+
       // this->pendingWritebacks.erase(digest);
       // wtcp(REPLY_FAIL);
     });
