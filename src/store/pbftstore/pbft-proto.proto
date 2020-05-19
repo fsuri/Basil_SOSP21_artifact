@@ -27,6 +27,11 @@ message Request {
   required bytes digest = 2;
 }
 
+message RequestRequest {
+  // the digest of the request to request
+  required bytes digest = 1;
+}
+
 // The primary can collect N requests and assign them batched sequence
 // numbers to them in 0..N-1
 // Primary then sends out preprepare for batched requests, where the digest

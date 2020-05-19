@@ -84,6 +84,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   proto::Commit commit;
   proto::BatchedRequest batchedRequest;
   proto::GroupedSignedMessage grouped;
+  proto::RequestRequest rr;
 
   if (type == request.GetTypeName()) {
     request.ParseFromString(data);
@@ -91,6 +92,22 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   } else if (type == batchedRequest.GetTypeName()) {
     batchedRequest.ParseFromString(data);
     HandleBatchedRequest(remote, batchedRequest);
+  } else if (type == rr.GetTypeName()) {
+    rr.ParseFromString(data);
+    std::string digest = rr.digest();
+    if (requests.find(digest) != requests.end()) {
+      Debug("Resending request");
+      DebugHash(digest);
+      proto::Request reqReply;
+      reqReply.set_digest(digest);
+      *reqReply.mutable_packed_msg() = requests[digest];
+      transport->SendMessage(this, remote, reqReply);
+    }
+    if (batchedRequests.find(digest) != batchedRequests.end()) {
+      Debug("Resending batch");
+      DebugHash(digest);
+      transport->SendMessage(this, remote, batchedRequests[digest]);
+    }
   } else if (type == preprepare.GetTypeName()) {
     if (signMessages && !recvSignedMessage) {
       return;
@@ -175,6 +192,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
   Debug("Handling request message");
 
   string digest = request.digest();
+  DebugHash(digest);
 
   if (requests.find(digest) == requests.end()) {
     Debug("new request: %s", request.packed_msg().type().c_str());
@@ -474,6 +492,7 @@ void Replica::executeSlots() {
     // only execute when we have the batched request
     if (batchedRequests.find(batchDigest) != batchedRequests.end()) {
       string digest = (*batchedRequests[batchDigest].mutable_digests())[execBatchNum];
+      DebugHash(digest);
       // only execute if we have the full request
       if (requests.find(digest) != requests.end()) {
         Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
@@ -497,10 +516,18 @@ void Replica::executeSlots() {
         }
       } else {
         Debug("request from batch %lu not yet received", execSeqNum);
+        proto::RequestRequest rr;
+        rr.set_digest(digest);
+        int primaryIdx = config.GetLeaderIndex(currentView);
+        transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
         break;
       }
     } else {
       Debug("Batch request not yet received");
+      proto::RequestRequest rr;
+      rr.set_digest(batchDigest);
+      int primaryIdx = config.GetLeaderIndex(currentView);
+      transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
       break;
     }
   }
