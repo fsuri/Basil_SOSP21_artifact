@@ -102,22 +102,22 @@ void Server::ReceiveMessage(const TransportAddress &remote,
 // Add all Fallback signedMessages
 } else if (type == phase1FB.GetTypeName()) {
     phase1FB.ParseFromString(data);
-    HandlePhase1FB(this, remote, phase1FB.);
+    HandlePhase1FB(remote, phase1FB);
   } else if (type == phase2FB.GetTypeName()) {
     phase2FB.ParseFromString(data);
-    HandlePhase2FB(this, remote, phase2FB);
+    HandlePhase2FB(remote, phase2FB);
   } else if (type == invokeFB.GetTypeName()) {
     invokeFB.ParseFromString(data);
-    HandleInvokeFB(this, remote, invokeFB); //DONT send back to remote, but instead to FB, calculate based on view. (need to include this in TX state thats kept locally.)
+    HandleInvokeFB(remote, invokeFB); //DONT send back to remote, but instead to FB, calculate based on view. (need to include this in TX state thats kept locally.)
   } else if (type == electFB.GetTypeName()) {
     electFB.ParseFromString(data);
-    HandleElectFB(this, remote, electFB);
+    HandleElectFB(remote, electFB);
   } else if (type == decisionFB.GetTypeName()) {
     decisionFB.ParseFromString(data);
-    HandleDecisionFB(this, remote, decisionFB); //DONT send back to remote, but instead to interested clients. (need to include list of interested clients as part of local tx state)
+    HandleDecisionFB(remote, decisionFB); //DONT send back to remote, but instead to interested clients. (need to include list of interested clients as part of local tx state)
   } else if (type == moveView.GetTypeName()) {
     moveView.ParseFromString(data);
-    HandleMoveView(this, remote, moveView); //Send only to other replicas
+    HandleMoveView(remote, moveView); //Send only to other replicas
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
@@ -226,19 +226,21 @@ void Server::HandleRead(const TransportAddress &remote,
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
 
-  // no-replays property, i.e. recover existing decision/result from storage
-  if(p1Decisions.find(msg.txn_digest()) != p1Decisions.end()){
-        proto::ConcurrencyControl::Result result  =p1Decisions[msg.txn_digest();
-        //KEEP track of interested client
-        interestedClients[txnDigest].insert(remote);
-  }
 
-
- else{
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
+      proto::ConcurrencyControl::Result result;
+      // no-replays property, i.e. recover existing decision/result from storage
+      if(p1Decisions.find(txnDigest) != p1Decisions.end()){
+            result  =p1Decisions[txnDigest];
+            //KEEP track of interested client
+            interestedClients[txnDigest].insert(remote.clone());
+      }
+
+
+     else{
 
   if (params.validateProofs && params.signedMessages && params.verifyDeps) {
     for (const auto &dep : msg.txn().deps()) {
@@ -257,22 +259,22 @@ void Server::HandlePhase1(const TransportAddress &remote,
   }
   //KEEP track of interested client
   current_views[txnDigest] = 0;
-  interestedClients[txnDigest].insert(remote);
+  interestedClients[txnDigest].insert(remote.clone());
 
   proto::Transaction *txn = msg.release_txn();
   ongoing[txnDigest] = txn;
 
   Timestamp retryTs;
-  proto::ConcurrencyControl::Result result = DoOCCCheck(msg.req_id(),
+  result = DoOCCCheck(msg.req_id(),
       remote, txnDigest, *txn, retryTs, committedProof);
 
   }
 
   if (result != proto::ConcurrencyControl::WAIT) {
-    if(client_starttime.find(txnDigest) == client_starttime.end()){}
+    if(client_starttime.find(txnDigest) == client_starttime.end()){
       struct timeval tv;
       gettimeofday(&tv, NULL);
-      uint64_t start_time = tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+      uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
       client_starttime[txnDigest] = start_time;
     }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
     SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);
@@ -280,9 +282,11 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 }
 
+
+
 //FALLBACK PHASE1
-void Server::HandlePhase1FB(const TransportAddress &remote,
-    proto::Phase1 &msg) {
+void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg) {
+
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   Debug("PHASE1FB[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
@@ -297,15 +301,20 @@ void Server::HandlePhase1FB(const TransportAddress &remote,
 
 //currently for simplicity just forward writeback message that we received and stored.
     if(writebackMessages.find(txnDigest) != writebackMessages.end()){
-      proto::Writeback wb = writebackMessages[txnDigest];
-      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, wb, 1);
+      writeback = writebackMessages[txnDigest];
+      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, 1);
     }
 
     //add case where there is both p2 and p1
     else if(p2Decisions.end() != p2Decisions.find(txnDigest) && p1Decisions.end() != p1Decisions.find(txnDigest) ){
-      proto::CommitDecision decision = p2Decisions[txnDigest];    //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself. Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
-
-      SetP1(msg.req_id(), txnDigest, result, conflict);
+       proto::CommitDecision decision = p2Decisions[txnDigest];    //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself. Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
+       proto::ConcurrencyControl::Result result = p1Decisions[txnDigest];
+       proto::CommittedProof conflict;
+       //recover stored commit proof.
+       if(result == proto::ConcurrencyControl::ABORT){
+         conflict = p1Conflicts[txnDigest];
+       }
+       SetP1(msg.req_id(), txnDigest, result, conflict);
        SetP2(msg.req_id(), txnDigest, decision);
        SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote, 2);
     }
@@ -353,7 +362,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote,
         }
       }
       //KEEP track of interested client
-      interestedClients[txnDigest].insert(remote);
+      interestedClients[txnDigest].insert(remote.clone());
       current_views[txnDigest] = 0;
 
       proto::Transaction *txn = msg.release_txn();
@@ -468,6 +477,8 @@ void Server::SendPhase1FBReply(uint64_t reqId,
 
     transport->SendMessage(this, remote, phase1FBReply);
 }
+
+
 
 
 
@@ -701,7 +712,7 @@ void Server::VerifyP2FB(const TransportAddress &remote, std::string txnDigest, p
 }
 
 
-bool Server::VerifyViews(proto::InvokeFB &msg, uint34_t lG){
+bool Server::VerifyViews(proto::InvokeFB &msg, uint32_t lG){
   // extract the P1FBreplies
   // extract signatures of the views. (type Signed Message)
   // decompute signature based on ID.
@@ -887,13 +898,13 @@ void Server::ElectFB(const TransportAddress &remote, proto::ElectFB &msg){
     // check whether all views in the elect messages match (the replica)
     if(ElectQuorum_meta[txnDigest].first == electMessage.view() && ElectQuorum[txnDigest].find(signed_msg) == ElectQuorum[txnDigest].end()){
         // update state, keep counter of received ElectFbs  --> last one executes the function
-      ElectQuorum[txnDigest].insert(signed_message);
+      ElectQuorum[txnDigest].insert(signed_message.clone());
       if(electMessage.dec() == proto::COMMIT) ElectQuorum_meta[txnDigest].second++;
     }
     else if(ElectQuorum_meta[txnDigest].first() < electMessage.view()){
       ElectQuorum_meta[txnDigest].first = electMessage.view();
       ElectQuorum[txnDigest].clear()
-      ElectQuorum[txnDigest].insert(signed_message);
+      ElectQuorum[txnDigest].insert(signed_message.clone());
     }
   }
 
@@ -914,16 +925,46 @@ void Server::ElectFB(const TransportAddress &remote, proto::ElectFB &msg){
     for (proto::SignedMessage & iter : ElectQuorum[txnDigest] ) {
       //response->add_elect_sigs(iter);
       proto::SignedMessage* sm = response->add_elect_sigs();
-      sm = iter;
+      sm = *iter;
     }
     transport->SendMessageToGroup(this, group, decisionFB);
 
   }
 }
 
-void Server::DecisionFB(){
+void Server::DecisionFB(const TransportAddress &remote,
+    const proto::DecisionFB &msg) ){
 
-  //TODO: 1) verify signatures, Ignore if from view < current
+    std::string txnDigest = msg.txn_digest();
+    if(current_views[txnDigest] > msg.view()) return;
+
+
+    std::string Msg;
+    proto::ElectFB electfb;
+
+//TODO: verify signatures, Ignore if from view < current
+    uint64_t count = 2* config.f() +1;
+    for(auto & iter :msg.elect_sigs()){  //does this work syntactically?
+      electfb.ParseFromString(iter.bytes());
+      electfb.SerializeToString(&Msg);
+      if(crypto::Verify(keyManager->GetPublicKey(iter.process_id()), Msg, iter.signature())){
+        if(electfb.decision() == msg.dec() && electfb.view() == msg.view()){
+          counter--;
+        }
+      }
+      if(counter==0) break;
+    }
+    if(counter !=0) return; //sigs dont match decision
+
+    if(decision_views[txnDigest] < msg.view()){
+      decision_views[txnDigest] = msg.view();
+      p2Decisions[txnDigest] = msg.dec();
+    }
+    SetP2(txnDigest, p2Decisions[txnDigest]);
+    for(const TransportAddress &target :   interestedClients[txnDigest]){   //needs to change to *?
+      transport->SendMessage(this, *target, phase2Reply);
+    }
+
   //TODO: 2) Send Phase2Reply message to all interested clients (check list interestedClients for all remote addresses)
   //TODO: 3) send current views to client (in case there was no consensus, so the client can start a new round.)
 }
