@@ -506,11 +506,11 @@ void ShardClient::Commit(const std::string& txn_digest, const proto::ShardDecisi
       stats->Increment("c_tout", 1);
       fprintf(stderr,"c_tout recv %d\n", group_idx);
       fprintf(stderr,"ack\n");
-      for (const auto& recv : this->pendingWritebacks[digest].receivedAcks) {
+      for (const auto& recv : this->pendingWritebacks[txn_digest].receivedAcks) {
         fprintf(stderr,"%lu\n", recv);
       }
       fprintf(stderr,"nak:\n");
-      for (const auto& recv : this->pendingWritebacks[digest].receivedFails) {
+      for (const auto& recv : this->pendingWritebacks[txn_digest].receivedFails) {
         fprintf(stderr,"%lu\n", recv);
       }
 
