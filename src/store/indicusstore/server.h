@@ -43,6 +43,7 @@
 #include "store/indicusstore/store.h"
 #include "store/indicusstore/indicus-proto.pb.h"
 #include "store/indicusstore/batchsigner.h"
+#include "store/indicusstore/verifier.h"
 
 #include <set>
 #include <unordered_map>
@@ -144,6 +145,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void LookupP2Decision(const std::string &txnDigest,
       int64_t &myProcessId, proto::CommitDecision &myDecision) const;
   uint64_t DependencyDepth(const proto::Transaction *txn) const;
+  void MessageToSign(::google::protobuf::Message* msg,
+      proto::SignedMessage *signedMessage, signedCallback cb);
 
   inline bool IsKeyOwned(const std::string &key) const {
     return static_cast<int>((*part)(key, numShards, groupIdx, dummyTxnGroups) % numGroups) == groupIdx;
@@ -163,6 +166,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   const uint64_t timeDelta;
   TrueTime timeServer;
   BatchSigner *batchSigner;
+  Verifier *verifier;
 
   /* Declare protobuf objects as members to avoid stack alloc/dealloc costs */
   proto::SignedMessage signedMessage;

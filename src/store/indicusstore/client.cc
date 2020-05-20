@@ -31,6 +31,8 @@
 
 #include "store/indicusstore/client.h"
 
+#include "store/indicusstore/localbatchverifier.h"
+#include "store/indicusstore/basicverifier.h"
 #include "store/indicusstore/common.h"
 
 namespace indicusstore {
@@ -53,11 +55,17 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
 
+  if (params.signatureBatchSize == 1) {
+    verifier = new BasicVerifier();
+  } else {
+    verifier = new LocalBatchVerifier(dummyStats);
+  }
+
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
     bclient.push_back(new ShardClient(config, transport, client_id, i,
         closestReplicas, pingReplicas, params,
-        keyManager, timeServer));
+        keyManager, verifier, timeServer));
   }
 
   Debug("Indicus client [%lu] created! %lu %lu", client_id, nshards,
@@ -72,9 +80,10 @@ Client::~Client()
   Latency_Dump(&executeLatency);
   Latency_Dump(&getLatency);
   Latency_Dump(&commitLatency);
-    for (auto b : bclient) {
-        delete b;
-    }
+  for (auto b : bclient) {
+      delete b;
+  }
+  delete verifier;
 }
 
 /* Begins a transaction. All subsequent operations before a commit() or

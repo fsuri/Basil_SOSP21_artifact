@@ -75,7 +75,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   ShardClient(transport::Configuration *config, Transport *transport,
       uint64_t client_id, int group, const std::vector<int> &closestReplicas,
       bool pingReplicas,
-      Parameters params, KeyManager *keyManager, TrueTime &timeServer);
+      Parameters params, KeyManager *keyManager, Verifier *verifier,
+      TrueTime &timeServer);
   virtual ~ShardClient();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
@@ -138,10 +139,11 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   struct PendingPhase1 {
     PendingPhase1(uint64_t reqId, int group, const proto::Transaction &txn,
         const std::string &txnDigest, const transport::Configuration *config,
-        KeyManager *keyManager, Parameters params) :
+        KeyManager *keyManager, Parameters params, Verifier *verifier) :
         reqId(reqId), requestTimeout(nullptr), decisionTimeout(nullptr),
         decisionTimeoutStarted(false), txn_(txn), txnDigest_(txnDigest),
-        p1Validator(group, &txn_, &txnDigest_, config, keyManager, params),
+        p1Validator(group, &txn_, &txnDigest_, config, keyManager, params,
+            verifier),
         decision(proto::ABORT), fast(false) { }
     ~PendingPhase1() {
       if (requestTimeout != nullptr) {
@@ -229,6 +231,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   const bool pingReplicas;
   const Parameters params;
   KeyManager *keyManager;
+  Verifier *verifier;
   const uint64_t phase1DecisionTimeout;
   std::vector<int> closestReplicas;
 

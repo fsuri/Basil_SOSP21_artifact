@@ -40,6 +40,9 @@
 #include "store/indicusstore/phase1validator.h"
 #include "store/indicusstore/localbatchsigner.h"
 #include "store/indicusstore/sharedbatchsigner.h"
+#include "store/indicusstore/basicverifier.h"
+#include "store/indicusstore/localbatchverifier.h"
+#include "store/indicusstore/sharedbatchverifier.h"
 
 namespace indicusstore {
 
@@ -59,16 +62,23 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   _Latency_Init(&verifyLat, "verify_lat");
   _Latency_Init(&signLat, "sign_lat");
 
-  if (params.sharedMemBatches) {
-    batchSigner = new SharedBatchSigner(transport, keyManager, GetStats(),
-        batchTimeoutMicro, params.signatureBatchSize, id,
-        params.validateProofs && params.signedMessages &&
-        params.signatureBatchSize > 1 && params.adjustBatchSize);
+  if (params.signatureBatchSize == 1) {
+    verifier = new BasicVerifier();
+    batchSigner = nullptr;
   } else {
-    batchSigner = new LocalBatchSigner(transport, keyManager, GetStats(),
-        batchTimeoutMicro, params.signatureBatchSize, id,
-        params.validateProofs && params.signedMessages &&
-        params.signatureBatchSize > 1 && params.adjustBatchSize);
+    if (params.sharedMemBatches) {
+      batchSigner = new SharedBatchSigner(transport, keyManager, GetStats(),
+          batchTimeoutMicro, params.signatureBatchSize, id,
+          params.validateProofs && params.signedMessages &&
+          params.signatureBatchSize > 1 && params.adjustBatchSize);
+      verifier = new SharedBatchVerifier(stats);
+    } else {
+      batchSigner = new LocalBatchSigner(transport, keyManager, GetStats(),
+          batchTimeoutMicro, params.signatureBatchSize, id,
+          params.validateProofs && params.signedMessages &&
+          params.signatureBatchSize > 1 && params.adjustBatchSize);
+      verifier = new LocalBatchVerifier(stats);
+    }
   }
   // this is needed purely from loading data without executing transactions
   proto::CommittedProof *proof = new proto::CommittedProof();
@@ -86,7 +96,10 @@ Server::~Server() {
   for (const auto &o : ongoing) {
     delete o.second;
   }
-  delete batchSigner;
+  if (batchSigner != nullptr) {
+    delete batchSigner;
+  }
+  delete verifier;
   Latency_Dump(&verifyLat);
   Latency_Dump(&signLat);
 }
@@ -214,7 +227,7 @@ void Server::HandleRead(const TransportAddress &remote,
       (readReply->write().has_committed_value() || (params.verifyDeps && readReply->write().has_prepared_value()))) {
     if (params.readReplyBatch) {
       proto::Write* write = new proto::Write(readReply->write());
-      batchSigner->MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
+      MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
         sendCB();
         delete write;
       });
@@ -251,7 +264,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
           BytesToHex(txnDigest, 16).c_str());
         return;
       }
-      if (!ValidateDependency(dep, &config, params.readDepSize, keyManager, params.signatureBatchSize)) {
+      if (!ValidateDependency(dep, &config, params.readDepSize, keyManager, verifier)) {
         Debug("VALIDATE Dependency failed for txn %s.",
             BytesToHex(txnDigest, 16).c_str());
         // safe to ignore Byzantine client
@@ -307,7 +320,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   LookupP1Decision(*txnDigest, myProcessId, myResult);
   if (params.validateProofs && params.signedMessages && !ValidateP1Replies(msg.decision(),
         false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
-        myResult, params.signatureBatchSize)) {
+        myResult, verifier)) {
     Debug("VALIDATE P1Replies failed.");
     return;
   }
@@ -332,7 +345,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
       proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
 
       //Latency_Start(&signLat);
-      batchSigner->MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
+      MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
         [sendCB, p2Decision]() {
           sendCB();
           delete p2Decision;
@@ -383,7 +396,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
       LookupP1Decision(*txnDigest, myProcessId, myResult);
 
       if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
-            keyManager, &config, myProcessId, myResult, verifyLat, params.signatureBatchSize)) {
+            keyManager, &config, myProcessId, myResult, verifyLat, verifier)) {
         Debug("WRITEBACK[%s] Failed to validate P1 replies for fast commit.",
             BytesToHex(*txnDigest, 16).c_str());
         return;
@@ -394,7 +407,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
       LookupP2Decision(*txnDigest, myProcessId, myDecision);
 
       if (!ValidateP2Replies(msg.decision(), txn, txnDigest, msg.p2_sigs(),
-            keyManager, &config, myProcessId, myDecision, verifyLat, params.signatureBatchSize)) {
+            keyManager, &config, myProcessId, myDecision, verifyLat, verifier)) {
         Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
             BytesToHex(*txnDigest, 16).c_str(), msg.decision());
         return;
@@ -403,7 +416,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
       std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
           params.hashDigest);
       if (!ValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
-            txnDigest, params.signedMessages, keyManager, &config, params.signatureBatchSize)) {
+            txnDigest, params.signedMessages, keyManager, &config, verifier)) {
         Debug("WRITEBACK[%s] Failed to validate committed conflict for fast abort.",
             BytesToHex(*txnDigest, 16).c_str());
         return;
@@ -435,10 +448,9 @@ void Server::HandleAbort(const TransportAddress &remote,
     }
 
     //Latency_Start(&verifyLat);
-    if (!Verify(keyManager->GetPublicKey(msg.signed_internal().process_id()),
+    if (!verifier->Verify(keyManager->GetPublicKey(msg.signed_internal().process_id()),
           msg.signed_internal().data(),
-          msg.signed_internal().signature(),
-          params.signatureBatchSize)) {
+          msg.signed_internal().signature())) {
       //Latency_End(&verifyLat);
       return;
     }
@@ -1064,7 +1076,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
     } else if (params.signedMessages) {
       proto::ConcurrencyControl* cc = new proto::ConcurrencyControl(phase1Reply->cc());
       //Latency_Start(&signLat);
-      batchSigner->MessageToSign(cc, phase1Reply->mutable_signed_cc(),
+      MessageToSign(cc, phase1Reply->mutable_signed_cc(),
         [sendCB, cc, txnDigest, this, phase1Reply]() {
           Debug("PHASE1[%s] Sending Phase1Reply with signature %s from priv key %lu.",
             BytesToHex(txnDigest, 16).c_str(),
@@ -1133,6 +1145,16 @@ uint64_t Server::DependencyDepth(const proto::Transaction *txn) const {
     }
   }
   return maxDepth;
+}
+
+void Server::MessageToSign(::google::protobuf::Message* msg,
+      proto::SignedMessage *signedMessage, signedCallback cb) {
+  if (params.signatureBatchSize == 1) {
+    SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMessage);
+    cb();
+  } else {
+    batchSigner->MessageToSign(msg, signedMessage, cb);
+  }
 }
 
 } // namespace indicusstore

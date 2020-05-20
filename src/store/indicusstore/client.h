@@ -177,6 +177,8 @@ class Client : public ::Client {
   const uint64_t readQuorumSize;
   const Parameters params;
   KeyManager *keyManager;
+  Verifier *verifier;
+  Stats dummyStats;
   // TrueTime server.
   TrueTime timeServer;
 

@@ -12,8 +12,6 @@ SharedBatchSigner::SharedBatchSigner(Transport *transport,
       transport, keyManager, stats, batchTimeoutMicro, batchSize, id,
       adjustBatchSize), batchSize(batchSize), batchTimerId(0), nextPendingBatchId(0UL),
       alive(false) {
-  boost::interprocess::named_mutex::remove(("completion_queue_mtx_" + std::to_string(id)).c_str());
-  boost::interprocess::named_condition::remove(("completion_queue_condition_" + std::to_string(id)).c_str());
   segment = new managed_shared_memory(open_or_create, "MySharedMemory", 33554432);//67108864); // 64 MB
   alloc_inst = new void_allocator(segment->get_segment_manager());
   sharedWorkQueueMtx = new named_mutex(open_or_create, "shared_work_queue_mtx");
@@ -30,13 +28,19 @@ SharedBatchSigner::~SharedBatchSigner() {
   cqc->notify_one();
   signedCallbackThread->join();
   delete signedCallbackThread;
-  delete cqc;
-  delete GetCompletionQueueMutex(id);
-  delete GetCompletionQueueCondition(id);
-
-  segment->destroy<SignatureWorkQueue>(
-      ("completion_queue_" + std::to_string(id)).c_str());
+  for (const auto &mtx : completionQueueMtx) {
+    delete mtx.second;
+  }
+  for (const auto &cond : completionQueueReady) {
+    delete cond.second;
+  }
+  for (const auto &queue : completionQueues) {
+    delete queue.second;
+  }
+  delete sharedWorkQueueMtx;
+  delete sharedWorkQueue;
   delete segment;
+  delete alloc_inst;
 }
 
 void SharedBatchSigner::MessageToSign(::google::protobuf::Message* msg,
@@ -124,11 +128,12 @@ void SharedBatchSigner::SignBatch() {
 
   sharedWorkQueueMtx->unlock();
   stats.IncrementList("sig_batch", batchSize);
+  /*
   stats.Add("sig_batch_sizes", batchSize);
   struct timeval curr;
   gettimeofday(&curr, NULL);
   uint64_t currMicros = curr.tv_sec * 1000000ULL + curr.tv_usec;
-  stats.Add("sig_batch_sizes_ts",  currMicros);
+  stats.Add("sig_batch_sizes_ts",  currMicros);*/
 
   BatchedSigs::generateBatchedSignatures(batchMessages, privKey, batchSignatures);
 
@@ -170,14 +175,20 @@ void SharedBatchSigner::RunSignedCallbackConsumer() {
       
       if (pendingBatch.size() > 0) {
         auto itr =  pendingBatch.find(work.id);
-        UW_ASSERT(itr != pendingBatch.end());
+        if (itr != pendingBatch.end()) {
+          itr->second.signedMessage->set_process_id(work.pid);
+          *itr->second.signedMessage->mutable_signature() = std::string(work.data.begin(), work.data.end());
 
-        itr->second.signedMessage->set_process_id(work.pid);
-        *itr->second.signedMessage->mutable_signature() = std::string(work.data.begin(), work.data.end());
+          Debug("Starting timer cb.");
+          transport->Timer(0, [cb = itr->second.cb](){ 
+              Debug("Calling cb.");
+              cb();
+            });
 
-        transport->Timer(0, [cb = itr->second.cb](){ cb(); });
-
-        pendingBatch.erase(itr);
+          pendingBatch.erase(itr);
+        } else {
+          Debug("Signature is from stale run.");
+        }
       } else {
         Debug("Signature is from stale run.");
       }

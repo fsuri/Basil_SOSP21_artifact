@@ -7,9 +7,9 @@ namespace indicusstore {
 
 Phase1Validator::Phase1Validator(int group, const proto::Transaction *txn,
     const std::string *txnDigest, const transport::Configuration *config,
-    KeyManager *keyManager, Parameters params) : group(group),
+    KeyManager *keyManager, Parameters params, Verifier *verifier) : group(group),
     txn(txn), txnDigest(txnDigest), config(config), keyManager(keyManager),
-    params(params), state(NOT_ENOUGH), commits(0U), abstains(0U) {
+    params(params), verifier(verifier), state(NOT_ENOUGH), commits(0U), abstains(0U) {
 }
 
 Phase1Validator::~Phase1Validator() {
@@ -34,7 +34,8 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
       std::string committedTxnDigest = TransactionDigest(
           cc.committed_conflict().txn(), params.hashDigest);
       if (params.validateProofs && !ValidateCommittedConflict(cc.committed_conflict(),
-            &committedTxnDigest, txn, txnDigest, params.signedMessages, keyManager, config, params.signatureBatchSize)) {
+            &committedTxnDigest, txn, txnDigest, params.signedMessages,
+            keyManager, config, verifier)) {
         Debug("[group %d] Invalid committed_conflict for Phase1Reply.",
             group);
         return false;

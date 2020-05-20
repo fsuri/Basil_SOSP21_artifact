@@ -40,11 +40,13 @@ namespace indicusstore {
 ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int group, const std::vector<int> &closestReplicas_,
     bool pingReplicas,
-    Parameters params, KeyManager *keyManager, TrueTime &timeServer) :
+    Parameters params, KeyManager *keyManager, Verifier *verifier,
+    TrueTime &timeServer) :
     PingInitiator(this, transport, config->n),
     client_id(client_id), transport(transport), config(config), group(group),
     timeServer(timeServer), pingReplicas(pingReplicas), params(params),
-    keyManager(keyManager), phase1DecisionTimeout(1000UL), lastReqId(0UL) {
+    keyManager(keyManager), verifier(verifier), phase1DecisionTimeout(1000UL),
+    lastReqId(0UL) {
   transport->Register(this, *config, -1, -1);
 
   if (closestReplicas_.size() == 0) {
@@ -132,7 +134,7 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
   Debug("[group %i] Sending PHASE1 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
   PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId, group, transaction,
-      txnDigest, config, keyManager, params);
+      txnDigest, config, keyManager, params, verifier);
   pendingPhase1s[reqId] = pendingPhase1;
   pendingPhase1->pcb = pcb;
   pendingPhase1->ptcb = ptcb;
@@ -295,8 +297,8 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   const proto::Write *write;
   if (params.validateProofs && params.signedMessages) {
     if (reply.has_signed_write()) {
-      if (!Verify(keyManager->GetPublicKey(reply.signed_write().process_id()),
-              reply.signed_write().data(), reply.signed_write().signature(), params.signatureBatchSize)) {
+      if (!verifier->Verify(keyManager->GetPublicKey(reply.signed_write().process_id()),
+              reply.signed_write().data(), reply.signed_write().signature())) {
         Debug("[group %i] Failed to validate signature for write.", group);
         return;
       }
@@ -339,7 +341,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
           reply.proof().txn(), params.hashDigest);
       if (!ValidateTransactionWrite(reply.proof(), &committedTxnDigest,
             req->key, write->committed_value(), write->committed_timestamp(),
-            config, params.signedMessages, keyManager, params.signatureBatchSize)) {
+            config, params.signedMessages, keyManager, verifier)) {
         Debug("[group %i] Failed to validate committed value for read %lu.",
             group, reply.req_id());
         // invalid replies can be treated as if we never received a reply from
@@ -439,8 +441,8 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
       return;
     }
 
-    if (!Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
-          reply.signed_cc().data(), reply.signed_cc().signature(), params.signatureBatchSize)) {
+    if (!verifier->Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
+          reply.signed_cc().data(), reply.signed_cc().signature())) {
       Debug("[group %i] Signature %s %s from replica %lu is not valid.", group,
             BytesToHex(reply.signed_cc().data(), 100).c_str(),
             BytesToHex(reply.signed_cc().signature(), 100).c_str(),
@@ -562,11 +564,10 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
       return;
     }
 
-    if (!Verify(keyManager->GetPublicKey(
+    if (!verifier->Verify(keyManager->GetPublicKey(
             reply.signed_p2_decision().process_id()),
           reply.signed_p2_decision().data(),
-          reply.signed_p2_decision().signature(),
-          params.signatureBatchSize)) {
+          reply.signed_p2_decision().signature())) {
       return;
     }
 

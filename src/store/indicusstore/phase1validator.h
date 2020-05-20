@@ -9,6 +9,7 @@
 #include "lib/transport.h"
 #include "store/indicusstore/common.h"
 #include "store/indicusstore/indicus-proto.pb.h"
+#include "store/indicusstore/verifier.h"
 
 namespace indicusstore {
 
@@ -26,7 +27,7 @@ class Phase1Validator {
  public:
   Phase1Validator(int group, const proto::Transaction *txn,
       const std::string *txnDigest, const transport::Configuration *config,
-      KeyManager *keyManager, Parameters params);
+      KeyManager *keyManager, Parameters params, Verifier *verifier);
   virtual ~Phase1Validator();
 
   bool ProcessMessage(const proto::ConcurrencyControl &cc);
@@ -40,6 +41,7 @@ class Phase1Validator {
   const transport::Configuration *config;
   KeyManager *keyManager;
   const Parameters params;
+  Verifier *verifier;
 
   Phase1ValidationState state;
   uint32_t commits;

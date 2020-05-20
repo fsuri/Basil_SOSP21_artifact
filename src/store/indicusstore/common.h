@@ -6,6 +6,7 @@
 #include "store/common/timestamp.h"
 #include "store/indicusstore/indicus-proto.pb.h"
 #include "lib/latency.h"
+#include "store/indicusstore/verifier.h"
 
 #include <map>
 #include <string>
@@ -26,48 +27,45 @@ void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
     crypto::PrivKey* privateKey, uint64_t processId,
     const std::vector<proto::SignedMessage*>& signedMessages);
 
-bool Verify(crypto::PubKey* publicKey, const string &message, const string &signature,
-    unsigned int sigBatchSize);
-
 bool ValidateCommittedConflict(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, const proto::Transaction *txn,
     const std::string *txnDigest, bool signedMessages, KeyManager *keyManager,
-    const transport::Configuration *config, unsigned int sigBatchSize);
+    const transport::Configuration *config, Verifier *verifier);
 
 bool ValidateCommittedProof(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, KeyManager *keyManager,
-    const transport::Configuration *config, unsigned int sigBatchSize);
+    const transport::Configuration *config, Verifier *verifier);
 
 bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
-    int64_t myProcessId, proto::ConcurrencyControl::Result myResult, unsigned int sigBatchSize);
+    int64_t myProcessId, proto::ConcurrencyControl::Result myResult, Verifier *verifier);
 
 bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::ConcurrencyControl::Result myResult,
-    Latency_t &lat, unsigned int sigBatchSize);
+    Latency_t &lat, Verifier *verifier);
 
 bool ValidateP2Replies(proto::CommitDecision decision,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
-    int64_t myProcessId, proto::CommitDecision myDecision, unsigned int sigBatchSize);
+    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier);
 
 bool ValidateP2Replies(proto::CommitDecision decision,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::CommitDecision myDecision,
-    Latency_t &lat, unsigned int sigBatchSize);
+    Latency_t &lat, Verifier *verifier);
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     const std::string *txnDigest, const std::string &key, const std::string &val, const Timestamp &timestamp,
     const transport::Configuration *config, bool signedMessages,
-    KeyManager *keyManager, unsigned int sigBatchSize);
+    KeyManager *keyManager, Verifier *verifier);
 
 // check must validate that proof replies are from all involved shards
 bool ValidateProofCommit1(const proto::CommittedProof &proof,
@@ -103,7 +101,7 @@ bool ValidateP2RepliesAbort(
 
 bool ValidateDependency(const proto::Dependency &dep,
     const transport::Configuration *config, uint64_t readDepSize,
-    KeyManager *keyManager, unsigned int sigBatchSize);
+    KeyManager *keyManager, Verifier *verifier);
 
 bool operator==(const proto::Write &pw1, const proto::Write &pw2);
 
