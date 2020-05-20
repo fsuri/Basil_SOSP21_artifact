@@ -251,6 +251,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
       cleanupPendingTx(digest);
       proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
       groupedDecisionAck->set_status(REPLY_FAIL);
+      groupedDecisionAck->set_txn_digest(digest);
       results.push_back(returnMessage(groupedDecisionAck));
     }
   } else {
