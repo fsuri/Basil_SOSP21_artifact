@@ -246,7 +246,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     }
 
     if (abortedTxs.find(digest) != abortedTxs.end()) {
-      stats.Increment("gdec_failed",1);
+      stats.Increment("gdec_failed_buf",1);
       // abort the tx
       cleanupPendingTx(digest);
       proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();

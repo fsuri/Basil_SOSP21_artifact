@@ -68,6 +68,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 
     if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
       Debug("Message is invalid!");
+      stats->Increment("invalid_sig",1);
       return;
     }
     recvSignedMessage = true;
@@ -126,6 +127,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     }
   } else if (type == preprepare.GetTypeName()) {
     if (signMessages && !recvSignedMessage) {
+      stats->Increment("invalid_sig_pp",1);
       return;
     }
 
@@ -134,6 +136,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   } else if (type == prepare.GetTypeName()) {
     prepare.ParseFromString(data);
     if (signMessages && !recvSignedMessage) {
+      stats->Increment("invalid_sig_p",1);
       return;
     }
 
@@ -141,6 +144,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   } else if (type == commit.GetTypeName()) {
     commit.ParseFromString(data);
     if (signMessages && !recvSignedMessage) {
+      stats->Increment("invalid_sig_c",1);
       return;
     }
 
@@ -301,6 +305,7 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
   if (signMessages) {
     // make sure this message is from this shard
     if (signedMsg.replica_id() / config.n != (uint64_t) groupIdx) {
+      stats->Increment("invalid_pp_group",1);
       return;
     }
     // make sure id is good
@@ -309,6 +314,7 @@ void Replica::HandlePreprepare(const TransportAddress &remote,
     }
     // make sure the primary isn't equivocating
     if (!slots.setPreprepare(preprepare, signedMsg.replica_id(), signedMsg.signature())) {
+      stats->Increment("invalid_pp_hash",1);
       return;
     }
   } else {
@@ -348,9 +354,11 @@ void Replica::HandlePrepare(const TransportAddress &remote,
   if (signMessages) {
     // make sure this message is from this shard
     if (signedMsg.replica_id() / config.n != (uint64_t) groupIdx) {
+      stats->Increment("invalid_p_group",1);
       return;
     }
     if (!slots.addPrepare(prepare, signedMsg.replica_id(), signedMsg.signature())) {
+      stats->Increment("invalid_pp_hash",1);
       return;
     }
   } else {
@@ -375,9 +383,11 @@ void Replica::HandleCommit(const TransportAddress &remote,
   if (signMessages) {
     // make sure this message is from this shard
     if (signedMsg.replica_id() / config.n != (uint64_t) groupIdx) {
+      stats->Increment("invalid_c_group",1);
       return;
     }
     if (!slots.addCommit(commit, signedMsg.replica_id(), signedMsg.signature())) {
+      stats->Increment("invalid_c_hash",1);
       return;
     }
   } else {
