@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
   uint64_t timeoutms = 10;
   DefaultPartitioner dp;
   pbftstore::Server* server = new pbftstore::Server(config, &keyManager, groupIdx, myId, numShards, numGroups, signMessages, validateProofs, 10, &dp);
-  pbftstore::Replica replica(config, &keyManager, dynamic_cast<pbftstore::App *>(server), groupIdx, myId, signMessages, timeoutms, maxBatchSize, primaryCoordinator, &transport);
+  pbftstore::Replica replica(config, &keyManager, dynamic_cast<pbftstore::App *>(server), groupIdx, myId, signMessages, timeoutms, maxBatchSize, primaryCoordinator, false, &transport);
 
   printf("Running transport\n");
   transport.Run();

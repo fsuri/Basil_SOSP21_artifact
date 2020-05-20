@@ -23,7 +23,7 @@ class Replica : public TransportReceiver {
 public:
   Replica(const transport::Configuration &config, KeyManager *keyManager,
     App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
-    uint64_t batchTimeoutMS, bool primaryCoordinator, Transport *transport);
+    uint64_t batchTimeoutMS, bool primaryCoordinator, bool requestTx, Transport *transport);
   ~Replica();
 
   // Message handlers.
@@ -56,6 +56,7 @@ public:
   uint64_t maxBatchSize;
   uint64_t batchTimeoutMS;
   bool primaryCoordinator;
+  bool requestTx;
   Transport *transport;
   int currentView;
   int nextSeqNum;

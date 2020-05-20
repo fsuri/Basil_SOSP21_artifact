@@ -247,6 +247,8 @@ DEFINE_uint64(indicus_key_type, 2, "key type (see create keys for mappings)"
     " key type (for Indicus)");
 DEFINE_uint64(indicus_use_coordinator, false, "use coordinator"
     " make primary the coordinator for atomic broadcast (for Indicus)");
+DEFINE_uint64(indicus_request_tx, false, "request tx"
+    " request tx (for Indicus)");
 const std::string occ_type_args[] = {
 	"tapir",
   "mvtso"
@@ -526,7 +528,7 @@ int main(int argc, char **argv) {
 			replica = new pbftstore::Replica(config, &keyManager,
 				dynamic_cast<pbftstore::App *>(server),
 				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, FLAGS_indicus_sig_batch_timeout,
-				FLAGS_indicus_sig_batch, FLAGS_indicus_use_coordinator, tport);
+				FLAGS_indicus_sig_batch, FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
 			break;
 		}
     default: {

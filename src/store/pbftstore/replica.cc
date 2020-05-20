@@ -29,10 +29,10 @@ using namespace std;
 
 Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
-  uint64_t batchTimeoutMS, bool primaryCoordinator, Transport *transport)
+  uint64_t batchTimeoutMS, bool primaryCoordinator, bool requestTx, Transport *transport)
     : config(config), keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
     id(groupIdx * config.n + idx), signMessages(signMessages), maxBatchSize(maxBatchSize),
-    batchTimeoutMS(batchTimeoutMS), primaryCoordinator(primaryCoordinator), transport(transport) {
+    batchTimeoutMS(batchTimeoutMS), primaryCoordinator(primaryCoordinator), requestTx(requestTx), transport(transport) {
   transport->Register(this, config, groupIdx, idx);
 
   // intial view
@@ -550,23 +550,27 @@ void Replica::executeSlots() {
         }
       } else {
         Debug("request from batch %lu not yet received", execSeqNum);
-        stats->Increment("req_txn",1);
-        proto::RequestRequest rr;
-        rr.set_digest(digest);
-        int primaryIdx = config.GetLeaderIndex(currentView);
-        if (primaryIdx == idx) {
-          stats->Increment("primary_req_txn",1);
+        if (requestTx) {
+          stats->Increment("req_txn",1);
+          proto::RequestRequest rr;
+          rr.set_digest(digest);
+          int primaryIdx = config.GetLeaderIndex(currentView);
+          if (primaryIdx == idx) {
+            stats->Increment("primary_req_txn",1);
+          }
+          transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
         }
-        transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
         break;
       }
     } else {
       Debug("Batch request not yet received");
-      stats->Increment("req_batch",1);
-      proto::RequestRequest rr;
-      rr.set_digest(batchDigest);
-      int primaryIdx = config.GetLeaderIndex(currentView);
-      transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+      if (requestTx) {
+        stats->Increment("req_batch",1);
+        proto::RequestRequest rr;
+        rr.set_digest(batchDigest);
+        int primaryIdx = config.GetLeaderIndex(currentView);
+        transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+      }
       break;
     }
   }
