@@ -74,7 +74,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
     ping.ParseFromString(data);
     HandlePingResponse(ping);
     //FALLBACK readMessages
-  } else if(FB info){
+  } else if(type == RelayP1){ //receive full TX info for a dependency
     // relay to client
   }
   else if(PHase1FB reply){
@@ -174,7 +174,9 @@ void ShardClient::Phase2(uint64_t id,
     phase2_timeout_callback ptcb, uint32_t timeout) {
   Debug("[group %i] Sending PHASE2 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
-  PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);
+  PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);  //TODO: add view that this decision is from (default = 0).
+  //TODO: When sending an InvokeFB message, this view = the view you propose ; but unclear what decision you are waiting for?
+  //Create many mappings for potential views/decisions instead.
   pendingPhase2s[reqId] = pendingPhase2;
   pendingPhase2->pcb = pcb;
   pendingPhase2->ptcb = ptcb;
@@ -413,6 +415,16 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   }
 }
 
+void ShardClient::HandlePhase1FBReply(const proto::Phase1FBReply &reply){
+  //TODO: 1) Check if WRITEBACK
+  //TODO: 2) Check if P2  --> call p2 Process messages
+  //TODO: 3) CCheck if P1 -> call HandlePhase1Reply
+  //TODO: 4) manage views.
+
+  //TODO: Create pendingPhase1 instances for fallback transaction instantiations.
+}
+
+
 void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
   auto itr = this->pendingPhase1s.find(reply.req_id());
   if (itr == this->pendingPhase1s.end()) {
@@ -587,6 +599,7 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
     *sig->mutable_signature()= reply.signed_p2_decision().signature();
   }
 
+//TODO: Edit this to check for matching view too.
   if (p2Decision->decision() == itr->second->decision) {
     itr->second->matchingReplies++;
   }

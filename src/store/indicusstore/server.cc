@@ -685,6 +685,7 @@ void Server::VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, 
   //check if there are p2 decisions.
    proto::GroupedP1FBreplies groupedReplies = p2fb.grp_p1_fb();
    //proto::P1FBreplies loggedReplies = groupedReplies.grouped_fbreplies()[logGroup];
+    //TRY THIS:  (*groupedReplies.mutable_grouped_fbreplies())[logGroup]
 
 //construct decision object. serialize it. compare.
    uint32_t counter = config.f + 1; //or config.QuorumSize()

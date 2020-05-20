@@ -88,6 +88,10 @@ message Phase1 {
   required Transaction txn = 2;
 }
 
+message RelayP1 {  //datatype that replicas send clients to inform them that they can start a FB etc.
+  required Phase1 p1 = 1;
+}
+
 
 // fallback Phase1
 message Phase1FB {
@@ -121,6 +125,10 @@ message GroupedP1FBreplies{
     map<uint64, P1FBreplies> grouped_fbreplies = 1;
 }
 
+message P2Replies {
+  repeated Phase2Reply p2replies = 1;
+}
+
 //TODO: Needs to include the p1 or p2 proofs necessary to write a p2.
 //fallback Phase2
 message Phase2FB {
@@ -129,7 +137,9 @@ message Phase2FB {
   optional Transaction txn = 3;
   optional bytes txn_digest = 4;
   optional GroupedP1FBreplies grp_p1_fb = 5;
-  //optional GroupedSignatures grouped_sigs = 5;
+  //TODO:: CHANGE TO THIS!!!!
+  //optional GroupedSignatures grouped_sigs = 5; //this is for p1 proof
+  //optional P2Replies p2_replies = 6; // this is for p2 proof
 }
 //fallback phase2R: Can be the same Phase2R as normal.
 
@@ -209,7 +219,8 @@ message Phase1Replies {
   repeated Phase1Reply replies = 1;
 }
 
-
+//TODO:: Could change so p1 version just does normal Phase2 (therefore can use same callbacks), but server checks if ID != ORIGINAL
+//TODO: Make P2FB only for p2 proofs, those do not need to be delayed anyways because they are already based on decisions from originial!!
 message Phase2 {
   required uint64 req_id = 1;
   required CommitDecision decision = 2;

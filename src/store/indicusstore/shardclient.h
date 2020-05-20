@@ -110,7 +110,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
       const proto::GroupedSignatures &p2Sigs);
 
   virtual void Abort(uint64_t id, const TimestampMessage &ts);
-  virtual bool SendPing(size_t replica, const PingMessage &ping); 
+  virtual bool SendPing(size_t replica, const PingMessage &ping);
  private:
   struct PendingQuorumGet {
     PendingQuorumGet(uint64_t reqId) : reqId(reqId),
@@ -166,6 +166,21 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     proto::CommittedProof conflict;
   };
 
+//Fallback request
+struct PendingPhase1FB {
+
+
+  PendingPhase1 pendingP1;  //TODO:: the callback needs to differ: It needs to propose a P2Rec message.
+  std::map<uint64_t, PendingPhase2 > pendingP2s;  //for each view: hold commit/abort votes.
+  std::map<proto::ConcurrencyControl::Result, proto::Phase2Replies> p2ReplySigs; //These must be from the same group, but can differ in view.
+
+  //TODO: add different callbacks
+  phase1_callback p1cb; //use this for Fast path?
+  phase1FB_callback p1fbcb; //
+  phase2_callback p2cb;
+
+};
+
   struct PendingPhase2 {
     PendingPhase2(uint64_t reqId, proto::CommitDecision decision) : reqId(reqId),
         decision(decision), requestTimeout(nullptr), matchingReplies(0UL) { }
@@ -176,6 +191,9 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     }
     uint64_t reqId;
     proto::CommitDecision decision;
+    //FALLBACK MEANS VIEW IS necessary
+    uint64_t decision_view;  //can omit this for all requests that came from view = 0 because signature matches.
+    //TODO: Need to add decision view checks eveywhere.
     Timeout *requestTimeout;
 
     proto::Signatures p2ReplySigs;
@@ -183,6 +201,9 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     phase2_callback pcb;
     phase2_timeout_callback ptcb;
   };
+
+
+
 
   struct PendingAbort {
     PendingAbort(uint64_t reqId) : reqId(reqId),
@@ -241,6 +262,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   std::unordered_map<uint64_t, PendingPhase2 *> pendingPhase2s;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
 
+  //keep additional maps for this from txnDigest ->Pending For Fallback instances?
+
   proto::Read read;
   proto::Phase1 phase1;
   proto::Phase2 phase2;
@@ -250,7 +273,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   proto::Phase1Reply phase1Reply;
   proto::Phase2Reply phase2Reply;
   PingMessage ping;
-  
+
   proto::Write validatedPrepared;
   proto::ConcurrencyControl validatedCC;
   proto::Phase2Decision validatedP2Decision;
