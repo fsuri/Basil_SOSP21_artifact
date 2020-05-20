@@ -218,6 +218,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   decision->set_shard_id(groupIdx);
   // OCC check
   if (CCC2(transaction)) {
+    stats.Increment("ccc_succeed",1);
     Debug("ccc succeeded");
     decision->set_status(REPLY_OK);
     pendingTransactions[digest] = transaction;
