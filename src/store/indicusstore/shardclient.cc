@@ -73,6 +73,16 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   } else if (type == ping.GetTypeName()) {
     ping.ParseFromString(data);
     HandlePingResponse(ping);
+    //FALLBACK readMessages
+  } else if(FB info){
+    // relay to client
+  }
+  else if(PHase1FB reply){
+    //wait for quorum and relay to client
+  }
+  else if(Phase2FB reply){
+    //wait for quorum and relay to client
+  }
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
@@ -292,7 +302,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
               reply.signed_write().data(), reply.signed_write().signature())) {
           return;
       }
-      
+
       if(!validatedPrepared.ParseFromString(reply.signed_write().data())) {
         return;
       }

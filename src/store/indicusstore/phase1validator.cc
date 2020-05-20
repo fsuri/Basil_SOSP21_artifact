@@ -14,7 +14,7 @@ Phase1Validator::Phase1Validator(int group, const proto::Transaction *txn,
 
 Phase1Validator::~Phase1Validator() {
 }
-
+//extend this function to account for p2 replies --> f+1 can serve as proof.
 bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
   if (params.validateProofs && cc.txn_digest() != *txnDigest) {
     Debug("[group %d] Phase1Reply digest %s does not match computed digest %s.",

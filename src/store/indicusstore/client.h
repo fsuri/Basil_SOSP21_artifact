@@ -133,10 +133,11 @@ class Client : public ::Client {
   void Phase2TimeoutCallback(int group, uint64_t reqId, int status);
 
   // Fallback logic
-  
-  //void Receive Full Dep or Receive Full Conflict. (this should be received as answer from a replica instead of P1R if tx is stalled on a dependency. Alternatively, this is the conflicting TX)
-  //void Phase1_Rec   P1 do not need to be signed. Send p1 rec request to every replica in every involved shard.
 
+  //void Receive Full Dep or Receive Full Conflict. (this should be received as answer from a replica instead of P1R if tx is stalled on a dependency. Alternatively, this is the conflicting TX)
+  void Phase1_Rec(proto::Phase1 &phase1);   //P1 do not need to be signed. Send p1 rec request to every replica in every involved shard.
+  void Phase2_Rec();
+  void InvokeFB();
   //void Phase1_Rec_Callback: Wait for either: Fast Path or Slow Path of p1r quorums. OR: if received p2r replies: Use those if f+1 received, or start election if inconsistent received.  P1_recR := (p1R, optional: p2R)_R.
   //We need to extend p2R messages to include views  (can interpret no view = v0 if that makes it easiest to not change current code).      Replicas must keep track of curr_view per TX as well.
 
@@ -153,6 +154,7 @@ class Client : public ::Client {
 
   //void ReceiveNewView.  (Only necessary if doing the client driven view change. This happens if replicas tried to elect a FB, but timed out on a response because the FB is byz or crashed or whatever) Receive 3f+1 matching from higher view than last and start new Invocation
   //void FBWriteback: Should just be the normal writeback
+  std::unordered_map<std::string, proto::Phase1> FB_phase1;
 
   void Writeback(PendingRequest *req);
 

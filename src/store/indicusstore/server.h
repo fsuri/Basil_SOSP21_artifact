@@ -96,7 +96,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 //Fallback protocol components
 // Edit MVTSO-check: When we suspend a transaction waiting for a dependency, then after some timeout, we should send the full TX to the client (IF we have it - 1 correct replica is guaranteed to have it.)
 // void HandleP1_Rec -> exec p1 if unreceived, reply with p1r, or p2r + dec_view  (Need to modify normal P2R message to contain view=0), current view
-void HandlePhase1FB(const TransportAddress &remote,proto::Phase1FB &msg);
+void HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg);
 // void HandleP2_Rec -> Reply with p2 decision
 // void HandleFB_Invoke -> send Elect message to FB based on views received. OR: Send all to all to other replicas (can use MACs to all replicas BESIDES the To-be-fallback) for next replica to elect.
 // void HandleFB_Dec -> receive FB decision, verify whether majority was indeed confirmed and sends signed P2R to all interested clients (this must include the view from the decision)
@@ -198,6 +198,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::vector<int> dummyTxnGroups;
 
   proto::Phase1FB phase1FB;
+  proto::Phase1FBReply phase1FBReply;
   proto::Phase2FB phase2FB;
   proto::InvokeFB invokeFB;
   proto::ElectFB electFB;
@@ -207,10 +208,12 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   PingMessage ping;
 
 //FALLBACK helper functions
+//TODO: make strings call by ref.
   void SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Result &result, proto::CommittedProof &conflict);
   void SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision &decision);
-  void SendPhase1FBReply(uint64_t reqId, proto::phase1Reply &p1r, proto::phase2Reply &p2r, proto::Writeback &wb, const TransportAddress &remote, uint32_t response_case );
-  void VerifyP2FB(const TransportAddress &remote, std::string txnDigest, proto::Phase2FB &p2fb);
+  void SendPhase1FBReply(uint64_t reqId, proto::Phase1Reply &p1r, proto::Phase2Reply &p2r, proto::Writeback &wb, const TransportAddress &remote,  std::string txnDigest, uint32_t response_case );
+
+  void VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, proto::Phase2FB &p2fb);
   bool VerifyViews(proto::InvokeFB &msg, uint32_t lG);
 
   VersionedKVStore<Timestamp, Value> store;
@@ -248,7 +251,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   //keep list of the views in which the p2Decision is from: //TODO: add this to p2Decisions directly - doing this here so I do not touch any existing code.
   std::unordered_map<std::string, uint64_t> decision_views;
 
-  std::unordered_map<std::string, std::unordered_set<proto::SignedMessage*>> ElectQuorum;  //tuple contains view entry, set for that view and count of Commit vs Abort.
+  std::unordered_map<std::string, std::unordered_set<const proto::SignedMessage*>> ElectQuorum;  //tuple contains view entry, set for that view and count of Commit vs Abort.
   std::unordered_map<std::string, std::pair<uint64_t, uint64_t>> ElectQuorum_meta;
 
   std::unordered_map<std::string, proto::Writeback> writebackMessages;
