@@ -183,7 +183,15 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
         uint32_t timeout = pp->timeout;
         proto::Transaction txn = pp->txn;
         pendingPrepares.erase(digest);
-        this->WriteBackSigned(dec, txn, ccb, ctcb, timeout);
+        ccb(COMMITTED);
+        this->WriteBackSigned(dec, txn, [](transaction_status_t tx_stat) {
+          if (tx_stat != COMMITTED) {
+            Panic("Writeback confirmation failed");
+          }
+          Debug("Got confirmation of writeback");
+        }, []() {
+          Debug("writeback confirmation timed out");
+        }, timeout);
       }
     }
   }
@@ -219,7 +227,15 @@ void Client::HandlePrepareReply(std::string digest, uint64_t shard_id, int statu
         uint32_t timeout = pp->timeout;
         proto::Transaction txn = pp->txn;
         pendingPrepares.erase(digest);
-        this->WriteBack(dec, txn, ccb, ctcb, timeout);
+        ccb(COMMITTED);
+        this->WriteBack(dec, txn, [](transaction_status_t tx_stat) {
+          if (tx_stat != COMMITTED) {
+            Panic("Writeback confirmation failed");
+          }
+          Debug("Got confirmation of writeback");
+        }, []() {
+          Debug("writeback confirmation timed out");
+        }, timeout);
       }
     }
   }
