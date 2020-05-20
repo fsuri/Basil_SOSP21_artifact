@@ -83,6 +83,7 @@ private:
   void cleanupPendingTx(std::string digest);
 
   std::unordered_map<std::string, proto::GroupedDecision> bufferedGDecs;
+  std::unordered_set<std::string> abortedTxs;
 
   // return true if this key is owned by this shard
   inline bool IsKeyOwned(const std::string &key) const {

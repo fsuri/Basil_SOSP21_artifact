@@ -236,13 +236,22 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
       }
       preparedReads[read.key()][txTs] = read.readtime();
     }
-    
+
     // check for buffered gdecision
     if (bufferedGDecs.find(digest) != bufferedGDecs.end()) {
       stats.Increment("used_buffered_gdec",1);
       Debug("found buffered gdecision");
       results.push_back(HandleGroupedDecision(bufferedGDecs[digest]));
       bufferedGDecs.erase(digest);
+    }
+
+    if (abortedTxs.find(digest) != abortedTxs.end()) {
+      stats.Increment("gdec_failed",1);
+      // abort the tx
+      cleanupPendingTx(digest);
+      proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
+      groupedDecisionAck->set_status(REPLY_FAIL);
+      results.push_back(returnMessage(groupedDecisionAck));
     }
   } else {
     Debug("ccc failed");
@@ -372,6 +381,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     stats.Increment("gdec_failed",1);
     // abort the tx
     cleanupPendingTx(digest);
+    abortedTxs.insert(digest);
     groupedDecisionAck->set_status(REPLY_FAIL);
   }
   Debug("decision ack status: %d", groupedDecisionAck->status());
