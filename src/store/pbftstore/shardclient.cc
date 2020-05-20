@@ -581,6 +581,7 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
 
 void ShardClient::Abort(std::string txn_digest) {
   Debug("Handling client abort");
+  // TODO should techincally include a proof
   if (pendingWritebacks.find(txn_digest) == pendingWritebacks.end()) {
     proto::GroupedDecision groupedDecision;
     groupedDecision.set_status(REPLY_FAIL);
@@ -588,9 +589,14 @@ void ShardClient::Abort(std::string txn_digest) {
     proto::ShardDecisions sd;
     *groupedDecision.mutable_decisions() = sd;
 
+    proto::Request request;
+    request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
+    request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
+    request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+
     stats->Increment("shard_abort", 1);
-    Debug("Sending abort to all replicas in shard");
-    transport->SendMessageToGroup(this, group_idx, groupedDecision);
+    Debug("AB abort to all replicas in shard");
+    transport->SendMessageToGroup(this, group_idx, request);
   } else {
     Debug("abort called on already aborted tx");
   }

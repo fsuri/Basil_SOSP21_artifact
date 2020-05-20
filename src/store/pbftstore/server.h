@@ -60,7 +60,9 @@ private:
 
   ::google::protobuf::Message* HandleRead(const proto::Read& read);
 
-  ::google::protobuf::Message* HandleGroupedDecision(const proto::GroupedDecision& gdecision);
+  ::google::protobuf::Message* HandleGroupedCommitDecision(const proto::GroupedDecision& gdecision);
+
+  ::google::protobuf::Message* HandleGroupedAbortDecision(const proto::GroupedDecision& gdecision);
 
   ::google::protobuf::Message* returnMessage(::google::protobuf::Message* msg);
 
