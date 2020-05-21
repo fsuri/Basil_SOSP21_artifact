@@ -61,6 +61,18 @@ public:
   int currentView;
   int nextSeqNum;
 
+  // members to reduce alloc
+  proto::SignedMessage tmpsignedMessage;
+  proto::Request recvrequest;
+  proto::Preprepare recvpreprepare;
+  proto::Prepare recvprepare;
+  proto::Commit recvcommit;
+  proto::BatchedRequest recvbatchedRequest;
+  proto::GroupedSignedMessage recvgrouped;
+  proto::RequestRequest recvrr;
+  proto::ABRequest recvab;
+
+
   Slots slots;
 
   bool batchTimerRunning;

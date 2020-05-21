@@ -54,62 +54,52 @@ Replica::~Replica() {}
 
 void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
                           const string &d, void *meta_data) {
-  proto::SignedMessage signedMessage;
   string type;
   string data;
   bool recvSignedMessage = false;
 
   Debug("Received message of type %s", t.c_str());
 
-  if (t == signedMessage.GetTypeName()) {
-    if (!signedMessage.ParseFromString(d)) {
+  if (t == tmpsignedMessage.GetTypeName()) {
+    if (!tmpsignedMessage.ParseFromString(d)) {
       return;
     }
 
-    if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
+    if (!ValidateSignedMessage(tmpsignedMessage, keyManager, data, type)) {
       Debug("Message is invalid!");
       stats->Increment("invalid_sig",1);
       return;
     }
     recvSignedMessage = true;
     Debug("Message is valid!");
-    Debug("Message is from %lu", signedMessage.replica_id());
+    Debug("Message is from %lu", tmpsignedMessage.replica_id());
   } else {
     type = t;
     data = d;
   }
 
-  proto::Request request;
-  proto::Preprepare preprepare;
-  proto::Prepare prepare;
-  proto::Commit commit;
-  proto::BatchedRequest batchedRequest;
-  proto::GroupedSignedMessage grouped;
-  proto::RequestRequest rr;
-  proto::ABRequest ab;
-
-  if (type == request.GetTypeName()) {
-    request.ParseFromString(data);
-    HandleRequest(remote, request);
-  } else if (type == batchedRequest.GetTypeName()) {
-    batchedRequest.ParseFromString(data);
-    HandleBatchedRequest(remote, batchedRequest);
-  } else if (type == ab.GetTypeName()) {
-    ab.ParseFromString(data);
-    if (slots.getSlotDigest(ab.seqnum(), ab.viewnum()) == ab.digest()) {
+  if (type == recvrequest.GetTypeName()) {
+    recvrequest.ParseFromString(data);
+    HandleRequest(remote, recvrequest);
+  } else if (type == recvbatchedRequest.GetTypeName()) {
+    recvbatchedRequest.ParseFromString(data);
+    HandleBatchedRequest(remote, recvbatchedRequest);
+  } else if (type == recvab.GetTypeName()) {
+    recvab.ParseFromString(data);
+    if (slots.getSlotDigest(recvab.seqnum(), recvab.viewnum()) == recvab.digest()) {
       stats->Increment("valid_ab", 1);
 
       proto::Preprepare preprepare;
-      preprepare.set_seqnum(ab.seqnum());
-      preprepare.set_viewnum(ab.viewnum());
-      preprepare.set_digest(ab.digest());
+      preprepare.set_seqnum(recvab.seqnum());
+      preprepare.set_viewnum(recvab.viewnum());
+      preprepare.set_digest(recvab.digest());
       sendMessageToAll(preprepare);
     } else {
       stats->Increment("invalid_ab", 1);
     }
-  } else if (type == rr.GetTypeName()) {
-    rr.ParseFromString(data);
-    std::string digest = rr.digest();
+  } else if (type == recvrr.GetTypeName()) {
+    recvrr.ParseFromString(data);
+    std::string digest = recvrr.digest();
     if (requests.find(digest) != requests.end()) {
       Debug("Resending request");
       stats->Increment("request_rr",1);
@@ -125,34 +115,34 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
       DebugHash(digest);
       transport->SendMessage(this, remote, batchedRequests[digest]);
     }
-  } else if (type == preprepare.GetTypeName()) {
+  } else if (type == recvpreprepare.GetTypeName()) {
     if (signMessages && !recvSignedMessage) {
       stats->Increment("invalid_sig_pp",1);
       return;
     }
 
-    preprepare.ParseFromString(data);
-    HandlePreprepare(remote, preprepare, signedMessage);
-  } else if (type == prepare.GetTypeName()) {
-    prepare.ParseFromString(data);
+    recvpreprepare.ParseFromString(data);
+    HandlePreprepare(remote, recvpreprepare, tmpsignedMessage);
+  } else if (type == recvprepare.GetTypeName()) {
+    recvprepare.ParseFromString(data);
     if (signMessages && !recvSignedMessage) {
       stats->Increment("invalid_sig_p",1);
       return;
     }
 
-    HandlePrepare(remote, prepare, signedMessage);
-  } else if (type == commit.GetTypeName()) {
-    commit.ParseFromString(data);
+    HandlePrepare(remote, recvprepare, tmpsignedMessage);
+  } else if (type == recvcommit.GetTypeName()) {
+    recvcommit.ParseFromString(data);
     if (signMessages && !recvSignedMessage) {
       stats->Increment("invalid_sig_c",1);
       return;
     }
 
-    HandleCommit(remote, commit, signedMessage);
-  } else if (type == grouped.GetTypeName()) {
-    grouped.ParseFromString(data);
+    HandleCommit(remote, recvcommit, tmpsignedMessage);
+  } else if (type == recvgrouped.GetTypeName()) {
+    recvgrouped.ParseFromString(data);
 
-    HandleGrouped(remote, grouped);
+    HandleGrouped(remote, recvgrouped);
   } else {
     Debug("Sending request to app");
     ::google::protobuf::Message* reply = app->HandleMessage(type, data);

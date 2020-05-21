@@ -475,13 +475,13 @@ void ShardClient::SignedPrepare(const proto::Transaction& txn, signed_prepare_ca
     psp.timeout = new Timeout(transport, timeout, [this, digest, ptcb]() {
       Debug("Prepare signed timeout called (but nothing was done)");
       stats->Increment("ps_tout", 1);
-      fprintf(stderr,"p_tout recv %d\n", group_idx);
+      fprintf(stderr,"ps_tout recv %d\n", group_idx);
       fprintf(stderr,"ack\n");
-      for (const auto& recv : this->pendingPrepares[digest].receivedOkIds) {
+      for (const auto& recv : this->pendingSignedPrepares[digest].receivedValidSigs) {
         fprintf(stderr,"%lu\n", recv);
       }
       fprintf(stderr,"nak:\n");
-      for (const auto& recv : this->pendingPrepares[digest].receivedFailedIds) {
+      for (const auto& recv : this->pendingSignedPrepares[digest].receivedFailedIds) {
         fprintf(stderr,"%lu\n", recv);
       }
       // this->pendingSignedPrepares.erase(digest);
