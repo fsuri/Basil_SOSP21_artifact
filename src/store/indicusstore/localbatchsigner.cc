@@ -53,7 +53,13 @@ void LocalBatchSigner::MessageToSign(::google::protobuf::Message* msg,
   }
 }
 void LocalBatchSigner::SignBatch() {
-  stats.IncrementList("sig_batch", pendingBatchMessages.size());
+  uint64_t batchSize = pendingBatchMessages.size();
+  stats.IncrementList("sig_batch", batchSize);
+  stats.Add("sig_batch_sizes", batchSize);
+  struct timeval curr;
+  gettimeofday(&curr, NULL);
+  uint64_t currMicros = curr.tv_sec * 1000000ULL + curr.tv_usec;
+  stats.Add("sig_batch_sizes_ts",  currMicros);
   SignMessages(pendingBatchMessages, keyManager->GetPrivateKey(id), id,
     pendingBatchSignedMessages);
   pendingBatchMessages.clear();

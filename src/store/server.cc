@@ -229,6 +229,8 @@ DEFINE_uint64(indicus_time_delta, 2000, "max clock skew allowed for concurrency"
     " control (for Indicus)");
 DEFINE_bool(indicus_shared_mem_batch, false, "use shared memory batches for"
     " signing messages (for Indicus)");
+DEFINE_bool(indicus_shared_mem_verify, false, "use shared memory for"
+    " verifying messages (for Indicus)");
 DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
     " necessary to prevent impersonation (for Indicus)");
 DEFINE_bool(indicus_validate_proofs, false, "send and validate proofs as"
@@ -519,7 +521,7 @@ int main(int argc, char **argv) {
 				FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
         FLAGS_indicus_max_dep_depth, readDepSize,
         FLAGS_indicus_read_reply_batch, FLAGS_indicus_adjust_batch_size,
-        FLAGS_indicus_shared_mem_batch);
+        FLAGS_indicus_shared_mem_batch, FLAGS_indicus_shared_mem_verify);
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
           tport, &keyManager, params, timeDelta, indicusOCCType, part, FLAGS_indicus_sig_batch_timeout);

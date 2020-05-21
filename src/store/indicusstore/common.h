@@ -134,15 +134,17 @@ typedef struct Parameters {
   const bool readReplyBatch;
   const bool adjustBatchSize;
   const bool sharedMemBatches;
+  const bool sharedMemVerify;
 
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     int signatureBatchSize, int64_t maxDepDepth, uint64_t readDepSize,
-    bool readReplyBatch, bool adjustBatchSize, bool sharedMemBatches) :
+    bool readReplyBatch, bool adjustBatchSize, bool sharedMemBatches,
+    bool sharedMemVerify) :
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
     maxDepDepth(maxDepDepth), readDepSize(readDepSize),
     readReplyBatch(readReplyBatch), adjustBatchSize(adjustBatchSize),
-    sharedMemBatches(sharedMemBatches) { }
+    sharedMemBatches(sharedMemBatches), sharedMemVerify(sharedMemVerify) { }
 } Parameters;
 
 } // namespace indicusstore

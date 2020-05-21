@@ -71,12 +71,16 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
           batchTimeoutMicro, params.signatureBatchSize, id,
           params.validateProofs && params.signedMessages &&
           params.signatureBatchSize > 1 && params.adjustBatchSize);
-      verifier = new SharedBatchVerifier(stats);
     } else {
       batchSigner = new LocalBatchSigner(transport, keyManager, GetStats(),
           batchTimeoutMicro, params.signatureBatchSize, id,
           params.validateProofs && params.signedMessages &&
           params.signatureBatchSize > 1 && params.adjustBatchSize);
+    }
+
+    if (params.sharedMemVerify) {
+      verifier = new SharedBatchVerifier(stats);
+    } else {
       verifier = new LocalBatchVerifier(stats);
     }
   }

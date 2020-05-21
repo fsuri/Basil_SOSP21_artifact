@@ -42,9 +42,13 @@ class SharedBatchSigner : public BatchSigner {
   void BatchTimeout();
   void SignBatch();
 
+  void StopTimeout();
+  void StartTimeout();
+
   void RunSignedCallbackConsumer();
 
   uint64_t batchSize;
+  std::mutex batchTimerMtx;
   int batchTimerId;
 
   std::mutex pendingBatchMtx;

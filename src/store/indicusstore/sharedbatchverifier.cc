@@ -40,7 +40,8 @@ bool SharedBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &m
     std::string rootSig(rootSigShared.begin(), rootSigShared.end());
     if (crypto::Verify(publicKey, hashStr, rootSig)) {
       cacheMtx->lock();
-      cache->insert(std::make_pair(boost::move(rootSigShared), boost::move(hashStrShared)));
+      cache->insert(std::make_pair(boost::move(rootSigShared),
+            boost::move(hashStrShared)));
       cacheMtx->unlock();
       return true;
     } else {

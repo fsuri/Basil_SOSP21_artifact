@@ -3,6 +3,7 @@
 #include "lib/message.h"
 #include "lib/batched_sigs.h"
 #include "store/indicusstore/common.h"
+#include <mutex>
 
 namespace indicusstore {
 
@@ -67,20 +68,13 @@ void SharedBatchSigner::MessageToSign(::google::protobuf::Message* msg,
           signedMessage->data().size(), id, workId));
     if (sharedWorkQueue->size() >= batchSize) {
       Debug("Batch is full, sending");
-      if (batchTimerId > 0) {
-        transport->CancelTimer(batchTimerId);
-        batchTimerId = 0;
-      }
+      StopTimeout();
 
       SignBatch(); 
       return;
     } else {
       sharedWorkQueueMtx->unlock();
-      if (batchTimerId == 0) {
-        Debug("Starting batch timeout.");
-        batchTimerId = transport->TimerMicro(batchTimeoutMicro,
-            std::bind(&SharedBatchSigner::BatchTimeout, this));
-      }
+      StartTimeout();
     }
   }
 }
@@ -128,12 +122,12 @@ void SharedBatchSigner::SignBatch() {
 
   sharedWorkQueueMtx->unlock();
   stats.IncrementList("sig_batch", batchSize);
-  /*
+  
   stats.Add("sig_batch_sizes", batchSize);
   struct timeval curr;
   gettimeofday(&curr, NULL);
   uint64_t currMicros = curr.tv_sec * 1000000ULL + curr.tv_usec;
-  stats.Add("sig_batch_sizes_ts",  currMicros);*/
+  stats.Add("sig_batch_sizes_ts",  currMicros);
 
   BatchedSigs::generateBatchedSignatures(batchMessages, privKey, batchSignatures);
 
@@ -151,6 +145,21 @@ void SharedBatchSigner::SignBatch() {
     scoped_lock<named_mutex> lock(*GetCompletionQueueMutex(pid));
     Debug("Notfying %lu of completed signatures.", pid);
     GetCompletionQueueCondition(pid)->notify_one();
+  }
+}
+
+void SharedBatchSigner::StopTimeout() {
+  if (batchTimerId > 0) {
+    transport->CancelTimer(batchTimerId);
+    batchTimerId = 0;
+  }
+}
+
+void SharedBatchSigner::StartTimeout() {
+  if (batchTimerId == 0) {
+    Debug("Starting batch timeout.");
+    batchTimerId = transport->TimerMicro(batchTimeoutMicro,
+        std::bind(&SharedBatchSigner::BatchTimeout, this));
   }
 }
 
