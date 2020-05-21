@@ -70,8 +70,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
       batchSigner = new SharedBatchSigner(transport, keyManager, GetStats(),
           batchTimeoutMicro, params.signatureBatchSize, id,
           params.validateProofs && params.signedMessages &&
-          params.signatureBatchSize > 1 && params.adjustBatchSize,
-          config.IsLowestGroupOnHost(groupIdx, idx) ? 1 : 0);
+          params.signatureBatchSize > 1 && params.adjustBatchSize);
     } else {
       batchSigner = new LocalBatchSigner(transport, keyManager, GetStats(),
           batchTimeoutMicro, params.signatureBatchSize, id,

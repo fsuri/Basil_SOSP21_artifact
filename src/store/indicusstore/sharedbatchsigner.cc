@@ -9,26 +9,19 @@ namespace indicusstore {
 
 SharedBatchSigner::SharedBatchSigner(Transport *transport,
     KeyManager *keyManager, Stats &stats, uint64_t batchTimeoutMicro,
-    uint64_t batchSize, uint64_t id, bool adjustBatchSize,
-    int designatedTimeout) : BatchSigner(
+    uint64_t batchSize, uint64_t id, bool adjustBatchSize) : BatchSigner(
       transport, keyManager, stats, batchTimeoutMicro, batchSize, id,
       adjustBatchSize), batchSize(batchSize), batchTimerId(0), nextPendingBatchId(0UL),
-      alive(false), designatedTimeout(designatedTimeout) {
+      alive(false), currentBatchId(0) {
   segment = new managed_shared_memory(open_or_create, "MySharedMemory", 33554432);//67108864); // 64 MB
   alloc_inst = new void_allocator(segment->get_segment_manager());
+  sharedBatchId = segment->find_or_construct<int>("shared_batch_id")(0);
   sharedWorkQueueMtx = new named_mutex(open_or_create, "shared_work_queue_mtx");
-  sharedWorkQueueCond = new named_condition(open_or_create, "shared_work_queue_cond");
   sharedWorkQueue = segment->find_or_construct<SignatureWorkQueue>("shared_work_queue")(*alloc_inst);
 
   alive = true;
   signedCallbackThread = new std::thread(
       &SharedBatchSigner::RunSignedCallbackConsumer, this);
-  // -1 if not using designated timeout, 0 if using designated timeout and not
-  //    the designee, 1 if using designated timeout and the designee
-  if (designatedTimeout == 1) {
-    signTimeoutThread= new std::thread(
-        &SharedBatchSigner::RunSignTimeoutChecker, this);
-  }
 }
 
 SharedBatchSigner::~SharedBatchSigner() {
@@ -37,11 +30,6 @@ SharedBatchSigner::~SharedBatchSigner() {
   cqc->notify_one();
   signedCallbackThread->join();
   delete signedCallbackThread;
-  if (designatedTimeout == 1) {
-    sharedWorkQueueCond->notify_one();
-    signTimeoutThread->join();
-    delete signTimeoutThread;
-  }
   for (const auto &mtx : completionQueueMtx) {
     delete mtx.second;
   }
@@ -51,7 +39,7 @@ SharedBatchSigner::~SharedBatchSigner() {
   for (const auto &queue : completionQueues) {
     delete queue.second;
   }
-  delete sharedWorkQueueCond;
+  delete sharedBatchId;
   delete sharedWorkQueueMtx;
   delete sharedWorkQueue;
   delete segment;
@@ -80,36 +68,44 @@ void SharedBatchSigner::MessageToSign(::google::protobuf::Message* msg,
 
     sharedWorkQueue->push_back(SignatureWork(*alloc_inst, &signedMessage->data()[0],
           signedMessage->data().size(), id, workId));
-    sharedWorkQueueCond->notify_one();
+    if (sharedWorkQueue->size() == 1) {
+      Debug("First element in new batch, incrementing counter.");
+      *sharedBatchId = *sharedBatchId + 1;
+    }
+
+    if (*sharedBatchId != currentBatchId) {
+      currentBatchId = *sharedBatchId;
+      StopTimeout();
+    }
+
+    Debug("Current batch id is %d.", currentBatchId);
+
     if (sharedWorkQueue->size() >= batchSize) {
       Debug("Batch is full, sending");
-      if (designatedTimeout == -1 || designatedTimeout == 1) {
-        StopTimeout();
-      }
+      StopTimeout();
 
       SignBatch(); 
       return;
     } else {
+      Debug("Batch has %lu items.", sharedWorkQueue->size());
       sharedWorkQueueMtx->unlock();
-      if (designatedTimeout == -1 || designatedTimeout == 1) {
-        StartTimeout();
-      }
+      StartTimeout();
     }
   }
 }
 
 void SharedBatchSigner::BatchTimeout() {
   batchTimerId = 0;
-  pendingBatchMtx.lock();
-  if (designatedTimeout == -1 && pendingBatch.size() == 0) {
-    pendingBatchMtx.unlock();
-    Debug("Not signing batch because have no outstanding messages.");
-    return;
-  }
-  pendingBatchMtx.unlock();
 
   sharedWorkQueueMtx->lock();
   Debug("Batch timer expired with %lu items.", this->sharedWorkQueue->size());
+  if (*sharedBatchId != currentBatchId) {
+    Debug("Batch that we were waiting for %d already finished (%d).", currentBatchId,
+        *sharedBatchId);
+    sharedWorkQueueMtx->unlock();
+    return;
+
+  }
 
   if (sharedWorkQueue->size() > 0) {
     this->SignBatch();

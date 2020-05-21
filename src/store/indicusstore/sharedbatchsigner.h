@@ -31,7 +31,7 @@ class SharedBatchSigner : public BatchSigner {
  public:
   SharedBatchSigner(Transport *transport, KeyManager *keyManager, Stats &stats,
       uint64_t batchTimeoutMicro, uint64_t batchSize, uint64_t id,
-      bool adjustBatchSize, int designatedTimeout);
+      bool adjustBatchSize);
   virtual ~SharedBatchSigner();
 
   virtual void MessageToSign(::google::protobuf::Message* msg,
@@ -69,8 +69,6 @@ class SharedBatchSigner : public BatchSigner {
 
   bool alive;
   std::thread *signedCallbackThread;
-  int designatedTimeout;
-  std::thread *signTimeoutThread;
 
   typedef allocator<void, managed_shared_memory::segment_manager> void_allocator;
   typedef allocator<char, managed_shared_memory::segment_manager> CharAllocator;
@@ -91,6 +89,8 @@ class SharedBatchSigner : public BatchSigner {
   managed_shared_memory *segment;
   const void_allocator *alloc_inst;
 
+  int currentBatchId;
+  int *sharedBatchId;
   named_mutex *sharedWorkQueueMtx;
   named_condition *sharedWorkQueueCond;
   SignatureWorkQueue *sharedWorkQueue;
