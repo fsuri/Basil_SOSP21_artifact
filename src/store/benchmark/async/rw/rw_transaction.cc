@@ -20,10 +20,10 @@ RWTransaction::~RWTransaction() {
 
 Operation RWTransaction::GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
     std::map<std::string, std::string> readValues) {
-  if (finishedOpCount < GetNumOps()) {
-    if (finishedOpCount % 2 == 0) {
+  if (outstandingOpCount < GetNumOps()) {
+    if (outstandingOpCount % 2 == 0) {
       return Get(GetKey(finishedOpCount));
-    } else {
+    } else if (finishedOpCount == outstandingOpCount) {
       auto strValueItr = readValues.find(GetKey(finishedOpCount));
       UW_ASSERT(strValueItr != readValues.end());
       std::string strValue = strValueItr->second;
@@ -41,6 +41,8 @@ Operation RWTransaction::GetNextOperation(size_t outstandingOpCount, size_t fini
         }
       }
       return Put(GetKey(finishedOpCount), writeValue);
+    } else {
+      return Wait();
     }
   } else if (finishedOpCount == GetNumOps()) {
     return Commit();
