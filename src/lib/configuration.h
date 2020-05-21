@@ -39,6 +39,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 
 using std::string;
 
@@ -80,6 +81,7 @@ public:
         return !(*this == other);
     }
     int replicaHost(int group, int idx) const;
+    bool IsLowestGroupOnHost(int group, int idx) const;
 
 public:
     int g;                      // number of groups
@@ -89,6 +91,7 @@ private:
     std::map<int, std::vector<ReplicaAddress> > replicas;
     std::map<int, std::map<int, int>> replicaHosts;
     std::map<int, std::map<std::string, int>> hosts;
+    std::map<std::string, std::set<int>> hostToGroups;
     ReplicaAddress *multicastAddress;
     bool hasMulticast;
     ReplicaAddress *fcAddress;

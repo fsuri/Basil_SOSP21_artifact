@@ -98,6 +98,7 @@ Configuration::Configuration(int g, int n, int f,
         if (hosts[r.first].find(r.second[idx].host) == hosts[r.first].end()) {
           hosts[r.first][r.second[idx].host] = hosts[r.first].size();
           replicaHosts[r.first][idx] = hosts[r.first][r.second[idx].host];
+          hostToGroups[r.second[idx].host].insert(r.first);
         }
       }
     }
@@ -295,6 +296,12 @@ int Configuration::replicaHost(int group, int idx) const {
     }
   }
   return -1;
+}
+
+bool Configuration::IsLowestGroupOnHost(int group, int idx) const {
+  auto itr = hostToGroups.find(replica(group, idx).host);
+  UW_ASSERT(itr != hostToGroups.end());
+  return *itr->second.begin() == group;
 }
 
 bool
