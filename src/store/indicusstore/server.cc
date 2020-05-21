@@ -282,7 +282,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 }
 
-
+//TODO: all requestID entries can be deleted..
 void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg) {
 
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
@@ -440,6 +440,7 @@ void Server::SendPhase1FBReply(uint64_t reqId,
 
     phase1FBReply.Clear();
     phase1FBReply.set_req_id(reqId);
+    phase1FBReply.set_txn_digest(txnDigest);
 
     switch(response_case){
       //commit or abort done --> writeback
@@ -471,9 +472,9 @@ void Server::SendPhase1FBReply(uint64_t reqId,
     //*phase1FBReply.mutable_current_view() = *curr_view;
     //phase1FBReply.mutable_current_view(curr_view));
     phase1FBReply.mutable_current_view()->set_current_view(current_views[txnDigest]);
+    phase1FBReply.mutable_current_view()->set_replica_id(idx);
 
 //SIGN IT:  //TODO: Want to add this to p2 also, in case fallback is faulty - for simplicity assume only correct fallbacks for now.
-    if (params.validateProofs) {
       *phase1FBReply.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
 
       if (params.signedMessages) {
@@ -482,7 +483,7 @@ void Server::SendPhase1FBReply(uint64_t reqId,
         SignMessage(cView, keyManager->GetPrivateKey(id), id, phase1FBReply.mutable_signed_current_view());
         //Latency_End(&signLat);
       }
-    }
+
 
     transport->SendMessage(this, remote, phase1FBReply);
 }
@@ -766,7 +767,25 @@ void Server::VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, 
     if(p2Decisions.find(txnDigest) == p2Decisions.end()) return; //Still no decision. Failure.
     // form p2r and send it
     SetP2(p2fb.req_id(), txnDigest, p2Decisions[txnDigest]);
-    transport->SendMessage(this, remote, phase2Reply);
+    phase2FBReply.Clear();
+    phase2FBReply.set_txn_digest(txnDigest);
+    *phase2FBReply.mutable_p2r() = phase2Reply;
+    phase2FBReply.mutable_current_view()->set_current_view(current_views[txnDigest]);
+    phase1FBReply.mutable_current_view()->set_replica_id(idx);
+
+//TODO: can remove this for simplicity if assuming only correct fallbacks.
+
+    *phase2FBReply.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
+
+      if (params.signedMessages) {
+        proto::CurrentView cView(phase2FBReply.current_view());
+        //Latency_Start(&signLat);
+        SignMessage(cView, keyManager->GetPrivateKey(id), id, phase2FBReply.mutable_signed_current_view());
+        //Latency_End(&signLat);
+      }
+
+
+    transport->SendMessage(this, remote, phase2FBReply);
     Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
 
 }
@@ -1024,9 +1043,26 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
       decision_views[txnDigest] = msg.view();
       p2Decisions[txnDigest] = msg.dec();
     }
-    SetP2(msg.req_id(), txnDigest, p2Decisions[txnDigest]);
+    SetP2(msg.req_id(), txnDigest, p2Decisions[txnDigest]);  //TODO: problematic that client cannot distinguish? Wrap it inside a P2FBreply?
+    phase2FBReply.Clear();
+    phase2FBReply.set_txn_digest(txnDigest);
+    *phase2FBReply.mutable_p2r() = phase2Reply;
+    phase2FBReply.mutable_current_view()->set_current_view(current_views[txnDigest]);
+
+    //TODO: can remove this for simplicity if assuming only correct fallbacks.
+    if (params.validateProofs) {
+      *phase2FBReply.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
+
+      if (params.signedMessages) {
+        proto::CurrentView cView(phase2FBReply.current_view());
+        //Latency_Start(&signLat);
+        SignMessage(cView, keyManager->GetPrivateKey(id), id, phase2FBReply.mutable_signed_current_view());
+        //Latency_End(&signLat);
+      }
+    }
+
     for(const TransportAddress * target :   interestedClients[txnDigest] ){
-      transport->SendMessage(this, *target, phase2Reply);
+      transport->SendMessage(this, *target, phase2FBReply);
     }
 
   //TODO: 2) Send Phase2Reply message to all interested clients (check list interestedClients for all remote addresses)

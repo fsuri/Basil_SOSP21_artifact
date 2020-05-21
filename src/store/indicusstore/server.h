@@ -197,13 +197,16 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   proto::AbortInternal abortInternal;
   std::vector<int> dummyTxnGroups;
 
+  proto::RelayP1 relayP1;
   proto::Phase1FB phase1FB;
   proto::Phase1FBReply phase1FBReply;
   proto::Phase2FB phase2FB;
+  proto::Phase2FBReply phase2FBReply;
   proto::InvokeFB invokeFB;
   proto::ElectFB electFB;
   proto::DecisionFB decisionFB;
   proto::MoveView moveView;
+
 
   PingMessage ping;
 

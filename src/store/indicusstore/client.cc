@@ -460,5 +460,58 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
     acb();
   });
 }
+///Fallback logic
+
+//TODO:
+
+void CLient::RelayP1callback(proto::RelayP1 &relayP1){ //schedules Phase1FB
+  //TODO: check if req.id referenced is still ongoing.
+  pendingReqs.find(relayP1.req_id()) == pendingReqs.end(){return; }
+
+  proto::Phase1 p1 = relayP1.p1();
+   //TODO: Check if the current pending request has this txn as dependency.
+  std::string txnDigest = TransactionDigest(p1.txn(), params.hashDigest);
+  bool check = false;
+  for(auto & dep: txn.deps()){
+   if(dep.write().prepared_txn_digest() == txnDigest){ check = true;}
+ }
+ if(!check) return;
+
+
+// TODO: schedule again for end of timeout. If still valid, then start P1FB
+transport->Timer(...)
+
+
+}
+void Phase1FB(proto::phase1 &p1){  //passes callbacks
+  std::string txnDigest = TransactionDigest(p1.txn(), params.hashDigest);
+  FB_instances[txnDigest] = p1;  //TODO:: Create pendngFallbackRequest
+
+  //TODO: create p1FBmessage
+
+  phase1FB.Clear();
+  phase1FB.set_req_id(p1.req_id());  //This can just be ommitted. its useless.
+  *phase1FB.mutable_txn() = p1.txn();
+
+//TODO: modify this.
+  for (auto group : p1.txn().involved_groups()) {
+    bclient[group]->Phase1FB(p1.req_id(), p1.txn(), txnDigest, std::bind(
+          &Client::Phase1FBCallback, this, txnDigest, group, std::placeholders::_1,
+          std::placeholders::_2, std::placeholders::_3, std::placeholders::_4),
+        std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
+          std::placeholders::_1));
+    req->outstandingPhase1s++;
+  }
+
+}
+void Phase1FBcallback(std::string txnDigest, uint64_t group, )  { //call either WritebackFb, or Phase2FB, or invokeFB
+
+}
+//void Phase2FB: passes callbacks
+//void InvokeFB: calls Phase2FB and adds that to the InvokeFB message.
+//void Phase2FBcallback: call either WritebackFB, or InvokeFB
+
+
+
 
 } // namespace indicusstore

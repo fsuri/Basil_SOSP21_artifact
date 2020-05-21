@@ -70,6 +70,14 @@ typedef std::function<void(int)> phase2_timeout_callback;
 typedef std::function<void()> writeback_callback;
 typedef std::function<void(int)> writeback_timeout_callback;
 
+
+//Fallback typedefs:
+typedef std::function<void(proto::CommitDecision, bool,
+    const proto::CommittedProof &,
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1FB_callbackA;
+
+typedef std::function<void(proto::CommitDecision, const proto::P2Replies &)> phase1_callbackB;
+
 class ShardClient : public TransportReceiver, public PingInitiator, public PingTransport {
  public:
   ShardClient(transport::Configuration *config, Transport *transport,
@@ -166,20 +174,37 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     proto::CommittedProof conflict;
   };
 
-//Fallback request
-struct PendingPhase1FB {
+struct SignedView(){
+  SignedView(uint64_t v): view(v) {}
+  SignedView(uint64_t v, proto::SignedMessage s_v): view(v), signed_view(s_v) {}
+  ~SignedView(){}
 
+  uint64_t view;
+  proto::SignedMessage signed_view;
+}
+//Fallback request
+struct PendingFB {
+  PendingFB() : p1(true), max_view(0) {}
+  ~PendingFB(){}
 
   PendingPhase1 pendingP1;  //TODO:: the callback needs to differ: It needs to propose a P2Rec message.
-  std::map<uint64_t, PendingPhase2 > pendingP2s;  //for each view: hold commit/abort votes.
-  std::map<proto::ConcurrencyControl::Result, proto::Phase2Replies> p2ReplySigs; //These must be from the same group, but can differ in view.
+  std::map<uint64_t, PendingPhase2* > pendingP2s;  //for each view: hold commit/abort votes.
+  std::map<uint64_t, PendingPhase2* > ALTpendingP2s;
+  std::map<proto::CommitDecision, proto::Phase2Replies*> p2ReplySigs; //These must be from the same group, but can differ in view.
+  std::unordered_set<uint64> process_ids;
+  bool p1; //TODO DISTINGUISH IN WHICH PHASE WE ARE:
+  uint64_t max_view;
+  std::map<uint64_t, SignedView*> current_views;  //maps from replicaID to current view
+  std::map<uint64_t, std::set<uint64_t>> view_levels; //maps from view to ids  in that view
 
   //TODO: add different callbacks
-  phase1_callback p1cb; //use this for Fast path?
-  phase1FB_callback p1fbcb; //
-  phase2_callback p2cb;
-
+  writebackFB_callback wbFBcb;
+  phase1FB_callback p1FBcb; // can use a lot from phase1_callback (edited to include the f+1 p2 case + sends a P2FB message instead)
+  phase2FB_callback p2FBcb; // callback in case that we finish normal p2, can return just as if it was the normal protocol?
+  invokeFB_callback invFBcb;
 };
+
+std::unordered_map<std::string, PendingFB*> pendingFallbacks; //map from txnDigests to their fallback instances.
 
   struct PendingPhase2 {
     PendingPhase2(uint64_t reqId, proto::CommitDecision decision) : reqId(reqId),
@@ -273,6 +298,16 @@ struct PendingPhase1FB {
   proto::Phase1Reply phase1Reply;
   proto::Phase2Reply phase2Reply;
   PingMessage ping;
+
+
+  //FALLBACK
+  proto::RelayP1 relayP1;
+  proto::Phase1FB phase1FB;
+  proto::Phase1FBReply phase1FBReply;
+  proto::Phase2FB phase2FB;
+  proto::Phase2FBReply phase2FBReply;
+  proto::InvokeFB invokeFB;
+
 
   proto::Write validatedPrepared;
   proto::ConcurrencyControl validatedCC;
