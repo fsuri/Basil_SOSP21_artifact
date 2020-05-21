@@ -435,7 +435,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
   if (msg.decision() == proto::COMMIT) {
     Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
-    Commit(*txnDigest, txn, msg.has_p1_sigs() ? msg.p1_sigs() : msg.p2_sigs(),
+    Commit(*txnDigest, txn, msg.has_p1_sigs() ? msg.release_p1_sigs() : msg.release_p2_sigs(),
         msg.has_p1_sigs());
   } else {
     Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
@@ -910,7 +910,7 @@ void Server::GetCommittedWrites(const std::string &key, const Timestamp &ts,
 }
 
 void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
-      const proto::GroupedSignatures &groupedSigs, bool p1Sigs) {
+      proto::GroupedSignatures *groupedSigs, bool p1Sigs) {
   Timestamp ts(txn->timestamp());
 
   Value val;
@@ -927,9 +927,9 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
     proof->set_allocated_txn(txn);
     if (params.signedMessages) {
       if (p1Sigs) {
-        *proof->mutable_p1_sigs() = groupedSigs;
+        proof->set_allocated_p1_sigs(groupedSigs);
       } else {
-        *proof->mutable_p2_sigs() = groupedSigs;
+        proof->set_allocated_p2_sigs(groupedSigs);
       }
     }
   }

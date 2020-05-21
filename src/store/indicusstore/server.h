@@ -126,7 +126,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void GetCommittedWrites(const std::string &key, const Timestamp &ts,
       std::vector<std::pair<Timestamp, Value>> &writes);
   void Commit(const std::string &txnDigest, proto::Transaction *txn,
-      const proto::GroupedSignatures &groupedSigs, bool p1Sigs);
+      proto::GroupedSignatures *groupedSigs, bool p1Sigs);
   void Abort(const std::string &txnDigest);
   void CheckDependents(const std::string &txnDigest);
   proto::ConcurrencyControl::Result CheckDependencies(

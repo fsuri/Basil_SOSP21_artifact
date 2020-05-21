@@ -354,42 +354,44 @@ bool operator!=(const proto::Write &pw1, const proto::Write &pw2) {
 
 std::string TransactionDigest(const proto::Transaction &txn, bool hashDigest) {
   if (hashDigest) {
-    CryptoPP::BLAKE2b hash;
-    std::string digest;
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+
+    std::string digest(BLAKE3_OUT_LEN, 0);
 
     uint64_t client_id = txn.client_id();
     uint64_t client_seq_num = txn.client_seq_num();
-    hash.Update((const CryptoPP::byte*) &client_id, sizeof(client_id));
-    hash.Update((const CryptoPP::byte*) &client_seq_num, sizeof(client_seq_num));
+
+    blake3_hasher_update(&hasher, (unsigned char *) &client_id, sizeof(client_id));
+    blake3_hasher_update(&hasher, (unsigned char *) &client_seq_num, sizeof(client_seq_num));
     for (const auto &group : txn.involved_groups()) {
-      hash.Update((const CryptoPP::byte*) &group, sizeof(group));
+      blake3_hasher_update(&hasher, (unsigned char *) &group, sizeof(group));
     }
     for (const auto &read : txn.read_set()) {
       uint64_t readtimeId = read.readtime().id();
       uint64_t readtimeTs = read.readtime().timestamp();
-      hash.Update((const CryptoPP::byte*) &read.key()[0], read.key().length());
-      hash.Update((const CryptoPP::byte*) &readtimeId,
+      blake3_hasher_update(&hasher, (unsigned char *) &read.key()[0], read.key().length());
+      blake3_hasher_update(&hasher, (unsigned char *) &readtimeId,
           sizeof(read.readtime().id()));
-      hash.Update((const CryptoPP::byte*) &readtimeTs,
+      blake3_hasher_update(&hasher, (unsigned char *) &readtimeTs,
           sizeof(read.readtime().timestamp()));
     }
     for (const auto &write : txn.write_set()) {
-      hash.Update((const CryptoPP::byte*) &write.key()[0], write.key().length());
-      hash.Update((const CryptoPP::byte*) &write.value()[0], write.value().length());
+      blake3_hasher_update(&hasher, (unsigned char *) &write.key()[0], write.key().length());
+      blake3_hasher_update(&hasher, (unsigned char *) &write.value()[0], write.value().length());
     }
     for (const auto &dep : txn.deps()) {
-      hash.Update((const CryptoPP::byte*) &dep.write().prepared_txn_digest()[0],
+      blake3_hasher_update(&hasher, (unsigned char *) &dep.write().prepared_txn_digest()[0],
           dep.write().prepared_txn_digest().length());
     }
     uint64_t timestampId = txn.timestamp().id();
     uint64_t timestampTs = txn.timestamp().timestamp();
-    hash.Update((const CryptoPP::byte*) &timestampId,
+    blake3_hasher_update(&hasher, (unsigned char *) &timestampId,
         sizeof(timestampId));
-    hash.Update((const CryptoPP::byte*) &timestampTs,
+    blake3_hasher_update(&hasher, (unsigned char *) &timestampTs,
         sizeof(timestampTs));
 
-    digest.resize(hash.DigestSize());
-    hash.Final((CryptoPP::byte*) &digest[0]);
+    blake3_hasher_finalize(&hasher, (unsigned char *) &digest[0], BLAKE3_OUT_LEN);
 
     return digest;
   } else {
@@ -455,10 +457,9 @@ uint64_t SlowAbortQuorumSize(const transport::Configuration *config) {
 
 bool IsReplicaInGroup(uint64_t id, uint32_t group,
     const transport::Configuration *config) {
-  uint64_t replicaGroup = id / config->n;
-  const std::string &host = config->replica(id / config->n, id % config->n).host;
+  int host = config->replicaHost(id / config->n, id % config->n);
   for (int i = 0; i < config->n; ++i) {
-    if (config->replica(group, i).host == host) {
+    if (host == config->replicaHost(group, i)) {
       return true;
     }
   }

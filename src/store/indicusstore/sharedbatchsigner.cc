@@ -177,6 +177,7 @@ void SharedBatchSigner::RunSignedCallbackConsumer() {
     }
 
     pendingBatchMtx.lock();
+    std::vector<signedCallback> *signedCbs = new std::vector<signedCallback>();
     while (alive && !GetCompletionQueue(id)->empty()) {
       SignatureWork work = GetCompletionQueue(id)->front();
       GetCompletionQueue(id)->pop_front();
@@ -187,13 +188,7 @@ void SharedBatchSigner::RunSignedCallbackConsumer() {
         if (itr != pendingBatch.end()) {
           itr->second.signedMessage->set_process_id(work.pid);
           *itr->second.signedMessage->mutable_signature() = std::string(work.data.begin(), work.data.end());
-
-          Debug("Starting timer cb.");
-          transport->Timer(0, [cb = itr->second.cb](){ 
-              Debug("Calling cb.");
-              cb();
-            });
-
+          signedCbs->push_back(itr->second.cb);
           pendingBatch.erase(itr);
         } else {
           Debug("Signature is from stale run.");
@@ -202,6 +197,12 @@ void SharedBatchSigner::RunSignedCallbackConsumer() {
         Debug("Signature is from stale run.");
       }
     }
+    transport->Timer(0, [signedCbs](){ 
+        for (const auto &cb : *signedCbs) {
+          cb();
+        }
+        delete signedCbs;
+      });
     pendingBatchMtx.unlock();
   }
 }

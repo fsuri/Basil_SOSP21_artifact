@@ -79,6 +79,7 @@ public:
     inline bool operator!= (const Configuration &other) const {
         return !(*this == other);
     }
+    int replicaHost(int group, int idx) const;
 
 public:
     int g;                      // number of groups
@@ -86,6 +87,8 @@ public:
     int f;                      // number of failures tolerated (assume homogeneous across groups)
 private:
     std::map<int, std::vector<ReplicaAddress> > replicas;
+    std::map<int, std::map<int, int>> replicaHosts;
+    std::map<int, std::map<std::string, int>> hosts;
     ReplicaAddress *multicastAddress;
     bool hasMulticast;
     ReplicaAddress *fcAddress;

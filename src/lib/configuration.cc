@@ -55,7 +55,8 @@ ReplicaAddress::operator==(const ReplicaAddress &other) const {
 
 Configuration::Configuration(const Configuration &c)
     : g(c.g), n(c.n), f(c.f), replicas(c.replicas), hasMulticast(c.hasMulticast),
-      hasFC(c.hasFC), interfaces(c.interfaces)
+      hasFC(c.hasFC), interfaces(c.interfaces), replicaHosts(c.replicaHosts),
+      hosts(c.hosts)
 {
     multicastAddress = NULL;
     if (hasMulticast) {
@@ -90,6 +91,15 @@ Configuration::Configuration(int g, int n, int f,
     } else {
         hasFC = false;
         fcAddress = NULL;
+    }
+
+    for (const auto &r : replicas) {
+      for (size_t idx = 0; idx < r.second.size(); ++idx) {
+        if (hosts[r.first].find(r.second[idx].host) == hosts[r.first].end()) {
+          hosts[r.first][r.second[idx].host] = hosts[r.first].size();
+          replicaHosts[r.first][idx] = hosts[r.first][r.second[idx].host];
+        }
+      }
     }
 }
 
@@ -211,6 +221,15 @@ Configuration::Configuration(std::istream &file)
     if (f == -1) {
         Panic("Configuration did not specify a 'f' parameter");
     }
+  
+    for (const auto &r : replicas) {
+      for (size_t idx = 0; idx < r.second.size(); ++idx) {
+        if (hosts[r.first].find(r.second[idx].host) == hosts[r.first].end()) {
+          hosts[r.first][r.second[idx].host] = hosts[r.first].size();
+          replicaHosts[r.first][idx] = hosts[r.first][r.second[idx].host];
+        }
+      }
+    }
 }
 
 Configuration::~Configuration()
@@ -265,6 +284,17 @@ int
 Configuration::FastQuorumSize() const
 {
     return f + (f+1)/2 + 1;
+}
+
+int Configuration::replicaHost(int group, int idx) const {
+  const auto itr = replicaHosts.find(group);
+  if (itr != replicaHosts.end()) {
+    const auto jtr = itr->second.find(idx);
+    if (jtr != itr->second.end()) {
+      return jtr->second;
+    }
+  }
+  return -1;
 }
 
 bool
