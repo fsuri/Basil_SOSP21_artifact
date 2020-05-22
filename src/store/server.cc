@@ -616,19 +616,23 @@ void Cleanup(int signal) {
   if (FLAGS_stats_file.size() > 0) {
     server->GetStats().ExportJSON(FLAGS_stats_file);
   }
+  Notice("Freeing server.");
   if (server != nullptr) {
     delete server;
     delete part;
     server = nullptr;
   }
+  Notice("Freeing replica.");
   if (replica != nullptr) {
     delete replica;
     replica = nullptr;
   }
+  Notice("Freeing transport.");
   if (tport != nullptr) {
     tport->Stop(true);
     delete tport;
     tport = nullptr;
   }
+  Notice("Exiting.");
   exit(0);
 }

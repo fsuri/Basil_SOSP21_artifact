@@ -28,22 +28,31 @@ SharedBatchSigner::~SharedBatchSigner() {
   alive = false;
   auto cqc = GetCompletionQueueCondition(id);
   cqc->notify_one();
+  Notice("Waiting for signed callback thread to finish.");
   signedCallbackThread->join();
+  Notice("Freeing signed callback thread");
   delete signedCallbackThread;
   for (const auto &mtx : completionQueueMtx) {
-    delete mtx.second;
+    //Notice("Freeing completion queue mtx %lu", mtx.first);
+    // delete mtx.second;
   }
   for (const auto &cond : completionQueueReady) {
-    delete cond.second;
+    // Notice("Freeing completion queue cond %lu", cond.first);
+    // delete cond.second;
   }
   for (const auto &queue : completionQueues) {
-    delete queue.second;
+    //Notice("Freeing completion queue %lu", queue.first);
+    // delete queue.second;
   }
-  delete sharedBatchId;
-  delete sharedWorkQueueMtx;
-  delete sharedWorkQueue;
-  delete segment;
-  delete alloc_inst;
+  // delete sharedBatchId;
+  // Notice("Freeing shared work queue mtx.");
+  // delete sharedWorkQueueMtx;
+  // Notice("Freeing shared work queue.");
+  // delete sharedWorkQueue;
+  // Notice("Freeing shared segment.");
+  // delete segment;
+  // Notice("Freeing allocator.");
+  // delete alloc_inst;
 }
 
 void SharedBatchSigner::MessageToSign(::google::protobuf::Message* msg,
@@ -179,7 +188,7 @@ void SharedBatchSigner::StartTimeout() {
 }
 
 void SharedBatchSigner::RunSignedCallbackConsumer() {
-  Debug("Starting signed callback consumer thread.");
+  Notice("Starting signed callback consumer thread.");
   while (alive) {
     scoped_lock<named_mutex> l(*GetCompletionQueueMutex(id));
     while (alive && GetCompletionQueue(id)->empty()) {
@@ -220,10 +229,11 @@ void SharedBatchSigner::RunSignedCallbackConsumer() {
       });
     pendingBatchMtx.unlock();
   }
+  Notice("Thread done.");
 }
 
 void SharedBatchSigner::RunSignTimeoutChecker() {
-  Debug("Starting sign timeout checker thread.");
+  Notice("Starting sign timeout checker thread.");
   while (alive) {
     scoped_lock<named_mutex> l(*sharedWorkQueueMtx);
     while (alive && sharedWorkQueue->empty()) {

@@ -100,9 +100,11 @@ Server::~Server() {
   for (const auto &o : ongoing) {
     delete o.second;
   }
+  Notice("Freeing signer.");
   if (batchSigner != nullptr) {
     delete batchSigner;
   }
+  Notice("Freeing verifier.");
   delete verifier;
   Latency_Dump(&verifyLat);
   Latency_Dump(&signLat);

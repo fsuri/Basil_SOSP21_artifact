@@ -18,10 +18,10 @@ SharedBatchVerifier::SharedBatchVerifier(Stats &stats) : stats(stats) {
 }
 
 SharedBatchVerifier::~SharedBatchVerifier() {
-  delete cacheMtx;
-  delete cache;
-  delete segment;
-  delete alloc_inst;
+  // delete cacheMtx;
+  // delete cache;
+  // delete segment;
+  // delete alloc_inst;
 }
 
 bool SharedBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &message,
