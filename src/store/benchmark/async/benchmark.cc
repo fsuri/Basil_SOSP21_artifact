@@ -731,13 +731,17 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  if (FLAGS_num_clients > (1 << 6)) {
+    std::cerr << "Only support up to " << (1 << 6) << " clients in one process." << std::endl;
+    return 1;
+  }
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
     Client *client = nullptr;
     AsyncClient *asyncClient = nullptr;
     SyncClient *syncClient = nullptr;
     OneShotClient *oneShotClient = nullptr;
 
-    uint64_t clientId = (FLAGS_client_id << 32) | i;
+    uint64_t clientId = (FLAGS_client_id << 6) | i;
     switch (mode) {
       case PROTO_TAPIR: {
         client = new tapirstore::Client(config, clientId,

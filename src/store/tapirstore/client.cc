@@ -43,7 +43,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     pingReplicas(pingReplicas),
     syncCommit(syncCommit), timeServer(timeServer), lastReqId(0UL),
     first(true), startedPings(false) {
-    t_id = client_id << 32;
+    t_id = client_id << 26;
 
     bclient.reserve(nshards);
 

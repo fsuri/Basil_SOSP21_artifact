@@ -42,10 +42,11 @@ Store::~Store() { }
 int
 Store::Get(uint64_t id, const string &key, pair<Timestamp,string> &value)
 {
-    Debug("[%lu] GET %s", id, key.c_str());
+    Debug("[%lu] GET %lx", id, *((const uint64_t *) key.c_str()));
     bool ret = store.get(key, value);
     if (ret) {
-        Debug("Value: %s at <%lu, %lu>", value.second.c_str(), value.first.getTimestamp(), value.first.getID());
+        Debug("Value at <%lu, %lu>", value.first.getTimestamp(),
+            value.first.getID());
         return REPLY_OK;
     } else {
         return REPLY_FAIL;
@@ -72,6 +73,10 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
     Debug("[%lu] PREPARE with ts %lu.%lu", id, timestamp.getTimestamp(),
         timestamp.getID());
 
+    if (ongoing.find(id) == ongoing.end()) {
+      ongoing[id] = txn;
+    }
+
     if (prepared.find(id) != prepared.end()) {
         if (prepared[id].first == timestamp) {
             Warning("[%lu] Already Prepared!", id);
@@ -80,8 +85,6 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
             // run the checks again for a new timestamp
             Cleanup(id);
         }
-    } else {
-      ongoing[id] = txn;
     }
 
     // do OCC checks
@@ -95,7 +98,9 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
         pair<Timestamp, Timestamp> range;
         bool ret = store.getRange(read.first, read.second, range);
 
-        Debug("Range %lu %lu %lu", read.second.getTimestamp(),
+        Debug("Range %lx %lu %lu %lu",
+            *((const uint64_t *) read.first.c_str()),
+            read.second.getTimestamp(),
             range.first.getTimestamp(), range.second.getTimestamp());
 
         // if we don't have this key then no conflicts for read
@@ -281,6 +286,9 @@ Store::Commit(const Timestamp &timestamp, const Transaction &txn)
 
     // insert writes into versioned key-value store
     for (auto &write : txn.getWriteSet()) {
+      Debug("Committing write to key %lx %lu.%lu.",
+        *((const uint64_t *) write.first.c_str()), timestamp.getTimestamp(),
+        timestamp.getID());
         store.put(write.first, // key
                   write.second, // value
                   timestamp); // timestamp
@@ -292,9 +300,7 @@ Store::Abort(uint64_t id, const Transaction &txn)
 {
     Debug("[%lu] ABORT", id);
     
-    if (prepared.find(id) != prepared.end()) {
-      Cleanup(id);
-    }
+    Cleanup(id);
 }
 
 void

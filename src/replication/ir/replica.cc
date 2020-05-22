@@ -227,7 +227,6 @@ IRReplica::HandleProposeConsensus(const TransportAddress &remote,
     }
 
     // Send the reply
-    transport->SendMessage(this, remote, reply);
     if (transport->SendMessage(this, remote, reply)) {
       Debug("%lu:%lu Replied to ProposeConsensusMessage", clientid, clientreqid);
     } else {

@@ -324,7 +324,9 @@ bool ShardClient::GetCallback(uint64_t reqId, const string &request_str,
     std::string key = pendingGet->key;
     this->pendingGets.erase(itr);
     delete pendingGet;
-    Debug("[shard %lu:%i] GET callback [%d]", client_id, shard, reply.status());
+    Debug("[shard %lu:%i] GET callback [%d] %lx %lu.%lu", client_id, shard,
+        reply.status(), *((const uint64_t *) key.c_str()), reply.timestamp().timestamp(),
+        reply.timestamp().id());
     if (reply.has_timestamp()) {
       gcb(reply.status(), key, reply.value(), Timestamp(reply.timestamp()));
     } else {
