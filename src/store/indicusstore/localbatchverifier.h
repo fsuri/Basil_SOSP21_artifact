@@ -4,6 +4,7 @@
 #include "store/indicusstore/verifier.h"
 #include "store/indicusstore/localbatchverifier.h"
 #include "store/common/stats.h"
+#include "lib/latency.h"
 
 #include <string>
 #include <unordered_map>
@@ -20,6 +21,7 @@ class LocalBatchVerifier : public Verifier {
 
  private:
   Stats &stats;
+  Latency_t lat;
   std::unordered_map<std::string, std::string> cache;
 
 };

@@ -8,17 +8,21 @@
 namespace indicusstore {
 
 LocalBatchVerifier::LocalBatchVerifier(Stats &stats) : stats(stats) {
+  _Latency_Init(&lat, "merkle");
 }
 
 LocalBatchVerifier::~LocalBatchVerifier() {
+  Latency_Dump(&lat);
 }
 
 bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &message,
     const std::string &signature) {
   std::string hashStr;
   std::string rootSig;
+  Latency_Start(&lat);
   BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
       hashStr, rootSig);
+  Latency_End(&lat);
   auto itr = cache.find(rootSig);
   if (itr == cache.end()) {
     stats.Increment("verify_cache_miss");

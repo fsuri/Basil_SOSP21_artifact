@@ -43,6 +43,7 @@
 #include "store/indicusstore/basicverifier.h"
 #include "store/indicusstore/localbatchverifier.h"
 #include "store/indicusstore/sharedbatchverifier.h"
+#include "lib/batched_sigs.h"
 
 namespace indicusstore {
 
@@ -94,6 +95,11 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
 }
 
 Server::~Server() {
+  std::cerr << "Hash count: " << BatchedSigs::hashCount << std::endl;
+  std::cerr << "Hash cat count: " << BatchedSigs::hashCatCount << std::endl;
+  std::cerr << "Total count: " << BatchedSigs::hashCount + BatchedSigs::hashCatCount << std::endl;
+  Notice("Freeing verifier.");
+  delete verifier;
   for (const auto &c : committed) {
     delete c.second;
   }
@@ -104,8 +110,6 @@ Server::~Server() {
   if (batchSigner != nullptr) {
     delete batchSigner;
   }
-  Notice("Freeing verifier.");
-  delete verifier;
   Latency_Dump(&verifyLat);
   Latency_Dump(&signLat);
 }

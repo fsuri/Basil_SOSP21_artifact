@@ -73,10 +73,6 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
     Debug("[%lu] PREPARE with ts %lu.%lu", id, timestamp.getTimestamp(),
         timestamp.getID());
 
-    if (ongoing.find(id) == ongoing.end()) {
-      ongoing[id] = txn;
-    }
-
     if (prepared.find(id) != prepared.end()) {
         if (prepared[id].first == timestamp) {
             Warning("[%lu] Already Prepared!", id);
@@ -85,6 +81,10 @@ Store::Prepare(uint64_t id, const Transaction &txn, const Timestamp &timestamp,
             // run the checks again for a new timestamp
             Cleanup(id);
         }
+    }
+
+    if (ongoing.find(id) == ongoing.end()) {
+      ongoing[id] = txn;
     }
 
     // do OCC checks
@@ -342,6 +342,7 @@ void Store::Cleanup(uint64_t txnId) {
       }
     }
   }*/
+  Debug("Removing txn %lu from prepared and ongoing.", txnId);
   prepared.erase(txnId);
   ongoing.erase(txnId);
 }

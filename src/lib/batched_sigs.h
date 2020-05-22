@@ -15,6 +15,9 @@ void bhash(unsigned char* in, size_t len, unsigned char* out);
 
 void generateBatchedSignatures(const std::vector<const std::string*> &messages, crypto::PrivKey* privateKey, std::vector<std::string> &sigs);
 
+extern uint64_t hashCount;
+extern uint64_t hashCatCount;
+
 template<class S>
 void computeBatchedSignatureHash(const std::string* signature, const std::string* message, crypto::PubKey* publicKey,
     S &hashStr, S &rootSig) {
@@ -34,6 +37,7 @@ void computeBatchedSignatureHash(const std::string* signature, const std::string
   unsigned char hash[BLAKE3_OUT_LEN];
   // the leaf hash is the hash of the message
   bhash((unsigned char*) &message->at(0), message->length(), &hash[0]);
+  hashCount++;
   // h is the index of the sibling hash in the signature
   int h = 0;
   // j is the current position in the tree.
@@ -46,12 +50,14 @@ void computeBatchedSignatureHash(const std::string* signature, const std::string
       // node j was the left sibling
       bhash_cat(&hash[0], (unsigned char*) &signature->at(starting_pos + h*hash_size), hash);
     }
+    hashCatCount++;
     h++;
   }
 
   hashStr.resize(hash_size);
   hashStr.replace(hashStr.begin(), hashStr.end(), &hash[0], &hash[hash_size]);
 }
+
 
 }
 

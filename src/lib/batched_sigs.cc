@@ -7,6 +7,9 @@
 
 namespace BatchedSigs {
 
+uint64_t hashCount = 0;
+uint64_t hashCatCount = 0;
+
 // store an int into an unsigned char array
 void packInt(unsigned int i, unsigned char* out) {
   out[0] = ((unsigned int) i >> 24) & 0xFF;
