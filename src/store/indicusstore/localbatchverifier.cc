@@ -19,8 +19,6 @@ bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &me
   std::string rootSig;
   BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
       hashStr, rootSig);
-  Debug("Root hash %s %s.", BytesToHex(hashStr, 100).c_str(),
-      BytesToHex(rootSig, 100).c_str());
   auto itr = cache.find(rootSig);
   if (itr == cache.end()) {
     stats.Increment("verify_cache_miss");

@@ -427,8 +427,9 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
 
   const proto::ConcurrencyControl *cc = nullptr;
   if (hasSigned) {
-    Debug("[group %i] Verifying signed_cc because has_cc %d and ccr %d.",
-        group,
+    Debug("[group %i] Verifying signed_cc from %lu with signatures bytes %lu"
+        " because has_cc %d and ccr %d.",
+        group, reply.signed_cc().process_id(), reply.signed_cc().signature().length(),
         reply.has_cc(),
         reply.cc().ccr());
     if (!reply.has_signed_cc()) {

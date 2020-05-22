@@ -812,6 +812,21 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       // TODO: add additional rts dep check to shrink abort window
       //    Is this still a thing?
     }
+
+    if (params.validateProofs && params.signedMessages && !params.verifyDeps) {
+      for (const auto &dep : txn.deps()) {
+        if (dep.involved_group() != groupIdx) {
+          continue;
+        }
+        if (committed.find(dep.write().prepared_txn_digest()) == committed.end() &&
+            aborted.find(dep.write().prepared_txn_digest()) == aborted.end()) {
+
+          if (prepared.find(dep.write().prepared_txn_digest()) == prepared.end()) {
+            return proto::ConcurrencyControl::ABSTAIN;
+          }
+        }
+      }
+    }
     Prepare(txnDigest, txn);
   }
 
@@ -822,13 +837,6 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     }
     if (committed.find(dep.write().prepared_txn_digest()) == committed.end() &&
         aborted.find(dep.write().prepared_txn_digest()) == aborted.end()) {
-
-      if (params.validateProofs && params.signedMessages && !params.verifyDeps) {
-        if (prepared.find(dep.write().prepared_txn_digest()) == prepared.end()) {
-          return proto::ConcurrencyControl::ABSTAIN;
-        }
-      }
-
       Debug("[%lu:%lu][%s] WAIT for dependency %s to finish.",
           txn.client_id(), txn.client_seq_num(),
           BytesToHex(txnDigest, 16).c_str(),
@@ -1009,6 +1017,8 @@ void Server::CheckDependents(const std::string &txnDigest) {
 
       dependenciesItr->second.deps.erase(txnDigest);
       if (dependenciesItr->second.deps.size() == 0) {
+        Debug("Dependencies of %s have all committed or aborted.",
+            BytesToHex(dependent, 16).c_str());
         proto::ConcurrencyControl::Result result = CheckDependencies(
             dependent);
         UW_ASSERT(result != proto::ConcurrencyControl::ABORT);
@@ -1082,6 +1092,9 @@ void Server::SendPhase1Reply(uint64_t reqId,
     } else if (params.signedMessages) {
       proto::ConcurrencyControl* cc = new proto::ConcurrencyControl(phase1Reply->cc());
       //Latency_Start(&signLat);
+      Debug("PHASE1[%s] Batching Phase1Reply.",
+            BytesToHex(txnDigest, 16).c_str());
+
       MessageToSign(cc, phase1Reply->mutable_signed_cc(),
         [sendCB, cc, txnDigest, this, phase1Reply]() {
           Debug("PHASE1[%s] Sending Phase1Reply with signature %s from priv key %lu.",
