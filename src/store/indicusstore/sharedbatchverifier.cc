@@ -26,37 +26,34 @@ SharedBatchVerifier::~SharedBatchVerifier() {
 
 bool SharedBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &message,
     const std::string &signature) {
-  // MyShmString hashStrShared(BLAKE3_OUT_LEN, 0, *alloc_inst);
-  // MyShmString rootSigShared(crypto::SigSize(publicKey), 0, *alloc_inst);
-  // BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
-  //    hashStrShared, rootSigShared);
+  MyShmString hashStrShared(BLAKE3_OUT_LEN, 0, *alloc_inst);
+  MyShmString rootSigShared(crypto::SigSize(publicKey), 0, *alloc_inst);
+  BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
+     hashStrShared, rootSigShared);
 
   cacheMtx->lock_sharable();
-  // const auto itr = cache->find(rootSigShared);
-  // if (itr == cache->end()) {
-    // cacheMtx->unlock_sharable();
-    // stats.Increment("verify_cache_miss");
-    // std::string hashStr(hashStrShared.begin(), hashStrShared.end());
-    //std::string rootSig(rootSigShared.begin(), rootSigShared.end());
-    // if (crypto::Verify(publicKey, hashStr, rootSig)) {
-      // cacheMtx->lock();
-      // cache->insert(std::make_pair(boost::move(rootSigShared),
-      //      boost::move(hashStrShared)));
-      // cacheMtx->unlock();
-      // return true;
-    // } else {
-    //   return false;
-    // }
-  // } else {
-    // bool verified = hashStrShared == itr->second;
+  const auto itr = cache->find(rootSigShared);
+  if (itr == cache->end()) {
     cacheMtx->unlock_sharable();
-    // if (verified) {
+    stats.Increment("verify_cache_miss");
+    if (crypto::Verify(publicKey, &hashStrShared[0], hashStrShared.length(),
+          &rootSigShared[0])) {
+      cacheMtx->lock();
+      cache->insert(std::make_pair(boost::move(rootSigShared),
+           boost::move(hashStrShared)));
+      cacheMtx->unlock();
+      return true;
+    } else {
+      return false;
+    }
+  } else {
+    bool verified = hashStrShared == itr->second;
+    cacheMtx->unlock_sharable();
+    if (verified) {
       stats.Increment("verify_cache_hit");
-    // }
-    //return verified;
-    return true;
-  // }
-
+    }
+    return verified;
+  }
 }
 
 } // namespace indicusstore

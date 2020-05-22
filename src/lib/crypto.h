@@ -19,7 +19,8 @@ string Sign(PrivKey* privateKey, const string &message);
 size_t SigSize(PrivKey* privateKey);
 size_t SigSize(PubKey* publicKey);
 
-bool Verify(PubKey* publicKey, const string &message, const string &signature);
+bool Verify(PubKey* publicKey, const char *message, size_t messageLen,
+    const char *signature);
 
 void SavePublicKey(const string &filename, PubKey* key);
 
@@ -42,9 +43,7 @@ void SignMessage(PrivKey* privateKey, const std::string &m, S &s) {
 
 template <typename S>
 bool IsMessageValid(PubKey* publicKey, const std::string &m, S *s) {
-  string signature = s->signature();
-
-  return Verify(publicKey, m, signature);
+  return Verify(publicKey, &m[0], m.length(), &s->signature()[0]);
 }
 
 }  // namespace crypto

@@ -24,7 +24,7 @@ bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &me
   auto itr = cache.find(rootSig);
   if (itr == cache.end()) {
     stats.Increment("verify_cache_miss");
-    if (crypto::Verify(publicKey, hashStr, rootSig)) {
+    if (crypto::Verify(publicKey, &hashStr[0], hashStr.length(), &rootSig[0])) {
       cache[rootSig] = hashStr;
       return true;
     } else {

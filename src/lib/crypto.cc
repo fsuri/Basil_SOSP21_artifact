@@ -133,35 +133,39 @@ size_t SigSize(PubKey* publicKey) {
 }
 
 
-bool Verify(PubKey* publicKey, const string &message, const string &signature) {
+bool Verify(PubKey* publicKey, const char *message, size_t messageLen,
+    const char *signature) {
   switch(publicKey->t) {
   case RSA: {
-    bool result = false;
+    Panic("Not implemented.");
+    /*bool result = false;
     RSASS<PSS, SHA256>::Verifier verifier(*publicKey->rsaKey);
     StringSource ss2(
         signature + message, true,
         new SignatureVerificationFilter(
             verifier, new ArraySink((uint8_t *)&result, sizeof(result))));
-    return result;
+    return result;*/
   }
   case ECDSA: {
-    bool result = false;
+    Panic("Not implemented.");
+    /*bool result = false;
     CryptoPP::ECDSA<ECP, SHA256>::Verifier verifier(*publicKey->ecdsaKey);
     StringSource ss2(
         signature + message, true,
         new SignatureVerificationFilter(
             verifier, new ArraySink((uint8_t *)&result, sizeof(result))));
-    return result;
+    return result;*/
   }
   case ED25: {
-    return crypto_sign_verify_detached((unsigned char*) &signature[0], (unsigned char*) &message[0], message.length(), publicKey->ed25Key) == 0;
+    return crypto_sign_verify_detached((unsigned char*) signature,
+        (unsigned char*) message, messageLen, publicKey->ed25Key) == 0;
   }
   case SECP: {
     blake3_hasher_init(&hasher);
-    blake3_hasher_update(&hasher, (unsigned char*) &message[0], message.length());
+    blake3_hasher_update(&hasher, (unsigned char*) message, messageLen);
     unsigned char out[BLAKE3_OUT_LEN];
     blake3_hasher_finalize(&hasher, out, BLAKE3_OUT_LEN);
-    return secp256k1_ecdsa_verify(secpCTX, (secp256k1_ecdsa_signature*) &signature[0], out, (secp256k1_pubkey*) publicKey->secpKey) == 1;
+    return secp256k1_ecdsa_verify(secpCTX, (secp256k1_ecdsa_signature*) signature, out, (secp256k1_pubkey*) publicKey->secpKey) == 1;
   }
 
   }

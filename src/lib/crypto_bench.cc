@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
     std::string sig(crypto::Sign(privKey, s));
     Latency_End(&signLat);
     Latency_Start(&verifyLat);
-    assert(crypto::Verify(pubKey, s, sig));
+    assert(crypto::Verify(pubKey, &s[0], s.length(), &sig[0]));
     Latency_End(&verifyLat);
 
     /*std::string hs;
