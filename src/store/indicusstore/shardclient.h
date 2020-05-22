@@ -32,6 +32,7 @@
 #ifndef _INDICUS_SHARDCLIENT_H_
 #define _INDICUS_SHARDCLIENT_H_
 
+
 #include "lib/keymanager.h"
 #include "lib/assert.h"
 #include "lib/configuration.h"
@@ -72,6 +73,8 @@ typedef std::function<void(int)> writeback_timeout_callback;
 
 
 //Fallback typedefs:
+typedef std::function<void(proto::RelayP1 &)> relayP1_callback;
+
 typedef std::function<void(proto::CommitDecision, bool,
     const proto::CommittedProof &,
     const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1FB_callbackA;
@@ -178,6 +181,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     proto::CommitDecision decision;
     bool fast;
     proto::CommittedProof conflict;
+    //relay Callbacks
+    relayP1_callback rcb;
   };
 
 struct SignedView(){
@@ -195,7 +200,7 @@ struct PendingFB {
 
 
 
-  PendingPhase1 pendingP1;  //TODO:: the callback needs to differ: It needs to propose a P2Rec message.
+  PendingPhase1 *pendingP1;  //TODO:: the callback needs to differ: It needs to propose a P2Rec message.
   std::map<uint64_t, PendingPhase2* > pendingP2s;  //for each view: hold commit/abort votes.
   std::map<uint64_t, PendingPhase2* > ALTpendingP2s;
   std::map<proto::CommitDecision, proto::Phase2Replies*> p2ReplySigs; //These must be from the same group, but can differ in view.

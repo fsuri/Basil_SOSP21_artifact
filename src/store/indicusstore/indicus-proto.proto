@@ -93,7 +93,7 @@ message Phase1 {
 }
 
 message RelayP1 {  //datatype that replicas send clients to inform them that they can start a FB etc.
-  required uint64 req_id = 1; //this is the ID of the txn that has the p1 as a dependency
+  required uint64 conflict_id = 1; //this is the ID of the txn that has the p1 as a dependency
   required Phase1 p1 = 2;  //this is the dependency.
 }
 
@@ -154,10 +154,10 @@ message Phase2FB {
   required CommitDecision decision = 2;
   optional Transaction txn = 3;
   optional bytes txn_digest = 4;
-  optional GroupedP1FBreplies grp_p1_fb = 5;
+  //optional GroupedP1FBreplies grp_p1_fb = 5;
   //TODO:: CHANGE TO THIS!!!!
-  //optional GroupedSignatures grouped_sigs = 5; //this is for p1 proof
-  //optional P2Replies p2_replies = 6; // this is for p2 proof
+  optional GroupedSignatures grouped_sigs = 5; //this is for p1 proof
+  optional P2Replies p2_replies = 6; // this is for p2 proof
 }
 //fallback phase2R: Can be the same Phase2R as normal.
 
@@ -171,8 +171,8 @@ message InvokeFB {
   //optional Phase2 p2 = 4 //This would be to
   optional uint64 proposed_view = 4;
   optional bool catchup = 5; //just signifies whether we need 3f+1 or f+1 to justify
-  optional Signatures view_sigs = 6;  //expect client to attach just the signatures necessary to prove his proposed view.
-  //THIS NEEDS TO CHANGE TO SIGNED MESSAGES, (because of vote subsumtion)
+  //optional Signatures view_sigs = 6;  //expect client to attach just the signatures necessary to prove his proposed view.
+  optional SignedMessages view_signed = 6;//THIS NEEDS TO CHANGE TO SIGNED MESSAGES, (because of vote subsumtion)
 }
 
 

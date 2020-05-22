@@ -472,7 +472,7 @@ void Server::SendPhase1FBReply(uint64_t reqId,
     //*phase1FBReply.mutable_current_view() = *curr_view;
     //phase1FBReply.mutable_current_view(curr_view));
     phase1FBReply.mutable_current_view()->set_current_view(current_views[txnDigest]);
-    phase1FBReply.mutable_current_view()->set_replica_id(idx);
+    phase1FBReply.mutable_current_view()->set_replica_id(id);
 
 //SIGN IT:  //TODO: Want to add this to p2 also, in case fallback is faulty - for simplicity assume only correct fallbacks for now.
       *phase1FBReply.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
@@ -640,6 +640,7 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
         //PANIC, have never seen the tx that is mentioned. Start timer ourselves.
         client_starttime[txnDigest] = current_time;
         transport->Timer((CLIENTTIMEOUT), [this, &remote, &txnDigest, &msg](){VerifyP2FB(remote, txnDigest, msg);});
+        return;
 
       }
 
@@ -652,6 +653,8 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
       else{
         //schedule for once original client has timed out.
         transport->Timer((CLIENTTIMEOUT-elapsed), [this, &remote, &txnDigest, &msg](){VerifyP2FB(remote, txnDigest, msg);});
+        return;
+
       }
     }
 }
@@ -682,154 +685,248 @@ void Server::VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, 
       }
   }
 
-//  if (params.validateProofs) {
-  //check if there are p2 decisions.
-   proto::GroupedP1FBreplies groupedReplies = p2fb.grp_p1_fb();
-   //proto::P1FBreplies loggedReplies = groupedReplies.grouped_fbreplies()[logGroup];
-    //TRY THIS:  (*groupedReplies.mutable_grouped_fbreplies())[logGroup]
+//CHANGE CODE TO CLEARLY ACCOUNT FOR THE NEW CASES:
+//P2FB either contains GroupedSignatures directly, OR it just contains P2Replies.
 
-//construct decision object. serialize it. compare.
-   uint32_t counter = config.f + 1; //or config.QuorumSize()
-
-   for(auto & loggedReplies : groupedReplies.grouped_fbreplies()){
-     if(loggedReplies.first != logGroup) continue;
-
-     for(const auto &p1fbr : loggedReplies.second.fbreplies()){
-          if(p1fbr.has_p2r()){
-            proto::Phase2Reply p2r = p1fbr.p2r();
-
-              if (params.signedMessages) {
-                if(p2r.has_signed_p2_decision()){
-                  proto::SignedMessage sig_msg = p2r.signed_p2_decision();
-                  proto::Phase2Decision p2Dec;
-                  p2Dec.ParseFromString(sig_msg.data());
-                  if(p2Dec.decision() == p2fb.decision() && p2Dec.txn_digest() == p2fb.txn_digest()){
-                    if(crypto::Verify(keyManager->GetPublicKey(sig_msg.process_id()), sig_msg.data(), sig_msg.signature())){ counter--;} else{return;}
-                  }
-                }
-              }
-              else{
-                if(p2r.has_p2_decision()){
-                  if(p2r.p2_decision().decision() == p2fb.decision() && p2r.p2_decision().txn_digest() == p2fb.txn_digest()) counter--;
-                }
-              }
-          }
-          if(counter == 0){
-            p2Decisions[txnDigest] = p2fb.decision();
-            decision_views[txnDigest] = 0;
-            break;
-          }
-        }
-    }
-    //still no decision --> check all p1s.
-    proto::GroupedSignatures grpSigs;
-    //std::unordered_map<uint64_t, proto::Signatures> grp_sigs;
-    if(p2Decisions.find(txnDigest) == p2Decisions.end()){
-          //TODO: extract all p1s as proof and call HandleP2
-          for(auto & group_replies: groupedReplies.grouped_fbreplies()){
-          //for(auto & [ key, group_replies ]: p2fb.grp_p1_f()->grouped_fbreplies()){
-            proto::Signatures sig_collection;
-            for (auto &p1fbr: group_replies.second.fbreplies()){
-            //for(auto p1fbr: group_replies.second()){
-              proto::Signature *new_sig = sig_collection.add_sigs();
-              //new_sig.mutable_signature(p1fbr.p1r()->signed_cc()->signature()); //Is this correct.
-              *new_sig->mutable_signature() = p1fbr.p1r().signed_cc().signature();
-
-            }
-            //grp_sigs[key] = sig_collection;
-            //grp_sigs[group_replies.first] = sig_collection;
-            (*grpSigs.mutable_grouped_sigs())[group_replies.first] = sig_collection;
-          }
-        //grpSigs.mutable_grouped_sigs(grp_sigs);
-      //  *grpSigs.mutable_grouped_sigs() = grp_sigs;
-
-        proto::Transaction txn;
-        if(ongoing.find(txnDigest) != ongoing.end()){
-          proto::Transaction txn = *ongoing[txnDigest];
-        }
-        else if(p2fb.has_txn()){
-              proto::Transaction txn = p2fb.txn();
-        }
-        else{
-          return; //TXN unseen.
+//TODO: Case A
+if(p2fb.has_p2_replies()){
+  uint32_t counter = config.f + 1;
+  for(auto & p2_reply : p2fb.p2_replies()){
+      proto::Phase2Decision p2dec;
+      if (params.signedMessages) {
+        if(!p2_reply.has_signed_p2_decision()){ return;}
+        proto::SignedMessage sig_msg = p2_reply.signed_p2_decision();
+        if(!IsReplicaInGroup(sig_msg.process_id(), logGroup, &config)){ return;}
+        p2dec.ParseFromString(sig_msg.data());
+        if(p2dec.decision() == p2fb.decision() && p2dec.txn_digest() == p2fb.txn_digest()){
+          if(crypto::Verify(keyManager->GetPublicKey(sig_msg.process_id()), sig_msg.data(), sig_msg.signature())){ counter--;} else{return;}
         }
 
-        int64_t myProcessId;
-        proto::ConcurrencyControl::Result myResult;
-        LookupP1Decision(txnDigest, myProcessId, myResult);
-
-        if(!ValidateP1Replies(p2fb.decision(), false, &txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult)){
-          return; //INVALID SIGS
+      }
+      //no sig case:
+      else{
+        if(p2r.has_p2_decision()){
+          if(p2_reply.p2_decision().decision() == p2fb.decision() && p2_reply.p2_decision().txn_digest() == p2fb.txn_digest()) counter--;
         }
+      }
+      if(counter == 0){
         p2Decisions[txnDigest] = p2fb.decision();
         decision_views[txnDigest] = 0;
+        break;
+      }
+  }
+}
+//TODO: Case B
+else if(p2fb.has_grouped_sigs()){
+    proto::Transaction txn;
+    if(ongoing.find(txnDigest) != ongoing.end()){
+      proto::Transaction txn = *ongoing[txnDigest];
     }
-    if(p2Decisions.find(txnDigest) == p2Decisions.end()) return; //Still no decision. Failure.
-    // form p2r and send it
-    SetP2(p2fb.req_id(), txnDigest, p2Decisions[txnDigest]);
-    phase2FBReply.Clear();
-    phase2FBReply.set_txn_digest(txnDigest);
-    *phase2FBReply.mutable_p2r() = phase2Reply;
-    phase2FBReply.mutable_current_view()->set_current_view(current_views[txnDigest]);
-    phase1FBReply.mutable_current_view()->set_replica_id(idx);
+    else if(p2fb.has_txn()){
+          proto::Transaction txn = p2fb.txn();
+    }
+    else{
+      return; //TXN unseen.
+    }
+
+    proto::GroupedSignatures grpSigs = p2fb.grouped_sigs();
+    int64_t myProcessId;
+    proto::ConcurrencyControl::Result myResult;
+    LookupP1Decision(txnDigest, myProcessId, myResult);
+
+    if(!ValidateP1Replies(p2fb.decision(), false, &txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult)){
+      return; //INVALID SIGS
+    }
+    p2Decisions[txnDigest] = p2fb.decision();
+    decision_views[txnDigest] = 0;
+}
+
+if(p2Decisions.find(txnDigest) == p2Decisions.end()) return; //Still no decision. Failure.
+// form p2r and send it
+SetP2(p2fb.req_id(), txnDigest, p2Decisions[txnDigest]);
+phase2FBReply.Clear();
+phase2FBReply.set_txn_digest(txnDigest);
+*phase2FBReply.mutable_p2r() = phase2Reply;
+phase2FBReply.mutable_current_view()->set_current_view(current_views[txnDigest]);
+phase1FBReply.mutable_current_view()->set_replica_id(id);
 
 //TODO: can remove this for simplicity if assuming only correct fallbacks.
 
-    *phase2FBReply.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
+*phase2FBReply.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
 
-      if (params.signedMessages) {
-        proto::CurrentView cView(phase2FBReply.current_view());
-        //Latency_Start(&signLat);
-        SignMessage(cView, keyManager->GetPrivateKey(id), id, phase2FBReply.mutable_signed_current_view());
-        //Latency_End(&signLat);
-      }
+  if (params.signedMessages) {
+    proto::CurrentView cView(phase2FBReply.current_view());
+    //Latency_Start(&signLat);
+    SignMessage(cView, keyManager->GetPrivateKey(id), id, phase2FBReply.mutable_signed_current_view());
+    //Latency_End(&signLat);
+  }
 
 
-    transport->SendMessage(this, remote, phase2FBReply);
-    Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
+transport->SendMessage(this, remote, phase2FBReply);
+Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
 
 }
+///OLD CODE:
+
+// //  if (params.validateProofs) {
+//   //check if there are p2 decisions.
+//    proto::GroupedP1FBreplies groupedReplies = p2fb.grp_p1_fb();
+//    //proto::P1FBreplies loggedReplies = groupedReplies.grouped_fbreplies()[logGroup];
+//     //TRY THIS:  (*groupedReplies.mutable_grouped_fbreplies())[logGroup]
+//
+// //construct decision object. serialize it. compare.
+//    uint32_t counter = config.f + 1; //or config.QuorumSize()
+//
+//    for(auto & loggedReplies : groupedReplies.grouped_fbreplies()){
+//      if(loggedReplies.first != logGroup) continue;
+//
+//      for(const auto &p1fbr : loggedReplies.second.fbreplies()){
+//           if(p1fbr.has_p2r()){
+//             proto::Phase2Reply p2r = p1fbr.p2r();
+//
+//               if (params.signedMessages) {
+//                 if(p2r.has_signed_p2_decision()){
+//                   proto::SignedMessage sig_msg = p2r.signed_p2_decision();
+//                   proto::Phase2Decision p2Dec;
+//                   p2Dec.ParseFromString(sig_msg.data());
+//                   if(p2Dec.decision() == p2fb.decision() && p2Dec.txn_digest() == p2fb.txn_digest()){
+//                     if(crypto::Verify(keyManager->GetPublicKey(sig_msg.process_id()), sig_msg.data(), sig_msg.signature())){ counter--;} else{return;}
+//                   }
+//                 }
+//               }
+//               else{
+//                 if(p2r.has_p2_decision()){
+//                   if(p2r.p2_decision().decision() == p2fb.decision() && p2r.p2_decision().txn_digest() == p2fb.txn_digest()) counter--;
+//                 }
+//               }
+//           }
+//           if(counter == 0){
+//             p2Decisions[txnDigest] = p2fb.decision();
+//             decision_views[txnDigest] = 0;
+//             break;
+//           }
+//         }
+//     }
+//     //still no decision --> check all p1s.
+//     proto::GroupedSignatures grpSigs;
+//     //std::unordered_map<uint64_t, proto::Signatures> grp_sigs;
+//     if(p2Decisions.find(txnDigest) == p2Decisions.end()){
+//           //TODO: extract all p1s as proof and call HandleP2
+//           for(auto & group_replies: groupedReplies.grouped_fbreplies()){
+//           //for(auto & [ key, group_replies ]: p2fb.grp_p1_f()->grouped_fbreplies()){
+//             proto::Signatures sig_collection;
+//             for (auto &p1fbr: group_replies.second.fbreplies()){
+//             //for(auto p1fbr: group_replies.second()){
+//               proto::Signature *new_sig = sig_collection.add_sigs();
+//               //new_sig.mutable_signature(p1fbr.p1r()->signed_cc()->signature()); //Is this correct.
+//               *new_sig->mutable_signature() = p1fbr.p1r().signed_cc().signature();
+//
+//             }
+//             //grp_sigs[key] = sig_collection;
+//             //grp_sigs[group_replies.first] = sig_collection;
+//             (*grpSigs.mutable_grouped_sigs())[group_replies.first] = sig_collection;
+//           }
+//         //grpSigs.mutable_grouped_sigs(grp_sigs);
+//       //  *grpSigs.mutable_grouped_sigs() = grp_sigs;
+//
+//         proto::Transaction txn;
+//         if(ongoing.find(txnDigest) != ongoing.end()){
+//           proto::Transaction txn = *ongoing[txnDigest];
+//         }
+//         else if(p2fb.has_txn()){
+//               proto::Transaction txn = p2fb.txn();
+//         }
+//         else{
+//           return; //TXN unseen.
+//         }
+//
+//         int64_t myProcessId;
+//         proto::ConcurrencyControl::Result myResult;
+//         LookupP1Decision(txnDigest, myProcessId, myResult);
+//
+//         if(!ValidateP1Replies(p2fb.decision(), false, &txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult)){
+//           return; //INVALID SIGS
+//         }
+//         p2Decisions[txnDigest] = p2fb.decision();
+//         decision_views[txnDigest] = 0;
+//     }
 
 
+//TODO: Views are now signed messages. Split verify P2fb function.
 bool Server::VerifyViews(proto::InvokeFB &msg, uint32_t lG){
-  // extract the P1FBreplies
-  // extract signatures of the views. (type Signed Message)
-  // decompute signature based on ID.
-  //compare that byte string vs hash(serialized proto view object)
-  //and just match vs   proto object for view cast: (txn, proposed_view)
-  std::string viewMsg;
-  proto::CurrentView curr_view;
-  //curr_view.mutable_txn_digest(msg.txn_digest());
+
   auto txnDigest = msg.txn_digest();
-  *curr_view.mutable_txn_digest() = txnDigest;
 
-  //check that all sigs are from the logging Group.
-    proto::Signatures sigs = msg.view_sigs();
-    if(msg.catchup()){
-      curr_view.set_current_view(msg.proposed_view());
-      curr_view.SerializeToString(&viewMsg);
-      uint64_t counter = config.f +1;
-      for(const auto &sig : sigs.sigs()){
-        //TODO: check that this id was from the loggin shard. sig.process_id() in lG
-        if(IsReplicaInGroup(sig.process_id(), lG, &config)){
-            if(crypto::Verify(keyManager->GetPublicKey(sig.process_id()), viewMsg, sig.signature())) { counter--;} else{return false;}
-        }
-        if(counter == 0) return true;
-      }
-    }
-    else{
-      curr_view.set_current_view(msg.proposed_view()-1);
-      curr_view.SerializeToString(&viewMsg);
-      uint64_t counter = 3* config.f +1;
-      for(const auto &sig : sigs.sigs()){
-        if(IsReplicaInGroup(sig.process_id(), lG, &config)){
-            if(crypto::Verify(keyManager->GetPublicKey(sig.process_id()), viewMsg, sig.signature() )) { counter--;} else{return false;}
-        }
-        if(counter == 0) return true;
-      }
+  //Assuming Invoke Message contains SignedMessages for view instead of Signatures.
+      proto::SignedMessages signed_messages = msg.view_signed();
+      if(msg.catchup()){
+        uint64_t counter = config.f +1;
+        for(const auto &signed_m : signed_messages.sig_msgs()){
 
-    }
-    return false;
+          proto::CurrentView view_s;
+          view_s.ParseFromString(signed_m.data());
+
+          if(IsReplicaInGroup(signed_m.process_id(), lG, &config)){
+              if(view_s.view() < msg.proposed_view()){ return false;}
+              if(view_s.txn_digest() != txnDigest) { return false;}
+              if(crypto::Verify(keyManager->GetPublicKey(signed_m.process_id()), signed_m.data(), sig.signature())) { counter--;} else{return false;}
+          }
+          if(counter == 0) return true;
+        }
+      }
+      else{
+        uint64_t counter = 3* config.f +1;
+        for(const auto &signed_m : signed_messages.sig_msgs()){
+
+          proto::CurrentView view_s;
+          view_s.ParseFromString(signed_m.data());
+
+          if(IsReplicaInGroup(signed_m.process_id(), lG, &config)){
+              if(view_s.view() < msg.proposed_view()-1){ return false;}
+              if(view_s.txn_digest() != txnDigest) { return false;}
+              if(crypto::Verify(keyManager->GetPublicKey(signed_m.process_id()), signed_m.data(), sig.signature())) { counter--;} else{return false;}
+          }
+          if(counter == 0) return true;
+        }
+
+      }
+      return false;
+
+
+  // //USE THIS CODE IF ASSUMING VIEWS ARE JUST SIGNATURES - NEED TO DISTINGUISH THOUGH IN CASE VIEWS WHERE >= proposed view, not just =
+  // std::string viewMsg;
+  // proto::CurrentView curr_view;
+  //curr_view.mutable_txn_digest(msg.txn_digest());
+
+  //*curr_view.mutable_txn_digest() = txnDigest;
+
+  //   proto::Signatures sigs = msg.view_sigs();
+  //   if(msg.catchup()){
+  //     curr_view.set_current_view(msg.proposed_view());
+  //     curr_view.SerializeToString(&viewMsg);
+  //     uint64_t counter = config.f +1;
+  //     for(const auto &sig : sigs.sigs()){
+  //       //TODO: check that this id was from the loggin shard. sig.process_id() in lG
+  //       if(IsReplicaInGroup(sig.process_id(), lG, &config)){
+  //           if(crypto::Verify(keyManager->GetPublicKey(sig.process_id()), viewMsg, sig.signature())) { counter--;} else{return false;}
+  //       }
+  //       if(counter == 0) return true;
+  //     }
+  //   }
+  //   else{
+  //     curr_view.set_current_view(msg.proposed_view()-1);
+  //     curr_view.SerializeToString(&viewMsg);
+  //     uint64_t counter = 3* config.f +1;
+  //     for(const auto &sig : sigs.sigs()){
+  //       if(IsReplicaInGroup(sig.process_id(), lG, &config)){
+  //           if(crypto::Verify(keyManager->GetPublicKey(sig.process_id()), viewMsg, sig.signature() )) { counter--;} else{return false;}
+  //       }
+  //       if(counter == 0) return true;
+  //     }
+  //
+  //   }
+  //   return false;
+
 }
 
 
@@ -856,9 +953,11 @@ if(msg.proposed_view() <= current_views[txnDigest]) return; //Obsolete Invoke Me
     //PANIC, have never seen the tx that is mentioned. Start timer ourselves.
     client_starttime[txnDigest] = current_time;
     transport->Timer((CLIENTTIMEOUT), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+    return;
   }
   if (elapsed < CLIENTTIMEOUT ){
     transport->Timer((CLIENTTIMEOUT-elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+    return;
   }
 //check for current FB reign
   uint64_t FB_elapsed;
@@ -866,6 +965,7 @@ if(msg.proposed_view() <= current_views[txnDigest]) return; //Obsolete Invoke Me
       FB_elapsed = current_time - FBtimeouts_start[txnDigest];
       if(FB_elapsed < exp_timeouts[txnDigest]){
           transport->Timer((exp_timeouts[txnDigest]-FB_elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+          return;
       }
 
   }
@@ -1048,7 +1148,8 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
     phase2FBReply.set_txn_digest(txnDigest);
     *phase2FBReply.mutable_p2r() = phase2Reply;
     phase2FBReply.mutable_current_view()->set_current_view(current_views[txnDigest]);
-
+    phase2FBReply.mutable_current_view()->set_replica_id(id)
+;
     //TODO: can remove this for simplicity if assuming only correct fallbacks.
     if (params.validateProofs) {
       *phase2FBReply.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
@@ -1529,6 +1630,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
 
   Prepare(txnDigest, txn);
 
+
   bool allFinished = true;
   for (const auto &dep : txn.deps()) {
     if (dep.involved_group() != groupIdx) {
@@ -1537,11 +1639,20 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     if (committed.find(dep.write().prepared_txn_digest()) == committed.end() &&
         aborted.find(dep.write().prepared_txn_digest()) == aborted.end()) {
 
+        //THIS implements the version in which replicas just return abstain for dependencies they have not prepared themselves.
       if (params.validateProofs && params.signedMessages && !params.verifyDeps) {
         if (prepared.find(dep.write().prepared_txn_digest()) == prepared.end()) {
           return proto::ConcurrencyControl::ABSTAIN;
         }
       }
+        //INSERT FALLBACK relayP1
+
+      std::string txdig = dep.write().prepared_txn_digest();
+      if(ongoing.find(txdig) != ongoing.end()){
+        proto::Transaction tx = *ongoing[txdig]
+        RelayP1(remote, tx, reqId);
+      }
+
 
       Debug("[%lu:%lu][%s] WAIT for dependency %s to finish.",
           txn.client_id(), txn.client_seq_num(),
@@ -1568,6 +1679,18 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
   } else {
     return CheckDependencies(txn);
   }
+}
+
+//RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
+void RelayP1(const TransportAddress &remote, proto::Transaction &tx, uint64_t conflict_id){
+  proto::Phase1 p1;
+  p1.set_req_id(0); //doesnt matter, its not used for fallback requests really.
+  *p1.mutable_txn() = tx;
+  proto::RelayP1 relayP1;
+  relayP1.set_conflict_id(conflict_id);
+  *relayP1.mutable_p1() = p1;
+
+  transport->SendMessage(this, remote, relayP1);
 }
 
 void Server::GetPreparedReadTimestamps(

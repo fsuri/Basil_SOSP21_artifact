@@ -142,9 +142,11 @@ void ShardClient::Put(uint64_t id, const std::string &key,
   pcb(REPLY_OK, key, value);
 }
 
+
+
 void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
     const std::string &txnDigest,
-    phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout) {
+    phase1_callback pcb, phase1_timeout_callback ptcb, relayP1_callback rcb, uint32_t timeout) {
   Debug("[group %i] Sending PHASE1 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
   PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId, group, transaction,
@@ -152,6 +154,7 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
   pendingPhase1s[reqId] = pendingPhase1;
   pendingPhase1->pcb = pcb;
   pendingPhase1->ptcb = ptcb;
+  pendingPhase1->rcb = rcb;
   pendingPhase1->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase1]() {
       phase1_timeout_callback ptcb = pendingPhase1->ptcb;
       auto itr = this->pendingPhase1s.find(pendingPhase1->reqId);
@@ -255,6 +258,8 @@ void ShardClient::Writeback(const proto::Transaction &transaction,
 
   transport->SendMessageToGroup(this, group, writeback);
   Debug("[group %i] Sent Fallback WRITEBACK[%s]", group, txnDigest);
+
+  //TODO:delete pendingFB instance? And all pending phase2 that are inside.
 }
 
 
@@ -652,44 +657,17 @@ void ShardClient::Phase1Decision(
   delete pendingPhase1;
 }
 
+/////////////////////////////////////////FALLBACK CODE STARTS HERE ///////////////////////////////////////////
 
-HandlePhase1Relay(proto::RelayP1 &rP1){
-
-    //Call into client to see if still waiting.
-    //TODO: 1) Check if this is a dependency of the pendingTx, otherwise discard
-    //TODO: 2) schedule again for a timeouts
-    //TODO: 3) Call P1Fallback
+HandlePhase1Relay(proto::RelayP1 &relayP1){
+  uint64_t req_id = relayP1.conflict_id();
+  auto itr = this->pendingPhase1s.find(req_id);
+  if (itr == this->pendingPhase1s.end()) {
+    return; // this is a stale request and no upcall is necessary!
+  }
+  itr->second->rcb(relayP1); //upcall to the registered relayP1 callback function.
 }
-void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
-    const std::string &txnDigest,
-    phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout) {
-  Debug("[group %i] Sending PHASE1 [%lu]", group, id);
-  uint64_t reqId = lastReqId++;
-  PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId, group, transaction,
-      txnDigest, config, keyManager, params);
-  pendingPhase1s[reqId] = pendingPhase1;
-  pendingPhase1->pcb = pcb;
-  pendingPhase1->ptcb = ptcb;
-  pendingPhase1->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase1]() {
-      phase1_timeout_callback ptcb = pendingPhase1->ptcb;
-      auto itr = this->pendingPhase1s.find(pendingPhase1->reqId);
-      if (itr != this->pendingPhase1s.end()) {
-        PendingPhase1 *pendingPhase1 = itr->second;
-        this->pendingPhase1s.erase(itr);
-        delete pendingPhase1;
-      }
-      ptcb(REPLY_TIMEOUT);
-  });
 
-  // create prepare request
-  phase1.Clear();
-  phase1.set_req_id(reqId);
-  *phase1.mutable_txn() = transaction;
-
-  transport->SendMessageToGroup(this, group, phase1);
-
-  pendingPhase1->requestTimeout->Reset();
-}
 
 void ShardClient::Phase1FB(proto::Phase1 p1, const std::string &txnDigest, phase1FB_callbackA p1FBcbA, \
   hase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb) {
@@ -702,24 +680,13 @@ void ShardClient::Phase1FB(proto::Phase1 p1, const std::string &txnDigest, phase
       txnDigest, config, keyManager, params);
   pendingFB->pendingP1 = pendingPhase1;
 
-  //TODO: allocate the other datastructures too.
-//TODO: modify the callbacks, who should have them?
+  //set all callbacks
+  //TODO: need to have relayP1 of its own in theory, to support deeper deps.
   pendingFB->wbFBcb = wbFBcb;
   pendingFB->p1FBcbA = p1FBcbA;
   pendingFB->p1FBcbB = p1FBcbB;
   pendingFB->p2FBcb = p2FBcb;
   pendingFB->invFBcb = invFBcb;
-  //What is this for? why destroy the state after a timeout. //TODO: DO NOT destory the PendingFB, but only the pendingP1.
-  // pendingP1FB->requestTimeout = new Timeout(transport, timeout, [this, pendingP1FB, txnDigest]() {
-  //     phase1fb_timeout_callback ptcb = pendingP1FB->ptcb;
-  //     auto itr = this->pendingFallbacks.find(txnDigest);
-  //     if (itr != this->pendingFallbacks.end()) {
-  //       PendingFB *pendingP1FB = itr->second;
-  //       //this->pendingPhase1s.erase(itr);
-  //       delete pendingP1FB;
-  //     }
-  //     ptcb(REPLY_TIMEOUT);
-  // });
 
   // create prepare request
   phase1FB.Clear();
@@ -731,9 +698,11 @@ void ShardClient::Phase1FB(proto::Phase1 p1, const std::string &txnDigest, phase
   pendingPhase1->requestTimeout->Reset();
 }
 
+//TODO: clean this up.
 void ShardClient::HandlePhase1FBReply(proto::phase1FBReply &p1fbr){ // update pendingFB state -- if complete, upcall to client
 
-  auto itr = this->pendingFallbacks.find(reply.txn_digest());
+  std::string txnDigest = p2fbr.txn_digest();
+  auto itr = this->pendingFallbacks.find(txnDigest);
   if (itr == this->pendingFallbacks.end()) {
     return; // this is a stale request
   }
@@ -745,139 +714,120 @@ void ShardClient::HandlePhase1FBReply(proto::phase1FBReply &p1fbr){ // update pe
   //If p2r :; Call HandlePhase2FB() --> this will invoke the Fallback. (this means that the view message must be passed also)
   if(p1fbr.has_p2()){
     proto::Phase2Reply p2r = p1fbr.p2();
-    HandleP2FBR(p2r, p2r.txn_digest())//, reply.attached_view());
+    ProcessP2FBR(p2r, p2r.txn_digest())//, reply.attached_view());
   }
   if(reply.has_p1()){
       //If p1r :: //TODO: call existing HandlePingMessage
       proto::phase1Reply reply = p1fbr.p1();
 
+      /// CODE PASTE:
+          PendingPhase1 *pendingPhase1 = itr->second->pendingP1;
 
-/// Code paste:
-PendingPhase1 *pendingPhase1 = itr->second->pendingP1;
+          bool hasSigned = (params.validateProofs && params.signedMessages) && (!reply.has_cc() || reply.cc().ccr() != proto::ConcurrencyControl::ABORT);
 
-bool hasSigned = (params.validateProofs && params.signedMessages) && (!reply.has_cc() || reply.cc().ccr() != proto::ConcurrencyControl::ABORT);
-
-const proto::ConcurrencyControl *cc = nullptr;
-if (hasSigned) {
-  Debug("[group %i] Verifying signed_cc because has_cc %d and ccr %d.",
-      group,
-      reply.has_cc(),
-      reply.cc().ccr());
-  if (!reply.has_signed_cc()) {
-    return;
-  }
-
-  if (!IsReplicaInGroup(reply.signed_cc().process_id(), group, config)) {
-    Debug("[group %d] Phase1FBReply from replica %lu who is not in group.",
-        group, reply.signed_cc().process_id());
-    return;
-  }
-
-  if (!crypto::Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
-        reply.signed_cc().data(), reply.signed_cc().signature())) {
-    Debug("[group %i] Signature %s from replica %lu is not valid.", group,
-          BytesToHex(reply.signed_cc().signature(), 100).c_str(),
-          reply.signed_cc().process_id());
-
-    return;
-  }
-
-  if (!validatedCC.ParseFromString(reply.signed_cc().data())) {
-    return;
-  }
-
-  cc = &validatedCC;
-} else {
-  UW_ASSERT(reply.has_cc());
-
-  cc = &reply.cc();
-}
-
-Debug("[group %i] PHASE1 callback ccr=%d", group, cc->ccr());
-
-if (!pendingPhase1->p1Validator.ProcessMessage(*cc)) {
-  return;
-}
-
-if (hasSigned) {
-  proto::Signature *sig = pendingPhase1->p1ReplySigs[cc->ccr()].add_sigs();
-  sig->set_process_id(reply.signed_cc().process_id());
-  *sig->mutable_signature() = reply.signed_cc().signature();
-}
-
-Phase1ValidationState state = pendingPhase1->p1Validator.GetState();
-switch (state) {
-  case FAST_COMMIT:
-    pendingPhase1->decision = proto::COMMIT;
-    pendingPhase1->fast = true;
-    Phase1Decision(itr);
-    break;
-  case FAST_ABORT:
-    pendingPhase1->decision = proto::ABORT;
-    pendingPhase1->fast = true;
-    if (params.validateProofs) {
-      pendingPhase1->conflict = cc->committed_conflict();
-    }
-    Phase1Decision(itr);
-    break;
-  case SLOW_COMMIT_FINAL:
-    pendingPhase1->decision = proto::COMMIT;
-    pendingPhase1->fast = false;
-    Phase1Decision(itr);
-    break;
-  case SLOW_ABORT_FINAL:
-    pendingPhase1->decision = proto::ABORT;
-    pendingPhase1->fast = false;
-    Phase1Decision(itr);
-    break;
-  case SLOW_COMMIT_TENTATIVE:
-    if (!pendingPhase1->decisionTimeoutStarted) {
-      uint64_t reqId = reply.req_id();
-      pendingPhase1->decisionTimeout = new Timeout(transport,
-          phase1DecisionTimeout, [this, reqId]() {
-            auto itr = pendingPhase1s.find(reqId);
-            if (itr == pendingPhase1s.end()) {
+          const proto::ConcurrencyControl *cc = nullptr;
+          //Check all validity criteria
+          if (hasSigned) {
+            Debug("[group %i] Verifying signed_cc because has_cc %d and ccr %d.", group, reply.has_cc(), reply.cc().ccr());
+            if (!reply.has_signed_cc()) {
               return;
             }
-            itr->second->decision = proto::COMMIT;
-            itr->second->fast = false;
-            Phase1Decision(itr);
-          }
-        );
-      pendingPhase1->decisionTimeout->Reset();
-      pendingPhase1->decisionTimeoutStarted = true;
-    }
-    break;
-
-  case SLOW_ABORT_TENTATIVE:
-    if (!pendingPhase1->decisionTimeoutStarted) {
-      uint64_t reqId = reply.req_id();
-      pendingPhase1->decisionTimeout = new Timeout(transport,
-          phase1DecisionTimeout, [this, reqId]() {
-            auto itr = pendingPhase1s.find(reqId);
-            if (itr == pendingPhase1s.end()) {
+            if (!IsReplicaInGroup(reply.signed_cc().process_id(), group, config)) {
+              Debug("[group %d] Phase1FBReply from replica %lu who is not in group.",  group, reply.signed_cc().process_id());
               return;
             }
-            itr->second->decision = proto::ABORT;
-            itr->second->fast = false;
-            Phase1Decision(itr);
+            if (!crypto::Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()), reply.signed_cc().data(), reply.signed_cc().signature())) {
+              Debug("[group %i] Signature %s from replica %lu is not valid.", group, BytesToHex(reply.signed_cc().signature(), 100).c_str(), reply.signed_cc().process_id());
+              return;
+            }
+            if (!validatedCC.ParseFromString(reply.signed_cc().data())) {  //validatedCC is a global variable of type proto:CC
+              return;
+            }
+            cc = &validatedCC;
+          } else {
+            UW_ASSERT(reply.has_cc());
+
+            cc = &reply.cc();
           }
-        );
-      pendingPhase1->decisionTimeout->Reset();
-      pendingPhase1->decisionTimeoutStarted = true;
+          Debug("[group %i] PHASE1FB callback ccr=%d", group, cc->ccr());
+          if (!pendingPhase1->p1Validator.ProcessMessage(*cc)) {
+            return;
+          }
+
+          if (hasSigned) {
+            proto::Signature *sig = pendingPhase1->p1ReplySigs[cc->ccr()].add_sigs();
+            sig->set_process_id(reply.signed_cc().process_id());
+            *sig->mutable_signature() = reply.signed_cc().signature();
+          }
+
+          Phase1ValidationState state = pendingPhase1->p1Validator.GetState();
+          switch (state) {
+            case FAST_COMMIT:
+              pendingPhase1->decision = proto::COMMIT;
+              pendingPhase1->fast = true;
+              Phase1Decision(itr);
+              break;
+            case FAST_ABORT:
+              pendingPhase1->decision = proto::ABORT;
+              pendingPhase1->fast = true;
+              if (params.validateProofs) {
+                pendingPhase1->conflict = cc->committed_conflict();
+              }
+              Phase1Decision(itr);
+              break;
+            case SLOW_COMMIT_FINAL:
+              pendingPhase1->decision = proto::COMMIT;
+              pendingPhase1->fast = false;
+              Phase1Decision(itr);
+              break;
+            case SLOW_ABORT_FINAL:
+              pendingPhase1->decision = proto::ABORT;
+              pendingPhase1->fast = false;
+              Phase1Decision(itr);
+              break;
+            case SLOW_COMMIT_TENTATIVE:
+
+            //TODO:: need to edit this.
+              if (!pendingPhase1->decisionTimeoutStarted) {
+                pendingPhase1->decisionTimeout = new Timeout(transport,
+                    phase1DecisionTimeout, [this, reqId]() {
+                      auto itr = pendingFallbacks.find(txnDigest);
+                      if (itr == pendingFallbacks.end()) {
+                        return;
+                      }
+                      itr->second->pendingP1->decision = proto::COMMIT;
+                      itr->second->pendingP1->fast = false;
+                      Phase1Decision(itr);
+                    }
+                  );
+                pendingPhase1->decisionTimeout->Reset();
+                pendingPhase1->decisionTimeoutStarted = true;
+              }
+              break;
+
+            case SLOW_ABORT_TENTATIVE:
+              if (!pendingPhase1->decisionTimeoutStarted) {
+                pendingPhase1->decisionTimeout = new Timeout(transport,
+                    phase1DecisionTimeout, [this, reqId]() {
+                      auto itr = pendingFallbacks.find(txnDigest);
+                      if (itr == pendingFallbacks.end()) {
+                        return;
+                      }
+                      itr->second->pendingP1->decision = proto::ABORT;
+                      itr->second->pendingP1->fast = false;
+                      Phase1Decision(itr);
+                    }
+                  );
+                pendingPhase1->decisionTimeout->Reset();
+                pendingPhase1->decisionTimeoutStarted = true;
+              }
+              break;
+            case NOT_ENOUGH:
+              break;
+            default:
+              break;
+          }
     }
-    break;
-  case NOT_ENOUGH:
-    break;
-  default:
-    break;
-}
-
-
-
-
-//
-}
 
   //TODO: Update view state
 
@@ -886,21 +836,13 @@ switch (state) {
 
 
 
-
-  //TODO: 1) Check if WRITEBACK
-  //TODO: 2) Check if P2  --> call p2 Process messages
-  //TODO: 3) CCheck if P1 -> call HandlePhase1Reply
-  //TODO: 4) manage views.
-  //TODO: Create pendingPhase1 instances for fallback transaction instantiations.
-
-
   void ShardClient::Phase1FBDecision(
-      std::unordered_map<uint64_t, PendingFallbacks *>::iterator itr) {
-    PendingPhase1 *pendingPhase1 = itr->second->pendingP1;
-    pendingPhase1->pcb(pendingPhase1->decision, pendingPhase1->fast,  //TODO Adjust this for FB. Fast path is the same, but slow path is different.
-        pendingPhase1->conflict, pendingPhase1->p1ReplySigs);
-    this->pendingPhase1s.erase(itr);
-    delete pendingPhase1;
+      std::unordered_map<uint64_t, PendingFB *>::iterator itr) {
+    PendingFB *pendingFB = itr->second;
+    PendingPhase1 *pendingPhase1 = pendingFb->pendingP1;
+    pendingFB->p1FBcbA(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict, pendingPhase1->p1ReplySigs);
+    //this->pendingFallbacks.erase(itr);
+    delete pendingPhase1;  //p1 object in pendingFallback is obsolete.
   }
 
 //version A) for p1 based Phase2.  grouped_sigs. //TODO:change callbacks.
@@ -909,13 +851,6 @@ switch (state) {
       proto::CommitDecision decision,
       const proto::GroupedSignatures &groupedSigs) {
     Debug("[group %i] Sending PHASE2FB [%lu]", group, id);
-
-    //TODO: When sending an InvokeFB message, this view = the view you propose ; but unclear what decision you are waiting for?
-    //Create many mappings for potential views/decisions instead.
-
-    //set callbacks properly; these should be inside the pendingFB, not the pendingP2.
-
-    //TODO: differentiate the case for p2
 
     phase2FB.Clear();
     phase2FB.set_req_id(reqId);
@@ -928,7 +863,8 @@ switch (state) {
 
 
   }
-
+  //version B) for p2 based Phase2. p2_replies
+//OVERLOAD Phase2FB so it has the 2 cases
   void ShardClient::Phase2FB(uint64_t id,
       const proto::Transaction &txn, const std::string &txnDigest,
       proto::CommitDecision decision,
@@ -947,41 +883,53 @@ switch (state) {
 
   }
 
-//make copy of this with overloaded argument: Version b) for p2 based Phase 2, sets p2_replies instead.
+void UpdateViewStrucutre(std::string txnDigest, proto::Phase2FBReply &p2fbr){
 
-HandlePhase2FBReply(proto::Phase2FBReply &p2fbr){
+  auto itr = this->pendingFallbacks.find(txnDigest);
 
-  std::string txnDigest = p2fbr.txn_digest();
-  auto itr = this->pendingFallbacks.find(p2fbr.txn_digest());
-  if (itr == this->pendingFallbacks.end()) {
-    Debug("[group %i] Received stale Phase2FBReply for txn %s.", group, p2fbr.txn_digest());
-    return; // this is a stale request
-  }
-
-  //TODO: update view State
   if (params.validateProofs && params.signedMessages) {
       if(!p2fbr.has_signed_current_view()) return;
         proto::SignedMessage signed_msg = p2fbr.signed_current_view();
-        proto::CurrentView curr_view;
-        curr_view.ParseFromString(signed_msg.data());
+        proto::CurrentView new_view;
+        new_view.ParseFromString(signed_msg.data());
+        //only update data strucure if new view is bigger.
+        if(itr->current_views.find(signed_msg.process_id()) != itr->current_views.end()){
+          if(new_view.current_view() <= itr->current_views[signed_msg.process_id()]) return;
+        }
+        // Check if replica ID in group.
+        if(!IsReplicaInGroup(signed_msg.process_id(), group, config)) return;
+
         if(!crypto::Verify(keyManager->GetPublicKey(  signed_msg.process_id()), signed_msg.data(), signed_msg.signature())) return;
         SignedView s_view = new SignedView(curr_view.view(), signed_msg);
-        itr->current_views[curr_view.replica_id()] = s_view;
+        itr->current_views[new_view.replica_id()] = s_view;
 
   }
   else{
+    if(itr->current_views.find(new_view.replica_id()))
     if(p2fbr.current_view().)
     SignedView s_view = new SignedView(p2fbr.current_view().view());
     itr->current_views[p2fbr.current_view().replica_id()] = s_view;
   }
   //TODO: update levels structure
   //TODO: find new proposing view if new view > current proposing view.
+}
 
-  HandleP2FBR(p2fbr.p2r(), p2fbr.txn_digest()); //, p2fbr.attached_view());
+HandlePhase2FBReply(proto::Phase2FBReply &p2fbr){
+
+  std::string txnDigest = p2fbr.txn_digest();
+  auto itr = this->pendingFallbacks.find(txnDigest);
+  if (itr == this->pendingFallbacks.end()) {
+    Debug("[group %i] Received stale Phase2FBReply for txn %s.", group, p2fbr.txn_digest());
+    return; // this is a stale request
+  }
+
+  UpdateViewStrucutre(txnDigest, p2fbr);
+
+  ProcessP2FBR(p2fbr.p2r(), p2fbr.txn_digest()); //, p2fbr.attached_view());
 
 }
 
-HandleP2FBR(proto::Phase2Reply &reply, std::string &txnDigest){ //, proto::AttachedView &view){
+ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest){ //, proto::AttachedView &view){
     auto itr = this->pendingFallbacks.find(txnDigest);
     const proto::Phase2Decision *p2Decision = nullptr;
     if (params.validateProofs && params.signedMessages) {
@@ -1077,6 +1025,7 @@ HandleP2FBR(proto::Phase2Reply &reply, std::string &txnDigest){ //, proto::Attac
 //TODO: also check whether we have waited for n-f for a given view. If so and no match, then thats enough to start InvokeFB after atimeout too.
 
     //if they are mismatched and they are part of max view; need to keep track of divergence
+
     if(itr->second->max_view = p2Decision->view()  \
       && itr->second->pendingP2s[p2Decision->view()]->matchingReplies >= config.f +1 \
       && itr->second->ALTpendingP2s[p2Decision->view()]->matchingReplies >= config.f +1){
@@ -1092,10 +1041,12 @@ HandleP2FBR(proto::Phase2Reply &reply, std::string &txnDigest){ //, proto::Attac
   //TODO: need to keep track of new views.
 }
 
-void ShardClient::WritebackFB(proto::Writeback &wb) {
+void ShardClient::WritebackFB(proto::Writeback &wb std::string txnDigest) {
 
   transport->SendMessageToGroup(this, group, wb);
   Debug("[group %i] Sent FB-WRITEBACK[%lu]", group, id);
+
+  //TODO: Delete PendingFB instance.
 }
 
 
