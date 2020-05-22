@@ -76,7 +76,13 @@ typedef std::function<void(proto::CommitDecision, bool,
     const proto::CommittedProof &,
     const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1FB_callbackA;
 
-typedef std::function<void(proto::CommitDecision, const proto::P2Replies &)> phase1_callbackB;
+typedef std::function<void() proto::CommitDecision, const proto::P2Replies &)> phase1_callbackB;
+
+typedef std::function<void(const proto::Signatures &)> phase2FB_callback;
+
+typedef std::function<void()> invokeFB_callback; //needs no arguments; could pass  "const proto::SignedMessages &" for view sigs, but it will just come back anyways
+
+typedef std::function<void(const proto::Writeback &)> writebackFB_callback;
 
 class ShardClient : public TransportReceiver, public PingInitiator, public PingTransport {
  public:
@@ -187,6 +193,8 @@ struct PendingFB {
   PendingFB() : p1(true), max_view(0) {}
   ~PendingFB(){}
 
+
+
   PendingPhase1 pendingP1;  //TODO:: the callback needs to differ: It needs to propose a P2Rec message.
   std::map<uint64_t, PendingPhase2* > pendingP2s;  //for each view: hold commit/abort votes.
   std::map<uint64_t, PendingPhase2* > ALTpendingP2s;
@@ -199,7 +207,8 @@ struct PendingFB {
 
   //TODO: add different callbacks
   writebackFB_callback wbFBcb;
-  phase1FB_callback p1FBcb; // can use a lot from phase1_callback (edited to include the f+1 p2 case + sends a P2FB message instead)
+  phase1FB_callbackA p1FBcbA; // can use a lot from phase1_callback (edited to include the f+1 p2 case + sends a P2FB message instead)
+  phase1FB_callbackB p1FBcbB;
   phase2FB_callback p2FBcb; // callback in case that we finish normal p2, can return just as if it was the normal protocol?
   invokeFB_callback invFBcb;
 };

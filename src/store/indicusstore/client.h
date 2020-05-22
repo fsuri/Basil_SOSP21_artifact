@@ -117,6 +117,9 @@ class Client : public ::Client {
     std::string txnDigest;
     int slowAbortGroup;
     proto::CommittedProof conflict;
+    //added this for fallback handling
+    proto::Transaction txn;
+    proto::Phase2Replies p2Replies;
   };
 
   void Phase1(PendingRequest *req);
@@ -154,7 +157,7 @@ class Client : public ::Client {
 
   //void ReceiveNewView.  (Only necessary if doing the client driven view change. This happens if replicas tried to elect a FB, but timed out on a response because the FB is byz or crashed or whatever) Receive 3f+1 matching from higher view than last and start new Invocation
   //void FBWriteback: Should just be the normal writeback
-  std::unordered_map<std::string, proto::Phase1> FB_instances;
+  std::unordered_map<std::string, pendingRequests*> FB_instances;
 
 
 

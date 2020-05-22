@@ -16,6 +16,10 @@ message SignedMessage {
   required bytes signature = 3;
 }
 
+message SignedMessages{
+  repeated SignedMessage sig_msgs = 1;
+}
+
 message Signature {
   required uint64 process_id = 1;
   required bytes signature = 2;
@@ -168,6 +172,7 @@ message InvokeFB {
   optional uint64 proposed_view = 4;
   optional bool catchup = 5; //just signifies whether we need 3f+1 or f+1 to justify
   optional Signatures view_sigs = 6;  //expect client to attach just the signatures necessary to prove his proposed view.
+  //THIS NEEDS TO CHANGE TO SIGNED MESSAGES, (because of vote subsumtion)
 }
 
 

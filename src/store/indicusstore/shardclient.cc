@@ -233,6 +233,31 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction,
   Debug("[group %i] Sent WRITEBACK[%lu]", group, id);
 }
 
+//Overloaded Wb function to not include ID, this is purely for debug purpose to distinguish whether a message came from FB instance.
+void ShardClient::Writeback(const proto::Transaction &transaction,
+    const std::string &txnDigest,
+    proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
+    const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs) {
+
+  writeback.Clear();
+  // create commit request
+  writeback.set_decision(decision);
+  if (params.validateProofs && params.signedMessages) {
+    if (fast && decision == proto::COMMIT) {
+      *writeback.mutable_p1_sigs() = p1Sigs;
+    } else if (fast && decision == proto::ABORT) {
+      *writeback.mutable_conflict() = conflict;
+    } else {
+      *writeback.mutable_p2_sigs() = p2Sigs;
+    }
+  }
+  writeback.set_txn_digest(txnDigest);
+
+  transport->SendMessageToGroup(this, group, writeback);
+  Debug("[group %i] Sent Fallback WRITEBACK[%s]", group, txnDigest);
+}
+
+
 void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
   abort.Clear();
   *abort.mutable_internal()->mutable_ts() = ts;
@@ -666,8 +691,8 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction,
   pendingPhase1->requestTimeout->Reset();
 }
 
-void ShardClient::Phase1FB(proto::Phase1 p1, const std::string &txnDigest, phase1FB_callback p1FBcb, \
-  phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb) {
+void ShardClient::Phase1FB(proto::Phase1 p1, const std::string &txnDigest, phase1FB_callbackA p1FBcbA, \
+  hase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb) {
   Debug("[group %i] Sending PHASE1FB [%lu]", group, id);
 
   PendingFB pendingFB = new PendingFB();
@@ -680,7 +705,8 @@ void ShardClient::Phase1FB(proto::Phase1 p1, const std::string &txnDigest, phase
   //TODO: allocate the other datastructures too.
 //TODO: modify the callbacks, who should have them?
   pendingFB->wbFBcb = wbFBcb;
-  pendingFB->p1FBcb = p1FBcb;
+  pendingFB->p1FBcbA = p1FBcbA;
+  pendingFB->p1FBcbB = p1FBcbB;
   pendingFB->p2FBcb = p2FBcb;
   pendingFB->invFBcb = invFBcb;
   //What is this for? why destroy the state after a timeout. //TODO: DO NOT destory the PendingFB, but only the pendingP1.
@@ -713,7 +739,7 @@ void ShardClient::HandlePhase1FBReply(proto::phase1FBReply &p1fbr){ // update pe
   }
   //TODO: check type:
   if(p1fbr.has_wb()){
-    //TODO: return to client
+    itr->second->wbFBcb(p1fbr.wb());
     return;
   }
   //If p2r :; Call HandlePhase2FB() --> this will invoke the Fallback. (this means that the view message must be passed also)
@@ -859,6 +885,8 @@ switch (state) {
 }
 
 
+
+
   //TODO: 1) Check if WRITEBACK
   //TODO: 2) Check if P2  --> call p2 Process messages
   //TODO: 3) CCheck if P1 -> call HandlePhase1Reply
@@ -879,28 +907,15 @@ switch (state) {
   void ShardClient::Phase2FB(uint64_t id,
       const proto::Transaction &txn, const std::string &txnDigest,
       proto::CommitDecision decision,
-      const proto::GroupedSignatures &groupedSigs, phase2_callback pcb,
-      phase2_timeout_callback ptcb, uint32_t ti  pendingPhase2s[reqId] = pendingPhase2;meout) {
+      const proto::GroupedSignatures &groupedSigs) {
     Debug("[group %i] Sending PHASE2FB [%lu]", group, id);
 
     //TODO: When sending an InvokeFB message, this view = the view you propose ; but unclear what decision you are waiting for?
     //Create many mappings for potential views/decisions instead.
 
     //set callbacks properly; these should be inside the pendingFB, not the pendingP2.
-    pendingPhase2s[reqId] = pendingPhase2;
-    pendingPhase2->pcb = pcb;
-    pendingPhase2->ptcb = ptcb;
-    pendingPhase2->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase2]() {
-        phase2_timeout_callback ptcb = pendingPhase2->ptcb;
-        auto itr = this->pendingPhase2s.find(pendingPhase2->reqId);
-        if (itr != this->pendingPhase2s.end()) {
-          PendingPhase2 *pendingPhase2 = itr->second;
-          this->pendingPhase2s.erase(itr);
-          delete pendingPhase2;
-        }
 
-        ptcb(REPLY_TIMEOUT);
-    });
+    //TODO: differentiate the case for p2
 
     phase2FB.Clear();
     phase2FB.set_req_id(reqId);
@@ -911,7 +926,25 @@ switch (state) {
     }
     transport->SendMessageToGroup(this, group, phase2FB);
 
-    pendingPhase2->requestTimeout->Reset();   //TODO: address this.
+
+  }
+
+  void ShardClient::Phase2FB(uint64_t id,
+      const proto::Transaction &txn, const std::string &txnDigest,
+      proto::CommitDecision decision,
+      const proto::P2Replies &p2Replies) {
+    Debug("[group %i] Sending PHASE2FB [%lu]", group, id);
+
+    phase2FB.Clear();
+    phase2FB.set_req_id(reqId);
+    phase2FB.set_decision(decision);
+    *phase2FB.mutable_txn_digest() = txnDigest;
+    if (params.validateProofs && params.signedMessages) {
+      *phase2.mutable_p2_replies() = p2Replies;
+    }
+    transport->SendMessageToGroup(this, group, phase2FB);
+
+
   }
 
 //make copy of this with overloaded argument: Version b) for p2 based Phase 2, sets p2_replies instead.
@@ -1041,14 +1074,14 @@ HandleP2FBR(proto::Phase2Reply &reply, std::string &txnDigest){ //, proto::Attac
 
 
 
-
+//TODO: also check whether we have waited for n-f for a given view. If so and no match, then thats enough to start InvokeFB after atimeout too.
 
     //if they are mismatched and they are part of max view; need to keep track of divergence
     if(itr->second->max_view = p2Decision->view()  \
       && itr->second->pendingP2s[p2Decision->view()]->matchingReplies >= config.f +1 \
       && itr->second->ALTpendingP2s[p2Decision->view()]->matchingReplies >= config.f +1){
         //TODO: collect view Quorums.
-        //TODO Invoke FALLBACK
+        //TODO Invoke FALLBACK (can only do this if enough views collected...) --> always wait for at least n-f? --> to guarantee that highest view is included
         //TODO This also requires P2 decision (if not sent yet).
       }
 
@@ -1057,6 +1090,12 @@ HandleP2FBR(proto::Phase2Reply &reply, std::string &txnDigest){ //, proto::Attac
 
 
   //TODO: need to keep track of new views.
+}
+
+void ShardClient::WritebackFB(proto::Writeback &wb) {
+
+  transport->SendMessageToGroup(this, group, wb);
+  Debug("[group %i] Sent FB-WRITEBACK[%lu]", group, id);
 }
 
 
