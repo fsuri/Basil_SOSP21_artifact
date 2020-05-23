@@ -542,6 +542,8 @@ void Client::Phase1FB(proto::Phase1 &p1, uint64_t conflict_id){  //passes callba
       auto wb = std::bind(&Client::WritebackFBcallback, this, conflict_id, txnDigest, bind_txn, std::placeholders::_1);
       auto invoke = std::bind(&Client::InvokeFBcallback, this, conflict_id, txnDigest, group); //technically only needed at logging shard
 
+      //Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Transaction &fbtxn, proto::Writeback &wb)
+
       //proto::Transaction fbtxn = p1.txn();
       //uint64_t fbID = p1.req_id();
       bclient[group]->Phase1FB(p1, txnDigest, p1fbA, p1fbB, p2fb, wb, invoke);

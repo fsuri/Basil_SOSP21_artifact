@@ -82,7 +82,7 @@ typedef std::function<void(proto::CommitDecision, const proto::P2Replies &)> pha
 
 typedef std::function<void(proto::CommitDecision, const proto::Signatures &)> phase2FB_callback;
 
-typedef std::function<void(const proto::Writeback &)> writebackFB_callback;
+typedef std::function<void(proto::Writeback &)> writebackFB_callback;
 
 typedef std::function<void()> invokeFB_callback;
 
@@ -131,7 +131,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   virtual bool SendPing(size_t replica, const PingMessage &ping);
 
 //public fallback functions:
-  virtual void Phase1FB(proto::Phase1 &p1, const std::string &txnDigest, phase1FB_callbackA p1FBcbA, phase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb);
+  virtual void Phase1FB(proto::Phase1 &p1, const std::string &txnDigest, phase1FB_callbackA p1FBcbA,
+    phase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb);
   virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,
     const proto::GroupedSignatures &groupedSigs);
   //overloaded for different p2 alternative

@@ -706,7 +706,8 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){ // update pe
   }
   //TODO: check type:
   if(p1fbr.has_wb()){
-    itr->second->wbFBcb(p1fbr.wb());
+    proto::Writeback wb = p1fbr.wb();
+    itr->second->wbFBcb(wb);
     return;
   }
 
