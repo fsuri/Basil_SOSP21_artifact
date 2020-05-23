@@ -147,6 +147,12 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   uint64_t DependencyDepth(const proto::Transaction *txn) const;
   void MessageToSign(::google::protobuf::Message* msg,
       proto::SignedMessage *signedMessage, signedCallback cb);
+  proto::ReadReply *GetUnusedReadReply();
+  proto::Phase1Reply *GetUnusedPhase1Reply();
+  proto::Phase2Reply *GetUnusedPhase2Reply();
+  void FreeReadReply(proto::ReadReply *reply);
+  void FreePhase1Reply(proto::Phase1Reply *reply);
+  void FreePhase2Reply(proto::Phase2Reply *reply);
 
   inline bool IsKeyOwned(const std::string &key) const {
     return static_cast<int>((*part)(key, numShards, groupIdx, dummyTxnGroups) % numGroups) == groupIdx;
@@ -181,6 +187,10 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   proto::ConcurrencyControl concurrencyControl;
   proto::AbortInternal abortInternal;
   std::vector<int> dummyTxnGroups;
+
+  std::vector<proto::ReadReply *> readReplies;
+  std::vector<proto::Phase1Reply *> p1Replies;
+  std::vector<proto::Phase2Reply *> p2Replies;
 
   PingMessage ping;
 

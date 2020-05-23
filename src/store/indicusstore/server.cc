@@ -106,6 +106,15 @@ Server::~Server() {
   for (const auto &o : ongoing) {
     delete o.second;
   }
+  for (auto r : readReplies) {
+    delete r;
+  }
+  for (auto r : p1Replies) {
+    delete r;
+  }
+  for (auto r : p2Replies) {
+    delete r;
+  }
   Notice("Freeing signer.");
   if (batchSigner != nullptr) {
     delete batchSigner;
@@ -173,7 +182,7 @@ void Server::HandleRead(const TransportAddress &remote,
   std::pair<Timestamp, Server::Value> tsVal;
   bool exists = store.get(msg.key(), ts, tsVal);
 
-  proto::ReadReply* readReply = new proto::ReadReply();
+  proto::ReadReply* readReply = GetUnusedReadReply();
   readReply->set_req_id(msg.req_id());
   readReply->set_key(msg.key());
   if (exists) {
@@ -191,7 +200,7 @@ void Server::HandleRead(const TransportAddress &remote,
   auto sendCB = [this, remoteCopy, readReply]() {
     this->transport->SendMessage(this, *remoteCopy, *readReply);
     delete remoteCopy;
-    delete readReply;
+    FreeReadReply(readReply);
   };
 
   if (occType == MVTSO) {
@@ -337,12 +346,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   p2Decisions[*txnDigest] = msg.decision();
 
-  proto::Phase2Reply* phase2Reply = new proto::Phase2Reply();
+  proto::Phase2Reply* phase2Reply = GetUnusedPhase2Reply();
   TransportAddress *remoteCopy = remote.clone();
   auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
     this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
-    delete phase2Reply;
+    FreePhase2Reply(phase2Reply);
     delete remoteCopy;
   };
 
@@ -1077,13 +1086,13 @@ void Server::SendPhase1Reply(uint64_t reqId,
     const TransportAddress &remote) {
   p1Decisions[txnDigest] = result;
 
-  proto::Phase1Reply* phase1Reply = new proto::Phase1Reply();
+  proto::Phase1Reply* phase1Reply = GetUnusedPhase1Reply();
   phase1Reply->set_req_id(reqId);
   TransportAddress *remoteCopy = remote.clone();
 
   auto sendCB = [remoteCopy, this, phase1Reply]() {
     this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
-    delete phase1Reply;
+    FreePhase1Reply(phase1Reply);
     delete remoteCopy;
   };
 
@@ -1179,5 +1188,54 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
     batchSigner->MessageToSign(msg, signedMessage, cb);
   }
 }
+
+proto::ReadReply *Server::GetUnusedReadReply() {
+  proto::ReadReply *reply;
+  if (readReplies.size() > 0) {
+    reply = readReplies.back();
+    reply->Clear();
+    readReplies.pop_back();
+  } else {
+    reply = new proto::ReadReply();
+  }
+  return reply;
+}
+
+proto::Phase1Reply *Server::GetUnusedPhase1Reply() {
+  proto::Phase1Reply *reply;
+  if (p1Replies.size() > 0) {
+    reply = p1Replies.back();
+    reply->Clear();
+    p1Replies.pop_back();
+  } else {
+    reply = new proto::Phase1Reply();
+  }
+  return reply;
+}
+
+proto::Phase2Reply *Server::GetUnusedPhase2Reply() {
+  proto::Phase2Reply *reply;
+  if (p2Replies.size() > 0) {
+    reply = p2Replies.back();
+    reply->Clear();
+    p2Replies.pop_back();
+  } else {
+    reply = new proto::Phase2Reply();
+  }
+  return reply;
+}
+
+void Server::FreeReadReply(proto::ReadReply *reply) {
+  readReplies.push_back(reply);
+}
+
+void Server::FreePhase1Reply(proto::Phase1Reply *reply) {
+  p1Replies.push_back(reply);
+}
+
+void Server::FreePhase2Reply(proto::Phase2Reply *reply) {
+  p2Replies.push_back(reply);
+}
+
 
 } // namespace indicusstore
