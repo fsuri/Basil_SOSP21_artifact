@@ -471,19 +471,20 @@ void Server::SendPhase1FBReply(uint64_t reqId,
     //curr_view.set_current_view(current_views[txnDigest]);
     //*phase1FBReply.mutable_current_view() = *curr_view;
     //phase1FBReply.mutable_current_view(curr_view));
-    phase1FBReply.mutable_current_view()->set_current_view(current_views[txnDigest]);
-    phase1FBReply.mutable_current_view()->set_replica_id(id);
+    proto::AttachedView attachedView;
+    attachedView.mutable_current_view()->set_current_view(current_views[txnDigest]);
+    attachedView.mutable_current_view()->set_replica_id(id);
 
 //SIGN IT:  //TODO: Want to add this to p2 also, in case fallback is faulty - for simplicity assume only correct fallbacks for now.
-      *phase1FBReply.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
+      *attachedView.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
 
       if (params.signedMessages) {
-        proto::CurrentView cView(phase1FBReply.current_view());
+        proto::CurrentView cView(attachedView.current_view());
         //Latency_Start(&signLat);
-        SignMessage(cView, keyManager->GetPrivateKey(id), id, phase1FBReply.mutable_signed_current_view());
+        SignMessage(cView, keyManager->GetPrivateKey(id), id, attachedView.mutable_signed_current_view());
         //Latency_End(&signLat);
       }
-
+    *phase1FBReply.mutable_attached_view() = attachedView;
 
     transport->SendMessage(this, remote, phase1FBReply);
 }
@@ -747,19 +748,20 @@ SetP2(p2fb.req_id(), txnDigest, p2Decisions[txnDigest]);
 phase2FBReply.Clear();
 phase2FBReply.set_txn_digest(txnDigest);
 *phase2FBReply.mutable_p2r() = phase2Reply;
-phase2FBReply.mutable_current_view()->set_current_view(current_views[txnDigest]);
-phase1FBReply.mutable_current_view()->set_replica_id(id);
+proto::AttachedView attachedView;
+attachedView.mutable_current_view()->set_current_view(current_views[txnDigest]);
+attachedView.mutable_current_view()->set_replica_id(id);
 
-//TODO: can remove this for simplicity if assuming only correct fallbacks.
-
-*phase2FBReply.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
+//SIGN IT:  //TODO: Want to add this to p2 also, in case fallback is faulty - for simplicity assume only correct fallbacks for now.
+  *attachedView.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
 
   if (params.signedMessages) {
-    proto::CurrentView cView(phase2FBReply.current_view());
+    proto::CurrentView cView(attachedView.current_view());
     //Latency_Start(&signLat);
-    SignMessage(cView, keyManager->GetPrivateKey(id), id, phase2FBReply.mutable_signed_current_view());
+    SignMessage(cView, keyManager->GetPrivateKey(id), id, attachedView.mutable_signed_current_view());
     //Latency_End(&signLat);
   }
+*phase2FBReply.mutable_attached_view() = attachedView;
 
 
 transport->SendMessage(this, remote, phase2FBReply);
@@ -1147,20 +1149,20 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
     phase2FBReply.Clear();
     phase2FBReply.set_txn_digest(txnDigest);
     *phase2FBReply.mutable_p2r() = phase2Reply;
-    phase2FBReply.mutable_current_view()->set_current_view(current_views[txnDigest]);
-    phase2FBReply.mutable_current_view()->set_replica_id(id)
-;
-    //TODO: can remove this for simplicity if assuming only correct fallbacks.
-    if (params.validateProofs) {
-      *phase2FBReply.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
+    proto::AttachedView attachedView;
+    attachedView.mutable_current_view()->set_current_view(current_views[txnDigest]);
+    attachedView.mutable_current_view()->set_replica_id(id);
+
+//SIGN IT:  //TODO: Want to add this to p2 also, in case fallback is faulty - for simplicity assume only correct fallbacks for now.
+      *attachedView.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
 
       if (params.signedMessages) {
-        proto::CurrentView cView(phase2FBReply.current_view());
+        proto::CurrentView cView(attachedView.current_view());
         //Latency_Start(&signLat);
-        SignMessage(cView, keyManager->GetPrivateKey(id), id, phase2FBReply.mutable_signed_current_view());
+        SignMessage(cView, keyManager->GetPrivateKey(id), id, attachedView.mutable_signed_current_view());
         //Latency_End(&signLat);
       }
-    }
+    *phase2FBReply.mutable_attached_view() = attachedView;
 
     for(const TransportAddress * target :   interestedClients[txnDigest] ){
       transport->SendMessage(this, *target, phase2FBReply);

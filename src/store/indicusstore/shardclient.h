@@ -79,13 +79,15 @@ typedef std::function<void(proto::CommitDecision, bool,
     const proto::CommittedProof &,
     const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1FB_callbackA;
 
-typedef std::function<void() proto::CommitDecision, const proto::P2Replies &)> phase1_callbackB;
+typedef std::function<void(proto::CommitDecision, const proto::P2Replies &)> phase1_callbackB;
 
-typedef std::function<void(const proto::Signatures &)> phase2FB_callback;
+typedef std::function<void(proto::CommitDecision, const proto::Signatures &)> phase2FB_callback;
 
 typedef std::function<void()> invokeFB_callback; //needs no arguments; could pass  "const proto::SignedMessages &" for view sigs, but it will just come back anyways
 
 typedef std::function<void(const proto::Writeback &)> writebackFB_callback;
+
+typedef std::function<void()> call_invokeFB;
 
 class ShardClient : public TransportReceiver, public PingInitiator, public PingTransport {
  public:
@@ -195,20 +197,25 @@ struct SignedView(){
 }
 //Fallback request
 struct PendingFB {
-  PendingFB() : p1(true), max_view(0) {}
+  PendingFB() : p1(true), max_decision_view(0), max_view(0) {}
   ~PendingFB(){}
 
 
 
   PendingPhase1 *pendingP1;  //TODO:: the callback needs to differ: It needs to propose a P2Rec message.
+  uint64_t max_decision_view;
   std::map<uint64_t, PendingPhase2* > pendingP2s;  //for each view: hold commit/abort votes.
   std::map<uint64_t, PendingPhase2* > ALTpendingP2s;
-  std::map<proto::CommitDecision, proto::Phase2Replies*> p2ReplySigs; //These must be from the same group, but can differ in view.
+  std::map<proto::CommitDecision, proto::Phase2Replies*> p2Replies; //These must be from the same group, but can differ in view.
   std::unordered_set<uint64> process_ids;
   bool p1; //TODO DISTINGUISH IN WHICH PHASE WE ARE:
-  uint64_t max_view;
+
   std::map<uint64_t, SignedView*> current_views;  //maps from replicaID to current view
   std::map<uint64_t, std::set<uint64_t>> view_levels; //maps from view to ids  in that view
+  uint64_t last_view;
+  uint64_t max_view;  //we will propose max_view, but only if its bigger than last_view; otherwise we need better votes.
+  bool catchup;
+  //std::set<uint64_t> existing_levels;
 
   //TODO: add different callbacks
   writebackFB_callback wbFBcb;
@@ -216,6 +223,10 @@ struct PendingFB {
   phase1FB_callbackB p1FBcbB;
   phase2FB_callback p2FBcb; // callback in case that we finish normal p2, can return just as if it was the normal protocol?
   invokeFB_callback invFBcb;
+
+  // manage Invocation start
+  bool call_invokeFB;
+  call_invokeFB view_invoker;
 };
 
 std::unordered_map<std::string, PendingFB*> pendingFallbacks; //map from txnDigests to their fallback instances.

@@ -711,10 +711,14 @@ void ShardClient::HandlePhase1FBReply(proto::phase1FBReply &p1fbr){ // update pe
     itr->second->wbFBcb(p1fbr.wb());
     return;
   }
+
+//Update views, since those might become necessary.
+  UpdateViewStructure(txnDigest, p1fbr.attached_view());
   //If p2r :; Call HandlePhase2FB() --> this will invoke the Fallback. (this means that the view message must be passed also)
   if(p1fbr.has_p2()){
     proto::Phase2Reply p2r = p1fbr.p2();
     ProcessP2FBR(p2r, p2r.txn_digest())//, reply.attached_view());
+    return;
   }
   if(reply.has_p1()){
       //If p1r :: //TODO: call existing HandlePingMessage
@@ -829,8 +833,6 @@ void ShardClient::HandlePhase1FBReply(proto::phase1FBReply &p1fbr){ // update pe
           }
     }
 
-  //TODO: Update view state
-
 
 }
 
@@ -838,6 +840,7 @@ void ShardClient::HandlePhase1FBReply(proto::phase1FBReply &p1fbr){ // update pe
 
   void ShardClient::Phase1FBDecision(
       std::unordered_map<uint64_t, PendingFB *>::iterator itr) {
+    itr->second->p1 = false;
     PendingFB *pendingFB = itr->second;
     PendingPhase1 *pendingPhase1 = pendingFb->pendingP1;
     pendingFB->p1FBcbA(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict, pendingPhase1->p1ReplySigs);
@@ -883,35 +886,122 @@ void ShardClient::HandlePhase1FBReply(proto::phase1FBReply &p1fbr){ // update pe
 
   }
 
-void UpdateViewStrucutre(std::string txnDigest, proto::Phase2FBReply &p2fbr){
+void UpdateViewStructure(std::string txnDigest, proto::AttachedView &ac){
 
   auto itr = this->pendingFallbacks.find(txnDigest);
 
+  int64_t current view;
+  bool update = false;
+  uint64_t id;
+
   if (params.validateProofs && params.signedMessages) {
-      if(!p2fbr.has_signed_current_view()) return;
-        proto::SignedMessage signed_msg = p2fbr.signed_current_view();
+        if(!ac.has_signed_current_view()) return;
+        proto::SignedMessage signed_msg = ac.signed_current_view();
         proto::CurrentView new_view;
         new_view.ParseFromString(signed_msg.data());
+
         //only update data strucure if new view is bigger.
-        if(itr->current_views.find(signed_msg.process_id()) != itr->current_views.end()){
-          if(new_view.current_view() <= itr->current_views[signed_msg.process_id()]) return;
+        if(itr->second->current_views.find(signed_msg.process_id()) != itr->second->current_views.end()){
+          current_view =  itr->second->current_views[new_view.replica_id()]->view;
+          if(new_view.current_view() <= itr->second->current_views[signed_msg.process_id()]->view) return;
         }
         // Check if replica ID in group.
         if(!IsReplicaInGroup(signed_msg.process_id(), group, config)) return;
 
         if(!crypto::Verify(keyManager->GetPublicKey(  signed_msg.process_id()), signed_msg.data(), signed_msg.signature())) return;
         SignedView s_view = new SignedView(curr_view.view(), signed_msg);
-        itr->current_views[new_view.replica_id()] = s_view;
+        update = true;
+        itr->second->current_views[new_view.replica_id()] = &s_view;
+        id = signed_msg.process_id();
 
   }
   else{
-    if(itr->current_views.find(new_view.replica_id()))
-    if(p2fbr.current_view().)
-    SignedView s_view = new SignedView(p2fbr.current_view().view());
-    itr->current_views[p2fbr.current_view().replica_id()] = s_view;
+
+    if(!ac.has_current_view()) return;
+    proto::CurrentView new_view = ac.current_view();
+    if(itr->second->current_views.find(new_view.replica_id()))
+    if(itr->second->current_views.find(signed_msg.process_id()) != itr->current_views.end()){
+        current_view =  itr->second->current_views[new_view.replica_id()]->view;
+        if(new_view.current_view() <= itr->second->current_views[new_view.replica_id()]->view) return;
+    }
+    if(!IsReplicaInGroup(new_view.replica_id(), group, config)) return;
+    SignedView s_view = new SignedView(new_view.view());
+    update=true;
+    itr->second->current_views[new_view.replica_id()] = &s_view;
+    id = new_view.replica_id();
   }
-  //TODO: update levels structure
-  //TODO: find new proposing view if new view > current proposing view.
+
+  if(update){
+    uint64_t nv = new_view.view();
+    itr->second->view_levels[current_view].erase(id);
+    if(itr->second->view_levels[current_view]->size() == 0){
+      //itr->existing_levels.erase(current_view);
+      itr->second->view_levels.erase(current_view);
+    }
+
+    if(itr->second->view_levels.find(nv) == itr->second->view_levels.end()){  //if(itr->existing_levels.find(nv) == itr->existing_levels.end()){
+      itr->second->view_levels[nv] = std::set<uint64_t>();
+    }
+    itr->second->view_levels[new_view.view()].insert(id);
+    //itr->existing_levels.insert(new_view.view());
+
+    //Dont do this here?
+
+    // if(new_view.view() >= itr->second->max_view){
+    //   ComputeMaxLevel(txnDigest);
+    // }
+    //ADD logic to call Invoke callback if it was missing new views to invoked
+    if(itr->second->call_invokeFB){
+      itr->second->view_invoker();
+    }
+
+  }
+}
+
+// void ShardClient::ComputeMaxLevel(std::string txnDigest){
+//     auto itr = pendingFallbacks[txnDigest];
+//     std::set<uint64_t> levels = itr->existing_levels;
+//     std::set<int>::reverse_iterator rit;
+//     uint64_t count = 0;
+//
+//     for (rit=levels.rbegin(); rit != levels.rend(); ++rit){
+//       if(*rit < itr->max_view) return;
+//       if(count + itr->view_levels[*rit].size() >= 3*config.f + 1){
+//         itr->max_view = *rit + 1;
+//         return;
+//       }
+//       elif(count+ itr->view_levels[*rit].size() >= config.f +1){
+//         itr->max_view = *rit;
+//         return;
+//       }
+//       count += itr->view_levels[*rit].size();
+//
+//     }
+//   return;
+// }
+
+void ShardClient::ComputeMaxLevel(std::string txnDigest){
+    auto itr = pendingFallbacks[txnDigest];
+
+    std::map<uint64_t, std::set<uint64_t>>::reverse_iterator rit;
+    uint64_t count = 0;
+
+    for (rit=itr->second->view_levels.rbegin(); rit != itr->second->view_levels.rend(); ++rit){
+      if(rit->first < itr->second->max_view) return;
+      if(count + rit->second.size() >= 3*config.f + 1){
+        itr->second->max_view = rit->first + 1;
+        itr->second->catchup = false;
+        return;
+      }
+      elif(count+ rit->second.size() >= config.f +1){
+        itr->second->max_view = rit->first;
+        itr->second->catchup = true;
+        return;
+      }
+      count += rit->second.size();
+
+    }
+  return;
 }
 
 HandlePhase2FBReply(proto::Phase2FBReply &p2fbr){
@@ -923,11 +1013,12 @@ HandlePhase2FBReply(proto::Phase2FBReply &p2fbr){
     return; // this is a stale request
   }
 
-  UpdateViewStrucutre(txnDigest, p2fbr);
+  UpdateViewStructure(txnDigest, p2fbr.attached_view());
 
   ProcessP2FBR(p2fbr.p2r(), p2fbr.txn_digest()); //, p2fbr.attached_view());
 
 }
+
 
 ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest){ //, proto::AttachedView &view){
     auto itr = this->pendingFallbacks.find(txnDigest);
@@ -964,15 +1055,21 @@ ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest){ //, proto::Atta
         p2Decision->decision(), p2Decision->view());
 
 
-    if(itr->second->max_view < p2Decision->view(){
-      itr->second->max_view = p2Decision->view();
-      //TODO: delete all entries for views < max_view -1. They are pretty much obsolete.
-    }
-    else if{itr->second->max_view > p2Decision->view()+1 ){ //TODO: restructure message type so the validity check only comes after trivial checks
-      return;
-    }
+    if(itr->second->max_decision_view < p2Decision->view()){
+              itr->second->max_decision_view = p2Decision->view();
+              //delete all entries for views < max_view -1. They are pretty much obsolete.
+              //TODO: should only do this once f+1 received. Otherwise we let a byz delete our state.
+                std::map<uint64_t, PendingPhase*>::iterator it;
+                for (it=itr->second->pendingP2s.begin(); it != itr->second->pendingP2s.end(); it++){
+                    itr->second->pendingP2s.erase(it.first);
+                }
+
+      }
+      else if(itr->second->max_decision_view > p2Decision->view()+1 ){
+              return;
+      }
 //create new entry for this view.
-    if(itr->second->pendingP2s.find(p2Decision->view()) = itr->second->pendingP2s.end()){
+    if(itr->second->pendingP2s.find(p2Decision->view()) == itr->second->pendingP2s.end()){
       itr->second->pendingP2s[p2Decision->view()] = new pendingPhase2(reply.req_id(), p2Decision->decision());
     }
 
@@ -995,28 +1092,30 @@ ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest){ //, proto::Atta
     //Can return directly to writeback
     if (itr->second->pendingP2s[p2Decision->view()]->matchingReplies >= QuorumSize(config)) {
       PendingFB *pendingFB = itr->second;
-      pendingFB->p2cb(pendingFB.pendingP2s[p2Decision->view()].p2ReplySigs);  //TODO: change this callback. need to include decision..
+      pendingFB->p2FBcb(pendingFB.pendingP2s[p2Decision->view()].decision , pendingFB.pendingP2s[p2Decision->view()].p2ReplySigs);
       this->pendingFallbacks.erase(itr);
       delete pendingFB;
     }
     else if (itr->second->ALTpendingP2s[p2Decision->view()]->matchingReplies >= QuorumSize(config)) {
       PendingFB *pendingFB = itr->second;
-      pendingFB->p2cb(pendingFB.ALTpendingP2s[p2Decision->view()].p2ReplySigs);  //TODO: change this callback.
+        pendingFB->p2FBcb(pendingFB.ALTpendingP2s[p2Decision->view()].decision , pendingFB.ALTpendingP2s[p2Decision->view()].p2ReplySigs);
       this->pendingFallbacks.erase(itr);
       delete pendingFB;
     }
 
     //Otherwise, check if we are still doing p1 simultaneously
+
     if(itr->second->p1){
       uint64_t id = reply.signed_p2_decision().process_id());
       if(itr->second->process_ids.find(id) == itr->second->process_ids.end()){
         itr->second->process_ids.insert(id);
-        Phase2Reply *new_item  = itr->second->p2ReplySigs[p2Decision->decision()].add_p2replies();
+        Phase2Reply *new_item  = itr->second->p2Repies[p2Decision->decision()].add_p2replies();
         new_item = reply;
       }
-      if(itr->second->p2ReplySigs[p2Decision->decision()].size() == config.f +1 ){
-        //set flag
-        //TODO: Callback and send P2.
+      if(itr->second->p2Replies[p2Decision->decision()].size() == config.f +1 ){
+        itr->second->p1 = false;
+        PendingFB *pendingFB = itr->second;
+        pendingFB->p1FBcbB(p2Decision->decision(), pendingFB.p2ReplySigs[p2Decision->decision()].p2Repies);
       }
     }
 
@@ -1026,19 +1125,67 @@ ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest){ //, proto::Atta
 
     //if they are mismatched and they are part of max view; need to keep track of divergence
 
-    if(itr->second->max_view = p2Decision->view()  \
+    //TODO: need to have f+1 in max_decision view, otherwise vulnerable to byz replica skipping. Keep a count.
+    if(itr->second->max_decision_view == p2Decision->view()  \
       && itr->second->pendingP2s[p2Decision->view()]->matchingReplies >= config.f +1 \
       && itr->second->ALTpendingP2s[p2Decision->view()]->matchingReplies >= config.f +1){
-        //TODO: collect view Quorums.
-        //TODO Invoke FALLBACK (can only do this if enough views collected...) --> always wait for at least n-f? --> to guarantee that highest view is included
-        //TODO This also requires P2 decision (if not sent yet).
+        itr->second->invFBcb();
+      }
+}
+
+void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::Transaction &txn, proto::Decision decision, proto::Phase2Replies &p2Replies){
+  ComputeMaxView(txnDigest);
+  auto itr = pendingFallbacks[txnDigest];
+  if(itr == pendingFallbacks.end()) return;
+
+  if(itr->second->max_view <= itr->second->last_view){
+    itr->second->call_invokeFB = true;
+    itr->second->view_invoker = std::bind(&InvokeFB, this, conflict_id, txnDigest, txn, decision, p2Replies);
+  }
+  else{
+    itr->second->call_invokeFB = false;
+
+
+      proto::SignedMessages view_signed;
+      std::map<uint64_t, std::set<uint64_t>>::reverse_iterator rit;
+      uint64_t count;
+
+      if(itr->second->catchup){
+        count = config.f+1;
+      }
+      else{
+        count = 3*config.f +1
+      }
+      for (rit=itr->second->view_levels.rbegin(); rit != itr->second->view_levels.rend(); ++rit){
+
+        for(auto id: rit->second){
+          SignedView* sv = itr->second->current_views[id];
+          proto::SignedMessage* sm = view_signed.add_sig_msgs();
+          *sm = sv->signed_view;
+          count++;
+          if(count == 0) break;
+        }
+        if(count == 0) break;
       }
 
+      phase2FB.Clear();
+      phase2FB.set_req_id(conflict_id);
+      phase2FB.set_decision(decision);
+      phase2FB.set_txn_digest(txnDigest);
+      *phase2FB.mutable_txn() = txn;
+      *phase2FB.mutable_p2_replies() = p2Replies;
 
+      invokeFB.Clear();
+      invokeFB.set_req_id(conflict_id);
+      invokeFB.set_txn_digest(txnDigest);
+      *invokeFB.mutable_p2fb() = phase2FB;
+      invokeFB.set_proposed_view(itr->second->max_view);
+      *invokeFB.mutable_view_signed() = view_signed();
 
+      transport->SendMessageToGroup(this, group, invokeFB);
+      Debug("[group %i] Sent InvokeFB[%lu]", group, id);
+  }
 
-
-  //TODO: need to keep track of new views.
 }
 
 void ShardClient::WritebackFB(proto::Writeback &wb std::string txnDigest) {
@@ -1046,7 +1193,14 @@ void ShardClient::WritebackFB(proto::Writeback &wb std::string txnDigest) {
   transport->SendMessageToGroup(this, group, wb);
   Debug("[group %i] Sent FB-WRITEBACK[%lu]", group, id);
 
-  //TODO: Delete PendingFB instance.
+  // Delete PendingFB instance.
+  auto itr = pendingFallbacks.find(txnDigest);
+  if(itr != pendingFallbacks.end()){
+    PendingFB *pendFB = itr->second;
+    pendingFallbacks.erase(txnDigest);
+    delete pendFB;
+  }
+
 }
 
 

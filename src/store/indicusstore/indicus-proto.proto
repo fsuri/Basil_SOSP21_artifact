@@ -126,12 +126,12 @@ message Phase1FBReply {
   optional Phase1Reply p1r =3;
   optional Phase2Reply p2r =4;
   optional Writeback wb =5;
-  //optional AttachedView attached_view = ;
-  oneof current_view_oneof {
-     CurrentView current_view = 6;
-     SignedMessage signed_current_view = 7;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
- }
-  optional uint64 replica_id = 8;
+  optional AttachedView attached_view = 6;
+  //oneof current_view_oneof {
+  //   CurrentView current_view = 6;
+  //   SignedMessage signed_current_view = 7;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
+ //}
+  optional uint64 replica_id = 7;
 
 }
 
@@ -267,11 +267,11 @@ message Phase2Reply {
 message Phase2FBReply {
   required bytes txn_digest = 1;
   required Phase2Reply p2r = 2;
-  //optional AttachedView attached_view = 3;
-  oneof current_view_oneof {
-    CurrentView current_view = 3;
-   SignedMessage signed_current_view = 4;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
-  }
+  optional AttachedView attached_view = 3;
+//  oneof current_view_oneof {
+//    CurrentView current_view = 3;
+//   SignedMessage signed_current_view = 4;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
+//  }
 
 }
 

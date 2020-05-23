@@ -542,7 +542,7 @@ void Client::Phase1FB(proto::phase1 &p1, uint64_t conflict_id){  //passes callba
           std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
       auto p1fbB = std::bind( &Client::Phase1FBcallbackB, this, conflict_id, txnDigest, group, std::placeholders::_1,  //technically only needed at logging shard
           std::placeholders::_2);
-      auto p2fb = std::bind( &Client::Phase2FBcallback, this, conflict_id, txnDigest, group, std::placeholders::_1);
+      auto p2fb = std::bind( &Client::Phase2FBcallback, this, conflict_id, txnDigest, group, std::placeholders::_1, std::placeholders_2);
       auto wb = std::bind(&Client::WritebackFBcallback, this, conflict_id, txnDigest, p1.txn(), std::placeholders::_1);
       auto invoke = std::bind(&Client::InvokeFBcallback, this, conflict_id, txnDigest, group); //technically only needed at logging shard
 
@@ -746,7 +746,7 @@ void Client::Phase1FBcallbackB(uint64_t conflict_id; std::string txnDigest, uint
 
 }
 
-void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, uint64_t group, const proto::Signatures &p2ReplySig ){
+void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, uint64_t group, proto::CommitDecision decision, const proto::Signatures &p2ReplySig ){
   //TODO: map to normal Phase2Callback
 if(pendingReqs.find(conflict_id()) == pendingReqs.end()){Debug("Request id %lu already committed or aborted.", conflict_id); return; }
 if(pendingReqs[conflict_id]->outstandingPhase1s == 0){ return;}
@@ -766,6 +766,7 @@ if(pendingReqs[conflict_id]->outstandingPhase1s == 0){ return;}
                txnId);
           return;
   }
+  req->decision = decision;
 
   if (params.validateProofs && params.signedMessages) {
     (*req->p2ReplySigsGrouped.mutable_grouped_sigs())[group] = p2ReplySigs;
