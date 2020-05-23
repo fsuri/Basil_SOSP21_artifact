@@ -72,6 +72,9 @@ public:
   proto::RequestRequest recvrr;
   proto::ABRequest recvab;
 
+  std::unordered_map<uint64_t, std::string> sessionKeys;
+  bool ValidateHMACedMessage(const proto::SignedMessage &signedMessage, std::string &data, std::string &type);
+  void CreateHMACedMessage(const ::google::protobuf::Message &msg, proto::SignedMessage& signedMessage);
 
   Slots slots;
 

@@ -13,6 +13,10 @@ message SignedMessage {
   required bytes signature = 3;
 }
 
+message HMACs {
+  map<uint64, bytes> hmacs = 1;
+}
+
 // represents a single message signed by multiple replicas
 message GroupedSignedMessage {
   required bytes packed_msg = 1;

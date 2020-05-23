@@ -48,9 +48,47 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   Debug("Initialized replica at %d %d", groupIdx, idx);
 
   stats = app->mutableStats();
+
+
+  // assume these are somehow secretly shared before hand
+  for (uint64_t i = 0; i < config.n; i++) {
+    if (i > idx) {
+      sessionKeys[i] = std::string(8, (char) idx + 0x30) + std::string(8, (char) i + 0x30);
+    } else {
+      sessionKeys[i] = std::string(8, (char) i + 0x30) + std::string(8, (char) idx + 0x30);
+    }
+  }
 }
 
 Replica::~Replica() {}
+
+bool Replica::ValidateHMACedMessage(const proto::SignedMessage &signedMessage, std::string &data, std::string &type) {
+  proto::PackedMessage packedMessage;
+  packedMessage.ParseFromString(signedMessage.packed_msg());
+  data = packedMessage.msg();
+  type = packedMessage.type();
+
+  proto::HMACs hmacs;
+  hmacs.ParseFromString(signedMessage.signature());
+  return crypto::verifyHMAC(signedMessage.packed_msg(), (*hmacs.mutable_hmacs())[idx], sessionKeys[signedMessage.replica_id()]);
+}
+
+void Replica::CreateHMACedMessage(const ::google::protobuf::Message &msg, proto::SignedMessage& signedMessage) {
+  proto::PackedMessage packedMsg;
+  *packedMsg.mutable_msg() = msg.SerializeAsString();
+  *packedMsg.mutable_type() = msg.GetTypeName();
+  // TODO this is not portable. SerializeAsString may not return the same
+  // result every time
+  std::string msgData = packedMsg.SerializeAsString();
+  signedMessage.set_packed_msg(msgData);
+  signedMessage.set_replica_id(id);
+
+  proto::HMACs hmacs;
+  for (uint64_t i = 0; i < config.n; i++) {
+    (*hmacs.mutable_hmacs())[i] = crypto::HMAC(msgData, sessionKeys[i]);
+  }
+  signedMessage.set_signature(hmacs.SerializeAsString());
+}
 
 void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
                           const string &d, void *meta_data) {
@@ -65,7 +103,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
       return;
     }
 
-    if (!ValidateSignedMessage(tmpsignedMessage, keyManager, data, type)) {
+    if (!ValidateHMACedMessage(tmpsignedMessage, data, type)) {
       Debug("Message is invalid!");
       stats->Increment("invalid_sig",1);
       return;
@@ -160,7 +198,8 @@ bool Replica::sendMessageToPrimary(const ::google::protobuf::Message& msg) {
   int primaryIdx = config.GetLeaderIndex(currentView);
   if (signMessages) {
     proto::SignedMessage signedMsg;
-    SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMsg);
+    // SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMsg);
+    Panic("Unimplemented");
     return transport->SendMessageToReplica(this, groupIdx, primaryIdx, signedMsg);
   } else {
     return transport->SendMessageToReplica(this, groupIdx, primaryIdx, msg);
@@ -186,7 +225,7 @@ bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
     // });
     // return true;
     proto::SignedMessage signedMsg;
-    SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMsg);
+    CreateHMACedMessage(msg, signedMsg);
 
     return this->transport->SendMessageToGroup(this, groupIdx, signedMsg) &&
            this->transport->SendMessageToReplica(this, groupIdx, idx, signedMsg);

@@ -19,6 +19,10 @@ string Sign(PrivKey* privateKey, const string &message);
 size_t SigSize(PrivKey* privateKey);
 size_t SigSize(PubKey* publicKey);
 
+std::string HMAC(std::string message, std::string key);
+
+bool verifyHMAC(std::string message, std::string mac, std::string key);
+
 bool Verify(PubKey* publicKey, const string &message, const string &signature);
 
 void SavePublicKey(const string &filename, PubKey* key);
