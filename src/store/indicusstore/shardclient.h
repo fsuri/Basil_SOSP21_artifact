@@ -130,6 +130,16 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
 
   virtual void Abort(uint64_t id, const TimestampMessage &ts);
   virtual bool SendPing(size_t replica, const PingMessage &ping);
+
+//public fallback functions:
+  virtual void void Phase1FB(proto::Phase1 p1, const std::string &txnDigest, phase1FB_callbackA p1FBcbA, \
+    phase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb);
+  virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,const proto::GroupedSignatures &groupedSigs)
+  virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,const proto::P2Replies &p2Replies);
+  virtual void WritebackFB(proto::Writeback &wb std::string txnDigest); //fix bracket
+  virtual void InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::Transaction &txn, proto::Decision decision, proto::Phase2Replies &p2Replies);
+
+
  private:
   struct PendingQuorumGet {
     PendingQuorumGet(uint64_t reqId) : reqId(reqId),
@@ -283,6 +293,15 @@ std::unordered_map<std::string, PendingFB*> pendingFallbacks; //map from txnDige
   void Phase1Decision(uint64_t reqId);
   void Phase1Decision(
       std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
+
+  //private fallback functions
+  void HandlePhase1Relay(proto::RelayP1 &relayP1);
+  void HandlePhase1FBReply(proto::phase1FBReply &p1fbr);
+  void Phase1FBDecision(std::unordered_map<uint64_t, PendingFB *>::iterator itr);
+  void ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest);
+  void HandlePhase2FBReply(proto::Phase2FBReply &p2fbr);
+  void ComputeMaxLevel(std::string txnDigest);
+  void UpdateViewStructure(std::string txnDigest, proto::AttachedView &ac);
 
   inline size_t GetNthClosestReplica(size_t idx) const {
     if (pingReplicas && GetOrderedReplicas().size() > 0) {

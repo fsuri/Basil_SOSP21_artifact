@@ -547,8 +547,6 @@ void Server::HandlePhase2(const TransportAddress &remote,
         }
     }
     else{
-
-
       Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
 
       int64_t myProcessId;
@@ -611,20 +609,37 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
       SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, wb,  remote, txnDigest, 1); //TODO: Create a seperate message explicitly for writeback: This suffices to finish all fallback procedures
     }
 
-    //p2 decision already exists. Just return it.   CAN CUT THIS, REDUNDANT
-    //else if(p2Decisions.end() != p2Decisions.find(txnDigest)){
+  // HandePhase2 just returns an existing decision.
+else if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
+      proto::CommitDecision decision =p2Decisions[txnDigest];
 
-    //  HandlePhase2(remote, msg);
-      //TODO: Clean up HandePhase2 so it just returns the existing message if .
-      //proto::CommitDecision decision = p2Decisions[txnDigest];
-      //SetP2(msg.req_id(), txnDigest, decision);
-      //transport->SendMessage(this, remote, phase2Reply);
-      //Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
+      SetP2(msg.req_id(), txnDigest, decision);
+      phase2FBReply.Clear();
+      phase2FBReply.set_txn_digest(txnDigest);
+      *phase2FBReply.mutable_p2r() = phase2Reply;
+      proto::AttachedView attachedView;
+      attachedView.mutable_current_view()->set_current_view(current_views[txnDigest]);
+      attachedView.mutable_current_view()->set_replica_id(id);
 
-      //just do normal handle p2 otherwise after timeout
+      //SIGN IT: .
+        *attachedView.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
 
-    else{
-      //TODO: The timer should start running AFTER the Mvtso check returns. so add it there.
+        if (params.signedMessages) {
+          proto::CurrentView cView(attachedView.current_view());
+          //Latency_Start(&signLat);
+          SignMessage(cView, keyManager->GetPrivateKey(id), id, attachedView.mutable_signed_current_view());
+          //Latency_End(&signLat);
+        }
+      *phase2FBReply.mutable_attached_view() = attachedView;
+
+
+      transport->SendMessage(this, remote, phase2FBReply);
+      Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
+}
+//just do normal handle p2 otherwise after timeout
+else{
+
+      //The timer should start running AFTER the Mvtso check returns. 
       // I could make the timeout window 0 if I dont expect byz clients. An honest client will likely only ever start this on conflict.
       //std::chrono::high_resolution_clock::time_point current_time = high_resolution_clock::now();
       struct timeval tv;
