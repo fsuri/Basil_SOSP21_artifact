@@ -639,7 +639,7 @@ else if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
 //just do normal handle p2 otherwise after timeout
 else{
 
-      //The timer should start running AFTER the Mvtso check returns. 
+      //The timer should start running AFTER the Mvtso check returns.
       // I could make the timeout window 0 if I dont expect byz clients. An honest client will likely only ever start this on conflict.
       //std::chrono::high_resolution_clock::time_point current_time = high_resolution_clock::now();
       struct timeval tv;
@@ -706,8 +706,9 @@ void Server::VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, 
 
 //TODO: Case A
 if(p2fb.has_p2_replies()){
+  proto::P2Replies p2Replies = p2fb.p2_replies();
   uint32_t counter = config.f + 1;
-  for(auto & p2_reply : p2fb.p2_replies()){
+  for(auto & p2_reply : p2Replies.p2replies()){
       proto::Phase2Decision p2dec;
       if (params.signedMessages) {
         if(!p2_reply.has_signed_p2_decision()){ return;}
@@ -721,7 +722,7 @@ if(p2fb.has_p2_replies()){
       }
       //no sig case:
       else{
-        if(p2r.has_p2_decision()){
+        if(p2_reply.has_p2_decision()){
           if(p2_reply.p2_decision().decision() == p2fb.decision() && p2_reply.p2_decision().txn_digest() == p2fb.txn_digest()) counter--;
         }
       }
@@ -884,9 +885,9 @@ bool Server::VerifyViews(proto::InvokeFB &msg, uint32_t lG){
           view_s.ParseFromString(signed_m.data());
 
           if(IsReplicaInGroup(signed_m.process_id(), lG, &config)){
-              if(view_s.view() < msg.proposed_view()){ return false;}
+              if(view_s.current_view() < msg.proposed_view()){ return false;}
               if(view_s.txn_digest() != txnDigest) { return false;}
-              if(crypto::Verify(keyManager->GetPublicKey(signed_m.process_id()), signed_m.data(), sig.signature())) { counter--;} else{return false;}
+              if(crypto::Verify(keyManager->GetPublicKey(signed_m.process_id()), signed_m.data(), signed_m.signature())) { counter--;} else{return false;}
           }
           if(counter == 0) return true;
         }
@@ -899,9 +900,9 @@ bool Server::VerifyViews(proto::InvokeFB &msg, uint32_t lG){
           view_s.ParseFromString(signed_m.data());
 
           if(IsReplicaInGroup(signed_m.process_id(), lG, &config)){
-              if(view_s.view() < msg.proposed_view()-1){ return false;}
+              if(view_s.current_view() < msg.proposed_view()-1){ return false;}
               if(view_s.txn_digest() != txnDigest) { return false;}
-              if(crypto::Verify(keyManager->GetPublicKey(signed_m.process_id()), signed_m.data(), sig.signature())) { counter--;} else{return false;}
+              if(crypto::Verify(keyManager->GetPublicKey(signed_m.process_id()), signed_m.data(), signed_m.signature())) { counter--;} else{return false;}
           }
           if(counter == 0) return true;
         }
@@ -1666,7 +1667,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
 
       std::string txdig = dep.write().prepared_txn_digest();
       if(ongoing.find(txdig) != ongoing.end()){
-        proto::Transaction tx = *ongoing[txdig]
+        proto::Transaction tx = *ongoing[txdig];
         RelayP1(remote, tx, reqId);
       }
 
@@ -1699,7 +1700,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
 }
 
 //RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
-void RelayP1(const TransportAddress &remote, proto::Transaction &tx, uint64_t conflict_id){
+void Server::RelayP1(const TransportAddress &remote, proto::Transaction &tx, uint64_t conflict_id){
   proto::Phase1 p1;
   p1.set_req_id(0); //doesnt matter, its not used for fallback requests really.
   *p1.mutable_txn() = tx;

@@ -95,7 +95,7 @@ class Client : public ::Client {
         outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
         decision(proto::COMMIT), fast(true),
         startedPhase2(false), startedWriteback(false),
-        callbackInvoked(false), timeout(0UL), slowAbortGroup(-1), P2done(false) {
+        callbackInvoked(false), timeout(0UL), slowAbortGroup(-1) {
     }
 
     ~PendingRequest() {
@@ -121,8 +121,8 @@ class Client : public ::Client {
     proto::CommittedProof conflict;
     //added this for fallback handling
     proto::Transaction txn;
-    proto::Phase2Replies p2Replies;
-    bool P2done;
+    proto::P2Replies p2Replies;
+
   };
 
   void Phase1(PendingRequest *req);
@@ -139,22 +139,22 @@ class Client : public ::Client {
   void Phase2TimeoutCallback(int group, uint64_t reqId, int status);
 
   // Fallback logic
-  void isDep(std::String &txnDigest, proto::Transaction &Req_txn);
+  bool isDep(std::string &txnDigest, proto::Transaction &Req_txn);
   void RelayP1callback(proto::RelayP1 &relayP1);
-  void Phase1FB(proto::phase1 &p1, uint64_t conflict_id);
+  void Phase1FB(proto::Phase1 &p1, uint64_t conflict_id);
   void Phase2FB(PendingRequest *req);
-  void WritebackFB(Pendingrequest *req);
-  void Phase1FBcallbackA(uint64_t conflict_id; std::string txnDigest, uint64_t group, \
-    proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict, \
-  const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs);
+  void WritebackFB(PendingRequest *req);
+  void Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
+     bool fast, const proto::CommittedProof &conflict, const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs);
   void FBHandleAllPhase1Received(PendingRequest *req);
-  void Phase1FBcallbackB(uint64_t conflict_id; std::string txnDigest, uint64_t group, proto::CommitDecision decision, \
-     proto::Phase2Replies p2replies);
-  void Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, uint64_t group, const proto::Signatures &p2ReplySig )
+  void Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
+    proto::P2Replies p2replies);
+  void Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
+    const proto::Signatures &p2ReplySig);
   void WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Transaction &fbtxn, proto::Writeback &wb);
-  void InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, uint64_t group)
+  void InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group);
   //keep track of pending Fallback instances. Maps from txnDigest, req Id is oblivious to us.
-  std::unordered_map<std::string, pendingRequests*> FB_instances;
+  std::unordered_map<std::string, PendingRequest*> FB_instances;
 
 
 

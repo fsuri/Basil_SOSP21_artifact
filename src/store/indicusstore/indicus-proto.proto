@@ -122,7 +122,7 @@ message AttachedView{
 //fallback Phase1 reply
 message Phase1FBReply {
   required uint64 req_id = 1;
-  required bytes txn_digest = 2
+  required bytes txn_digest = 2;
   optional Phase1Reply p1r =3;
   optional Phase2Reply p2r =4;
   optional Writeback wb =5;
@@ -154,10 +154,9 @@ message Phase2FB {
   required CommitDecision decision = 2;
   optional Transaction txn = 3;
   optional bytes txn_digest = 4;
-  //optional GroupedP1FBreplies grp_p1_fb = 5;
-  //TODO:: CHANGE TO THIS!!!!
   optional GroupedSignatures grouped_sigs = 5; //this is for p1 proof
   optional P2Replies p2_replies = 6; // this is for p2 proof
+  //old: GroupedP1FBreplies grp_p1_fb = 5;
 }
 //fallback phase2R: Can be the same Phase2R as normal.
 
