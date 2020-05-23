@@ -262,7 +262,6 @@ IRReplica::HandleFinalizeConsensus(const TransportAddress &remote,
         reply.set_replicaidx(myIdx);
         *reply.mutable_opid() = msg.opid();
 
-        transport->SendMessage(this, remote, reply);
         if (transport->SendMessage(this, remote, reply)) {
           Debug("%lu:%lu Replied to finalize consensus op", clientid, clientreqid);
         } else {

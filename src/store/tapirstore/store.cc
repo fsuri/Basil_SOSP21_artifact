@@ -267,11 +267,9 @@ Store::Commit(uint64_t id, const Timestamp &timestamp)
 
     Debug("[%lu] COMMIT at ts %lu.%lu", id, timestamp.getTimestamp(), timestamp.getID());
     
-    // const auto &t = ongoing[id];
-    // Commit(timestamp, t);
+    const auto &t = ongoing[id];
 
-    pair<Timestamp, Transaction> p = prepared[id];
-    Commit(p.first, p.second);
+    Commit(timestamp, t);
 
     Cleanup(id);
 }
