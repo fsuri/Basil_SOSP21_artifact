@@ -444,13 +444,13 @@ void Server::cleanupPendingTx(std::string digest) {
 
 void Server::Load(const string &key, const string &value,
     const Timestamp timestamp) {
-      if (IsKeyOwned(key)) {
+      // if (IsKeyOwned(key)) {
   ValueAndProof val;
   val.value = value;
   val.commitProof = dummyProof;
   commitStore.put(key, val, timestamp);
 
-      }
+      // }
 }
 
 Stats &Server::GetStats() {
