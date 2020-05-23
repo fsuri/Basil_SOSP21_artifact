@@ -311,7 +311,7 @@ void ShardClient::HandleWritebackReply(const proto::GroupedDecisionAck& groupedD
   if (pendingWritebacks.find(digest) != pendingWritebacks.end()) {
     PendingWritebackReply* pw = &pendingWritebacks[digest];
 
-    uint64_t replica_id = pw->receivedAcks.size();
+    uint64_t replica_id = pw->receivedAcks.size() + pw->receivedFails.size();
     if (signMessages) {
       replica_id = signedMsg.replica_id();
     }
@@ -478,7 +478,7 @@ void ShardClient::SignedPrepare(const proto::Transaction& txn, signed_prepare_ca
       fprintf(stderr,"ps_tout recv %d\n", group_idx);
       fprintf(stderr,"ack\n");
       for (const auto& recv : this->pendingSignedPrepares[digest].receivedValidSigs) {
-        fprintf(stderr,"%lu\n", recv);
+        fprintf(stderr,"%lu\n", recv.first);
       }
       fprintf(stderr,"nak:\n");
       for (const auto& recv : this->pendingSignedPrepares[digest].receivedFailedIds) {
@@ -516,6 +516,7 @@ void ShardClient::Commit(const std::string& txn_digest, const proto::ShardDecisi
       Debug("Writeback timeout called (but nothing was done)");
       stats->Increment("c_tout", 1);
       fprintf(stderr,"c_tout recv %d\n", group_idx);
+      fprintf(stderr, "txn: %s\n", txn_digest.c_str());
       fprintf(stderr,"ack\n");
       for (const auto& recv : this->pendingWritebacks[txn_digest].receivedAcks) {
         fprintf(stderr,"%lu\n", recv);
