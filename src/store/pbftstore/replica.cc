@@ -70,7 +70,7 @@ bool Replica::ValidateHMACedMessage(const proto::SignedMessage &signedMessage, s
 
   proto::HMACs hmacs;
   hmacs.ParseFromString(signedMessage.signature());
-  return crypto::verifyHMAC(signedMessage.packed_msg(), (*hmacs.mutable_hmacs())[idx], sessionKeys[signedMessage.replica_id()]);
+  return crypto::verifyHMAC(signedMessage.packed_msg(), (*hmacs.mutable_hmacs())[idx], sessionKeys[signedMessage.replica_id() % config.n]);
 }
 
 void Replica::CreateHMACedMessage(const ::google::protobuf::Message &msg, proto::SignedMessage& signedMessage) {
