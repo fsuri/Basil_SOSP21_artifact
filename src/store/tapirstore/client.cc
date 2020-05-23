@@ -142,6 +142,8 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     req->prepareTimestamp = Timestamp(timeServer.GetTime(), client_id);
     req->callbackInvoked = false;
     req->timeout = timeout;
+
+    stats.IncrementList("txn_groups", participants.size());
     
     Prepare(req, timeout);
   });

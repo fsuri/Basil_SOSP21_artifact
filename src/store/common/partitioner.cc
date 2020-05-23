@@ -66,10 +66,6 @@ uint64_t WarehousePartitioner::operator()(const std::string &key,
     {
       uint32_t w_id = *reinterpret_cast<const uint32_t*>(key.c_str() + 1);
       uint32_t d_id = *reinterpret_cast<const uint32_t*>(key.c_str() + 5);
-      UW_ASSERT(1 <= w_id);
-      UW_ASSERT(w_id <= numWarehouses);
-      UW_ASSERT(1 <= d_id);
-      UW_ASSERT(d_id <= 10);
       return (((w_id - 1) * 10) + (d_id - 1)) % nshards;
     }
     default:
