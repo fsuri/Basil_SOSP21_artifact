@@ -657,7 +657,8 @@ int main(int argc, char **argv) {
       part = new WarehouseDistItemsPartitioner(FLAGS_tpcc_num_warehouses);
       break;
     case WAREHOUSE:
-      part = new WarehousePartitioner(FLAGS_tpcc_num_warehouses, rand);
+      //part = new WarehousePartitioner(FLAGS_tpcc_num_warehouses, rand);
+      part = new WarehouseDistItemsPartitioner(FLAGS_tpcc_num_warehouses);
       break;
     default:
       NOT_REACHABLE();
