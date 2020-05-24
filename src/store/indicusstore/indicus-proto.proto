@@ -4,6 +4,7 @@ import "store/common/common-proto.proto";
 
 package indicusstore.proto;
 
+
 enum CommitDecision {
   COMMIT = 0;
   ABORT = 1;
@@ -13,6 +14,10 @@ message SignedMessage {
   required bytes data = 1;
   required uint64 process_id = 2;
   required bytes signature = 3;
+}
+
+message SignedMessages{
+  repeated SignedMessage sig_msgs = 1;
 }
 
 message Signature {
@@ -33,6 +38,7 @@ message Read {
 message GroupedSignatures {
   map<uint64, Signatures> grouped_sigs = 1;
 }
+
 
 message CommittedProof {
   required Transaction txn = 1;
@@ -86,6 +92,127 @@ message Phase1 {
   required Transaction txn = 2;
 }
 
+message RelayP1 {  //datatype that replicas send clients to inform them that they can start a FB etc.
+  required uint64 conflict_id = 1; //this is the ID of the txn that has the p1 as a dependency
+  required Phase1 p1 = 2;  //this is the dependency.
+}
+
+
+// fallback Phase1
+message Phase1FB {
+  required uint64 req_id =1;
+  required Transaction txn  =2;
+}
+
+message CurrentView{
+  required uint64 current_view = 1;
+  required bytes txn_digest = 2;
+  required uint64 replica_id = 3;
+}
+
+message AttachedView{
+  oneof current_view_oneof {
+    CurrentView current_view = 1;
+    SignedMessage signed_current_view = 2;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
+  }
+}
+
+
+
+//fallback Phase1 reply
+message Phase1FBReply {
+  required uint64 req_id = 1;
+  required bytes txn_digest = 2;
+  optional Phase1Reply p1r =3;
+  optional Phase2Reply p2r =4;
+  optional Writeback wb =5;
+  optional AttachedView attached_view = 6;
+  //oneof current_view_oneof {
+  //   CurrentView current_view = 6;
+  //   SignedMessage signed_current_view = 7;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
+ //}
+  optional uint64 replica_id = 7;
+
+}
+
+message P1FBreplies {
+  repeated Phase1FBReply fbreplies = 1;
+}
+
+message GroupedP1FBreplies{
+    map<uint64, P1FBreplies> grouped_fbreplies = 1;
+}
+
+message P2Replies {
+  repeated Phase2Reply p2replies = 1;
+}
+
+//TODO: Needs to include the p1 or p2 proofs necessary to write a p2.
+//fallback Phase2
+message Phase2FB {
+  required uint64 req_id = 1;
+  required CommitDecision decision = 2;
+  optional Transaction txn = 3;
+  optional bytes txn_digest = 4;
+  optional GroupedSignatures grouped_sigs = 5; //this is for p1 proof
+  optional P2Replies p2_replies = 6; // this is for p2 proof
+  //old: GroupedP1FBreplies grp_p1_fb = 5;
+}
+//fallback phase2R: Can be the same Phase2R as normal.
+
+//TODO: Dont include the Phase2FB component if that replica has already received it and answered with it.
+//change this to include the signed views for a txn digest.
+//fallback Invoke; info from p2fb is sort of redundant
+message InvokeFB {
+  required uint64 req_id = 1;
+  optional bytes txn_digest = 2;
+  optional Phase2FB p2fb = 3;
+  //optional Phase2 p2 = 4 //This would be to
+  optional uint64 proposed_view = 4;
+  optional bool catchup = 5; //just signifies whether we need 3f+1 or f+1 to justify
+  //optional Signatures view_sigs = 6;  //expect client to attach just the signatures necessary to prove his proposed view.
+  optional SignedMessages view_signed = 6;//THIS NEEDS TO CHANGE TO SIGNED MESSAGES, (because of vote subsumtion)
+}
+
+
+// all to all move to new views; upon reception of a InvokeFB request and timeout on FB result message reception, this message is sent to all replicas, and forwarded if f+1 are received. Only forward once per view.
+// Just assume for simplicty that only honest clients start invocations and therefore this message is never necessary. (Its fine if we always send it, but it might be unecessary and requires us to implement MACs too; or pay heavy signature price.)
+message MoveView {
+  required uint64 req_id = 1;
+  required bytes txn_digest = 2;
+  required uint64 view = 3;
+}
+
+
+//fallback elect. Send this message to replica at view = v upon reception of InvokeFB or f+1 MoveView requests.
+message ElectMessage {
+  required uint64 req_id = 1;
+  required bytes txn_digest = 2;
+  required CommitDecision decision = 3;
+  required uint64 view = 4; //dont need this for decision, just for round robin iteration mapping.
+}
+
+
+message ElectFB{
+ oneof electfb_oneof{
+  ElectMessage elect_fb = 1;
+  SignedMessage signed_elect_fb = 2;
+  }
+}
+//message ElectFB{
+ //required ElectMessage elect_fb = 1;
+ //optional Signature signed_elect_fb = 2;
+//}
+
+
+message DecisionFB {
+  required uint64 req_id = 1;
+  required bytes txn_digest = 2;
+  required CommitDecision dec = 3;
+  required uint64 view = 4;
+  repeated SignedMessage elect_sigs =5; // want to send the Quorum of ElectFB messages. not sure if this is the correct way
+}
+
 message ConcurrencyControl {
   enum Result {
     COMMIT = 0;
@@ -112,7 +239,8 @@ message Phase1Replies {
   repeated Phase1Reply replies = 1;
 }
 
-
+//TODO:: Could change so p1 version just does normal Phase2 (therefore can use same callbacks), but server checks if ID != ORIGINAL
+//TODO: Make P2FB only for p2 proofs, those do not need to be delayed anyways because they are already based on decisions from originial!!
 message Phase2 {
   required uint64 req_id = 1;
   required CommitDecision decision = 2;
@@ -121,10 +249,12 @@ message Phase2 {
   optional GroupedSignatures grouped_sigs = 5;
 }
 
+//ADD MATCHING VIEW, make it required?
 message Phase2Decision {
   required CommitDecision decision = 1;
   optional bytes txn_digest = 2;
   optional uint64 involved_group = 3;
+  optional uint64 view = 4;
 }
 
 message Phase2Reply {
@@ -133,6 +263,17 @@ message Phase2Reply {
     Phase2Decision p2_decision = 2;
     SignedMessage signed_p2_decision = 3;
   }
+}
+
+message Phase2FBReply {
+  required bytes txn_digest = 1;
+  required Phase2Reply p2r = 2;
+  optional AttachedView attached_view = 3;
+//  oneof current_view_oneof {
+//    CurrentView current_view = 3;
+//   SignedMessage signed_current_view = 4;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
+//  }
+
 }
 
 message Writeback {

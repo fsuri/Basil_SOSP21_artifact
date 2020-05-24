@@ -1,4 +1,4 @@
-\pdfminorversion=4
+ \pdfminorversion=4
 %\usepackage{usenix}
 \usepackage[numbers,sort&compress]{natbib}
 \setlength{\bibsep}{3pt plus 4pt}
@@ -105,7 +105,7 @@
 \newcommand{\alignleft}[1]{\multicolumn{1}{l}{#1}}
 \newcommand{\alignright}[1]{\multicolumn{1}{r}{#1}}
 \newcommand{\aligncenter}[1]{\multicolumn{1}{c}{#1}}
-
+\newcommand{\fsbox}[1]{\vspace{5pt}\fbox{#1}\vspace{5pt}}
 
 \ifthenelse{\boolean{publicversion}}{
     \newcommand{\grumbler}[2]{}
@@ -116,15 +116,16 @@
     \setlength{\tabcolsep}{0.25in}
     \setlist[itemize]{leftmargin=*}
     \setlist[enumerate]{leftmargin=*}
-    \usepackage[subtle,wordspacing=normal]{savetrees} % Saves space
-    \setlength{\parskip}{2pt plus 1mm minus 1mm} %No line skip
-    \setlength{\parindent}{5pt} % Default is 15pt. 
-    \setlength\abovedisplayskip{2pt plus 2pt minus 2pt}% minimises space above display maths
-    \setlength\belowdisplayskip{2pt plus 2pt minus 2pt}% minimises space below displaymaths
+    %\usepackage[subtle,wordspacing=normal]{savetrees} % Saves space
+    \setlength{\parskip}{5pt plus 1mm minus 1mm} %No line skip
+    \setlength{\parindent}{2pt} % Default is 15pt. 
+    \setlength\abovedisplayskip{5pt plus 2pt minus 2pt}% minimises space above display maths
+    \setlength\belowdisplayskip{5pt plus 2pt minus 2pt}% minimises space below displaymaths
     \setlength{\abovecaptionskip}{1pt} % minimises space below caption
     \setlength{\belowcaptionskip}{1pt} % minimises space below caption
-    \setlength\floatsep{2pt plus  0pt minus 0pt}
+    \setlength\floatsep{3pt plus  0pt minus 0pt}
     \setlength\textfloatsep{3pt plus 0pt minus 0pt}
+    \setlength{\fboxsep}{5pt}
      } 
 {
  \newcommand{\grumbler}[2]{{{\bf #1:} #2}}

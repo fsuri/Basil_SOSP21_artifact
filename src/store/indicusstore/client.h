@@ -31,6 +31,7 @@
 
 #ifndef _INDICUS_CLIENT_H_
 #define _INDICUS_CLIENT_H_
+#define CLIENTTIMEOUT  10
 
 #include "lib/assert.h"
 #include "lib/keymanager.h"
@@ -45,6 +46,7 @@
 #include "store/common/frontend/bufferclient.h"
 #include "store/indicusstore/shardclient.h"
 #include "store/indicusstore/indicus-proto.pb.h"
+#include <sys/time.h>
 
 #include <thread>
 #include <set>
@@ -117,6 +119,10 @@ class Client : public ::Client {
     std::string txnDigest;
     int slowAbortGroup;
     proto::CommittedProof conflict;
+    //added this for fallback handling
+    proto::Transaction txn;
+    proto::P2Replies p2Replies;
+
   };
 
   void Phase1(PendingRequest *req);
@@ -133,26 +139,24 @@ class Client : public ::Client {
   void Phase2TimeoutCallback(int group, uint64_t reqId, int status);
 
   // Fallback logic
-  
-  //void Receive Full Dep or Receive Full Conflict. (this should be received as answer from a replica instead of P1R if tx is stalled on a dependency. Alternatively, this is the conflicting TX)
-  //void Phase1_Rec   P1 do not need to be signed. Send p1 rec request to every replica in every involved shard.
+  bool isDep(std::string &txnDigest, proto::Transaction &Req_txn);
+  void RelayP1callback(proto::RelayP1 &relayP1);
+  void Phase1FB(proto::Phase1 &p1, uint64_t conflict_id);
+  void Phase2FB(PendingRequest *req);
+  void WritebackFB(PendingRequest *req);
+  void Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
+     bool fast, const proto::CommittedProof &conflict, const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs);
+  void FBHandleAllPhase1Received(PendingRequest *req);
+  void Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
+    proto::P2Replies p2replies);
+  void Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
+    const proto::Signatures &p2ReplySig);
+  void WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Transaction &fbtxn, proto::Writeback &wb);
+  void InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group);
+  //keep track of pending Fallback instances. Maps from txnDigest, req Id is oblivious to us.
+  std::unordered_map<std::string, PendingRequest*> FB_instances;
 
-  //void Phase1_Rec_Callback: Wait for either: Fast Path or Slow Path of p1r quorums. OR: if received p2r replies: Use those if f+1 received, or start election if inconsistent received.  P1_recR := (p1R, optional: p2R)_R.
-  //We need to extend p2R messages to include views  (can interpret no view = v0 if that makes it easiest to not change current code).      Replicas must keep track of curr_view per TX as well.
 
-
-  // 2 cases:
-     //void Phase2_Rec    P2 need to be signed in order to enforce time-out, replicas will buffer until time-out.
-  // 1: normal P2 (includes as proof P1R Quorum from all shards, or f+1 P2R from loggin shard)
-    //void InvokeFallback
-  // 2: Invoke election: Include signed Quorum of replica current views. Alternatively, if it makes things easier: Just send request to all replicas and have replicas use all to all. In this case we do not need signature proofs AND we can use Macs between replicas.
-
-
-  //void Phase2_Rec_Callback: Receive a P2 from a view > 0. Try to assemble 4f+1 matching. (Keep a mapping from views to Sets in order to potentially do this for multiple views; GC old ones.)
-
-
-  //void ReceiveNewView.  (Only necessary if doing the client driven view change. This happens if replicas tried to elect a FB, but timed out on a response because the FB is byz or crashed or whatever) Receive 3f+1 matching from higher view than last and start new Invocation
-  //void FBWriteback: Should just be the normal writeback
 
   void Writeback(PendingRequest *req);
 
@@ -199,6 +203,8 @@ class Client : public ::Client {
   proto::Transaction txn;
   // Outstanding requests.
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
+
+  std::unordered_map<uint64_t, uint64_t> pendingReqs_starttime;
 
   /* Debug State */
   std::unordered_map<std::string, uint32_t> statInts;

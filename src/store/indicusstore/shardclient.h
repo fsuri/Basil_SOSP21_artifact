@@ -32,6 +32,7 @@
 #ifndef _INDICUS_SHARDCLIENT_H_
 #define _INDICUS_SHARDCLIENT_H_
 
+
 #include "lib/keymanager.h"
 #include "lib/assert.h"
 #include "lib/configuration.h"
@@ -70,6 +71,23 @@ typedef std::function<void(int)> phase2_timeout_callback;
 typedef std::function<void()> writeback_callback;
 typedef std::function<void(int)> writeback_timeout_callback;
 
+
+//Fallback typedefs:
+typedef std::function<void(proto::RelayP1 &)> relayP1_callback;
+
+typedef std::function<void(proto::CommitDecision, bool, const proto::CommittedProof &,
+  const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1FB_callbackA;
+
+typedef std::function<void(proto::CommitDecision, const proto::P2Replies &)> phase1FB_callbackB;
+
+typedef std::function<void(proto::CommitDecision, const proto::Signatures &)> phase2FB_callback;
+
+typedef std::function<void(proto::Writeback &)> writebackFB_callback;
+
+typedef std::function<void()> invokeFB_callback;
+
+typedef std::function<void()> viewQuorum_callback;
+
 class ShardClient : public TransportReceiver, public PingInitiator, public PingTransport {
  public:
   ShardClient(transport::Configuration *config, Transport *transport,
@@ -96,22 +114,36 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
       const std::string &value, put_callback pcb, put_timeout_callback ptcb,
       uint32_t timeout);
 
-  virtual void Phase1(uint64_t id, const proto::Transaction &transaction,
-      const std::string &txnDigest,
-      phase1_callback pcb, phase1_timeout_callback ptcb, uint32_t timeout);
+  virtual void Phase1(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
+    phase1_callback pcb, phase1_timeout_callback ptcb, relayP1_callback rcb, uint32_t timeout);
   virtual void Phase2(uint64_t id, const proto::Transaction &transaction,
       const std::string &txnDigest, proto::CommitDecision decision,
       const proto::GroupedSignatures &groupedSigs, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout);
-  virtual void Writeback(uint64_t id, const proto::Transaction &transaction,
-      const std::string &txnDigest,
-      proto::CommitDecision decision, bool fast,
-      const proto::CommittedProof &conflict,
-      const proto::GroupedSignatures &p1Sigs,
-      const proto::GroupedSignatures &p2Sigs);
+  virtual void Writeback(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
+    proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
+    const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs);
+  //overloaded function for fallback
+  virtual void Writeback(const proto::Transaction &transaction, const std::string &txnDigest,
+      proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
+      const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs);
 
   virtual void Abort(uint64_t id, const TimestampMessage &ts);
-  virtual bool SendPing(size_t replica, const PingMessage &ping); 
+  virtual bool SendPing(size_t replica, const PingMessage &ping);
+
+//public fallback functions:
+  virtual void Phase1FB(proto::Phase1 &p1, const std::string &txnDigest, phase1FB_callbackA p1FBcbA,
+    phase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb);
+  virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,
+    const proto::GroupedSignatures &groupedSigs);
+  //overloaded for different p2 alternative
+  virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,
+    const proto::P2Replies &p2Replies);
+  virtual void WritebackFB(std::string txnDigest, proto::Writeback &wb); //fix bracket
+  virtual void InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::Transaction &txn, proto::CommitDecision decision,
+    proto::P2Replies &p2Replies);
+
+
  private:
   struct PendingQuorumGet {
     PendingQuorumGet(uint64_t reqId) : reqId(reqId),
@@ -166,7 +198,10 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     proto::CommitDecision decision;
     bool fast;
     proto::CommittedProof conflict;
+    //relay Callbacks
+    relayP1_callback rcb;
   };
+
 
   struct PendingPhase2 {
     PendingPhase2(uint64_t reqId, proto::CommitDecision decision) : reqId(reqId),
@@ -178,6 +213,9 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     }
     uint64_t reqId;
     proto::CommitDecision decision;
+    //FALLBACK MEANS VIEW IS necessary
+    uint64_t decision_view;  //can omit this for all requests that came from view = 0 because signature matches.
+    //TODO: Need to add decision view checks eveywhere.
     Timeout *requestTimeout;
 
     proto::Signatures p2ReplySigs;
@@ -185,6 +223,53 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     phase2_callback pcb;
     phase2_timeout_callback ptcb;
   };
+
+  struct SignedView {
+    SignedView(uint64_t v): view(v) {}
+    SignedView(uint64_t v, proto::SignedMessage s_v): view(v), signed_view(s_v) {}
+    ~SignedView(){}
+
+    uint64_t view;
+    proto::SignedMessage signed_view;
+  };
+  //Fallback request
+  struct PendingFB {
+    PendingFB() : max_decision_view(0UL), p1(true), last_view(0), max_view(0) {}
+    ~PendingFB(){}
+
+
+
+    PendingPhase1 *pendingP1;  //TODO:: the callback needs to differ: It needs to propose a P2Rec message.
+    uint64_t max_decision_view;
+    std::map<uint64_t, PendingPhase2* > pendingP2s;  //for each view: hold commit/abort votes.
+    std::map<uint64_t, PendingPhase2* > ALTpendingP2s;
+    std::map<proto::CommitDecision, proto::P2Replies*> p2Replies; //These must be from the same group, but can differ in view.
+    std::unordered_set<uint64_t> process_ids;
+    bool p1; //TODO DISTINGUISH IN WHICH PHASE WE ARE:
+
+    std::map<uint64_t, SignedView*> current_views;  //maps from replicaID to current view
+    std::map<uint64_t, std::set<uint64_t>> view_levels; //maps from view to ids  in that view
+    uint64_t last_view;
+    uint64_t max_view;  //we will propose max_view, but only if its bigger than last_view; otherwise we need better votes.
+    bool catchup;
+    //std::set<uint64_t> existing_levels;
+
+    //TODO: add different callbacks
+    writebackFB_callback wbFBcb;
+    phase1FB_callbackA p1FBcbA; // can use a lot from phase1_callback (edited to include the f+1 p2 case + sends a P2FB message instead)
+    phase1FB_callbackB p1FBcbB;
+    phase2FB_callback p2FBcb; // callback in case that we finish normal p2, can return just as if it was the normal protocol?
+    invokeFB_callback invFBcb;
+
+    // manage Invocation start
+    viewQuorum_callback view_invoker;
+    bool call_invokeFB;
+
+  };
+
+  std::unordered_map<std::string, PendingFB*> pendingFallbacks; //map from txnDigests to their fallback instances.
+
+
 
   struct PendingAbort {
     PendingAbort(uint64_t reqId) : reqId(reqId),
@@ -215,6 +300,15 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   void Phase1Decision(
       std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
 
+  //private fallback functions
+  void HandlePhase1Relay(proto::RelayP1 &relayP1);
+  void HandlePhase1FBReply(proto::Phase1FBReply &p1fbr);
+  void Phase1FBDecision(PendingFB *pendingFB);
+  void ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest);
+  void HandlePhase2FBReply(proto::Phase2FBReply &p2fbr);
+  void ComputeMaxLevel(std::string txnDigest);
+  void UpdateViewStructure(std::string txnDigest, const proto::AttachedView &ac);
+
   inline size_t GetNthClosestReplica(size_t idx) const {
     if (pingReplicas && GetOrderedReplicas().size() > 0) {
       return GetOrderedReplicas()[idx];
@@ -244,6 +338,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   std::unordered_map<uint64_t, PendingPhase2 *> pendingPhase2s;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
 
+  //keep additional maps for this from txnDigest ->Pending For Fallback instances?
+
   proto::Read read;
   proto::Phase1 phase1;
   proto::Phase2 phase2;
@@ -253,7 +349,17 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   proto::Phase1Reply phase1Reply;
   proto::Phase2Reply phase2Reply;
   PingMessage ping;
-  
+
+
+  //FALLBACK
+  proto::RelayP1 relayP1;
+  proto::Phase1FB phase1FB;
+  proto::Phase1FBReply phase1FBReply;
+  proto::Phase2FB phase2FB;
+  proto::Phase2FBReply phase2FBReply;
+  proto::InvokeFB invokeFB;
+
+
   proto::Write validatedPrepared;
   proto::ConcurrencyControl validatedCC;
   proto::Phase2Decision validatedP2Decision;
