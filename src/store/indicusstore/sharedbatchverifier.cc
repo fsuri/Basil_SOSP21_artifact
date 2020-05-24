@@ -29,8 +29,10 @@ bool SharedBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &m
     const std::string &signature) {
   MyShmString hashStrShared(BLAKE3_OUT_LEN, 0, *alloc_inst);
   MyShmString rootSigShared(crypto::SigSize(publicKey), 0, *alloc_inst);
-  BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
-     hashStrShared, rootSigShared);
+  if (!BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
+     hashStrShared, rootSigShared)) {
+    return false;
+  }
 
   cacheMtx->lock_sharable();
   const auto itr = cache->find(rootSigShared);

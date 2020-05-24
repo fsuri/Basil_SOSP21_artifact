@@ -23,8 +23,10 @@ bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &me
   std::string hashStr;
   std::string rootSig;
   Latency_Start(&hashLat);
-  BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
-      hashStr, rootSig, merkleBranchFactor);
+  if (!BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
+      hashStr, rootSig, merkleBranchFactor)) {
+    return false;
+  }
   Latency_End(&hashLat);
   auto itr = cache.find(rootSig);
   if (itr == cache.end()) {
