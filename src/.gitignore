@@ -3,6 +3,7 @@
 .DS_Store
 
 lib/crypto_bench
+lib/batched_sigs_test
 lockserver/client-main
 lockserver/server-main
 lockserver/lockserver-repl

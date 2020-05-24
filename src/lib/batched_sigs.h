@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <cstring>
 #include "lib/crypto.h"
 #include "lib/blake3.h"
 
@@ -23,7 +24,7 @@ extern blake3_hasher hasher;
 
 
 template<class S>
-void computeBatchedSignatureHash(const std::string* signature, const std::string* message, crypto::PubKey* publicKey,
+bool computeBatchedSignatureHash(const std::string* signature, const std::string* message, crypto::PubKey* publicKey,
     S &hashStr, S &rootSig, uint64_t m = 2) {
   size_t hash_size = BLAKE3_OUT_LEN;
   size_t sig_size = crypto::SigSize(publicKey);
@@ -53,29 +54,24 @@ void computeBatchedSignatureHash(const std::string* signature, const std::string
     // append the next hash on the path to the root to the signature
     blake3_hasher_init(&hasher);
 
-    for (int k = 1; k <= m; ++k) {
-      int l = (j-1)/m * m + k;
-      if (l > max_leaf) {
-        break;
-      }
-      //std::cerr << "checking sibling " << l << " " << h << std::endl;
-      if (l == j) {
-        //std::cerr << "update with hash " << l << std::endl;
-        blake3_hasher_update(&hasher, &hash[0], BLAKE3_OUT_LEN);
-      } else {
-        //std::cerr << "read hash " << l << " from " << starting_pos + h*hash_size << std::endl;
-        //std::cerr << "update with hash " << l << std::endl;
-        blake3_hasher_update(&hasher, &signature->at(starting_pos + h*hash_size),
-            BLAKE3_OUT_LEN);
-        h++;
-      }
-      hashCatCount++;
+    int leftmost_sib = (j-1)/m * m + 1;
+    int rightmost_sib = leftmost_sib + m - 1;
+    if (rightmost_sib > max_leaf) {
+      rightmost_sib = max_leaf;
     }
+    //std::cerr << "ls " << leftmost_sib << " rs " << rightmost_sib << std::endl;
+    if (memcmp(&hash[0], &signature->at(starting_pos + (h + (j - leftmost_sib)) * hash_size), hash_size) != 0) {
+      return false;
+    }
+    blake3_hasher_update(&hasher, &signature->at(starting_pos + h * hash_size),
+        ((rightmost_sib - leftmost_sib) + 1) * hash_size);
+    h += (rightmost_sib - leftmost_sib) + 1;
     blake3_hasher_finalize(&hasher, hash, BLAKE3_OUT_LEN);
   }
 
   hashStr.resize(hash_size);
   hashStr.replace(hashStr.begin(), hashStr.end(), &hash[0], &hash[hash_size]);
+  return true;
 }
 
 
