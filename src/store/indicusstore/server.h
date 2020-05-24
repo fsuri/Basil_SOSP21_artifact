@@ -122,14 +122,14 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   proto::ConcurrencyControl::Result DoOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
-      Timestamp &retryTs, proto::CommittedProof &conflict);
+      Timestamp &retryTs, const proto::CommittedProof* &conflict);
   proto::ConcurrencyControl::Result DoTAPIROCCCheck(
       const std::string &txnDigest, const proto::Transaction &txn,
       Timestamp &retryTs);
   proto::ConcurrencyControl::Result DoMVTSOOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
-      proto::CommittedProof &conflict);
+      const proto::CommittedProof* &conflict);
 
   void GetWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
@@ -153,7 +153,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   bool CheckHighWatermark(const Timestamp &ts);
   void SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
-    const proto::CommittedProof &conflict, const std::string &txnDigest,
+    const proto::CommittedProof *conflict, const std::string &txnDigest,
     const TransportAddress &remote);
   void Clean(const std::string &txnDigest);
   void CleanDependencies(const std::string &txnDigest);
@@ -201,7 +201,6 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   proto::Abort abort;
 
   proto::Write preparedWrite;
-  proto::CommittedProof committedProof;
   proto::ConcurrencyControl concurrencyControl;
   proto::AbortInternal abortInternal;
   std::vector<int> dummyTxnGroups;
@@ -225,7 +224,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
 //FALLBACK helper functions
 //TODO: make strings call by ref.
-  void SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Result &result, proto::CommittedProof &conflict);
+  void SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
   void SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision &decision);
   void SendPhase1FBReply(uint64_t reqId, proto::Phase1Reply &p1r, proto::Phase2Reply &p2r, proto::Writeback &wb, const TransportAddress &remote,  std::string txnDigest, uint32_t response_case );
 
@@ -247,7 +246,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
 
   std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
-  std::unordered_map<std::string, proto::CommittedProof> p1Conflicts;
+  std::unordered_map<std::string, const proto::CommittedProof *> p1Conflicts;
   std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
   std::unordered_map<std::string, proto::CommittedProof *> committed;
   std::unordered_set<std::string> aborted;    //ADD Aborted proof to it.(in order to reply to Fallback)

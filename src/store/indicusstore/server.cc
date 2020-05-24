@@ -298,49 +298,47 @@ void Server::HandleRead(const TransportAddress &remote,
 
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
-
-
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
-      proto::ConcurrencyControl::Result result;
-      // no-replays property, i.e. recover existing decision/result from storage
-if(p1Decisions.find(txnDigest) != p1Decisions.end()){
-            result  = p1Decisions[txnDigest];
-            //KEEP track of interested client
-            interestedClients[txnDigest].insert(remote.clone());
-}
-
-
-else{
-
-  if (params.validateProofs && params.signedMessages && params.verifyDeps) {
-    for (const auto &dep : msg.txn().deps()) {
-      if (!dep.has_write_sigs()) {
-        Debug("Dep for txn %s missing signatures.",
-          BytesToHex(txnDigest, 16).c_str());
-        return;
-      }
-      if (!ValidateDependency(dep, &config, params.readDepSize, keyManager, verifier)) {
-        Debug("VALIDATE Dependency failed for txn %s.",
-            BytesToHex(txnDigest, 16).c_str());
-        // safe to ignore Byzantine client
-        return;
+  proto::ConcurrencyControl::Result result;
+  const proto::CommittedProof *committedProof;
+  // no-replays property, i.e. recover existing decision/result from storage
+  if(p1Decisions.find(txnDigest) != p1Decisions.end()){
+    result = p1Decisions[txnDigest];
+    //KEEP track of interested client
+    interestedClients[txnDigest].insert(remote.clone());
+    if (result == proto::ConcurrencyControl::ABORT) {
+      committedProof = p1Conflicts[txnDigest];
+    }
+  } else{
+    if (params.validateProofs && params.signedMessages && params.verifyDeps) {
+      for (const auto &dep : msg.txn().deps()) {
+        if (!dep.has_write_sigs()) {
+          Debug("Dep for txn %s missing signatures.",
+              BytesToHex(txnDigest, 16).c_str());
+          return;
+        }
+        if (!ValidateDependency(dep, &config, params.readDepSize, keyManager,
+              verifier)) {
+          Debug("VALIDATE Dependency failed for txn %s.",
+              BytesToHex(txnDigest, 16).c_str());
+          // safe to ignore Byzantine client
+          return;
+        }
       }
     }
-  }
-  //KEEP track of interested client
-  current_views[txnDigest] = 0;
-  interestedClients[txnDigest].insert(remote.clone());
+    //KEEP track of interested client
+    current_views[txnDigest] = 0;
+    interestedClients[txnDigest].insert(remote.clone());
 
-  proto::Transaction *txn = msg.release_txn();
-  ongoing[txnDigest] = txn;
+    proto::Transaction *txn = msg.release_txn();
+    ongoing[txnDigest] = txn;
 
-  Timestamp retryTs;
-  result = DoOCCCheck(msg.req_id(),
-      remote, txnDigest, *txn, retryTs, committedProof);
-
+    Timestamp retryTs;
+    result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
+        committedProof);
   }
 
   if (result != proto::ConcurrencyControl::WAIT) {
@@ -575,7 +573,7 @@ void Server::HandleAbort(const TransportAddress &remote,
 proto::ConcurrencyControl::Result Server::DoOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
-    Timestamp &retryTs, proto::CommittedProof &conflict) {
+    Timestamp &retryTs, const proto::CommittedProof* &conflict) {
   switch (occType) {
     case TAPIR:
       return DoTAPIROCCCheck(txnDigest, txn, retryTs);
@@ -722,7 +720,7 @@ proto::ConcurrencyControl::Result Server::DoTAPIROCCCheck(
 proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
-    proto::CommittedProof &conflict) {
+    const proto::CommittedProof* &conflict) {
   Debug("PREPARE[%lu:%lu][%s] with ts %lu.%lu.",
       txn.client_id(), txn.client_seq_num(),
       BytesToHex(txnDigest, 16).c_str(),
@@ -755,7 +753,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //     GetCommittedWrites only returns writes larger than readVersion
         if (committedWrite.first < ts) {
           if (params.validateProofs) {
-            conflict = *committedWrite.second.proof;
+            conflict = committedWrite.second.proof;
           }
           Debug("[%lu:%lu][%s] ABORT wr conflict committed write for key %s:"
               " this txn's read ts %lu.%lu < committed ts %lu.%lu < this txn's ts %lu.%lu.",
@@ -809,7 +807,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
             break;
           } else if (std::get<1>(*ritr) < ts) {
             if (params.validateProofs) {
-              conflict = *std::get<2>(*ritr);
+              conflict = std::get<2>(*ritr);
             }
             Debug("[%lu:%lu][%s] ABORT rw conflict committed read for key %s: committed"
                 " read ts %lu.%lu < this txn's ts %lu.%lu < committed ts %lu.%lu.",
@@ -1103,6 +1101,14 @@ void Server::Clean(const std::string &txnDigest) {
     prepared.erase(itr);
   }
   ongoing.erase(txnDigest);
+  auto jtr = interestedClients.find(txnDigest);
+  if (jtr != interestedClients.end()) {
+    for (const auto addr : jtr->second) {
+      delete addr;
+    }
+    interestedClients.erase(jtr);
+  }
+  current_views.erase(txnDigest);
 }
 
 void Server::CheckDependents(const std::string &txnDigest) {
@@ -1120,7 +1126,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
             dependent);
         UW_ASSERT(result != proto::ConcurrencyControl::ABORT);
         waitingDependencies.erase(dependent);
-        proto::CommittedProof conflict;
+        const proto::CommittedProof *conflict = nullptr;
         SendPhase1Reply(dependenciesItr->second.reqId, result, conflict, dependent,
             *dependenciesItr->second.remote);
       }
@@ -1166,7 +1172,7 @@ bool Server::CheckHighWatermark(const Timestamp &ts) {
 
 void Server::SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
-    const proto::CommittedProof &conflict, const std::string &txnDigest,
+    const proto::CommittedProof *conflict, const std::string &txnDigest,
     const TransportAddress &remote) {
   p1Decisions[txnDigest] = result;
   //add abort proof so we can use it for fallbacks easily.
@@ -1188,7 +1194,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
     *phase1Reply->mutable_cc()->mutable_txn_digest() = txnDigest;
     phase1Reply->mutable_cc()->set_involved_group(groupIdx);
     if (result == proto::ConcurrencyControl::ABORT) {
-      *phase1Reply->mutable_cc()->mutable_committed_conflict() = conflict;
+      *phase1Reply->mutable_cc()->mutable_committed_conflict() = *conflict;
     } else if (params.signedMessages) {
       proto::ConcurrencyControl* cc = new proto::ConcurrencyControl(phase1Reply->cc());
       //Latency_Start(&signLat);
@@ -1356,7 +1362,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
        proto::CommittedProof conflict;
        //recover stored commit proof.
        if (result != proto::ConcurrencyControl::WAIT) {
-         proto::CommittedProof conflict;
+         const proto::CommittedProof *conflict;
          //recover stored commit proof.
          if(result == proto::ConcurrencyControl::ABORT){
            conflict = p1Conflicts[txnDigest];
@@ -1379,7 +1385,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
     else if(p1Decisions.end() != p1Decisions.find(txnDigest)){
         proto::ConcurrencyControl::Result result = p1Decisions[txnDigest];
         if (result != proto::ConcurrencyControl::WAIT) {
-          proto::CommittedProof conflict;
+          const proto::CommittedProof *conflict;
           //recover stored commit proof.
           if(result == proto::ConcurrencyControl::ABORT){
             conflict = p1Conflicts[txnDigest];
@@ -1418,6 +1424,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       ongoing[txnDigest] = txn;
 
       Timestamp retryTs;
+      const proto::CommittedProof *committedProof;
       proto::ConcurrencyControl::Result result = DoOCCCheck(msg.req_id(),
           remote, txnDigest, *txn, retryTs, committedProof);
 
@@ -1441,14 +1448,14 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   }
 }
 
-void Server::SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Result &result, proto::CommittedProof &conflict){
+void Server::SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict){
   phase1Reply.Clear();
   phase1Reply.set_req_id(reqId);
   phase1Reply.mutable_cc()->set_ccr(result);
   if (params.validateProofs) {
     *phase1Reply.mutable_cc()->mutable_txn_digest() = txnDigest;
     if (result == proto::ConcurrencyControl::ABORT) {
-      *phase1Reply.mutable_cc()->mutable_committed_conflict() = conflict;
+      *phase1Reply.mutable_cc()->mutable_committed_conflict() = *conflict;
     } else if (params.signedMessages) {
       proto::ConcurrencyControl cc(phase1Reply.cc());
       //Latency_Start(&signLat);
