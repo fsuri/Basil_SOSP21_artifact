@@ -50,7 +50,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     readMessages(readMessages), readQuorumSize(readQuorumSize),
     params(params),
     keyManager(keyManager),
-    timeServer(timeServer), first(true), startedPings(false),
+    timeServer(timeServer), failureActive(false), first(true), startedPings(false),
     client_seq_num(0UL), lastReqId(0UL), getIdx(0UL) {
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
@@ -73,6 +73,12 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
   _Latency_Init(&executeLatency, "execute");
   _Latency_Init(&getLatency, "get");
   _Latency_Init(&commitLatency, "commit");
+
+  if (params.injectFailure.enabled) {
+    transport->Timer(params.injectFailure.timeMs, [this](){
+        failureActive = true;
+      });
+  }
 }
 
 Client::~Client()
@@ -410,6 +416,12 @@ void Client::Writeback(PendingRequest *req) {
   Debug("WRITEBACK[%lu:%lu]", client_id, req->id);
 
   req->startedWriteback = true;
+
+  if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH &&
+      txn.deps_size() > 0) {
+    stats.Increment("inject_failure_crash");
+    return;
+  }
 
   transaction_status_t result;
   switch (req->decision) {

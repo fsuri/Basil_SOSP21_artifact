@@ -528,17 +528,18 @@ int main(int argc, char **argv) {
         FLAGS_indicus_max_dep_depth, readDepSize,
         FLAGS_indicus_read_reply_batch, FLAGS_indicus_adjust_batch_size,
         FLAGS_indicus_shared_mem_batch, FLAGS_indicus_shared_mem_verify,
-        FLAGS_indicus_merkle_branch_factor);
+        FLAGS_indicus_merkle_branch_factor, indicusstore::InjectFailure());
       server = new indicusstore::Server(config, FLAGS_group_idx,
-          FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
-          tport, &keyManager, params, timeDelta, indicusOCCType, part, FLAGS_indicus_sig_batch_timeout);
+          FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
+          &keyManager, params, timeDelta, indicusOCCType, part,
+          FLAGS_indicus_sig_batch_timeout);
       break;
     }
 		case PROTO_PBFT: {
 			server = new pbftstore::Server(config, &keyManager,
 				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
-				FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs, FLAGS_indicus_time_delta,
-				part);
+				FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+        FLAGS_indicus_time_delta, part);
 			replica = new pbftstore::Replica(config, &keyManager,
 				dynamic_cast<pbftstore::App *>(server),
 				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, FLAGS_indicus_sig_batch_timeout,

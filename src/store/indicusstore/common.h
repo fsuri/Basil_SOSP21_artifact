@@ -124,6 +124,21 @@ bool IsReplicaInGroup(uint64_t id, uint32_t group,
 
 int64_t GetLogGroup(const proto::Transaction &txn, const std::string &txnDigest);
 
+enum InjectFailureType {
+  CLIENT_EQUIVOCATE = 0,
+  CLIENT_CRASH
+};
+
+struct InjectFailure {
+  InjectFailure() { }
+  InjectFailure(const InjectFailure &failure) : type(failure.type),
+      timeMs(failure.timeMs), enabled(failure.enabled) { }
+
+  InjectFailureType type;
+  uint32_t timeMs;
+  bool enabled;
+};
+
 typedef struct Parameters {
   const bool signedMessages;
   const bool validateProofs;
@@ -137,17 +152,18 @@ typedef struct Parameters {
   const bool sharedMemBatches;
   const bool sharedMemVerify;
   const uint64_t merkleBranchFactor;
+  const InjectFailure injectFailure;
 
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     int signatureBatchSize, int64_t maxDepDepth, uint64_t readDepSize,
     bool readReplyBatch, bool adjustBatchSize, bool sharedMemBatches,
-    bool sharedMemVerify, uint64_t merkleBranchFactor) :
+    bool sharedMemVerify, uint64_t merkleBranchFactor, const InjectFailure &injectFailure) :
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
     maxDepDepth(maxDepDepth), readDepSize(readDepSize),
     readReplyBatch(readReplyBatch), adjustBatchSize(adjustBatchSize),
     sharedMemBatches(sharedMemBatches), sharedMemVerify(sharedMemVerify),
-    merkleBranchFactor(merkleBranchFactor) { }
+    merkleBranchFactor(merkleBranchFactor), injectFailure(injectFailure) { }
 } Parameters;
 
 } // namespace indicusstore

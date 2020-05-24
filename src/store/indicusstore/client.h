@@ -181,7 +181,7 @@ class Client : public ::Client {
   Stats dummyStats;
   // TrueTime server.
   TrueTime timeServer;
-
+  bool failureActive;
 
   bool first;
   bool startedPings;

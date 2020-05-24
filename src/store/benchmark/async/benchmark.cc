@@ -202,6 +202,32 @@ DEFINE_int64(indicus_max_dep_depth, -1, "maximum length of dependency chain"
     " allowed by honest replicas [-1 is no maximum, -2 is no deps] (for Indicus)");
 DEFINE_uint64(indicus_key_type, 2, "key type (see create keys for mappings)"
     " key type (for Indicus)");
+DEFINE_uint64(indicus_inject_failure_ms, 0, "number of milliseconds to wait"
+    " before injecting a failure (for Indicus)");
+DEFINE_uint64(indicus_inject_failure_proportion, 0, "proportion of clients that"
+    " will inject a failure (for Indicus)");
+const std::string if_args[] = {
+  "client-crash",
+	"client-equivocate"
+};
+const indicusstore::InjectFailureType iff[] {
+  indicusstore::InjectFailureType::CLIENT_CRASH,
+  indicusstore::InjectFailureType::CLIENT_EQUIVOCATE
+};
+static bool ValidateInjectFailureType(const char* flagname,
+    const std::string &value) {
+  int n = sizeof(if_args);
+  for (int i = 0; i < n; ++i) {
+    if (value == if_args[i]) {
+      return true;
+    }
+  }
+  std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
+  return false;
+}
+DEFINE_string(indicus_inject_failure_type, if_args[0], "type of failure to"
+    " inject (for Indicus)");
+DEFINE_validator(indicus_inject_failure_type, &ValidateInjectFailureType);
 
 DEFINE_bool(debug_stats, false, "record stats related to debugging");
 
@@ -572,6 +598,16 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // parse inject failure
+  indicusstore::InjectFailureType injectFailureType = indicusstore::InjectFailureType::CLIENT_EQUIVOCATE;
+  int numInjectFailure = sizeof(if_args);
+  for (int i = 0; i < numInjectFailure; ++i) {
+    if (FLAGS_indicus_inject_failure_type == if_args[i]) {
+      injectFailureType = iff[i];
+      break;
+    }
+  }
+
   // parse read dep
   read_dep_t read_dep = READ_DEP_UNKNOWN;
   int numReadDeps = sizeof(read_dep_args);
@@ -737,6 +773,7 @@ int main(int argc, char **argv) {
     std::cerr << "Only support up to " << (1 << 6) << " clients in one process." << std::endl;
     return 1;
   }
+
   for (size_t i = 0; i < FLAGS_num_clients; i++) {
     Client *client = nullptr;
     AsyncClient *asyncClient = nullptr;
@@ -825,11 +862,16 @@ int main(int argc, char **argv) {
             NOT_REACHABLE();
         }
 
+        indicusstore::InjectFailure failure;
+        failure.type = injectFailureType;
+        failure.timeMs = FLAGS_indicus_inject_failure_ms;
+        failure.enabled = rand() % 100 < FLAGS_indicus_inject_failure_proportion;
+
 				indicusstore::Parameters params(FLAGS_indicus_sign_messages,
 					FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
 					FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
           FLAGS_indicus_max_dep_depth, readDepSize, false, false, false, false,
-          FLAGS_indicus_merkle_branch_factor);
+          FLAGS_indicus_merkle_branch_factor, failure);
 
         client = new indicusstore::Client(config, clientId,
             FLAGS_num_shards,
