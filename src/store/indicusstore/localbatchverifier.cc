@@ -7,7 +7,8 @@
 
 namespace indicusstore {
 
-LocalBatchVerifier::LocalBatchVerifier(Stats &stats) : stats(stats) {
+LocalBatchVerifier::LocalBatchVerifier(uint64_t merkleBranchFactor, Stats &stats) :
+  merkleBranchFactor(merkleBranchFactor), stats(stats) {
   _Latency_Init(&hashLat, "hash");
   _Latency_Init(&cryptoLat, "crypto");
 }
@@ -23,7 +24,7 @@ bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &me
   std::string rootSig;
   Latency_Start(&hashLat);
   BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
-      hashStr, rootSig);
+      hashStr, rootSig, merkleBranchFactor);
   Latency_End(&hashLat);
   auto itr = cache.find(rootSig);
   if (itr == cache.end()) {

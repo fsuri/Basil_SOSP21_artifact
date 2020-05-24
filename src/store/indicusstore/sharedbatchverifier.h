@@ -17,7 +17,7 @@ using namespace boost::interprocess;
 
 class SharedBatchVerifier : public Verifier {
  public:
-  SharedBatchVerifier(Stats &stats);
+  SharedBatchVerifier(uint64_t merkleBranchFactor, Stats &stats);
   virtual ~SharedBatchVerifier();
 
   virtual bool Verify(crypto::PubKey *publicKey, const std::string &message,
@@ -31,6 +31,7 @@ class SharedBatchVerifier : public Verifier {
   typedef allocator<MapValueType, managed_shared_memory::segment_manager> MapValueTypeAllocator;
   typedef map<MyShmString, MyShmString, std::less<MyShmString>, MapValueTypeAllocator> SignatureCache;
 
+  const uint64_t merkleBranchFactor;
   Stats &stats;
 
   managed_shared_memory *segment;

@@ -6,8 +6,8 @@ namespace indicusstore {
 
 LocalBatchSigner::LocalBatchSigner(Transport *transport, KeyManager *keyManager, Stats &stats,
     uint64_t batchTimeoutMicro, uint64_t batchSize, uint64_t id,
-    bool adjustBatchSize) : BatchSigner(transport, keyManager, stats,
-      batchTimeoutMicro, batchSize, id, adjustBatchSize),
+    bool adjustBatchSize, uint64_t merkleBranchFactor) : BatchSigner(transport, keyManager, stats,
+      batchTimeoutMicro, batchSize, id, adjustBatchSize, merkleBranchFactor),
     batchTimerRunning(false),
     batchSize(batchSize),
     messagesBatchedInterval(0UL) {
@@ -61,7 +61,7 @@ void LocalBatchSigner::SignBatch() {
   uint64_t currMicros = curr.tv_sec * 1000000ULL + curr.tv_usec;
   stats.Add("sig_batch_sizes_ts",  currMicros);
   SignMessages(pendingBatchMessages, keyManager->GetPrivateKey(id), id,
-    pendingBatchSignedMessages);
+    pendingBatchSignedMessages, merkleBranchFactor);
   pendingBatchMessages.clear();
   pendingBatchSignedMessages.clear();
   for (const auto& cb : pendingBatchCallbacks) {

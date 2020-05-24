@@ -13,13 +13,14 @@ namespace indicusstore {
 
 class LocalBatchVerifier : public Verifier {
  public:
-  LocalBatchVerifier(Stats &stats);
+  LocalBatchVerifier(uint64_t merkleBranchFactor, Stats &stats);
   virtual ~LocalBatchVerifier();
 
   virtual bool Verify(crypto::PubKey *publicKey, const std::string &message,
       const std::string &signature) override;
 
  private:
+  const uint64_t merkleBranchFactor;
   Stats &stats;
   Latency_t hashLat;
   Latency_t cryptoLat;

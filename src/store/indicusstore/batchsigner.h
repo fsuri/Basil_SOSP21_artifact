@@ -20,9 +20,10 @@ class BatchSigner {
  public:
   BatchSigner(Transport *transport, KeyManager *keyManager, Stats &stats,
       uint64_t batchTimeoutMicro, uint64_t batchSize, uint64_t id,
-      bool adjustBatchSize) : transport(transport), keyManager(keyManager),
+      bool adjustBatchSize, uint64_t merkleBranchFactor) : transport(transport), keyManager(keyManager),
       stats(stats), batchTimeoutMicro(batchTimeoutMicro),
-      initialBatchSize(batchSize), id(id), adjustBatchSize(adjustBatchSize) { }
+      initialBatchSize(batchSize), id(id), adjustBatchSize(adjustBatchSize),
+      merkleBranchFactor(merkleBranchFactor) { }
   virtual ~BatchSigner() { }
 
   virtual void MessageToSign(::google::protobuf::Message* msg,
@@ -37,6 +38,7 @@ class BatchSigner {
   const uint64_t initialBatchSize;
   const uint64_t id;
   const bool adjustBatchSize;
+  const uint64_t merkleBranchFactor;
 
 };
 

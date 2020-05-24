@@ -9,7 +9,8 @@
 
 namespace indicusstore {
 
-SharedBatchVerifier::SharedBatchVerifier(Stats &stats) : stats(stats) {
+SharedBatchVerifier::SharedBatchVerifier(uint64_t merkleBranchFactor,
+    Stats &stats) : merkleBranchFactor(merkleBranchFactor), stats(stats) {
   segment = new managed_shared_memory(open_or_create, "signature_cache_segment",
       2 * 33554432); // 32 MB
   alloc_inst = new void_allocator(segment->get_segment_manager());

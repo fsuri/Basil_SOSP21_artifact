@@ -58,7 +58,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
   if (params.signatureBatchSize == 1) {
     verifier = new BasicVerifier();
   } else {
-    verifier = new LocalBatchVerifier(dummyStats);
+    verifier = new LocalBatchVerifier(params.merkleBranchFactor, dummyStats);
   }
 
   /* Start a client for each shard. */

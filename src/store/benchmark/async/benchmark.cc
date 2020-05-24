@@ -194,6 +194,8 @@ DEFINE_bool(indicus_verify_deps, true, "check signatures of transaction"
     " depdendencies (for Indicus)");
 DEFINE_uint64(indicus_sig_batch, 1, "signature batch size"
     " sig batch size (for Indicus)");
+DEFINE_uint64(indicus_merkle_branch_factor, 2, "branch factor of merkle tree"
+    " of batch (for Indicus)");
 DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
 DEFINE_int64(indicus_max_dep_depth, -1, "maximum length of dependency chain"
@@ -826,7 +828,8 @@ int main(int argc, char **argv) {
 				indicusstore::Parameters params(FLAGS_indicus_sign_messages,
 					FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
 					FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
-          FLAGS_indicus_max_dep_depth, readDepSize, false, false, false, false);
+          FLAGS_indicus_max_dep_depth, readDepSize, false, false, false, false,
+          FLAGS_indicus_merkle_branch_factor);
 
         client = new indicusstore::Client(config, clientId,
             FLAGS_num_shards,

@@ -31,7 +31,7 @@ class SharedBatchSigner : public BatchSigner {
  public:
   SharedBatchSigner(Transport *transport, KeyManager *keyManager, Stats &stats,
       uint64_t batchTimeoutMicro, uint64_t batchSize, uint64_t id,
-      bool adjustBatchSize);
+      bool adjustBatchSize, uint64_t merkleBranchFactor);
   virtual ~SharedBatchSigner();
 
   virtual void MessageToSign(::google::protobuf::Message* msg,

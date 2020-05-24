@@ -233,7 +233,7 @@ void ShardClient::Abort(uint64_t id, const TimestampMessage &ts) {
       std::vector<::google::protobuf::Message*> messages = {&internal};
       std::vector<proto::SignedMessage*> signedMessages = {abort.mutable_signed_internal()};
       SignMessages(messages, keyManager->GetPrivateKey(client_id % 1024), client_id % 1024,
-          signedMessages);
+          signedMessages, params.merkleBranchFactor);
     }
   }
 

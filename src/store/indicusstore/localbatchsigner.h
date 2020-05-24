@@ -21,7 +21,7 @@ class LocalBatchSigner : public BatchSigner {
  public:
   LocalBatchSigner(Transport *transport, KeyManager *keyManager, Stats &stats,
       uint64_t batchTimeoutMicro, uint64_t batchSize, uint64_t id,
-      bool adjustBatchSize);
+      bool adjustBatchSize, uint64_t merkleBranchFactor);
   virtual ~LocalBatchSigner();
 
   virtual void MessageToSign(::google::protobuf::Message* msg,

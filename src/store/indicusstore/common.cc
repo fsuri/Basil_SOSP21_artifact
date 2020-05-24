@@ -26,7 +26,8 @@ void SignMessage(::google::protobuf::Message* msg,
 
 void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
     crypto::PrivKey* privateKey, uint64_t processId,
-    const std::vector<proto::SignedMessage*>& signedMessages) {
+    const std::vector<proto::SignedMessage*>& signedMessages,
+    uint64_t merkleBranchFactor) {
   UW_ASSERT(msgs.size() == signedMessages.size());
 
   std::vector<const std::string*> messageStrs;
@@ -37,7 +38,7 @@ void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
   }
 
   std::vector<std::string> sigs;
-  BatchedSigs::generateBatchedSignatures(messageStrs, privateKey, sigs);
+  BatchedSigs::generateBatchedSignatures(messageStrs, privateKey, sigs, merkleBranchFactor);
   for (unsigned int i = 0; i < msgs.size(); i++) {
     *signedMessages[i]->mutable_signature() = sigs[i];
   }

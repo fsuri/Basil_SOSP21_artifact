@@ -9,9 +9,9 @@ namespace indicusstore {
 
 SharedBatchSigner::SharedBatchSigner(Transport *transport,
     KeyManager *keyManager, Stats &stats, uint64_t batchTimeoutMicro,
-    uint64_t batchSize, uint64_t id, bool adjustBatchSize) : BatchSigner(
+    uint64_t batchSize, uint64_t id, bool adjustBatchSize, uint64_t merkleBranchFactor) : BatchSigner(
       transport, keyManager, stats, batchTimeoutMicro, batchSize, id,
-      adjustBatchSize), batchSize(batchSize), batchTimerId(0), nextPendingBatchId(0UL),
+      adjustBatchSize, merkleBranchFactor), batchSize(batchSize), batchTimerId(0), nextPendingBatchId(0UL),
       alive(false), currentBatchId(0) {
   segment = new managed_shared_memory(open_or_create, "MySharedMemory", 33554432);//67108864); // 64 MB
   alloc_inst = new void_allocator(segment->get_segment_manager());
@@ -153,7 +153,8 @@ void SharedBatchSigner::SignBatch() {
   uint64_t currMicros = curr.tv_sec * 1000000ULL + curr.tv_usec;
   stats.Add("sig_batch_sizes_ts",  currMicros);
 
-  BatchedSigs::generateBatchedSignatures(batchMessages, privKey, batchSignatures);
+  BatchedSigs::generateBatchedSignatures(batchMessages, privKey, batchSignatures,
+      merkleBranchFactor);
 
   for (size_t i = 0; i < batchSignatures.size(); ++i) {
     scoped_lock<named_mutex> lock(*GetCompletionQueueMutex(pids[i]));

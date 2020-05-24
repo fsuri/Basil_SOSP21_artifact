@@ -71,18 +71,20 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
       batchSigner = new SharedBatchSigner(transport, keyManager, GetStats(),
           batchTimeoutMicro, params.signatureBatchSize, id,
           params.validateProofs && params.signedMessages &&
-          params.signatureBatchSize > 1 && params.adjustBatchSize);
+          params.signatureBatchSize > 1 && params.adjustBatchSize,
+          params.merkleBranchFactor);
     } else {
       batchSigner = new LocalBatchSigner(transport, keyManager, GetStats(),
           batchTimeoutMicro, params.signatureBatchSize, id,
           params.validateProofs && params.signedMessages &&
-          params.signatureBatchSize > 1 && params.adjustBatchSize);
+          params.signatureBatchSize > 1 && params.adjustBatchSize,
+          params.merkleBranchFactor);
     }
 
     if (params.sharedMemVerify) {
-      verifier = new SharedBatchVerifier(stats);
+      verifier = new SharedBatchVerifier(params.merkleBranchFactor, stats);
     } else {
-      verifier = new LocalBatchVerifier(stats);
+      verifier = new LocalBatchVerifier(params.merkleBranchFactor, stats);
     }
   }
   // this is needed purely from loading data without executing transactions
@@ -261,7 +263,7 @@ void Server::HandleRead(const TransportAddress &remote,
       msgs.push_back(&write);
       std::vector<proto::SignedMessage *> smsgs;
       smsgs.push_back(readReply->mutable_signed_write());
-      SignMessages(msgs, keyManager->GetPrivateKey(id), id, smsgs);
+      SignMessages(msgs, keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor);
       sendCB();
     }
   } else {

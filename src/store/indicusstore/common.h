@@ -25,7 +25,8 @@ void SignMessage(::google::protobuf::Message* msg,
 
 void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
     crypto::PrivKey* privateKey, uint64_t processId,
-    const std::vector<proto::SignedMessage*>& signedMessages);
+    const std::vector<proto::SignedMessage*>& signedMessages,
+    uint64_t merkleBranchFactor);
 
 bool ValidateCommittedConflict(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, const proto::Transaction *txn,
@@ -135,16 +136,18 @@ typedef struct Parameters {
   const bool adjustBatchSize;
   const bool sharedMemBatches;
   const bool sharedMemVerify;
+  const uint64_t merkleBranchFactor;
 
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     int signatureBatchSize, int64_t maxDepDepth, uint64_t readDepSize,
     bool readReplyBatch, bool adjustBatchSize, bool sharedMemBatches,
-    bool sharedMemVerify) :
+    bool sharedMemVerify, uint64_t merkleBranchFactor) :
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
     maxDepDepth(maxDepDepth), readDepSize(readDepSize),
     readReplyBatch(readReplyBatch), adjustBatchSize(adjustBatchSize),
-    sharedMemBatches(sharedMemBatches), sharedMemVerify(sharedMemVerify) { }
+    sharedMemBatches(sharedMemBatches), sharedMemVerify(sharedMemVerify),
+    merkleBranchFactor(merkleBranchFactor) { }
 } Parameters;
 
 } // namespace indicusstore
