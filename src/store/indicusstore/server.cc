@@ -233,14 +233,14 @@ void Server::HandlePhase1(const TransportAddress &remote,
       msg.txn().timestamp().timestamp());
       proto::ConcurrencyControl::Result result;
       // no-replays property, i.e. recover existing decision/result from storage
-      if(p1Decisions.find(txnDigest) != p1Decisions.end()){
-            result  =p1Decisions[txnDigest];
+if(p1Decisions.find(txnDigest) != p1Decisions.end()){
+            result  = p1Decisions[txnDigest];
             //KEEP track of interested client
             interestedClients[txnDigest].insert(remote.clone());
-      }
+}
 
 
-     else{
+else{
 
   if (params.validateProofs && params.signedMessages && params.verifyDeps) {
     for (const auto &dep : msg.txn().deps()) {
@@ -297,10 +297,14 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
     //else if(aborted.end() != aborted.find(txnDigest) ){
     //}
 
+    //KEEP track of interested client
+    interestedClients[txnDigest].insert(remote.clone());
+
 //currently for simplicity just forward writeback message that we received and stored.
     if(writebackMessages.find(txnDigest) != writebackMessages.end()){
       writeback = writebackMessages[txnDigest];
       SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
+      return;
     }
 
     //add case where there is both p2 and p1
@@ -309,10 +313,15 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
        proto::ConcurrencyControl::Result result = p1Decisions[txnDigest];
        proto::CommittedProof conflict;
        //recover stored commit proof.
-       if(result == proto::ConcurrencyControl::ABORT){
-         conflict = p1Conflicts[txnDigest];
+       if (result != proto::ConcurrencyControl::WAIT) {
+         proto::CommittedProof conflict;
+         //recover stored commit proof.
+         if(result == proto::ConcurrencyControl::ABORT){
+           conflict = p1Conflicts[txnDigest];
+         }
+         SetP1(msg.req_id(), txnDigest, result, conflict);
+         SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 4);
        }
-       SetP1(msg.req_id(), txnDigest, result, conflict);
        SetP2(msg.req_id(), txnDigest, decision);
        SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,   txnDigest, 2);
     }
@@ -359,8 +368,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
           }
         }
       }
-      //KEEP track of interested client
-      interestedClients[txnDigest].insert(remote.clone());
+      //start new current view
       current_views[txnDigest] = 0;
 
       proto::Transaction *txn = msg.release_txn();
@@ -419,6 +427,7 @@ void Server::SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision 
   //TODO: ADD VIEW. Is this the right notation?
   if(decision_views.find(txnDigest) == decision_views.end()) decision_views[txnDigest] = 0;
   phase2Reply.mutable_p2_decision()->set_view(decision_views[txnDigest]);
+
   if (params.validateProofs) {
     *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = txnDigest;
     if (params.signedMessages) {
@@ -1080,6 +1089,9 @@ if(msg.proposed_view() <= current_views[txnDigest]) return; //Obsolete Invoke Me
 void Server::HandleElectFB(const TransportAddress &remote, proto::ElectFB &msg){
 
   //assume all is signed for now. TODO: make that general so no exceptions.
+  if (!params.signedMessages) {Debug("ERROR HANDLE ELECT FB: NON SIGNED VERSION NOT IMPLEMENTED");}
+  if(!msg.has_signed_elect_fb()) return;
+
   proto::SignedMessage signed_msg = msg.signed_elect_fb();
   proto::ElectMessage electMessage;
   electMessage.ParseFromString(signed_msg.data());
@@ -1143,16 +1155,22 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
 
 
     std::string Msg;
-    proto::ElectFB electfb;
+  //  proto::ElectFB electfb;
+
+    proto::ElectMessage elect_msg;
 
 //TODO: verify signatures, Ignore if from view < current
     uint64_t counter = 2* config.f +1;
-    for(auto & iter :msg.elect_sigs()){  //does this work syntactically?
-      electfb.ParseFromString(iter.data());
-      electfb.SerializeToString(&Msg);
-      if(crypto::Verify(keyManager->GetPublicKey(iter.process_id()), Msg, iter.signature())){
+    for(auto & iter :msg.elect_sigs()){  //iter of type SignedMessage
+    //  electfb.ParseFromString(iter.data());
+    //  electfb.SerializeToString(&Msg);
+      elect_msg.ParseFromString(iter.data());
+      //TODO: need to add that these signatures come from different replicas..
+      //TODO: check that there are 4f+1 elect messages in total? is this necessary?
+      if(crypto::Verify(keyManager->GetPublicKey(iter.process_id()), iter.data(), iter.signature())){
         //check that replicas were electing this FB and voting for this decision
-        if(electfb.elect_fb().decision() == msg.dec() && electfb.elect_fb().view() == msg.view()){
+        //if(electfb.elect_fb().decision() == msg.dec() && electfb.elect_fb().view() == msg.view()){
+        if(elect_msg.decision() == msg.dec() && elect_msg.view() == msg.view()){
           counter--;
         }
       }

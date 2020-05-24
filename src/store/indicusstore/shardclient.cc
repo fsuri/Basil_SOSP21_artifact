@@ -1125,6 +1125,7 @@ void ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest
     else if (itr->second->ALTpendingP2s[view]->matchingReplies >= QuorumSize(config)) {
       PendingFB *pendingFB = itr->second;
         pendingFB->p2FBcb(pendingFB->ALTpendingP2s[view]->decision , pendingFB->ALTpendingP2s[view]->p2ReplySigs);
+        //TODO:Edit this callback so that it includes view too. Then modify both client and server code to check proofs for matching view as well.
       this->pendingFallbacks.erase(itr);
       delete pendingFB;
     }
