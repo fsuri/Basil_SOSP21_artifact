@@ -119,7 +119,7 @@
       "read_quorum": "one-honest",
       "read_dep": "one-honest",
       "hash_digest": true,
-      "validate_proofs": false,
+      "validate_proofs": true,
       "sign_messages": false,
       "signature_type": 3,
       "key_path": "/usr/local/etc/indicus-keys/secp256k1"
