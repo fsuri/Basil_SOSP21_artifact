@@ -6,6 +6,8 @@
 #include "lib/crypto.h"
 #include "lib/blake3.h"
 
+#include <iostream>
+
 namespace BatchedSigs {
 
 void packInt(unsigned int i, unsigned char* out);
@@ -13,14 +15,16 @@ unsigned int unpackInt(unsigned char* in);
 void bhash_cat(unsigned char* in1, unsigned char* in2, unsigned char* out);
 void bhash(unsigned char* in, size_t len, unsigned char* out);
 
-void generateBatchedSignatures(const std::vector<const std::string*> &messages, crypto::PrivKey* privateKey, std::vector<std::string> &sigs);
+void generateBatchedSignatures(const std::vector<const std::string*> &messages, crypto::PrivKey* privateKey, std::vector<std::string> &sigs, uint64_t m = 2);
 
 extern uint64_t hashCount;
 extern uint64_t hashCatCount;
+extern blake3_hasher hasher;
+
 
 template<class S>
 void computeBatchedSignatureHash(const std::string* signature, const std::string* message, crypto::PubKey* publicKey,
-    S &hashStr, S &rootSig) {
+    S &hashStr, S &rootSig, uint64_t m = 2) {
   size_t hash_size = BLAKE3_OUT_LEN;
   size_t sig_size = crypto::SigSize(publicKey);
 
@@ -42,16 +46,32 @@ void computeBatchedSignatureHash(const std::string* signature, const std::string
   int h = 0;
   // j is the current position in the tree.
   // invariant: [hash] is the hash of node j in the merkle tree
-  for (int j = n - 1 + i; j >= 1; j=(j+1)/2 - 1) {
-    if (j % 2 == 0) {
-      // node j was the right sibling
-      bhash_cat((unsigned char*) &signature->at(starting_pos + h*hash_size), &hash[0], hash);
-    } else {
-      // node j was the left sibling
-      bhash_cat(&hash[0], (unsigned char*) &signature->at(starting_pos + h*hash_size), hash);
+  int max_leaf = ((n - 1 + (m - 2)) / (m - 1) + n - 1);
+  //std::cerr << "max leaf " << max_leaf << std::endl;
+  for (int j = ((n - 1 + (m - 2)) / (m - 1)) + i; j >= 1; j=(j-1) / m) {
+    //std::cerr << "curr node " << j << std::endl;
+    // append the next hash on the path to the root to the signature
+    blake3_hasher_init(&hasher);
+
+    for (int k = 1; k <= m; ++k) {
+      int l = (j-1)/m * m + k;
+      if (l > max_leaf) {
+        break;
+      }
+      //std::cerr << "checking sibling " << l << " " << h << std::endl;
+      if (l == j) {
+        //std::cerr << "update with hash " << l << std::endl;
+        blake3_hasher_update(&hasher, &hash[0], BLAKE3_OUT_LEN);
+      } else {
+        //std::cerr << "read hash " << l << " from " << starting_pos + h*hash_size << std::endl;
+        //std::cerr << "update with hash " << l << std::endl;
+        blake3_hasher_update(&hasher, &signature->at(starting_pos + h*hash_size),
+            BLAKE3_OUT_LEN);
+        h++;
+      }
+      hashCatCount++;
     }
-    hashCatCount++;
-    h++;
+    blake3_hasher_finalize(&hasher, hash, BLAKE3_OUT_LEN);
   }
 
   hashStr.resize(hash_size);
