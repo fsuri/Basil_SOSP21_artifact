@@ -121,6 +121,7 @@
       "hash_digest": true,
       "validate_proofs": false,
       "sign_messages": false,
+      "signature_type": 3,
       "key_path": "/usr/local/etc/indicus-keys/secp256k1"
     },
 		{
@@ -131,6 +132,7 @@
       "hash_digest": true,
       "validate_proofs": true,
       "sign_messages": true,
+      "signature_type": 3,
       "key_path": "/usr/local/etc/indicus-keys/secp256k1"
     }
   ],
