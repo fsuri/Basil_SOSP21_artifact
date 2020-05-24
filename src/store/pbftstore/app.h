@@ -4,6 +4,8 @@
 #include <string>
 #include "store/pbftstore/pbft-proto.pb.h"
 #include <google/protobuf/message.h>
+#include "store/common/stats.h"
+#include <vector>
 
 namespace pbftstore {
 
@@ -15,7 +17,9 @@ public:
 
     virtual ::google::protobuf::Message* HandleMessage(const std::string& type, const std::string& msg);
     // upcall to execute the message
-    virtual ::google::protobuf::Message* Execute(const std::string& type, const std::string& msg);
+    virtual std::vector<::google::protobuf::Message*> Execute(const std::string& type, const std::string& msg);
+
+    virtual Stats* mutableStats() = 0;
 };
 
 }

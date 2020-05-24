@@ -139,6 +139,11 @@ std::string string_to_hex(const std::string& input)
     return output;
 }
 
+void DebugHash(const std::string& hash) {
+  Debug("Hash: %s", string_to_hex(hash).substr(0,10).c_str());
+}
+
+
 bool verifyGDecision(const proto::GroupedDecision& gdecision,
   const proto::Transaction& txn, KeyManager* keyManager, bool signMessages, uint64_t f) {
   std::string digest = gdecision.txn_digest();

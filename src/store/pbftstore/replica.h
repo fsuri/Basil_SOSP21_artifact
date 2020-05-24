@@ -11,6 +11,7 @@
 #include "lib/crypto.h"
 #include "lib/keymanager.h"
 
+#include "store/common/stats.h"
 #include "store/pbftstore/pbft-proto.pb.h"
 #include "store/pbftstore/slots.h"
 #include "store/pbftstore/app.h"
@@ -22,7 +23,7 @@ class Replica : public TransportReceiver {
 public:
   Replica(const transport::Configuration &config, KeyManager *keyManager,
     App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
-    bool primaryCoordinator, Transport *transport);
+    uint64_t batchTimeoutMS, bool primaryCoordinator, bool requestTx, Transport *transport);
   ~Replica();
 
   // Message handlers.
@@ -53,10 +54,27 @@ public:
   int id; // unique replica id (across all shards)
   bool signMessages;
   uint64_t maxBatchSize;
+  uint64_t batchTimeoutMS;
   bool primaryCoordinator;
+  bool requestTx;
   Transport *transport;
   int currentView;
   int nextSeqNum;
+
+  // members to reduce alloc
+  proto::SignedMessage tmpsignedMessage;
+  proto::Request recvrequest;
+  proto::Preprepare recvpreprepare;
+  proto::Prepare recvprepare;
+  proto::Commit recvcommit;
+  proto::BatchedRequest recvbatchedRequest;
+  proto::GroupedSignedMessage recvgrouped;
+  proto::RequestRequest recvrr;
+  proto::ABRequest recvab;
+
+  std::unordered_map<uint64_t, std::string> sessionKeys;
+  bool ValidateHMACedMessage(const proto::SignedMessage &signedMessage, std::string &data, std::string &type);
+  void CreateHMACedMessage(const ::google::protobuf::Message &msg, proto::SignedMessage& signedMessage);
 
   Slots slots;
 
@@ -93,6 +111,15 @@ public:
   void testSlot(uint64_t seqnum, uint64_t viewnum, std::string digest, bool gotPrepare);
 
   void executeSlots();
+
+  // map from seqnum to view num to
+  std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::unordered_map<std::string, int>>> actionTimers;
+
+  void startActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest);
+
+  void cancelActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest);
+
+  Stats* stats;
 };
 
 } // namespace pbftstore

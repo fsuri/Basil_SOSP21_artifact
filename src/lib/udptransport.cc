@@ -661,7 +661,7 @@ UDPTransport::Run()
 void
 UDPTransport::Stop(bool immediately)
 {
-    tp.stop();
+    // tp.stop();
     event_base_loopbreak(libeventBase);
 }
 
@@ -985,7 +985,8 @@ UDPTransport::OnTimer(UDPTransportTimerInfo *info)
 }
 
 void UDPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) {
-  tp.dispatch(f, cb, libeventBase);
+  // tp.dispatch(f, cb, libeventBase);
+  Panic("unimplemented");
 }
 
 

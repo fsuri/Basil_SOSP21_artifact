@@ -21,13 +21,15 @@ public:
   Server(const transport::Configuration& config, KeyManager *keyManager, int groupIdx, int idx, int numShards, int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, Partitioner *part, TrueTime timeServer = TrueTime(0, 0));
   ~Server();
 
-  ::google::protobuf::Message* Execute(const std::string& type, const std::string& msg);
+  std::vector<::google::protobuf::Message*> Execute(const std::string& type, const std::string& msg);
   ::google::protobuf::Message* HandleMessage(const std::string& type, const std::string& msg);
 
   void Load(const std::string &key, const std::string &value,
       const Timestamp timestamp);
 
   Stats &GetStats();
+
+  Stats* mutableStats();
 
 private:
   Stats stats;
@@ -49,14 +51,18 @@ private:
     std::shared_ptr<proto::CommitProof> commitProof;
   };
 
+  std::shared_ptr<proto::CommitProof> dummyProof;
+
   VersionedKVStore<Timestamp, ValueAndProof> commitStore;
 
 
-  ::google::protobuf::Message* HandleTransaction(const proto::Transaction& transaction);
+  std::vector<::google::protobuf::Message*> HandleTransaction(const proto::Transaction& transaction);
 
   ::google::protobuf::Message* HandleRead(const proto::Read& read);
 
-  ::google::protobuf::Message* HandleGroupedDecision(const proto::GroupedDecision& gdecision);
+  ::google::protobuf::Message* HandleGroupedCommitDecision(const proto::GroupedDecision& gdecision);
+
+  ::google::protobuf::Message* HandleGroupedAbortDecision(const proto::GroupedDecision& gdecision);
 
   ::google::protobuf::Message* returnMessage(::google::protobuf::Message* msg);
 
@@ -77,6 +83,9 @@ private:
   bool CCC2(const proto::Transaction& txn);
 
   void cleanupPendingTx(std::string digest);
+
+  std::unordered_map<std::string, proto::GroupedDecision> bufferedGDecs;
+  std::unordered_set<std::string> abortedTxs;
 
   // return true if this key is owned by this shard
   inline bool IsKeyOwned(const std::string &key) const {

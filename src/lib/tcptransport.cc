@@ -446,6 +446,7 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
 
     if (bufferevent_write(ev, buf, totalLen) < 0) {
         Warning("Failed to write to TCP buffer");
+        fprintf(stderr, "tcp write failed\n");
         return false;
     }
 
@@ -475,7 +476,7 @@ TCPTransport::Stop(bool immediately)
   // - This is mainly a problem if the client is still running long after it should have
   //   finished (due to abort loops)
   if (!stopped) {
-    tp.stop();
+    // tp.stop();
     auto stopFn = [this](){
       if (!stopped) {
         stopped = true;
@@ -586,7 +587,8 @@ TCPTransport::TimerCallback(evutil_socket_t fd, short what, void *arg)
 }
 
 void TCPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {
-  tp.dispatch(f, cb, libeventBase);
+  // tp.dispatch(f, cb, libeventBase);
+  Panic("unimplemented");
 }
 
 void
@@ -752,11 +754,13 @@ TCPTransport::TCPIncomingEventCallback(struct bufferevent *bev,
                                        short what, void *arg)
 {
     if (what & BEV_EVENT_ERROR) {
+      fprintf(stderr,"tcp incoming error\n");
         Debug("Error on incoming TCP connection: %s\n",
                 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
         bufferevent_free(bev);
         return;
     } else if (what & BEV_EVENT_ERROR) {
+      fprintf(stderr,"tcp incoming eof\n");
         Debug("EOF on incoming TCP connection\n");
         bufferevent_free(bev);
         return;
@@ -776,8 +780,10 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
     TCPTransportAddress addr = it->second.first;
 
     if (what & BEV_EVENT_CONNECTED) {
+      fprintf(stderr,"tcp  outgoing connection\n");
         Debug("Established outgoing TCP connection to server");
     } else if (what & BEV_EVENT_ERROR) {
+      fprintf(stderr,"tcp  outgoing error\n");
         Warning("Error on outgoing TCP connection to server: %s",
                 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
         bufferevent_free(bev);
@@ -790,6 +796,7 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
 
         return;
     } else if (what & BEV_EVENT_EOF) {
+      fprintf(stderr,"tcp  outgoing eof\n");
         Warning("EOF on outgoing TCP connection to server");
         bufferevent_free(bev);
 

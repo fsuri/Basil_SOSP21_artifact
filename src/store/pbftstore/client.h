@@ -47,8 +47,6 @@ class Client : public ::Client {
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
       uint32_t timeout) override;
 
-  std::vector<int> Stats();
-
  private:
   uint64_t client_id;
   /* Configuration State */

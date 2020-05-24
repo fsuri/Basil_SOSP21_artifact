@@ -22,9 +22,9 @@ bool Slots::setPreprepare(const proto::Preprepare &preprepare, uint64_t replica_
   return slots[seq_num][view].preprepare.digest == digest;
 }
 
-bool Slots::setPreprepare(const proto::Preprepare &preprepare, uint64_t primaryId) {
+bool Slots::setPreprepare(const proto::Preprepare &preprepare) {
   // with no sigs just assume the preprepare came from the primary
-  return setPreprepare(preprepare, primaryId, "");
+  return setPreprepare(preprepare, 0, "");
 }
 
 bool Slots::addPrepare(const proto::Prepare &prepare, uint64_t replica_id, const std::string& sig) {
@@ -45,7 +45,7 @@ bool Slots::addPrepare(const proto::Prepare &prepare) {
   std::string digest = prepare.digest();
 
   // add a prepare with a fake id, don't really care because we don't have sigs
-  return addPrepare(prepare, slots[seq_num][view].prepares[digest].size(), "");
+  return addPrepare(prepare, slots[seq_num][view].prepares[digest].size() + 1, "");
 }
 
 bool Slots::Prepared(uint64_t slot_num, uint64_t view, uint64_t f) {

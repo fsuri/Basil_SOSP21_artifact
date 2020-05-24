@@ -6,11 +6,11 @@ namespace pbftstore {
 ShardClient::ShardClient(const transport::Configuration& config, Transport *transport,
     uint64_t group_idx,
     bool signMessages, bool validateProofs,
-    KeyManager *keyManager) :
+    KeyManager *keyManager, Stats* stats) :
     config(config), transport(transport),
     group_idx(group_idx),
     signMessages(signMessages), validateProofs(validateProofs),
-    keyManager(keyManager) {
+    keyManager(keyManager), stats(stats) {
   transport->Register(this, config, -1, -1);
   readReq = 0;
 }
@@ -19,12 +19,20 @@ ShardClient::~ShardClient() {}
 
 bool ShardClient::validateReadProof(const proto::CommitProof& commitProof, const std::string& key,
   const std::string& value, const Timestamp& timestamp) {
+    // hack for load:
+    if (timestamp.getID() == 0 && timestamp.getTimestamp() == 0) {
+      Debug("Using preloaded key");
+      return true;
+    }
+
     // First, verify the transaction
+    Debug("Validating read proof");
 
     // txn must have timestamp of write
     if (Timestamp(commitProof.txn().timestamp()) != timestamp) {
       return false;
     }
+    Debug("timestamp valid");
 
     bool found_write = false;
 
@@ -38,6 +46,7 @@ bool ShardClient::validateReadProof(const proto::CommitProof& commitProof, const
     if (!found_write) {
       return false;
     }
+    Debug("write valid");
 
     // Verified Transaction at this point
 
@@ -49,14 +58,17 @@ bool ShardClient::validateReadProof(const proto::CommitProof& commitProof, const
     if (commitProof.writeback_message().txn_digest() != proofTxnDigest) {
       return false;
     }
+    Debug("commit digest valid");
 
     if (commitProof.writeback_message().status() != REPLY_OK) {
       return false;
     }
+    Debug("writeback status valid");
 
     if (!verifyGDecision(commitProof.writeback_message(), commitProof.txn(), keyManager, signMessages, config.f)) {
       return false;
     }
+    Debug("proof valid");
 
     return true;
   }
@@ -125,6 +137,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply& readReply, const proto
 
   // get the read request id from the reply
   uint64_t reqId = readReply.req_id();
+  Debug("Read red id: %lu", reqId);
 
   // try and find a matching pending read based on the request
   if (pendingReads.find(reqId) != pendingReads.end()) {
@@ -164,6 +177,9 @@ void ShardClient::HandleReadReply(const proto::ReadReply& readReply, const proto
 
     Debug("reply size: %lu", pendingRead->receivedReplies.size());
     if (pendingRead->receivedReplies.size() >= pendingRead->numResultsRequired) {
+      if (pendingRead->timeout != nullptr) {
+        pendingRead->timeout->Stop();
+      }
       read_callback rcb = pendingRead->rcb;
       std::string value = pendingRead->maxValue;
       Timestamp readts = pendingRead->maxTs;
@@ -180,10 +196,12 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
   Debug("Handling transaction decision");
 
   std::string digest = transactionDecision.txn_digest();
+  DebugHash(digest);
   // only handle decisions for my shard
   // NOTE: makes the assumption that numshards == numgroups
   if (transactionDecision.shard_id() == (uint64_t) group_idx) {
     if (signMessages) {
+      stats->Increment("handle_tx_dec_s",1);
       // Debug("signed packed msg: %s", string_to_hex(signedMsg.packed_msg()).c_str());
       // get the pending signed preprepare
       if (pendingSignedPrepares.find(digest) != pendingSignedPrepares.end()) {
@@ -219,6 +237,9 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
 
           // invoke the callback with the signed grouped decision
           signed_prepare_callback pcb = psp->pcb;
+          if (psp->timeout != nullptr) {
+            psp->timeout->Stop();
+          }
           pendingSignedPrepares.erase(digest);
           pcb(REPLY_OK, groupSignedMsg);
           return;
@@ -227,6 +248,9 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
         if (psp->receivedFailedIds.size() >= (uint64_t) config.f + 1) {
           Debug("Not enough valid txn decisions, failing");
           signed_prepare_callback pcb = psp->pcb;
+          if (psp->timeout != nullptr) {
+            psp->timeout->Stop();
+          }
           pendingSignedPrepares.erase(digest);
           // adding sigs to the grouped signed msg would be worthless
           pcb(REPLY_FAIL, groupSignedMsg);
@@ -234,6 +258,7 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
         }
       }
     } else {
+      stats->Increment("handle_tx_dec",1);
       if (pendingPrepares.find(digest) != pendingPrepares.end()) {
         PendingPrepare* pp = &pendingPrepares[digest];
         if (transactionDecision.status() == REPLY_OK) {
@@ -252,6 +277,9 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
           proto::TransactionDecision validDecision = pp->validDecision;
           // invoke the callback if we have enough of the same decision
           prepare_callback pcb = pp->pcb;
+          if (pp->timeout != nullptr) {
+            pp->timeout->Stop();
+          }
           pendingPrepares.erase(digest);
           pcb(REPLY_OK, validDecision);
           return;
@@ -261,12 +289,17 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
           proto::TransactionDecision failedDecision;
           failedDecision.set_status(REPLY_FAIL);
           prepare_callback pcb = pendingPrepares[digest].pcb;
+          if (pp->timeout != nullptr) {
+            pp->timeout->Stop();
+          }
           pendingPrepares.erase(digest);
           pcb(REPLY_FAIL, failedDecision);
           return;
         }
       }
     }
+  } else {
+    stats->Increment("wrong_dec_shard",1);
   }
 }
 
@@ -274,10 +307,11 @@ void ShardClient::HandleWritebackReply(const proto::GroupedDecisionAck& groupedD
   Debug("Handling Writeback reply");
 
   std::string digest = groupedDecisionAck.txn_digest();
+  DebugHash(digest);
   if (pendingWritebacks.find(digest) != pendingWritebacks.end()) {
     PendingWritebackReply* pw = &pendingWritebacks[digest];
 
-    uint64_t replica_id = pw->receivedAcks.size();
+    uint64_t replica_id = pw->receivedAcks.size() + pw->receivedFails.size();
     if (signMessages) {
       replica_id = signedMsg.replica_id();
     }
@@ -295,6 +329,9 @@ void ShardClient::HandleWritebackReply(const proto::GroupedDecisionAck& groupedD
       Debug("Got enough writeback acks");
       // if the list has enough replicas, we can invoke the callback
       writeback_callback wcb = pendingWritebacks[digest].wcb;
+      if (pendingWritebacks[digest].timeout != nullptr) {
+        pendingWritebacks[digest].timeout->Stop();
+      }
       pendingWritebacks.erase(digest);
       wcb(REPLY_OK);
       return;
@@ -304,6 +341,9 @@ void ShardClient::HandleWritebackReply(const proto::GroupedDecisionAck& groupedD
     if (pw->receivedFails.size() >= (uint64_t) config.f + 1) {
       Debug("Unable to get enough writeback acks, failing");
       writeback_callback wcb = pendingWritebacks[digest].wcb;
+      if (pendingWritebacks[digest].timeout != nullptr) {
+        pendingWritebacks[digest].timeout->Stop();
+      }
       pendingWritebacks.erase(digest);
       wcb(REPLY_FAIL);
     }
@@ -322,6 +362,7 @@ void ShardClient::Get(const std::string &key, const Timestamp &ts,
 
   proto::Read read;
   uint64_t reqId = readReq++;
+  Debug("Get id: %lu", reqId);
   read.set_req_id(reqId);
   read.set_key(key);
   ts.serialize(read.mutable_timestamp());
@@ -333,10 +374,21 @@ void ShardClient::Get(const std::string &key, const Timestamp &ts,
   pr.status = REPLY_FAIL;
   // every ts should be bigger than this one
   pr.maxTs = Timestamp();
+  pr.timeout = new Timeout(transport, timeout, [this, reqId, gtcb]() {
+    Debug("Get timeout called (but nothing was done)");
+      stats->Increment("g_tout", 1);
+      fprintf(stderr,"g_tout recv %lu\n",  this->pendingReads[reqId].numResultsRequired);
+      for (const auto& recv : this->pendingReads[reqId].receivedReplies) {
+        fprintf(stderr,"%lu\n", recv);
+      }
+    // this->pendingReads.erase(reqId);
+    // gtcb(reqId, key);
+  });
+  pr.timeout->Start();
+  // pr.timeout = nullptr;
 
   pendingReads[reqId] = pr;
 
-  // TODO timeout
 }
 
 std::string ShardClient::CreateValidPackedDecision(std::string digest) {
@@ -359,11 +411,14 @@ void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
 
   std::string digest = TransactionDigest(txn);
   if (pendingPrepares.find(digest) == pendingPrepares.end()) {
+    stats->Increment("shard_prepare",1);
     proto::Request request;
+    DebugHash(digest);
     request.set_digest(digest);
     request.mutable_packed_msg()->set_msg(txn.SerializeAsString());
     request.mutable_packed_msg()->set_type(txn.GetTypeName());
 
+    Debug("Sending txn to all replicas in shard");
     transport->SendMessageToGroup(this, group_idx, request);
 
     PendingPrepare pp;
@@ -374,12 +429,28 @@ void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
     validDecision.set_shard_id(group_idx);
     // this is what the tx decisions should look like for valid replies
     pp.validDecision = validDecision;
+    pp.timeout = new Timeout(transport, timeout, [this, digest, ptcb]() {
+      Debug("Prepare timeout called (but nothing was done)");
+      stats->Increment("p_tout", 1);
+      fprintf(stderr,"p_tout recv %d\n", group_idx);
+      fprintf(stderr,"ack\n");
+      for (const auto& recv : this->pendingPrepares[digest].receivedOkIds) {
+        fprintf(stderr,"%lu\n", recv);
+      }
+      fprintf(stderr,"nak:\n");
+      for (const auto& recv : this->pendingPrepares[digest].receivedFailedIds) {
+        fprintf(stderr,"%lu\n", recv);
+      }
+      // this->pendingPrepares.erase(digest);
+      // ptcb(REPLY_FAIL);
+    });
+    pp.timeout->Start();
+    // pp.timeout = nullptr;
 
     pendingPrepares[digest] = pp;
 
-    // TODO timeout
   } else {
-    // TODO warning
+    Debug("prepare called on already prepared tx");
   }
 }
 
@@ -392,19 +463,37 @@ void ShardClient::SignedPrepare(const proto::Transaction& txn, signed_prepare_ca
     request.set_digest(digest);
     request.mutable_packed_msg()->set_msg(txn.SerializeAsString());
     request.mutable_packed_msg()->set_type(txn.GetTypeName());
+    stats->Increment("shard_prepare_s",1);
 
+    Debug("Sending txn to all replicas in shard");
     transport->SendMessageToGroup(this, group_idx, request);
 
     PendingSignedPrepare psp;
     psp.pcb = pcb;
     // this is what the tx decisions should look like for valid replies
     psp.validDecisionPacked = CreateValidPackedDecision(digest);
+    psp.timeout = new Timeout(transport, timeout, [this, digest, ptcb]() {
+      Debug("Prepare signed timeout called (but nothing was done)");
+      stats->Increment("ps_tout", 1);
+      fprintf(stderr,"ps_tout recv %d\n", group_idx);
+      fprintf(stderr,"ack\n");
+      for (const auto& recv : this->pendingSignedPrepares[digest].receivedValidSigs) {
+        fprintf(stderr,"%lu\n", recv.first);
+      }
+      fprintf(stderr,"nak:\n");
+      for (const auto& recv : this->pendingSignedPrepares[digest].receivedFailedIds) {
+        fprintf(stderr,"%lu\n", recv);
+      }
+      // this->pendingSignedPrepares.erase(digest);
+      // ptcb(REPLY_FAIL);
+    });
+    psp.timeout->Start();
+    // psp.timeout = nullptr;
 
     pendingSignedPrepares[digest] = psp;
 
-    // TODO timeout
   } else {
-    // TODO warning
+    Debug("prepare signed called on already prepared tx");
   }
 }
 
@@ -416,16 +505,37 @@ void ShardClient::Commit(const std::string& txn_digest, const proto::ShardDecisi
     groupedDecision.set_status(REPLY_OK);
     groupedDecision.set_txn_digest(txn_digest);
     *groupedDecision.mutable_decisions() = dec;
+    stats->Increment("shard_commit", 1);
 
+    Debug("Sending commit to all replicas in shard");
     transport->SendMessageToGroup(this, group_idx, groupedDecision);
 
     PendingWritebackReply pwr;
     pwr.wcb = wcb;
+    pwr.timeout = new Timeout(transport, timeout, [this, txn_digest, wtcp]() {
+      Debug("Writeback timeout called (but nothing was done)");
+      stats->Increment("c_tout", 1);
+      fprintf(stderr,"c_tout recv %d\n", group_idx);
+      fprintf(stderr, "txn: %s\n", txn_digest.c_str());
+      fprintf(stderr,"ack\n");
+      for (const auto& recv : this->pendingWritebacks[txn_digest].receivedAcks) {
+        fprintf(stderr,"%lu\n", recv);
+      }
+      fprintf(stderr,"nak:\n");
+      for (const auto& recv : this->pendingWritebacks[txn_digest].receivedFails) {
+        fprintf(stderr,"%lu\n", recv);
+      }
+
+      // this->pendingWritebacks.erase(digest);
+      // wtcp(REPLY_FAIL);
+    });
+    pwr.timeout->Start();
+    // pwr.timeout = nullptr;
+
     pendingWritebacks[txn_digest] = pwr;
 
-    // TODO timeout
   } else {
-    // TODO warning
+    Debug("commit called on already committed tx");
   }
 }
 
@@ -437,21 +547,42 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
     groupedDecision.set_status(REPLY_OK);
     groupedDecision.set_txn_digest(txn_digest);
     *groupedDecision.mutable_signed_decisions() = dec;
+    stats->Increment("shard_commit_s", 1);
 
+    Debug("Sending commit to all replicas in shard");
     transport->SendMessageToGroup(this, group_idx, groupedDecision);
 
     PendingWritebackReply pwr;
     pwr.wcb = wcb;
+    pwr.timeout = new Timeout(transport, timeout, [this, txn_digest, wtcp]() {
+      Debug("Writeback signed timeout called (but nothing was done)");
+      stats->Increment("cs_tout", 1);
+      fprintf(stderr,"cs_tout recv %d\n", group_idx);
+      fprintf(stderr,"ack\n");
+      for (const auto& recv : this->pendingWritebacks[txn_digest].receivedAcks) {
+        fprintf(stderr,"%lu\n", recv);
+      }
+      fprintf(stderr,"nak:\n");
+      for (const auto& recv : this->pendingWritebacks[txn_digest].receivedFails) {
+        fprintf(stderr,"%lu\n", recv);
+      }
+      // this->pendingWritebacks.erase(digest);
+      // wtcp(REPLY_FAIL);
+    });
+    pwr.timeout->Start();
+    // pwr.timeout = nullptr;
+
     pendingWritebacks[txn_digest] = pwr;
 
     // TODO timeout
   } else {
-    // TODO warning
+    Debug("commit signed called on already committed tx");
   }
 }
 
 void ShardClient::Abort(std::string txn_digest) {
   Debug("Handling client abort");
+  // TODO should techincally include a proof
   if (pendingWritebacks.find(txn_digest) == pendingWritebacks.end()) {
     proto::GroupedDecision groupedDecision;
     groupedDecision.set_status(REPLY_FAIL);
@@ -459,9 +590,16 @@ void ShardClient::Abort(std::string txn_digest) {
     proto::ShardDecisions sd;
     *groupedDecision.mutable_decisions() = sd;
 
-    transport->SendMessageToGroup(this, group_idx, groupedDecision);
+    proto::Request request;
+    request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
+    request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
+    request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+
+    stats->Increment("shard_abort", 1);
+    Debug("AB abort to all replicas in shard");
+    transport->SendMessageToGroup(this, group_idx, request);
   } else {
-    // TODO warning
+    Debug("abort called on already aborted tx");
   }
 }
 

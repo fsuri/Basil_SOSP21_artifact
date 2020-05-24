@@ -10,6 +10,7 @@
 #include <cryptopp/oids.h>
 #include <cryptopp/osrng.h>
 #include <cryptopp/sha.h>
+#include <cryptopp/hmac.h>
 #include <random>
 #include "lib/secp256k1.h"
 #include "lib/blake3.h"
@@ -47,6 +48,42 @@ struct PrivKey {
     unsigned char* secpKey;
   };
 };
+
+std::string HMAC(std::string message, std::string keystr) {
+  SecByteBlock key((const CryptoPP::byte*)keystr.data(), keystr.size());
+  try{
+    CryptoPP::HMAC< CryptoPP::SHA256 > hmac(key, key.size());
+
+    string mac;
+    StringSource ss2(message, true,
+        new HashFilter(hmac,
+            new StringSink(mac)
+        ) // HashFilter
+    );
+    return mac;
+  }
+  catch(const CryptoPP::Exception& e) {
+      std::cerr << e.what() << std::endl;
+      exit(1);
+  }
+}
+
+bool verifyHMAC(std::string message, std::string mac, std::string keystr) {
+  SecByteBlock key((const CryptoPP::byte*)keystr.data(), keystr.size());
+  try{
+      CryptoPP::HMAC< CryptoPP::SHA256 > hmac(key, key.size());
+      const int flags = HashVerificationFilter::THROW_EXCEPTION | HashVerificationFilter::HASH_AT_END;
+
+      StringSource(message + mac, true,
+          new HashVerificationFilter(hmac, NULL, flags)
+      ); // StringSource
+
+      return true;
+  }
+  catch(const CryptoPP::Exception& e) {
+    return false;
+  }
+}
 
 string Hash(const string &message) {
   SHA256 hash;
