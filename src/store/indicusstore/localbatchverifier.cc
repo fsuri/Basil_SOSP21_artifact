@@ -8,28 +8,33 @@
 namespace indicusstore {
 
 LocalBatchVerifier::LocalBatchVerifier(Stats &stats) : stats(stats) {
-  _Latency_Init(&lat, "merkle");
+  _Latency_Init(&hashLat, "hash");
+  _Latency_Init(&cryptoLat, "crypto");
 }
 
 LocalBatchVerifier::~LocalBatchVerifier() {
-  Latency_Dump(&lat);
+  Latency_Dump(&hashLat);
+  Latency_Dump(&cryptoLat);
 }
 
 bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &message,
     const std::string &signature) {
   std::string hashStr;
   std::string rootSig;
-  Latency_Start(&lat);
+  Latency_Start(&hashLat);
   BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
       hashStr, rootSig);
-  Latency_End(&lat);
+  Latency_End(&hashLat);
   auto itr = cache.find(rootSig);
   if (itr == cache.end()) {
     stats.Increment("verify_cache_miss");
+    Latency_Start(&cryptoLat);
     if (crypto::Verify(publicKey, &hashStr[0], hashStr.length(), &rootSig[0])) {
+      Latency_End(&cryptoLat);
       cache[rootSig] = hashStr;
       return true;
     } else {
+      Latency_End(&cryptoLat);
       Debug("Verification with public key failed.");
       return false;
     }

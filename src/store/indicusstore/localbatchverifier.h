@@ -21,7 +21,8 @@ class LocalBatchVerifier : public Verifier {
 
  private:
   Stats &stats;
-  Latency_t lat;
+  Latency_t hashLat;
+  Latency_t cryptoLat;
   std::unordered_map<std::string, std::string> cache;
 
 };
