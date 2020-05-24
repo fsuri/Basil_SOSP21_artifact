@@ -1039,7 +1039,8 @@ if(msg.proposed_view() <= current_views[txnDigest]) return; //Obsolete Invoke Me
 
 //verify views
     if(!VerifyViews(msg, logGroup)) return; //invalid view signatures.
-    //TODO: Adopt view
+    //TODO: Adopt view if it is bigger than our current.
+    if(current_views[txnDigest] >= msg.proposed_view()) return; //
     current_views[txnDigest] = msg.proposed_view();
     size_t replicaID = (msg.proposed_view() + txnDigest[0]) % config.n;
 
@@ -1137,6 +1138,7 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
      proto::DecisionFB &msg){
 
     std::string txnDigest = msg.txn_digest();
+    //outdated request
     if(current_views[txnDigest] > msg.view()) return;
 
 
@@ -1149,6 +1151,7 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
       electfb.ParseFromString(iter.data());
       electfb.SerializeToString(&Msg);
       if(crypto::Verify(keyManager->GetPublicKey(iter.process_id()), Msg, iter.signature())){
+        //check that replicas were electing this FB and voting for this decision
         if(electfb.elect_fb().decision() == msg.dec() && electfb.elect_fb().view() == msg.view()){
           counter--;
         }
@@ -1161,6 +1164,10 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
       decision_views[txnDigest] = msg.view();
       p2Decisions[txnDigest] = msg.dec();
     }
+    if(current_views[txnDigest] < msg.view()){
+      current_views[txnDigest] = msg.view();
+    }
+
     SetP2(msg.req_id(), txnDigest, p2Decisions[txnDigest]);  //TODO: problematic that client cannot distinguish? Wrap it inside a P2FBreply?
     phase2FBReply.Clear();
     phase2FBReply.set_txn_digest(txnDigest);
