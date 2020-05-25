@@ -405,7 +405,8 @@ void Server::HandlePhase2(const TransportAddress &remote,
       decision_views[*txnDigest] = 0;
     }
     auto dec_view = decision_views[*txnDigest];
-    phase2Reply->mutable_p2_decision()->set_view(dec_view);
+    // TODO: uncomment, see below
+    //phase2Reply->mutable_p2_decision()->set_view(dec_view);
   } else{
     Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
 
@@ -432,7 +433,9 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
     phase2Reply->mutable_p2_decision()->set_decision(msg.decision());
     if (params.validateProofs) {
-      phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
+      // TODO: uncomment. need a way for a process to know the decision view
+      //   when verifying the signed p2_decision
+      //phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
     }
   }
 
@@ -932,10 +935,12 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
           txn.client_id(), txn.client_seq_num(),
           BytesToHex(txnDigest, 16).c_str(),
           BytesToHex(dep.write().prepared_txn_digest(), 16).c_str());
-      if (ongoing.find(dep.write().prepared_txn_digest()) != ongoing.end()) {
+      // TODO: uncomment for running with fallback. leaving commented to see if
+      //    causing performance issue.
+      /*if (ongoing.find(dep.write().prepared_txn_digest()) != ongoing.end()) {
         proto::Transaction *tx = ongoing[dep.write().prepared_txn_digest()];
         RelayP1(remote, *tx, reqId);
-      }
+      }*/
       allFinished = false;
       dependents[dep.write().prepared_txn_digest()].insert(txnDigest);
       auto dependenciesItr = waitingDependencies.find(txnDigest);

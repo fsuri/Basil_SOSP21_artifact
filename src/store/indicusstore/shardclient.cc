@@ -672,6 +672,8 @@ void ShardClient::Phase1Decision(
 /////////////////////////////////////////FALLBACK CODE STARTS HERE ///////////////////////////////////////////
 
 void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
+  // TODO: undo
+  return;
   uint64_t req_id = relayP1.conflict_id();
   auto itr = this->pendingPhase1s.find(req_id);
   if (itr == this->pendingPhase1s.end()) {
