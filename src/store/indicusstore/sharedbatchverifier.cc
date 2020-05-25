@@ -30,7 +30,8 @@ bool SharedBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &m
   MyShmString hashStrShared(BLAKE3_OUT_LEN, 0, *alloc_inst);
   MyShmString rootSigShared(crypto::SigSize(publicKey), 0, *alloc_inst);
   if (!BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
-     hashStrShared, rootSigShared)) {
+     hashStrShared, rootSigShared, merkleBranchFactor)) {
+    Debug("Some hash value was tampered with.");
     return false;
   }
 
@@ -47,6 +48,7 @@ bool SharedBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &m
       cacheMtx->unlock();
       return true;
     } else {
+      Debug("Verification with public key failed.");
       return false;
     }
   } else {
@@ -54,6 +56,8 @@ bool SharedBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &m
     cacheMtx->unlock_sharable();
     if (verified) {
       stats.Increment("verify_cache_hit");
+    } else {
+      Debug("Root hash did not match cached signature.");
     }
     return verified;
   }

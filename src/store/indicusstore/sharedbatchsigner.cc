@@ -32,6 +32,8 @@ SharedBatchSigner::~SharedBatchSigner() {
   signedCallbackThread->join();
   Notice("Freeing signed callback thread");
   delete signedCallbackThread;
+  Notice("Done freeing thread.");
+  /*
   for (const auto &mtx : completionQueueMtx) {
     //Notice("Freeing completion queue mtx %lu", mtx.first);
     // delete mtx.second;
@@ -53,6 +55,7 @@ SharedBatchSigner::~SharedBatchSigner() {
   // delete segment;
   // Notice("Freeing allocator.");
   // delete alloc_inst;
+  */
 }
 
 void SharedBatchSigner::MessageToSign(::google::protobuf::Message* msg,
