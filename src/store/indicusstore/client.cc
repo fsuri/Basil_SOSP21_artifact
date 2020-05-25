@@ -429,8 +429,8 @@ void Client::Writeback(PendingRequest *req) {
 
   req->startedWriteback = true;
 
-  if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH &&
-      txn.deps_size() > 0) {
+  if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
+    Debug("INJECT FAILURE");
     stats.Increment("inject_failure_crash");
     return;
   }
