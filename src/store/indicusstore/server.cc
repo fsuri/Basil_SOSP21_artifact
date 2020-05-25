@@ -2225,6 +2225,7 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
 //RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
 void Server::RelayP1(const TransportAddress &remote, std::string txnDigest, uint64_t conflict_id){
 
+  Debug("RelayP1[%s] timed out.", BytesToHex(txnDigest, 16).c_str());
   proto::Transaction *tx;
   if (ongoing.find(txnDigest) == ongoing.end()) return;
 
@@ -2235,6 +2236,8 @@ void Server::RelayP1(const TransportAddress &remote, std::string txnDigest, uint
   proto::RelayP1 relayP1;
   relayP1.set_conflict_id(conflict_id);
   *relayP1.mutable_p1() = p1;
+
+  Debug("Sending RelayP1[%s].", BytesToHex(txnDigest, 16).c_str());
 
   transport->SendMessage(this, remote, relayP1);
 }
