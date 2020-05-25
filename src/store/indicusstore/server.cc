@@ -936,8 +936,12 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
           BytesToHex(txnDigest, 16).c_str(),
           BytesToHex(dep.write().prepared_txn_digest(), 16).c_str());
       if (ongoing.find(dep.write().prepared_txn_digest()) != ongoing.end()) {
-        proto::Transaction *tx = ongoing[dep.write().prepared_txn_digest()];
-        RelayP1(remote, *tx, reqId);
+
+        std::string txnDig = dep.write().prepared_txn_digest();
+        //schedule Relay for client timeout only..
+        //proto::Transaction *tx = ongoing[txnDig];
+        transport->Timer((CLIENTTIMEOUT), [this, &remote, txnDig, reqId](){RelayP1(remote, txnDig, reqId);});
+        //RelayP1(remote, *tx, reqId);
       }
       allFinished = false;
       dependents[dep.write().prepared_txn_digest()].insert(txnDigest);
@@ -2225,10 +2229,15 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
-void Server::RelayP1(const TransportAddress &remote, proto::Transaction &tx, uint64_t conflict_id){
+void Server::RelayP1(const TransportAddress &remote, std::string txnDigest, uint64_t conflict_id){
+
+  proto::Transaction *tx;
+  if (ongoing.find(txnDigest) == ongoing.end()) return;
+
+  tx = ongoing[txnDigest];
   proto::Phase1 p1;
   p1.set_req_id(0); //doesnt matter, its not used for fallback requests really.
-  *p1.mutable_txn() = tx;
+  *p1.mutable_txn() = *tx;
   proto::RelayP1 relayP1;
   relayP1.set_conflict_id(conflict_id);
   *relayP1.mutable_p1() = p1;

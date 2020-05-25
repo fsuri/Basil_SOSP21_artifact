@@ -230,7 +230,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
   void VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, proto::Phase2FB &p2fb);
   bool VerifyViews(proto::InvokeFB &msg, uint32_t lG);
-  void RelayP1(const TransportAddress &remote, proto::Transaction &tx, uint64_t conflict_id);
+  void RelayP1(const TransportAddress &remote, std::string txnDigest, uint64_t conflict_id);
 
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
