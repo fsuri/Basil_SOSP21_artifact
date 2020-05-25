@@ -31,7 +31,7 @@
 
 #ifndef _INDICUS_CLIENT_H_
 #define _INDICUS_CLIENT_H_
-#define CLIENTTIMEOUT  10
+#define CLIENTTIMEOUT  100
 
 #include "lib/assert.h"
 #include "lib/keymanager.h"
