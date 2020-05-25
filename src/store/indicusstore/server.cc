@@ -1118,17 +1118,17 @@ void Server::Clean(const std::string &txnDigest) {
   }
   current_views.erase(txnDigest);
   decision_views.erase(txnDigest);
-  auto ktr = ElectQuorum.find(txnDigest);
-  if (jtr != interestedClients.end()) {
+  /*auto ktr = ElectQuorum.find(txnDigest);
+  if (ktr != ElectQuorum.end()) {
     for (const auto signed_m : ktr->second) {
       delete signed_m;
     }
-      ElectQuorum.erase(txnDigest);
+    ElectQuorum.erase(txnDigest);
   }
   ElectQuorum_meta.erase(txnDigest);
   p1Conflicts.erase(txnDigest);
   p2Decisions.erase(txnDigest);
-
+  */
   //TODO: erase all timers if we use them again
 }
 
