@@ -32,7 +32,7 @@
 #ifndef _INDICUS_SERVER_H_
 #define _INDICUS_SERVER_H_
 
-#define CLIENTTIMEOUT  10    //currently miliseconds; adjust to whatever is a sensible time: dont know what is expected latency for 1 op
+#define CLIENTTIMEOUT  100    //currently miliseconds; adjust to whatever is a sensible time: dont know what is expected latency for 1 op
 
 #include "lib/latency.h"
 #include "lib/transport.h"
@@ -230,7 +230,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
   void VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, proto::Phase2FB &p2fb);
   bool VerifyViews(proto::InvokeFB &msg, uint32_t lG);
-  void RelayP1(const TransportAddress &remote, proto::Transaction &tx, uint64_t conflict_id);
+  void RelayP1(const TransportAddress &remote, std::string txnDigest, uint64_t conflict_id);
 
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
