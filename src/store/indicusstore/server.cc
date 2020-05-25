@@ -141,6 +141,8 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     HandlePhase2(remote, phase2);
   } else if (type == writeback.GetTypeName()) {
     writeback.ParseFromString(data);
+    //proto::Writeback *wb = new proto::Writeback();
+    //wb->ParseFromString(data);
     HandleWriteback(remote, writeback);
   } else if (type == abort.GetTypeName()) {
     abort.ParseFromString(data);
@@ -342,12 +344,12 @@ void Server::HandlePhase1(const TransportAddress &remote,
   }
 
   if (result != proto::ConcurrencyControl::WAIT) {
-    if(client_starttime.find(txnDigest) == client_starttime.end()){
-      struct timeval tv;
-      gettimeofday(&tv, NULL);
-      uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
-      client_starttime[txnDigest] = start_time;
-    }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
+    // if(client_starttime.find(txnDigest) == client_starttime.end()){
+    //   struct timeval tv;
+    //   gettimeofday(&tv, NULL);
+    //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+    //   client_starttime[txnDigest] = start_time;
+    // }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
     SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);
   }
 
@@ -424,12 +426,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
     current_views[*txnDigest] = 0;
     decision_views[*txnDigest] = 0;
 
-    if(client_starttime.find(*txnDigest) == client_starttime.end()){
-      struct timeval tv;
-      gettimeofday(&tv, NULL);
-      uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
-      client_starttime[*txnDigest] = start_time;
-    }
+    // if(client_starttime.find(*txnDigest) == client_starttime.end()){
+    //   struct timeval tv;
+    //   gettimeofday(&tv, NULL);
+    //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+    //   client_starttime[*txnDigest] = start_time;
+    // }
 
     phase2Reply->mutable_p2_decision()->set_decision(msg.decision());
     if (params.validateProofs) {
@@ -525,7 +527,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
     }
   }
 
-  writebackMessages[*txnDigest] = msg;
+
 
   if (msg.decision() == proto::COMMIT) {
     Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
@@ -533,6 +535,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
         msg.has_p1_sigs());
   } else {
     Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
+    writebackMessages[*txnDigest] = msg;
     Abort(*txnDigest);
   }
 }
@@ -1114,6 +1117,19 @@ void Server::Clean(const std::string &txnDigest) {
     interestedClients.erase(jtr);
   }
   current_views.erase(txnDigest);
+  decision_views.erase(txnDigest);
+  auto ktr = ElectQuorum.find(txnDigest);
+  if (jtr != interestedClients.end()) {
+    for (const auto signed_m : ktr->second) {
+      delete signed_m;
+    }
+      ElectQuorum.erase(txnDigest);
+  }
+  ElectQuorum_meta.erase(txnDigest);
+  p1Conflicts.erase(txnDigest);
+  p2Decisions.erase(txnDigest);
+
+  //TODO: erase all timers if we use them again
 }
 
 void Server::CheckDependents(const std::string &txnDigest) {
@@ -1354,11 +1370,32 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
     interestedClients[txnDigest].insert(remote.clone());
 
 //currently for simplicity just forward writeback message that we received and stored.
+    //ABORT CASE
     if(writebackMessages.find(txnDigest) != writebackMessages.end()){
       writeback = writebackMessages[txnDigest];
       SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
       return;
     }
+    //COMMIT CASE
+    else if(committed.find(txnDigest) != committed.end()){
+      writeback.Clear();
+      writeback.set_decision(proto::COMMIT);
+      writeback.set_txn_digest(txnDigest);
+
+      if(committed[txnDigest]->has_p1_sigs()){
+        *writeback.mutable_p1_sigs() = committed[txnDigest]->p1_sigs();
+      }
+      else if(committed[txnDigest]->has_p2_sigs()){
+        *writeback.mutable_p2_sigs() = committed[txnDigest]->p2_sigs();
+      }
+      else{
+        return; //error
+      }
+
+      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
+      return;
+    }
+
 
     //add case where there is both p2 and p1
     else if(p2Decisions.end() != p2Decisions.find(txnDigest) && p1Decisions.end() != p1Decisions.find(txnDigest) ){
@@ -1602,36 +1639,42 @@ else{
       //The timer should start running AFTER the Mvtso check returns.
       // I could make the timeout window 0 if I dont expect byz clients. An honest client will likely only ever start this on conflict.
       //std::chrono::high_resolution_clock::time_point current_time = high_resolution_clock::now();
-      struct timeval tv;
-      gettimeofday(&tv, NULL);
-      uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
 
+      //VerifyP2FB(remote, txnDigest, msg)
+      transport->Timer((CLIENTTIMEOUT), [this, &remote, &txnDigest, &msg](){VerifyP2FB(remote, txnDigest, msg);});
 
-      //std::time_t current_time;
-      //std::chrono::high_resolution_clock::time_point
-      uint64_t elapsed;
-      if(client_starttime.find(txnDigest) != client_starttime.end())
-          elapsed = current_time - client_starttime[txnDigest];
-      else{
-        //PANIC, have never seen the tx that is mentioned. Start timer ourselves.
-        client_starttime[txnDigest] = current_time;
-        transport->Timer((CLIENTTIMEOUT), [this, &remote, &txnDigest, &msg](){VerifyP2FB(remote, txnDigest, msg);});
-        return;
-
-      }
-
-	    //current_time = time(NULL);
-      //std::time_t elapsed = current_time - FBclient_timeouts[txnDigest];
-      //TODO: Replay this toy time logic with proper MS timer.
-      if (elapsed >= CLIENTTIMEOUT){
-        VerifyP2FB(remote, txnDigest, msg);
-      }
-      else{
-        //schedule for once original client has timed out.
-        transport->Timer((CLIENTTIMEOUT-elapsed), [this, &remote, &txnDigest, &msg](){VerifyP2FB(remote, txnDigest, msg);});
-        return;
-
-      }
+//TODO: for time being dont do this smarter scheduling.
+// if(false){
+//       struct timeval tv;
+//       gettimeofday(&tv, NULL);
+//       uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+//
+//
+//       //std::time_t current_time;
+//       //std::chrono::high_resolution_clock::time_point
+//       uint64_t elapsed;
+//       if(client_starttime.find(txnDigest) != client_starttime.end())
+//           elapsed = current_time - client_starttime[txnDigest];
+//       else{
+//         //PANIC, have never seen the tx that is mentioned. Start timer ourselves.
+//         client_starttime[txnDigest] = current_time;
+//         transport->Timer((CLIENTTIMEOUT), [this, &remote, &txnDigest, &msg](){VerifyP2FB(remote, txnDigest, msg);});
+//         return;
+//
+//       }
+//
+// 	    //current_time = time(NULL);
+//       //std::time_t elapsed = current_time - FBclient_timeouts[txnDigest];
+//       //TODO: Replay this toy time logic with proper MS timer.
+//       if (elapsed >= CLIENTTIMEOUT){
+//         VerifyP2FB(remote, txnDigest, msg);
+//       }
+//       else{
+//         //schedule for once original client has timed out.
+//         transport->Timer((CLIENTTIMEOUT-elapsed), [this, &remote, &txnDigest, &msg](){VerifyP2FB(remote, txnDigest, msg);});
+//         return;
+//       }
+//  }
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1924,33 +1967,33 @@ auto txnDigest = msg.txn_digest();
 if(msg.proposed_view() <= current_views[txnDigest]) return; //Obsolete Invoke Message. //TODO: return new view.
 
   //TODO  Schedule request for when current leader timeout is complete --> check exp timeouts; then set new one.
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
-
-  uint64_t elapsed;
-  if(client_starttime.find(txnDigest) != client_starttime.end())
-      elapsed = current_time - client_starttime[txnDigest];
-  else{
-    //PANIC, have never seen the tx that is mentioned. Start timer ourselves.
-    client_starttime[txnDigest] = current_time;
-    transport->Timer((CLIENTTIMEOUT), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
-    return;
-  }
-  if (elapsed < CLIENTTIMEOUT ){
-    transport->Timer((CLIENTTIMEOUT-elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
-    return;
-  }
-//check for current FB reign
-  uint64_t FB_elapsed;
-  if(exp_timeouts.find(txnDigest) != exp_timeouts.end()){
-      FB_elapsed = current_time - FBtimeouts_start[txnDigest];
-      if(FB_elapsed < exp_timeouts[txnDigest]){
-          transport->Timer((exp_timeouts[txnDigest]-FB_elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
-          return;
-      }
-
-  }
+//   struct timeval tv;
+//   gettimeofday(&tv, NULL);
+//   uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+//
+//   uint64_t elapsed;
+//   if(client_starttime.find(txnDigest) != client_starttime.end())
+//       elapsed = current_time - client_starttime[txnDigest];
+//   else{
+//     //PANIC, have never seen the tx that is mentioned. Start timer ourselves.
+//     client_starttime[txnDigest] = current_time;
+//     transport->Timer((CLIENTTIMEOUT), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+//     return;
+//   }
+//   if (elapsed < CLIENTTIMEOUT ){
+//     transport->Timer((CLIENTTIMEOUT-elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+//     return;
+//   }
+// //check for current FB reign
+//   uint64_t FB_elapsed;
+//   if(exp_timeouts.find(txnDigest) != exp_timeouts.end()){
+//       FB_elapsed = current_time - FBtimeouts_start[txnDigest];
+//       if(FB_elapsed < exp_timeouts[txnDigest]){
+//           transport->Timer((exp_timeouts[txnDigest]-FB_elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+//           return;
+//       }
+//
+//   }
   //otherwise pass and invoke for the first time!
 
 
@@ -2027,16 +2070,16 @@ if(msg.proposed_view() <= current_views[txnDigest]) return; //Obsolete Invoke Me
     }
 
     //Set timeouts new.
-    gettimeofday(&tv, NULL);
-    current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;
-    if(exp_timeouts.find(txnDigest) == exp_timeouts.end()){
-       exp_timeouts[txnDigest] = CLIENTTIMEOUT; //start first timeout. //TODO: Make this a config parameter.
-       FBtimeouts_start[txnDigest] = current_time;
-    }
-    else{
-       exp_timeouts[txnDigest] = exp_timeouts[txnDigest] * 2; //TODO: increase timeouts exponentially. SET INCREASE RATIO IN CONFIG
-       FBtimeouts_start[txnDigest] = current_time;
-    }
+    // gettimeofday(&tv, NULL);
+    // current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;
+    // if(exp_timeouts.find(txnDigest) == exp_timeouts.end()){
+    //    exp_timeouts[txnDigest] = CLIENTTIMEOUT; //start first timeout. //TODO: Make this a config parameter.
+    //    FBtimeouts_start[txnDigest] = current_time;
+    // }
+    // else{
+    //    exp_timeouts[txnDigest] = exp_timeouts[txnDigest] * 2; //TODO: increase timeouts exponentially. SET INCREASE RATIO IN CONFIG
+    //    FBtimeouts_start[txnDigest] = current_time;
+    // }
     //(TODO 4) Send MoveView message for new view to all other replicas)
 }
 
