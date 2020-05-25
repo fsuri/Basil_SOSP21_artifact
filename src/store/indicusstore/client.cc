@@ -825,6 +825,9 @@ void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, pr
   proto::Transaction Req_txn = pendingReqs[conflict_id]->txn;
   if(!isDep(txnDigest, Req_txn)) return;
 
+  // set txn field here.
+  *wb.mutable_txn() = fbtxn;
+
  for (auto group : fbtxn.involved_groups()) {
    bclient[group]->WritebackFB(txnDigest, wb);
  }
