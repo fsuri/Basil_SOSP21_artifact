@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
     Latency_End(&verifyLat);
 
 
-      int num =12 ;
+      int num =64 ;
     crypto::PubKey* publicKeys[num];
     const char *messages[num];
     size_t messageLens[num];
@@ -102,28 +102,32 @@ int main(int argc, char *argv[]) {
     std::string strings[num];
     std::string sign[num];
 
-    for(int i=0; i<num; i++){
-          //DIFFERENT STRINGS
+    if(keyType != crypto::DONNA){ continue;}
+    else{
+      for(int i=0; i<num; i++){
+            //DIFFERENT STRINGS
 
-       GenerateRandomString(FLAGS_size, rd, strings[i]);
+         GenerateRandomString(FLAGS_size, rd, strings[i]);
 
-          //DIFFERENT KEYS
-       std::pair<crypto::PrivKey*, crypto::PubKey*> keypair = crypto::GenerateKeypair(keyType, precompute);
-       crypto::PrivKey* privKey = keypair.first;
-       crypto::PubKey* pubKey = keypair.second;
+            //DIFFERENT KEYS
+         std::pair<crypto::PrivKey*, crypto::PubKey*> keypair = crypto::GenerateKeypair(keyType, precompute);
+         crypto::PrivKey* privKey = keypair.first;
+         crypto::PubKey* pubKey = keypair.second;
 
-      sign[i] = (crypto::Sign(privKey, strings[i]));
+        sign[i] = (crypto::Sign(privKey, strings[i]));
 
 
-      //speed up only when the messages and keys are the same?? Experiments that modify either seemingly dont get a speedup...
-      publicKeys[i] = pubKey;
-      messages[i] = &(strings[i])[0];
-      messageLens[i] = s.length();
-      signatures[i] = &(sign[i])[0];
+        //speed up only when the messages and keys are the same?? Experiments that modify either seemingly dont get a speedup...
+        publicKeys[i] = pubKey;
+        messages[i] = &(strings[i])[0];
+        messageLens[i] = s.length();
+        signatures[i] = &(sign[i])[0];
+      }
+      Latency_Start(&batchLat);
+      assert(crypto::BatchVerify(crypto::KeyType::DONNA, publicKeys, messages, messageLens, signatures, num));
+      Latency_End(&batchLat);
     }
-    Latency_Start(&batchLat);
-    assert(crypto::BatchVerify(crypto::KeyType::DONNA, publicKeys, messages, messageLens, signatures, num));
-    Latency_End(&batchLat);
+
 
 
     /*std::string hs;
@@ -169,7 +173,7 @@ int main(int argc, char *argv[]) {
 
   Latency_Dump(&signLat);
   Latency_Dump(&verifyLat);
-  Latency_Dump(&batchLat);
+  if(keyType == crypto::DONNA) Latency_Dump(&batchLat);
   Notice("===================================");
   //Latency_Dump(&signBLat);
   //Latency_Dump(&verifyBLat);
