@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
     Latency_End(&verifyLat);
 
 
-      int num =64 ;
+      int num =6 ;
     crypto::PubKey* publicKeys[num];
     const char *messages[num];
     size_t messageLens[num];
