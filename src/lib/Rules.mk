@@ -36,9 +36,9 @@ LIB-tcptransport := $(o)tcptransport.o $(LIB-transport)
 
 LIB-persistent_register := $(o)persistent_register.o $(LIB-message)
 
-LIB-crypto := $(LIB-message) $(o)crypto.o $(o)keymanager.o
+LIB-crypto := $(LIB-message) $(o)crypto.o $(o)keymanager.o $(d)ed25519.o
 
-LIB-batched-sigs := $(LIB-crypto) $(o)batched_sigs.o
+LIB-batched-sigs := $(LIB-crypto) $(o)batched_sigs.o 
 
 $(d)crypto_bench: $(LIB-latency) $(LIB-crypto) $(LIB-batched-sigs) $(o)crypto_bench.o
 
@@ -46,6 +46,8 @@ $(d)batched_sigs_test: $(LIB-latency) $(LIB-crypto) $(LIB-batched-sigs) $(o)batc
 
 $(d)blake3_test: $(LIB-latency) $(LIB-crypto) $(LIB-batched-sigs) $(o)blake3_test.o
 
-BINS += $(d)crypto_bench $(d)batched_sigs_test $(d)blake3_test
+#$(d)ed25519_donna: $(o)ed25519.o
+
+BINS +=  $(d)crypto_bench $(d)batched_sigs_test $(d)blake3_test 
 
 include $(d)tests/Rules.mk

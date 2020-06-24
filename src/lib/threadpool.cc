@@ -55,7 +55,8 @@ void ThreadPool::stop() {
 void ThreadPool::EventCallback(evutil_socket_t fd, short what, void *arg) {
   // we want to run the callback in the main event loop
   EventInfo* info = (EventInfo*) arg;
-  info->cb(info->r);
+  info->cb(info->r);  //FS: If the main thread runs all of it, then the thread is not doing any function? I.e. the function needs to be run FIRST, before event_active is called, no? event_active invokes the callback which runs on the main loop.
+  //could also only add new event with tv=0 once the function is complete. either is fine though.
   event_free(info->ev);
   delete info;
 }

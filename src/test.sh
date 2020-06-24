@@ -1,3 +1,5 @@
+#!/bin/bash
+
 CLIENTS=0
 DURATION=10
 ZIPF=0.0

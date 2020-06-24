@@ -41,6 +41,8 @@ int main(int argc, char *argv[]) {
     keyType = crypto::ED25;
   } else if (FLAGS_signature_alg == "secp256k1") {
     keyType = crypto::SECP;
+  } else if (FLAGS_signature_alg == "donna"){
+    keyType = crypto::DONNA;
   } else {
     Panic("Unknown signature algorithm: %s.", FLAGS_signature_alg.c_str());
   }
@@ -57,12 +59,15 @@ int main(int argc, char *argv[]) {
   struct Latency_t verifyBLat;
   struct Latency_t hashLat;
   struct Latency_t blake3Lat;
+
+  struct Latency_t batchLat;
   _Latency_Init(&signLat, "sign");
   _Latency_Init(&verifyLat, "verify");
   _Latency_Init(&signBLat, "sign");
   _Latency_Init(&verifyBLat, "verify");
   _Latency_Init(&hashLat, "sha256");
   _Latency_Init(&blake3Lat, "blake3");
+  _Latency_Init(&batchLat, "batchverify");
 
   std::vector<std::string*> messages;
   int batchSize = 100;
@@ -86,6 +91,40 @@ int main(int argc, char *argv[]) {
     Latency_Start(&verifyLat);
     assert(crypto::Verify(pubKey, &s[0], s.length(), &sig[0]));
     Latency_End(&verifyLat);
+
+
+      int num =12 ;
+    crypto::PubKey* publicKeys[num];
+    const char *messages[num];
+    size_t messageLens[num];
+    const char *signatures[num];
+    //ed25519_signature sig[num];
+    std::string strings[num];
+    std::string sign[num];
+
+    for(int i=0; i<num; i++){
+          //DIFFERENT STRINGS
+
+       GenerateRandomString(FLAGS_size, rd, strings[i]);
+
+          //DIFFERENT KEYS
+       std::pair<crypto::PrivKey*, crypto::PubKey*> keypair = crypto::GenerateKeypair(keyType, precompute);
+       crypto::PrivKey* privKey = keypair.first;
+       crypto::PubKey* pubKey = keypair.second;
+
+      sign[i] = (crypto::Sign(privKey, strings[i]));
+
+
+      //speed up only when the messages and keys are the same?? Experiments that modify either seemingly dont get a speedup...
+      publicKeys[i] = pubKey;
+      messages[i] = &(strings[i])[0];
+      messageLens[i] = s.length();
+      signatures[i] = &(sign[i])[0];
+    }
+    Latency_Start(&batchLat);
+    assert(crypto::BatchVerify(crypto::KeyType::DONNA, publicKeys, messages, messageLens, signatures, num));
+    Latency_End(&batchLat);
+
 
     /*std::string hs;
     GenerateRandomString(FLAGS_size, rd, hs);
@@ -125,8 +164,12 @@ int main(int argc, char *argv[]) {
     Latency_End(&verifyBLat);*/
 
   }
+
+  //TODO (FS): Add test case for ed25119 donna, + using batch verification.
+
   Latency_Dump(&signLat);
   Latency_Dump(&verifyLat);
+  Latency_Dump(&batchLat);
   Notice("===================================");
   //Latency_Dump(&signBLat);
   //Latency_Dump(&verifyBLat);

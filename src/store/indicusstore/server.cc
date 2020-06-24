@@ -487,6 +487,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
   Debug("WRITEBACK[%s] with decision %d.",
       BytesToHex(*txnDigest, 16).c_str(), msg.decision());
 
+
   if (params.validateProofs) {
     if (params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()) {
       int64_t myProcessId;
@@ -510,6 +511,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
             BytesToHex(*txnDigest, 16).c_str(), msg.decision());
         return;
       }
+      //MISSING CASE FOR FAST ABORT WITH 3f+1 ABSTAIN!!!!!!!!!!!!!!!!!!!!
     } else if (msg.decision() == proto::ABORT && msg.has_conflict()) {
       std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
           params.hashDigest);

@@ -16,6 +16,13 @@
 #include "lib/blake3.h"
 #include "lib/static_block.h"
 
+#include "ed25519.h" //TODO (FS): Add Donna ed25519 lib   https://github.com/justmoon/curvebench/tree/master/src/ed25519-donna
+#include <string.h>
+
+//add batching interface too. !!
+
+//TODO (FS): Add BLS    https://github.com/skalenetwork/libBLS
+
 namespace crypto {
 
 using namespace CryptoPP;
@@ -36,6 +43,7 @@ struct PubKey {
     CryptoPP::ECDSA<ECP, SHA256>::PublicKey* ecdsaKey;
     unsigned char* ed25Key;
     unsigned char* secpKey;
+    ed25519_public_key* donnaKey;
   };
 };
 
@@ -46,6 +54,9 @@ struct PrivKey {
     CryptoPP::ECDSA<ECP, SHA256>::PrivateKey* ecdsaKey;
     unsigned char* ed25Key;
     unsigned char* secpKey;
+    std::pair<ed25519_secret_key*,ed25519_public_key *> donnaKey;
+    // ed25519_secret_key* donnaKeyPriv;
+    // ed25519_public_key* donnaKeyPub;//ed25519_public_key donnaKeyPub;
   };
 };
 
@@ -85,6 +96,7 @@ bool verifyHMAC(std::string message, std::string mac, std::string keystr) {
   }
 }
 
+//FS Use a different Hash? I.e. Blake for everything?
 string Hash(const string &message) {
   SHA256 hash;
 
@@ -136,6 +148,23 @@ string Sign(PrivKey* privateKey, const string &message) {
     secp256k1_ecdsa_sign(secpCTX, (secp256k1_ecdsa_signature*) &signature[0], out, privateKey->secpKey, NULL, NULL);
     return signature;
   }
+  case DONNA: {
+    //REQUIRES PUBLIC KEY TO SIGN AS WELL
+    //ed25519_signature sig;
+    std::string signature;
+    signature.resize(64);
+
+    const unsigned char * msg = (unsigned char*) &message[0];
+
+    ed25519_sign(msg, message.length(), *privateKey->donnaKey.first, *privateKey->donnaKey.second, (unsigned char*) &signature[0]);
+    //ed25519_sign(msg, sizeof(msg)-1, *privateKey->donnaKey.first, *privateKey->donnaKey.second, sig);
+    // signature = std::string( (const char*)  sig);
+
+    // bool one = ed25519_sign_open(msg, message.length(), *privateKey->donnaKey.second, (unsigned char*) &signature[0]) == 0;
+    // std::cout << "SIGNING RESULT:" << one << std::endl;
+
+    return signature;
+  }
   default: {
     Panic("unimplemented");
   }
@@ -156,6 +185,9 @@ size_t SigSize(KeyType t) {
   case SECP: {
     return sizeof(secp256k1_ecdsa_signature);
   }
+  case DONNA:{
+    return sizeof(ed25519_signature);
+  }
   default: {
     Panic("unimplemented");
   }
@@ -173,41 +205,74 @@ size_t SigSize(PubKey* publicKey) {
 bool Verify(PubKey* publicKey, const char *message, size_t messageLen,
     const char *signature) {
   switch(publicKey->t) {
-  case RSA: {
-    Panic("Not implemented.");
-    /*bool result = false;
-    RSASS<PSS, SHA256>::Verifier verifier(*publicKey->rsaKey);
-    StringSource ss2(
-        signature + message, true,
-        new SignatureVerificationFilter(
-            verifier, new ArraySink((uint8_t *)&result, sizeof(result))));
-    return result;*/
-  }
-  case ECDSA: {
-    Panic("Not implemented.");
-    /*bool result = false;
-    CryptoPP::ECDSA<ECP, SHA256>::Verifier verifier(*publicKey->ecdsaKey);
-    StringSource ss2(
-        signature + message, true,
-        new SignatureVerificationFilter(
-            verifier, new ArraySink((uint8_t *)&result, sizeof(result))));
-    return result;*/
-  }
-  case ED25: {
-    return crypto_sign_verify_detached((unsigned char*) signature,
-        (unsigned char*) message, messageLen, publicKey->ed25Key) == 0;
-  }
-  case SECP: {
-    blake3_hasher_init(&hasher);
-    blake3_hasher_update(&hasher, (unsigned char*) message, messageLen);
-    unsigned char out[BLAKE3_OUT_LEN];
-    blake3_hasher_finalize(&hasher, out, BLAKE3_OUT_LEN);
-    return secp256k1_ecdsa_verify(secpCTX, (secp256k1_ecdsa_signature*) signature, out, (secp256k1_pubkey*) publicKey->secpKey) == 1;
-  }
+    case RSA: {
+      Panic("Not implemented.");
+      /*bool result = false;
+      RSASS<PSS, SHA256>::Verifier verifier(*publicKey->rsaKey);
+      StringSource ss2(
+          signature + message, true,
+          new SignatureVerificationFilter(
+              verifier, new ArraySink((uint8_t *)&result, sizeof(result))));
+      return result;*/
+    }
+    case ECDSA: {
+      Panic("Not implemented.");
+      /*bool result = false;
+      CryptoPP::ECDSA<ECP, SHA256>::Verifier verifier(*publicKey->ecdsaKey);
+      StringSource ss2(
+          signature + message, true,
+          new SignatureVerificationFilter(
+              verifier, new ArraySink((uint8_t *)&result, sizeof(result))));
+      return result;*/
+    }
+    case ED25: {
+      return crypto_sign_verify_detached((unsigned char*) signature,
+          (unsigned char*) message, messageLen, publicKey->ed25Key) == 0;
+    }
+    case SECP: {
+      blake3_hasher_init(&hasher);
+      blake3_hasher_update(&hasher, (unsigned char*) message, messageLen);
+      unsigned char out[BLAKE3_OUT_LEN];
+      blake3_hasher_finalize(&hasher, out, BLAKE3_OUT_LEN);
+      return secp256k1_ecdsa_verify(secpCTX, (secp256k1_ecdsa_signature*) signature, out, (secp256k1_pubkey*) publicKey->secpKey) == 1;
+    }
+    case DONNA: {
 
+      unsigned char * testMsg = (unsigned char*) &message[0];
+      //int len = static_cast<int>(messageLen);
+      bool res = ed25519_sign_open(testMsg, messageLen, *publicKey->donnaKey, (unsigned char*) signature) == 0;
+      //std::cout << "VERIFY TEST:" << res << std::endl;
+      return res;
+    }
+    default: {
+      Panic("unimplemented");
+    }
   }
-  Panic("unimplemented");
 }
+
+//split into modular function: AddToBatch, VerifyBatch
+
+bool BatchVerify(KeyType t, PubKey* publicKeys[], const char *messages[], size_t messageLens[], const char *signatures[], int num){
+  switch(t){
+    case DONNA: {
+      const unsigned char *pkp[num]; // = {pk, pk, pk, pk, pk, pk};
+
+      int valid[num];
+      for(int i=0; i<num; i++){
+          pkp[i] = (unsigned char*) publicKeys[i]->donnaKey;
+      }
+
+
+     bool all_valid = ed25519_sign_open_batch((const unsigned char**) messages, messageLens, pkp, (const unsigned char**) signatures, num, valid) == 0;
+     return all_valid;
+    }
+   default: {
+     Panic("unimplemented");
+   }
+  }
+}
+
+//need detailed info if to be used for n
 
 void Save(const std::string &filename, const BufferedTransformation &bt) {
   FileSink file(filename.c_str());
@@ -246,6 +311,9 @@ void SavePublicKey(const string &filename, PubKey* key) {
     SaveCFile(filename, key->secpKey, sizeof(secp256k1_pubkey));
     break;
   }
+  case DONNA: {
+    SaveCFile(filename, (unsigned char*) &key->donnaKey[0], sizeof(ed25519_public_key));
+  }
   default: {
     Panic("unimplemented");
   }
@@ -275,6 +343,9 @@ void SavePrivateKey(const std::string &filename, PrivKey* key) {
   case SECP: {
     SaveCFile(filename, key->secpKey, 32);
     break;
+  }
+  case DONNA: {
+    SaveCFile(filename, (unsigned char*) &key->donnaKey.first[0], sizeof(ed25519_public_key));
   }
   default: {
     Panic("unimplemented");
@@ -331,6 +402,11 @@ PubKey* LoadPublicKey(const string &filename, KeyType t, bool precompute) {
     LoadCFile(filename, key->ed25Key, sizeof(secp256k1_pubkey));
     break;
   }
+  case DONNA: {
+    key->donnaKey = (ed25519_public_key*) malloc(sizeof(ed25519_public_key));
+    LoadCFile(filename, (unsigned char*) &key->donnaKey[0], sizeof(ed25519_public_key));  //FS: This should work?
+    //TODO: cast back the other way.
+  }
   default: {
     Panic("unimplemented");
   }
@@ -371,6 +447,15 @@ PrivKey* LoadPrivateKey(const string &filename, KeyType t, bool precompute) {
     LoadCFile(filename, key->ed25Key, 32);
     break;
   }
+  case DONNA: {
+    string delimiter = ".priv";
+    const string publicfile = filename.substr(0, filename.find(delimiter)) + ".pub"; // get publickey path name.
+    key->donnaKey.first = (ed25519_secret_key*) malloc(sizeof(ed25519_secret_key));
+    LoadCFile(filename, (unsigned char*) &key->donnaKey.first[0], sizeof(ed25519_secret_key));  //FS: This should work?
+    key->donnaKey.second = (ed25519_public_key*) malloc(sizeof(ed25519_public_key));
+    LoadCFile(publicfile, (unsigned char*) &key->donnaKey.second[0], sizeof(ed25519_public_key));  //FS: This should work?
+
+  }
   default: {
     Panic("unimplemented");
   }
@@ -385,63 +470,94 @@ std::pair<PrivKey*, PubKey*> GenerateKeypair(KeyType t, bool precompute) {
   pubKey->t = t;
 
   switch(t) {
-  case RSA: {
-    // PGP Random Pool-like generator
-    AutoSeededRandomPool prng;
+      case RSA: {
+        // PGP Random Pool-like generator
+        AutoSeededRandomPool prng;
 
-    // generate keys
-    privKey->rsaKey = new RSA::PrivateKey();
-    privKey->rsaKey->Initialize(prng, 2048);
+        // generate keys
+        privKey->rsaKey = new RSA::PrivateKey();
+        privKey->rsaKey->Initialize(prng, 2048);
 
-    pubKey->rsaKey = new RSA::PublicKey(*privKey->rsaKey);
-    bool result = pubKey->rsaKey->Validate(prng, 3);
-    if (!result) {
-      throw "Public key derivation failed";
-    }
-    break;
-  }
-  case ECDSA: {
-    // PGP Random Pool-like generator
-    AutoSeededRandomPool prng;
+        pubKey->rsaKey = new RSA::PublicKey(*privKey->rsaKey);
+        bool result = pubKey->rsaKey->Validate(prng, 3);
+        if (!result) {
+          throw "Public key derivation failed";
+        }
+        break;
+      }
+      case ECDSA: {
+        // PGP Random Pool-like generator
+        AutoSeededRandomPool prng;
 
-    // generate keys
-    privKey->ecdsaKey = new CryptoPP::ECDSA<ECP, SHA256>::PrivateKey();
-    privKey->ecdsaKey->Initialize(prng, ASN1::secp256k1());
+        // generate keys
+        privKey->ecdsaKey = new CryptoPP::ECDSA<ECP, SHA256>::PrivateKey();
+        privKey->ecdsaKey->Initialize(prng, ASN1::secp256k1());
 
-    pubKey->ecdsaKey = new CryptoPP::ECDSA<ECP, SHA256>::PublicKey();
-    privKey->ecdsaKey->MakePublicKey(*pubKey->ecdsaKey);
-    bool result = pubKey->ecdsaKey->Validate(prng, 3);
-    if (!result) {
-      throw "Public key derivation failed";
-    }
-    if (precompute) {
-      privKey->ecdsaKey->Precompute();
-      pubKey->ecdsaKey->Precompute();
-    }
-    break;
-  }
-  case ED25: {
-    pubKey->ed25Key = (unsigned char*) malloc(crypto_sign_PUBLICKEYBYTES);
-    privKey->ed25Key = (unsigned char*) malloc(crypto_sign_SECRETKEYBYTES);
-    crypto_sign_keypair(pubKey->ed25Key, privKey->ed25Key);
-    break;
-  }
-  case SECP: {
-    pubKey->secpKey = (unsigned char*) malloc(sizeof(secp256k1_pubkey));
-    privKey->secpKey = (unsigned char*) malloc(32);
-    // TODO prolly not secure random but meh
-    std::random_device rd;
-    for (int i = 0; i < 32; i++) {
-      privKey->secpKey[i] = static_cast<char>(rd());
-    }
-    if (secp256k1_ec_pubkey_create(secpCTX, (secp256k1_pubkey*) pubKey->secpKey, privKey->secpKey) == 0) {
-      Panic("Unable to create pub key");
-    };
-    break;
-  }
-  default: {
-    Panic("unimplemented");
-  }
+        pubKey->ecdsaKey = new CryptoPP::ECDSA<ECP, SHA256>::PublicKey();
+        privKey->ecdsaKey->MakePublicKey(*pubKey->ecdsaKey);
+        bool result = pubKey->ecdsaKey->Validate(prng, 3);
+        if (!result) {
+          throw "Public key derivation failed";
+        }
+        if (precompute) {
+          privKey->ecdsaKey->Precompute();
+          pubKey->ecdsaKey->Precompute();
+        }
+        break;
+      }
+      case ED25: {
+        pubKey->ed25Key = (unsigned char*) malloc(crypto_sign_PUBLICKEYBYTES);
+        privKey->ed25Key = (unsigned char*) malloc(crypto_sign_SECRETKEYBYTES);
+        crypto_sign_keypair(pubKey->ed25Key, privKey->ed25Key);
+        break;
+      }
+      case SECP: {
+        pubKey->secpKey = (unsigned char*) malloc(sizeof(secp256k1_pubkey));
+        privKey->secpKey = (unsigned char*) malloc(32);
+        // TODO prolly not secure random but meh
+        std::random_device rd;
+        for (int i = 0; i < 32; i++) {
+          privKey->secpKey[i] = static_cast<char>(rd());
+        }
+        if (secp256k1_ec_pubkey_create(secpCTX, (secp256k1_pubkey*) pubKey->secpKey, privKey->secpKey) == 0) {
+          Panic("Unable to create pub key");
+        };
+        break;
+      }
+      case DONNA: {
+
+        privKey->donnaKey.first = (ed25519_secret_key*) malloc(sizeof(ed25519_secret_key));
+        privKey->donnaKey.second = (ed25519_public_key*) malloc(sizeof(ed25519_public_key));
+        pubKey->donnaKey = (ed25519_public_key*) malloc(sizeof(ed25519_public_key));
+
+      	ed25519_randombytes_unsafe(privKey->donnaKey.first, sizeof(ed25519_secret_key));
+      	ed25519_publickey(*privKey->donnaKey.first, *privKey->donnaKey.second);
+        memcpy(pubKey->donnaKey, privKey->donnaKey.second, sizeof(ed25519_public_key));
+
+
+        //TEST HERE:
+        // const char *msg2 = "hello";
+    	  // unsigned char * msg = (unsigned char*) &msg2[0];
+        //
+        //
+        // std::cout << "ORIG:" << *privKey->donnaKey.second << std::endl;
+        // std::cout<< "COPY:" << *pubKey->donnaKey  << std::endl;
+        //
+        // std::string signature;
+        //
+        // ed25519_sign(msg, sizeof(msg)-1, *privKey->donnaKey.first, *privKey->donnaKey.second, (unsigned char*) &signature[0]);
+        //
+        //
+        // int two = ed25519_sign_open(msg, sizeof(msg)-1, *privKey->donnaKey.second, (unsigned char*) &signature[0]) ;
+        //
+        // std::cout << "GENERATION TEST:" << two << std::endl;
+
+
+        break;
+      }
+      default: {
+        Panic("unimplemented");
+      }
   }
   return std::pair<PrivKey*, PubKey*>(privKey, pubKey);
 }

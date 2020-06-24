@@ -35,6 +35,7 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
   }
 
   switch(cc.ccr()) {
+
     case proto::ConcurrencyControl::ABORT: {
       std::string committedTxnDigest = TransactionDigest(
           cc.committed_conflict().txn(), params.hashDigest);
@@ -66,6 +67,7 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
         state = SLOW_COMMIT_FINAL;
       }
       break;
+      //MISSING CASE FOR FAST ABORT WITH 3f+1 ABSTAIN
     case proto::ConcurrencyControl::ABSTAIN:
       abstains++;
 

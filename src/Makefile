@@ -43,6 +43,8 @@ LIBSECP256K1_CFLAGS := $(shell pkg-config --cflags libsecp256k1)
 LIBSECP256K1_LDFLAGS := $(shell pkg-config --libs libsecp256k1)
 CFLAGS += $(LIBSECP256K1_CFLAGS)
 LDFLAGS += $(LIBSECP256K1_LDFLAGS)
+#ed25519-donna
+LDFLAGS += -lssl -lcrypto
 
 # Google test framework. This doesn't use pkgconfig
 GTEST_DIR := /usr/src/gtest-1.10.0/googletest
