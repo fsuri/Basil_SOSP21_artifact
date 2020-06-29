@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
     Latency_End(&verifyLat);
 
 
-      int num =6 ;
+      int num =64 ;
     crypto::PubKey* publicKeys[num];
     const char *messages[num];
     size_t messageLens[num];
@@ -101,10 +101,12 @@ int main(int argc, char *argv[]) {
     //ed25519_signature sig[num];
     std::string strings[num];
     std::string sign[num];
+    int valid[num];
 
+    int iter = 8;
     if(keyType != crypto::DONNA){ continue;}
     else{
-      for(int i=0; i<num; i++){
+      for(int i=0; i<iter; i++){
             //DIFFERENT STRINGS
 
          GenerateRandomString(FLAGS_size, rd, strings[i]);
@@ -124,7 +126,12 @@ int main(int argc, char *argv[]) {
         signatures[i] = &(sign[i])[0];
       }
       Latency_Start(&batchLat);
-      assert(crypto::BatchVerify(crypto::KeyType::DONNA, publicKeys, messages, messageLens, signatures, num));
+      assert(crypto::BatchVerify(crypto::KeyType::DONNA, publicKeys, messages, messageLens, signatures, iter, &valid[0]));
+      // if(i==0){
+      //   for(int j =0; j<num; j++){
+      //     std::cout << "ENTRY:" << valid[j] << std::endl;
+      //   }
+      // }
       Latency_End(&batchLat);
     }
 

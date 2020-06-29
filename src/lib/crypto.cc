@@ -252,12 +252,12 @@ bool Verify(PubKey* publicKey, const char *message, size_t messageLen,
 
 //split into modular function: AddToBatch, VerifyBatch
 
-bool BatchVerify(KeyType t, PubKey* publicKeys[], const char *messages[], size_t messageLens[], const char *signatures[], int num){
+bool BatchVerify(KeyType t, PubKey* publicKeys[], const char *messages[], size_t messageLens[], const char *signatures[], int num, int *valid){
   switch(t){
     case DONNA: {
       const unsigned char *pkp[num]; // = {pk, pk, pk, pk, pk, pk};
 
-      int valid[num];
+      //int valid[num];
       for(int i=0; i<num; i++){
           pkp[i] = (unsigned char*) publicKeys[i]->donnaKey;
       }

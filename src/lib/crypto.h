@@ -22,7 +22,7 @@ size_t SigSize(PubKey* publicKey);
 bool Verify(PubKey* publicKey, const char *message, size_t messageLen,
     const char *signature);
 
-bool BatchVerify(KeyType t, PubKey* publicKeys[], const char *messages[], size_t messageLens[], const char *signatures[], int num);
+bool BatchVerify(KeyType t, PubKey* publicKeys[], const char *messages[], size_t messageLens[], const char *signatures[], int num, int *valid);
 
 std::string HMAC(std::string message, std::string key);
 

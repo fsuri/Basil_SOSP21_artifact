@@ -128,6 +128,8 @@ Server::~Server() {
   Latency_Dump(&signLat);
 }
 
+
+//Full CPU utilization parallelism: Assign all these functions to different threads. Add mutexes to every shared data structure function 
 void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
   if (type == read.GetTypeName()) {
