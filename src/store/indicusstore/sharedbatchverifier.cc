@@ -63,4 +63,12 @@ bool SharedBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &m
   }
 }
 
+void SharedBatchVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::string &message,
+    const std::string &signature, verifyCallback vb, bool multithread, bool autocomplete){
+      return; //placeholder function to satisfy interface.
+}
+void SharedBatchVerifier::Complete(bool multithread, bool force_complete){
+  return; //placeholder function to satisfy interface.
+}
+
 } // namespace indicusstore

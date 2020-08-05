@@ -70,12 +70,12 @@ void asyncValidateCommittedConflict(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, const proto::Transaction *txn,
     const std::string *txnDigest, bool signedMessages, KeyManager *keyManager,
     const transport::Configuration *config, Verifier *verifier,
-    mainThreadCallback mcb, Transport *transport, bool multithread = false);
+    mainThreadCallback mcb, Transport *transport, bool multithread = false, bool batchVerification = false);
 
 void asyncValidateCommittedProof(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, KeyManager *keyManager,
     const transport::Configuration *config, Verifier *verifier,
-    mainThreadCallback mcb, Transport *transport, bool multithread = false);
+    mainThreadCallback mcb, Transport *transport, bool multithread = false, bool batchVerification = false);
 
 bool ValidateCommittedConflict(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, const proto::Transaction *txn,
@@ -95,14 +95,14 @@ void* ValidateP1RepliesWrapper(proto::CommitDecision decision,
     const transport::Configuration *config,
     int64_t myProcessId, proto::ConcurrencyControl::Result myResult, Verifier *verifier);
 
-void asyncValidateP1Replies(proto::CommitDecision decision,
-    bool fast,
-    const proto::Transaction *txn,
-    const std::string *txnDigest,
-    const proto::GroupedSignatures &groupedSigs,
-    KeyManager *keyManager,
-    const transport::Configuration *config,
-    int64_t myProcessId, proto::ConcurrencyControl::Result myResult,
+void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs, KeyManager *keyManager,
+    const transport::Configuration *config, int64_t myProcessId, proto::ConcurrencyControl::Result myResult,
+    Verifier *verifier, mainThreadCallback mcb, Transport *transport, bool multithread = false);
+
+void asyncValidateP1Replies(proto::CommitDecision decision, bool fast, const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs, KeyManager *keyManager,
+    const transport::Configuration *config, int64_t myProcessId, proto::ConcurrencyControl::Result myResult,
     Verifier *verifier, mainThreadCallback mcb, Transport *transport, bool multithread = false);
 
 void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
@@ -125,6 +125,13 @@ void* ValidateP2RepliesWrapper(proto::CommitDecision decision,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier);
+
+void asyncBatchValidateP2Replies(proto::CommitDecision decision,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier,
+    mainThreadCallback mcb, Transport* transport, bool multithread = false);
 
 void asyncValidateP2Replies(proto::CommitDecision decision,
     const proto::Transaction *txn,
@@ -241,17 +248,20 @@ typedef struct Parameters {
   const InjectFailure injectFailure;
 
   const bool multiThreading;
+  const bool batchVerification;
 
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     int signatureBatchSize, int64_t maxDepDepth, uint64_t readDepSize,
     bool readReplyBatch, bool adjustBatchSize, bool sharedMemBatches,
-    bool sharedMemVerify, uint64_t merkleBranchFactor, const InjectFailure &injectFailure, bool multiThreading) :
+    bool sharedMemVerify, uint64_t merkleBranchFactor, const InjectFailure &injectFailure,
+    bool multiThreading, bool batchVerification) :
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
     maxDepDepth(maxDepDepth), readDepSize(readDepSize),
     readReplyBatch(readReplyBatch), adjustBatchSize(adjustBatchSize),
     sharedMemBatches(sharedMemBatches), sharedMemVerify(sharedMemVerify),
-    merkleBranchFactor(merkleBranchFactor), injectFailure(injectFailure), multiThreading(multiThreading){ }
+    merkleBranchFactor(merkleBranchFactor), injectFailure(injectFailure),
+    multiThreading(multiThreading), batchVerification(batchVerification){ }
 } Parameters;
 
 } // namespace indicusstore

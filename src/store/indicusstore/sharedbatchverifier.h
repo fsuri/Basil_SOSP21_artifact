@@ -23,6 +23,11 @@ class SharedBatchVerifier : public Verifier {
   virtual bool Verify(crypto::PubKey *publicKey, const std::string &message,
       const std::string &signature) override;
 
+  virtual void asyncBatchVerify(crypto::PubKey *publicKey, const std::string &message,
+          const std::string &signature, verifyCallback vb, bool multithread, bool autocomplete = false) override;
+
+  virtual void Complete(bool multithread, bool force_complete = false) override;
+
  private:
   typedef allocator<void, managed_shared_memory::segment_manager> void_allocator;
   typedef allocator<char, managed_shared_memory::segment_manager> CharAllocator;

@@ -206,6 +206,10 @@ DEFINE_uint64(indicus_inject_failure_ms, 0, "number of milliseconds to wait"
     " before injecting a failure (for Indicus)");
 DEFINE_uint64(indicus_inject_failure_proportion, 0, "proportion of clients that"
     " will inject a failure (for Indicus)");
+
+DEFINE_bool(indicus_multiThreading, false, "dispatch crypto to parallel threads");
+DEFINE_bool(indicus_batchVerification, false, "using ed25519 donna batch verification");
+
 const std::string if_args[] = {
   "client-crash",
 	"client-equivocate"
@@ -871,7 +875,8 @@ int main(int argc, char **argv) {
 					FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
 					FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
           FLAGS_indicus_max_dep_depth, readDepSize, false, false, false, false,
-          FLAGS_indicus_merkle_branch_factor, failure, false); //last flag is multi-threading
+          FLAGS_indicus_merkle_branch_factor, failure,
+					FLAGS_indicus_multiThreading, FLAGS_indicus_batchVerification);
 
         client = new indicusstore::Client(config, clientId,
             FLAGS_num_shards,

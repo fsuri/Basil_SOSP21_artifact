@@ -64,7 +64,7 @@ void asyncValidateCommittedConflict(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, const proto::Transaction *txn,
     const std::string *txnDigest, bool signedMessages, KeyManager *keyManager,
     const transport::Configuration *config, Verifier *verifier,
-    mainThreadCallback mcb, Transport *transport, bool multithread){
+    mainThreadCallback mcb, Transport *transport, bool multithread, bool batchVerification){
 
     if (!TransactionsConflict(proof.txn(), *txn)) {
       Debug("Committed txn [%lu:%lu][%s] does not conflict with this txn [%lu:%lu][%s].",
@@ -81,10 +81,11 @@ void asyncValidateCommittedConflict(const proto::CommittedProof &proof,
     return;
 }
 
+//use params.batchVerification .. Add additional argument to asyncFunctions batch.
 void asyncValidateCommittedProof(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, KeyManager *keyManager,
     const transport::Configuration *config, Verifier *verifier,
-    mainThreadCallback mcb, Transport *transport, bool multithread) {
+    mainThreadCallback mcb, Transport *transport, bool multithread, bool batchVerification) {
   if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
     // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
     //    without needing to write all existing data with transactions
@@ -95,14 +96,29 @@ void asyncValidateCommittedProof(const proto::CommittedProof &proof,
   }
 
   if (proof.has_p1_sigs()) {
-    asyncValidateP1Replies(proto::COMMIT, true, &proof.txn(), committedTxnDigest,
-        proof.p1_sigs(), keyManager, config, -1, proto::ConcurrencyControl::ABORT,
-        verifier, mcb, transport, multithread);
-    return;
+    if(batchVerification){
+      asyncBatchValidateP1Replies(proto::COMMIT, true, &proof.txn(), committedTxnDigest,
+          proof.p1_sigs(), keyManager, config, -1, proto::ConcurrencyControl::ABORT,
+          verifier, mcb, transport, multithread);
+      return;
+    }
+    else{
+      asyncValidateP1Replies(proto::COMMIT, true, &proof.txn(), committedTxnDigest,
+          proof.p1_sigs(), keyManager, config, -1, proto::ConcurrencyControl::ABORT,
+          verifier, mcb, transport, multithread);
+      return;
+    }
   } else if (proof.has_p2_sigs()) {
-    asyncValidateP2Replies(proto::COMMIT, &proof.txn(), committedTxnDigest,
-        proof.p2_sigs(), keyManager, config, -1, proto::ABORT, verifier, mcb, transport, multithread);
-    return;
+    if(batchVerification){
+      asyncBatchValidateP2Replies(proto::COMMIT, &proof.txn(), committedTxnDigest,
+          proof.p2_sigs(), keyManager, config, -1, proto::ABORT, verifier, mcb, transport, multithread);
+      return;
+    }
+    else{
+      asyncValidateP2Replies(proto::COMMIT, &proof.txn(), committedTxnDigest,
+          proof.p2_sigs(), keyManager, config, -1, proto::ABORT, verifier, mcb, transport, multithread);
+      return;
+    }
   } else {
     Debug("Proof has neither P1 nor P2 sigs.");
     return;
@@ -193,25 +209,6 @@ bool ValidateP1Replies(proto::CommitDecision decision,
 //TODO: Need to handle duplicate P1/P2/Writeback requests from same client? Othererwise work could be duplicated in parallel.
 // AND replica might change its decision!!!!!
 
-  //1) generate ReqID to map
-  //std::map<key, asyncVerification*> map;
-  //2) create datastrcutures (asyncVerification object) for that Id, datastructure also stores the original callbacks
-
-// ::google::protobuf::Message* copy = msg.New();
-//     copy->CopyFrom(msg);
-//     TransportAddress* remoteCopy = remote.copy();
-//     transport->DispatchTP([this, copy] {
-//       proto::SignedMessage* signedMsg = new proto::SignedMessage();
-//       SignMessage(*copy, this->keyManager->GetPrivateKey(this->id), this->id, *signedMsg);
-//       delete copy;
-//       return (void*) signedMsg;
-//     }, [this, remoteCopy](void* ret) {
-//       proto::SignedMessage* signedMsg = (proto::SignedMessage*) ret;
-//       this->transport->SendMessage(this, *remoteCopy, *signedMsg);
-//       delete signedMsg;
-//       delete remoteCopy;
-//     });
-
 
 //upon false technically do not need to call the callback.
 void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result){
@@ -219,10 +216,8 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
   bool verification_result = * ((bool*) result);
   delete (bool*) result;
 
-
   std::lock_guard<std::mutex> lock(verifyObj->objMutex);
   //technically dont need a mutex if this callback only runs on main thread?
-
 
   //Need to delete only after "last count" has finished.
   verifyObj->deletable--;
@@ -241,7 +236,6 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
     }
   verifyObj->groupCounts[groupId]++;
 
-
   if (verifyObj->groupCounts[groupId] == verifyObj->quorumSize) {
           //verifyObj->groupsVerified.insert(sigs.first);
       verifyObj->groupsVerified++;
@@ -250,7 +244,6 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
     if(verifyObj->deletable == 0) delete verifyObj;
       return;
   }
-
 
   if (verifyObj->decision == proto::COMMIT) {
     if(!(verifyObj->groupsVerified == verifyObj->groupTotals)){
@@ -267,12 +260,85 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
   return;
 }
 
-// void asyncBatchValidateP1Replies(){
-//   //call the batch verification function which handles dispatching itself
-//   same as asyncValidateP1Replies, but instead of Dispatching, just call verifier->asyncBatchVerify
-//
-//   Call Complete BatchDispatch once at the end. This function dispatches if the batch is beyond max_fill or timer expires.
-// }
+//Currently structured to dispatch only AFTER size has been determined AND it is guaranteed that all
+//jobs are "valid" (for example no duplicate replicas)
+
+//ALTERNATIVE (not-implemented) structure that can avoid this: keep track of global map of verification objects and checks
+//if map.find(object) == map.end(). Then we can delete asap, and not just at the end.
+//Although still no way of knowing when to delete in case no trigger option is pulled...
+void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs, KeyManager *keyManager,
+    const transport::Configuration *config, int64_t myProcessId, proto::ConcurrencyControl::Result myResult,
+    Verifier *verifier, mainThreadCallback mcb, Transport *transport, bool multithread) {
+
+  proto::ConcurrencyControl concurrencyControl;
+  concurrencyControl.Clear();
+  *concurrencyControl.mutable_txn_digest() = *txnDigest;
+  uint32_t quorumSize = 0;
+
+  if (fast && decision == proto::COMMIT) {
+    concurrencyControl.set_ccr(proto::ConcurrencyControl::COMMIT);
+    quorumSize = config->n;
+  } else if (decision == proto::COMMIT) {
+    concurrencyControl.set_ccr(proto::ConcurrencyControl::COMMIT);
+    quorumSize = SlowCommitQuorumSize(config);
+  } else if (decision == proto::ABORT) {
+    concurrencyControl.set_ccr(proto::ConcurrencyControl::ABSTAIN);
+    quorumSize = SlowAbortQuorumSize(config);
+  } else {
+    // NOT_REACHABLE();
+    return;
+  }
+  asyncVerification *verifyObj = new asyncVerification(quorumSize, mcb, txn->involved_groups_size(), decision);
+  std::list<std::function<void()>> asyncBatchingVerificationJobs;
+
+  for (const auto &sigs : groupedSigs.grouped_sigs()) {
+    concurrencyControl.set_involved_group(sigs.first);
+    std::string ccMsg;
+    concurrencyControl.SerializeToString(&ccMsg);
+    std::set<uint64_t> replicasVerified;
+
+    for (const auto &sig : sigs.second.sigs()) {
+      if (!IsReplicaInGroup(sig.process_id(), sigs.first, config)) {
+        Debug("Signature for group %lu from replica %lu who is not in group.", sigs.first, sig.process_id());
+        {
+        std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+        verifyObj->terminate = true;
+        }
+        return;
+      }
+      auto insertItr = replicasVerified.insert(sig.process_id());
+      if (!insertItr.second) {
+        Debug("Already verified sig from replica %lu in group %lu.",
+            sig.process_id(), sigs.first);
+        {
+        std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+        verifyObj->terminate = true;
+        }
+        return;
+      }
+      {
+      std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+      if(verifyObj->terminate == true) return; //return preemtively if concurrent thread has already called back?
+      }
+      Debug("Verifying %lu byte signature from replica %lu in group %lu.",
+          sig.signature().size(), sig.process_id(), sigs.first);
+
+
+      std::function<void(void*)> vb(std::bind(asyncValidateP1RepliesCallback, verifyObj, sigs.first, std::placeholders::_1));
+
+      std::function<void()> func(std::bind(&Verifier::asyncBatchVerify, verifier, keyManager->GetPublicKey(sig.process_id()),
+                ccMsg, sig.signature(), vb, multithread, false)); //autocomplete set to false by default.
+      asyncBatchingVerificationJobs.push_back(func);
+      }
+    }
+
+  verifyObj->deletable = asyncBatchingVerificationJobs.size();
+  for (auto &asyncBatchVerify : asyncBatchingVerificationJobs){
+    asyncBatchVerify();
+  }
+  verifier->Complete(multithread, false); //force set to false by default.
+}
 
 //OR: could create a libevent base. Create events for each waiting verification
 void asyncValidateP1Replies(proto::CommitDecision decision,
@@ -379,16 +445,12 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
     if(multithread){
       transport->DispatchTP(verification.first, verification.second);
     }
-    //b) No multithreading: Calls verify + async Callback.
+    //b) No multithreading: Calls verify + async Callback. Problem: Unecessary copying for bind.
     else{
       verification.second(verification.first());
     }
   }
 }
-
-
-
-
 
 
 
@@ -558,7 +620,69 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
       return;
   }
 }
-// TODO: Add to .h file
+
+
+void asyncBatchValidateP2Replies(proto::CommitDecision decision,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier,
+    mainThreadCallback mcb, Transport* transport, bool multithread){
+
+    proto::Phase2Decision p2Decision;
+    p2Decision.Clear();
+    p2Decision.set_decision(decision);
+    p2Decision.set_involved_group(GetLogGroup(*txn, *txnDigest));
+    *p2Decision.mutable_txn_digest() = *txnDigest;
+
+    std::string p2DecisionMsg;
+    p2Decision.SerializeToString(&p2DecisionMsg);
+
+    if (groupedSigs.grouped_sigs().size() != 1) {
+      Debug("Expected exactly 1 group but saw %lu", groupedSigs.grouped_sigs().size());
+      return;
+    }
+
+    asyncVerification *verifyObj = new asyncVerification(QuorumSize(config), mcb, 1, decision);
+
+    std::list<std::function<void()>> asyncBatchingVerificationJobs;
+
+    const auto &sigs = groupedSigs.grouped_sigs().begin(); //this is an iterator
+    // verifyObj->deletable = sigs->second.sigs_size();  // redundant
+
+    std::set<uint64_t> replicasVerified;
+    int64_t logGrp = GetLogGroup(*txn, *txnDigest);
+    //verify that this group corresponds to the log group
+    if(sigs->first != logGrp){
+      Debug("P2 replies from group (%lu) that is not logging group (%lu).", sigs->first, logGrp);
+      return;
+    }
+
+    for (const auto &sig : sigs->second.sigs()) {
+
+      if (!IsReplicaInGroup(sig.process_id(), sigs->first, config)) {
+        Debug("Signature for group %lu from replica %lu who is not in group.", sigs->first, sig.process_id());
+        return;
+      }
+      if (!replicasVerified.insert(sig.process_id()).second) {
+        Debug("Already verified signature from %lu.", sig.process_id());
+        return;
+      }
+
+      std::function<void(void*)> vb(std::bind(asyncValidateP2RepliesCallback, verifyObj, sigs->first, std::placeholders::_1));
+
+      std::function<void()> func(std::bind(&Verifier::asyncBatchVerify, verifier, keyManager->GetPublicKey(sig.process_id()),
+                p2DecisionMsg, sig.signature(), vb, multithread, false)); //autocomplete set to false by default.
+      asyncBatchingVerificationJobs.push_back(func);
+
+    }
+    verifyObj->deletable = asyncBatchingVerificationJobs.size();
+    for (auto &asyncBatchVerify : asyncBatchingVerificationJobs){
+      asyncBatchVerify();
+    }
+    verifier->Complete(multithread, false); //force set to false by default.
+}
+
 void asyncValidateP2Replies(proto::CommitDecision decision,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,

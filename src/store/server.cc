@@ -260,7 +260,10 @@ DEFINE_uint64(indicus_use_coordinator, false, "use coordinator"
     " make primary the coordinator for atomic broadcast (for Indicus)");
 DEFINE_uint64(indicus_request_tx, false, "request tx"
     " request tx (for Indicus)");
+		//
 DEFINE_bool(indicus_multiThreading, false, "dispatch crypto to parallel threads");
+DEFINE_bool(indicus_batchVerification, false, "using ed25519 donna batch verification");
+
 const std::string occ_type_args[] = {
 	"tapir",
   "mvtso"
@@ -531,7 +534,7 @@ int main(int argc, char **argv) {
         FLAGS_indicus_read_reply_batch, FLAGS_indicus_adjust_batch_size,
         FLAGS_indicus_shared_mem_batch, FLAGS_indicus_shared_mem_verify,
         FLAGS_indicus_merkle_branch_factor, indicusstore::InjectFailure(),
-				FLAGS_indicus_multiThreading);  //last flag for multithreading
+				FLAGS_indicus_multiThreading, FLAGS_indicus_batchVerification);
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
           &keyManager, params, timeDelta, indicusOCCType, part,
@@ -622,7 +625,7 @@ int main(int argc, char **argv) {
 		CPU_ZERO(&cpuset);
 		int num_cpus = std::thread::hardware_concurrency();
 		CPU_SET(num_cpus-1, &cpuset); //last core is for main
-		int rc = pthread_setaffinity_np(pthread_self(),	sizeof(cpu_set_t), &cpuset);
+		pthread_setaffinity_np(pthread_self(),	sizeof(cpu_set_t), &cpuset);
 	}
 
   tport->Run();

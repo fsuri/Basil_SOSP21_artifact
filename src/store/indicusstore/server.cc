@@ -67,8 +67,9 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   _Latency_Init(&signLat, "sign_lat");
 
   if (params.signatureBatchSize == 1) {
+    //verifier = new BasicVerifier(transport);
     verifier = new BasicVerifier(transport, batchTimeoutMicro, params.validateProofs && params.signedMessages &&
-    params.signatureBatchSize > 1 && params.adjustBatchSize, 64);
+    params.signatureBatchSize > 1 && params.adjustBatchSize, 64UL);
     batchSigner = nullptr;
   } else {
     if (params.sharedMemBatches) {
@@ -88,7 +89,10 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     if (params.sharedMemVerify) {
       verifier = new SharedBatchVerifier(params.merkleBranchFactor, stats); //add transport if using multithreading
     } else {
-      verifier = new LocalBatchVerifier(params.merkleBranchFactor, stats, transport);
+      //verifier = new LocalBatchVerifier(params.merkleBranchFactor, stats, transport);
+      verifier = new LocalBatchVerifier(params.merkleBranchFactor, stats, transport,
+        batchTimeoutMicro, params.validateProofs && params.signedMessages &&
+        params.signatureBatchSize > 1 && params.adjustBatchSize, 64UL);
     }
   }
   //start up threadpool (common threadpool, not split into different roles yet)
@@ -484,7 +488,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
           //Alternatively: parse into a new Phase2 directly in the ReceiveMessage function
           proto::Phase2 * msg_copy = msg.New();
           msg_copy->CopyFrom(msg);
-          //copy shouldnt be needed due to bind?
+          //copy shouldnt be needed due to bind? or is it because msg is passed as reference?
 
           std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this, *msg_copy, txnDigest, sendCB, phase2Reply, std::placeholders::_1));
 
@@ -494,18 +498,36 @@ void Server::HandlePhase2(const TransportAddress &remote,
               //tp->dispatch(f, cb, transport->libeventBase);
 
           //OPTION2: Validation itself is asynchronous (each verification = 1 job)
-          asyncValidateP1Replies(msg.decision(),
-                false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
-                myResult, verifier, mcb, transport, true);
-
+          if(params.batchVerification){
+            asyncBatchValidateP1Replies(msg.decision(),
+                  false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
+                  myResult, verifier, mcb, transport, true);
+          }
+          else{
+            asyncValidateP1Replies(msg.decision(),
+                  false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
+                  myResult, verifier, mcb, transport, true);
+          }
           return;
         }
         else{
-          if(!ValidateP1Replies(msg.decision(),
-                false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
-                myResult, verifier)) {
-            Debug("VALIDATE P1Replies failed.");
-            return;
+          if(params.batchVerification){
+            proto::Phase2 * msg_copy = msg.New();
+            msg_copy->CopyFrom(msg);
+            //copy shouldnt be needed due to bind? or is it because msg is passed as reference?
+            std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this, *msg_copy, txnDigest, sendCB, phase2Reply, std::placeholders::_1));
+
+            asyncBatchValidateP1Replies(msg.decision(),
+                  false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
+                  myResult, verifier, mcb, transport, false);
+          }
+          else{
+            if(!ValidateP1Replies(msg.decision(),
+                  false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
+                  myResult, verifier)) {
+              Debug("VALIDATE P1Replies failed.");
+              return;
+            }
           }
         }
       }
@@ -584,10 +606,16 @@ void Server::HandleWriteback(const TransportAddress &remote,
             proto::ConcurrencyControl::Result myResult;
             LookupP1Decision(*txnDigest, myProcessId, myResult);
 
+            if(params.batchVerification){
+              asyncBatchValidateP1Replies(msg.decision(),
+                    true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
+                    myResult, verifier, mcb, transport, true);
+            }
+            else{
             asyncValidateP1Replies(msg.decision(),
                   true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier, mcb, transport, true);
-
+            }
             return;
 
 
@@ -597,10 +625,16 @@ void Server::HandleWriteback(const TransportAddress &remote,
             proto::ConcurrencyControl::Result myResult;
             LookupP1Decision(*txnDigest, myProcessId, myResult);
 
+            if(params.batchVerification){
+              asyncBatchValidateP1Replies(msg.decision(),
+                    true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
+                    myResult, verifier, mcb, transport, true);
+            }
+            else{
             asyncValidateP1Replies(msg.decision(),
                   true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier, mcb, transport, true);
-
+            }
             return;
           }
 
@@ -610,9 +644,16 @@ void Server::HandleWriteback(const TransportAddress &remote,
               proto::CommitDecision myDecision;
               LookupP2Decision(*txnDigest, myProcessId, myDecision);
 
-              asyncValidateP2Replies(msg.decision(),
-                    txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
-                    myDecision, verifier, mcb, transport, true);
+              if(params.batchVerification){
+                asyncBatchValidateP2Replies(msg.decision(),
+                      txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
+                      myDecision, verifier, mcb, transport, true);
+              }
+              else{
+                asyncValidateP2Replies(msg.decision(),
+                      txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
+                      myDecision, verifier, mcb, transport, true);
+              }
               return;
           }
 
@@ -623,7 +664,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
                   params.hashDigest);
               asyncValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
                     txnDigest, params.signedMessages, keyManager, &config, verifier,
-                    mcb, transport, true);
+                    mcb, transport, true, params.batchVerification);
               return;
           }
           else if (params.signedMessages) {
@@ -635,6 +676,9 @@ void Server::HandleWriteback(const TransportAddress &remote,
           }
 
       }
+      //If I make the else case use the async function too, then I can collapse the duplicate code here
+      //and just pass params.multiThreading as argument...
+      //Currently NOT doing that because the async version does additional copies (binds) that could be avoided?
       else{
 
           if (params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()) {
@@ -642,11 +686,23 @@ void Server::HandleWriteback(const TransportAddress &remote,
             proto::ConcurrencyControl::Result myResult;
             LookupP1Decision(*txnDigest, myProcessId, myResult);
 
-            if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
-                  keyManager, &config, myProcessId, myResult, verifyLat, verifier)) {
-              Debug("WRITEBACK[%s] Failed to validate P1 replies for fast commit.",
-                  BytesToHex(*txnDigest, 16).c_str());
+            if(params.batchVerification){
+              proto::Writeback * msg_copy = msg.New();
+              msg_copy->CopyFrom(msg);
+              //copy shouldnt be needed due to bind?
+              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, *msg_copy, txnDigest, txn, std::placeholders::_1));
+              asyncBatchValidateP1Replies(proto::COMMIT,
+                    true, txn, txnDigest,msg.p1_sigs(), keyManager, &config, myProcessId,
+                    myResult, verifier, mcb, transport, false);
               return;
+            }
+            else{
+              if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
+                    keyManager, &config, myProcessId, myResult, verifyLat, verifier)) {
+                Debug("WRITEBACK[%s] Failed to validate P1 replies for fast commit.",
+                    BytesToHex(*txnDigest, 16).c_str());
+                return;
+              }
             }
           }
           //inerted previously MISSING CASE FOR FAST ABORT WITH 3f+1 ABSTAIN
@@ -656,11 +712,23 @@ void Server::HandleWriteback(const TransportAddress &remote,
             proto::ConcurrencyControl::Result myResult;
             LookupP1Decision(*txnDigest, myProcessId, myResult);
 
-            if (!ValidateP1Replies(proto::ABORT, true, txn, txnDigest, msg.p1_sigs(),
-                  keyManager, &config, myProcessId, myResult, verifyLat, verifier)) {
-              Debug("WRITEBACK[%s] Failed to validate P1 replies for fast abort.",
-                  BytesToHex(*txnDigest, 16).c_str());
+            if(params.batchVerification){
+              proto::Writeback * msg_copy = msg.New();
+              msg_copy->CopyFrom(msg);
+              //copy shouldnt be needed due to bind?
+              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, *msg_copy, txnDigest, txn, std::placeholders::_1));
+              asyncBatchValidateP1Replies(proto::ABORT,
+                    true, txn, txnDigest,msg.p1_sigs(), keyManager, &config, myProcessId,
+                    myResult, verifier, mcb, transport, false);
               return;
+            }
+            else{
+              if (!ValidateP1Replies(proto::ABORT, true, txn, txnDigest, msg.p1_sigs(),
+                    keyManager, &config, myProcessId, myResult, verifyLat, verifier)) {
+                Debug("WRITEBACK[%s] Failed to validate P1 replies for fast abort.",
+                    BytesToHex(*txnDigest, 16).c_str());
+                return;
+              }
             }
           }
 
@@ -670,21 +738,48 @@ void Server::HandleWriteback(const TransportAddress &remote,
             proto::CommitDecision myDecision;
             LookupP2Decision(*txnDigest, myProcessId, myDecision);
 
-            if (!ValidateP2Replies(msg.decision(), txn, txnDigest, msg.p2_sigs(),
-                  keyManager, &config, myProcessId, myDecision, verifyLat, verifier)) {
-              Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
-                  BytesToHex(*txnDigest, 16).c_str(), msg.decision());
+
+            if(params.batchVerification){
+              proto::Writeback * msg_copy = msg.New();
+              msg_copy->CopyFrom(msg);
+              //copy shouldnt be needed due to bind?
+              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, *msg_copy, txnDigest, txn, std::placeholders::_1));
+              asyncBatchValidateP2Replies(msg.decision(),
+                    txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
+                    myDecision, verifier, mcb, transport, false);
               return;
+            }
+            else{
+              if (!ValidateP2Replies(msg.decision(), txn, txnDigest, msg.p2_sigs(),
+                    keyManager, &config, myProcessId, myDecision, verifyLat, verifier)) {
+                Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
+                    BytesToHex(*txnDigest, 16).c_str(), msg.decision());
+                return;
+              }
             }
 
           } else if (msg.decision() == proto::ABORT && msg.has_conflict()) {
             std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
                 params.hashDigest);
-            if (!ValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
-                  txnDigest, params.signedMessages, keyManager, &config, verifier)) {
-              Debug("WRITEBACK[%s] Failed to validate committed conflict for fast abort.",
-                  BytesToHex(*txnDigest, 16).c_str());
-              return;
+
+                if(params.batchVerification){
+                  proto::Writeback * msg_copy = msg.New();
+                  msg_copy->CopyFrom(msg);
+                  //copy shouldnt be needed due to bind?
+                  std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, *msg_copy, txnDigest, txn, std::placeholders::_1));
+                  asyncValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
+                        txnDigest, params.signedMessages, keyManager, &config, verifier,
+                        mcb, transport, false, params.batchVerification);
+                  return;
+                }
+                else{
+                  if (!ValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
+                        txnDigest, params.signedMessages, keyManager, &config, verifier)) {
+                    Debug("WRITEBACK[%s] Failed to validate committed conflict for fast abort.",
+                        BytesToHex(*txnDigest, 16).c_str());
+                    return;
+                }
+
             }
           } else if (params.signedMessages) {
             Debug("WRITEBACK[%s] decision %d, has_p1_sigs %d, has_p2_sigs %d, and"
@@ -692,7 +787,6 @@ void Server::HandleWriteback(const TransportAddress &remote,
                 msg.decision(), msg.has_p1_sigs(), msg.has_p2_sigs(), msg.has_conflict());
             return;
           }
-
         }
 
   }

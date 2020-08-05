@@ -171,37 +171,37 @@ void LocalBatchVerifier::asyncBatchVerifyCallback(crypto::PubKey *publicKey, std
 }
 //correct the multithreading function dispatching.
 
+//might want to change message and signature to call by value?
 void LocalBatchVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::string &message,
     const std::string &signature, verifyCallback vb, bool multithread, bool autocomplete){
       //autocomplete param indicates whether complete should be called as soon as a batch is full
       //Allows us to ignore batch limit and batch all together.
 
-    // std::string *hashStr = new std::string;
-    // std::string *rootSig = new std::string;
-    std::string hashStr;
-    std::string rootSig;
+    std::string *hashStr = new std::string;
+    std::string *rootSig = new std::string;
+    const std::string *msg_copy = new std::string(&message[0]);
+    const std::string *sig_copy = new std::string(&signature[0]);
+
+    //TODO:: public key copy?? dont think its needed.
 
     if(multithread){
-      const std::string *msg_copy = new std::string(&message[0]);
-      const std::string *sig_copy = new std::string(&signature[0]);
-      //TODO:: public key copy?? dont think its needed.
-      std::bind(BatchedSigs::computeBatchedSignatureHash, &signature, &message, publicKey, hashStr, rootSig, merkleBranchFactor);
-      // std::bind(BatchedSigs::computeBatchedSignatureHash, sig_copy, msg_copy, publicKey,
-      //     *hashStr, *rootSig, merkleBranchFactor);
-      std::function<bool()> func([](){return true;});
+      std::function<bool()> func(std::bind(BatchedSigs::computeBatchedSignatureHash<std::string>, sig_copy, msg_copy, publicKey,
+           *hashStr, *rootSig, merkleBranchFactor));
       std::function<void*()> f(std::bind(pointerWrapperC<bool>, func));
-      std::function<void(void*)> cb(std::bind(LocalBatchVerifier::asyncBatchVerifyCallback, this, publicKey, hashStr,
+
+      std::function<void(void*)> cb(std::bind(&LocalBatchVerifier::asyncBatchVerifyCallback, this, publicKey, hashStr,
          rootSig, vb, multithread, autocomplete, msg_copy, sig_copy, std::placeholders::_1));
       Latency_Start(&hashLat); //inaccurate since the actual execution might be delayed... can pass it to actual function if desired. Currently measures Latency until progress is made, not raw hash time.
       transport->DispatchTP(f, cb);
     }
     else{
-      // if (!BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
-      //     hashStr, rootSig, merkleBranchFactor))
+      //if using &signature and &message instead of copies, then the callback will try to delete them?
+       if (BatchedSigs::computeBatchedSignatureHash(sig_copy, msg_copy, publicKey,
+           *hashStr, *rootSig, merkleBranchFactor)){
+             bool *validate = new bool(true);
+             asyncBatchVerifyCallback(publicKey, hashStr, rootSig, vb, multithread, autocomplete, msg_copy, sig_copy, (void*) validate);
+           }
     }
-
-
-
 }
 
 void LocalBatchVerifier::Complete(bool multithread, bool force_complete){
