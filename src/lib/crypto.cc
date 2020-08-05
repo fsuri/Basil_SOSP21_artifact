@@ -1,22 +1,7 @@
 #include "lib/crypto.h"
 #include "lib/assert.h"
 
-#include <sodium.h>
-#include <cryptopp/eccrypto.h>
-#include <cryptopp/rsa.h>
-#include <cryptopp/pssr.h>
-#include <cryptopp/files.h>
-#include <cryptopp/hex.h>
-#include <cryptopp/oids.h>
-#include <cryptopp/osrng.h>
-#include <cryptopp/sha.h>
-#include <cryptopp/hmac.h>
-#include <random>
-#include "lib/secp256k1.h"
-#include "lib/blake3.h"
-#include "lib/static_block.h"
 
-#include "ed25519.h" //TODO (FS): Add Donna ed25519 lib   https://github.com/justmoon/curvebench/tree/master/src/ed25519-donna
 #include <string.h>
 
 //add batching interface too. !!
@@ -36,29 +21,31 @@ static_block {
   secpCTX = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
 }
 
-struct PubKey {
-  KeyType t;
-  union {
-    RSA::PublicKey* rsaKey;
-    CryptoPP::ECDSA<ECP, SHA256>::PublicKey* ecdsaKey;
-    unsigned char* ed25Key;
-    unsigned char* secpKey;
-    ed25519_public_key* donnaKey;
-  };
-};
+//Migrated to crypto.h
 
-struct PrivKey {
-  KeyType t;
-  union {
-    RSA::PrivateKey* rsaKey;
-    CryptoPP::ECDSA<ECP, SHA256>::PrivateKey* ecdsaKey;
-    unsigned char* ed25Key;
-    unsigned char* secpKey;
-    std::pair<ed25519_secret_key*,ed25519_public_key *> donnaKey;
-    // ed25519_secret_key* donnaKeyPriv;
-    // ed25519_public_key* donnaKeyPub;//ed25519_public_key donnaKeyPub;
-  };
-};
+// struct PubKey {
+//   KeyType t;
+//   union {
+//     RSA::PublicKey* rsaKey;
+//     CryptoPP::ECDSA<ECP, SHA256>::PublicKey* ecdsaKey;
+//     unsigned char* ed25Key;
+//     unsigned char* secpKey;
+//     ed25519_public_key* donnaKey;
+//   };
+// };
+//
+// struct PrivKey {
+//   KeyType t;
+//   union {
+//     RSA::PrivateKey* rsaKey;
+//     CryptoPP::ECDSA<ECP, SHA256>::PrivateKey* ecdsaKey;
+//     unsigned char* ed25Key;
+//     unsigned char* secpKey;
+//     std::pair<ed25519_secret_key*,ed25519_public_key *> donnaKey;
+//     // ed25519_secret_key* donnaKeyPriv;
+//     // ed25519_public_key* donnaKeyPub;//ed25519_public_key donnaKeyPub;
+//   };
+// };
 
 std::string HMAC(std::string message, std::string keystr) {
   SecByteBlock key((const CryptoPP::byte*)keystr.data(), keystr.size());
@@ -267,7 +254,7 @@ bool BatchVerify(KeyType t, PubKey* publicKeys[], const char *messages[], size_t
      return all_valid;
     }
    default: {
-     Panic("unimplemented");
+     Panic("Batch Verification only available for ed25519_DONNA based cryptography");
    }
   }
 }

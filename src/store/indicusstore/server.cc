@@ -67,7 +67,8 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   _Latency_Init(&signLat, "sign_lat");
 
   if (params.signatureBatchSize == 1) {
-    verifier = new BasicVerifier();
+    verifier = new BasicVerifier(transport, batchTimeoutMicro, params.validateProofs && params.signedMessages &&
+    params.signatureBatchSize > 1 && params.adjustBatchSize, 64);
     batchSigner = nullptr;
   } else {
     if (params.sharedMemBatches) {
@@ -85,11 +86,14 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     }
 
     if (params.sharedMemVerify) {
-      verifier = new SharedBatchVerifier(params.merkleBranchFactor, stats);
+      verifier = new SharedBatchVerifier(params.merkleBranchFactor, stats); //add transport if using multithreading
     } else {
-      verifier = new LocalBatchVerifier(params.merkleBranchFactor, stats);
+      verifier = new LocalBatchVerifier(params.merkleBranchFactor, stats, transport);
     }
   }
+  //start up threadpool (common threadpool, not split into different roles yet)
+  //tp = new ThreadPool();
+
   // this is needed purely from loading data without executing transactions
   proto::CommittedProof *proof = new proto::CommittedProof();
   proof->mutable_txn()->set_client_id(0);
@@ -129,7 +133,7 @@ Server::~Server() {
 }
 
 
-//Full CPU utilization parallelism: Assign all these functions to different threads. Add mutexes to every shared data structure function 
+//Full CPU utilization parallelism: Assign all these functions to different threads. Add mutexes to every shared data structure function
 void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
   if (type == read.GetTypeName()) {
@@ -139,12 +143,21 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     phase1.ParseFromString(data);
     HandlePhase1(remote, phase1);
   } else if (type == phase2.GetTypeName()) {
+      // if(params.multiThreading){
+      //     proto::Phase2* p2 = new proto::Phase2();
+      //     p2->ParseFromString(data);
+      //     HandlePhase2(remote, *p2);
+      // }
     phase2.ParseFromString(data);
     HandlePhase2(remote, phase2);
   } else if (type == writeback.GetTypeName()) {
     writeback.ParseFromString(data);
-    //proto::Writeback *wb = new proto::Writeback();
-    //wb->ParseFromString(data);
+
+      // if(params.multiThreading){
+      //     proto::Writeback *wb = new proto::Writeback();
+      //     wb->ParseFromString(data);
+      //     HandlePhase2(remote, *wb);
+      // }
     HandleWriteback(remote, writeback);
   } else if (type == abort.GetTypeName()) {
     abort.ParseFromString(data);
@@ -357,6 +370,51 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 }
 
+
+void Server::HandlePhase2CB(const proto::Phase2 &msg, const std::string* txnDigest, signedCallback sendCB, proto::Phase2Reply* phase2Reply, void* valid){
+
+  if(!(*(bool*) valid) ) {
+    Debug("VALIDATE P1Replies for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
+    delete (bool*) valid;
+    return;
+  }
+
+  delete (bool*) valid;
+
+  p2Decisions[*txnDigest] = msg.decision();   //is this correct
+  current_views[*txnDigest] = 0;
+  decision_views[*txnDigest] = 0;
+
+  // if(client_starttime.find(*txnDigest) == client_starttime.end()){
+  //   struct timeval tv;
+  //   gettimeofday(&tv, NULL);
+  //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+  //   client_starttime[*txnDigest] = start_time;
+  // }
+
+  phase2Reply->mutable_p2_decision()->set_decision(msg.decision());
+  if (params.validateProofs) {
+    // TODO: uncomment. need a way for a process to know the decision view
+    //   when verifying the signed p2_decision
+    //phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
+  }
+
+
+if (params.validateProofs && params.signedMessages) {
+  proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
+  //Latency_Start(&signLat);
+  MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
+      [sendCB, p2Decision]() {
+      sendCB();
+      delete p2Decision;
+      });
+  //Latency_End(&signLat);
+  return;
+}
+sendCB();
+}
+
+
 //TODO: ADD AUTHENTICATION IN ORDER TO ENFORCE TIMEOUTS. ANYBODY THAT IS NOT THE ORIGINAL CLIENT SHOULD ONLY BE ABLE TO SEND P2FB messages and NOT normal P2!!!!!!
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
@@ -417,46 +475,66 @@ void Server::HandlePhase2(const TransportAddress &remote,
     int64_t myProcessId;
     proto::ConcurrencyControl::Result myResult;
     LookupP1Decision(*txnDigest, myProcessId, myResult);
-    if (params.validateProofs && params.signedMessages && !ValidateP1Replies(msg.decision(),
-          false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
-          myResult, verifier)) {
-      Debug("VALIDATE P1Replies failed.");
-      return;
-    }
 
-    p2Decisions[*txnDigest] = msg.decision();   //is this correct
-    current_views[*txnDigest] = 0;
-    decision_views[*txnDigest] = 0;
 
-    // if(client_starttime.find(*txnDigest) == client_starttime.end()){
-    //   struct timeval tv;
-    //   gettimeofday(&tv, NULL);
-    //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
-    //   client_starttime[*txnDigest] = start_time;
-    // }
+    if (params.validateProofs && params.signedMessages) {
+        if(params.multiThreading){  //last parameter in Params in server.cc
+          //Dispatch, split function below.
 
-    phase2Reply->mutable_p2_decision()->set_decision(msg.decision());
-    if (params.validateProofs) {
-      // TODO: uncomment. need a way for a process to know the decision view
-      //   when verifying the signed p2_decision
-      //phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
-    }
+          //Alternatively: parse into a new Phase2 directly in the ReceiveMessage function
+          proto::Phase2 * msg_copy = msg.New();
+          msg_copy->CopyFrom(msg);
+          //copy shouldnt be needed due to bind?
+
+          std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this, *msg_copy, txnDigest, sendCB, phase2Reply, std::placeholders::_1));
+
+          //OPTION 1: Validation itself is synchronous    TODO: Needs to be extended with thread safety.
+              //std::function<void*()> f (std::bind(&ValidateP1RepliesWrapper, msg_copy.decision(), false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId, myResult, verifier));
+              //transport->DispatchTP(f, mcb);
+              //tp->dispatch(f, cb, transport->libeventBase);
+
+          //OPTION2: Validation itself is asynchronous (each verification = 1 job)
+          asyncValidateP1Replies(msg.decision(),
+                false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
+                myResult, verifier, mcb, transport, true);
+
+          return;
+        }
+        else{
+          if(!ValidateP1Replies(msg.decision(),
+                false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
+                myResult, verifier)) {
+            Debug("VALIDATE P1Replies failed.");
+            return;
+          }
+        }
+      }
+
+  bool* valid = new bool;
+ *valid = true;
+  HandlePhase2CB(msg, txnDigest, sendCB, phase2Reply, (void*) valid);
   }
+}
 
-  if (params.validateProofs && params.signedMessages) {
-    proto::Phase2Decision* p2Decision = new proto::Phase2Decision(
-        phase2Reply->p2_decision());
-    //Latency_Start(&signLat);
-    MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
-        [sendCB, p2Decision]() {
-        sendCB();
-        delete p2Decision;
-        });
-    //Latency_End(&signLat);
+void Server::WritebackCallback(proto::Writeback &msg, const std::string* txnDigest, proto::Transaction* txn, void* valid){
+
+  if(!(*(bool*) valid)){
+    Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
+    delete (bool*) valid;
     return;
   }
-  sendCB();
+  delete (bool*) valid;
+
+  if (msg.decision() == proto::COMMIT) {
+    Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
+    Commit(*txnDigest, txn, msg.has_p1_sigs() ? msg.release_p1_sigs() : msg.release_p2_sigs(), msg.has_p1_sigs());
+  } else {
+    Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
+    writebackMessages[*txnDigest] = msg;
+    Abort(*txnDigest);
+  }
 }
+
 
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
@@ -489,60 +567,141 @@ void Server::HandleWriteback(const TransportAddress &remote,
   Debug("WRITEBACK[%s] with decision %d.",
       BytesToHex(*txnDigest, 16).c_str(), msg.decision());
 
+//could delegate this whole block to the threads, but then would need to make it threadsafe?
 
-  if (params.validateProofs) {
-    if (params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()) {
-      int64_t myProcessId;
-      proto::ConcurrencyControl::Result myResult;
-      LookupP1Decision(*txnDigest, myProcessId, myResult);
+//TODO: declare mcb = bind(HandleWBCallback)
 
-      if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
-            keyManager, &config, myProcessId, myResult, verifyLat, verifier)) {
-        Debug("WRITEBACK[%s] Failed to validate P1 replies for fast commit.",
-            BytesToHex(*txnDigest, 16).c_str());
-        return;
-      }
-    } else if (params.signedMessages && msg.has_p2_sigs()) {
-      int64_t myProcessId;
-      proto::CommitDecision myDecision;
-      LookupP2Decision(*txnDigest, myProcessId, myDecision);
+  if (params.validateProofs ) {
+      if(params.multiThreading){
+          //Alternatively: parse into a new Phase2 directly in the ReceiveMessage function
+          proto::Writeback * msg_copy = msg.New();
+          msg_copy->CopyFrom(msg);
+          //copy shouldnt be needed due to bind?
+          std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, *msg_copy, txnDigest, txn, std::placeholders::_1));
 
-      if (!ValidateP2Replies(msg.decision(), txn, txnDigest, msg.p2_sigs(),
-            keyManager, &config, myProcessId, myDecision, verifyLat, verifier)) {
-        Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
-            BytesToHex(*txnDigest, 16).c_str(), msg.decision());
-        return;
+          if(params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()){
+            int64_t myProcessId;
+            proto::ConcurrencyControl::Result myResult;
+            LookupP1Decision(*txnDigest, myProcessId, myResult);
+
+            asyncValidateP1Replies(msg.decision(),
+                  true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
+                  myResult, verifier, mcb, transport, true);
+
+            return;
+
+
+          }
+          else if(params.signedMessages && msg.decision() == proto::ABORT && msg.has_p1_sigs()){
+            int64_t myProcessId;
+            proto::ConcurrencyControl::Result myResult;
+            LookupP1Decision(*txnDigest, myProcessId, myResult);
+
+            asyncValidateP1Replies(msg.decision(),
+                  true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
+                  myResult, verifier, mcb, transport, true);
+
+            return;
+          }
+
+          else if (params.signedMessages && msg.has_p2_sigs()) {
+              //TODO: Make async validate P2 replies func
+              int64_t myProcessId;
+              proto::CommitDecision myDecision;
+              LookupP2Decision(*txnDigest, myProcessId, myDecision);
+
+              asyncValidateP2Replies(msg.decision(),
+                    txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
+                    myDecision, verifier, mcb, transport, true);
+              return;
+          }
+
+
+          else if (msg.decision() == proto::ABORT && msg.has_conflict()) {
+              //TODO:Make Async ValidateCommittedConflict
+              std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
+                  params.hashDigest);
+              asyncValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
+                    txnDigest, params.signedMessages, keyManager, &config, verifier,
+                    mcb, transport, true);
+              return;
+          }
+          else if (params.signedMessages) {
+
+             Debug("WRITEBACK[%s] decision %d, has_p1_sigs %d, has_p2_sigs %d, and"
+                 " has_conflict %d.", BytesToHex(*txnDigest, 16).c_str(),
+                 msg.decision(), msg.has_p1_sigs(), msg.has_p2_sigs(), msg.has_conflict());
+             return;
+          }
+
       }
-      //MISSING CASE FOR FAST ABORT WITH 3f+1 ABSTAIN!!!!!!!!!!!!!!!!!!!!
-    } else if (msg.decision() == proto::ABORT && msg.has_conflict()) {
-      std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
-          params.hashDigest);
-      if (!ValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
-            txnDigest, params.signedMessages, keyManager, &config, verifier)) {
-        Debug("WRITEBACK[%s] Failed to validate committed conflict for fast abort.",
-            BytesToHex(*txnDigest, 16).c_str());
-        return;
-      }
-    } else if (params.signedMessages) {
-      Debug("WRITEBACK[%s] decision %d, has_p1_sigs %d, has_p2_sigs %d, and"
-          " has_conflict %d.", BytesToHex(*txnDigest, 16).c_str(),
-          msg.decision(), msg.has_p1_sigs(), msg.has_p2_sigs(), msg.has_conflict());
-      return;
-    }
+      else{
+
+          if (params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()) {
+            int64_t myProcessId;
+            proto::ConcurrencyControl::Result myResult;
+            LookupP1Decision(*txnDigest, myProcessId, myResult);
+
+            if (!ValidateP1Replies(proto::COMMIT, true, txn, txnDigest, msg.p1_sigs(),
+                  keyManager, &config, myProcessId, myResult, verifyLat, verifier)) {
+              Debug("WRITEBACK[%s] Failed to validate P1 replies for fast commit.",
+                  BytesToHex(*txnDigest, 16).c_str());
+              return;
+            }
+          }
+          //inerted previously MISSING CASE FOR FAST ABORT WITH 3f+1 ABSTAIN
+          //TODO: need to check whether clients even ever generate this (they should) (+ server mvtso replies)
+          else if (params.signedMessages && msg.decision() == proto::ABORT && msg.has_p1_sigs()) {
+            int64_t myProcessId;
+            proto::ConcurrencyControl::Result myResult;
+            LookupP1Decision(*txnDigest, myProcessId, myResult);
+
+            if (!ValidateP1Replies(proto::ABORT, true, txn, txnDigest, msg.p1_sigs(),
+                  keyManager, &config, myProcessId, myResult, verifyLat, verifier)) {
+              Debug("WRITEBACK[%s] Failed to validate P1 replies for fast abort.",
+                  BytesToHex(*txnDigest, 16).c_str());
+              return;
+            }
+          }
+
+
+          else if (params.signedMessages && msg.has_p2_sigs()) {
+            int64_t myProcessId;
+            proto::CommitDecision myDecision;
+            LookupP2Decision(*txnDigest, myProcessId, myDecision);
+
+            if (!ValidateP2Replies(msg.decision(), txn, txnDigest, msg.p2_sigs(),
+                  keyManager, &config, myProcessId, myDecision, verifyLat, verifier)) {
+              Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
+                  BytesToHex(*txnDigest, 16).c_str(), msg.decision());
+              return;
+            }
+
+          } else if (msg.decision() == proto::ABORT && msg.has_conflict()) {
+            std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
+                params.hashDigest);
+            if (!ValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
+                  txnDigest, params.signedMessages, keyManager, &config, verifier)) {
+              Debug("WRITEBACK[%s] Failed to validate committed conflict for fast abort.",
+                  BytesToHex(*txnDigest, 16).c_str());
+              return;
+            }
+          } else if (params.signedMessages) {
+            Debug("WRITEBACK[%s] decision %d, has_p1_sigs %d, has_p2_sigs %d, and"
+                " has_conflict %d.", BytesToHex(*txnDigest, 16).c_str(),
+                msg.decision(), msg.has_p1_sigs(), msg.has_p2_sigs(), msg.has_conflict());
+            return;
+          }
+
+        }
+
   }
+  bool* valid = new bool;
+  *valid = true;
+  WritebackCallback(msg, txnDigest, txn, (void*) valid);
 
-
-
-  if (msg.decision() == proto::COMMIT) {
-    Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
-    Commit(*txnDigest, txn, msg.has_p1_sigs() ? msg.release_p1_sigs() : msg.release_p2_sigs(),
-        msg.has_p1_sigs());
-  } else {
-    Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
-    writebackMessages[*txnDigest] = msg;
-    Abort(*txnDigest);
-  }
 }
+
 
 void Server::HandleAbort(const TransportAddress &remote,
     const proto::Abort &msg) {
@@ -1300,13 +1459,31 @@ uint64_t Server::DependencyDepth(const proto::Transaction *txn) const {
 
 void Server::MessageToSign(::google::protobuf::Message* msg,
       proto::SignedMessage *signedMessage, signedCallback cb) {
-  if (params.signatureBatchSize == 1) {
-    SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMessage);
-    cb();
-  } else {
-    batchSigner->MessageToSign(msg, signedMessage, cb);
+
+  if(params.multiThreading){
+      if (params.signatureBatchSize == 1) {
+          // ::google::protobuf::Message* msg_copy = msg.New();
+          // msg_copy->CopyFrom(msg);
+          // std::function<void*()> f(std::bind(asyncSignMessage, *msg_copy, keyManager->GetPrivateKey(id), id, signedMessage));
+          //Assuming bind creates a copy this suffices:
+      std::function<void*()> f(std::bind(asyncSignMessage, msg, keyManager->GetPrivateKey(id), id, signedMessage));
+      transport->DispatchTP(f, [cb](void * ret){ cb();});
+      }
+      else {
+        batchSigner->asyncMessageToSign(msg, signedMessage, cb);
+      }
+  }
+  else{
+    if (params.signatureBatchSize == 1) {
+      SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMessage);
+      cb();
+      //if multithread: Dispatch f: SignMessage and cb.
+    } else {
+      batchSigner->MessageToSign(msg, signedMessage, cb);
+    }
   }
 }
+
 
 proto::ReadReply *Server::GetUnusedReadReply() {
   proto::ReadReply *reply;
@@ -1355,6 +1532,8 @@ void Server::FreePhase1Reply(proto::Phase1Reply *reply) {
 void Server::FreePhase2Reply(proto::Phase2Reply *reply) {
   p2Replies.push_back(reply);
 }
+
+////////////////////// Fallback realm beings here... enter at own risk
 
 //TODO: all requestID entries can be deleted..
 void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg) {
@@ -1714,9 +1893,9 @@ void Server::VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, 
 
 //TODO: Case A
 if(p2fb.has_p2_replies()){
-  proto::P2Replies p2Replies = p2fb.p2_replies();
+  proto::P2Replies p2Reps = p2fb.p2_replies();
   uint32_t counter = config.f + 1;
-  for(auto & p2_reply : p2Replies.p2replies()){
+  for(auto & p2_reply : p2Reps.p2replies()){
       proto::Phase2Decision p2dec;
       if (params.signedMessages) {
         if(!p2_reply.has_signed_p2_decision()){ return;}

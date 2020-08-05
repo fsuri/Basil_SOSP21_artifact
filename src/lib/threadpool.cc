@@ -3,6 +3,8 @@
 #include <thread>
 #include <sched.h>
 
+
+//TODO: make is so that all but the first core are used.
 ThreadPool::ThreadPool() {
   int num_cpus = std::thread::hardware_concurrency();
   Debug("num cpus %d", num_cpus);

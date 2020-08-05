@@ -1,14 +1,59 @@
 #ifndef _NODE_CRYPTO_H_
 #define _NODE_CRYPTO_H_
 
+
+#include <sodium.h>
+#include <cryptopp/eccrypto.h>
+#include <cryptopp/rsa.h>
+#include <cryptopp/pssr.h>
+#include <cryptopp/files.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/oids.h>
+#include <cryptopp/osrng.h>
+#include <cryptopp/sha.h>
+#include <cryptopp/hmac.h>
+#include <random>
+#include "lib/secp256k1.h"
+#include "lib/blake3.h"
+#include "lib/static_block.h"
+
+#include "ed25519.h" // Donna ed25519 lib   https://github.com/justmoon/curvebench/tree/master/src/ed25519-donna
+
 #include <string>
 
 namespace crypto {
 
+  using namespace CryptoPP;
+  using namespace std;
+  
 enum KeyType { RSA, ECDSA, ED25, SECP, DONNA };
 
-typedef struct PubKey PubKey;
-typedef struct PrivKey PrivKey;
+// typedef struct PubKey PubKey;
+// typedef struct PrivKey PrivKey;
+
+struct PubKey {
+  KeyType t;
+  union {
+    RSA::PublicKey* rsaKey;
+    CryptoPP::ECDSA<ECP, SHA256>::PublicKey* ecdsaKey;
+    unsigned char* ed25Key;
+    unsigned char* secpKey;
+    ed25519_public_key* donnaKey;
+  };
+};
+
+struct PrivKey {
+  KeyType t;
+  union {
+    RSA::PrivateKey* rsaKey;
+    CryptoPP::ECDSA<ECP, SHA256>::PrivateKey* ecdsaKey;
+    unsigned char* ed25Key;
+    unsigned char* secpKey;
+    std::pair<ed25519_secret_key*,ed25519_public_key *> donnaKey;
+    // ed25519_secret_key* donnaKeyPriv;
+    // ed25519_public_key* donnaKeyPub;//ed25519_public_key donnaKeyPub;
+  };
+};
 
 using namespace std;
 

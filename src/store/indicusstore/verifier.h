@@ -4,8 +4,19 @@
 #include <string>
 
 #include "lib/crypto.h"
+//#include "lib/crypto.cc"
+#include "lib/tcptransport.h"
+//#include "store/indicusstore/common.h"
 
 namespace indicusstore {
+
+  typedef std::function<void(void*)> verifyCallback;
+
+  template<typename T> static void* pointerWrapperC(std::function<T()> func){
+      T* t = new T; //(T*) malloc(sizeof(T));
+      *t = func();
+      return (void*) t;
+  }
 
 class Verifier {
  public:

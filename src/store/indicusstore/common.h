@@ -7,19 +7,57 @@
 #include "store/indicusstore/indicus-proto.pb.h"
 #include "lib/latency.h"
 #include "store/indicusstore/verifier.h"
+#include "lib/tcptransport.h"
 
 #include <map>
 #include <string>
 #include <vector>
 #include <functional>
+#include <mutex>
 
 #include <google/protobuf/message.h>
 
 namespace indicusstore {
 
 typedef std::function<void()> signedCallback;
+typedef std::function<void(void*)> verifyCallback;
+typedef std::function<void(void*)> mainThreadCallback;
+
+
+struct asyncVerification{
+  asyncVerification(uint32_t _quorumSize, mainThreadCallback mcb, int no_groups, proto::CommitDecision _decision) :
+  quorumSize(_quorumSize), mainThreadCallback(mcb), groupTotals(no_groups), decision(_decision), terminate(false) { }
+  ~asyncVerification() { }
+
+  std::mutex objMutex;
+  //NEEDS A MUTEX OBJECT THAT EACH THREAD tries to acquire.
+
+  uint32_t quorumSize;
+  std::function<void(void*)> mainThreadCallback;
+
+  std::map<uint64_t, uint32_t> groupCounts;
+  int groupTotals;
+  int groupsVerified;
+
+  proto::CommitDecision decision;
+  //proto::Transaction *txn;
+  //std::set<int> groupsVerified;
+
+  int deletable;
+  bool terminate;
+};
+
+template<typename T> static void* pointerWrapper(std::function<T()> func){
+    T* t = new T; //(T*) malloc(sizeof(T));
+    *t = func();
+    return (void*) t;
+}
 
 void SignMessage(::google::protobuf::Message* msg,
+    crypto::PrivKey* privateKey, uint64_t processId,
+    proto::SignedMessage *signedMessage);
+
+void* asyncSignMessage(::google::protobuf::Message* msg,
     crypto::PrivKey* privateKey, uint64_t processId,
     proto::SignedMessage *signedMessage);
 
@@ -27,6 +65,17 @@ void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
     crypto::PrivKey* privateKey, uint64_t processId,
     const std::vector<proto::SignedMessage*>& signedMessages,
     uint64_t merkleBranchFactor);
+
+void asyncValidateCommittedConflict(const proto::CommittedProof &proof,
+    const std::string *committedTxnDigest, const proto::Transaction *txn,
+    const std::string *txnDigest, bool signedMessages, KeyManager *keyManager,
+    const transport::Configuration *config, Verifier *verifier,
+    mainThreadCallback mcb, Transport *transport, bool multithread = false);
+
+void asyncValidateCommittedProof(const proto::CommittedProof &proof,
+    const std::string *committedTxnDigest, KeyManager *keyManager,
+    const transport::Configuration *config, Verifier *verifier,
+    mainThreadCallback mcb, Transport *transport, bool multithread = false);
 
 bool ValidateCommittedConflict(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, const proto::Transaction *txn,
@@ -36,6 +85,27 @@ bool ValidateCommittedConflict(const proto::CommittedProof &proof,
 bool ValidateCommittedProof(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, KeyManager *keyManager,
     const transport::Configuration *config, Verifier *verifier);
+
+void* ValidateP1RepliesWrapper(proto::CommitDecision decision,
+    bool fast,
+    const proto::Transaction *txn,
+    const std::string *txnDigest,
+    const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager,
+    const transport::Configuration *config,
+    int64_t myProcessId, proto::ConcurrencyControl::Result myResult, Verifier *verifier);
+
+void asyncValidateP1Replies(proto::CommitDecision decision,
+    bool fast,
+    const proto::Transaction *txn,
+    const std::string *txnDigest,
+    const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager,
+    const transport::Configuration *config,
+    int64_t myProcessId, proto::ConcurrencyControl::Result myResult,
+    Verifier *verifier, mainThreadCallback mcb, Transport *transport, bool multithread = false);
+
+void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
 
 bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
     const proto::Transaction *txn,
@@ -49,6 +119,21 @@ bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::ConcurrencyControl::Result myResult,
     Latency_t &lat, Verifier *verifier);
+
+void* ValidateP2RepliesWrapper(proto::CommitDecision decision,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier);
+
+void asyncValidateP2Replies(proto::CommitDecision decision,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier,
+    mainThreadCallback mcb, Transport* transport, bool multithread = false);
+
+void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
 
 bool ValidateP2Replies(proto::CommitDecision decision,
     const proto::Transaction *txn,
@@ -118,6 +203,7 @@ bool TransactionsConflict(const proto::Transaction &a,
 uint64_t QuorumSize(const transport::Configuration *config);
 uint64_t FastQuorumSize(const transport::Configuration *config);
 uint64_t SlowCommitQuorumSize(const transport::Configuration *config);
+uint64_t FastAbortQuorumSize(const transport::Configuration *config);
 uint64_t SlowAbortQuorumSize(const transport::Configuration *config);
 bool IsReplicaInGroup(uint64_t id, uint32_t group,
     const transport::Configuration *config);
@@ -154,16 +240,18 @@ typedef struct Parameters {
   const uint64_t merkleBranchFactor;
   const InjectFailure injectFailure;
 
+  const bool multiThreading;
+
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     int signatureBatchSize, int64_t maxDepDepth, uint64_t readDepSize,
     bool readReplyBatch, bool adjustBatchSize, bool sharedMemBatches,
-    bool sharedMemVerify, uint64_t merkleBranchFactor, const InjectFailure &injectFailure) :
+    bool sharedMemVerify, uint64_t merkleBranchFactor, const InjectFailure &injectFailure, bool multiThreading) :
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
     maxDepDepth(maxDepDepth), readDepSize(readDepSize),
     readReplyBatch(readReplyBatch), adjustBatchSize(adjustBatchSize),
     sharedMemBatches(sharedMemBatches), sharedMemVerify(sharedMemVerify),
-    merkleBranchFactor(merkleBranchFactor), injectFailure(injectFailure) { }
+    merkleBranchFactor(merkleBranchFactor), injectFailure(injectFailure), multiThreading(multiThreading){ }
 } Parameters;
 
 } // namespace indicusstore

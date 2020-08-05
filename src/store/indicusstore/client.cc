@@ -57,9 +57,9 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
 
   if (params.signatureBatchSize == 1) {
-    verifier = new BasicVerifier();
+    verifier = new BasicVerifier(transport);//transport, 1000000UL,false); //Need to change interface so client can use it too?
   } else {
-    verifier = new LocalBatchVerifier(params.merkleBranchFactor, dummyStats);
+    verifier = new LocalBatchVerifier(params.merkleBranchFactor, dummyStats, transport);
   }
 
   /* Start a client for each shard. */
@@ -595,7 +595,7 @@ void Client::Phase2FB(PendingRequest *req){ //this is called from the Phase1FB c
       groupIdx = groupIdx % fb_txn.involved_groups_size();
       UW_ASSERT(groupIdx < fb_txn.involved_groups_size());
       int64_t logGroup = fb_txn.involved_groups(groupIdx);
-      Debug("PHASE2FB[%lu:%s][%s] logging to group %ld", client_id, req->txnDigest,
+      Debug("PHASE2FB[%lu:%s][%s] logging to group %ld", client_id, req->txnDigest.c_str(),
           BytesToHex(req->txnDigest, 16).c_str(), logGroup);
 
 
@@ -638,7 +638,7 @@ void Client::Phase2FB(PendingRequest *req){ //this is called from the Phase1FB c
 
 void Client::WritebackFB(PendingRequest *req){
   //TODO: wrap normal function
-  Debug("WRITEBACKFB[%lu:%s]", client_id, req->txnDigest);
+  Debug("WRITEBACKFB[%lu:%s]", client_id, req->txnDigest.c_str());
 
   req->startedWriteback = true;
 
@@ -681,7 +681,10 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
   if(pendingReqs.find(conflict_id) == pendingReqs.end()){return; }
   if(pendingReqs[conflict_id]->outstandingPhase1s == 0){ return;}
   //check if instance still active.
-  if(FB_instances.find(txnDigest) == FB_instances.end()){Debug("FB instances %s already committed or aborted.", txnDigest); return; }
+  if(FB_instances.find(txnDigest) == FB_instances.end()){
+    Debug("FB instances %s already committed or aborted.", txnDigest.c_str());
+    return;
+  }
 
   PendingRequest* req = FB_instances[txnDigest];
   //Check if the current pending request has this txn as dependency.
@@ -689,11 +692,11 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
   if(!isDep(txnDigest, Req_txn)) return;
 
   // do pretty much normal Phase1Callback. Modify it so it calls Phase2FB or WritebackFB.
-  Debug("FBPHASE1[%lu:%s] callback decision %d from group %d", client_id, txnDigest, decision, group);
+  Debug("FBPHASE1[%lu:%s] callback decision %d from group %d", client_id, txnDigest.c_str(), decision, (int)group);
 
   if (req->startedPhase2 || req->startedWriteback) {
     Debug("Already started Phase2FB/WritebackFB for FB instance %s. Ignoring Phase1"
-        " response from group %d.", txnDigest, group);
+        " response from group %d.", txnDigest.c_str(), (int)group);
     return;
   }
 
@@ -708,14 +711,13 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
       auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
       UW_ASSERT(itr != sigs.end());
       Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
-          group);
+          (int)group);
       (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
       req->slowAbortGroup = group;
     } else if (decision == proto::COMMIT) {
       auto itr = sigs.find(proto::ConcurrencyControl::COMMIT);
       UW_ASSERT(itr != sigs.end());
-      Debug("Have %d COMMIT replies from group %d.", itr->second.sigs_size(),
-          group);
+      Debug("Have %d COMMIT replies from group %d.", itr->second.sigs_size(), (int)group);
       (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
     }
   }
@@ -747,7 +749,7 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
 
 
 void Client::FBHandleAllPhase1Received(PendingRequest *req) {
-  Debug("FB instance [%s]: All PHASE1's received", req->txnDigest);
+  Debug("FB instance [%s]: All PHASE1's received", req->txnDigest.c_str());
   if (req->fast) {
     WritebackFB(req);
   } else {
@@ -764,7 +766,7 @@ void Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
      if(pendingReqs[conflict_id]->outstandingPhase1s == 0){ return;}
 
     //check if instance still active.
-    if(FB_instances.find(txnDigest) == FB_instances.end()){Debug("FB instances %s already committed or aborted.", txnDigest); return; }
+    if(FB_instances.find(txnDigest) == FB_instances.end()){Debug("FB instances %s already committed or aborted.", txnDigest.c_str()); return; }
 
     PendingRequest* req = FB_instances[txnDigest];
          //TODO: Check if the current pending request has this txn as dependency.
@@ -787,19 +789,19 @@ void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64
 if(pendingReqs.find(conflict_id) == pendingReqs.end()){Debug("Request id %lu already committed or aborted.", conflict_id); return; }
 if(pendingReqs[conflict_id]->outstandingPhase1s == 0){ return;}
   //check if instance still active.
-  if(FB_instances.find(txnDigest) == FB_instances.end()){Debug("FB instances %s already committed or aborted.", txnDigest); return; }
+  if(FB_instances.find(txnDigest) == FB_instances.end()){Debug("FB instances %s already committed or aborted.", txnDigest.c_str()); return; }
 
   //check that this is actually a dependent
   proto::Transaction Req_txn = pendingReqs[conflict_id]->txn;
   if(!isDep(txnDigest, Req_txn)) return;
 
-  Debug("PHASE2FB[%lu:%s] callback", client_id, txnDigest);
+  Debug("PHASE2FB[%lu:%s] callback", client_id, txnDigest.c_str());
 
   PendingRequest* req = FB_instances[txnDigest];
 
   if (req->startedWriteback) {
       Debug("Already started WritebackFB for FB request id %s. Ignoring Phase2FB response.",
-               txnDigest);
+               txnDigest.c_str());
           return;
   }
   req->decision = decision;
@@ -817,7 +819,7 @@ void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, pr
   if(pendingReqs[conflict_id]->outstandingPhase1s == 0){ return;}
 
   //check if instance still active.
-  if(FB_instances.find(txnDigest) == FB_instances.end()){Debug("FB instances %s already committed or aborted.", txnDigest); return; }
+  if(FB_instances.find(txnDigest) == FB_instances.end()){Debug("FB instances %s already committed or aborted.", txnDigest.c_str()); return; }
 
   FB_instances[txnDigest]->startedWriteback = true;
 
@@ -844,7 +846,7 @@ void Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64
   if(pendingReqs.find(conflict_id) == pendingReqs.end()){Debug("Request id %lu already committed or aborted.", conflict_id); return; }
   if(pendingReqs[conflict_id]->outstandingPhase1s == 0){ return;}
   //check if instance still active.
-  if(FB_instances.find(txnDigest) == FB_instances.end()){Debug("FB instances %s already committed or aborted.", txnDigest); return; }
+  if(FB_instances.find(txnDigest) == FB_instances.end()){Debug("FB instances %s already committed or aborted.", txnDigest.c_str()); return; }
 
   proto::Transaction Req_txn = pendingReqs[conflict_id]->txn;
   if(!isDep(txnDigest, Req_txn)) return;

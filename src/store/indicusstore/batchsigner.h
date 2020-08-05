@@ -30,6 +30,10 @@ class BatchSigner {
       proto::SignedMessage *signedMessage, signedCallback cb,
       bool finishBatch = false) = 0;
 
+  virtual void asyncMessageToSign(::google::protobuf::Message* msg,
+      proto::SignedMessage *signedMessage, signedCallback cb,
+      bool finishBatch = false) = 0;
+
  protected:
   Transport *transport;
   KeyManager *keyManager;

@@ -94,11 +94,21 @@ int main(int argc, char *argv[]) {
 
 
       int num =64 ;
-    crypto::PubKey* publicKeys[num];
-    const char *messages[num];
-    size_t messageLens[num];
-    const char *signatures[num];
+
+    // crypto::PubKey* publicKeys[num];
+    // const char *messages[num];
+    // size_t messageLens[num];
+    // const char *signatures[num];
     //ed25519_signature sig[num];
+
+
+    //USE vectors
+    //std::vector<double> v;   double* a = &v[0];  OR: v.data()
+    std::vector<crypto::PubKey*> publicKeys;
+    std::vector<const char*> messages;
+    std::vector<size_t> messageLens;
+    std::vector<const char*> signatures;
+
     std::string strings[num];
     std::string sign[num];
     int valid[num];
@@ -120,13 +130,19 @@ int main(int argc, char *argv[]) {
 
 
         //speed up only when the messages and keys are the same?? Experiments that modify either seemingly dont get a speedup...
-        publicKeys[i] = pubKey;
-        messages[i] = &(strings[i])[0];
-        messageLens[i] = s.length();
-        signatures[i] = &(sign[i])[0];
+        // publicKeys[i] = pubKey;
+        // messages[i] = &(strings[i])[0];
+        // messageLens[i] = s.length();
+        // signatures[i] = &(sign[i])[0];
+
+        publicKeys.push_back(pubKey);
+        messages.push_back(&(strings[i])[0]);
+        messageLens.push_back(s.length());
+        signatures.push_back(&(sign[i])[0]);
       }
       Latency_Start(&batchLat);
-      assert(crypto::BatchVerify(crypto::KeyType::DONNA, publicKeys, messages, messageLens, signatures, iter, &valid[0]));
+    //  assert(crypto::BatchVerify(crypto::KeyType::DONNA, publicKeys, messages, messageLens, signatures, iter, &valid[0]));
+      assert(crypto::BatchVerify(crypto::KeyType::DONNA, publicKeys.data(), messages.data(), messageLens.data(), signatures.data(), iter, &valid[0]));
       // if(i==0){
       //   for(int j =0; j<num; j++){
       //     std::cout << "ENTRY:" << valid[j] << std::endl;

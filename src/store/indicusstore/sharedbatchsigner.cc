@@ -75,7 +75,7 @@ void SharedBatchSigner::MessageToSign(::google::protobuf::Message* msg,
 
     sharedWorkQueueMtx->lock();
     msg->SerializeToString(signedMessage->mutable_data());
-    Debug("Adding SignatureWork with msg data %s.", 
+    Debug("Adding SignatureWork with msg data %s.",
         BytesToHex(signedMessage->data(), 100).c_str());
 
     sharedWorkQueue->push_back(SignatureWork(*alloc_inst, &signedMessage->data()[0],
@@ -96,7 +96,7 @@ void SharedBatchSigner::MessageToSign(::google::protobuf::Message* msg,
       Debug("Batch is full, sending");
       StopTimeout();
 
-      SignBatch(); 
+      SignBatch();
       return;
     } else {
       Debug("Batch has %lu items.", sharedWorkQueue->size());
@@ -149,7 +149,7 @@ void SharedBatchSigner::SignBatch() {
 
   sharedWorkQueueMtx->unlock();
   stats.IncrementList("sig_batch", batchSize);
-  
+
   stats.Add("sig_batch_sizes", batchSize);
   struct timeval curr;
   gettimeofday(&curr, NULL);
@@ -161,7 +161,7 @@ void SharedBatchSigner::SignBatch() {
 
   for (size_t i = 0; i < batchSignatures.size(); ++i) {
     scoped_lock<named_mutex> lock(*GetCompletionQueueMutex(pids[i]));
-    Debug("Adding signature %s %s to completion queue for %lu.", 
+    Debug("Adding signature %s %s to completion queue for %lu.",
         BytesToHex(*batchMessages[i], 100).c_str(),
         BytesToHex(batchSignatures[i], 100).c_str(),
         pids[i]);
@@ -210,7 +210,7 @@ void SharedBatchSigner::RunSignedCallbackConsumer() {
       SignatureWork work = GetCompletionQueue(id)->front();
       GetCompletionQueue(id)->pop_front();
       Debug("Received signature computed by process %lu.", work.pid);
-      
+
       if (pendingBatch.size() > 0) {
         auto itr =  pendingBatch.find(work.id);
         if (itr != pendingBatch.end()) {
@@ -225,7 +225,7 @@ void SharedBatchSigner::RunSignedCallbackConsumer() {
         Debug("Signature is from stale run.");
       }
     }
-    transport->Timer(0, [signedCbs](){ 
+    transport->Timer(0, [signedCbs](){
         for (const auto &cb : *signedCbs) {
           cb();
         }
@@ -280,6 +280,12 @@ SharedBatchSigner::SignatureWorkQueue *SharedBatchSigner::GetCompletionQueue(uin
     itr = p.first;
   }
   return itr->second;
+}
+
+//not implemented, just to fulfill interface
+void SharedBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
+    proto::SignedMessage *signedMessage, signedCallback cb, bool finishBatch) {
+      return;
 }
 
 } // namespace indicusstore

@@ -53,6 +53,8 @@
 #include <unordered_set>
 #include <ctime>
 
+//#include "lib/threadpool.cc"
+
 namespace indicusstore {
 
 class ServerTest;
@@ -90,8 +92,11 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
       proto::Phase1 &msg);
+  void HandlePhase2CB(const proto::Phase2 &msg, const std::string* txnDigest, signedCallback sendCB, proto::Phase2Reply* phase2Reply, void* valid);
   void HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg);
+
+  void WritebackCallback(proto::Writeback &msg, const std::string* txnDigest, proto::Transaction* txn, void* valid);
   void HandleWriteback(const TransportAddress &remote,
       proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
@@ -191,6 +196,8 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   TrueTime timeServer;
   BatchSigner *batchSigner;
   Verifier *verifier;
+
+  //ThreadPool* tp;
 
   /* Declare protobuf objects as members to avoid stack alloc/dealloc costs */
   proto::SignedMessage signedMessage;

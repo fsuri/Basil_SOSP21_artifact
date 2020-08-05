@@ -38,6 +38,10 @@ class SharedBatchSigner : public BatchSigner {
       proto::SignedMessage *signedMessage, signedCallback cb,
       bool finishBatch = false) override;
 
+  virtual void asyncMessageToSign(::google::protobuf::Message* msg,
+          proto::SignedMessage *signedMessage, signedCallback cb,
+          bool finishBatch = false) override;
+
  private:
   void BatchTimeout();
   void SignBatch();

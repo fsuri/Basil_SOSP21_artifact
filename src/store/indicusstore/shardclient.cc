@@ -257,7 +257,7 @@ void ShardClient::Writeback(const proto::Transaction &transaction,
   writeback.set_txn_digest(txnDigest);
 
   transport->SendMessageToGroup(this, group, writeback);
-  Debug("[group %i] Sent Fallback WRITEBACK[%s]", group, txnDigest);
+  Debug("[group %i] Sent Fallback WRITEBACK[%s]", group, txnDigest.c_str());
 
   //TODO:delete pendingFB instance? And all pending phase2 that are inside.
 }
@@ -1035,7 +1035,7 @@ void ShardClient::HandlePhase2FBReply(proto::Phase2FBReply &p2fbr){
   std::string txnDigest = p2fbr.txn_digest();
   auto itr = this->pendingFallbacks.find(txnDigest);
   if (itr == this->pendingFallbacks.end()) {
-    Debug("[group %i] Received stale Phase2FBReply for txn %s.", group, txnDigest);
+    Debug("[group %i] Received stale Phase2FBReply for txn %s.", group, txnDigest.c_str());
     return; // this is a stale request
   }
 

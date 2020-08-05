@@ -28,9 +28,18 @@ class LocalBatchSigner : public BatchSigner {
       proto::SignedMessage *signedMessage, signedCallback cb,
       bool finishBatch = false) override;
 
+  virtual void asyncMessageToSign(::google::protobuf::Message* msg,
+          proto::SignedMessage *signedMessage, signedCallback cb, bool finishBatch = false) override;
+
+
  private:
   void SignBatch();
   void AdjustBatchSize();
+  void* asyncSignBatch(std::vector<::google::protobuf::Message*> pendingBatchMessages,
+          std::vector<proto::SignedMessage*> pendingBatchSignedMessages,
+          std::vector<signedCallback> pendingBatchCallbacks);
+
+  void ManageCallbacks(void* result);
 
   bool batchTimerRunning;
   uint64_t batchSize;
@@ -40,6 +49,12 @@ class LocalBatchSigner : public BatchSigner {
   std::vector<::google::protobuf::Message*> pendingBatchMessages;
   std::vector<proto::SignedMessage*> pendingBatchSignedMessages;
   std::vector<signedCallback> pendingBatchCallbacks;
+
+  //sync logic for multithreading
+  std::mutex stat_mutex;
+  std::mutex verifierMutex;
+  bool signing; //true if Sign has been called. False at end of sign.
+  std::condition_variable cv;
 
 };
 

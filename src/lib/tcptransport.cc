@@ -48,6 +48,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <signal.h>
+//#include "lib/threadpool.cc"
 
 const size_t MAX_TCP_SIZE = 100; // XXX
 const uint32_t MAGIC = 0x06121983;
@@ -173,6 +174,8 @@ TCPTransport::TCPTransport(double dropRate, double reorderRate,
     event_set_fatal_callback(FatalCallback);
 
     libeventBase = event_base_new();
+    //tp = ThreadPool();
+    tp = new ThreadPool(); //change tp to *
     evthread_make_base_notifiable(libeventBase);
 
     // Set up signal handler
@@ -587,8 +590,8 @@ TCPTransport::TimerCallback(evutil_socket_t fd, short what, void *arg)
 }
 
 void TCPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {
-  // tp.dispatch(f, cb, libeventBase);
-  Panic("unimplemented");
+  tp->dispatch(f, cb, libeventBase);
+  //Panic("unimplemented");
 }
 
 void
