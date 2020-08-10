@@ -28,7 +28,7 @@ class Verifier {
 
   virtual void asyncBatchVerify(crypto::PubKey *publicKey, const std::string &message,
       const std::string &signature, verifyCallback vb, bool multithread, bool autocomplete = false) = 0;
-      
+
   virtual void Complete(bool multithread, bool force_complete = false) = 0;
 };
 
