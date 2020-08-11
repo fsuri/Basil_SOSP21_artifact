@@ -234,7 +234,7 @@ DEFINE_bool(indicus_shared_mem_verify, false, "use shared memory for"
     " verifying messages (for Indicus)");
 DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
     " necessary to prevent impersonation (for Indicus)");
-DEFINE_bool(indicus_validate_proofs, false, "send and validate proofs as"
+DEFINE_bool(indicus_validate_proofs, true, "send and validate proofs as"
     " necessary to check Byzantine behavior (for Indicus)");
 DEFINE_bool(indicus_hash_digest, false, "use hash function compute transaction"
     " digest (for Indicus)");
