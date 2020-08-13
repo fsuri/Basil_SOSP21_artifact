@@ -2,6 +2,7 @@
 #define BASIC_VERIFIER_H
 
 #include <vector>
+#include <mutex>
 #include "store/indicusstore/verifier.h"
 
 
@@ -54,6 +55,8 @@ private:
   std::vector<size_t> messageLens;
   std::vector<const char*> signatures;
   std::vector<verifyCallback> pendingBatchCallbacks;
+  
+
 
 
   void* asyncComputeBatchVerification(std::vector<crypto::PubKey*> _publicKeys,

@@ -231,6 +231,7 @@ bool Verify(PubKey* publicKey, const char *message, size_t messageLen,
       //std::cout << "VERIFY TEST:" << res << std::endl;
       return res;
     }
+
     default: {
       Panic("unimplemented");
     }
@@ -299,7 +300,9 @@ void SavePublicKey(const string &filename, PubKey* key) {
     break;
   }
   case DONNA: {
-    SaveCFile(filename, (unsigned char*) &key->donnaKey[0], sizeof(ed25519_public_key));
+    //SaveCFile(filename, (unsigned char*) &key->donnaKey[0], sizeof(ed25519_public_key));
+    SaveCFile(filename, *key->donnaKey, sizeof(ed25519_public_key));
+    break;
   }
   default: {
     Panic("unimplemented");
@@ -332,7 +335,9 @@ void SavePrivateKey(const std::string &filename, PrivKey* key) {
     break;
   }
   case DONNA: {
-    SaveCFile(filename, (unsigned char*) &key->donnaKey.first[0], sizeof(ed25519_public_key));
+    //SaveCFile(filename, (unsigned char*) &key->donnaKey.first[0], sizeof(ed25519_public_key));
+    SaveCFile(filename, *key->donnaKey.first, sizeof(ed25519_public_key));
+    break;
   }
   default: {
     Panic("unimplemented");
@@ -391,8 +396,14 @@ PubKey* LoadPublicKey(const string &filename, KeyType t, bool precompute) {
   }
   case DONNA: {
     key->donnaKey = (ed25519_public_key*) malloc(sizeof(ed25519_public_key));
-    LoadCFile(filename, (unsigned char*) &key->donnaKey[0], sizeof(ed25519_public_key));  //FS: This should work?
-    //TODO: cast back the other way.
+    //LoadCFile(filename, (unsigned char*) &key->donnaKey[0], sizeof(ed25519_public_key));  //FS: This should work?
+    //TODO: cast back the other way?
+    LoadCFile(filename, *(key->donnaKey), sizeof(ed25519_public_key));
+
+
+
+
+    break;
   }
   default: {
     Panic("unimplemented");
@@ -438,10 +449,13 @@ PrivKey* LoadPrivateKey(const string &filename, KeyType t, bool precompute) {
     string delimiter = ".priv";
     const string publicfile = filename.substr(0, filename.find(delimiter)) + ".pub"; // get publickey path name.
     key->donnaKey.first = (ed25519_secret_key*) malloc(sizeof(ed25519_secret_key));
-    LoadCFile(filename, (unsigned char*) &key->donnaKey.first[0], sizeof(ed25519_secret_key));  //FS: This should work?
+    //LoadCFile(filename, (unsigned char*) &key->donnaKey.first[0], sizeof(ed25519_secret_key));  //FS: This should work?
+    LoadCFile(filename, *key->donnaKey.first, sizeof(ed25519_secret_key));
     key->donnaKey.second = (ed25519_public_key*) malloc(sizeof(ed25519_public_key));
-    LoadCFile(publicfile, (unsigned char*) &key->donnaKey.second[0], sizeof(ed25519_public_key));  //FS: This should work?
+  //LoadCFile(publicfile, (unsigned char*) &key->donnaKey.second[0], sizeof(ed25519_public_key));  //FS: This should work?
+    LoadCFile(publicfile, *key->donnaKey.second, sizeof(ed25519_public_key));
 
+    break;
   }
   default: {
     Panic("unimplemented");
@@ -519,7 +533,8 @@ std::pair<PrivKey*, PubKey*> GenerateKeypair(KeyType t, bool precompute) {
 
       	ed25519_randombytes_unsafe(privKey->donnaKey.first, sizeof(ed25519_secret_key));
       	ed25519_publickey(*privKey->donnaKey.first, *privKey->donnaKey.second);
-        memcpy(pubKey->donnaKey, privKey->donnaKey.second, sizeof(ed25519_public_key));
+        pubKey->donnaKey = privKey->donnaKey.second;
+        //memcpy(pubKey->donnaKey, privKey->donnaKey.second, sizeof(ed25519_public_key));
 
 
         //TEST HERE:

@@ -213,10 +213,13 @@ bool ValidateP1Replies(proto::CommitDecision decision,
 //upon false technically do not need to call the callback.
 void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result){
 
+
   bool verification_result = * ((bool*) result);
+
   delete (bool*) result;
 
-  std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+  Debug("asyncValidateP1RepliesCallback with result: %s", verification_result ? "true" : "false");
+  //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
   //technically dont need a mutex if this callback only runs on main thread?
 
   //Need to delete only after "last count" has finished.
@@ -255,8 +258,8 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
   bool* ret = new bool;
   *ret = true;
   verifyObj->terminate = true;
-  if(verifyObj->deletable == 0) delete verifyObj;
   verifyObj->mainThreadCallback((void*) ret);
+  if(verifyObj->deletable == 0) delete verifyObj;
   return;
 }
 
@@ -583,10 +586,12 @@ bool ValidateP2Replies(proto::CommitDecision decision,
 
 
 void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result){
+
   bool verification_result = * ((bool*) result);
   delete (bool*) result;
 
-  std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+  Debug("asyncValidateP2RepliesCallback with result: %s", verification_result ? "true" : "false");
+  //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
   //technically dont need a mutex if this callback only runs on main thread?
 
   //Need to delete only after "last count" has finished.
@@ -605,12 +610,12 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
   verifyObj->groupCounts[groupId]++;
 
 
+
   if (verifyObj->groupCounts[groupId] == verifyObj->quorumSize) {
-    bool* ret = new bool;
-    *ret = true;
+    bool* ret = new bool(true);
     verifyObj->terminate = true;
-    if(verifyObj->deletable == 0) delete verifyObj;
     verifyObj->mainThreadCallback((void*) ret);
+    if(verifyObj->deletable == 0) delete verifyObj;
     return;
 
   }

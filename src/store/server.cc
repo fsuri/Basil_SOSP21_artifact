@@ -232,7 +232,7 @@ DEFINE_bool(indicus_shared_mem_batch, false, "use shared memory batches for"
     " signing messages (for Indicus)");
 DEFINE_bool(indicus_shared_mem_verify, false, "use shared memory for"
     " verifying messages (for Indicus)");
-DEFINE_bool(indicus_sign_messages, false, "add signatures to messages as"
+DEFINE_bool(indicus_sign_messages, true, "add signatures to messages as"
     " necessary to prevent impersonation (for Indicus)");
 DEFINE_bool(indicus_validate_proofs, true, "send and validate proofs as"
     " necessary to check Byzantine behavior (for Indicus)");
@@ -254,7 +254,7 @@ DEFINE_string(indicus_key_path, "", "path to directory containing public and"
     " private keys (for Indicus)");
 DEFINE_int64(indicus_max_dep_depth, -1, "maximum length of dependency chain"
     " allowed by honest replicas [-1 is no maximum, -2 is no deps] (for Indicus)");
-DEFINE_uint64(indicus_key_type, 2, "key type (see create keys for mappings)"
+DEFINE_uint64(indicus_key_type, 4, "key type (see create keys for mappings)"
     " key type (for Indicus)");
 DEFINE_uint64(indicus_use_coordinator, false, "use coordinator"
     " make primary the coordinator for atomic broadcast (for Indicus)");
@@ -262,7 +262,8 @@ DEFINE_uint64(indicus_request_tx, false, "request tx"
     " request tx (for Indicus)");
 		//
 DEFINE_bool(indicus_multiThreading, false, "dispatch crypto to parallel threads");
-DEFINE_bool(indicus_batchVerification, false, "using ed25519 donna batch verification");
+DEFINE_bool(indicus_batchVerification, true, "using ed25519 donna batch verification");
+//DEFINE_uint64(indicus_verify_batch_timeout, 5, "verification batch timeout ms");
 
 const std::string occ_type_args[] = {
 	"tapir",
@@ -331,6 +332,7 @@ Partitioner *part = nullptr;
 void Cleanup(int signal);
 
 int main(int argc, char **argv) {
+
   gflags::SetUsageMessage(
            "runs a replica for a distributed replicated transaction\n"
 "           processing system.");
@@ -470,6 +472,10 @@ int main(int argc, char **argv) {
   case 3:
     keyType = crypto::SECP;
     break;
+	case 4:
+	  keyType = crypto::DONNA;
+	  break;
+
   default:
     throw "unimplemented";
   }
@@ -527,6 +533,8 @@ int main(int argc, char **argv) {
       }
       uint64_t timeDelta = (FLAGS_indicus_time_delta / 1000) << 32;
       timeDelta = timeDelta | (FLAGS_indicus_time_delta % 1000) * 1000;
+
+
 			indicusstore::Parameters params(FLAGS_indicus_sign_messages,
 				FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
 				FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
@@ -535,6 +543,7 @@ int main(int argc, char **argv) {
         FLAGS_indicus_shared_mem_batch, FLAGS_indicus_shared_mem_verify,
         FLAGS_indicus_merkle_branch_factor, indicusstore::InjectFailure(),
 				FLAGS_indicus_multiThreading, FLAGS_indicus_batchVerification);
+			Debug("Starting new server object");
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
           &keyManager, params, timeDelta, indicusOCCType, part,

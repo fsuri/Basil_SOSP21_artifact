@@ -68,7 +68,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
 
   if (params.signatureBatchSize == 1) {
     //verifier = new BasicVerifier(transport);
-    verifier = new BasicVerifier(transport, batchTimeoutMicro, params.validateProofs && params.signedMessages &&
+    verifier = new BasicVerifier(transport, 0, params.validateProofs && params.signedMessages &&
     params.signatureBatchSize > 1 && params.adjustBatchSize, 64UL);
     batchSigner = nullptr;
   } else {
@@ -140,6 +140,9 @@ Server::~Server() {
 //Full CPU utilization parallelism: Assign all these functions to different threads. Add mutexes to every shared data structure function
 void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
+
+  //if(test_bool) return;
+
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
     HandleRead(remote, read);
@@ -152,6 +155,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
       //     p2->ParseFromString(data);
       //     HandlePhase2(remote, *p2);
       // }
+      //test_bool = true;
     phase2.ParseFromString(data);
     HandlePhase2(remote, phase2);
   } else if (type == writeback.GetTypeName()) {

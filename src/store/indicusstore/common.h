@@ -20,7 +20,7 @@
 namespace indicusstore {
 
 typedef std::function<void()> signedCallback;
-typedef std::function<void(void*)> verifyCallback;
+//typedef std::function<void(void*)> verifyCallback;
 typedef std::function<void(void*)> mainThreadCallback;
 
 

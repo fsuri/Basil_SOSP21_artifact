@@ -35,7 +35,7 @@
 #include "lib/configuration.h"
 #include "lib/transport.h"
 #include "lib/transportcommon.h"
-// #include "lib/threadpool.h"
+#include "lib/threadpool.h"
 
 #include <event2/event.h>
 
@@ -122,6 +122,7 @@ private:
     std::map<int, UDPTransportTimerInfo *> timers;
     std::mutex timersLock;
     uint64_t lastFragMsgId;
+    ThreadPool* tp;
     struct UDPTransportFragInfo
     {
         uint64_t msgId;

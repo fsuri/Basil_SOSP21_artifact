@@ -23,6 +23,9 @@ int main(int argc, char** argv) {
   case 3:
     t = crypto::SECP;
     break;
+  case 4:
+    t = crypto::DONNA;
+    break;
   default:
     throw "unimplemented";
   }

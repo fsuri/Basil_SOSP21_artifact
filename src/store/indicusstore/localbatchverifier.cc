@@ -251,13 +251,14 @@ void LocalBatchVerifier::manageCallbacks(std::vector<const char*> _messages, std
    std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array){
 
   int* valid = (int*) valid_array;
-  int valid_size = sizeof(valid) / sizeof(valid[0]);
+  // int valid_size = sizeof(valid) / sizeof(valid[0]);
   int cb_size = _pendingBatchCallbacks.size();
-  UW_ASSERT(cb_size == valid_size);
+  // UW_ASSERT(cb_size == valid_size);
 
   //currently need to call the callbacks for failure results too. If one keeps a global datastructure instead of
   //a dynamic verificationObj then one would "know" if is deleted already or not.
-  for (int i = 0, size = _pendingBatchCallbacks.size(); i < size; ++i){
+  Debug("Call manageCallbacks for %d items", cb_size);
+  for (int i = 0; i < cb_size; ++i){
       bool* res = new bool;
       if(valid[i]){
         std::string hashStr(_signatures[i]);

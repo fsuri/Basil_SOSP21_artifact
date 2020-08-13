@@ -83,6 +83,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   virtual inline Stats &GetStats() override { return stats; }
 
  private:
+   //bool test_bool = false;
+
   friend class ServerTest;
   struct Value {
     std::string val;

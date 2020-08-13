@@ -53,6 +53,86 @@ int main(int argc, char *argv[]) {
   crypto::PrivKey* privKey = keypair.first;
   crypto::PubKey* pubKey = keypair.second;
 
+
+  //Test store and load.
+  std::string keyFileName("keytest");
+  const std::string privateKeyName = keyFileName + ".priv";
+  crypto::SavePrivateKey(privateKeyName, privKey);
+  std::cout << "Saved private key to: " << privateKeyName << std::endl;
+
+  const std::string publicKeyName = keyFileName + ".pub";
+  //(*pubKey->donnaKey)[strlen((*pubKey->donnaKey))-1] = '\0';
+  crypto::SavePublicKey(publicKeyName, pubKey);
+  std::cout << "Saved public key to: " << publicKeyName << std::endl;
+
+  unsigned char* test = *(pubKey->donnaKey);
+  bool b = *(pubKey->donnaKey) == test;
+  std::cout << "Pub vs char conversion: " << b <<std::endl;
+
+
+  // crypto::PubKey* keytest = (crypto::PubKey*) malloc(sizeof(crypto::PubKey));
+  // keytest->t = crypto::DONNA;
+  // keytest->donnaKey = (ed25519_public_key*) malloc(sizeof(ed25519_public_key));
+  //
+  // const std::string filename = publicKeyName;
+  // FILE * file = fopen(filename.c_str(), "r");
+  // if (file == NULL) {
+  //   Panic("Invalid filename %s", filename.c_str());
+  // }
+  //
+  // unsigned char* bytes = *(keytest->donnaKey);
+  // fread(bytes, sizeof(unsigned char), sizeof(ed25519_public_key), file);
+  // std::cout << "Pub vs Load conversion: " << *(pubKey->donnaKey) << " ...  " << *(keytest->donnaKey) <<std::endl;
+  // bool c = *(pubKey->donnaKey) == *(keytest->donnaKey);
+  // std::cout << "Pub vs Load conversion: " << c <<std::endl;
+
+  std::cout << "Priv.pub vs Pub " << privKey->donnaKey.second << " ... " << pubKey->donnaKey << std::endl;
+
+  crypto::PrivKey* privKeyLOAD = crypto::LoadPrivateKey(privateKeyName, crypto::DONNA, false);
+  bool first = *(privKey->donnaKey.first) == *(privKeyLOAD->donnaKey.first);
+  bool second = *(privKey->donnaKey.second) == *(privKeyLOAD->donnaKey.second);
+  std::cout << "Original vs Load: " << *privKey->donnaKey.first << " ... " << *privKeyLOAD->donnaKey.first << std::endl;
+  std::cout << "Original vs Load: " << *privKey->donnaKey.second << " ... " << *privKeyLOAD->donnaKey.second << std::endl;
+  std::cout << "ASSERT LOAD: " << first << "  " << second << std::endl;
+
+  crypto::PubKey* pubKeyLOAD = crypto::LoadPublicKey(publicKeyName, crypto::DONNA, false);
+  // crypto::PubKey* keytest = (crypto::PubKey*) malloc(sizeof(crypto::PubKey));
+  // keytest->t = crypto::DONNA;
+  // keytest->donnaKey = (ed25519_public_key*) malloc(sizeof(ed25519_public_key));
+  //
+  // const std::string filename = publicKeyName;
+  // FILE * file = fopen(filename.c_str(), "r");
+  // if (file == NULL) {
+  //   Panic("Invalid filename %s", filename.c_str());
+  // }
+  //
+  // unsigned char* bytes = *(keytest->donnaKey);
+  // fread(bytes, sizeof(unsigned char), sizeof(ed25519_public_key), file);
+  // std::cout << "Pub vs Load conversion: " << *(pubKey->donnaKey) << " ...  " << *(keytest->donnaKey) <<std::endl;
+  // bool c = *(pubKey->donnaKey) == *(keytest->donnaKey);
+  // std::cout << "Pub vs Load conversion: " << c <<std::endl;
+
+  // for(int i = 0; i<32; ++i){
+  //   std::cout << (*pubKey->donnaKey)[i] << std::endl;
+  // }
+
+  char fpubKey[33];
+  memcpy((void*)fpubKey, (void*) *pubKey->donnaKey, 32*sizeof(unsigned char));
+  fpubKey[32] = '\0';
+
+  char fpubKeyLOAD[33];
+  memcpy((void*) fpubKeyLOAD, (void*)*pubKeyLOAD->donnaKey, 32*sizeof(unsigned char));
+  fpubKeyLOAD[32] = '\0';
+  bool c = *fpubKey == *fpubKeyLOAD;
+  std::cout << "Pub vs Load conversion: " << c <<std::endl;
+  std::cout << "Original vs Load: " << fpubKey << " vs " << fpubKeyLOAD <<std::endl;
+
+
+
+  std::cout << "SIZE: " << sizeof(ed25519_public_key) << std::endl;
+  //privKey = privKeyLOAD;
+  ///Test end
+
   struct Latency_t signLat;
   struct Latency_t verifyLat;
   struct Latency_t signBLat;
@@ -123,8 +203,19 @@ int main(int argc, char *argv[]) {
 
             //DIFFERENT KEYS
          std::pair<crypto::PrivKey*, crypto::PubKey*> keypair = crypto::GenerateKeypair(keyType, precompute);
-         crypto::PrivKey* privKey = keypair.first;
-         crypto::PubKey* pubKey = keypair.second;
+         crypto::PrivKey* privKeyLOAD = keypair.first;
+         crypto::PubKey* pubKeyLOAD = keypair.second;
+
+         //Test Storing and Loading
+         std::string keyFileName("keytest");
+         const std::string publicKeyName = keyFileName + ".pub";
+         crypto::SavePublicKey(publicKeyName, pubKeyLOAD);
+         crypto::PubKey* pubKey = crypto::LoadPublicKey(publicKeyName, crypto::KeyType::DONNA, false);
+
+         const std::string privateKeyName = keyFileName + ".priv";
+         crypto::SavePrivateKey(privateKeyName, privKeyLOAD);
+         crypto::PrivKey* privKey = crypto::LoadPrivateKey(privateKeyName, crypto::DONNA, false);
+
 
         sign[i] = (crypto::Sign(privKey, strings[i]));
 
@@ -144,9 +235,9 @@ int main(int argc, char *argv[]) {
     //  assert(crypto::BatchVerify(crypto::KeyType::DONNA, publicKeys, messages, messageLens, signatures, iter, &valid[0]));
       assert(crypto::BatchVerify(crypto::KeyType::DONNA, publicKeys.data(), messages.data(), messageLens.data(), signatures.data(), iter, &valid[0]));
       // if(i==0){
-      //   for(int j =0; j<num; j++){
-      //     std::cout << "ENTRY:" << valid[j] << std::endl;
-      //   }
+        // for(int j =0; j<iter; j++){
+        //   std::cout << "ENTRY:" << valid[j] << std::endl;
+        // }
       // }
       Latency_End(&batchLat);
     }

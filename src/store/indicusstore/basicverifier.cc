@@ -55,8 +55,9 @@ void* BasicVerifier::asyncComputeBatchVerification(std::vector<crypto::PubKey*> 
     UW_ASSERT(_current_fill>0);
     UW_ASSERT(_publicKeys[0]->t == crypto::KeyType::DONNA);
     int* valid = new int[_current_fill];
+    Debug("BatchVerifying %d items", _current_fill);
     bool all_valid = crypto::BatchVerify(crypto::KeyType::DONNA, _publicKeys.data(), _messages.data(), _messageLens.data(), _signatures.data(), _current_fill, valid);
-
+    Debug("All valid: %s", all_valid ? "true" : "false");
     return (void*) valid;
 }
 
@@ -120,8 +121,12 @@ void BasicVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::strin
 
 void BasicVerifier::Complete(bool multithread, bool force_complete){
 
-  if(force_complete || current_fill >= batch_size) {
 
+  Debug("TRYING TO CALL COMPLETE WITH FILL: %d", current_fill);
+  //UW_ASSERT(current_fill>0);
+  if(force_complete || current_fill >= 64) {
+
+    if(current_fill == 0) return;
     if (batchTimerRunning) {
       transport->CancelTimer(batchTimerId);
       batchTimerRunning = false;
@@ -135,6 +140,7 @@ void BasicVerifier::Complete(bool multithread, bool force_complete){
     else{
       //cb(f()); //if one wants to bind always this line suffices
       //if trying to avoid the copying from binding, call with args:
+      Debug("TRYING TO CALL BATCH VERIFICATION WITH FILL: %d", current_fill);
       void* valid = asyncComputeBatchVerification(publicKeys, messages, messageLens, signatures, current_fill);
       manageCallbacks(pendingBatchCallbacks, valid);
     }
@@ -147,14 +153,54 @@ void BasicVerifier::Complete(bool multithread, bool force_complete){
   }
 
   else if (!batchTimerRunning) {
-    batchTimerRunning = true;
-    Debug("Starting batch timer");
-    batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this, multithread]() {
-      Debug("Batch timer expired with %d items, verifying",
-          this->current_fill);
-      this->batchTimerRunning = false;
-      this->Complete(multithread, true);
+    //Complete(multithread, true); //this works
+
+
+    //Sanity Test
+    // auto lambda = [this, multithread](){ this->Complete(multithread, true); };
+    //lambda(); //this works
+    // batchTimerId = transport->TimerMicro(0, lambda); //this does not
+
+    std::function<void*()> f(std::bind(&BasicVerifier::asyncComputeBatchVerification, this, publicKeys, messages, messageLens, signatures, current_fill));
+    std::function<void(void*)> cb(std::bind(&BasicVerifier::manageCallbacks, this, pendingBatchCallbacks, std::placeholders::_1));
+    publicKeys.clear();
+    messages.clear();
+    messageLens.clear();
+    signatures.clear();
+    pendingBatchCallbacks.clear();
+    current_fill = 0;
+    //cb(f()); this works
+    std::function<void()> q(std::bind(cb, f()));
+    //batchTimerId = transport->TimerMicro(0, q);
+
+    batchTimerId = transport->TimerMicro(0, [q](){
+      //cb(f()); //this does not
+      q(); //this works..
     });
+
+    // if(current_fill == 0) {Debug("NO FILL, DONT START TIMER"); return;}
+    // batchTimerRunning = true;
+    // Debug("Starting batch timer");
+    // batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this, multithread]() {
+    //   Debug("Batch timer expired with %d items, verifying",
+    //       this->current_fill);
+    //   this->batchTimerRunning = false;
+    //   this->Complete(multithread, true); //SOMEHOW THIS makes the result go false
+    // });
+
+    // // Debug("TIMEOUT: TRYING TO CALL BATCH VERIFICATION WITH FILL: %d", this->current_fill);
+    // // int* valid = new int[this->current_fill];
+    // // Debug("BatchVerifying %d items", this->current_fill);
+    // // bool all_valid = crypto::BatchVerify(crypto::KeyType::DONNA, publicKeys.data(), messages.data(), messageLens.data(), signatures.data(), current_fill, valid);
+    // // Debug("All valid: %s", all_valid ? "true" : "false");
+    // // this->manageCallbacks(pendingBatchCallbacks, valid);
+    // // publicKeys.clear();
+    // // messages.clear();
+    // // messageLens.clear();
+    // // signatures.clear();
+    // // pendingBatchCallbacks.clear();
+    // // current_fill = 0;
+    // });
   }
 }
 
@@ -163,23 +209,29 @@ void BasicVerifier::Complete(bool multithread, bool force_complete){
 void BasicVerifier::manageCallbacks(std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array){
 
   int* valid = (int*) valid_array;
-  int valid_size = sizeof(valid) / sizeof(valid[0]);
+  // int valid_size = sizeof(valid) / sizeof(valid[0]);
   int cb_size = _pendingBatchCallbacks.size();
-  UW_ASSERT(cb_size == valid_size);
+  // Debug("sizeof(valid): %d, sizeof(valid[0]): %d", sizeof(valid), sizeof(valid[0]));
+  // Debug("cb_size: %d, valid_size: %d", cb_size, valid_size);
+  // UW_ASSERT(cb_size == valid_size);
 
   //currently need to call the callbacks for failure results too. If one keeps a global datastructure instead of
   //a dynamic verificationObj then one would "know" if is deleted already or not.
-  for (int i = 0, size = _pendingBatchCallbacks.size(); i < size; ++i){
-      bool* res = new bool;
+
+  Debug("Call manageCallbacks for %d items", cb_size);
+  for (int i = 0; i < cb_size; ++i){
+
+      //Debug("valid[%d]: %d ", i, valid[i]);
       if(valid[i]){
-        *res = true;
+        bool* res = new bool(true);
         _pendingBatchCallbacks[i]((void*) res);
       }
       else{
-        *res = false;
+        bool* res = new bool(false);
         _pendingBatchCallbacks[i]((void*) res);
       }
   }
+  Debug("manageCallbacks complete");
   delete [] valid;
 //   for( auto it = pendingBatchCallbacks.begin() ; it != myvector.end(); ++it) :
 //     if valid[] : call the callback.

@@ -25,7 +25,7 @@ namespace crypto {
 
   using namespace CryptoPP;
   using namespace std;
-  
+
 enum KeyType { RSA, ECDSA, ED25, SECP, DONNA };
 
 // typedef struct PubKey PubKey;
@@ -50,6 +50,7 @@ struct PrivKey {
     unsigned char* ed25Key;
     unsigned char* secpKey;
     std::pair<ed25519_secret_key*,ed25519_public_key *> donnaKey;
+    //TODO: Could probably refactor the keys to just be unsigned char* instead of unsigned char *[32]
     // ed25519_secret_key* donnaKeyPriv;
     // ed25519_public_key* donnaKeyPub;//ed25519_public_key donnaKeyPub;
   };
