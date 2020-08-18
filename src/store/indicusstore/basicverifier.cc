@@ -3,6 +3,7 @@
 #include "lib/crypto.h"
 //#include "lib/crypto.cc"
 #include "lib/assert.h"
+#include "store/indicusstore/common.h"
 
 namespace indicusstore {
 
@@ -22,6 +23,7 @@ BasicVerifier::~BasicVerifier() {
 
 bool BasicVerifier::Verify(crypto::PubKey *publicKey, const std::string &message,
     const std::string &signature) {
+      Debug("VERIFYING ON THIS cpu: %d",  sched_getcpu());
   return crypto::Verify(publicKey, &message[0], message.length(), &signature[0]);
 }
 
@@ -56,8 +58,34 @@ void* BasicVerifier::asyncComputeBatchVerification(std::vector<crypto::PubKey*> 
     UW_ASSERT(_publicKeys[0]->t == crypto::KeyType::DONNA);
     int* valid = new int[_current_fill];
     Debug("BatchVerifying %d items", _current_fill);
-    bool all_valid = crypto::BatchVerify(crypto::KeyType::DONNA, _publicKeys.data(), _messages.data(), _messageLens.data(), _signatures.data(), _current_fill, valid);
+    // for(int i=0; i<_current_fill; ++i){
+    //   Debug("signature %d: %s ", i, BytesToHex(_signatures[i], 1024).c_str());
+    //   Debug("message %d: %s ", i, BytesToHex(_messages[i], 1024).c_str());
+    //   //Debug("public_key %d: %s ", i, BytesToHex(*_publicKeys[i], 1024).c_str());
+    // }
+    bool all_valid = crypto::BatchVerify(crypto::KeyType::DONNA, _publicKeys.data(), _messages.data(),
+        _messageLens.data(), _signatures.data(), _current_fill, valid);
     Debug("All valid: %s", all_valid ? "true" : "false");
+    return (void*) valid;
+}
+
+void* BasicVerifier::asyncComputeBatchVerificationS(std::vector<crypto::PubKey*> _publicKeys,
+  std::vector<std::string*> _messages, std::vector<size_t> _messageLens,
+  std::vector<std::string*> _signatures, int _current_fill){
+    UW_ASSERT(_current_fill>0);
+    UW_ASSERT(_publicKeys[0]->t == crypto::KeyType::DONNA);
+    int* valid = new int[_current_fill];
+    Debug("BatchVerifying %d items", _current_fill);
+
+    bool all_valid = crypto::BatchVerifyS(crypto::KeyType::DONNA, _publicKeys.data(), _messages.data(),
+        _messageLens.data(), _signatures.data(), _current_fill, valid);
+    Debug("All valid: %s", all_valid ? "true" : "false");
+    for(int i =0; i<_current_fill; ++i){
+      //free((void*)messages[i]);
+      //free((void*)signatures[i]);
+      delete _messages[i];
+      delete _signatures[i];
+    }
     return (void*) valid;
 }
 
@@ -75,15 +103,19 @@ void BasicVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::strin
 
         //TODO: add dispatching
         if(multithread){
-          std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, message, signature));
+          std::string msg(message);
+          std::string sig(signature);
+          std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, msg, sig));
           std::function<void*()> f(std::bind(pointerWrapperC<bool>, func));
           transport->DispatchTP(f, vb);
         }
         else{
-          std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, message, signature));
-          //Verify(publicKey, message, signature)
-          void* res = pointerWrapperC<bool>(func);
-          vb(res);
+          // std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, message, signature));
+          // //Verify(publicKey, message, signature)
+          // void* res = pointerWrapperC<bool>(func);
+          // vb(res);
+          bool res = new bool(Verify(publicKey, message, signature));
+          vb((void*)res);
         }
       }
 
@@ -91,10 +123,24 @@ void BasicVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::strin
       UW_ASSERT(publicKey->t == crypto::KeyType::DONNA);
 
       messagesBatchedInterval++;
+
+      //Use this if using char* vector interface:
+      // char* msg = (char*) malloc(message.length());
+      // memcpy(msg, &message[0], message.length());
+      //
+      // char* sig = (char*) malloc(signature.length());
+      // memcpy(sig, &signature[0], signature.length());
+
+      std::string* msg_copy = new std::string(message);
+      std::string* sig_copy = new std::string(signature);
+
+      messagesS.push_back(msg_copy);
+      signaturesS.push_back(sig_copy);
+
       publicKeys.push_back(publicKey);
-      messages.push_back(&message[0]);
+      //messages.push_back(msg);
       messageLens.push_back(message.length());
-      signatures.push_back(&signature[0]);
+      //signatures.push_back(sig);
       pendingBatchCallbacks.push_back(vb);
       current_fill++;
 
@@ -124,7 +170,7 @@ void BasicVerifier::Complete(bool multithread, bool force_complete){
 
   Debug("TRYING TO CALL COMPLETE WITH FILL: %d", current_fill);
   //UW_ASSERT(current_fill>0);
-  if(force_complete || current_fill >= 64) {
+  if(force_complete || batch_size >= 1) {
 
     if(current_fill == 0) return;
     if (batchTimerRunning) {
@@ -133,7 +179,24 @@ void BasicVerifier::Complete(bool multithread, bool force_complete){
     }
 
     if(multithread){
-      std::function<void*()> f(std::bind(&BasicVerifier::asyncComputeBatchVerification, this, publicKeys, messages, messageLens, signatures, current_fill));
+      // std::function<void*()> f(std::bind(&BasicVerifier::asyncComputeBatchVerification, this, publicKeys,
+      //   messages, messageLens, signatures, current_fill));
+
+      //TODO: FIX Problem: currently copying the pointers, and not the contents.
+      //copy all data.
+      // std::vector<crypto::PubKey*> publicKeys;
+      // std::vector<const char*> messages;
+      // std::vector<size_t> messageLens;
+      // std::vector<const char*> signatures;
+      // std::vector<verifyCallback> pendingBatchCallbacks;
+      //
+      // std::vector<std::string*> signaturesS;
+      // std::vector<std::string*> messagesS;
+
+      Debug("DISPATCHING BATCH VERIFICATION WITH FILL: %d", current_fill);
+      //clearing the data needs to be done in the functions then.
+      std::function<void*()> f(std::bind(&BasicVerifier::asyncComputeBatchVerificationS, this, publicKeys,
+          messagesS, messageLens, signaturesS, current_fill));
       std::function<void(void*)> cb(std::bind(&BasicVerifier::manageCallbacks, this, pendingBatchCallbacks, std::placeholders::_1));
       transport->DispatchTP(f, cb);
     }
@@ -141,52 +204,43 @@ void BasicVerifier::Complete(bool multithread, bool force_complete){
       //cb(f()); //if one wants to bind always this line suffices
       //if trying to avoid the copying from binding, call with args:
       Debug("TRYING TO CALL BATCH VERIFICATION WITH FILL: %d", current_fill);
-      void* valid = asyncComputeBatchVerification(publicKeys, messages, messageLens, signatures, current_fill);
+      //void* valid = asyncComputeBatchVerification(publicKeys, messages, messageLens, signatures, current_fill);
+      void* valid = asyncComputeBatchVerificationS(publicKeys, messagesS, messageLens, signaturesS, current_fill);
       manageCallbacks(pendingBatchCallbacks, valid);
     }
     publicKeys.clear();
-    messages.clear();
+    // for(int i =0; i<current_fill; ++i){
+    //   //free((void*)messages[i]);
+    //   //free((void*)signatures[i]);
+    //   delete messagesS[i];
+    //   delete signaturesS[i];
+    // }
+    messagesS.clear();
+    signaturesS.clear();
+
+    //messages.clear();
     messageLens.clear();
-    signatures.clear();
+    //signatures.clear();
     pendingBatchCallbacks.clear();
     current_fill = 0;
   }
 
   else if (!batchTimerRunning) {
     //Complete(multithread, true); //this works
-
-
     //Sanity Test
-    // auto lambda = [this, multithread](){ this->Complete(multithread, true); };
-    //lambda(); //this works
-    // batchTimerId = transport->TimerMicro(0, lambda); //this does not
+     // auto lambda = [this, multithread](){this->batchTimerRunning = false; this->Complete(multithread, true); };
+     // //lambda(); //this works
+     //  batchTimerId = transport->TimerMicro(0, lambda); //this does not
 
-    std::function<void*()> f(std::bind(&BasicVerifier::asyncComputeBatchVerification, this, publicKeys, messages, messageLens, signatures, current_fill));
-    std::function<void(void*)> cb(std::bind(&BasicVerifier::manageCallbacks, this, pendingBatchCallbacks, std::placeholders::_1));
-    publicKeys.clear();
-    messages.clear();
-    messageLens.clear();
-    signatures.clear();
-    pendingBatchCallbacks.clear();
-    current_fill = 0;
-    //cb(f()); this works
-    std::function<void()> q(std::bind(cb, f()));
-    //batchTimerId = transport->TimerMicro(0, q);
-
-    batchTimerId = transport->TimerMicro(0, [q](){
-      //cb(f()); //this does not
-      q(); //this works..
+    if(current_fill == 0) {Debug("NO FILL, DONT START TIMER"); return;}
+    batchTimerRunning = true;
+    Debug("Starting batch timer");
+    batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this, multithread]() {
+      Debug("Batch timer expired with %d items, verifying",
+          this->current_fill);
+      this->batchTimerRunning = false;
+      this->Complete(multithread, true); //SOMEHOW THIS makes the result go false
     });
-
-    // if(current_fill == 0) {Debug("NO FILL, DONT START TIMER"); return;}
-    // batchTimerRunning = true;
-    // Debug("Starting batch timer");
-    // batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this, multithread]() {
-    //   Debug("Batch timer expired with %d items, verifying",
-    //       this->current_fill);
-    //   this->batchTimerRunning = false;
-    //   this->Complete(multithread, true); //SOMEHOW THIS makes the result go false
-    // });
 
     // // Debug("TIMEOUT: TRYING TO CALL BATCH VERIFICATION WITH FILL: %d", this->current_fill);
     // // int* valid = new int[this->current_fill];
@@ -210,7 +264,7 @@ void BasicVerifier::manageCallbacks(std::vector<verifyCallback> _pendingBatchCal
 
   int* valid = (int*) valid_array;
   // int valid_size = sizeof(valid) / sizeof(valid[0]);
-  int cb_size = _pendingBatchCallbacks.size();
+  //int cb_size = _pendingBatchCallbacks.size();
   // Debug("sizeof(valid): %d, sizeof(valid[0]): %d", sizeof(valid), sizeof(valid[0]));
   // Debug("cb_size: %d, valid_size: %d", cb_size, valid_size);
   // UW_ASSERT(cb_size == valid_size);
@@ -218,8 +272,8 @@ void BasicVerifier::manageCallbacks(std::vector<verifyCallback> _pendingBatchCal
   //currently need to call the callbacks for failure results too. If one keeps a global datastructure instead of
   //a dynamic verificationObj then one would "know" if is deleted already or not.
 
-  Debug("Call manageCallbacks for %d items", cb_size);
-  for (int i = 0; i < cb_size; ++i){
+  Debug("Call manageCallbacks for %d items", _pendingBatchCallbacks.size());
+  for (int i = 0; i < _pendingBatchCallbacks.size(); ++i){
 
       //Debug("valid[%d]: %d ", i, valid[i]);
       if(valid[i]){

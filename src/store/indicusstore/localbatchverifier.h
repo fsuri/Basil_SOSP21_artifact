@@ -51,25 +51,33 @@ class LocalBatchVerifier : public Verifier {
 
   //add vectors for Batching
   static const int max_fill = 64;
-  int current_fill;
+  int current_fill = 0;
   std::vector<crypto::PubKey*> publicKeys;
   std::vector<const char*> messages;
   std::vector<size_t> messageLens;
   std::vector<const char*> signatures;
 
+  std::vector<std::string*> signaturesS;
+  std::vector<std::string*> messagesS;
+
   std::vector<verifyCallback> pendingBatchCallbacks;
 
   void asyncBatchVerifyCallback(crypto::PubKey *publicKey, std::string *hashStr,
-    std::string *rootSig, verifyCallback vb, bool multithread, bool autocomplete, const std::string *msg_copy,
-    const std::string *sig_copy,  void* validate);
+    std::string *rootSig, verifyCallback vb, bool multithread, bool autocomplete, void* validate);
 
   void* asyncComputeBatchVerification(std::vector<crypto::PubKey*> _publicKeys,
     std::vector<const char*> _messages, std::vector<size_t> _messageLens, std::vector<const char*> _signatures,
     int _current_fill);
 
+  void* asyncComputeBatchVerificationS(std::vector<crypto::PubKey*> _publicKeys,
+      std::vector<std::string*> _messagesS, std::vector<size_t> _messageLens,
+      std::vector<std::string*> _signaturesS, int _current_fill);
 
 
   void manageCallbacks(std::vector<const char*> _messages, std::vector<const char*> _signatures,
+       std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array);
+
+  void manageCallbacksS(std::vector<std::string*> _messages, std::vector<std::string*> _signatures,
        std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array);
 
   void AdjustBatchSize();

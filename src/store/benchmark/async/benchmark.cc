@@ -192,7 +192,7 @@ DEFINE_bool(indicus_hash_digest, false, "use hash function compute transaction"
     " digest (for Indicus)");
 DEFINE_bool(indicus_verify_deps, true, "check signatures of transaction"
     " depdendencies (for Indicus)");
-DEFINE_uint64(indicus_sig_batch, 1, "signature batch size"
+DEFINE_uint64(indicus_sig_batch, 2, "signature batch size"
     " sig batch size (for Indicus)");
 DEFINE_uint64(indicus_merkle_branch_factor, 2, "branch factor of merkle tree"
     " of batch (for Indicus)");

@@ -41,7 +41,7 @@ class BasicVerifier : public Verifier {
 private:
   Transport* transport;
   static const int max_fill = 64; //max batch size.
-  int current_fill;  // Call Batch Verify with this, current index;
+  int current_fill = 0;  // Call Batch Verify with this, current index;
 
 
   bool batchTimerRunning;
@@ -55,7 +55,10 @@ private:
   std::vector<size_t> messageLens;
   std::vector<const char*> signatures;
   std::vector<verifyCallback> pendingBatchCallbacks;
-  
+
+  std::vector<std::string*> signaturesS;
+  std::vector<std::string*> messagesS;
+
 
 
 
@@ -63,7 +66,9 @@ private:
     std::vector<const char*> _messages, std::vector<size_t> _messageLens, std::vector<const char*> _signatures,
     int _current_fill);
 
-
+    void* asyncComputeBatchVerificationS(std::vector<crypto::PubKey*> _publicKeys,
+      std::vector<std::string*> _messages, std::vector<size_t> _messageLens,
+      std::vector<std::string*> _signatures, int _current_fill);
 
   void manageCallbacks(std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array);
 

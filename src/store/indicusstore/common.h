@@ -37,7 +37,7 @@ struct asyncVerification{
 
   std::map<uint64_t, uint32_t> groupCounts;
   int groupTotals;
-  int groupsVerified;
+  int groupsVerified = 0;
 
   proto::CommitDecision decision;
   //proto::Transaction *txn;

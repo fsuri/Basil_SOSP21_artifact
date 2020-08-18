@@ -219,9 +219,12 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
   delete (bool*) result;
 
   Debug("asyncValidateP1RepliesCallback with result: %s", verification_result ? "true" : "false");
+  Debug("running on cpu %d",  sched_getcpu());
   //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
   //technically dont need a mutex if this callback only runs on main thread?
 
+  Debug("Obj QuorumSize: %d", verifyObj->quorumSize);
+  Debug("Obj groupTotals: %d", verifyObj->groupTotals);
   //Need to delete only after "last count" has finished.
   verifyObj->deletable--;
   //altneratively: keep shared datastructure (set) for verifyObject: If not in structure anymore = deleted. (remove terminate bool)
@@ -248,6 +251,8 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
       return;
   }
 
+  Debug("Obj GroupsVerified: %d", verifyObj->groupsVerified);
+
   if (verifyObj->decision == proto::COMMIT) {
     if(!(verifyObj->groupsVerified == verifyObj->groupTotals)){
           Debug("Phase1Replies for involved_group %d not complete.", (int)groupId);
@@ -258,6 +263,7 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
   bool* ret = new bool;
   *ret = true;
   verifyObj->terminate = true;
+  Debug("Calling HandlePhase2CB");
   verifyObj->mainThreadCallback((void*) ret);
   if(verifyObj->deletable == 0) delete verifyObj;
   return;
@@ -305,7 +311,7 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
       if (!IsReplicaInGroup(sig.process_id(), sigs.first, config)) {
         Debug("Signature for group %lu from replica %lu who is not in group.", sigs.first, sig.process_id());
         {
-        std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+        //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
         verifyObj->terminate = true;
         }
         return;
@@ -315,13 +321,13 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
         Debug("Already verified sig from replica %lu in group %lu.",
             sig.process_id(), sigs.first);
         {
-        std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+        //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
         verifyObj->terminate = true;
         }
         return;
       }
       {
-      std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+      //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
       if(verifyObj->terminate == true) return; //return preemtively if concurrent thread has already called back?
       }
       Debug("Verifying %lu byte signature from replica %lu in group %lu.",
@@ -336,10 +342,14 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
       }
     }
 
+
   verifyObj->deletable = asyncBatchingVerificationJobs.size();
+
   for (auto &asyncBatchVerify : asyncBatchingVerificationJobs){
     asyncBatchVerify();
+    Debug("called +1 times");
   }
+  Debug("Calling complete");
   verifier->Complete(multithread, false); //force set to false by default.
 }
 
@@ -392,7 +402,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
         Debug("Signature for group %lu from replica %lu who is not in group.", sigs.first, sig.process_id());
 
         {
-        std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+        //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
         verifyObj->terminate = true;
         }
         return;
@@ -404,7 +414,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
         Debug("Already verified sig from replica %lu in group %lu.",
             sig.process_id(), sigs.first);
         {
-        std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+        //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
         verifyObj->terminate = true;
         }
         return;
@@ -413,7 +423,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
 
 
       {
-      std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+      //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
       if(verifyObj->terminate == true) return; //return preemtively if concurrent thread has already called back?
       }
 

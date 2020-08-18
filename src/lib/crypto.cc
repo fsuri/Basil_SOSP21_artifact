@@ -260,6 +260,30 @@ bool BatchVerify(KeyType t, PubKey* publicKeys[], const char *messages[], size_t
   }
 }
 
+bool BatchVerifyS(KeyType t, PubKey* publicKeys[], string* messages[], size_t messageLens[], string* signatures[], int num, int *valid){
+  switch(t){
+    case DONNA: {
+      const unsigned char *pkp[num]; // = {pk, pk, pk, pk, pk, pk};
+      const unsigned char *mkp[num];
+      const unsigned char *skp[num];
+      //int valid[num];
+    
+      for(int i=0; i<num; i++){
+          pkp[i] = (const unsigned char*) publicKeys[i]->donnaKey;
+          mkp[i] = (const unsigned char*) messages[i]->data(); //&(*messages[i])[0]; // .c_str();
+          skp[i] = (const unsigned char*) signatures[i]->data(); //&(*signatures[i])[0];   //.c_str();
+      }
+
+
+     bool all_valid = ed25519_sign_open_batch(mkp, messageLens, pkp, skp, num, valid) == 0;
+     return all_valid;
+    }
+   default: {
+     Panic("Batch Verification only available for ed25519_DONNA based cryptography");
+   }
+  }
+}
+
 //need detailed info if to be used for n
 
 void Save(const std::string &filename, const BufferedTransformation &bt) {

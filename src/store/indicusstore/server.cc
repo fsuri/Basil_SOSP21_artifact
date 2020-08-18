@@ -68,7 +68,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
 
   if (params.signatureBatchSize == 1) {
     //verifier = new BasicVerifier(transport);
-    verifier = new BasicVerifier(transport, 0, params.validateProofs && params.signedMessages &&
+    verifier = new BasicVerifier(transport, batchTimeoutMicro, params.validateProofs && params.signedMessages &&
     params.signatureBatchSize > 1 && params.adjustBatchSize, 64UL);
     batchSigner = nullptr;
   } else {
@@ -294,6 +294,8 @@ void Server::HandleRead(const TransportAddress &remote,
 
   if (params.validateProofs && params.signedMessages &&
       (readReply->write().has_committed_value() || (params.verifyDeps && readReply->write().has_prepared_value()))) {
+
+//If readReplyBatch is false then respond immediately, otherwise respect batching policy
     if (params.readReplyBatch) {
       proto::Write* write = new proto::Write(readReply->write());
       MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
@@ -380,6 +382,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 
 void Server::HandlePhase2CB(const proto::Phase2 &msg, const std::string* txnDigest, signedCallback sendCB, proto::Phase2Reply* phase2Reply, void* valid){
+
+  Debug("HandlePhase2CB invoked");
 
   if(!(*(bool*) valid) ) {
     Debug("VALIDATE P1Replies for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
@@ -486,15 +490,15 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
 
     if (params.validateProofs && params.signedMessages) {
-        if(params.multiThreading){  //last parameter in Params in server.cc
-          //Dispatch, split function below.
+        if(params.multiThreading){
 
           //Alternatively: parse into a new Phase2 directly in the ReceiveMessage function
-          proto::Phase2 * msg_copy = msg.New();
-          msg_copy->CopyFrom(msg);
-          //copy shouldnt be needed due to bind? or is it because msg is passed as reference?
+          //proto::Phase2 * msg_copy = msg.New();
+          //msg_copy->CopyFrom(msg);
+          //copy shouldnt be needed due to bind
 
-          std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this, *msg_copy, txnDigest, sendCB, phase2Reply, std::placeholders::_1));
+          std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this,
+             msg, txnDigest, sendCB, phase2Reply, std::placeholders::_1));
 
           //OPTION 1: Validation itself is synchronous    TODO: Needs to be extended with thread safety.
               //std::function<void*()> f (std::bind(&ValidateP1RepliesWrapper, msg_copy.decision(), false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId, myResult, verifier));
@@ -516,14 +520,16 @@ void Server::HandlePhase2(const TransportAddress &remote,
         }
         else{
           if(params.batchVerification){
-            proto::Phase2 * msg_copy = msg.New();
-            msg_copy->CopyFrom(msg);
+            //proto::Phase2 * msg_copy = msg.New();
+            //msg_copy->CopyFrom(msg);
+
             //copy shouldnt be needed due to bind? or is it because msg is passed as reference?
-            std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this, *msg_copy, txnDigest, sendCB, phase2Reply, std::placeholders::_1));
+            std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this, msg, txnDigest, sendCB, phase2Reply, std::placeholders::_1));
 
             asyncBatchValidateP1Replies(msg.decision(),
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier, mcb, transport, false);
+            return;
           }
           else{
             if(!ValidateP1Replies(msg.decision(),
@@ -1573,8 +1579,14 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
   }
   else{
     if (params.signatureBatchSize == 1) {
+
+      // std::string str;
+      // msg->SerializeToString(&str);
+      // Debug("message: %s", BytesToHex(str, 128).c_str());
       SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMessage);
+
       cb();
+
       //if multithread: Dispatch f: SignMessage and cb.
     } else {
       batchSigner->MessageToSign(msg, signedMessage, cb);

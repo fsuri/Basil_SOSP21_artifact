@@ -95,7 +95,7 @@ void generateBatchedSignatures(const std::vector<const std::string*> &messages, 
   for (unsigned int i = 0; i < n; i++) {
     //std::cerr << "placing msg " << i << " at idx "
               //<< ((n - 1 + (m - 2)) / (m - 1) + i) << std::endl;
-    
+
 
     bhash((unsigned char*) &messages[i]->at(0), messages[i]->length(),
         &tree[((n - 1 + (m - 2)) / (m - 1) + i) * hash_size]);
@@ -161,5 +161,6 @@ void generateBatchedSignatures(const std::vector<const std::string*> &messages, 
     assert(sigs[i].size() == starting_pos + h*hash_size);
   }
 }
+
 
 }
