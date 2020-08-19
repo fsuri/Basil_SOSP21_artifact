@@ -225,7 +225,7 @@ void LocalBatchVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::
     Debug("rootSig pointer: %p", rootSig);
 
 //TODO:: Make semantics Multithread compatible... Current problem: main calls Complete but result might not yet be back
-    if(multithread){
+    if(multithread && false){
       std::function<bool()> func(std::bind(BatchedSigs::computeBatchedSignatureHash2<std::string>, signature, message, publicKey,
                 hashStr, rootSig, merkleBranchFactor));
       std::function<void*()> f(std::bind(pointerWrapperC<bool>, func));
