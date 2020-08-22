@@ -10,7 +10,7 @@
 
 DEFINE_uint64(size, 1000, "size of data to verify.");
 DEFINE_uint64(iterations, 100, "number of iterations to measure.");
-DEFINE_string(signature_alg, "ecdsa", "algorithm to benchmark (options: ecdsa, ed25519, rsa, secp256k1)");
+DEFINE_string(signature_alg, "ecdsa", "algorithm to benchmark (options: ecdsa, ed25519, rsa, secp256k1, donna)");
 
 void GenerateRandomString(uint64_t size, std::random_device &rd, std::string &s) {
   s.clear();

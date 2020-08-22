@@ -636,6 +636,7 @@ int main(int argc, char **argv) {
     iss >> replica;
   }
 
+
   // parse retwis settings
   std::vector<std::string> keys;
   if (benchMode == BENCH_RETWIS || benchMode == BENCH_RW) {

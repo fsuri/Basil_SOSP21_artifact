@@ -261,6 +261,7 @@ DEFINE_uint64(indicus_use_coordinator, false, "use coordinator"
 DEFINE_uint64(indicus_request_tx, false, "request tx"
     " request tx (for Indicus)");
 		//
+//DEFINE_bool(indicus_clientAuthenticated, false, "Client messages signed");
 DEFINE_bool(indicus_multiThreading, true, "dispatch crypto to parallel threads");
 DEFINE_bool(indicus_batchVerification, true, "using ed25519 donna batch verification");
 //DEFINE_uint64(indicus_verify_batch_timeout, 5, "verification batch timeout ms");

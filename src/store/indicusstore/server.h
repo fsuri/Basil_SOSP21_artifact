@@ -94,7 +94,9 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
       proto::Phase1 &msg);
-  void HandlePhase2CB(const proto::Phase2 &msg, const std::string* txnDigest, signedCallback sendCB, proto::Phase2Reply* phase2Reply, void* valid);
+  void HandlePhase2CB(const proto::CommitDecision decision, const std::string* txnDigest,
+     signedCallback sendCB, proto::Phase2Reply* phase2Reply, void* valid);
+
   void HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg);
 

@@ -381,7 +381,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 }
 
 
-void Server::HandlePhase2CB(const proto::Phase2 &msg, const std::string* txnDigest, signedCallback sendCB, proto::Phase2Reply* phase2Reply, void* valid){
+void Server::HandlePhase2CB(const proto::CommitDecision decision, const std::string* txnDigest, signedCallback sendCB, proto::Phase2Reply* phase2Reply, void* valid){
 
   Debug("HandlePhase2CB invoked");
 
@@ -393,7 +393,7 @@ void Server::HandlePhase2CB(const proto::Phase2 &msg, const std::string* txnDige
 
   delete (bool*) valid;
 
-  p2Decisions[*txnDigest] = msg.decision();   //is this correct
+  p2Decisions[*txnDigest] = decision;   //is this correct
   current_views[*txnDigest] = 0;
   decision_views[*txnDigest] = 0;
 
@@ -404,7 +404,7 @@ void Server::HandlePhase2CB(const proto::Phase2 &msg, const std::string* txnDige
   //   client_starttime[*txnDigest] = start_time;
   // }
 
-  phase2Reply->mutable_p2_decision()->set_decision(msg.decision());
+  phase2Reply->mutable_p2_decision()->set_decision(decision);
   if (params.validateProofs) {
     // TODO: uncomment. need a way for a process to know the decision view
     //   when verifying the signed p2_decision
@@ -428,6 +428,33 @@ sendCB();
 
 
 //TODO: ADD AUTHENTICATION IN ORDER TO ENFORCE TIMEOUTS. ANYBODY THAT IS NOT THE ORIGINAL CLIENT SHOULD ONLY BE ABLE TO SEND P2FB messages and NOT normal P2!!!!!!
+// //TODO: client signatures need to be implemented. keymanager would need to associate with client ids.
+// Perhaps client ids can just start after all replica ids, then one can use the keys.
+//     if(params.clientAuthenticated){ //TODO: this branch needs to go around the validate Proofs.
+//       if(!msg.has_auth_p2dec()){
+//         Debug("PHASE2 message not authenticated");
+//         return;
+//       }
+//       proto::Phase2ClientDecision p2cd;
+//       p2cd.ParseFromString(msg.auth_p2dec().data());
+//       //TODO: the parsing of txn and txn_digest
+//
+//       if(msg.auth_p2dec().process_id() != txn.client_id()){
+//         Debug("PHASE2 message from unauthenticated client");
+//         return;
+//       }
+//       //Todo: Get client key... Currently unimplemented. Clients not authenticated.
+//       crypto::Verify(clientPublicKey, &msg.auth_p2dec().data()[0], msg.auth_p2dec().data().length(), &msg.auth_p2dec().signature()[0]);
+//
+//
+//       //TODO: 1) check that message is signed
+//       //TODO: 2) check if id matches txn id. Access
+//       //TODO: 3) check whether signature validates.
+//     }
+//     else{
+//
+//     }
+
 void Server::HandlePhase2(const TransportAddress &remote,
       const proto::Phase2 &msg) {
 
@@ -498,7 +525,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
           //copy shouldnt be needed due to bind
 
           std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this,
-             msg, txnDigest, sendCB, phase2Reply, std::placeholders::_1));
+             msg.decision(), txnDigest, sendCB, phase2Reply, std::placeholders::_1));
 
           //OPTION 1: Validation itself is synchronous    TODO: Needs to be extended with thread safety.
               //std::function<void*()> f (std::bind(&ValidateP1RepliesWrapper, msg_copy.decision(), false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId, myResult, verifier));
@@ -510,6 +537,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
             asyncBatchValidateP1Replies(msg.decision(),
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier, mcb, transport, true);
+
           }
           else{
             asyncValidateP1Replies(msg.decision(),
@@ -524,7 +552,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
             //msg_copy->CopyFrom(msg);
 
             //copy shouldnt be needed due to bind? or is it because msg is passed as reference?
-            std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this, msg, txnDigest, sendCB, phase2Reply, std::placeholders::_1));
+            std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this, msg.decision(), txnDigest, sendCB, phase2Reply, std::placeholders::_1));
 
             asyncBatchValidateP1Replies(msg.decision(),
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
@@ -544,12 +572,14 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   bool* valid = new bool;
  *valid = true;
-  HandlePhase2CB(msg, txnDigest, sendCB, phase2Reply, (void*) valid);
+  HandlePhase2CB(msg.decision(), txnDigest, sendCB, phase2Reply, (void*) valid);
   }
 }
 
-void Server::WritebackCallback(proto::Writeback &msg, const std::string* txnDigest, proto::Transaction* txn, void* valid){
+void Server::WritebackCallback(proto::Writeback &msg, const std::string* txnDigest,
+  proto::Transaction* txn, void* valid){
 
+  Debug("WRITEBACK Callback[%s] being called", BytesToHex(*txnDigest, 16).c_str());
   if(!(*(bool*) valid)){
     Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
     delete (bool*) valid;
@@ -606,10 +636,13 @@ void Server::HandleWriteback(const TransportAddress &remote,
   if (params.validateProofs ) {
       if(params.multiThreading){
           //Alternatively: parse into a new Phase2 directly in the ReceiveMessage function
-          proto::Writeback * msg_copy = msg.New();
-          msg_copy->CopyFrom(msg);
+          //proto::Writeback * msg_copy = msg.New();
+          //msg_copy->CopyFrom(msg);
           //copy shouldnt be needed due to bind?
-          std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, *msg_copy, txnDigest, txn, std::placeholders::_1));
+
+          Debug("TAKING THIS BRANCH, generating MCB");
+          std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, msg,
+            txnDigest, txn, std::placeholders::_1));
 
           if(params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()){
             int64_t myProcessId;
@@ -617,6 +650,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
             LookupP1Decision(*txnDigest, myProcessId, myResult);
 
             if(params.batchVerification){
+              Debug("CALLING asyncBatchValidateP1Replies");
               asyncBatchValidateP1Replies(msg.decision(),
                     true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
                     myResult, verifier, mcb, transport, true);
@@ -697,10 +731,10 @@ void Server::HandleWriteback(const TransportAddress &remote,
             LookupP1Decision(*txnDigest, myProcessId, myResult);
 
             if(params.batchVerification){
-              proto::Writeback * msg_copy = msg.New();
-              msg_copy->CopyFrom(msg);
+              //proto::Writeback * msg_copy = msg.New();
+              //msg_copy->CopyFrom(msg);
               //copy shouldnt be needed due to bind?
-              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, *msg_copy, txnDigest, txn, std::placeholders::_1));
+              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP1Replies(proto::COMMIT,
                     true, txn, txnDigest,msg.p1_sigs(), keyManager, &config, myProcessId,
                     myResult, verifier, mcb, transport, false);
@@ -723,10 +757,10 @@ void Server::HandleWriteback(const TransportAddress &remote,
             LookupP1Decision(*txnDigest, myProcessId, myResult);
 
             if(params.batchVerification){
-              proto::Writeback * msg_copy = msg.New();
-              msg_copy->CopyFrom(msg);
+              //proto::Writeback * msg_copy = msg.New();
+              //msg_copy->CopyFrom(msg);
               //copy shouldnt be needed due to bind?
-              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, *msg_copy, txnDigest, txn, std::placeholders::_1));
+              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP1Replies(proto::ABORT,
                     true, txn, txnDigest,msg.p1_sigs(), keyManager, &config, myProcessId,
                     myResult, verifier, mcb, transport, false);
@@ -750,10 +784,10 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
 
             if(params.batchVerification){
-              proto::Writeback * msg_copy = msg.New();
-              msg_copy->CopyFrom(msg);
+              //proto::Writeback * msg_copy = msg.New();
+              //msg_copy->CopyFrom(msg);
               //copy shouldnt be needed due to bind?
-              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, *msg_copy, txnDigest, txn, std::placeholders::_1));
+              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP2Replies(msg.decision(),
                     txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
                     myDecision, verifier, mcb, transport, false);
@@ -773,10 +807,10 @@ void Server::HandleWriteback(const TransportAddress &remote,
                 params.hashDigest);
 
                 if(params.batchVerification){
-                  proto::Writeback * msg_copy = msg.New();
-                  msg_copy->CopyFrom(msg);
+                  //proto::Writeback * msg_copy = msg.New();
+                  //msg_copy->CopyFrom(msg);
                   //copy shouldnt be needed due to bind?
-                  std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, *msg_copy, txnDigest, txn, std::placeholders::_1));
+                  std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, msg, txnDigest, txn, std::placeholders::_1));
                   asyncValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
                         txnDigest, params.signedMessages, keyManager, &config, verifier,
                         mcb, transport, false, params.batchVerification);
@@ -1205,8 +1239,10 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
           txn.client_id(), txn.client_seq_num(),
           BytesToHex(txnDigest, 16).c_str(),
           BytesToHex(dep.write().prepared_txn_digest(), 16).c_str());
-      if (ongoing.find(dep.write().prepared_txn_digest()) != ongoing.end()) {
 
+      //start RelayP1 to initiate Fallback handling
+      //TODO: Currently disabled.
+      if (false && ongoing.find(dep.write().prepared_txn_digest()) != ongoing.end()) {
         std::string txnDig = dep.write().prepared_txn_digest();
         //schedule Relay for client timeout only..
         //proto::Transaction *tx = ongoing[txnDig];
@@ -2518,7 +2554,7 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
 //RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
 void Server::RelayP1(const TransportAddress &remote, std::string txnDigest, uint64_t conflict_id){
 
-  Debug("RelayP1[%s] timed out.", BytesToHex(txnDigest, 16).c_str());
+  Debug("RelayP1[%s] timed out.", BytesToHex(txnDigest, 256).c_str());
   proto::Transaction *tx;
   if (ongoing.find(txnDigest) == ongoing.end()) return;
 
@@ -2530,7 +2566,7 @@ void Server::RelayP1(const TransportAddress &remote, std::string txnDigest, uint
   relayP1.set_conflict_id(conflict_id);
   *relayP1.mutable_p1() = p1;
 
-  Debug("Sending RelayP1[%s].", BytesToHex(txnDigest, 16).c_str());
+  Debug("Sending RelayP1[%s].", BytesToHex(txnDigest, 256).c_str());
 
   transport->SendMessage(this, remote, relayP1);
 }

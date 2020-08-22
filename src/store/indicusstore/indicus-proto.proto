@@ -92,6 +92,104 @@ message Phase1 {
   required Transaction txn = 2;
 }
 
+
+
+message ConcurrencyControl {
+  enum Result {
+    COMMIT = 0;
+    ABORT = 1;
+    ABSTAIN = 2;
+    WAIT = 3;
+    RETRY = 4;
+  }
+  required Result ccr = 2;
+  optional CommittedProof committed_conflict = 3;
+  optional bytes txn_digest = 4;
+  optional uint64 involved_group = 5;
+}
+
+message Phase1Reply {
+  required uint64 req_id = 1;
+  oneof concurrency_oneof {
+    ConcurrencyControl cc = 2;
+    SignedMessage signed_cc = 3;
+  }
+}
+
+message Phase1Replies {
+  repeated Phase1Reply replies = 1;
+}
+
+//message Phase2ClientDecision {
+//  required CommitDecision decision = 1;
+//  optional bytes txn_digest = 2;
+//}
+
+
+//before verifying sig, check that id in SignedMessage (auth_p2dec.process_id) matches txn.client_id
+//TODO: refactor code to use this Phase2 version.
+//message authenticatedPhase2 {
+//  required uint64 req_id = 1;
+//  oneof p2dec_oneof {
+//    Phase2ClientDecision p2dec = 2;
+//    SignedMessage auth_p2dec = 3;
+//  }
+//  optional Transaction txn = 4;
+//  optional GroupedSignatures grouped_sigs = 5;
+//}
+
+//TODO:: Could change so p1 version just does normal Phase2 (therefore can use same callbacks), but server checks if ID != ORIGINAL
+//TODO: Make P2FB only for p2 proofs, those do not need to be delayed anyways because they are already based on decisions from originial!!
+message Phase2 {
+  required uint64 req_id = 1;
+  required CommitDecision decision = 2;
+  optional Transaction txn = 3;
+  optional bytes txn_digest = 4;
+  optional GroupedSignatures grouped_sigs = 5;
+}
+
+//ADD MATCHING VIEW, make it required?
+message Phase2Decision {
+  required CommitDecision decision = 1;
+  optional bytes txn_digest = 2;
+  optional uint64 involved_group = 3;
+  optional uint64 view = 4;
+}
+
+message Phase2Reply {
+  required uint64 req_id = 1;
+  oneof p2_decision_oneof {
+    Phase2Decision p2_decision = 2;
+    SignedMessage signed_p2_decision = 3;
+  }
+}
+
+
+message Writeback {
+  required CommitDecision decision = 1;
+  optional bytes txn_digest = 2;
+  optional Transaction txn = 3;
+  oneof reply_oneof {
+    GroupedSignatures p1_sigs = 4; // fast path commit
+    GroupedSignatures p2_sigs = 5; // slow path commit or abort
+    CommittedProof conflict = 6;   // fast path abort
+  }
+}
+
+message AbortInternal {
+  required TimestampMessage ts = 1;
+  repeated bytes read_set = 2;
+}
+
+message Abort {
+  oneof internal_oneof {
+    AbortInternal internal = 1;
+    SignedMessage signed_internal = 2;
+  }
+}
+
+/////////////////////////////////////////////////////// FB:
+
 message RelayP1 {  //datatype that replicas send clients to inform them that they can start a FB etc.
   required uint64 conflict_id = 1; //this is the ID of the txn that has the p1 as a dependency
   required Phase1 p1 = 2;  //this is the dependency.
@@ -160,6 +258,17 @@ message Phase2FB {
 }
 //fallback phase2R: Can be the same Phase2R as normal.
 
+message Phase2FBReply {
+  required bytes txn_digest = 1;
+  required Phase2Reply p2r = 2;
+  optional AttachedView attached_view = 3;
+//  oneof current_view_oneof {
+//    CurrentView current_view = 3;
+//   SignedMessage signed_current_view = 4;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
+//  }
+
+}
+
 //TODO: Dont include the Phase2FB component if that replica has already received it and answered with it.
 //change this to include the signed views for a txn digest.
 //fallback Invoke; info from p2fb is sort of redundant
@@ -211,90 +320,4 @@ message DecisionFB {
   required CommitDecision dec = 3;
   required uint64 view = 4;
   repeated SignedMessage elect_sigs =5; // want to send the Quorum of ElectFB messages. not sure if this is the correct way
-}
-
-message ConcurrencyControl {
-  enum Result {
-    COMMIT = 0;
-    ABORT = 1;
-    ABSTAIN = 2;
-    WAIT = 3;
-    RETRY = 4;
-  }
-  required Result ccr = 2;
-  optional CommittedProof committed_conflict = 3;
-  optional bytes txn_digest = 4;
-  optional uint64 involved_group = 5;
-}
-
-message Phase1Reply {
-  required uint64 req_id = 1;
-  oneof concurrency_oneof {
-    ConcurrencyControl cc = 2;
-    SignedMessage signed_cc = 3;
-  }
-}
-
-message Phase1Replies {
-  repeated Phase1Reply replies = 1;
-}
-
-//TODO:: Could change so p1 version just does normal Phase2 (therefore can use same callbacks), but server checks if ID != ORIGINAL
-//TODO: Make P2FB only for p2 proofs, those do not need to be delayed anyways because they are already based on decisions from originial!!
-message Phase2 {
-  required uint64 req_id = 1;
-  required CommitDecision decision = 2;
-  optional Transaction txn = 3;
-  optional bytes txn_digest = 4;
-  optional GroupedSignatures grouped_sigs = 5;
-}
-
-//ADD MATCHING VIEW, make it required?
-message Phase2Decision {
-  required CommitDecision decision = 1;
-  optional bytes txn_digest = 2;
-  optional uint64 involved_group = 3;
-  optional uint64 view = 4;
-}
-
-message Phase2Reply {
-  required uint64 req_id = 1;
-  oneof p2_decision_oneof {
-    Phase2Decision p2_decision = 2;
-    SignedMessage signed_p2_decision = 3;
-  }
-}
-
-message Phase2FBReply {
-  required bytes txn_digest = 1;
-  required Phase2Reply p2r = 2;
-  optional AttachedView attached_view = 3;
-//  oneof current_view_oneof {
-//    CurrentView current_view = 3;
-//   SignedMessage signed_current_view = 4;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
-//  }
-
-}
-
-message Writeback {
-  required CommitDecision decision = 1;
-  optional bytes txn_digest = 2;
-  optional Transaction txn = 3;
-  oneof reply_oneof {
-    GroupedSignatures p1_sigs = 4; // fast path commit
-    GroupedSignatures p2_sigs = 5; // slow path commit or abort
-    CommittedProof conflict = 6;   // fast path abort
-  }
-}
-
-message AbortInternal {
-  required TimestampMessage ts = 1;
-  repeated bytes read_set = 2;
-}
-
-message Abort {
-  oneof internal_oneof {
-    AbortInternal internal = 1;
-    SignedMessage signed_internal = 2;
-  }
 }

@@ -32,3 +32,5 @@ crypto::PrivKey* KeyManager::GetPrivateKey(uint64_t id) {
     return itr->second;
   }
 }
+
+//Todo add function support for Client keys also. Just add a second key path folder for those keys.
