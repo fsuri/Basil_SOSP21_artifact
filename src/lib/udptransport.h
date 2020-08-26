@@ -51,7 +51,8 @@
 class UDPTransportAddress : public TransportAddress
 {
 public:
-    UDPTransportAddress * clone() const;
+    virtual UDPTransportAddress * clone() const;
+    virtual ~UDPTransportAddress() {}
 private:
     UDPTransportAddress(const sockaddr_in &addr);
     sockaddr_in addr;

@@ -94,13 +94,14 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
       proto::Phase1 &msg);
-  void HandlePhase2CB(const proto::CommitDecision decision, const std::string* txnDigest,
-     signedCallback sendCB, proto::Phase2Reply* phase2Reply, void* valid);
+  void HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
+        signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, bool valid); //void* valid
 
   void HandlePhase2(const TransportAddress &remote,
-      const proto::Phase2 &msg);
+       proto::Phase2 &msg);
 
-  void WritebackCallback(proto::Writeback &msg, const std::string* txnDigest, proto::Transaction* txn, void* valid);
+  void WritebackCallback(proto::Writeback *msg, const std::string* txnDigest,
+    proto::Transaction* txn, bool valid); //void* valid);
   void HandleWriteback(const TransportAddress &remote,
       proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
@@ -163,7 +164,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   void SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
     const proto::CommittedProof *conflict, const std::string &txnDigest,
-    const TransportAddress &remote);
+    const TransportAddress *remote);
   void Clean(const std::string &txnDigest);
   void CleanDependencies(const std::string &txnDigest);
   void LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId,
@@ -176,9 +177,13 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   proto::ReadReply *GetUnusedReadReply();
   proto::Phase1Reply *GetUnusedPhase1Reply();
   proto::Phase2Reply *GetUnusedPhase2Reply();
+  proto::Phase2 *GetUnusedPhase2message();
+  proto::Writeback *GetUnusedWBmessage();
   void FreeReadReply(proto::ReadReply *reply);
   void FreePhase1Reply(proto::Phase1Reply *reply);
   void FreePhase2Reply(proto::Phase2Reply *reply);
+  void FreePhase2message(proto::Phase2 *msg);
+  void FreeWBmessage(proto::Writeback *msg);
 
 
   inline bool IsKeyOwned(const std::string &key) const {
@@ -219,6 +224,8 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::vector<proto::ReadReply *> readReplies;
   std::vector<proto::Phase1Reply *> p1Replies;
   std::vector<proto::Phase2Reply *> p2Replies;
+  std::vector<proto::Phase2 *> p2messages; //
+  std::vector<proto::Writeback *> WBmessages; //
   proto::Phase1Reply phase1Reply;
   proto::Phase2Reply phase2Reply;
   proto::RelayP1 relayP1;

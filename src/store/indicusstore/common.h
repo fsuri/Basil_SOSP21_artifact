@@ -20,8 +20,10 @@
 namespace indicusstore {
 
 typedef std::function<void()> signedCallback;
+typedef std::function<void()> cleanCallback;
 //typedef std::function<void(void*)> verifyCallback;
-typedef std::function<void(void*)> mainThreadCallback;
+//typedef std::function<void(void*)> mainThreadCallback;
+typedef std::function<void(bool)> mainThreadCallback;
 
 
 struct asyncVerification{
@@ -33,7 +35,8 @@ struct asyncVerification{
   //NEEDS A MUTEX OBJECT THAT EACH THREAD tries to acquire.
 
   uint32_t quorumSize;
-  std::function<void(void*)> mainThreadCallback;
+  std::function<void(bool)> mainThreadCallback;
+
 
   std::map<uint64_t, uint32_t> groupCounts;
   int groupTotals;

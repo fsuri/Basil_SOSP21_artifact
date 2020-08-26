@@ -53,7 +53,8 @@
 class TCPTransportAddress : public TransportAddress
 {
 public:
-    TCPTransportAddress * clone() const;
+    virtual TCPTransportAddress * clone() const;
+    virtual ~TCPTransportAddress() {}
     sockaddr_in addr;
 private:
     TCPTransportAddress(const sockaddr_in &addr);

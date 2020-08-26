@@ -150,23 +150,27 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     phase1.ParseFromString(data);
     HandlePhase1(remote, phase1);
   } else if (type == phase2.GetTypeName()) {
-      // if(params.multiThreading){
-      //     proto::Phase2* p2 = new proto::Phase2();
-      //     p2->ParseFromString(data);
-      //     HandlePhase2(remote, *p2);
-      // }
-      //test_bool = true;
-    phase2.ParseFromString(data);
-    HandlePhase2(remote, phase2);
-  } else if (type == writeback.GetTypeName()) {
-    writeback.ParseFromString(data);
+      if(params.multiThreading){
+          proto::Phase2* p2 = GetUnusedPhase2message();
+          p2->ParseFromString(data);
+          HandlePhase2(remote, *p2);
+      }
+      else{
+        phase2.ParseFromString(data);
+        HandlePhase2(remote, phase2);
+      }
 
-      // if(params.multiThreading){
-      //     proto::Writeback *wb = new proto::Writeback();
-      //     wb->ParseFromString(data);
-      //     HandlePhase2(remote, *wb);
-      // }
-    HandleWriteback(remote, writeback);
+  } else if (type == writeback.GetTypeName()) {
+
+      if(params.multiThreading){
+          proto::Writeback *wb = GetUnusedWBmessage();
+          wb->ParseFromString(data);
+          HandleWriteback(remote, *wb);
+      }
+      else{
+        writeback.ParseFromString(data);
+        HandleWriteback(remote, writeback);
+      }
   } else if (type == abort.GetTypeName()) {
     abort.ParseFromString(data);
     HandleAbort(remote, abort);
@@ -375,25 +379,30 @@ void Server::HandlePhase1(const TransportAddress &remote,
     //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
     //   client_starttime[txnDigest] = start_time;
     // }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
-    SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, remote);
+    SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, &remote);
   }
 
 }
 
 
-void Server::HandlePhase2CB(const proto::CommitDecision decision, const std::string* txnDigest, signedCallback sendCB, proto::Phase2Reply* phase2Reply, void* valid){
+//TODO: Needs to always delete/free. But does not need the bool arg to be allocated.
+void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
+  signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, bool valid) { //void* valid){
 
   Debug("HandlePhase2CB invoked");
 
-  if(!(*(bool*) valid) ) {
+  if(!valid){
+  //if(!(*(bool*) valid) ) {
     Debug("VALIDATE P1Replies for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
-    delete (bool*) valid;
+    //delete (bool*) valid;
+    cleanCB(); //deletes SendCB resources should it not be called.
+    if(params.multiThreading){
+      FreePhase2message(msg); //const_cast<proto::Phase2&>(msg));
+    }
     return;
   }
 
-  delete (bool*) valid;
-
-  p2Decisions[*txnDigest] = decision;   //is this correct
+  p2Decisions[*txnDigest] = msg->decision();   //is this correct
   current_views[*txnDigest] = 0;
   decision_views[*txnDigest] = 0;
 
@@ -404,13 +413,18 @@ void Server::HandlePhase2CB(const proto::CommitDecision decision, const std::str
   //   client_starttime[*txnDigest] = start_time;
   // }
 
-  phase2Reply->mutable_p2_decision()->set_decision(decision);
+  phase2Reply->mutable_p2_decision()->set_decision(msg->decision());
   if (params.validateProofs) {
     // TODO: uncomment. need a way for a process to know the decision view
     //   when verifying the signed p2_decision
     //phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
   }
 
+//Free allocated memory
+//delete (bool*) valid;
+if(params.multiThreading){
+  FreePhase2message(msg); // const_cast<proto::Phase2&>(msg));
+}
 
 if (params.validateProofs && params.signedMessages) {
   proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
@@ -456,7 +470,7 @@ sendCB();
 //     }
 
 void Server::HandlePhase2(const TransportAddress &remote,
-      const proto::Phase2 &msg) {
+       proto::Phase2 &msg) {
 
   const proto::Transaction *txn;
   std::string computedTxnDigest;
@@ -492,6 +506,10 @@ void Server::HandlePhase2(const TransportAddress &remote,
     FreePhase2Reply(phase2Reply);
     delete remoteCopy;
   };
+  auto cleanCB = [this, remoteCopy, phase2Reply]() {
+    FreePhase2Reply(phase2Reply);
+    delete remoteCopy;
+  };
 
   phase2Reply->set_req_id(msg.req_id());
   *phase2Reply->mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
@@ -524,10 +542,10 @@ void Server::HandlePhase2(const TransportAddress &remote,
           //msg_copy->CopyFrom(msg);
           //copy shouldnt be needed due to bind
 
-          std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this,
-             msg.decision(), txnDigest, sendCB, phase2Reply, std::placeholders::_1));
+          std::function<void(bool)> mcb(std::bind(&Server::HandlePhase2CB, this,
+             &msg, txnDigest, sendCB, phase2Reply, cleanCB, std::placeholders::_1));
 
-          //OPTION 1: Validation itself is synchronous    TODO: Needs to be extended with thread safety.
+          //OPTION 1: Validation itself is synchronous   Would need to be extended with thread safety.
               //std::function<void*()> f (std::bind(&ValidateP1RepliesWrapper, msg_copy.decision(), false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId, myResult, verifier));
               //transport->DispatchTP(f, mcb);
               //tp->dispatch(f, cb, transport->libeventBase);
@@ -552,7 +570,8 @@ void Server::HandlePhase2(const TransportAddress &remote,
             //msg_copy->CopyFrom(msg);
 
             //copy shouldnt be needed due to bind? or is it because msg is passed as reference?
-            std::function<void(void*)> mcb(std::bind(&Server::HandlePhase2CB, this, msg.decision(), txnDigest, sendCB, phase2Reply, std::placeholders::_1));
+            std::function<void(bool)> mcb(std::bind(&Server::HandlePhase2CB, this,
+              &msg, txnDigest, sendCB, phase2Reply, cleanCB, std::placeholders::_1));
 
             asyncBatchValidateP1Replies(msg.decision(),
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
@@ -564,42 +583,61 @@ void Server::HandlePhase2(const TransportAddress &remote,
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier)) {
               Debug("VALIDATE P1Replies failed.");
+              FreePhase2Reply(phase2Reply);
+              delete remoteCopy;
               return;
             }
           }
         }
       }
 
-  bool* valid = new bool;
- *valid = true;
-  HandlePhase2CB(msg.decision(), txnDigest, sendCB, phase2Reply, (void*) valid);
   }
+  // bool* valid = new bool(true);
+  // HandlePhase2CB(msg, txnDigest, sendCB, phase2Reply, (void*) valid);
+  HandlePhase2CB(&msg, txnDigest, sendCB, phase2Reply, cleanCB, true);
+
 }
 
-void Server::WritebackCallback(proto::Writeback &msg, const std::string* txnDigest,
-  proto::Transaction* txn, void* valid){
+void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDigest,
+  proto::Transaction* txn, bool valid) { //void* valid){
 
   Debug("WRITEBACK Callback[%s] being called", BytesToHex(*txnDigest, 16).c_str());
-  if(!(*(bool*) valid)){
+  if(!valid){
+  //if(!(*(bool*) valid)){
     Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
-    delete (bool*) valid;
+    //delete (bool*) valid;
+    if(params.multiThreading){
+      Debug("should not be here");
+      FreeWBmessage(msg);
+    }
     return;
   }
-  delete (bool*) valid;
+  //delete (bool*) valid;
 
-  if (msg.decision() == proto::COMMIT) {
+  if (msg->decision() == proto::COMMIT) {
     Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
-    Commit(*txnDigest, txn, msg.has_p1_sigs() ? msg.release_p1_sigs() : msg.release_p2_sigs(), msg.has_p1_sigs());
+    bool p1Sigs = msg->has_p1_sigs();
+    Commit(*txnDigest, txn, p1Sigs ? msg->release_p1_sigs() : msg->release_p2_sigs(), p1Sigs);
   } else {
     Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
-    writebackMessages[*txnDigest] = msg;
+    writebackMessages[*txnDigest] = *msg;
+    ///TODO: msg might no longer hold txn; could have been released in HanldeWriteback
     Abort(*txnDigest);
+  }
+
+  if(params.multiThreading){
+    // proto::GroupedSignatures* test = new proto::GroupedSignatures();
+    // msg.set_allocated_p1_sigs(test);
+    //delete msg;
+    //proto::Writeback* msg2 = new proto::Writeback;
+    FreeWBmessage(msg);
   }
 }
 
 
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
+Debug("Segfault here:");
   proto::Transaction *txn;
   const std::string *txnDigest;
   std::string computedTxnDigest;
@@ -621,8 +659,8 @@ void Server::HandleWriteback(const TransportAddress &remote,
     txn = txnItr->second;
     txnDigest = &msg.txn_digest();
   } else {
-    txn = msg.release_txn();
     computedTxnDigest = TransactionDigest(msg.txn(), params.hashDigest);
+    txn = msg.release_txn();
     txnDigest = &computedTxnDigest;
   }
 
@@ -641,7 +679,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
           //copy shouldnt be needed due to bind?
 
           Debug("TAKING THIS BRANCH, generating MCB");
-          std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, msg,
+          std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg,
             txnDigest, txn, std::placeholders::_1));
 
           if(params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()){
@@ -734,7 +772,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
               //proto::Writeback * msg_copy = msg.New();
               //msg_copy->CopyFrom(msg);
               //copy shouldnt be needed due to bind?
-              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, msg, txnDigest, txn, std::placeholders::_1));
+              std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP1Replies(proto::COMMIT,
                     true, txn, txnDigest,msg.p1_sigs(), keyManager, &config, myProcessId,
                     myResult, verifier, mcb, transport, false);
@@ -760,7 +798,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
               //proto::Writeback * msg_copy = msg.New();
               //msg_copy->CopyFrom(msg);
               //copy shouldnt be needed due to bind?
-              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, msg, txnDigest, txn, std::placeholders::_1));
+              std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP1Replies(proto::ABORT,
                     true, txn, txnDigest,msg.p1_sigs(), keyManager, &config, myProcessId,
                     myResult, verifier, mcb, transport, false);
@@ -787,7 +825,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
               //proto::Writeback * msg_copy = msg.New();
               //msg_copy->CopyFrom(msg);
               //copy shouldnt be needed due to bind?
-              std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, msg, txnDigest, txn, std::placeholders::_1));
+              std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP2Replies(msg.decision(),
                     txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
                     myDecision, verifier, mcb, transport, false);
@@ -810,7 +848,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
                   //proto::Writeback * msg_copy = msg.New();
                   //msg_copy->CopyFrom(msg);
                   //copy shouldnt be needed due to bind?
-                  std::function<void(void*)> mcb(std::bind(&Server::WritebackCallback, this, msg, txnDigest, txn, std::placeholders::_1));
+                  std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
                   asyncValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
                         txnDigest, params.signedMessages, keyManager, &config, verifier,
                         mcb, transport, false, params.batchVerification);
@@ -834,10 +872,9 @@ void Server::HandleWriteback(const TransportAddress &remote,
         }
 
   }
-  bool* valid = new bool;
-  *valid = true;
-  WritebackCallback(msg, txnDigest, txn, (void*) valid);
-
+  // bool* valid = new bool(true);
+  // WritebackCallback(msg, txnDigest, txn, (void*) valid);
+  WritebackCallback(&msg, txnDigest, txn, true);
 }
 
 
@@ -1259,7 +1296,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         dependenciesItr = inserted.first;
       }
       dependenciesItr->second.reqId = reqId;
-      dependenciesItr->second.remote = &remote;
+      dependenciesItr->second.remote = remote.clone();  //&remote;
       dependenciesItr->second.deps.insert(dep.write().prepared_txn_digest());
     }
   }
@@ -1329,6 +1366,7 @@ void Server::GetCommittedWrites(const std::string &key, const Timestamp &ts,
 
 void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
       proto::GroupedSignatures *groupedSigs, bool p1Sigs) {
+
   Timestamp ts(txn->timestamp());
 
   Value val;
@@ -1339,6 +1377,7 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
   val.proof = proof;
 
   auto committedItr = committed.insert(std::make_pair(txnDigest, proof));
+
   if (params.validateProofs) {
     // CAUTION: we no longer own txn pointer (which we allocated during Phase1
     //    and stored in ongoing)
@@ -1450,10 +1489,13 @@ void Server::CheckDependents(const std::string &txnDigest) {
         proto::ConcurrencyControl::Result result = CheckDependencies(
             dependent);
         UW_ASSERT(result != proto::ConcurrencyControl::ABORT);
-        waitingDependencies.erase(dependent);
+        Debug("print remote: %p", dependenciesItr->second.remote);
+        //waitingDependencies.erase(dependent);
         const proto::CommittedProof *conflict = nullptr;
         SendPhase1Reply(dependenciesItr->second.reqId, result, conflict, dependent,
-            *dependenciesItr->second.remote);
+            dependenciesItr->second.remote);
+        delete dependenciesItr->second.remote;
+        waitingDependencies.erase(dependent);
       }
     }
   }
@@ -1498,7 +1540,7 @@ bool Server::CheckHighWatermark(const Timestamp &ts) {
 void Server::SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
     const proto::CommittedProof *conflict, const std::string &txnDigest,
-    const TransportAddress &remote) {
+    const TransportAddress *remote) {
   p1Decisions[txnDigest] = result;
   //add abort proof so we can use it for fallbacks easily.
   if(result == proto::ConcurrencyControl::ABORT){
@@ -1507,7 +1549,8 @@ void Server::SendPhase1Reply(uint64_t reqId,
 
   proto::Phase1Reply* phase1Reply = GetUnusedPhase1Reply();
   phase1Reply->set_req_id(reqId);
-  TransportAddress *remoteCopy = remote.clone();
+  TransportAddress *remoteCopy = remote->clone();
+
   auto sendCB = [remoteCopy, this, phase1Reply]() {
     this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
     FreePhase1Reply(phase1Reply);
@@ -1667,6 +1710,30 @@ proto::Phase2Reply *Server::GetUnusedPhase2Reply() {
   return reply;
 }
 
+proto::Phase2 *Server::GetUnusedPhase2message() {
+  proto::Phase2 *msg;
+  if (p2messages.size() > 0) {
+    msg = p2messages.back();
+    msg->Clear();
+    p2messages.pop_back();
+  } else {
+    msg = new proto::Phase2();
+  }
+  return msg;
+}
+
+proto::Writeback *Server::GetUnusedWBmessage() {
+  proto::Writeback *msg;
+  if (WBmessages.size() > 0) {
+    msg = WBmessages.back();
+    msg->Clear();
+    WBmessages.pop_back();
+  } else {
+    msg = new proto::Writeback();
+  }
+  return msg;
+}
+
 void Server::FreeReadReply(proto::ReadReply *reply) {
   readReplies.push_back(reply);
 }
@@ -1677,6 +1744,14 @@ void Server::FreePhase1Reply(proto::Phase1Reply *reply) {
 
 void Server::FreePhase2Reply(proto::Phase2Reply *reply) {
   p2Replies.push_back(reply);
+}
+
+void Server::FreePhase2message(proto::Phase2 *msg) {
+  p2messages.push_back(msg);
+}
+
+void Server::FreeWBmessage(proto::Writeback *msg) {
+  WBmessages.push_back(msg);
 }
 
 ////////////////////// Fallback realm beings here... enter at own risk

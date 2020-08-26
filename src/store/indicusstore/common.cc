@@ -72,6 +72,7 @@ void asyncValidateCommittedConflict(const proto::CommittedProof &proof,
           BytesToHex(*committedTxnDigest, 16).c_str(),
           txn->client_id(), txn->client_seq_num(),
           BytesToHex(*txnDigest, 16).c_str());
+        mcb(false);
         return;
     }
     if(signedMessages && multithread){
@@ -89,9 +90,10 @@ void asyncValidateCommittedProof(const proto::CommittedProof &proof,
   if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
     // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
     //    without needing to write all existing data with transactions
-    bool* ret = new bool;
-    *ret = true;
-    mcb((void*) ret);
+
+    //bool* ret = new bool(true);
+    //mcb((void*) ret);
+    mcb(true);
     return;
   }
 
@@ -121,6 +123,7 @@ void asyncValidateCommittedProof(const proto::CommittedProof &proof,
     }
   } else {
     Debug("Proof has neither P1 nor P2 sigs.");
+    mcb(false);
     return;
   }
 }
@@ -230,14 +233,20 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
   //altneratively: keep shared datastructure (set) for verifyObject: If not in structure anymore = deleted. (remove terminate bool)
 
   if(verifyObj->terminate){
-      if(verifyObj->deletable == 0) delete verifyObj;
+      if(verifyObj->deletable == 0){
+        verifyObj->mainThreadCallback(false);
+        delete verifyObj;
+      }
       return;
   }
   if(!verification_result){
       verifyObj->terminate = true;
         // delete verifyObj;
         // verifyObj = NULL;
-      if(verifyObj->deletable == 0) delete verifyObj;
+      if(verifyObj->deletable == 0){
+         verifyObj->mainThreadCallback(false);
+         delete verifyObj;
+      }
       return;
     }
   verifyObj->groupCounts[groupId]++;
@@ -247,7 +256,10 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
       verifyObj->groupsVerified++;
   }
   else{
-    if(verifyObj->deletable == 0) delete verifyObj;
+    if(verifyObj->deletable == 0){
+      verifyObj->mainThreadCallback(false);
+      delete verifyObj;
+    }
       return;
   }
 
@@ -256,15 +268,18 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
   if (verifyObj->decision == proto::COMMIT) {
     if(!(verifyObj->groupsVerified == verifyObj->groupTotals)){
           Debug("Phase1Replies for involved_group %d not complete.", (int)groupId);
-          if(verifyObj->deletable == 0) delete verifyObj;
+          if(verifyObj->deletable == 0){
+            verifyObj->mainThreadCallback(false);
+            delete verifyObj;
+          }
             return;
     }
   }
-  bool* ret = new bool;
-  *ret = true;
-  verifyObj->terminate = true;
+  //bool* ret = new bool(true);
+    verifyObj->terminate = true;
   Debug("Calling HandlePhase2CB");
-  verifyObj->mainThreadCallback((void*) ret);
+  //verifyObj->mainThreadCallback((void*) ret);
+  verifyObj->mainThreadCallback(true);
   if(verifyObj->deletable == 0) delete verifyObj;
   return;
 }
@@ -296,6 +311,7 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
     quorumSize = SlowAbortQuorumSize(config);
   } else {
     // NOT_REACHABLE();
+    mcb(false);
     return;
   }
   asyncVerification *verifyObj = new asyncVerification(quorumSize, mcb, txn->involved_groups_size(), decision);
@@ -310,26 +326,30 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
     for (const auto &sig : sigs.second.sigs()) {
       if (!IsReplicaInGroup(sig.process_id(), sigs.first, config)) {
         Debug("Signature for group %lu from replica %lu who is not in group.", sigs.first, sig.process_id());
-        {
-        //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
-        verifyObj->terminate = true;
-        }
+        // {
+        // //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+        // verifyObj->terminate = true;  .
+        // }
+        delete verifyObj;
+        mcb(false);
         return;
       }
       auto insertItr = replicasVerified.insert(sig.process_id());
       if (!insertItr.second) {
         Debug("Already verified sig from replica %lu in group %lu.",
             sig.process_id(), sigs.first);
-        {
-        //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
-        verifyObj->terminate = true;
-        }
+        // {
+        // //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+        // verifyObj->terminate = true;
+        // }
+        delete verifyObj;
+        mcb(false);
         return;
       }
-      {
-      //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
-      if(verifyObj->terminate == true) return; //return preemtively if concurrent thread has already called back?
-      }
+      // {
+      // //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+      // if(verifyObj->terminate == true) return; //return preemtively if concurrent thread has already called back?
+      // }
       Debug("Verifying %lu byte signature from replica %lu in group %lu.",
           sig.signature().size(), sig.process_id(), sigs.first);
 
@@ -379,16 +399,13 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
     quorumSize = SlowAbortQuorumSize(config);
   } else {
     // NOT_REACHABLE();
+    mcb(false);
     return; //false; //dont need to return anything
   }
 
   asyncVerification *verifyObj = new asyncVerification(quorumSize, mcb, txn->involved_groups_size(), decision);
 
   std::list<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
-
-//groupedSigs.groupdes_sigs_size()
-
-//sigs.second.sigs_size()
 
   for (const auto &sigs : groupedSigs.grouped_sigs()) {
     concurrencyControl.set_involved_group(sigs.first);
@@ -401,10 +418,12 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
       if (!IsReplicaInGroup(sig.process_id(), sigs.first, config)) {
         Debug("Signature for group %lu from replica %lu who is not in group.", sigs.first, sig.process_id());
 
-        {
+        //{
         //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
-        verifyObj->terminate = true;
-        }
+        //verifyObj->terminate = true;
+        //}
+        delete verifyObj;
+        mcb(false);
         return;
         //OR call the callback with negative result, but kind of unecessary mcb();
       }
@@ -413,19 +432,21 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
       if (!insertItr.second) {
         Debug("Already verified sig from replica %lu in group %lu.",
             sig.process_id(), sigs.first);
-        {
+        //{
         //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
-        verifyObj->terminate = true;
-        }
+        //verifyObj->terminate = true;
+        //}
+        delete verifyObj;
+        mcb(false);
         return;
             //OR call the callback with negative result, but kind of unecessary mcb();
       }
 
 
-      {
+      //{
       //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
-      if(verifyObj->terminate == true) return; //return preemtively if concurrent thread has already called back?
-      }
+      //if(verifyObj->terminate == true) return; //return preemtively if concurrent thread has already called back?
+      //}
 
       Debug("Verifying %lu byte signature from replica %lu in group %lu.",
           sig.signature().size(), sig.process_id(), sigs.first);
@@ -437,17 +458,8 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
       std::function<void*()> f(std::bind(pointerWrapper<bool>, func)); //turn into void* function in order to dispatch
       std::function<void(void*)> cb(std::bind(asyncValidateP1RepliesCallback, verifyObj, sigs.first, std::placeholders::_1));
 
-      verificationJobs.push_back(std::make_pair(f, cb));  //change it into a pair. i.e. generate callback here.
+      verificationJobs.push_back(std::make_pair(f, cb));
 
-
-      // TODO:   VerifyWrapper  calls either: 1) verify + callback, OR: 2) dispatch to thread.
-      //Latency_Start(&lat);
-      // if (!skip && !verifier->Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
-      //         sig.signature())) {
-      //   //Latency_End(&lat);
-      //   Debug("Signature from replica %lu in group %lu is not valid.",
-      //       sig.process_id(), sigs.first);
-       //change this
       }
     }
 
@@ -608,13 +620,19 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
   verifyObj->deletable--;
 
   if(verifyObj->terminate){
-      if(verifyObj->deletable == 0) delete verifyObj;
-      return;
+    if(verifyObj->deletable == 0){
+      verifyObj->mainThreadCallback(false);
+      delete verifyObj;
+    }
+    return;
   }
   if(!verification_result){
       verifyObj->terminate = true;
 
-      if(verifyObj->deletable == 0) delete verifyObj;
+      if(verifyObj->deletable == 0){
+        verifyObj->mainThreadCallback(false);
+        delete verifyObj;
+      }
       return;
     }
   verifyObj->groupCounts[groupId]++;
@@ -622,16 +640,20 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
 
 
   if (verifyObj->groupCounts[groupId] == verifyObj->quorumSize) {
-    bool* ret = new bool(true);
     verifyObj->terminate = true;
-    verifyObj->mainThreadCallback((void*) ret);
+    //bool* ret = new bool(true);
+    //verifyObj->mainThreadCallback((void*) ret);
+    verifyObj->mainThreadCallback(true);
     if(verifyObj->deletable == 0) delete verifyObj;
     return;
 
   }
   else{
       Debug("Phase2Replies for logging group %d not complete.", (int)groupId);
-      if(verifyObj->deletable == 0) delete verifyObj;
+      if(verifyObj->deletable == 0){
+        verifyObj->mainThreadCallback(false);
+        delete verifyObj;
+      }
       return;
   }
 }
@@ -655,6 +677,7 @@ void asyncBatchValidateP2Replies(proto::CommitDecision decision,
 
     if (groupedSigs.grouped_sigs().size() != 1) {
       Debug("Expected exactly 1 group but saw %lu", groupedSigs.grouped_sigs().size());
+      mcb(false);
       return;
     }
 
@@ -670,6 +693,8 @@ void asyncBatchValidateP2Replies(proto::CommitDecision decision,
     //verify that this group corresponds to the log group
     if(sigs->first != logGrp){
       Debug("P2 replies from group (%lu) that is not logging group (%lu).", sigs->first, logGrp);
+      delete verifyObj;
+      mcb(false);
       return;
     }
 
@@ -677,10 +702,14 @@ void asyncBatchValidateP2Replies(proto::CommitDecision decision,
 
       if (!IsReplicaInGroup(sig.process_id(), sigs->first, config)) {
         Debug("Signature for group %lu from replica %lu who is not in group.", sigs->first, sig.process_id());
+        delete verifyObj;
+        mcb(false);
         return;
       }
       if (!replicasVerified.insert(sig.process_id()).second) {
         Debug("Already verified signature from %lu.", sig.process_id());
+        delete verifyObj;
+        mcb(false);
         return;
       }
 
@@ -716,6 +745,7 @@ void asyncValidateP2Replies(proto::CommitDecision decision,
 
     if (groupedSigs.grouped_sigs().size() != 1) {
       Debug("Expected exactly 1 group but saw %lu", groupedSigs.grouped_sigs().size());
+      mcb(false);
       return;
     }
 
@@ -731,6 +761,8 @@ void asyncValidateP2Replies(proto::CommitDecision decision,
     //verify that this group corresponds to the log group
     if(sigs->first != logGrp){
       Debug("P2 replies from group (%lu) that is not logging group (%lu).", sigs->first, logGrp);
+      delete verifyObj;
+      mcb(false);
       return;
     }
 
@@ -738,10 +770,14 @@ void asyncValidateP2Replies(proto::CommitDecision decision,
 
       if (!IsReplicaInGroup(sig.process_id(), sigs->first, config)) {
         Debug("Signature for group %lu from replica %lu who is not in group.", sigs->first, sig.process_id());
+        delete verifyObj;
+        mcb(false);
         return;
       }
       if (!replicasVerified.insert(sig.process_id()).second) {
         Debug("Already verified signature from %lu.", sig.process_id());
+        delete verifyObj;
+        mcb(false);
         return;
       }
       //TODO: add to job list

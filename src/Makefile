@@ -8,9 +8,9 @@ LD = g++
 EXPAND = lib/tmpl/expand
 
 #CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNUW_ASSERT
-CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2
-CXXFLAGS := -g -std=c++17
-LDFLAGS := -levent_pthreads -lrt
+CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized #-O2
+CXXFLAGS := -g -std=c++17 -fsanitize=address
+LDFLAGS := -levent_pthreads -lrt -fsanitize=address
 ## Debian package: check
 #CHECK_CFLAGS := $(shell pkg-config --cflags check)
 #CHECK_LDFLAGS := $(shell pkg-config --cflags --libs check)
