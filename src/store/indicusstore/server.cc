@@ -402,10 +402,16 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
     return;
   }
 
-  p2Decisions[*txnDigest] = msg->decision();   //is this correct
-  current_views[*txnDigest] = 0;
-  decision_views[*txnDigest] = 0;
-
+  if(p2Decisions.find(msg->txn_digest()) != p2Decisions.end()){
+    proto::CommitDecision &decision =p2Decisions[msg->txn_digest()];
+    phase2Reply->mutable_p2_decision()->set_decision(decision);
+  }
+  else{
+    p2Decisions[*txnDigest] = msg->decision();
+    current_views[*txnDigest] = 0;
+    decision_views[*txnDigest] = 0;
+    phase2Reply->mutable_p2_decision()->set_decision(msg->decision());
+  }
   // if(client_starttime.find(*txnDigest) == client_starttime.end()){
   //   struct timeval tv;
   //   gettimeofday(&tv, NULL);
@@ -413,11 +419,10 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
   //   client_starttime[*txnDigest] = start_time;
   // }
 
-  phase2Reply->mutable_p2_decision()->set_decision(msg->decision());
+
   if (params.validateProofs) {
-    // TODO: uncomment. need a way for a process to know the decision view
-    //   when verifying the signed p2_decision
-    //phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
+    //  need a way for a process to know the decision view when verifying the signed p2_decision
+    phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
   }
 
 //Free allocated memory
@@ -517,15 +522,18 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   // no-replays property, i.e. recover existing decision/result from storage (do this for HandlePhase1 as well.)
   if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
-    proto::CommitDecision decision =p2Decisions[msg.txn_digest()];
-    phase2Reply->mutable_p2_decision()->set_decision(decision);
-    //TODO: ADD VIEW. Is this the right notation?
-    if(decision_views.find(*txnDigest) == decision_views.end()) {
-      decision_views[*txnDigest] = 0;
-    }
-    auto dec_view = decision_views[*txnDigest];
-    // TODO: uncomment, see below
-    //phase2Reply->mutable_p2_decision()->set_view(dec_view);
+   //Logic moved to Callback:
+            // proto::CommitDecision &decision =p2Decisions[msg.txn_digest()];
+            // phase2Reply->mutable_p2_decision()->set_decision(decision);
+            //  ADD VIEW. Is this the right notation?
+            // if(decision_views.find(*txnDigest) == decision_views.end()) {
+            //   decision_views[*txnDigest] = 0;
+            // }
+            //auto dec_view = decision_views[*txnDigest];
+            //
+            //phase2Reply->mutable_p2_decision()->set_view(dec_view);
+
+  //first time message:
   } else{
     Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
 

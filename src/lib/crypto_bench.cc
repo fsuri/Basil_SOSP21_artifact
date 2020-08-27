@@ -55,20 +55,20 @@ int main(int argc, char *argv[]) {
 
 
   //Test store and load.
-  std::string keyFileName("keytest");
-  const std::string privateKeyName = keyFileName + ".priv";
-  crypto::SavePrivateKey(privateKeyName, privKey);
-  std::cout << "Saved private key to: " << privateKeyName << std::endl;
+  if(keyType == crypto::DONNA){
+    std::string keyFileName("keytest");
+    const std::string privateKeyName = keyFileName + ".priv";
+    crypto::SavePrivateKey(privateKeyName, privKey);
+    std::cout << "Saved private key to: " << privateKeyName << std::endl;
 
-  const std::string publicKeyName = keyFileName + ".pub";
-  //(*pubKey->donnaKey)[strlen((*pubKey->donnaKey))-1] = '\0';
-  crypto::SavePublicKey(publicKeyName, pubKey);
-  std::cout << "Saved public key to: " << publicKeyName << std::endl;
+    const std::string publicKeyName = keyFileName + ".pub";
+    //(*pubKey->donnaKey)[strlen((*pubKey->donnaKey))-1] = '\0';
+    crypto::SavePublicKey(publicKeyName, pubKey);
+    std::cout << "Saved public key to: " << publicKeyName << std::endl;
 
-  unsigned char* test = *(pubKey->donnaKey);
-  bool b = *(pubKey->donnaKey) == test;
-  std::cout << "Pub vs char conversion: " << b <<std::endl;
-
+    unsigned char* test = *(pubKey->donnaKey);
+    bool b = *(pubKey->donnaKey) == test;
+    std::cout << "Pub vs char conversion: " << b <<std::endl;
 
   // crypto::PubKey* keytest = (crypto::PubKey*) malloc(sizeof(crypto::PubKey));
   // keytest->t = crypto::DONNA;
@@ -132,6 +132,7 @@ int main(int argc, char *argv[]) {
   std::cout << "SIZE: " << sizeof(ed25519_public_key) << std::endl;
   //privKey = privKeyLOAD;
   ///Test end
+}
 
   struct Latency_t signLat;
   struct Latency_t verifyLat;
@@ -203,18 +204,19 @@ int main(int argc, char *argv[]) {
 
             //DIFFERENT KEYS
          std::pair<crypto::PrivKey*, crypto::PubKey*> keypair = crypto::GenerateKeypair(keyType, precompute);
-         crypto::PrivKey* privKeyLOAD = keypair.first;
-         crypto::PubKey* pubKeyLOAD = keypair.second;
+           crypto::PrivKey* privKeyLOAD = keypair.first;
+           crypto::PubKey* pubKeyLOAD = keypair.second;
 
-         //Test Storing and Loading
-         std::string keyFileName("keytest");
-         const std::string publicKeyName = keyFileName + ".pub";
-         crypto::SavePublicKey(publicKeyName, pubKeyLOAD);
-         crypto::PubKey* pubKey = crypto::LoadPublicKey(publicKeyName, crypto::KeyType::DONNA, false);
+           //Test Storing and Loading
+           std::string keyFileName("keytest");
+           const std::string publicKeyName = keyFileName + ".pub";
+           crypto::SavePublicKey(publicKeyName, pubKeyLOAD);
+           crypto::PubKey* pubKey = crypto::LoadPublicKey(publicKeyName, crypto::KeyType::DONNA, false);
 
-         const std::string privateKeyName = keyFileName + ".priv";
-         crypto::SavePrivateKey(privateKeyName, privKeyLOAD);
-         crypto::PrivKey* privKey = crypto::LoadPrivateKey(privateKeyName, crypto::DONNA, false);
+           const std::string privateKeyName = keyFileName + ".priv";
+           crypto::SavePrivateKey(privateKeyName, privKeyLOAD);
+           crypto::PrivKey* privKey = crypto::LoadPrivateKey(privateKeyName, crypto::DONNA, false);
+
 
 
         sign[i] = (crypto::Sign(privKey, strings[i]));
@@ -283,7 +285,7 @@ int main(int argc, char *argv[]) {
 
   }
 
-  //TODO (FS): Add test case for ed25119 donna, + using batch verification.
+
 
   Latency_Dump(&signLat);
   Latency_Dump(&verifyLat);

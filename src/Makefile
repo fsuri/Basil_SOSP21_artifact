@@ -8,9 +8,9 @@ LD = g++
 EXPAND = lib/tmpl/expand
 
 #CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNUW_ASSERT
-CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized #-O2
-CXXFLAGS := -g -std=c++17 -fsanitize=address
-LDFLAGS := -levent_pthreads -lrt -fsanitize=address
+CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2
+CXXFLAGS := -g -std=c++17 #-fsanitize=address
+LDFLAGS := -levent_pthreads -lrt #-fsanitize=address
 ## Debian package: check
 #CHECK_CFLAGS := $(shell pkg-config --cflags check)
 #CHECK_LDFLAGS := $(shell pkg-config --cflags --libs check)
@@ -44,7 +44,9 @@ LIBSECP256K1_LDFLAGS := $(shell pkg-config --libs libsecp256k1)
 CFLAGS += $(LIBSECP256K1_CFLAGS)
 LDFLAGS += $(LIBSECP256K1_LDFLAGS)
 #ed25519-donna
-LDFLAGS += -lssl -lcrypto
+#CFLAGS += -lssl 
+#-lcrypto #need this? try out, somehow neither are necessary? what about mbits?
+LDFLAGS +=  -lssl -lcrypto -led25519_donna
 
 # Google test framework. This doesn't use pkgconfig
 GTEST_DIR := /usr/src/gtest-1.10.0/googletest

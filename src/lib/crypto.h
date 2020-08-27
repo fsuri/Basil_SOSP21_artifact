@@ -17,7 +17,7 @@
 #include "lib/blake3.h"
 #include "lib/static_block.h"
 
-#include "ed25519.h" // Donna ed25519 lib   https://github.com/justmoon/curvebench/tree/master/src/ed25519-donna
+#include "lib/ed25519.h" // Donna ed25519 lib   https://github.com/justmoon/curvebench/tree/master/src/ed25519-donna
 
 #include <string>
 

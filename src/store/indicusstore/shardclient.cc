@@ -640,7 +640,14 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
     *sig->mutable_signature()= reply.signed_p2_decision().signature();
   }
 
-//TODO: Edit this to check for matching view too.
+//TODO: Edit this to check for matching view too. Can be ommitted because correct client expects all in view 0?
+//If it receives messages with view != 0 it needs to start its own fallback instance.
+  if(params.validateProofs){
+    if(!p2Decision->has_view()) return;
+    if(p2Decision->view() != 0) return; //TODO: start fallback instance here. (case can happen if client is slow)
+  }
+
+//Correct client KNOWS to expect only matching replies so we can just count those.
   if (p2Decision->decision() == itr->second->decision) {
     itr->second->matchingReplies++;
   }
