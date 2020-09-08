@@ -194,7 +194,7 @@ int main(int argc, char *argv[]) {
     std::string sign[num];
     int valid[num];
 
-    int iter = 8;
+    int iter = 64;
     if(keyType != crypto::DONNA){ continue;}
     else{
       for(int i=0; i<iter; i++){

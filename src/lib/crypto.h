@@ -17,6 +17,7 @@
 #include "lib/blake3.h"
 #include "lib/static_block.h"
 
+//#include <openssl/sha.h> //this is what the donna lib uses. cant have both this and crytoppp though.
 #include "lib/ed25519.h" // Donna ed25519 lib   https://github.com/justmoon/curvebench/tree/master/src/ed25519-donna
 
 #include <string>

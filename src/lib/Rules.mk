@@ -36,7 +36,8 @@ LIB-tcptransport := $(o)tcptransport.o $(LIB-transport)
 
 LIB-persistent_register := $(o)persistent_register.o $(LIB-message)
 
-LIB-crypto := $(LIB-message) $(o)crypto.o $(o)keymanager.o $(d)ed25519.o
+LIB-crypto := $(LIB-message) $(o)crypto.o $(o)keymanager.o 
+#$(d)ed25519.o
 
 LIB-batched-sigs := $(LIB-crypto) $(o)batched_sigs.o 
 

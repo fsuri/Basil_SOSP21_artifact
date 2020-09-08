@@ -33,7 +33,7 @@ LIBSSL_LDFLAGS := $(shell pkg-config --libs openssl)
 CFLAGS += $(LIBSSL_CFLAGS)
 LDFLAGS += $(LIBSSL_LDFLAGS)
 # cryptopp
-LDFLAGS += -l:libcryptopp.a
+LDFLAGS += -l:libcryptopp.a #why does lcryptopp not work? why the .a file here?
 # libsodium
 LDFLAGS += -lsodium
 # blake3
