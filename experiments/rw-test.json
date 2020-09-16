@@ -33,7 +33,7 @@
       "read_quorum": "one-honest",
       "validate_proofs": true,
       "sign_messages": true,
-      "key_path": "/usr/local/etc/indicus-keys"
+      "key_path": "/usr/local/etc/indicus-keys/donna"
     }
   ],
   "experiment_name": "indicus",

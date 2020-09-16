@@ -630,13 +630,13 @@ int main(int argc, char **argv) {
 
   CALLGRIND_START_INSTRUMENTATION;
 	//SET THREAD AFFINITY if running multiThreading:
-	if(FLAGS_indicus_multiThreading){
+	//if(FLAGS_indicus_multiThreading){
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
 		int num_cpus = std::thread::hardware_concurrency();
 		CPU_SET(num_cpus-1, &cpuset); //last core is for main
 		pthread_setaffinity_np(pthread_self(),	sizeof(cpu_set_t), &cpuset);
-	}
+	//}
 
   tport->Run();
   CALLGRIND_STOP_INSTRUMENTATION;
