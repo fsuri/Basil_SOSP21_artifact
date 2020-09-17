@@ -58,7 +58,7 @@
       "signature_type": 4,
 	  "multi_threading": true,
       "key_path": "/usr/local/etc/indicus-keys/donna"
-    }
+    },
 	{
       "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
@@ -94,7 +94,6 @@
 	[1, 1, 1, 1, 1, 1]
   ],
   "client_nodes_per_server": 1,
-  
   "pin_client_processes": [0, 1, 2, 3, 4, 5, 6, 7],
   "client_debug_output": true,
   "server_debug_output": true,
@@ -149,7 +148,7 @@
       "height": 600,
       "width": 800,
       "series_indep_vars_idx": 0,
-      "series_titles": ["Indicus-secp", "Indicus-donna"],
+      "series_titles": ["Indicus-donna", "Indicus-donnaMulti", "Indicus-donnaMulti+batchVerify"],
       "x_var_is_config": false,
       "x_var": ["run_stats", "combined", "tput", "p50"],
       "x_label": "Throughput (txn/s)",
@@ -163,7 +162,7 @@
       "height": 600,
       "width": 800,
       "series_indep_vars_idx": 0,
-      "series_titles": ["Indicus-secp", "Indicus-donna"],
+      "series_titles": ["Indicus-donna", "Indicus-donnaMulti", "Indicus-donnaMulti+batchVerify"],
       "x_var_is_config": true,
       "x_var": ["client_total"],
       "x_label": "Number of Clients",

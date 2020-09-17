@@ -367,9 +367,11 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
 
   for (auto &asyncBatchVerify : asyncBatchingVerificationJobs){
     asyncBatchVerify();
-    Debug("called +1 times");
+    Debug("adding job to verification batch");
   }
   Debug("Calling complete");
+  //check fill and stop.
+
   verifier->Complete(multithread, false); //force set to false by default.
 }
 

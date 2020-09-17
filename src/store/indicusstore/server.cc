@@ -645,7 +645,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
 
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
-Debug("Segfault here:");
+      
   proto::Transaction *txn;
   const std::string *txnDigest;
   std::string computedTxnDigest;
