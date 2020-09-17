@@ -472,15 +472,17 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
 
   PendingPhase1 *pendingPhase1 = itr->second;
 
-  bool hasSigned = (params.validateProofs && params.signedMessages) && (!reply.has_cc() || reply.cc().ccr() != proto::ConcurrencyControl::ABORT);
+  bool hasSigned = (params.validateProofs && params.signedMessages) &&
+   (!reply.has_cc() || reply.cc().ccr() != proto::ConcurrencyControl::ABORT);
 
   const proto::ConcurrencyControl *cc = nullptr;
   if (hasSigned) {
-    Debug("[group %i] Verifying signed_cc from %lu with signatures bytes %lu"
-        " because has_cc %d and ccr %d.",
-        group, reply.signed_cc().process_id(), reply.signed_cc().signature().length(),
-        reply.has_cc(),
-        reply.cc().ccr());
+    Debug("previously crashing here");
+    // Debug("[group %i] Verifying signed_cc from %lu with signatures bytes %lu"
+    //     " because has_cc %d and ccr %d.",
+    //     group, reply.signed_cc().process_id(), reply.signed_cc().signature().length(),
+    //     reply.has_cc(),
+    //     reply.cc().ccr());
     if (!reply.has_signed_cc()) {
       return;
     }
