@@ -246,7 +246,7 @@ DEFINE_bool(indicus_adjust_batch_size, false, "dynamically adjust batch size"
     " every sig_batch_timeout (for Indicus)");
 DEFINE_uint64(indicus_merkle_branch_factor, 2, "branch factor of merkle tree"
     " of batch (for Indicus)");
-DEFINE_uint64(indicus_sig_batch, 2, "signature batch size"
+DEFINE_uint64(indicus_sig_batch, 1, "signature batch size"
     " sig batch size (for Indicus)");
 DEFINE_uint64(indicus_sig_batch_timeout, 10, "signature batch timeout ms"
     " sig batch timeout (for Indicus)");
@@ -262,8 +262,8 @@ DEFINE_uint64(indicus_request_tx, false, "request tx"
     " request tx (for Indicus)");
 		//
 //DEFINE_bool(indicus_clientAuthenticated, false, "Client messages signed");
-DEFINE_bool(indicus_multiThreading, false, "dispatch crypto to parallel threads");
-DEFINE_bool(indicus_batchVerification, false, "using ed25519 donna batch verification");
+DEFINE_bool(indicus_multi_threading, false, "dispatch crypto to parallel threads");
+DEFINE_bool(indicus_batch_verification, false, "using ed25519 donna batch verification");
 //DEFINE_uint64(indicus_verify_batch_timeout, 5, "verification batch timeout ms");
 
 const std::string occ_type_args[] = {
@@ -543,7 +543,7 @@ int main(int argc, char **argv) {
         FLAGS_indicus_read_reply_batch, FLAGS_indicus_adjust_batch_size,
         FLAGS_indicus_shared_mem_batch, FLAGS_indicus_shared_mem_verify,
         FLAGS_indicus_merkle_branch_factor, indicusstore::InjectFailure(),
-				FLAGS_indicus_multiThreading, FLAGS_indicus_batchVerification);
+				FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification);
 			Debug("Starting new server object");
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
@@ -629,8 +629,8 @@ int main(int argc, char **argv) {
   std::signal(SIGINT, Cleanup);
 
   CALLGRIND_START_INSTRUMENTATION;
-	//SET THREAD AFFINITY if running multiThreading:
-	//if(FLAGS_indicus_multiThreading){
+	//SET THREAD AFFINITY if running multi_threading:
+	//if(FLAGS_indicus_multi_threading){
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
 		int num_cpus = std::thread::hardware_concurrency();

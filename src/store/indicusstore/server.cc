@@ -68,8 +68,8 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
 
   if (params.signatureBatchSize == 1) {
     //verifier = new BasicVerifier(transport);
-    verifier = new BasicVerifier(transport, batchTimeoutMicro, params.validateProofs && params.signedMessages &&
-    params.signatureBatchSize > 1 && params.adjustBatchSize, 64UL);
+    verifier = new BasicVerifier(transport, batchTimeoutMicro, params.validateProofs &&
+      params.signedMessages && params.adjustBatchSize, 64UL);
     batchSigner = nullptr;
   } else {
     if (params.sharedMemBatches) {
@@ -645,7 +645,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
 
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
-      
+
   proto::Transaction *txn;
   const std::string *txnDigest;
   std::string computedTxnDigest;
