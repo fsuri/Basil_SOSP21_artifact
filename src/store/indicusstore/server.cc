@@ -69,7 +69,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   if (params.signatureBatchSize == 1) {
     //verifier = new BasicVerifier(transport);
     verifier = new BasicVerifier(transport, batchTimeoutMicro, params.validateProofs &&
-      params.signedMessages && params.adjustBatchSize, 64UL);
+      params.signedMessages && params.adjustBatchSize, params.verificationBatchSize);
     batchSigner = nullptr;
   } else {
     if (params.sharedMemBatches) {
@@ -92,7 +92,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
       //verifier = new LocalBatchVerifier(params.merkleBranchFactor, stats, transport);
       verifier = new LocalBatchVerifier(params.merkleBranchFactor, stats, transport,
         batchTimeoutMicro, params.validateProofs && params.signedMessages &&
-        params.signatureBatchSize > 1 && params.adjustBatchSize, 64UL);
+        params.signatureBatchSize > 1 && params.adjustBatchSize, params.verificationBatchSize);
     }
   }
   //start up threadpool (common threadpool, not split into different roles yet)

@@ -209,6 +209,8 @@ DEFINE_uint64(indicus_inject_failure_proportion, 0, "proportion of clients that"
 
 DEFINE_bool(indicus_multi_threading, false, "dispatch crypto to parallel threads");
 DEFINE_bool(indicus_batch_verification, false, "using ed25519 donna batch verification");
+DEFINE_uint64(indicus_batch_verification_size, 64, "batch size for ed25519 donna batch verification");
+DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout, ms");
 
 const std::string if_args[] = {
   "client-crash",
@@ -880,7 +882,7 @@ int main(int argc, char **argv) {
 					FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
           FLAGS_indicus_max_dep_depth, readDepSize, false, false, false, false,
           FLAGS_indicus_merkle_branch_factor, failure,
-					FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification);
+					FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, FLAGS_indicus_batch_verification_size);
 
         client = new indicusstore::Client(config, clientId,
             FLAGS_num_shards,

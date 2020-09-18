@@ -264,7 +264,8 @@ DEFINE_uint64(indicus_request_tx, false, "request tx"
 //DEFINE_bool(indicus_clientAuthenticated, false, "Client messages signed");
 DEFINE_bool(indicus_multi_threading, false, "dispatch crypto to parallel threads");
 DEFINE_bool(indicus_batch_verification, false, "using ed25519 donna batch verification");
-//DEFINE_uint64(indicus_verify_batch_timeout, 5, "verification batch timeout ms");
+DEFINE_uint64(indicus_batch_verification_size, 64, "batch size for ed25519 donna batch verification");
+DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout, ms");
 
 const std::string occ_type_args[] = {
 	"tapir",
@@ -543,7 +544,7 @@ int main(int argc, char **argv) {
         FLAGS_indicus_read_reply_batch, FLAGS_indicus_adjust_batch_size,
         FLAGS_indicus_shared_mem_batch, FLAGS_indicus_shared_mem_verify,
         FLAGS_indicus_merkle_branch_factor, indicusstore::InjectFailure(),
-				FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification);
+				FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, FLAGS_indicus_batch_verification_size);
 			Debug("Starting new server object");
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
