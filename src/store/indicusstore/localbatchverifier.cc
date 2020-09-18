@@ -148,16 +148,16 @@ Debug("Harry you're a wizard? %s", *(bool*)validate ? "yes" : "no" );
         //TODO: add dispatching
         if(multithread){
           //std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, message, signature));
-          std::string msg(*hashStr);
-          std::string sig(*rootSig);
-          std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, msg, sig));
+          //std::string msg(*hashStr);
+          //std::string sig(*rootSig);
+          std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, *hashStr, *rootSig)); //msg, sig));
           std::function<void*()> f(std::bind(pointerWrapperC<bool>, func));
           transport->DispatchTP(f, vb);
         }
         else{
           //std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, message, signature));
           //std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, *hashStr, *rootSig));
-          bool res = new bool(Verify(publicKey, *hashStr, *rootSig));
+          bool* res = new bool(Verify(publicKey, *hashStr, *rootSig));
           //Verify(publicKey, message, signature)
           //void* res = pointerWrapperC<bool>(func);
           vb((void*)res);

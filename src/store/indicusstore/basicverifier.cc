@@ -114,7 +114,7 @@ void BasicVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::strin
           // //Verify(publicKey, message, signature)
           // void* res = pointerWrapperC<bool>(func);
           // vb(res);
-          bool res = new bool(Verify(publicKey, message, signature));
+          bool* res = new bool(Verify(publicKey, message, signature));
           vb((void*)res);
         }
       }
