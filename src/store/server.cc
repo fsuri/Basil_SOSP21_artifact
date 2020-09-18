@@ -246,7 +246,7 @@ DEFINE_bool(indicus_adjust_batch_size, false, "dynamically adjust batch size"
     " every sig_batch_timeout (for Indicus)");
 DEFINE_uint64(indicus_merkle_branch_factor, 2, "branch factor of merkle tree"
     " of batch (for Indicus)");
-DEFINE_uint64(indicus_sig_batch, 1, "signature batch size"
+DEFINE_uint64(indicus_sig_batch, 2, "signature batch size"
     " sig batch size (for Indicus)");
 DEFINE_uint64(indicus_sig_batch_timeout, 10, "signature batch timeout ms"
     " sig batch timeout (for Indicus)");

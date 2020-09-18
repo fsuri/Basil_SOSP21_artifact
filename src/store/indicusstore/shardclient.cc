@@ -477,12 +477,11 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
 
   const proto::ConcurrencyControl *cc = nullptr;
   if (hasSigned) {
-    Debug("previously crashing here");
-    // Debug("[group %i] Verifying signed_cc from %lu with signatures bytes %lu"
-    //     " because has_cc %d and ccr %d.",
-    //     group, reply.signed_cc().process_id(), reply.signed_cc().signature().length(),
-    //     reply.has_cc(),
-    //     reply.cc().ccr());
+    Debug("[group %i] Verifying signed_cc from %lu with signatures bytes %lu"
+        " because has_cc %d and ccr %d.",
+        group, reply.signed_cc().process_id(), reply.signed_cc().signature().length(),
+        reply.has_cc(),
+        reply.cc().ccr());
     if (!reply.has_signed_cc()) {
       return;
     }
@@ -492,7 +491,7 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
           group, reply.signed_cc().process_id());
       return;
     }
-
+      Debug("crashing here");
     if (!verifier->Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
           reply.signed_cc().data(), reply.signed_cc().signature())) {
       Debug("[group %i] Signature %s %s from replica %lu is not valid.", group,
@@ -502,7 +501,6 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
 
       return;
     }
-
     if (!validatedCC.ParseFromString(reply.signed_cc().data())) {
       return;
     }
@@ -512,6 +510,7 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
     UW_ASSERT(reply.has_cc());
 
     cc = &reply.cc();
+
   }
 
   Debug("[group %i] PHASE1 callback ccr=%d", group, cc->ccr());
