@@ -68,6 +68,22 @@ bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &me
   }
 }
 
+bool LocalBatchVerifier::partialVerify(crypto::PubKey *publicKey, std::string hashStr, std::string rootSig){
+    Latency_Start(&cryptoLat);
+    if (crypto::Verify(publicKey, &hashStr[0], hashStr.length(), &rootSig[0])) {
+      Latency_End(&cryptoLat);
+      //std::string hashStr_cpy(*hashStr);
+      //std::string rootSig_cpy(*rootSig);
+      //cache[rootSig_cpy] = hashStr_cpy;
+      cache[rootSig] = hashStr;
+      return true;
+    } else {
+      Latency_End(&cryptoLat);
+      Debug("Verification with public key failed.");
+      return false;
+    }
+}
+
 void* LocalBatchVerifier::asyncComputeBatchVerification(std::vector<crypto::PubKey*> _publicKeys,
   std::vector<const char*> _messages, std::vector<size_t> _messageLens,
   std::vector<const char*> _signatures, int _current_fill){
@@ -114,7 +130,7 @@ void LocalBatchVerifier::asyncBatchVerifyCallback(crypto::PubKey *publicKey, std
   // delete msg_copy;
   // delete sig_copy;
 
-Debug("Harry you're a wizard? %s", *(bool*)validate ? "yes" : "no" );
+Debug("Harry you're a wizard? %s", *(bool*)validate ? "yes  if(current_fill == 0) return;" : "no" );
 //TODO modify accordingly to params.
   if(*(bool*) validate){
     Latency_End(&hashLat);
@@ -150,14 +166,16 @@ Debug("Harry you're a wizard? %s", *(bool*)validate ? "yes" : "no" );
           //std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, message, signature));
           //std::string msg(*hashStr);
           //std::string sig(*rootSig);
-          std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, *hashStr, *rootSig)); //msg, sig));
+          std::function<bool()> func(std::bind(&LocalBatchVerifier::partialVerify, this, publicKey, *hashStr, *rootSig)); //msg, sig));
           std::function<void*()> f(std::bind(pointerWrapperC<bool>, func));
           transport->DispatchTP(f, vb);
         }
         else{
+          //this cannot work -> trying to call the whole verify again, even though part is already done.
+
           //std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, message, signature));
           //std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, *hashStr, *rootSig));
-          bool* res = new bool(Verify(publicKey, *hashStr, *rootSig));
+          bool* res = new bool(partialVerify(publicKey, *hashStr, *rootSig));
           //Verify(publicKey, message, signature)
           //void* res = pointerWrapperC<bool>(func);
           vb((void*)res);
@@ -212,8 +230,8 @@ void LocalBatchVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::
       //Allows us to ignore batch limit and batch all together.
 
 
-    std::string *hashStr = new std::string;
-    std::string *rootSig = new std::string;
+    // std::string *hashStr = new std::string;
+    // std::string *rootSig = new std::string;
     // const std::string *msg_copy = new std::string(message);
     // //*msg_copy = message;
     // const std::string *sig_copy = new std::string(signature);
@@ -221,11 +239,13 @@ void LocalBatchVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::
 
 
 
-    Debug("hashStr pointer: %p", hashStr);
-    Debug("rootSig pointer: %p", rootSig);
+    //Debug("hashStr pointer: %p", hashStr);
+    //Debug("rootSig pointer: %p", rootSig);
 
 //TODO:: Make semantics Multithread compatible... Current problem: main calls Complete but result might not yet be back
     if(multithread && false){
+      std::string *hashStr = new std::string;
+      std::string *rootSig = new std::string;
       std::function<bool()> func(std::bind(BatchedSigs::computeBatchedSignatureHash2<std::string>, signature, message, publicKey,
                 hashStr, rootSig, merkleBranchFactor));
       std::function<void*()> f(std::bind(pointerWrapperC<bool>, func));
@@ -236,19 +256,26 @@ void LocalBatchVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::
       transport->DispatchTP(f, cb);
     }
     else{
+      // if(batch_size==1){
+      //   bool* res = new bool(Verify(publicKey, message, signature));
+      //   vb((void*)res);
+      // }
+      // else{
+      std::string *hashStr = new std::string;
+      std::string *rootSig = new std::string;
       Latency_Start(&hashLat);
        if (BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
            *hashStr, *rootSig, merkleBranchFactor)){
              bool *validate = new bool(true);
              asyncBatchVerifyCallback(publicKey, hashStr, rootSig, vb, multithread, autocomplete, (void*) validate);
-
            }
-
-    }
+         }
+    //}
 }
 
 void LocalBatchVerifier::Complete(bool multithread, bool force_complete){
 
+  if(current_fill == 0) return;
   Debug("TRYING TO CALL COMPLETE WITH FILL: %d", current_fill);
 
   if(force_complete || current_fill >= batch_size) {

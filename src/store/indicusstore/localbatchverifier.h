@@ -34,6 +34,8 @@ class LocalBatchVerifier : public Verifier {
 
   virtual void Complete(bool multithread, bool force_complete = false) override;
 
+
+
  private:
 
   Transport *transport;
@@ -81,6 +83,9 @@ class LocalBatchVerifier : public Verifier {
        std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array);
 
   void AdjustBatchSize();
+
+  bool partialVerify(crypto::PubKey *publicKey, std::string hashStr, std::string rootSig);
+
 
 };
 

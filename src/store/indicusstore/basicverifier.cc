@@ -170,9 +170,11 @@ void BasicVerifier::Complete(bool multithread, bool force_complete){
 
   Debug("TRYING TO CALL COMPLETE WITH FILL: %d", current_fill);
   //UW_ASSERT(current_fill>0);
+
+  if(current_fill == 0) return;
   if(force_complete || batch_size >= 1) {
 
-    if(current_fill == 0) return;
+
     if (batchTimerRunning) {
       transport->CancelTimer(batchTimerId);
       batchTimerRunning = false;
