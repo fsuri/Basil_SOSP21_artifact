@@ -106,11 +106,11 @@ void* LocalBatchVerifier::asyncComputeBatchVerificationS(std::vector<crypto::Pub
     bool all_valid = crypto::BatchVerifyS(crypto::KeyType::DONNA, _publicKeys.data(), _messagesS.data(),
         _messageLens.data(), _signaturesS.data(), _current_fill, valid);
     Debug("All valid: %s", all_valid? "true" : "false");
-        // for(int i =0; i<_current_fill; ++i){
-        //
-        //   delete _messages[i];
-        //   delete _signatures[i];
-        // }
+         // for(int i =0; i<_current_fill; ++i){
+         //
+         //  delete _messagesS[i];
+         //  delete _signaturesS[i];
+         // }
     return (void*) valid;
 }
 
@@ -356,8 +356,8 @@ void LocalBatchVerifier::manageCallbacks(std::vector<const char*> _messages, std
   for (int i = 0; i < _pendingBatchCallbacks.size(); ++i){
       bool* res = new bool;
       if(valid[i]){
-        std::string hashStr(_signatures[i]);
-        std::string rootSig(_messages[i]);
+        std::string hashStr(_messages[i]);
+        std::string rootSig(_signatures[i]);
         cache[hashStr] = rootSig;
         bool* res = new bool(true);
         _pendingBatchCallbacks[i]((void*) res);
@@ -391,9 +391,10 @@ void LocalBatchVerifier::manageCallbacksS(std::vector<std::string*> _messagesS, 
   for (int i = 0; i < _pendingBatchCallbacks.size(); ++i){
       bool* res = new bool;
       if(valid[i]){
-        std::string hashStr(*_signaturesS[i]);
-        std::string rootSig(*_messagesS[i]);
-        cache[hashStr] = rootSig;
+        //std::string hashStr(*_messagesS[i]);
+        std::string rootSig(*_signaturesS[i]);
+        cache[*_messagesS[i]] = rootSig;
+        //cache[hashStr] = rootSig;
         bool* res = new bool(true);
         _pendingBatchCallbacks[i]((void*) res);
       }
