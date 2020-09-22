@@ -174,8 +174,8 @@ TCPTransport::TCPTransport(double dropRate, double reorderRate,
     event_set_fatal_callback(FatalCallback);
 
     libeventBase = event_base_new();
-    //tp = ThreadPool();
-    tp = new ThreadPool(); //change tp to *
+    //tp2.emplace(); this works?
+    //tp = new ThreadPool(); //change tp to *
     evthread_make_base_notifiable(libeventBase);
 
     // Set up signal handler
@@ -479,7 +479,7 @@ TCPTransport::Stop(bool immediately)
   // - This is mainly a problem if the client is still running long after it should have
   //   finished (due to abort loops)
   if (!stopped) {
-    // tp.stop();
+
     auto stopFn = [this](){
       if (!stopped) {
         stopped = true;
@@ -490,6 +490,8 @@ TCPTransport::Stop(bool immediately)
         }
         event_base_dump_events(libeventBase, stderr);
         event_base_loopbreak(libeventBase);
+        tp.stop();
+        //delete tp;
       }
     };
     if (immediately) {
@@ -590,7 +592,7 @@ TCPTransport::TimerCallback(evutil_socket_t fd, short what, void *arg)
 }
 
 void TCPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {
-  tp->dispatch(f, cb, libeventBase);
+  tp.dispatch(f, cb, libeventBase);
   //Panic("unimplemented");
 }
 

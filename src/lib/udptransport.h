@@ -123,7 +123,7 @@ private:
     std::map<int, UDPTransportTimerInfo *> timers;
     std::mutex timersLock;
     uint64_t lastFragMsgId;
-    ThreadPool* tp;
+    ThreadPool tp;
     struct UDPTransportFragInfo
     {
         uint64_t msgId;

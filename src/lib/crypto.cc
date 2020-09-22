@@ -1,7 +1,6 @@
 #include "lib/crypto.h"
 #include "lib/assert.h"
 
-
 #include <string.h>
 
 //add batching interface too. !!
@@ -139,11 +138,12 @@ string Sign(PrivKey* privateKey, const string &message) {
     //REQUIRES PUBLIC KEY TO SIGN AS WELL
     //ed25519_signature sig;
     std::string signature;
-    signature.resize(64);
+    signature.resize(64); //???? this creates leaks? but without it it crashes.
 
     const unsigned char * msg = (unsigned char*) &message[0];
 
-    ed25519_sign(msg, message.length(), *privateKey->donnaKey.first, *privateKey->donnaKey.second, (unsigned char*) &signature[0]);
+    ed25519_sign(msg, message.length(), *privateKey->donnaKey.first,
+    *privateKey->donnaKey.second, (unsigned char*) &signature[0]);
     //ed25519_sign(msg, sizeof(msg)-1, *privateKey->donnaKey.first, *privateKey->donnaKey.second, sig);
     // signature = std::string( (const char*)  sig);
 
@@ -229,6 +229,7 @@ bool Verify(PubKey* publicKey, const char *message, size_t messageLen,
       //int len = static_cast<int>(messageLen);
       bool res = ed25519_sign_open(testMsg, messageLen, *publicKey->donnaKey, (unsigned char*) signature) == 0;
       //std::cout << "VERIFY TEST:" << res << std::endl;
+      
       return res;
     }
 
@@ -267,7 +268,7 @@ bool BatchVerifyS(KeyType t, PubKey* publicKeys[], string* messages[], size_t me
       const unsigned char *mkp[num];
       const unsigned char *skp[num];
       //int valid[num];
-    
+
       for(int i=0; i<num; i++){
           pkp[i] = (const unsigned char*) publicKeys[i]->donnaKey;
           mkp[i] = (const unsigned char*) messages[i]->data(); //&(*messages[i])[0]; // .c_str();

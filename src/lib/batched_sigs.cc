@@ -5,6 +5,7 @@
 #include "lib/blake3.h"
 #include <stdint.h>
 #include <iostream>
+#include <valgrind/memcheck.h>
 
 namespace BatchedSigs {
 
@@ -81,7 +82,8 @@ uint64_t getTreeHeight(uint64_t n, uint64_t m) {
   return treeHeights[n];
 }
 // generate batches signatures for every message in [messages] using [privateKey]
-void generateBatchedSignatures(const std::vector<const std::string*> &messages, crypto::PrivKey* privateKey, std::vector<std::string> &sigs, uint64_t m) {
+void generateBatchedSignatures(const std::vector<const std::string*> &messages, crypto::PrivKey* privateKey,
+   std::vector<std::string> &sigs, uint64_t m) {
   bool hashMessages = true;
   unsigned int n = messages.size();
   assert(n > 0);
@@ -160,6 +162,9 @@ void generateBatchedSignatures(const std::vector<const std::string*> &messages, 
     sigs.emplace_back((char *) sig, starting_pos + h*hash_size);
     assert(sigs[i].size() == starting_pos + h*hash_size);
   }
+  //free tree? free sig?
+  free(tree);
+  free(sig);
 }
 
 

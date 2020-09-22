@@ -5,6 +5,7 @@
 #include "store/indicusstore/common.h"
 #include "lib/message.h"
 #include <valgrind/memcheck.h>
+#include "openssl/ssl.h"
 
 namespace indicusstore {
 
@@ -275,9 +276,10 @@ void LocalBatchVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::
 }
 
 void LocalBatchVerifier::Complete(bool multithread, bool force_complete){
-
+  //OPENSSL_thread_stop();
   VALGRIND_DO_LEAK_CHECK;
   if(current_fill == 0) return;
+
   Debug("TRYING TO CALL COMPLETE WITH FILL: %d", current_fill);
 
   if(force_complete || current_fill >= batch_size) {

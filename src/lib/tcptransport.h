@@ -134,7 +134,8 @@ private:
     std::map<std::pair<TCPTransportAddress, TransportReceiver *>, struct bufferevent *> tcpOutgoing;
     std::map<struct bufferevent *, std::pair<TCPTransportAddress, TransportReceiver *>> tcpAddresses;
     Latency_t sockWriteLat;
-    ThreadPool* tp;
+    ThreadPool tp;
+    
     bool stopped;
 
     virtual bool SendMessageInternal(TransportReceiver *src,

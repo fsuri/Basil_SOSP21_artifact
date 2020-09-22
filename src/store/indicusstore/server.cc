@@ -47,6 +47,7 @@
 #include "store/indicusstore/localbatchverifier.h"
 #include "store/indicusstore/sharedbatchverifier.h"
 #include "lib/batched_sigs.h"
+#include <valgrind/memcheck.h>
 
 namespace indicusstore {
 
@@ -142,7 +143,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
 
   //if(test_bool) return;
-
+  
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
     HandleRead(remote, read);
@@ -1666,14 +1667,11 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
   }
   else{
     if (params.signatureBatchSize == 1) {
-
       // std::string str;
       // msg->SerializeToString(&str);
       // Debug("message: %s", BytesToHex(str, 128).c_str());
       SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMessage);
-
       cb();
-
       //if multithread: Dispatch f: SignMessage and cb.
     } else {
       batchSigner->MessageToSign(msg, signedMessage, cb);
