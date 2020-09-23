@@ -124,7 +124,7 @@ void generateBatchedSignatures(const std::vector<const std::string*> &messages, 
   // sign the hash at the root of the tree
   std::string rootHash(&tree[0], &tree[hash_size]);
   std::string rootSig = crypto::Sign(privateKey, rootHash);
-
+  //VALGRIND_DO_LEAK_CHECK;
   size_t sig_size = crypto::SigSize(privateKey);
 
   // figure out the maximum size of a signature
