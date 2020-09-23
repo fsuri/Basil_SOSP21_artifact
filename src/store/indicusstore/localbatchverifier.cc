@@ -35,6 +35,7 @@ LocalBatchVerifier::~LocalBatchVerifier() {
 
 bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &message,
     const std::string &signature) {    //TODO  ADD CALLBACK as argument, needs to be passed to batcher. ()
+  VALGRIND_DO_LEAK_CHECK;
   std::string hashStr;
   std::string rootSig;
   Latency_Start(&hashLat);

@@ -6,7 +6,7 @@
 #include <mutex>
 #include <functional>
 #include <condition_variable>
-
+#include <thread>
 #include <event2/event.h>
 
 class ThreadPool {
@@ -14,7 +14,7 @@ class ThreadPool {
 public:
 
   ThreadPool();
-  //virtual ~ThreadPool();
+  virtual ~ThreadPool();
   // copy constructor panics
   ThreadPool(const ThreadPool& tp) { Panic("Unimplemented"); }
 
@@ -35,6 +35,7 @@ private:
   std::condition_variable cv;
   std::list<std::pair<std::function<void*()>, EventInfo*> > worklist;
   bool running;
+  std::vector<std::thread*> threads;
 
 };
 

@@ -44,13 +44,21 @@ ThreadPool::ThreadPool() {
     if (rc != 0) {
         Panic("Error calling pthread_setaffinity_np: %d", rc);
     }
+    threads.push_back(&t);
     t.detach();
   }
 }
 
+ThreadPool::~ThreadPool()
+{
+  stop();
+}
 void ThreadPool::stop() {
   running = false;
   cv.notify_all();
+  for(auto t: threads){
+    delete t;
+  }
 }
 
 
