@@ -126,7 +126,7 @@ void LocalBatchVerifier::asyncBatchVerifyCallback(crypto::PubKey *publicKey, std
   Debug("Printing rootSig: %s", BytesToHex(*rootSig, 1028).c_str());
 
   // std::string message(*hashStr);
-  // std::string signature(*rooVALGRIND_DO_LEAK_CHECK;tSig);
+  // std::string signature(*rootSig);
   // delete hashStr;
   // delete rootSig;
   // delete msg_copy;
@@ -238,7 +238,7 @@ void LocalBatchVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::
     // //*msg_copy = message;
     // const std::string *sig_copy = new std::string(signature);
     // //*sig_copy = signature;
-VALGRIND_DO_LEAK_CHECK;
+
 
 
     //Debug("hashStr pointer: %p", hashStr);
