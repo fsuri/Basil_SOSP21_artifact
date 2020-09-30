@@ -46,6 +46,7 @@ message CommittedProof {
     GroupedSignatures p1_sigs = 2;
     GroupedSignatures p2_sigs = 3;
   }
+  optional uint64 p2_view = 4;
 }
 
 message CommittedWrite {
@@ -174,6 +175,7 @@ message Writeback {
     GroupedSignatures p2_sigs = 5; // slow path commit or abort
     CommittedProof conflict = 6;   // fast path abort
   }
+  optional uint64 p2_view = 7;
 }
 
 message AbortInternal {

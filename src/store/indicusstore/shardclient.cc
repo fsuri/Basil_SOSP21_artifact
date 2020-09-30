@@ -228,8 +228,18 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
       *writeback.mutable_p1_sigs() = p1Sigs;
     } else if (fast && decision == proto::ABORT) {
       *writeback.mutable_conflict() = conflict;
+      if(conflict.has_p2_view()){
+        writeback.set_p2_view(conflict.p2_view());
+      }
+      else{
+        writeback.set_p2_view(0); //implies that this was a p1 proof for the conflict, attaching a view anyway..
+      }
+
     } else {
       *writeback.mutable_p2_sigs() = p2Sigs;
+      writeback.set_p2_view(0); //TODO: extend this to process other views too? Bookkeeping should only be needed
+      // for fallback though. Either combine the logic, or change it so that the orignial client issues FB function too
+
     }
   }
   writeback.set_txn_digest(txnDigest);
@@ -239,7 +249,7 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
 }
 
 //Overloaded Wb function to not include ID, this is purely for debug purpose to distinguish whether a message came from FB instance.
-void ShardClient::Writeback(const proto::Transaction &transaction,
+void ShardClient::WritebackFB(const proto::Transaction &transaction,
     const std::string &txnDigest,
     proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
     const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs) {
@@ -491,7 +501,7 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
           group, reply.signed_cc().process_id());
       return;
     }
-    
+
     if (!verifier->Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
           reply.signed_cc().data(), reply.signed_cc().signature())) {
       Debug("[group %i] Signature %s %s from replica %lu is not valid.", group,
@@ -646,6 +656,8 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
   if(params.validateProofs){
     if(!p2Decision->has_view()) return;
     if(p2Decision->view() != 0) return; //TODO: start fallback instance here. (case can happen if client is slow)
+    //TODO: start fb "instance" and roll over this request to that fallback function. (makes it so that when
+    //client receives bunch of messages from different views, they directly count towards the new Quorums needed)
   }
 
 //Correct client KNOWS to expect only matching replies so we can just count those.
@@ -682,6 +694,7 @@ void ShardClient::Phase1Decision(
 /////////////////////////////////////////FALLBACK CODE STARTS HERE ///////////////////////////////////////////
 
 void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
+
   Debug("RelayP1[%lu][%s].", relayP1.conflict_id(),
       TransactionDigest(relayP1.p1().txn(), params.hashDigest).c_str());
   uint64_t req_id = relayP1.conflict_id();
@@ -725,7 +738,9 @@ void ShardClient::Phase1FB(proto::Phase1 &p1, const std::string &txnDigest, phas
 //TODO: clean this up.
 void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){ // update pendingFB state -- if complete, upcall to client
 
+
   std::string txnDigest = p1fbr.txn_digest();
+  Debug("Handling P1FBReply [%s]", BytesToHex(txnDigest, 128).c_str());
   auto itr = this->pendingFallbacks.find(txnDigest);
   if (itr == this->pendingFallbacks.end()) {
     return; // this is a stale request
@@ -884,6 +899,7 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){ // update pe
       const proto::Transaction &txn, const std::string &txnDigest,
       proto::CommitDecision decision,
       const proto::GroupedSignatures &groupedSigs) {
+
     Debug("[group %i] Sending PHASE2FB [%lu]", group, id);
 
     phase2FB.Clear();
@@ -903,6 +919,8 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){ // update pe
       const proto::Transaction &txn, const std::string &txnDigest,
       proto::CommitDecision decision,
       const proto::P2Replies &p2Replies) {
+
+        return;
     Debug("[group %i] Sending PHASE2FB [%lu]", group, id);
 
     phase2FB.Clear();
@@ -1271,7 +1289,7 @@ void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::T
 
 }
 
-void ShardClient::WritebackFB(std::string txnDigest, proto::Writeback &wb) {
+void ShardClient::WritebackFB_fast(std::string txnDigest, proto::Writeback &wb) {
 
   transport->SendMessageToGroup(this, group, wb);
   Debug("[group %i] Sent FB-WRITEBACK[%lu]", group, client_id);

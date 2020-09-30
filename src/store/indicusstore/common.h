@@ -123,20 +123,20 @@ bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
     int64_t myProcessId, proto::ConcurrencyControl::Result myResult,
     Latency_t &lat, Verifier *verifier);
 
-void* ValidateP2RepliesWrapper(proto::CommitDecision decision,
+void* ValidateP2RepliesWrapper(proto::CommitDecision decision, uint64_t view,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier);
 
-void asyncBatchValidateP2Replies(proto::CommitDecision decision,
+void asyncBatchValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier,
     mainThreadCallback mcb, Transport* transport, bool multithread = false);
 
-void asyncValidateP2Replies(proto::CommitDecision decision,
+void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
@@ -145,13 +145,13 @@ void asyncValidateP2Replies(proto::CommitDecision decision,
 
 void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
 
-bool ValidateP2Replies(proto::CommitDecision decision,
+bool ValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier);
 
-bool ValidateP2Replies(proto::CommitDecision decision,
+bool ValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     const proto::Transaction *txn,
     const std::string *txnDigest, const proto::GroupedSignatures &groupedSigs,
     KeyManager *keyManager, const transport::Configuration *config,

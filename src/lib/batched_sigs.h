@@ -22,7 +22,7 @@ void generateBatchedSignatures(const std::vector<const std::string*> &messages, 
 
 extern uint64_t hashCount;
 extern uint64_t hashCatCount;
-extern blake3_hasher hasher;
+extern thread_local blake3_hasher hasher;
 
 template<class S>
 bool computeBatchedSignatureHash(const std::string* signature, const std::string* message, crypto::PubKey* publicKey,

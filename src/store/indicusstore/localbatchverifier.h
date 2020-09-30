@@ -7,6 +7,7 @@
 #include "store/indicusstore/common.h"
 #include "lib/latency.h"
 
+#include <mutex>
 #include <string>
 #include <unordered_map>
 
@@ -37,7 +38,7 @@ class LocalBatchVerifier : public Verifier {
 
 
  private:
-
+  std::mutex cacheMutex;
   Transport *transport;
   const uint64_t merkleBranchFactor;
   Stats &stats;

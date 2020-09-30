@@ -787,7 +787,8 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
     if (what & BEV_EVENT_CONNECTED) {
         Debug("Established outgoing TCP connection to server");
     } else if (what & BEV_EVENT_ERROR) {
-        Warning("Error on outgoing TCP connection to server: %s",
+        Warning("Error on outgoing TCP connection to server [g:%d][r:%d]: %s",
+                info->groupIdx, info->replicaIdx,
                 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
         bufferevent_free(bev);
 

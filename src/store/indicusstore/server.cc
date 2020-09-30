@@ -143,7 +143,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
 
   //if(test_bool) return;
-  
+
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
     HandleRead(remote, read);
@@ -162,7 +162,6 @@ void Server::ReceiveMessage(const TransportAddress &remote,
       }
 
   } else if (type == writeback.GetTypeName()) {
-
       if(params.multiThreading){
           proto::Writeback *wb = GetUnusedWBmessage();
           wb->ParseFromString(data);
@@ -180,7 +179,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     HandlePingMessage(this, remote, ping);
 
 // Add all Fallback signedMessages
-} else if (type == phase1FB.GetTypeName()) {
+  } else if (type == phase1FB.GetTypeName()) {
     phase1FB.ParseFromString(data);
     HandlePhase1FB(remote, phase1FB);
   } else if (type == phase2FB.GetTypeName()) {
@@ -422,7 +421,7 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
 
 
   if (params.validateProofs) {
-    //  need a way for a process to know the decision view when verifying the signed p2_decision
+    // TODO: need a way for a process to know the decision view when verifying the signed p2_decision
     phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
   }
 
@@ -436,7 +435,12 @@ if (params.validateProofs && params.signedMessages) {
   proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
   //Latency_Start(&signLat);
   MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
-      [sendCB, p2Decision]() {
+      [sendCB, p2Decision, txnDigest, phase2Reply]() { //TODO:: remove last 2, only for debug print
+        Debug("P2 SIGNATURE TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
+          BytesToHex(*txnDigest, 16).c_str(),
+          BytesToHex(phase2Reply->signed_p2_decision().signature(), 1024).c_str(),
+          phase2Reply->signed_p2_decision().process_id(),
+          BytesToHex(phase2Reply->signed_p2_decision().data(), 1024).c_str());
       sendCB();
       delete p2Decision;
       });
@@ -616,7 +620,6 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
     Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
     //delete (bool*) valid;
     if(params.multiThreading){
-      Debug("should not be here");
       FreeWBmessage(msg);
     }
     return;
@@ -626,7 +629,17 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
   if (msg->decision() == proto::COMMIT) {
     Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
     bool p1Sigs = msg->has_p1_sigs();
-    Commit(*txnDigest, txn, p1Sigs ? msg->release_p1_sigs() : msg->release_p2_sigs(), p1Sigs);
+    uint64_t view = -1;
+    if(!p1Sigs){
+      if(msg->has_p2_sigs() && msg->has_p2_view()){
+        view = msg->p2_view();
+      }
+      else{
+        Debug("Writeback for P2 does not have view or sigs");
+        return;
+      }
+    }
+    Commit(*txnDigest, txn, p1Sigs ? msg->release_p1_sigs() : msg->release_p2_sigs(), p1Sigs, view);
   } else {
     Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
     writebackMessages[*txnDigest] = *msg;
@@ -687,7 +700,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
           //msg_copy->CopyFrom(msg);
           //copy shouldnt be needed due to bind?
 
-          Debug("TAKING THIS BRANCH, generating MCB");
+          Debug("1: TAKING MULTITHREADING BRANCH, generating MCB");
           std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg,
             txnDigest, txn, std::placeholders::_1));
 
@@ -697,12 +710,13 @@ void Server::HandleWriteback(const TransportAddress &remote,
             LookupP1Decision(*txnDigest, myProcessId, myResult);
 
             if(params.batchVerification){
-              Debug("CALLING asyncBatchValidateP1Replies");
+              Debug("2: Taking batch branch p1 commit");
               asyncBatchValidateP1Replies(msg.decision(),
                     true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
                     myResult, verifier, mcb, transport, true);
             }
             else{
+                  Debug("2: Taking non-batch branch p1 commit");
             asyncValidateP1Replies(msg.decision(),
                   true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier, mcb, transport, true);
@@ -717,11 +731,13 @@ void Server::HandleWriteback(const TransportAddress &remote,
             LookupP1Decision(*txnDigest, myProcessId, myResult);
 
             if(params.batchVerification){
+              Debug("2: Taking batch branch p1 abort");
               asyncBatchValidateP1Replies(msg.decision(),
                     true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
                     myResult, verifier, mcb, transport, true);
             }
             else{
+              Debug("2: Taking non-batch branch p1 abort");
             asyncValidateP1Replies(msg.decision(),
                   true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier, mcb, transport, true);
@@ -731,17 +747,38 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
           else if (params.signedMessages && msg.has_p2_sigs()) {
               //TODO: Make async validate P2 replies func
+              if(!msg.has_p2_view()) return;
               int64_t myProcessId;
               proto::CommitDecision myDecision;
               LookupP2Decision(*txnDigest, myProcessId, myDecision);
 
               if(params.batchVerification){
-                asyncBatchValidateP2Replies(msg.decision(),
+                Debug("2: Taking batch branch p2");
+                asyncBatchValidateP2Replies(msg.decision(), msg.p2_view(),
                       txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
                       myDecision, verifier, mcb, transport, true);
               }
               else{
-                asyncValidateP2Replies(msg.decision(),
+                Debug("2: Taking non-batch branch p2");
+                // proto::Phase2Decision p2Decision;
+                // p2Decision.Clear();
+                // p2Decision.set_decision(msg_decision);
+                // p2Decision.set_involved_group(GetLogGroup(*txn, *txnDigest));
+                // *p2Decision.mutable_txn_digest() = *txnDigest;
+                //
+                // std::string p2DecisionMsg;
+                // p2Decision.SerializeToString(&p2DecisionMsg);
+                // auto &sigs = msg.p2_sigs().grouped_sigs().begin();
+                // for (const auto &sig : sigs->second.sigs()) {
+                //   Debug("P2 PRE-VERIFICATION TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
+                //       BytesToHex(*txnDigest, 128).c_str(),
+                //       BytesToHex(sig.signature(), 1024).c_str(), sig.process_id(),
+                //       BytesToHex(p2DecisionMsg, 1024).c_str());
+                // }
+
+                //Debug("Test ValidateP2Replies: %s", ValidateP2Replies(msg.decision(), txn, txnDigest, msg.p2_sigs(),
+                //      keyManager, &config, myProcessId, myDecision, verifyLat, verifier) ? "true" : "false");
+                asyncValidateP2Replies(msg.decision(), msg.p2_view(),
                       txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
                       myDecision, verifier, mcb, transport, true);
               }
@@ -825,6 +862,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
 
           else if (params.signedMessages && msg.has_p2_sigs()) {
+            if(!msg.has_p2_view()) return;
             int64_t myProcessId;
             proto::CommitDecision myDecision;
             LookupP2Decision(*txnDigest, myProcessId, myDecision);
@@ -835,13 +873,13 @@ void Server::HandleWriteback(const TransportAddress &remote,
               //msg_copy->CopyFrom(msg);
               //copy shouldnt be needed due to bind?
               std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
-              asyncBatchValidateP2Replies(msg.decision(),
+              asyncBatchValidateP2Replies(msg.decision(), msg.p2_view(),
                     txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
                     myDecision, verifier, mcb, transport, false);
               return;
             }
             else{
-              if (!ValidateP2Replies(msg.decision(), txn, txnDigest, msg.p2_sigs(),
+              if (!ValidateP2Replies(msg.decision(), msg.p2_view(), txn, txnDigest, msg.p2_sigs(),
                     keyManager, &config, myProcessId, myDecision, verifyLat, verifier)) {
                 Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
                     BytesToHex(*txnDigest, 16).c_str(), msg.decision());
@@ -1374,7 +1412,7 @@ void Server::GetCommittedWrites(const std::string &key, const Timestamp &ts,
 }
 
 void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
-      proto::GroupedSignatures *groupedSigs, bool p1Sigs) {
+      proto::GroupedSignatures *groupedSigs, bool p1Sigs, uint64_t view) {
 
   Timestamp ts(txn->timestamp());
 
@@ -1396,6 +1434,8 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
         proof->set_allocated_p1_sigs(groupedSigs);
       } else {
         proof->set_allocated_p2_sigs(groupedSigs);
+        proof->set_p2_view(view);
+        //view = groupedSigs.begin()->second.sigs().begin()
       }
     }
   }
@@ -1582,7 +1622,14 @@ void Server::SendPhase1Reply(uint64_t reqId,
         [sendCB, cc, txnDigest, this, phase1Reply]() {
           Debug("PHASE1[%s] Sending Phase1Reply with signature %s from priv key %lu.",
             BytesToHex(txnDigest, 16).c_str(),
-            BytesToHex(phase1Reply->signed_cc().signature(), 100).c_str(), phase1Reply->signed_cc().process_id());
+            BytesToHex(phase1Reply->signed_cc().signature(), 100).c_str(),
+            phase1Reply->signed_cc().process_id());
+          Debug("P1 SIGNATURE TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
+            BytesToHex(txnDigest, 16).c_str(),
+            BytesToHex(phase1Reply->signed_cc().signature(), 1024).c_str(),
+            phase1Reply->signed_cc().process_id(),
+            BytesToHex(phase1Reply->signed_cc().data(), 1024).c_str());
+
           sendCB();
           delete cc;
         });

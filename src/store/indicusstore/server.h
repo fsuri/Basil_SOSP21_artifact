@@ -153,7 +153,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   void GetCommittedWrites(const std::string &key, const Timestamp &ts,
       std::vector<std::pair<Timestamp, Value>> &writes);
   void Commit(const std::string &txnDigest, proto::Transaction *txn,
-      proto::GroupedSignatures *groupedSigs, bool p1Sigs);
+      proto::GroupedSignatures *groupedSigs, bool p1Sigs, uint64_t view);
   void Abort(const std::string &txnDigest);
   void CheckDependents(const std::string &txnDigest);
   proto::ConcurrencyControl::Result CheckDependencies(

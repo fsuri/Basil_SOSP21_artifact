@@ -31,6 +31,9 @@ private:
 
   static void EventCallback(evutil_socket_t fd, short what, void *arg);
 
+  // std::mutex* test_worklistMutex;
+  // std::condition_variable* test_cv;
+
   std::mutex worklistMutex;
   std::condition_variable cv;
   std::list<std::pair<std::function<void*()>, EventInfo*> > worklist;

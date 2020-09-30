@@ -36,22 +36,37 @@ LocalBatchVerifier::~LocalBatchVerifier() {
 bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &message,
     const std::string &signature) {    //TODO  ADD CALLBACK as argument, needs to be passed to batcher. ()
   VALGRIND_DO_LEAK_CHECK;
+  Debug("VERIFYING ON THIS cpu: %d",  sched_getcpu());
+  Debug("(CPU:%d) P1 LIVE-VERIFICATION for Sig:[%s] with Msg:[%s].", sched_getcpu(),
+      BytesToHex(signature, 1024).c_str(),
+      BytesToHex(message, 1024).c_str());
   std::string hashStr;
   std::string rootSig;
   Latency_Start(&hashLat);
   if (!BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
       hashStr, rootSig, merkleBranchFactor)) {
+    Debug("(CPU:%d) Signature batch hash computation failed: Sig:[%s] with Msg:[%s].",
+        sched_getcpu(),
+        BytesToHex(signature, 1024).c_str(),
+        BytesToHex(message, 1024).c_str());
     return false;
   }
   Latency_End(&hashLat);
+  std::unique_lock<std::mutex> lock(cacheMutex);
   auto itr = cache.find(rootSig);
   if (itr == cache.end()) {
+    lock.unlock();
     stats.Increment("verify_cache_miss");
     Latency_Start(&cryptoLat);
     //TODO: here: call AddToBatch  . This function needs to include the callback of the return
     //TODO: add automatic dispatch/ VerifyBatch when batch is full. Pass Callback function that manages all the callbacks.
     if (crypto::Verify(publicKey, &hashStr[0], hashStr.length(), &rootSig[0])) {
       Latency_End(&cryptoLat);
+      Debug("(CPU:%d) Adding rootSig:[%s] and hashStr:[%s].",
+          sched_getcpu(),
+          BytesToHex(rootSig, 1024).c_str(),
+          BytesToHex(hashStr, 1024).c_str());
+      std::unique_lock<std::mutex> lock(cacheMutex);
       cache[rootSig] = hashStr;
       return true;
     } else {
@@ -64,8 +79,12 @@ bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &me
       stats.Increment("verify_cache_hit");
       return true;
     } else {
-      Debug("Verification via cached hash %s failed.",
+      Debug("(CPU:%d) Verification via cach has failed: rootSig:[%s] and computedHash:[%s] failed, storedHash:[%s]",
+          sched_getcpu(),
+          BytesToHex(rootSig, 1024).c_str(),
+          BytesToHex(hashStr, 1024).c_str(),
           BytesToHex(itr->second, 100).c_str());
+
       return false;
     }
   }
@@ -90,24 +109,28 @@ bool LocalBatchVerifier::partialVerify(crypto::PubKey *publicKey, std::string ha
 void* LocalBatchVerifier::asyncComputeBatchVerification(std::vector<crypto::PubKey*> _publicKeys,
   std::vector<const char*> _messages, std::vector<size_t> _messageLens,
   std::vector<const char*> _signatures, int _current_fill){
+    Latency_Start(&cryptoLat);
     UW_ASSERT(_current_fill>0);
     UW_ASSERT(_publicKeys[0]->t == crypto::KeyType::DONNA);
     int* valid = new int[_current_fill];
     bool all_valid = crypto::BatchVerify(crypto::KeyType::DONNA, _publicKeys.data(), _messages.data(), _messageLens.data(), _signatures.data(), _current_fill, valid);
-
+    Latency_End(&cryptoLat);
     return (void*) valid;
 }
 
 void* LocalBatchVerifier::asyncComputeBatchVerificationS(std::vector<crypto::PubKey*> _publicKeys,
   std::vector<std::string*> _messagesS, std::vector<size_t> _messageLens,
   std::vector<std::string*> _signaturesS, int _current_fill){
+      Latency_Start(&cryptoLat);
     UW_ASSERT(_current_fill>0);
     UW_ASSERT(_publicKeys[0]->t == crypto::KeyType::DONNA);
     int* valid = new int[_current_fill];
 
     bool all_valid = crypto::BatchVerifyS(crypto::KeyType::DONNA, _publicKeys.data(), _messagesS.data(),
         _messageLens.data(), _signaturesS.data(), _current_fill, valid);
+      Latency_End(&cryptoLat);
     Debug("All valid: %s", all_valid? "true" : "false");
+
          // for(int i =0; i<_current_fill; ++i){
          //
          //  delete _messagesS[i];

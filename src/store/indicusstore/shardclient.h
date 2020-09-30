@@ -124,7 +124,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
     const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs);
   //overloaded function for fallback
-  virtual void Writeback(const proto::Transaction &transaction, const std::string &txnDigest,
+  virtual void WritebackFB(const proto::Transaction &transaction, const std::string &txnDigest,
       proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
       const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs);
 
@@ -139,7 +139,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   //overloaded for different p2 alternative
   virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,
     const proto::P2Replies &p2Replies);
-  virtual void WritebackFB(std::string txnDigest, proto::Writeback &wb); //fix bracket
+  virtual void WritebackFB_fast(std::string txnDigest, proto::Writeback &wb); //fix bracket
   virtual void InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::Transaction &txn, proto::CommitDecision decision,
     proto::P2Replies &p2Replies);
 

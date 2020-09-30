@@ -663,7 +663,7 @@ void Client::WritebackFB(PendingRequest *req){
   }
 
   for (auto group : req->txn.involved_groups()) {
-    bclient[group]->Writeback(req->txn, req->txnDigest,
+    bclient[group]->WritebackFB(req->txn, req->txnDigest,
         req->decision, req->fast, req->conflict, req->p1ReplySigsGrouped,
         req->p2ReplySigsGrouped);
   }
@@ -831,7 +831,7 @@ void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, pr
   *wb.mutable_txn() = fbtxn;
 
  for (auto group : fbtxn.involved_groups()) {
-   bclient[group]->WritebackFB(txnDigest, wb);
+   bclient[group]->WritebackFB_fast(txnDigest, wb);
  }
  //delete FB instance.
  auto itr = FB_instances.find(txnDigest);

@@ -6,17 +6,21 @@
 
 //TODO: make is so that all but the first core are used.
 ThreadPool::ThreadPool() {
+  // test_worklistMutex = new std::mutex;
+  // test_cv = new std::condition_variable;
+
   int num_cpus = std::thread::hardware_concurrency();
   Debug("num cpus %d", num_cpus);
   uint32_t num_threads = (uint32_t) std::max(1, num_cpus - 1);
   running = true;
   for (uint32_t i = 0; i < num_threads; i++) {
-    std::thread t([this] {
+    std::thread *t = new std::thread([this] {
       while (true) {
         std::pair<std::function<void*()>, EventInfo*> job;
         {
           // only acquire the lock in this block so that the
           // std::function execution is not holding the lock
+
           std::unique_lock<std::mutex> lock(this->worklistMutex);
           cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });
           if (!running) {
@@ -39,26 +43,30 @@ ThreadPool::ThreadPool() {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(i, &cpuset);
-    int rc = pthread_setaffinity_np(t.native_handle(),
+    int rc = pthread_setaffinity_np(t->native_handle(),
                                     sizeof(cpu_set_t), &cpuset);
     if (rc != 0) {
         Panic("Error calling pthread_setaffinity_np: %d", rc);
     }
-    threads.push_back(&t);
-    t.detach();
+    threads.push_back(t);
+    t->detach();
   }
 }
 
 ThreadPool::~ThreadPool()
 {
   stop();
+  // delete test_worklistMutex;
+  // delete test_cv;
 }
+
 void ThreadPool::stop() {
   running = false;
   cv.notify_all();
-  for(auto t: threads){
-    delete t;
-  }
+ // for(auto t: threads){
+ //    t->join();
+ //    delete t;
+ // }
 }
 
 
