@@ -69,6 +69,11 @@ void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
     const std::vector<proto::SignedMessage*>& signedMessages,
     uint64_t merkleBranchFactor);
 
+void* asyncSignMessages(const std::vector<::google::protobuf::Message*> msgs,
+    crypto::PrivKey* privateKey, uint64_t processId,
+    const std::vector<proto::SignedMessage*> signedMessages,
+    uint64_t merkleBranchFactor);
+
 void asyncValidateCommittedConflict(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, const proto::Transaction *txn,
     const std::string *txnDigest, bool signedMessages, KeyManager *keyManager,

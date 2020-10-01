@@ -60,6 +60,30 @@ void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
   }
 }
 
+void* asyncSignMessages(const std::vector<::google::protobuf::Message*> msgs,
+    crypto::PrivKey* privateKey, uint64_t processId,
+    const std::vector<proto::SignedMessage*> signedMessages,
+    uint64_t merkleBranchFactor) {
+
+  UW_ASSERT(msgs.size() == signedMessages.size());
+
+  std::vector<const std::string*> messageStrs;
+  for (unsigned int i = 0; i < msgs.size(); i++) {
+    signedMessages[i]->set_process_id(processId);
+    UW_ASSERT(msgs[i]->SerializeToString(signedMessages[i]->mutable_data()));
+    messageStrs.push_back(&signedMessages[i]->data());
+  }
+  Debug("sizes: %d, %d, %d", msgs.size(), signedMessages.size(), messageStrs.size());
+  std::vector<std::string> sigs;
+  BatchedSigs::generateBatchedSignatures(messageStrs, privateKey, sigs, merkleBranchFactor);
+  Debug("failing here");
+  for (unsigned int i = 0; i < msgs.size(); i++) {
+    *signedMessages[i]->mutable_signature() = sigs[i];
+  }
+
+  return (void*) &signedMessages;
+}
+
 void asyncValidateCommittedConflict(const proto::CommittedProof &proof,
     const std::string *committedTxnDigest, const proto::Transaction *txn,
     const std::string *txnDigest, bool signedMessages, KeyManager *keyManager,
@@ -221,8 +245,8 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
 
   delete (bool*) result;
 
-  Debug("asyncValidateP1RepliesCallback with result: %s", verification_result ? "true" : "false");
-  Debug("running on cpu %d (mainthread)",  sched_getcpu());
+  Debug("(CPU:%d - mainthread) asyncValidateP1RepliesCallback with result: %s", sched_getcpu(), verification_result ? "true" : "false");
+
   //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
   //technically dont need a mutex if this callback only runs on main thread?
 
@@ -457,19 +481,12 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
       Debug("Verifying %lu byte signature from replica %lu in group %lu.",
           sig.signature().size(), sig.process_id(), sigs.first);
       //sanity check expected results: all true
-      Debug("P1 VERIFICATION TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s]. \n verification expected_result %s",
-          BytesToHex(*txnDigest, 128).c_str(),
-          BytesToHex(sig.signature(), 1024).c_str(), sig.process_id(),
-          BytesToHex(ccMsg, 1024).c_str(),
-          verifier->Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
-                  sig.signature())? "true" : "false");
-
-      Debug("(DC) P1 VERIFICATION TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s]. \n verification expected_result %s",
-                      BytesToHex(*txnDigest, 128).c_str(),
-                      BytesToHex(sig.signature(), 1024).c_str(), sig.process_id(),
-                      BytesToHex(ccMsg, 1024).c_str(),
-                      verifier->Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
-                              sig.signature())? "true" : "false");
+      // Debug("P1 VERIFICATION TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s]. \n verification expected_result %s",
+      //     BytesToHex(*txnDigest, 128).c_str(),
+      //     BytesToHex(sig.signature(), 1024).c_str(), sig.process_id(),
+      //     BytesToHex(ccMsg, 1024).c_str(),
+      //     verifier->Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
+      //             sig.signature())? "true" : "false");
 
 
       std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(sig.process_id()),
@@ -491,7 +508,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
 
     //a)) Multithreading: Dispatched f: verify , cb: async Callback
     if(multithread){
-      Debug("P1 Validation is dispatched and parallel");
+      // Debug("P1 Validation is dispatched and parallel");
       transport->DispatchTP(verification.first, verification.second);
     }
     //b) No multithreading: Calls verify + async Callback. Problem: Unecessary copying for bind.
@@ -637,7 +654,7 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
   bool verification_result = * ((bool*) result);
   delete (bool*) result;
 
-  Debug("asyncValidateP2RepliesCallback with result: %s", verification_result ? "true" : "false");
+  Debug("(CPU:%d - mainthread) asyncValidateP2RepliesCallback with result: %s", sched_getcpu(), verification_result ? "true" : "false");
   //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
   //technically dont need a mutex if this callback only runs on main thread?
 
@@ -810,12 +827,13 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
         return;
       }
 
-      Debug("P2 VERIFICATION TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
-          BytesToHex(*txnDigest, 128).c_str(),
-          BytesToHex(sig.signature(), 1024).c_str(), sig.process_id(),
-          BytesToHex(p2DecisionMsg, 1024).c_str());
-      Debug("p2 verification expected_result %s", verifier->Verify(keyManager->GetPublicKey(sig.process_id()),
-            p2DecisionMsg, sig.signature())? "true" : "false");
+      //sanity checks
+      // Debug("P2 VERIFICATION TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
+      //     BytesToHex(*txnDigest, 128).c_str(),
+      //     BytesToHex(sig.signature(), 1024).c_str(), sig.process_id(),
+      //     BytesToHex(p2DecisionMsg, 1024).c_str());
+      // Debug("p2 verification expected_result %s", verifier->Verify(keyManager->GetPublicKey(sig.process_id()),
+      //       p2DecisionMsg, sig.signature())? "true" : "false");
 
       //TODO: add to job list
       std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(sig.process_id()), p2DecisionMsg, sig.signature()));
@@ -832,7 +850,7 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
 
       //a)) Multithreading: Dispatched f: verify , cb: async Callback
       if(multithread){
-        Debug("P2 Validation is dispatched and parallel");
+        // Debug("P2 Validation is dispatched and parallel");
         transport->DispatchTP(verification.first, verification.second);
       }
       //b) No multithreading: Calls verify + async Callback.

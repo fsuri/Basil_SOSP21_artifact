@@ -306,19 +306,49 @@ void Server::HandleRead(const TransportAddress &remote,
         sendCB();
         delete write;
       });
+      //TODO add multithreading:
     } else if (params.signatureBatchSize == 1) {
-      proto::Write write(readReply->write());
-      SignMessage(&write, keyManager->GetPrivateKey(id), id,
-          readReply->mutable_signed_write());
-      sendCB();
+
+      if(params.multiThreading){
+        proto::Write* write = new proto::Write(readReply->write());
+        std::function<void*()> f(std::bind(asyncSignMessage, write,
+          keyManager->GetPrivateKey(id), id, readReply->mutable_signed_write()));
+        transport->DispatchTP(f, [sendCB, write](void * ret){ sendCB(); delete write;});
+      }
+      else{
+        proto::Write write(readReply->write());
+        SignMessage(&write, keyManager->GetPrivateKey(id), id,
+            readReply->mutable_signed_write());
+        sendCB();
+      }
+
     } else {
-      proto::Write write(readReply->write());
-      std::vector<::google::protobuf::Message *> msgs;
-      msgs.push_back(&write);
-      std::vector<proto::SignedMessage *> smsgs;
-      smsgs.push_back(readReply->mutable_signed_write());
-      SignMessages(msgs, keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor);
-      sendCB();
+
+      if(params.multiThreading){
+
+        std::vector<::google::protobuf::Message *> msgs;
+        proto::Write* write = new proto::Write(readReply->write());
+        msgs.push_back(write);
+        std::vector<proto::SignedMessage *> smsgs;
+        smsgs.push_back(readReply->mutable_signed_write());
+
+        std::function<void*()> f(std::bind(asyncSignMessages, msgs,
+          keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor));
+          // [this, msgs, smsgs](){
+          //   SignMessages(msgs, keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor);
+          //   bool* r = new bool(true);
+          //   return (void*) r; }
+        transport->DispatchTP(f ,[sendCB, write](void * ret){ sendCB(); delete write;});
+      }
+      else{
+        proto::Write write(readReply->write());
+        std::vector<::google::protobuf::Message *> msgs;
+        msgs.push_back(&write);
+        std::vector<proto::SignedMessage *> smsgs;
+        smsgs.push_back(readReply->mutable_signed_write());
+        SignMessages(msgs, keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor);
+        sendCB();
+      }
     }
   } else {
     sendCB();
@@ -385,7 +415,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 }
 
 
-//TODO: Needs to always delete/free. But does not need the bool arg to be allocated.
+   //TODO: Needs to always delete/free. But does not need the bool arg to be allocated.
 void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
   signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, bool valid) { //void* valid){
 
@@ -436,11 +466,12 @@ if (params.validateProofs && params.signedMessages) {
   //Latency_Start(&signLat);
   MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
       [sendCB, p2Decision, txnDigest, phase2Reply]() { //TODO:: remove last 2, only for debug print
-        Debug("P2 SIGNATURE TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
-          BytesToHex(*txnDigest, 16).c_str(),
-          BytesToHex(phase2Reply->signed_p2_decision().signature(), 1024).c_str(),
-          phase2Reply->signed_p2_decision().process_id(),
-          BytesToHex(phase2Reply->signed_p2_decision().data(), 1024).c_str());
+        //sanity checks
+        // Debug("P2 SIGNATURE TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
+        //   BytesToHex(*txnDigest, 16).c_str(),
+        //   BytesToHex(phase2Reply->signed_p2_decision().signature(), 1024).c_str(),
+        //   phase2Reply->signed_p2_decision().process_id(),
+        //   BytesToHex(phase2Reply->signed_p2_decision().data(), 1024).c_str());
       sendCB();
       delete p2Decision;
       });
@@ -1624,11 +1655,12 @@ void Server::SendPhase1Reply(uint64_t reqId,
             BytesToHex(txnDigest, 16).c_str(),
             BytesToHex(phase1Reply->signed_cc().signature(), 100).c_str(),
             phase1Reply->signed_cc().process_id());
-          Debug("P1 SIGNATURE TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
-            BytesToHex(txnDigest, 16).c_str(),
-            BytesToHex(phase1Reply->signed_cc().signature(), 1024).c_str(),
-            phase1Reply->signed_cc().process_id(),
-            BytesToHex(phase1Reply->signed_cc().data(), 1024).c_str());
+          //sanity checks
+          // Debug("P1 SIGNATURE TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
+          //   BytesToHex(txnDigest, 16).c_str(),
+          //   BytesToHex(phase1Reply->signed_cc().signature(), 1024).c_str(),
+          //   phase1Reply->signed_cc().process_id(),
+          //   BytesToHex(phase1Reply->signed_cc().data(), 1024).c_str());
 
           sendCB();
           delete cc;

@@ -283,8 +283,8 @@ int main(int argc, char *argv[]) {
     }
     Latency_End(&verifyBLat);*/
 
-  }
 
+}
 
 
   Latency_Dump(&signLat);
