@@ -8,6 +8,7 @@
 
 #include "store/common/timestamp.h"
 #include "store/common/transaction.h"
+#include <utility>
 
 
 #include "lib/batched_sigs.h"
@@ -107,7 +108,7 @@ void asyncValidateCommittedConflict(const proto::CommittedProof &proof,
     }
     if(signedMessages && multithread){
       asyncValidateCommittedProof(proof, committedTxnDigest,
-            keyManager, config, verifier, mcb, transport, multithread);
+            keyManager, config, verifier, std::move(mcb), transport, multithread);
     }
     return;
 }
@@ -131,24 +132,24 @@ void asyncValidateCommittedProof(const proto::CommittedProof &proof,
     if(batchVerification){
       asyncBatchValidateP1Replies(proto::COMMIT, true, &proof.txn(), committedTxnDigest,
           proof.p1_sigs(), keyManager, config, -1, proto::ConcurrencyControl::ABORT,
-          verifier, mcb, transport, multithread);
+          verifier, std::move(mcb), transport, multithread);
       return;
     }
     else{
       asyncValidateP1Replies(proto::COMMIT, true, &proof.txn(), committedTxnDigest,
           proof.p1_sigs(), keyManager, config, -1, proto::ConcurrencyControl::ABORT,
-          verifier, mcb, transport, multithread);
+          verifier, std::move(mcb), transport, multithread);
       return;
     }
   } else if (proof.has_p2_sigs()) {
     if(batchVerification){
       asyncBatchValidateP2Replies(proto::COMMIT, proof.p2_view(), &proof.txn(), committedTxnDigest,
-          proof.p2_sigs(), keyManager, config, -1, proto::ABORT, verifier, mcb, transport, multithread);
+          proof.p2_sigs(), keyManager, config, -1, proto::ABORT, verifier, std::move(mcb), transport, multithread);
       return;
     }
     else{
       asyncValidateP2Replies(proto::COMMIT, proof.p2_view(), &proof.txn(), committedTxnDigest,
-          proof.p2_sigs(), keyManager, config, -1, proto::ABORT, verifier, mcb, transport, multithread);
+          proof.p2_sigs(), keyManager, config, -1, proto::ABORT, verifier, std::move(mcb), transport, multithread);
       return;
     }
   } else {
@@ -349,7 +350,7 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
     mcb(false);
     return;
   }
-  asyncVerification *verifyObj = new asyncVerification(quorumSize, mcb, txn->involved_groups_size(), decision);
+  asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), txn->involved_groups_size(), decision);
   std::list<std::function<void()>> asyncBatchingVerificationJobs;
 
   for (const auto &sigs : groupedSigs.grouped_sigs()) {
@@ -393,7 +394,7 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
 
       std::function<void()> func(std::bind(&Verifier::asyncBatchVerify, verifier, keyManager->GetPublicKey(sig.process_id()),
                 ccMsg, sig.signature(), vb, multithread, false)); //autocomplete set to false by default.
-      asyncBatchingVerificationJobs.push_back(func);
+      asyncBatchingVerificationJobs.push_back(std::move(func));
       }
     }
 
@@ -440,7 +441,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
     return; //false; //dont need to return anything
   }
 
-  asyncVerification *verifyObj = new asyncVerification(quorumSize, mcb, txn->involved_groups_size(), decision);
+  asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), txn->involved_groups_size(), decision);
 
   std::list<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
 
@@ -494,15 +495,15 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
       //     verifier->Verify(keyManager->GetPublicKey(sig.process_id()), ccMsg,
       //             sig.signature())? "true" : "false");
 
-
+      //create copy of ccMsg, and signature on heap, put them in the verifyObj, and then delete then when deleting the object.
       std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(sig.process_id()),
                 ccMsg, sig.signature()));
 
 
-      std::function<void*()> f(std::bind(pointerWrapper<bool>, func)); //turn into void* function in order to dispatch
+      std::function<void*()> f(std::bind(pointerWrapper<bool>, std::move(func))); //turn into void* function in order to dispatch
       std::function<void(void*)> cb(std::bind(asyncValidateP1RepliesCallback, verifyObj, sigs.first, std::placeholders::_1));
 
-      verificationJobs.push_back(std::make_pair(f, cb));
+      verificationJobs.push_back(std::make_pair(std::move(f), std::move(cb)));
 
       }
     }
@@ -515,7 +516,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
     //a)) Multithreading: Dispatched f: verify , cb: async Callback
     if(multithread){
       // Debug("P1 Validation is dispatched and parallel");
-      transport->DispatchTP(verification.first, verification.second);
+      transport->DispatchTP(std::move(verification.first), std::move(verification.second));
     }
     //b) No multithreading: Calls verify + async Callback. Problem: Unecessary copying for bind.
     else{
@@ -731,7 +732,7 @@ void asyncBatchValidateP2Replies(proto::CommitDecision decision, uint64_t view,
       return;
     }
 
-    asyncVerification *verifyObj = new asyncVerification(QuorumSize(config), mcb, 1, decision);
+    asyncVerification *verifyObj = new asyncVerification(QuorumSize(config), std::move(mcb), 1, decision);
 
     std::list<std::function<void()>> asyncBatchingVerificationJobs;
 
@@ -767,7 +768,7 @@ void asyncBatchValidateP2Replies(proto::CommitDecision decision, uint64_t view,
 
       std::function<void()> func(std::bind(&Verifier::asyncBatchVerify, verifier, keyManager->GetPublicKey(sig.process_id()),
                 p2DecisionMsg, sig.signature(), vb, multithread, false)); //autocomplete set to false by default.
-      asyncBatchingVerificationJobs.push_back(func);
+      asyncBatchingVerificationJobs.push_back(std::move(func));
 
     }
     verifyObj->deletable = asyncBatchingVerificationJobs.size();
@@ -814,7 +815,7 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
       mcb(false);
       return;
     }
-    asyncVerification *verifyObj = new asyncVerification(QuorumSize(config), mcb, 1, decision);
+    asyncVerification *verifyObj = new asyncVerification(QuorumSize(config), std::move(mcb), 1, decision);
 
     std::list<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
 
@@ -843,11 +844,13 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
 
       //TODO: add to job list
       std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(sig.process_id()), p2DecisionMsg, sig.signature()));
-      std::function<void*()> f(std::bind(pointerWrapper<bool>, func)); //turn into void* function in order to dispatch
+      std::function<void*()> f(std::bind(pointerWrapper<bool>, std::move(func))); //turn into void* function in order to dispatch
       //callback
+
+
       std::function<void(void*)> cb(std::bind(asyncValidateP2RepliesCallback, verifyObj, sigs->first, std::placeholders::_1));
 
-      verificationJobs.push_back(std::make_pair(f, cb));
+      verificationJobs.push_back(std::make_pair(std::move(f), std::move(cb)));
 
     }
 
@@ -857,7 +860,7 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
       //a)) Multithreading: Dispatched f: verify , cb: async Callback
       if(multithread){
         // Debug("P2 Validation is dispatched and parallel");
-        transport->DispatchTP(verification.first, verification.second);
+        transport->DispatchTP(std::move(verification.first), std::move(verification.second));
       }
       //b) No multithreading: Calls verify + async Callback.
       else{

@@ -987,11 +987,11 @@ UDPTransport::OnTimer(UDPTransportTimerInfo *info)
 }
 
 void UDPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) {
-  tp.dispatch(f, cb, libeventBase);
+  tp.dispatch(std::move(f), std::move(cb), libeventBase);
   //Panic("unimplemented");
 }
 void UDPTransport::DispatchTP_noCB(std::function<void*()> f) {
-  tp.detatch(f);
+  tp.detatch(std::move(f));
   //Panic("unimplemented");
 }
 

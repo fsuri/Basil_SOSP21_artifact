@@ -31,7 +31,7 @@ void LocalBatchSigner::MessageToSign(::google::protobuf::Message* msg,
     messagesBatchedInterval++;
     pendingBatchMessages.push_back(msg);
     pendingBatchSignedMessages.push_back(signedMessage);
-    pendingBatchCallbacks.push_back(cb);
+    pendingBatchCallbacks.push_back(std::move(cb));
 
     if (finishBatch || pendingBatchMessages.size() >= batchSize) {
       Debug("Batch is full, sending");
@@ -94,14 +94,14 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
     Debug("Initial batch size = 1, immediately signing");
 
     std::function<void*()> f(std::bind(asyncSignMessage, msg, keyManager->GetPrivateKey(id), id, signedMessage));
-    transport->DispatchTP(f, [cb](void * ret){ cb();});
+    transport->DispatchTP(std::move(f), [cb](void * ret){ cb();});
 
   } else {
     Debug("Adding to Sig batch");
     messagesBatchedInterval++;
     pendingBatchMessages.push_back(msg);
     pendingBatchSignedMessages.push_back(signedMessage);
-    pendingBatchCallbacks.push_back(cb);
+    pendingBatchCallbacks.push_back(std::move(cb));
 
     if (finishBatch || pendingBatchMessages.size() >= batchSize) {
       Debug("Batch is full, sending");
@@ -110,14 +110,15 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
         batchTimerRunning = false;
       }
 
+//move these too? After moving I have a clear vector so it should be fine.
       std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch, this,
-        pendingBatchMessages, pendingBatchSignedMessages, pendingBatchCallbacks));
+        pendingBatchMessages, pendingBatchSignedMessages, std::move(pendingBatchCallbacks)));
 
       pendingBatchMessages.clear();
       pendingBatchSignedMessages.clear();
       pendingBatchCallbacks.clear();
       Debug("Batch request bound, dispatching");
-      transport->DispatchTP(f, [](void* ret){delete (bool*) ret;});
+      transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
 
 
     } else if (!batchTimerRunning) {

@@ -193,8 +193,8 @@ Debug("Harry you're a wizard? %s", *(bool*)validate ? "yes  if(current_fill == 0
           //std::string msg(*hashStr);
           //std::string sig(*rootSig);
           std::function<bool()> func(std::bind(&LocalBatchVerifier::partialVerify, this, publicKey, *hashStr, *rootSig)); //msg, sig));
-          std::function<void*()> f(std::bind(pointerWrapperC<bool>, func));
-          transport->DispatchTP(f, vb);
+          std::function<void*()> f(std::bind(pointerWrapperC<bool>, std::move(func)));
+          transport->DispatchTP(std::move(f), std::move(vb));
         }
         else{
           //this cannot work -> trying to call the whole verify again, even though part is already done.
@@ -221,7 +221,7 @@ Debug("Harry you're a wizard? %s", *(bool*)validate ? "yes  if(current_fill == 0
       //messageLens.push_back(message.length());
       messageLens.push_back((*hashStr).length());
       //signatures.push_back(&signature[0]);
-      pendingBatchCallbacks.push_back(vb);
+      pendingBatchCallbacks.push_back(std::move(vb));
 
       current_fill++;
 
@@ -274,12 +274,12 @@ void LocalBatchVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::
       std::string *rootSig = new std::string;
       std::function<bool()> func(std::bind(BatchedSigs::computeBatchedSignatureHash2<std::string>, signature, message, publicKey,
                 hashStr, rootSig, merkleBranchFactor));
-      std::function<void*()> f(std::bind(pointerWrapperC<bool>, func));
+      std::function<void*()> f(std::bind(pointerWrapperC<bool>, std::move(func)));
 
       std::function<void(void*)> cb(std::bind(&LocalBatchVerifier::asyncBatchVerifyCallback, this, publicKey, hashStr,
-         rootSig, vb, multithread, autocomplete, std::placeholders::_1));
+         rootSig, std::move(vb), multithread, autocomplete, std::placeholders::_1));
       Latency_Start(&hashLat); //inaccurate since the actual execution might be delayed... can pass it to actual function if desired. Currently measures Latency until progress is made, not raw hash time.
-      transport->DispatchTP(f, cb);
+      transport->DispatchTP(std::move(f), std::move(cb));
     }
     else{
       // if(batch_size==1){
@@ -293,7 +293,7 @@ void LocalBatchVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::
        if (BatchedSigs::computeBatchedSignatureHash(&signature, &message, publicKey,
            *hashStr, *rootSig, merkleBranchFactor)){
              bool *validate = new bool(true);
-             asyncBatchVerifyCallback(publicKey, hashStr, rootSig, vb, multithread, autocomplete, (void*) validate);
+             asyncBatchVerifyCallback(publicKey, hashStr, rootSig, std::move(vb), multithread, autocomplete, (void*) validate);
            }
          }
     //}
@@ -321,8 +321,8 @@ void LocalBatchVerifier::Complete(bool multithread, bool force_complete){
       std::function<void*()> f(std::bind(&LocalBatchVerifier::asyncComputeBatchVerificationS, this, publicKeys,
           messagesS, messageLens, signaturesS, current_fill));
       std::function<void(void*)> cb(std::bind(&LocalBatchVerifier::manageCallbacksS, this,
-        messagesS, signaturesS, pendingBatchCallbacks, std::placeholders::_1));
-      transport->DispatchTP(f, cb);
+        messagesS, signaturesS, std::move(pendingBatchCallbacks), std::placeholders::_1));
+      transport->DispatchTP(std::move(f), std::move(cb));
     }
     else{
       Debug("TRYING TO CALL BATCH VERIFICATION WITH FILL: %d", current_fill);

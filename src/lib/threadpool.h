@@ -9,6 +9,12 @@
 #include <thread>
 #include <event2/event.h>
 
+struct EventInfo {
+    event* ev;
+    std::function<void(void*)> cb;
+    void* r;
+};
+
 class ThreadPool {
 
 public:
@@ -24,19 +30,20 @@ public:
   void detatch(std::function<void*()> f);
 
 private:
-  struct EventInfo {
-      event* ev;
-      std::function<void(void*)> cb;
-      void* r;
-  };
 
+ 
   static void EventCallback(evutil_socket_t fd, short what, void *arg);
+
+  EventInfo* GetUnusedEventInfo();
+  void FreeEventInfo(EventInfo *info);
 
   // std::mutex* test_worklistMutex;
   // std::condition_variable* test_cv;
 
+
   std::mutex worklistMutex;
   std::condition_variable cv;
+  std::vector<EventInfo*> eventInfos;
   std::list<std::pair<std::function<void*()>, EventInfo*> > worklist;
   bool running;
   std::vector<std::thread*> threads;

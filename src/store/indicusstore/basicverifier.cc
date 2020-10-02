@@ -106,8 +106,8 @@ void BasicVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::strin
           std::string msg(message);
           std::string sig(signature);
           std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, msg, sig));
-          std::function<void*()> f(std::bind(pointerWrapperC<bool>, func));
-          transport->DispatchTP(f, vb);
+          std::function<void*()> f(std::bind(pointerWrapperC<bool>, std::move(func)));
+          transport->DispatchTP(std::move(f), std::move(vb));
         }
         else{
           // std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, message, signature));
@@ -141,7 +141,7 @@ void BasicVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::strin
       //messages.push_back(msg);
       messageLens.push_back(message.length());
       //signatures.push_back(sig);
-      pendingBatchCallbacks.push_back(vb);
+      pendingBatchCallbacks.push_back(std::move(vb));
       current_fill++;
 
       if(autocomplete && current_fill >= batch_size) {
@@ -199,8 +199,8 @@ void BasicVerifier::Complete(bool multithread, bool force_complete){
       //clearing the data needs to be done in the functions then.
       std::function<void*()> f(std::bind(&BasicVerifier::asyncComputeBatchVerificationS, this, publicKeys,
           messagesS, messageLens, signaturesS, current_fill));
-      std::function<void(void*)> cb(std::bind(&BasicVerifier::manageCallbacks, this, pendingBatchCallbacks, std::placeholders::_1));
-      transport->DispatchTP(f, cb);
+      std::function<void(void*)> cb(std::bind(&BasicVerifier::manageCallbacks, this, std::move(pendingBatchCallbacks), std::placeholders::_1));
+      transport->DispatchTP(std::move(f), std::move(cb));
     }
     else{
       //cb(f()); //if one wants to bind always this line suffices

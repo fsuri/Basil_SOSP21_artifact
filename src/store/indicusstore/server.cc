@@ -303,7 +303,7 @@ void Server::HandleRead(const TransportAddress &remote,
 //If readReplyBatch is false then respond immediately, otherwise respect batching policy
     if (params.readReplyBatch) {
       proto::Write* write = new proto::Write(readReply->write());
-      MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
+      MessageToSign(write, readReply->mutable_signed_write(), [sendCB = std::move(sendCB), write]() {
         sendCB();
         delete write;
       });
@@ -314,7 +314,7 @@ void Server::HandleRead(const TransportAddress &remote,
         proto::Write* write = new proto::Write(readReply->write());
         std::function<void*()> f(std::bind(asyncSignMessage, write,
           keyManager->GetPrivateKey(id), id, readReply->mutable_signed_write()));
-        transport->DispatchTP(f, [sendCB, write](void * ret){ sendCB(); delete write;});
+        transport->DispatchTP(std::move(f), [sendCB{std::move(sendCB)}, write](void * ret){ sendCB(); delete write;});
       }
       else{
         proto::Write write(readReply->write());
@@ -339,7 +339,7 @@ void Server::HandleRead(const TransportAddress &remote,
           //   SignMessages(msgs, keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor);
           //   bool* r = new bool(true);
           //   return (void*) r; }
-        transport->DispatchTP(f ,[sendCB, write](void * ret){ sendCB(); delete write;});
+        transport->DispatchTP(std::move(f) ,[sendCB, write](void * ret){ sendCB(); delete write;});
       }
       else{
         proto::Write write(readReply->write());
@@ -1743,11 +1743,11 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
           //Assuming bind creates a copy this suffices:
           Debug("(multithreading) dispatching signing");
       std::function<void*()> f(std::bind(asyncSignMessage, msg, keyManager->GetPrivateKey(id), id, signedMessage));
-      transport->DispatchTP(f, [cb](void * ret){ cb();});
+      transport->DispatchTP(std::move(f), [cb](void * ret){ cb();});
       }
       else {
         Debug("(multithreading) adding sig request to localbatchSigner");
-        batchSigner->asyncMessageToSign(msg, signedMessage, cb);
+        batchSigner->asyncMessageToSign(msg, signedMessage, std::move(cb));
         Debug("crashing after delegating sig request");
       }
   }
@@ -1760,7 +1760,7 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
       cb();
       //if multithread: Dispatch f: SignMessage and cb.
     } else {
-      batchSigner->MessageToSign(msg, signedMessage, cb);
+      batchSigner->MessageToSign(msg, signedMessage, std::move(cb));
     }
   }
 }

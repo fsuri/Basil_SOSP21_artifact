@@ -48,6 +48,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <signal.h>
+#include <utility>
 //#include "lib/threadpool.cc"
 
 const size_t MAX_TCP_SIZE = 100; // XXX
@@ -592,11 +593,11 @@ TCPTransport::TimerCallback(evutil_socket_t fd, short what, void *arg)
 }
 
 void TCPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {
-  tp.dispatch(f, cb, libeventBase);
+  tp.dispatch(std::move(f), std::move(cb), libeventBase);
   //Panic("unimplemented");
 }
 void TCPTransport::DispatchTP_noCB(std::function<void*()> f) {
-  tp.detatch(f);
+  tp.detatch(std::move(f));
   //Panic("unimplemented");
 }
 
