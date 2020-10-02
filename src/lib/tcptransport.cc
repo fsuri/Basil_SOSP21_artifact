@@ -595,6 +595,10 @@ void TCPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*
   tp.dispatch(f, cb, libeventBase);
   //Panic("unimplemented");
 }
+void TCPTransport::DispatchTP_noCB(std::function<void*()> f) {
+  tp.detatch(f);
+  //Panic("unimplemented");
+}
 
 void
 TCPTransport::LogCallback(int severity, const char *msg)
@@ -785,7 +789,7 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
     TCPTransportAddress addr = it->second.first;
 
     if (what & BEV_EVENT_CONNECTED) {
-        Debug("Established outgoing TCP connection to server");
+        Debug("Established outgoing TCP connection to server [g:%d][r:%d]", info->groupIdx, info->replicaIdx);
     } else if (what & BEV_EVENT_ERROR) {
         Warning("Error on outgoing TCP connection to server [g:%d][r:%d]: %s",
                 info->groupIdx, info->replicaIdx,

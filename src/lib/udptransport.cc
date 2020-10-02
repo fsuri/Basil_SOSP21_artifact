@@ -990,6 +990,10 @@ void UDPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*
   tp.dispatch(f, cb, libeventBase);
   //Panic("unimplemented");
 }
+void UDPTransport::DispatchTP_noCB(std::function<void*()> f) {
+  tp.detatch(f);
+  //Panic("unimplemented");
+}
 
 
 void

@@ -48,6 +48,12 @@ void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
 
   std::vector<const std::string*> messageStrs;
   for (unsigned int i = 0; i < msgs.size(); i++) {
+    if(signedMessages[i]){
+      Debug("signedMessages[%d] exists", i);
+    }
+    else{
+      Debug("signedMessages[%d] was already freed", i);
+    }
     signedMessages[i]->set_process_id(processId);
     UW_ASSERT(msgs[i]->SerializeToString(signedMessages[i]->mutable_data()));
     messageStrs.push_back(&signedMessages[i]->data());

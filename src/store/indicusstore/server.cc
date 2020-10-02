@@ -252,6 +252,7 @@ void Server::HandleRead(const TransportAddress &remote,
 
   TransportAddress *remoteCopy = remote.clone();
   auto sendCB = [this, remoteCopy, readReply]() {
+    std::unique_lock<std::mutex> lock(transportMutex);
     this->transport->SendMessage(this, *remoteCopy, *readReply);
     delete remoteCopy;
     FreeReadReply(readReply);
@@ -410,6 +411,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
     //   client_starttime[txnDigest] = start_time;
     // }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
     SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, &remote);
+    Debug("Not failing as part of SendPhase1Reply");
   }
 
 }
@@ -542,6 +544,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   proto::Phase2Reply* phase2Reply = GetUnusedPhase2Reply();
   TransportAddress *remoteCopy = remote.clone();
   auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
+    std::unique_lock<std::mutex> lock(transportMutex);
     this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
     FreePhase2Reply(phase2Reply);
@@ -1632,6 +1635,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
   TransportAddress *remoteCopy = remote->clone();
 
   auto sendCB = [remoteCopy, this, phase1Reply]() {
+    std::unique_lock<std::mutex> lock(transportMutex);
     this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
     FreePhase1Reply(phase1Reply);
     delete remoteCopy;
@@ -1737,11 +1741,14 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
           // msg_copy->CopyFrom(msg);
           // std::function<void*()> f(std::bind(asyncSignMessage, *msg_copy, keyManager->GetPrivateKey(id), id, signedMessage));
           //Assuming bind creates a copy this suffices:
+          Debug("(multithreading) dispatching signing");
       std::function<void*()> f(std::bind(asyncSignMessage, msg, keyManager->GetPrivateKey(id), id, signedMessage));
       transport->DispatchTP(f, [cb](void * ret){ cb();});
       }
       else {
+        Debug("(multithreading) adding sig request to localbatchSigner");
         batchSigner->asyncMessageToSign(msg, signedMessage, cb);
+        Debug("crashing after delegating sig request");
       }
   }
   else{
@@ -1772,6 +1779,7 @@ proto::ReadReply *Server::GetUnusedReadReply() {
 }
 
 proto::Phase1Reply *Server::GetUnusedPhase1Reply() {
+  std::unique_lock<std::mutex> lock(protoMutex);
   proto::Phase1Reply *reply;
   if (p1Replies.size() > 0) {
     reply = p1Replies.back();
@@ -1784,6 +1792,7 @@ proto::Phase1Reply *Server::GetUnusedPhase1Reply() {
 }
 
 proto::Phase2Reply *Server::GetUnusedPhase2Reply() {
+  std::unique_lock<std::mutex> lock(protoMutex);
   proto::Phase2Reply *reply;
   if (p2Replies.size() > 0) {
     reply = p2Replies.back();
@@ -1824,10 +1833,12 @@ void Server::FreeReadReply(proto::ReadReply *reply) {
 }
 
 void Server::FreePhase1Reply(proto::Phase1Reply *reply) {
+  std::unique_lock<std::mutex> lock(protoMutex);
   p1Replies.push_back(reply);
 }
 
 void Server::FreePhase2Reply(proto::Phase2Reply *reply) {
+  std::unique_lock<std::mutex> lock(protoMutex);
   p2Replies.push_back(reply);
 }
 

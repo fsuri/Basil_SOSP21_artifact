@@ -52,6 +52,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <ctime>
+#include <mutex>
 
 //#include "lib/threadpool.cc"
 
@@ -207,6 +208,8 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   Verifier *verifier;
 
   //ThreadPool* tp;
+  std::mutex transportMutex;
+  std::mutex protoMutex;
 
   /* Declare protobuf objects as members to avoid stack alloc/dealloc costs */
   proto::SignedMessage signedMessage;

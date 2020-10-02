@@ -97,6 +97,7 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
     transport->DispatchTP(f, [cb](void * ret){ cb();});
 
   } else {
+    Debug("Adding to Sig batch");
     messagesBatchedInterval++;
     pendingBatchMessages.push_back(msg);
     pendingBatchSignedMessages.push_back(signedMessage);
@@ -115,6 +116,7 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
       pendingBatchMessages.clear();
       pendingBatchSignedMessages.clear();
       pendingBatchCallbacks.clear();
+      Debug("Batch request bound, dispatching");
       transport->DispatchTP(f, [](void* ret){delete (bool*) ret;});
 
 
@@ -157,9 +159,11 @@ std::vector<signedCallback> _pendingBatchCallbacks) {
     uint64_t currMicros = curr.tv_sec * 1000000ULL + curr.tv_usec;
     stats.Add("sig_batch_sizes_ts",  currMicros);
   }
+  Debug("(CPU:%d) Signing batch", sched_getcpu());
   SignMessages(_pendingBatchMessages, keyManager->GetPrivateKey(id), id,
     _pendingBatchSignedMessages, merkleBranchFactor);
 
+  Debug("(CPU:%d) Issuing sender callbacks", sched_getcpu());
   for (const auto& cb : _pendingBatchCallbacks) {
     cb();
   }

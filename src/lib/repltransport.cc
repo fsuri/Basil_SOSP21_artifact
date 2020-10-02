@@ -130,6 +130,9 @@ void ReplTransport::CancelAllTimers() {
 void ReplTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) {
   Panic("Unimplemented");
 }
+void ReplTransport::DispatchTP_noCB(std::function<void*()> f) {
+  Panic("unimplemented");
+}
 
 bool ReplTransport::DeliverMessage(const ReplTransportAddress &addr,
                                    int index) {

@@ -295,6 +295,9 @@ SimulatedTransport::Stop(bool immediately) {
 void SimulatedTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {
   Panic("Unimplemented");
 }
+void SimulatedTransport::DispatchTP_noCB(std::function<void*()> f) {
+  Panic("unimplemented");
+}
 
 
 const SimulatedTransportAddress *

@@ -21,6 +21,7 @@ public:
   void stop();
 
   void dispatch(std::function<void*()> f, std::function<void(void*)> cb, event_base* libeventBase);
+  void detatch(std::function<void*()> f);
 
 private:
   struct EventInfo {

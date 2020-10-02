@@ -35,7 +35,10 @@ ThreadPool::ThreadPool() {
 
         job.second->r = job.first();
         // This _should_ be thread safe
-        event_active(job.second->ev, 0, 0);
+        if(job.second){
+            event_active(job.second->ev, 0, 0);
+        }
+
       }
     });
     // Create a cpu_set_t object representing a set of CPUs. Clear it and mark
@@ -87,6 +90,14 @@ void ThreadPool::dispatch(std::function<void*()> f, std::function<void(void*)> c
 
   std::pair<std::function<void*()>, EventInfo*> job(f, info);
 
+  std::lock_guard<std::mutex> lk(worklistMutex);
+  worklist.push_back(job);
+  cv.notify_one();
+}
+
+void ThreadPool::detatch(std::function<void*()> f){
+  EventInfo* info = nullptr;
+  std::pair<std::function<void*()>, EventInfo*> job(f, info);
   std::lock_guard<std::mutex> lk(worklistMutex);
   worklist.push_back(job);
   cv.notify_one();

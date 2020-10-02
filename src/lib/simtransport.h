@@ -80,8 +80,9 @@ public:
     bool CancelTimer(int id);
     void CancelAllTimers();
     void Stop(bool immediately = false) override;
-    
+
     void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb);
+    void DispatchTP_noCB(std::function<void*()> f);
 
 protected:
     bool SendMessageInternal(TransportReceiver *src,
