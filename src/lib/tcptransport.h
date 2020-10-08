@@ -89,7 +89,9 @@ public:
     virtual void CancelAllTimers() override;
 
     void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb);
+    void DispatchTP_local(std::function<void*()> f, std::function<void(void*)> cb);
     void DispatchTP_noCB(std::function<void*()> f);
+    void IssueCB(std::function<void(void*)> cb);
 
     TCPTransportAddress
     LookupAddress(const transport::Configuration &cfg,

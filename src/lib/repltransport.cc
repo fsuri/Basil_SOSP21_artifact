@@ -130,7 +130,13 @@ void ReplTransport::CancelAllTimers() {
 void ReplTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) {
   Panic("Unimplemented");
 }
+void ReplTransport::DispatchTP_local(std::function<void*()> f, std::function<void(void*)> cb)  {
+  Panic("unimplemented");
+}
 void ReplTransport::DispatchTP_noCB(std::function<void*()> f) {
+  Panic("unimplemented");
+}
+void ReplTransport::IssueCB(std::function<void(void*)> cb){
   Panic("unimplemented");
 }
 

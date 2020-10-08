@@ -61,6 +61,13 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     params(params), keyManager(keyManager),
     timeDelta(timeDelta),
     timeServer(timeServer) {
+
+  // Testing purpose. TODO:: REMOVE
+  // for(int i=0; i<100; ++i){
+  //     proto::Writeback *msg= new proto::Writeback();
+  //     WBmessages.push_back(msg);
+  // }
+
   Debug("Starting Indicus replica %d.", id);
   transport->Register(this, config, groupIdx, idx);
   _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
@@ -1536,6 +1543,8 @@ void Server::Clean(const std::string &txnDigest) {
     prepared.erase(itr);
   }
   ongoing.erase(txnDigest);
+
+  //Fallback related cleans
   auto jtr = interestedClients.find(txnDigest);
   if (jtr != interestedClients.end()) {
     for (const auto addr : jtr->second) {

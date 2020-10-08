@@ -988,11 +988,15 @@ UDPTransport::OnTimer(UDPTransportTimerInfo *info)
 
 void UDPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) {
   tp.dispatch(std::move(f), std::move(cb), libeventBase);
-  //Panic("unimplemented");
+}
+void UDPTransport::DispatchTP_local(std::function<void*()> f, std::function<void(void*)> cb)  {
+  tp.dispatch_local(std::move(f), std::move(cb));
 }
 void UDPTransport::DispatchTP_noCB(std::function<void*()> f) {
   tp.detatch(std::move(f));
-  //Panic("unimplemented");
+}
+void UDPTransport::IssueCB(std::function<void(void*)> cb){
+  tp.issueCallback(std::move(cb), libeventBase);
 }
 
 

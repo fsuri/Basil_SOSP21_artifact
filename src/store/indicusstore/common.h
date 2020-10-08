@@ -27,12 +27,14 @@ typedef std::function<void(bool)> mainThreadCallback;
 
 
 struct asyncVerification{
-  asyncVerification(uint32_t _quorumSize, mainThreadCallback mcb, int no_groups, proto::CommitDecision _decision) :
-  quorumSize(_quorumSize), mainThreadCallback(mcb), groupTotals(no_groups), decision(_decision), terminate(false) { }
+  asyncVerification(uint32_t _quorumSize, mainThreadCallback mcb, int no_groups,
+    proto::CommitDecision _decision, Transport* tp) :  quorumSize(_quorumSize),
+    mainThreadCallback(mcb), groupTotals(no_groups), decision(_decision),
+    terminate(false), tp(tp) { }
   ~asyncVerification() { }
 
   std::mutex objMutex;
-  //NEEDS A MUTEX OBJECT THAT EACH THREAD tries to acquire.
+  Transport* tp;
 
   uint32_t quorumSize;
   std::function<void(bool)> mainThreadCallback;
@@ -114,6 +116,8 @@ void asyncValidateP1Replies(proto::CommitDecision decision, bool fast, const pro
     Verifier *verifier, mainThreadCallback mcb, Transport *transport, bool multithread = false);
 
 void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
+
+void ThreadLocalAsyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
 
 bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
     const proto::Transaction *txn,

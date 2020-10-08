@@ -136,7 +136,9 @@ public:
      * handle the result in cb
      */
     virtual void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) = 0;
+    virtual void DispatchTP_local(std::function<void*()> f, std::function<void(void*)> cb) = 0;
     virtual void DispatchTP_noCB(std::function<void*()> f) = 0;
+    virtual void IssueCB(std::function<void(void*)> cb) = 0;
 };
 
 class Timeout

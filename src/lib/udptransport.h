@@ -86,7 +86,9 @@ public:
     virtual void CancelAllTimers() override;
 
     virtual void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) override;
+    virtual void DispatchTP_local(std::function<void*()> f, std::function<void(void*)> cb) override;
     virtual void DispatchTP_noCB(std::function<void*()> f) override;
+    virtual void IssueCB(std::function<void(void*)> cb) override;
 
 private:
     int TimerInternal(struct timeval &tv, timer_callback_t cb);

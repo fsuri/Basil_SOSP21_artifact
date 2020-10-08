@@ -6,8 +6,8 @@
     ["client_total", "client_processes_per_client_node",
       "client_threads_per_process"]
   ],
-  "replication_protocol": ["indicus", "indicus", "indicus"],
-  "client_protocol_mode": ["indicus", "indicus", "indicus"],  
+  "replication_protocol": ["indicus", "indicus"],
+  "client_protocol_mode": ["indicus", "indicus"],  
   "fault_tolerance": 1,
   "num_shards": 1,
   "num_groups": 1,
@@ -31,48 +31,27 @@
   "run_locally": false,
   "replication_protocol_settings": [
     {
-      "message_transport_type": "tcp",
+	  "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
-      "read_dep": "one-honest",
-      "read_messages": "read-quorum",
-      "max_dep_depth": -1,
       "validate_proofs": true,
-      "hash_digest": true,
-      "verify_deps": false,
       "sign_messages": true,
-      "signature_type": 4,
+	  "sig_batch": 2,
+      "multi_threading": false,
+	  "batch_verification": false,
+	  "batch_verification_size": 6,
       "key_path": "/usr/local/etc/indicus-keys/donna"
     },
     {
       "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
-      "read_dep": "one-honest",
-      "read_messages": "read-quorum",
-      "max_dep_depth": -1,
       "validate_proofs": true,
-      "hash_digest": true,
-      "verify_deps": false,
       "sign_messages": true,
-      "signature_type": 4,
-	  "multi_threading": true,
-      "key_path": "/usr/local/etc/indicus-keys/donna"
-    },
-	{
-      "message_transport_type": "tcp",
-      "watermark_time_delta": 30000,
-      "read_quorum": "one-honest",
-      "read_dep": "one-honest",
-      "read_messages": "read-quorum",
-      "max_dep_depth": -1,
-      "validate_proofs": true,
-      "hash_digest": true,
-      "verify_deps": false,
-      "sign_messages": true,
-      "signature_type": 4,
-	  "multi_threading": true,
-	  "batch_verification": true,
+	  "sig_batch": 2,
+      "multi_threading": true,
+	  "batch_verification": false,
+	  "batch_verification_size": 6,
       "key_path": "/usr/local/etc/indicus-keys/donna"
     }
   ],
@@ -80,23 +59,20 @@
   "codebase_name": "indicus",
   "client_total": [
     [9, 27, 45, 63, 90, 126],
-    [9, 27, 45, 63, 90, 126],
 	[9, 27, 45, 63, 90, 126]
   ],
   "client_processes_per_client_node": [  
-    [1, 2, 3, 4, 5, 7],
     [1, 2, 3, 4, 5, 7],
 	[1, 2, 3, 4, 5, 7]
   ],
   "client_threads_per_process": [
     [1, 1, 1, 1, 1, 1],
-    [1, 1, 1, 1, 1, 1],
 	[1, 1, 1, 1, 1, 1]
   ],
   "client_nodes_per_server": 1,
   "pin_client_processes": [0, 1, 2, 3, 4, 5, 6, 7],
-  "client_debug_output": true,
-  "server_debug_output": true,
+  "client_debug_output": false,
+  "server_debug_output": false,
   "server_debug_stats": false,
   "client_debug_stats": false,
   "client_experiment_length": 60,
@@ -111,16 +87,10 @@
   "server_names": [
     ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
     "eu-west-1-1", "eu-west-1-2"],
-    ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
-    "eu-west-1-1", "eu-west-1-2"],
 	["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
     "eu-west-1-1", "eu-west-1-2"]
   ],
   "server_regions": [
-    {
-      "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2"],
-      "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"]
-    },
     {
       "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2"],
       "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"]
@@ -148,7 +118,7 @@
       "height": 600,
       "width": 800,
       "series_indep_vars_idx": 0,
-      "series_titles": ["Indicus-donna", "Indicus-donnaMulti", "Indicus-donnaMulti+batchVerify"],
+      "series_titles": ["Indicus-donna", "Indicus-donnaMulti"],
       "x_var_is_config": false,
       "x_var": ["run_stats", "combined", "tput", "p50"],
       "x_label": "Throughput (txn/s)",
@@ -162,7 +132,7 @@
       "height": 600,
       "width": 800,
       "series_indep_vars_idx": 0,
-      "series_titles": ["Indicus-donna", "Indicus-donnaMulti", "Indicus-donnaMulti+batchVerify"],
+      "series_titles": ["Indicus-donna", "Indicus-donnaMulti"],
       "x_var_is_config": true,
       "x_var": ["client_total"],
       "x_label": "Number of Clients",

@@ -320,6 +320,74 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
   return;
 }
 
+void ThreadLocalAsyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result){
+
+  //Declare one joint global bool pointer and use it. can avoid the delete that way.
+  //write new pointer wrapper, that transforms bool to choose one of the 2 globals.
+  bool verification_result = * ((bool*) result);
+
+  Debug("(CPU:%d - mainthread) asyncValidateP1RepliesCallback with result: %s", sched_getcpu(), verification_result ? "true" : "false");
+
+  std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+
+  verifyObj->deletable--;
+
+  if(verifyObj->terminate){
+      if(verifyObj->deletable == 0){
+        verifyObj->mainThreadCallback(false);  //need to  use TP->IssueCallback here: use the global bool ptr.
+                                               //need to change back callbacks to use bool pointer.
+        Debug("Return to CB UNSUCCESSFULLY");
+        delete verifyObj;
+      }
+      return;
+  }
+  if(!verification_result){
+      verifyObj->terminate = true;
+      if(verifyObj->deletable == 0){
+         Debug("Return to CB UNSUCCESSFULLY");
+         verifyObj->mainThreadCallback(false);
+         delete verifyObj;
+      }
+      return;
+    }
+  verifyObj->groupCounts[groupId]++;
+  Debug("Group %d verified %d out of necessary %d", groupId, verifyObj->groupCounts[groupId], verifyObj->quorumSize);
+  if (verifyObj->groupCounts[groupId] == verifyObj->quorumSize) {
+          //verifyObj->groupsVerified.insert(sigs.first);
+    Debug("Completed verification of group: %d", groupId);
+      verifyObj->groupsVerified++;
+  }
+  else{
+    if(verifyObj->deletable == 0){
+      verifyObj->mainThreadCallback(false);
+       Debug("Return to CB UNSUCCESSFULLY");
+      delete verifyObj;
+    }
+      return;
+  }
+
+  Debug("Obj GroupsVerified: %d", verifyObj->groupsVerified);
+
+  if (verifyObj->decision == proto::COMMIT) {
+    if(!(verifyObj->groupsVerified == verifyObj->groupTotals)){
+          Debug("Phase1Replies for involved_group %d not complete.", (int)groupId);
+          if(verifyObj->deletable == 0){
+            verifyObj->mainThreadCallback(false);
+            Debug("Return to CB UNSUCCESSFULLY");
+            delete verifyObj;
+          }
+            return;
+    }
+  }
+  //bool* ret = new bool(true);
+    verifyObj->terminate = true;
+  Debug("Calling HandlePhase2CB or HandleWritebackCB");
+  //verifyObj->mainThreadCallback((void*) ret);
+  verifyObj->mainThreadCallback(true);
+  if(verifyObj->deletable == 0) delete verifyObj;
+  return;
+}
+
 //Currently structured to dispatch only AFTER size has been determined AND it is guaranteed that all
 //jobs are "valid" (for example no duplicate replicas)
 
@@ -350,8 +418,8 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
     mcb(false);
     return;
   }
-  asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), txn->involved_groups_size(), decision);
-  std::list<std::function<void()>> asyncBatchingVerificationJobs;
+  asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), txn->involved_groups_size(), decision, transport);
+  std::vector<std::function<void()>> asyncBatchingVerificationJobs;
 
   for (const auto &sigs : groupedSigs.grouped_sigs()) {
     concurrencyControl.set_involved_group(sigs.first);
@@ -441,12 +509,12 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
     return; //false; //dont need to return anything
   }
 
-  asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), txn->involved_groups_size(), decision);
+  asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), txn->involved_groups_size(), decision, transport);
 
-  std::list<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
+  std::vector<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
 
   for (const auto &sigs : groupedSigs.grouped_sigs()) {
-    concurrencyControl.set_involved_group(sigs.first);
+    concurrencyControl.set_involved_group(sigs.first); //change grp sigs to const. move. Try to find the string copy
     std::string ccMsg;
     concurrencyControl.SerializeToString(&ccMsg);
     std::set<uint64_t> replicasVerified;
@@ -466,7 +534,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
         //OR call the callback with negative result, but kind of unecessary mcb();
       }
 
-      auto insertItr = replicasVerified.insert(sig.process_id());
+      auto insertItr = replicasVerified.insert(sig.process_id());  //maybe use unordered_set
       if (!insertItr.second) {
         Debug("Already verified sig from replica %lu in group %lu.",
             sig.process_id(), sigs.first);
@@ -497,13 +565,13 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
 
       //create copy of ccMsg, and signature on heap, put them in the verifyObj, and then delete then when deleting the object.
       std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(sig.process_id()),
-                ccMsg, sig.signature()));
+                ccMsg, sig.signature())); //make sig non const and move it
 
 
       std::function<void*()> f(std::bind(pointerWrapper<bool>, std::move(func))); //turn into void* function in order to dispatch
       std::function<void(void*)> cb(std::bind(asyncValidateP1RepliesCallback, verifyObj, sigs.first, std::placeholders::_1));
 
-      verificationJobs.push_back(std::make_pair(std::move(f), std::move(cb)));
+      verificationJobs.push_back(std::make_pair(std::move(f), std::move(cb))); //move of pair not necesary since constructor should be smart, already a temp value
 
       }
     }
@@ -732,9 +800,9 @@ void asyncBatchValidateP2Replies(proto::CommitDecision decision, uint64_t view,
       return;
     }
 
-    asyncVerification *verifyObj = new asyncVerification(QuorumSize(config), std::move(mcb), 1, decision);
+    asyncVerification *verifyObj = new asyncVerification(QuorumSize(config), std::move(mcb), 1, decision, transport);
 
-    std::list<std::function<void()>> asyncBatchingVerificationJobs;
+    std::vector<std::function<void()>> asyncBatchingVerificationJobs;
 
     const auto &sigs = groupedSigs.grouped_sigs().begin(); //this is an iterator
     // verifyObj->deletable = sigs->second.sigs_size();  // redundant
@@ -815,9 +883,9 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
       mcb(false);
       return;
     }
-    asyncVerification *verifyObj = new asyncVerification(QuorumSize(config), std::move(mcb), 1, decision);
+    asyncVerification *verifyObj = new asyncVerification(QuorumSize(config), std::move(mcb), 1, decision, transport);
 
-    std::list<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
+    std::vector<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
 
     for (const auto &sig : sigs->second.sigs()) {
 

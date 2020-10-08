@@ -634,9 +634,12 @@ int main(int argc, char **argv) {
 	//if(FLAGS_indicus_multi_threading){
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
-		int num_cpus = std::thread::hardware_concurrency();
-		CPU_SET(num_cpus-1, &cpuset); //last core is for main
+		//bool hyperthreading = true; //TODO::make this into a flag
+	  //int num_cpus = std::thread::hardware_concurrency()/(2-hyperthreading);
+		//CPU_SET(num_cpus-1, &cpuset); //last core is for main
+		CPU_SET(0, &cpuset); //first core is for main
 		pthread_setaffinity_np(pthread_self(),	sizeof(cpu_set_t), &cpuset);
+		Debug("MainThread running on CPU %d.", sched_getcpu());
 	//}
 
   tport->Run();

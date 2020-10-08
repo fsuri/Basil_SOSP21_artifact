@@ -594,11 +594,17 @@ TCPTransport::TimerCallback(evutil_socket_t fd, short what, void *arg)
 
 void TCPTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {
   tp.dispatch(std::move(f), std::move(cb), libeventBase);
-  //Panic("unimplemented");
 }
+
+void TCPTransport::DispatchTP_local(std::function<void*()> f, std::function<void(void*)> cb)  {
+  tp.dispatch_local(std::move(f), std::move(cb));
+}
+
 void TCPTransport::DispatchTP_noCB(std::function<void*()> f) {
   tp.detatch(std::move(f));
-  //Panic("unimplemented");
+}
+void TCPTransport::IssueCB(std::function<void(void*)> cb){
+  tp.issueCallback(std::move(cb), libeventBase);
 }
 
 void

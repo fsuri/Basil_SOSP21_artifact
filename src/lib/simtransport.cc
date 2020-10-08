@@ -295,10 +295,15 @@ SimulatedTransport::Stop(bool immediately) {
 void SimulatedTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {
   Panic("Unimplemented");
 }
+void SimulatedTransport::DispatchTP_local(std::function<void*()> f, std::function<void(void*)> cb)  {
+  Panic("unimplemented");
+}
 void SimulatedTransport::DispatchTP_noCB(std::function<void*()> f) {
   Panic("unimplemented");
 }
-
+void SimulatedTransport::IssueCB(std::function<void(void*)> cb){
+  Panic("unimplemented");
+}
 
 const SimulatedTransportAddress *
 SimulatedTransport::LookupFCAddress(const transport::Configuration *cfg)

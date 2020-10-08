@@ -8,7 +8,7 @@ LD = g++
 EXPAND = lib/tmpl/expand
 
 #CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNUW_ASSERT
-CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2#-O1#-O2
+CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2#-O3#-O1#-O2
 CXXFLAGS := -g -std=c++17 #-fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
 LDFLAGS := -levent_pthreads -lrt #-fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
 ## Debian package: check

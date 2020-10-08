@@ -216,7 +216,9 @@ public:
     virtual void CancelAllTimers() override;
 
     void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb);
+    void DispatchTP_local(std::function<void*()> f, std::function<void(void*)> cb);
     void DispatchTP_noCB(std::function<void*()> f);
+    void IssueCB(std::function<void(void*)> cb);
 
     // DeliverMessage(addr, i) delivers the ith queued inbound message to the
     // receiver with address addr. It's possible to send a message to the
