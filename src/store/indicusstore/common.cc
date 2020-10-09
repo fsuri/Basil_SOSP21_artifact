@@ -15,6 +15,33 @@
 
 namespace indicusstore {
 
+void* BoolPointerWrapper(std::function<bool()> func){
+    if(func()){
+      return (void*) true;
+    }
+    else{
+      return (void*) false;
+    }
+  }
+//
+std::string* GetUnusedMessageString(){
+    std::unique_lock<std::mutex> lock(msgStr_mutex);
+    std::string* msg;
+    if(MessageStrings.size() > 0){
+      msg = MessageStrings.back();
+      MessageStrings.pop_back();
+    }
+    else{
+      msg = new string();
+    }
+    return msg;
+}
+void FreeMessageString(std::string *msg){
+  std::unique_lock<std::mutex> lock(msgStr_mutex);
+  msg->clear();
+  MessageStrings.push_back(msg);
+}
+
 void SignMessage(::google::protobuf::Message* msg,
     crypto::PrivKey* privateKey, uint64_t processId,
     proto::SignedMessage *signedMessage) {
@@ -103,7 +130,7 @@ void asyncValidateCommittedConflict(const proto::CommittedProof &proof,
           BytesToHex(*committedTxnDigest, 16).c_str(),
           txn->client_id(), txn->client_seq_num(),
           BytesToHex(*txnDigest, 16).c_str());
-        mcb(false);
+        mcb((void*) false);
         return;
     }
     if(signedMessages && multithread){
@@ -124,7 +151,7 @@ void asyncValidateCommittedProof(const proto::CommittedProof &proof,
 
     //bool* ret = new bool(true);
     //mcb((void*) ret);
-    mcb(true);
+    mcb((void*) true);
     return;
   }
 
@@ -154,7 +181,7 @@ void asyncValidateCommittedProof(const proto::CommittedProof &proof,
     }
   } else {
     Debug("Proof has neither P1 nor P2 sigs.");
-    mcb(false);
+    mcb((void*) false);
     return;
   }
 }
@@ -248,11 +275,11 @@ bool ValidateP1Replies(proto::CommitDecision decision,
 void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result){
 
 
-  bool verification_result = * ((bool*) result);
+  //bool verification_result = * ((bool*) result);
 
-  delete (bool*) result;
+  //delete (bool*) result;
 
-  Debug("(CPU:%d - mainthread) asyncValidateP1RepliesCallback with result: %s", sched_getcpu(), verification_result ? "true" : "false");
+  Debug("(CPU:%d - mainthread) asyncValidateP1RepliesCallback with result: %s", sched_getcpu(), result ? "true" : "false");
 
   //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
   //technically dont need a mutex if this callback only runs on main thread?
@@ -265,19 +292,21 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
 
   if(verifyObj->terminate){
       if(verifyObj->deletable == 0){
-        verifyObj->mainThreadCallback(false);
+        verifyObj->mcb((void*) false);
         Debug("Return to CB UNSUCCESSFULLY");
+        //verifyObj->deleteMessages();
         delete verifyObj;
       }
       return;
   }
-  if(!verification_result){
+  if(!result){
       verifyObj->terminate = true;
         // delete verifyObj;
         // verifyObj = NULL;
       if(verifyObj->deletable == 0){
          Debug("Return to CB UNSUCCESSFULLY");
-         verifyObj->mainThreadCallback(false);
+         verifyObj->mcb((void*) false);
+         //verifyObj->deleteMessages();
          delete verifyObj;
       }
       return;
@@ -291,7 +320,8 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
   }
   else{
     if(verifyObj->deletable == 0){
-      verifyObj->mainThreadCallback(false);
+      verifyObj->mcb((void*) false);
+      //verifyObj->deleteMessages();
        Debug("Return to CB UNSUCCESSFULLY");
       delete verifyObj;
     }
@@ -304,8 +334,9 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
     if(!(verifyObj->groupsVerified == verifyObj->groupTotals)){
           Debug("Phase1Replies for involved_group %d not complete.", (int)groupId);
           if(verifyObj->deletable == 0){
-            verifyObj->mainThreadCallback(false);
+            verifyObj->mcb((void*) false);
             Debug("Return to CB UNSUCCESSFULLY");
+            //verifyObj->deleteMessages();
             delete verifyObj;
           }
             return;
@@ -314,9 +345,12 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
   //bool* ret = new bool(true);
     verifyObj->terminate = true;
   Debug("Calling HandlePhase2CB or HandleWritebackCB");
-  //verifyObj->mainThreadCallback((void*) ret);
-  verifyObj->mainThreadCallback(true);
-  if(verifyObj->deletable == 0) delete verifyObj;
+  //verifyObj->mcb((void*) ret);
+  verifyObj->mcb((void*) true);
+  if(verifyObj->deletable == 0){
+    //verifyObj->deleteMessages();
+    delete verifyObj;
+  }
   return;
 }
 
@@ -324,9 +358,9 @@ void ThreadLocalAsyncValidateP1RepliesCallback(asyncVerification* verifyObj, uin
 
   //Declare one joint global bool pointer and use it. can avoid the delete that way.
   //write new pointer wrapper, that transforms bool to choose one of the 2 globals.
-  bool verification_result = * ((bool*) result);
+  //bool verification_result = * ((bool*) result);
 
-  Debug("(CPU:%d - mainthread) asyncValidateP1RepliesCallback with result: %s", sched_getcpu(), verification_result ? "true" : "false");
+  Debug("(CPU:%d - mainthread) asyncValidateP1RepliesCallback with result: %s", sched_getcpu(), result ? "true" : "false");
 
   std::lock_guard<std::mutex> lock(verifyObj->objMutex);
 
@@ -334,18 +368,17 @@ void ThreadLocalAsyncValidateP1RepliesCallback(asyncVerification* verifyObj, uin
 
   if(verifyObj->terminate){
       if(verifyObj->deletable == 0){
-        verifyObj->mainThreadCallback(false);  //need to  use TP->IssueCallback here: use the global bool ptr.
-                                               //need to change back callbacks to use bool pointer.
+        verifyObj->mcb((void*) false);  //Only do successfull calbacks on main. False just frees the message
         Debug("Return to CB UNSUCCESSFULLY");
         delete verifyObj;
       }
       return;
   }
-  if(!verification_result){
+  if(!result){
       verifyObj->terminate = true;
       if(verifyObj->deletable == 0){
          Debug("Return to CB UNSUCCESSFULLY");
-         verifyObj->mainThreadCallback(false);
+         verifyObj->mcb((void*) false);
          delete verifyObj;
       }
       return;
@@ -359,7 +392,7 @@ void ThreadLocalAsyncValidateP1RepliesCallback(asyncVerification* verifyObj, uin
   }
   else{
     if(verifyObj->deletable == 0){
-      verifyObj->mainThreadCallback(false);
+      verifyObj->mcb((void*) false);
        Debug("Return to CB UNSUCCESSFULLY");
       delete verifyObj;
     }
@@ -372,7 +405,7 @@ void ThreadLocalAsyncValidateP1RepliesCallback(asyncVerification* verifyObj, uin
     if(!(verifyObj->groupsVerified == verifyObj->groupTotals)){
           Debug("Phase1Replies for involved_group %d not complete.", (int)groupId);
           if(verifyObj->deletable == 0){
-            verifyObj->mainThreadCallback(false);
+            verifyObj->mcb((void*) false);
             Debug("Return to CB UNSUCCESSFULLY");
             delete verifyObj;
           }
@@ -382,8 +415,10 @@ void ThreadLocalAsyncValidateP1RepliesCallback(asyncVerification* verifyObj, uin
   //bool* ret = new bool(true);
     verifyObj->terminate = true;
   Debug("Calling HandlePhase2CB or HandleWritebackCB");
-  //verifyObj->mainThreadCallback((void*) ret);
-  verifyObj->mainThreadCallback(true);
+  //verifyObj->mcb((void*) ret);
+  Debug("Crashing right after this:");
+  verifyObj->tp->IssueCB(std::move(verifyObj->mcb), (void*) true);
+  Debug("Have not crashed yet");
   if(verifyObj->deletable == 0) delete verifyObj;
   return;
 }
@@ -415,7 +450,7 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
     quorumSize = SlowAbortQuorumSize(config);
   } else {
     // NOT_REACHABLE();
-    mcb(false);
+    mcb((void*) false);
     return;
   }
   asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), txn->involved_groups_size(), decision, transport);
@@ -435,7 +470,7 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
         // verifyObj->terminate = true;  .
         // }
         delete verifyObj;
-        mcb(false);
+        mcb((void*) false);
         return;
       }
       auto insertItr = replicasVerified.insert(sig.process_id());
@@ -447,7 +482,7 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
         // verifyObj->terminate = true;
         // }
         delete verifyObj;
-        mcb(false);
+        mcb((void*) false);
         return;
       }
       // {
@@ -505,7 +540,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
     quorumSize = SlowAbortQuorumSize(config);
   } else {
     // NOT_REACHABLE();
-    mcb(false);
+    mcb((void*) false);
     return; //false; //dont need to return anything
   }
 
@@ -515,9 +550,15 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
 
   for (const auto &sigs : groupedSigs.grouped_sigs()) {
     concurrencyControl.set_involved_group(sigs.first); //change grp sigs to const. move. Try to find the string copy
-    std::string ccMsg;
-    concurrencyControl.SerializeToString(&ccMsg);
-    std::set<uint64_t> replicasVerified;
+    std::string* ccMsg = GetUnusedMessageString();//new string();
+    concurrencyControl.SerializeToString(ccMsg);
+    verifyObj->ccMsgs.push_back(ccMsg); //TODO: delete at callback
+    //Redundant copy version:
+    // std::string ccMsg;
+    // concurrencyControl.SerializeToString(&ccMsg);
+
+    //std::set<uint64_t> replicasVerified;
+    std::unordered_set<uint64_t> replicasVerified;
 
     for (const auto &sig : sigs.second.sigs()) {
 
@@ -529,7 +570,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
         //verifyObj->terminate = true;
         //}
         delete verifyObj;
-        mcb(false);
+        mcb((void*) false);
         return;
         //OR call the callback with negative result, but kind of unecessary mcb();
       }
@@ -543,7 +584,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
         //verifyObj->terminate = true;
         //}
         delete verifyObj;
-        mcb(false);
+        mcb((void*) false);
         return;
             //OR call the callback with negative result, but kind of unecessary mcb();
       }
@@ -565,11 +606,20 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
 
       //create copy of ccMsg, and signature on heap, put them in the verifyObj, and then delete then when deleting the object.
       std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(sig.process_id()),
-                ccMsg, sig.signature())); //make sig non const and move it
+                std::ref(*ccMsg), std::ref(sig.signature()))); //make sig non const and move it
+
+      std::function<void*()> f(std::bind(BoolPointerWrapper, std::move(func)));
+      //turn into void* function in order to dispatch
+      //std::function<void*()> f(std::bind(pointerWrapper<bool>, std::move(func)));
+      std::function<void(void*)> cb;
+      if(LocalDispatch){
+         cb = std::move(std::bind(ThreadLocalAsyncValidateP1RepliesCallback, verifyObj, sigs.first, std::placeholders::_1));
+      }
+      else{
+         cb = std::move(std::bind(asyncValidateP1RepliesCallback, verifyObj, sigs.first, std::placeholders::_1));
+      }
 
 
-      std::function<void*()> f(std::bind(pointerWrapper<bool>, std::move(func))); //turn into void* function in order to dispatch
-      std::function<void(void*)> cb(std::bind(asyncValidateP1RepliesCallback, verifyObj, sigs.first, std::placeholders::_1));
 
       verificationJobs.push_back(std::make_pair(std::move(f), std::move(cb))); //move of pair not necesary since constructor should be smart, already a temp value
 
@@ -582,8 +632,11 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
   for (auto &verification : verificationJobs){
 
     //a)) Multithreading: Dispatched f: verify , cb: async Callback
-    if(multithread){
+    if(multithread && LocalDispatch){
       // Debug("P1 Validation is dispatched and parallel");
+      transport->DispatchTP_local(std::move(verification.first), std::move(verification.second));
+    }
+    else if(multithread){
       transport->DispatchTP(std::move(verification.first), std::move(verification.second));
     }
     //b) No multithreading: Calls verify + async Callback. Problem: Unecessary copying for bind.
@@ -726,10 +779,10 @@ bool ValidateP2Replies(proto::CommitDecision decision, uint64_t view,
 
 void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result){
 
-  bool verification_result = * ((bool*) result);
-  delete (bool*) result;
+  //bool verification_result = * ((bool*) result);
+  //delete (bool*) result;
 
-  Debug("(CPU:%d - mainthread) asyncValidateP2RepliesCallback with result: %s", sched_getcpu(), verification_result ? "true" : "false");
+  Debug("(CPU:%d - mainthread) asyncValidateP2RepliesCallback with result: %s", sched_getcpu(), result ? "true" : "false");
   //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
   //technically dont need a mutex if this callback only runs on main thread?
 
@@ -738,16 +791,16 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
 
   if(verifyObj->terminate){
     if(verifyObj->deletable == 0){
-      verifyObj->mainThreadCallback(false);
+      verifyObj->mcb((void*) false);
       delete verifyObj;
     }
     return;
   }
-  if(!verification_result){
+  if(!result){
       verifyObj->terminate = true;
 
       if(verifyObj->deletable == 0){
-        verifyObj->mainThreadCallback(false);
+        verifyObj->mcb((void*) false);
         delete verifyObj;
       }
       return;
@@ -760,8 +813,8 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
   if (verifyObj->groupCounts[groupId] == verifyObj->quorumSize) {
     verifyObj->terminate = true;
     //bool* ret = new bool(true);
-    //verifyObj->mainThreadCallback((void*) ret);
-    verifyObj->mainThreadCallback(true);
+    //verifyObj->mcb((void*) ret);
+    verifyObj->mcb((void*) true);
     if(verifyObj->deletable == 0) delete verifyObj;
     return;
 
@@ -769,13 +822,64 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
   else{
       Debug("Phase2Replies for logging group %d not complete.", (int)groupId);
       if(verifyObj->deletable == 0){
-        verifyObj->mainThreadCallback(false);
+        verifyObj->mcb((void*) false);
         delete verifyObj;
       }
       return;
   }
 }
 
+void ThreadLocalAsyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result){
+
+  //bool verification_result = * ((bool*) result);
+  //delete (bool*) result;
+
+  Debug("(CPU:%d - mainthread) asyncValidateP2RepliesCallback with result: %s", sched_getcpu(), result ? "true" : "false");
+  std::lock_guard<std::mutex> lock(verifyObj->objMutex);
+  //technically dont need a mutex if this callback only runs on main thread?
+
+  //Need to delete only after "last count" has finished.
+  verifyObj->deletable--;
+
+  if(verifyObj->terminate){
+    if(verifyObj->deletable == 0){
+      verifyObj->mcb((void*) false);
+      delete verifyObj;
+    }
+    return;
+  }
+  if(!result){
+      verifyObj->terminate = true;
+
+      if(verifyObj->deletable == 0){
+        verifyObj->mcb((void*) false);
+        delete verifyObj;
+      }
+      return;
+    }
+  verifyObj->groupCounts[groupId]++;
+  Debug("%d out of necessary %d Phase2Replies for logging group %d verified.",
+  verifyObj->groupCounts[groupId],verifyObj->quorumSize,(int)groupId);
+
+
+  if (verifyObj->groupCounts[groupId] == verifyObj->quorumSize) {
+    verifyObj->terminate = true;
+    //bool* ret = new bool(true);
+    //verifyObj->mcb((void*) ret);
+    verifyObj->tp->IssueCB(std::move(verifyObj->mcb), (void*) true);
+    if(verifyObj->deletable == 0) delete verifyObj;
+    return;
+
+  }
+  else{
+      Debug("Phase2Replies for logging group %d not complete.", (int)groupId);
+      if(verifyObj->deletable == 0){
+        verifyObj->mcb((void*) false);
+        delete verifyObj;
+      }
+      return;
+  }
+}
 
 void asyncBatchValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     const proto::Transaction *txn,
@@ -796,7 +900,7 @@ void asyncBatchValidateP2Replies(proto::CommitDecision decision, uint64_t view,
 
     if (groupedSigs.grouped_sigs().size() != 1) {
       Debug("Expected exactly 1 group but saw %lu", groupedSigs.grouped_sigs().size());
-      mcb(false);
+      mcb((void*) false);
       return;
     }
 
@@ -813,7 +917,7 @@ void asyncBatchValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     if(sigs->first != logGrp){
       Debug("P2 replies from group (%lu) that is not logging group (%lu).", sigs->first, logGrp);
       delete verifyObj;
-      mcb(false);
+      mcb((void*) false);
       return;
     }
 
@@ -822,13 +926,13 @@ void asyncBatchValidateP2Replies(proto::CommitDecision decision, uint64_t view,
       if (!IsReplicaInGroup(sig.process_id(), sigs->first, config)) {
         Debug("Signature for group %lu from replica %lu who is not in group.", sigs->first, sig.process_id());
         delete verifyObj;
-        mcb(false);
+        mcb((void*) false);
         return;
       }
       if (!replicasVerified.insert(sig.process_id()).second) {
         Debug("Already verified signature from %lu.", sig.process_id());
         delete verifyObj;
-        mcb(false);
+        mcb((void*) false);
         return;
       }
 
@@ -860,12 +964,14 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     p2Decision.set_involved_group(GetLogGroup(*txn, *txnDigest));
     *p2Decision.mutable_txn_digest() = *txnDigest;
 
-    std::string p2DecisionMsg;
-    p2Decision.SerializeToString(&p2DecisionMsg);
+    // std::string p2DecisionMsg;
+    // p2Decision.SerializeToString(&p2DecisionMsg);
+    std::string* p2DecisionMsg = GetUnusedMessageString();
+    p2Decision.SerializeToString(p2DecisionMsg);
 
     if (groupedSigs.grouped_sigs().size() != 1) {
       Debug("Expected exactly 1 group but saw %lu", groupedSigs.grouped_sigs().size());
-      mcb(false);
+      mcb((void*) false);
       return;
     }
 
@@ -880,11 +986,11 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     if(sigs->first != logGrp){
       Debug("P2 replies from group (%lu) that is not logging group (%lu).", sigs->first, logGrp);
       //delete verifyObj;
-      mcb(false);
+      mcb((void*) false);
       return;
     }
     asyncVerification *verifyObj = new asyncVerification(QuorumSize(config), std::move(mcb), 1, decision, transport);
-
+    verifyObj->ccMsgs.push_back(p2DecisionMsg);
     std::vector<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
 
     for (const auto &sig : sigs->second.sigs()) {
@@ -892,13 +998,13 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
       if (!IsReplicaInGroup(sig.process_id(), sigs->first, config)) {
         Debug("Signature for group %lu from replica %lu who is not in group.", sigs->first, sig.process_id());
         delete verifyObj;
-        mcb(false);
+        mcb((void*) false);
         return;
       }
       if (!replicasVerified.insert(sig.process_id()).second) {
         Debug("Already verified signature from %lu.", sig.process_id());
         delete verifyObj;
-        mcb(false);
+        mcb((void*) false);
         return;
       }
 
@@ -911,14 +1017,21 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
       //       p2DecisionMsg, sig.signature())? "true" : "false");
 
       //TODO: add to job list
-      std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(sig.process_id()), p2DecisionMsg, sig.signature()));
-      std::function<void*()> f(std::bind(pointerWrapper<bool>, std::move(func))); //turn into void* function in order to dispatch
+      std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(sig.process_id()),
+      std::ref(*p2DecisionMsg), std::ref(sig.signature())));
+      //std::function<void*()> f(std::bind(pointerWrapper<bool>, std::move(func))); //turn into void* function in order to dispatch
       //callback
+      std::function<void*()> f(std::bind(BoolPointerWrapper, std::move(func)));
 
-
-      std::function<void(void*)> cb(std::bind(asyncValidateP2RepliesCallback, verifyObj, sigs->first, std::placeholders::_1));
-
-      verificationJobs.push_back(std::make_pair(std::move(f), std::move(cb)));
+      //turn into void* function in order to dispatch
+      //std::function<void*()> f(std::bind(pointerWrapper<bool>, std::move(func)));
+      std::function<void(void*)> cb;
+      if(LocalDispatch){
+         cb = std::move(std::bind(ThreadLocalAsyncValidateP2RepliesCallback, verifyObj, sigs->first, std::placeholders::_1));
+      }
+      else{
+         cb = std::move(std::bind(asyncValidateP2RepliesCallback, verifyObj, sigs->first, std::placeholders::_1));
+      }
 
     }
 
@@ -926,9 +1039,14 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     for (auto &verification : verificationJobs){
 
       //a)) Multithreading: Dispatched f: verify , cb: async Callback
-      if(multithread){
+      if(multithread && LocalDispatch){
         // Debug("P2 Validation is dispatched and parallel");
-        transport->DispatchTP(std::move(verification.first), std::move(verification.second));
+        transport->DispatchTP_local(std::move(verification.first), std::move(verification.second));
+      }
+      else if(multithread){
+
+          transport->DispatchTP(std::move(verification.first), std::move(verification.second));
+
       }
       //b) No multithreading: Calls verify + async Callback.
       else{

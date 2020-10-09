@@ -310,7 +310,8 @@ void Server::HandleRead(const TransportAddress &remote,
 //If readReplyBatch is false then respond immediately, otherwise respect batching policy
     if (params.readReplyBatch) {
       proto::Write* write = new proto::Write(readReply->write());
-      MessageToSign(write, readReply->mutable_signed_write(), [sendCB = std::move(sendCB), write]() {
+      // move: sendCB = std::move(sendCB) or {std::move(sendCB)}
+      MessageToSign(write, readReply->mutable_signed_write(), [sendCB, write]() {
         sendCB();
         delete write;
       });
@@ -321,7 +322,7 @@ void Server::HandleRead(const TransportAddress &remote,
         proto::Write* write = new proto::Write(readReply->write());
         std::function<void*()> f(std::bind(asyncSignMessage, write,
           keyManager->GetPrivateKey(id), id, readReply->mutable_signed_write()));
-        transport->DispatchTP(std::move(f), [sendCB{std::move(sendCB)}, write](void * ret){ sendCB(); delete write;});
+        transport->DispatchTP(std::move(f), [sendCB, write](void * ret){ sendCB(); delete write;});
       }
       else{
         proto::Write write(readReply->write());
@@ -426,12 +427,11 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
    //TODO: Needs to always delete/free. But does not need the bool arg to be allocated.
 void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
-  signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, bool valid) { //void* valid){
+  signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid){ //bool valid) { //
 
   Debug("HandlePhase2CB invoked");
 
   if(!valid){
-  //if(!(*(bool*) valid) ) {
     Debug("VALIDATE P1Replies for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
     //delete (bool*) valid;
     cleanCB(); //deletes SendCB resources should it not be called.
@@ -596,7 +596,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
           //msg_copy->CopyFrom(msg);
           //copy shouldnt be needed due to bind
 
-          std::function<void(bool)> mcb(std::bind(&Server::HandlePhase2CB, this,
+          mainThreadCallback mcb(std::bind(&Server::HandlePhase2CB, this,
              &msg, txnDigest, sendCB, phase2Reply, cleanCB, std::placeholders::_1));
 
           //OPTION 1: Validation itself is synchronous   Would need to be extended with thread safety.
@@ -608,13 +608,13 @@ void Server::HandlePhase2(const TransportAddress &remote,
           if(params.batchVerification){
             asyncBatchValidateP1Replies(msg.decision(),
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
-                  myResult, verifier, mcb, transport, true);
+                  myResult, verifier, std::move(mcb), transport, true);
 
           }
           else{
             asyncValidateP1Replies(msg.decision(),
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
-                  myResult, verifier, mcb, transport, true);
+                  myResult, verifier, std::move(mcb), transport, true);
           }
           return;
         }
@@ -624,12 +624,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
             //msg_copy->CopyFrom(msg);
 
             //copy shouldnt be needed due to bind? or is it because msg is passed as reference?
-            std::function<void(bool)> mcb(std::bind(&Server::HandlePhase2CB, this,
+            mainThreadCallback mcb(std::bind(&Server::HandlePhase2CB, this,
               &msg, txnDigest, sendCB, phase2Reply, cleanCB, std::placeholders::_1));
 
             asyncBatchValidateP1Replies(msg.decision(),
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
-                  myResult, verifier, mcb, transport, false);
+                  myResult, verifier, std::move(mcb), transport, false);
             return;
           }
           else{
@@ -648,16 +648,15 @@ void Server::HandlePhase2(const TransportAddress &remote,
   }
   // bool* valid = new bool(true);
   // HandlePhase2CB(msg, txnDigest, sendCB, phase2Reply, (void*) valid);
-  HandlePhase2CB(&msg, txnDigest, sendCB, phase2Reply, cleanCB, true);
+  HandlePhase2CB(&msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
 
 }
 
 void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDigest,
-  proto::Transaction* txn, bool valid) { //void* valid){
+  proto::Transaction* txn, void* valid){//bool valid) { //void* valid){
 
   Debug("WRITEBACK Callback[%s] being called", BytesToHex(*txnDigest, 16).c_str());
-  if(!valid){
-  //if(!(*(bool*) valid)){
+  if(! valid){
     Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
     //delete (bool*) valid;
     if(params.multiThreading){
@@ -742,7 +741,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
           //copy shouldnt be needed due to bind?
 
           Debug("1: TAKING MULTITHREADING BRANCH, generating MCB");
-          std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg,
+          mainThreadCallback mcb(std::bind(&Server::WritebackCallback, this, &msg,
             txnDigest, txn, std::placeholders::_1));
 
           if(params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()){
@@ -754,13 +753,13 @@ void Server::HandleWriteback(const TransportAddress &remote,
               Debug("2: Taking batch branch p1 commit");
               asyncBatchValidateP1Replies(msg.decision(),
                     true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
-                    myResult, verifier, mcb, transport, true);
+                    myResult, verifier, std::move(mcb), transport, true);
             }
             else{
                   Debug("2: Taking non-batch branch p1 commit");
             asyncValidateP1Replies(msg.decision(),
                   true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
-                  myResult, verifier, mcb, transport, true);
+                  myResult, verifier, std::move(mcb), transport, true);
             }
             return;
 
@@ -775,13 +774,13 @@ void Server::HandleWriteback(const TransportAddress &remote,
               Debug("2: Taking batch branch p1 abort");
               asyncBatchValidateP1Replies(msg.decision(),
                     true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
-                    myResult, verifier, mcb, transport, true);
+                    myResult, verifier, std::move(mcb), transport, true);
             }
             else{
               Debug("2: Taking non-batch branch p1 abort");
             asyncValidateP1Replies(msg.decision(),
                   true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
-                  myResult, verifier, mcb, transport, true);
+                  myResult, verifier, std::move(mcb), transport, true);
             }
             return;
           }
@@ -797,31 +796,13 @@ void Server::HandleWriteback(const TransportAddress &remote,
                 Debug("2: Taking batch branch p2");
                 asyncBatchValidateP2Replies(msg.decision(), msg.p2_view(),
                       txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
-                      myDecision, verifier, mcb, transport, true);
+                      myDecision, verifier, std::move(mcb), transport, true);
               }
               else{
                 Debug("2: Taking non-batch branch p2");
-                // proto::Phase2Decision p2Decision;
-                // p2Decision.Clear();
-                // p2Decision.set_decision(msg_decision);
-                // p2Decision.set_involved_group(GetLogGroup(*txn, *txnDigest));
-                // *p2Decision.mutable_txn_digest() = *txnDigest;
-                //
-                // std::string p2DecisionMsg;
-                // p2Decision.SerializeToString(&p2DecisionMsg);
-                // auto &sigs = msg.p2_sigs().grouped_sigs().begin();
-                // for (const auto &sig : sigs->second.sigs()) {
-                //   Debug("P2 PRE-VERIFICATION TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
-                //       BytesToHex(*txnDigest, 128).c_str(),
-                //       BytesToHex(sig.signature(), 1024).c_str(), sig.process_id(),
-                //       BytesToHex(p2DecisionMsg, 1024).c_str());
-                // }
-
-                //Debug("Test ValidateP2Replies: %s", ValidateP2Replies(msg.decision(), txn, txnDigest, msg.p2_sigs(),
-                //      keyManager, &config, myProcessId, myDecision, verifyLat, verifier) ? "true" : "false");
                 asyncValidateP2Replies(msg.decision(), msg.p2_view(),
                       txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
-                      myDecision, verifier, mcb, transport, true);
+                      myDecision, verifier, std::move(mcb), transport, true);
               }
               return;
           }
@@ -859,10 +840,10 @@ void Server::HandleWriteback(const TransportAddress &remote,
               //proto::Writeback * msg_copy = msg.New();
               //msg_copy->CopyFrom(msg);
               //copy shouldnt be needed due to bind?
-              std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
+              mainThreadCallback mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP1Replies(proto::COMMIT,
                     true, txn, txnDigest,msg.p1_sigs(), keyManager, &config, myProcessId,
-                    myResult, verifier, mcb, transport, false);
+                    myResult, verifier, std::move(mcb), transport, false);
               return;
             }
             else{
@@ -885,10 +866,10 @@ void Server::HandleWriteback(const TransportAddress &remote,
               //proto::Writeback * msg_copy = msg.New();
               //msg_copy->CopyFrom(msg);
               //copy shouldnt be needed due to bind?
-              std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
+              mainThreadCallback mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP1Replies(proto::ABORT,
                     true, txn, txnDigest,msg.p1_sigs(), keyManager, &config, myProcessId,
-                    myResult, verifier, mcb, transport, false);
+                    myResult, verifier, std::move(mcb), transport, false);
               return;
             }
             else{
@@ -913,10 +894,10 @@ void Server::HandleWriteback(const TransportAddress &remote,
               //proto::Writeback * msg_copy = msg.New();
               //msg_copy->CopyFrom(msg);
               //copy shouldnt be needed due to bind?
-              std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
+              mainThreadCallback mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP2Replies(msg.decision(), msg.p2_view(),
                     txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
-                    myDecision, verifier, mcb, transport, false);
+                    myDecision, verifier, std::move(mcb), transport, false);
               return;
             }
             else{
@@ -936,10 +917,10 @@ void Server::HandleWriteback(const TransportAddress &remote,
                   //proto::Writeback * msg_copy = msg.New();
                   //msg_copy->CopyFrom(msg);
                   //copy shouldnt be needed due to bind?
-                  std::function<void(bool)> mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
+                  mainThreadCallback mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
                   asyncValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
                         txnDigest, params.signedMessages, keyManager, &config, verifier,
-                        mcb, transport, false, params.batchVerification);
+                        std::move(mcb), transport, false, params.batchVerification);
                   return;
                 }
                 else{
@@ -962,7 +943,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
   }
   // bool* valid = new bool(true);
   // WritebackCallback(msg, txnDigest, txn, (void*) valid);
-  WritebackCallback(&msg, txnDigest, txn, true);
+  WritebackCallback(&msg, txnDigest, txn, (void*) true);
 }
 
 
@@ -1776,6 +1757,7 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
 
 
 proto::ReadReply *Server::GetUnusedReadReply() {
+  std::unique_lock<std::mutex> lock(protoMutex);
   proto::ReadReply *reply;
   if (readReplies.size() > 0) {
     reply = readReplies.back();
@@ -1814,6 +1796,7 @@ proto::Phase2Reply *Server::GetUnusedPhase2Reply() {
 }
 
 proto::Phase2 *Server::GetUnusedPhase2message() {
+  std::unique_lock<std::mutex> lock(protoMutex);
   proto::Phase2 *msg;
   if (p2messages.size() > 0) {
     msg = p2messages.back();
@@ -1826,6 +1809,7 @@ proto::Phase2 *Server::GetUnusedPhase2message() {
 }
 
 proto::Writeback *Server::GetUnusedWBmessage() {
+  std::unique_lock<std::mutex> lock(protoMutex);
   proto::Writeback *msg;
   if (WBmessages.size() > 0) {
     msg = WBmessages.back();
@@ -1838,6 +1822,7 @@ proto::Writeback *Server::GetUnusedWBmessage() {
 }
 
 void Server::FreeReadReply(proto::ReadReply *reply) {
+  std::unique_lock<std::mutex> lock(protoMutex);
   readReplies.push_back(reply);
 }
 
@@ -1852,10 +1837,12 @@ void Server::FreePhase2Reply(proto::Phase2Reply *reply) {
 }
 
 void Server::FreePhase2message(proto::Phase2 *msg) {
+  std::unique_lock<std::mutex> lock(protoMutex);
   p2messages.push_back(msg);
 }
 
 void Server::FreeWBmessage(proto::Writeback *msg) {
+  std::unique_lock<std::mutex> lock(protoMutex);
   WBmessages.push_back(msg);
 }
 

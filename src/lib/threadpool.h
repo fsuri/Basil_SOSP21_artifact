@@ -9,8 +9,6 @@
 #include <thread>
 #include <event2/event.h>
 
-
-
 class ThreadPool {
 
 public:
@@ -25,7 +23,7 @@ public:
   void dispatch(std::function<void*()> f, std::function<void(void*)> cb, event_base* libeventBase);
   void dispatch_local(std::function<void*()> f, std::function<void(void*)> cb);
   void detatch(std::function<void*()> f);
-  void issueCallback(std::function<void(void*)> cb, event_base* libeventBase);
+  void issueCallback(std::function<void(void*)> cb, void* arg, event_base* libeventBase);
 
 private:
 

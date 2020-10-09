@@ -995,8 +995,8 @@ void UDPTransport::DispatchTP_local(std::function<void*()> f, std::function<void
 void UDPTransport::DispatchTP_noCB(std::function<void*()> f) {
   tp.detatch(std::move(f));
 }
-void UDPTransport::IssueCB(std::function<void(void*)> cb){
-  tp.issueCallback(std::move(cb), libeventBase);
+void UDPTransport::IssueCB(std::function<void(void*)> cb, void* arg){
+  tp.issueCallback(std::move(cb), arg, libeventBase);
 }
 
 

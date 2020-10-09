@@ -263,7 +263,7 @@ DEFINE_uint64(indicus_request_tx, false, "request tx"
 		//
 //DEFINE_bool(indicus_clientAuthenticated, false, "Client messages signed");
 DEFINE_bool(indicus_multi_threading, true, "dispatch crypto to parallel threads");
-DEFINE_bool(indicus_batch_verification, true, "using ed25519 donna batch verification");
+DEFINE_bool(indicus_batch_verification, false, "using ed25519 donna batch verification");
 DEFINE_uint64(indicus_batch_verification_size, 64, "batch size for ed25519 donna batch verification");
 DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout, ms");
 

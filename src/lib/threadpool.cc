@@ -37,10 +37,13 @@ ThreadPool::ThreadPool() {
           this->worklist.pop_front();
         }
 
-        job.second->r = job.first();
-        // This _should_ be thread safe
         if(job.second){
+            job.second->r = job.first();
+        // This _should_ be thread safe
             event_active(job.second->ev, 0, 0);
+        }
+        else{
+          job.first();
         }
 
       }
@@ -135,10 +138,10 @@ void ThreadPool::detatch(std::function<void*()> f){
 //could make f purely void, if I refactored a bunch
 //lazy solution:
 // transport->Timer(0, [](){f(new bool(true));})
-void ThreadPool::issueCallback(std::function<void(void*)> cb, event_base* libeventBase){
+void ThreadPool::issueCallback(std::function<void(void*)> cb, void* arg, event_base* libeventBase){
   EventInfo* info = GetUnusedEventInfo(); //new EventInfo(this);
   info->cb = std::move(cb);
-  info->r = new bool(true);
+  info->r = arg;
   //info->ev = event_new(libeventBase, -1, 0, ThreadPool::EventCallback, info);
   info->ev = GetUnusedEvent(libeventBase, info);
   event_add(info->ev, NULL);

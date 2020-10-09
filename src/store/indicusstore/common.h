@@ -19,26 +19,43 @@
 
 namespace indicusstore {
 
+static bool LocalDispatch = false; //TODO: Turn into config flag if a viable option.
+
 typedef std::function<void()> signedCallback;
 typedef std::function<void()> cleanCallback;
 //typedef std::function<void(void*)> verifyCallback;
-//typedef std::function<void(void*)> mainThreadCallback;
-typedef std::function<void(bool)> mainThreadCallback;
+typedef std::function<void(void*)> mainThreadCallback; //TODO change back to this...
+//typedef std::function<void(bool)> mainThreadCallback;
 
+//static bool True = true;
+//static bool False = false;
 
+static std::vector<std::string*> MessageStrings;
+static std::mutex msgStr_mutex;
+std::string* GetUnusedMessageString();
+void FreeMessageString(std::string *str);
+
+//TODO: re-use objects?
 struct asyncVerification{
   asyncVerification(uint32_t _quorumSize, mainThreadCallback mcb, int no_groups,
     proto::CommitDecision _decision, Transport* tp) :  quorumSize(_quorumSize),
-    mainThreadCallback(mcb), groupTotals(no_groups), decision(_decision),
+    mcb(mcb), groupTotals(no_groups), decision(_decision),
     terminate(false), tp(tp) { }
-  ~asyncVerification() { }
+  ~asyncVerification() { deleteMessages();}
 
   std::mutex objMutex;
   Transport* tp;
+  std::vector<std::string*> ccMsgs;
+
+  void deleteMessages(){
+    for(auto ccMsg : ccMsgs){
+      FreeMessageString(ccMsg);//delete ccMsg;
+    }
+  }
 
   uint32_t quorumSize;
-  std::function<void(bool)> mainThreadCallback;
-
+  //std::function<void(bool)> mainThreadCallback;
+  mainThreadCallback mcb;
 
   std::map<uint64_t, uint32_t> groupCounts;
   int groupTotals;
@@ -52,11 +69,14 @@ struct asyncVerification{
   bool terminate;
 };
 
+
 template<typename T> static void* pointerWrapper(std::function<T()> func){
     T* t = new T; //(T*) malloc(sizeof(T));
     *t = func();
     return (void*) t;
 }
+
+void* BoolPointerWrapper(std::function<bool()> func);
 
 void SignMessage(::google::protobuf::Message* msg,
     crypto::PrivKey* privateKey, uint64_t processId,
@@ -116,7 +136,6 @@ void asyncValidateP1Replies(proto::CommitDecision decision, bool fast, const pro
     Verifier *verifier, mainThreadCallback mcb, Transport *transport, bool multithread = false);
 
 void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
-
 void ThreadLocalAsyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
 
 bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
@@ -153,6 +172,7 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     mainThreadCallback mcb, Transport* transport, bool multithread = false);
 
 void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
+void ThreadLocalAsyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
 
 bool ValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     const proto::Transaction *txn,

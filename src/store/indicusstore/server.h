@@ -96,13 +96,13 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void HandlePhase1(const TransportAddress &remote,
       proto::Phase1 &msg);
   void HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
-        signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, bool valid); //void* valid
+        signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid); //bool valid);
 
   void HandlePhase2(const TransportAddress &remote,
        proto::Phase2 &msg);
 
   void WritebackCallback(proto::Writeback *msg, const std::string* txnDigest,
-    proto::Transaction* txn, bool valid); //void* valid);
+    proto::Transaction* txn, void* valid); //bool valid);
   void HandleWriteback(const TransportAddress &remote,
       proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
