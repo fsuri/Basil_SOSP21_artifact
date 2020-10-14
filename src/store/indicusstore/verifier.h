@@ -23,6 +23,9 @@ class Verifier {
   Verifier() { }
   virtual ~Verifier() { }
 
+  virtual bool Verify2(crypto::PubKey *publicKey, const std::string *message,
+      const std::string *signature) = 0;
+
   virtual bool Verify(crypto::PubKey *publicKey, const std::string &message,
       const std::string &signature) = 0;
 

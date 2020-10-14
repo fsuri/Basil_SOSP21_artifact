@@ -20,6 +20,8 @@ class LocalBatchVerifier : public Verifier {
     uint64_t batchTimeoutMicro, bool adjustBatchSize, uint64_t batch_size);
   virtual ~LocalBatchVerifier();
 
+  virtual bool Verify2(crypto::PubKey *publicKey, const std::string *message,
+      const std::string *signature) override;
   virtual bool Verify(crypto::PubKey *publicKey, const std::string &message,
       const std::string &signature) override;
 
@@ -77,15 +79,15 @@ class LocalBatchVerifier : public Verifier {
       std::vector<std::string*> _signaturesS, int _current_fill);
 
 
-  void manageCallbacks(std::vector<const char*> _messages, std::vector<const char*> _signatures,
-       std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array);
+  void manageCallbacks(std::vector<const char*> &_messages, std::vector<const char*> &_signatures,
+       std::vector<verifyCallback> &_pendingBatchCallbacks, void* valid_array);
 
-  void manageCallbacksS(std::vector<std::string*> _messages, std::vector<std::string*> _signatures,
-       std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array);
+  void manageCallbacksS(std::vector<std::string*> &_messages, std::vector<std::string*> &_signatures,
+       std::vector<verifyCallback> &_pendingBatchCallbacks, void* valid_array);
 
   void AdjustBatchSize();
 
-  bool partialVerify(crypto::PubKey *publicKey, std::string hashStr, std::string rootSig);
+  bool partialVerify(crypto::PubKey *publicKey, const std::string &hashStr, const std::string &rootSig);
 
 
 };

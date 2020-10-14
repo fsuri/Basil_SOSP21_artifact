@@ -33,6 +33,11 @@ LocalBatchVerifier::~LocalBatchVerifier() {
   Latency_Dump(&cryptoLat);
 }
 
+bool LocalBatchVerifier::Verify2(crypto::PubKey *publicKey, const std::string *message,
+    const std::string *signature) {
+  return Verify(publicKey, *message, *signature);
+}
+
 bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &message,
     const std::string &signature) {    //TODO  ADD CALLBACK as argument, needs to be passed to batcher. ()
   VALGRIND_DO_LEAK_CHECK;
@@ -90,7 +95,7 @@ bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &me
   }
 }
 
-bool LocalBatchVerifier::partialVerify(crypto::PubKey *publicKey, std::string hashStr, std::string rootSig){
+bool LocalBatchVerifier::partialVerify(crypto::PubKey *publicKey, const std::string &hashStr, const std::string &rootSig){
     Latency_Start(&cryptoLat);
     if (crypto::Verify(publicKey, &hashStr[0], hashStr.length(), &rootSig[0])) {
       Latency_End(&cryptoLat);
@@ -192,19 +197,13 @@ Debug("Harry you're a wizard? %s", *(bool*)validate ? "yes  if(current_fill == 0
           //std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, message, signature));
           //std::string msg(*hashStr);
           //std::string sig(*rootSig);
-          std::function<bool()> func(std::bind(&LocalBatchVerifier::partialVerify, this, publicKey, *hashStr, *rootSig)); //msg, sig));
+          std::function<bool()> func(std::bind(&LocalBatchVerifier::partialVerify, this, publicKey, std::ref(*hashStr), std::ref(*rootSig))); //msg, sig));
           std::function<void*()> f(std::bind(pointerWrapperC<bool>, std::move(func)));
           transport->DispatchTP(std::move(f), std::move(vb));
         }
         else{
-          //this cannot work -> trying to call the whole verify again, even though part is already done.
-
-          //std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, message, signature));
-          //std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, *hashStr, *rootSig));
-          bool* res = new bool(partialVerify(publicKey, *hashStr, *rootSig));
-          //Verify(publicKey, message, signature)
-          //void* res = pointerWrapperC<bool>(func);
-          vb((void*)res);
+          //bool* res = new bool(partialVerify(publicKey, *hashStr, *rootSig));
+          vb((void*) partialVerify(publicKey, *hashStr, *rootSig));
         }
         delete hashStr;
         delete rootSig;
@@ -368,8 +367,8 @@ void LocalBatchVerifier::Complete(bool multithread, bool force_complete){
 }
 
 
-void LocalBatchVerifier::manageCallbacks(std::vector<const char*> _messages, std::vector<const char*> _signatures,
-   std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array){
+void LocalBatchVerifier::manageCallbacks(std::vector<const char*> &_messages, std::vector<const char*> &_signatures,
+   std::vector<verifyCallback> &_pendingBatchCallbacks, void* valid_array){
 
   int* valid = (int*) valid_array;
   // int valid_size = sizeof(valid) / sizeof(valid[0]);
@@ -385,12 +384,12 @@ void LocalBatchVerifier::manageCallbacks(std::vector<const char*> _messages, std
         std::string hashStr(_messages[i]);
         std::string rootSig(_signatures[i]);
         cache[hashStr] = rootSig;
-        bool* res = new bool(true);
-        _pendingBatchCallbacks[i]((void*) res);
+        //bool* res = new bool(true);
+        _pendingBatchCallbacks[i]((void*) true);
       }
       else{
-        bool* res = new bool(false);
-        _pendingBatchCallbacks[i]((void*) res);
+        //bool* res = new bool(false);
+        _pendingBatchCallbacks[i]((void*) false);
       }
   }
   delete [] valid;
@@ -403,8 +402,8 @@ void LocalBatchVerifier::manageCallbacks(std::vector<const char*> _messages, std
 
 }
 
-void LocalBatchVerifier::manageCallbacksS(std::vector<std::string*> _messagesS, std::vector<std::string*> _signaturesS,
-   std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array){
+void LocalBatchVerifier::manageCallbacksS(std::vector<std::string*> &_messagesS, std::vector<std::string*> &_signaturesS,
+   std::vector<verifyCallback> &_pendingBatchCallbacks, void* valid_array){
 
   int* valid = (int*) valid_array;
   // int valid_size = sizeof(valid) / sizeof(valid[0]);
@@ -421,12 +420,12 @@ void LocalBatchVerifier::manageCallbacksS(std::vector<std::string*> _messagesS, 
         std::string rootSig(*_signaturesS[i]);
         cache[*_messagesS[i]] = rootSig;
         //cache[hashStr] = rootSig;
-        bool* res = new bool(true);
-        _pendingBatchCallbacks[i]((void*) res);
+        //bool* res = new bool(true);
+        _pendingBatchCallbacks[i]((void*) true);
       }
       else{
-        bool* res = new bool(false);
-        _pendingBatchCallbacks[i]((void*) res);
+        //bool* res = new bool(false);
+        _pendingBatchCallbacks[i]((void*) false);
       }
   }
   delete [] valid;

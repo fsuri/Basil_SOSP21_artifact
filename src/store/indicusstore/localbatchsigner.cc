@@ -93,8 +93,15 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
   if (initialBatchSize == 1) {
     Debug("Initial batch size = 1, immediately signing");
 
-    std::function<void*()> f(std::bind(asyncSignMessage, msg, keyManager->GetPrivateKey(id), id, signedMessage));
-    transport->DispatchTP(std::move(f), [cb](void * ret){ cb();});
+    // std::function<void*()> f(std::bind(asyncSignMessage, msg, keyManager->GetPrivateKey(id),
+    //   id, signedMessage));
+    // transport->DispatchTP(std::move(f), [cb](void * ret){ cb();});
+    auto f = [this, msg, signedMessage, cb](){
+      SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMessage);
+      cb();
+      return (void*) true;
+    };
+    transport->DispatchTP_noCB(std::move(f));
 
   } else {
     Debug("Adding to Sig batch");
@@ -118,7 +125,8 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
       pendingBatchSignedMessages.clear();
       pendingBatchCallbacks.clear();
       Debug("Batch request bound, dispatching");
-      transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
+      //transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
+      transport->DispatchTP_noCB(std::move(f));
 
 
     } else if (!batchTimerRunning) {
@@ -135,7 +143,9 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
         this->pendingBatchMessages.clear();
         this->pendingBatchSignedMessages.clear();
         this->pendingBatchCallbacks.clear();
-        this->transport->DispatchTP(f, [](void* ret){delete (bool*) ret;});
+        //this->transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
+        this->transport->DispatchTP_noCB(std::move(f));
+
       });
 
     }
@@ -169,8 +179,8 @@ std::vector<signedCallback> _pendingBatchCallbacks) {
     cb();
   }
 
-  bool* ret = new bool;
-  return (void*) ret;
+  //bool* ret = new bool;
+  return (void*) true;
 }
 
 //NOT USED

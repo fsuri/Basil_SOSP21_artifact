@@ -20,6 +20,8 @@ class SharedBatchVerifier : public Verifier {
   SharedBatchVerifier(uint64_t merkleBranchFactor, Stats &stats);
   virtual ~SharedBatchVerifier();
 
+  virtual bool Verify2(crypto::PubKey *publicKey, const std::string *message,
+      const std::string *signature) override;
   virtual bool Verify(crypto::PubKey *publicKey, const std::string &message,
       const std::string &signature) override;
 

@@ -7,6 +7,7 @@
 
 //TODO: make is so that all but the first core are used.
 ThreadPool::ThreadPool() {
+  //printf("starting threadpool \n");
   //could pre-allocate some Events and EventInfos for a Hotstart
 
   //TODO: add config param for hyperthreading
@@ -20,31 +21,32 @@ ThreadPool::ThreadPool() {
     //if(i % 2 == 0) continue;
     std::thread *t = new std::thread([this, i] {
       while (true) {
-        std::pair<std::function<void*()>, EventInfo*> job;
+        //std::pair<std::function<void*()>, EventInfo*> job;
+        std::function<void*()> job;
         {
           // only acquire the lock in this block so that the
           // std::function execution is not holding the lock
           Debug("Thread %d running on CPU %d.", i, sched_getcpu());
           std::unique_lock<std::mutex> lock(this->worklistMutex);
-          cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });
+          cv.wait(lock, [this] { return this->worklist2.size() > 0 || !running; });
           if (!running) {
             break;
           }
-          if (this->worklist.size() == 0) {
+          if (this->worklist2.size() == 0) {
             continue;
           }
-          job = this->worklist.front(); //creates a copy? According to doc its a ref.
-          this->worklist.pop_front();
+          job = std::move(this->worklist2.front());
+          this->worklist2.pop_front();
         }
-
-        if(job.second){
-            job.second->r = job.first();
-        // This _should_ be thread safe
-            event_active(job.second->ev, 0, 0);
-        }
-        else{
-          job.first();
-        }
+        job();
+        // if(job.second){
+        //     job.second->r = job.first();
+        // // This _should_ be thread safe
+        //     event_active(job.second->ev, 0, 0);
+        // }
+        // else{
+        //   job.first();
+        // }
 
       }
     });
@@ -116,18 +118,23 @@ void* ThreadPool::combiner(std::function<void*()> f, std::function<void(void*)> 
 
 void ThreadPool::dispatch_local(std::function<void*()> f, std::function<void(void*)> cb){
   EventInfo* info = nullptr;
-  std::function<void*()> combination(std::bind(ThreadPool::combiner, std::move(f), std::move(cb)));
-  std::pair<std::function<void*()>, EventInfo*> job(std::move(combination), info);
+  auto combination = [f = std::move(f), cb = std::move(cb)](){cb(f()); return nullptr;};
+  //std::function<void*()> combination(std::bind(ThreadPool::combiner, std::move(f), std::move(cb)));
+  //std::pair<std::function<void*()>, EventInfo*> job(std::move(combination), info);
   std::lock_guard<std::mutex> lk(worklistMutex);
-  worklist.push_back(std::move(job));
+  //worklist.emplace_back(std::make_pair(std::move(combination), info));
+  worklist2.push_back(std::move(combination));
+
+  //worklist.push_back(std::move(job));
   cv.notify_one();
 }
 
 void ThreadPool::detatch(std::function<void*()> f){
   EventInfo* info = nullptr;
-  std::pair<std::function<void*()>, EventInfo*> job(std::move(f), info);
+  //std::pair<std::function<void*()>, EventInfo*> job(std::move(f), info);
   std::lock_guard<std::mutex> lk(worklistMutex);
-  worklist.push_back(std::move(job));
+  //worklist.push_back(std::move(job));
+  worklist2.push_back(std::move(f)); //does it still create a copy? //same with emplace_back?
   cv.notify_one();
 }
 
@@ -152,6 +159,7 @@ void ThreadPool::issueCallback(std::function<void(void*)> cb, void* arg, event_b
 
 
 ThreadPool::EventInfo* ThreadPool::GetUnusedEventInfo() {
+  std::unique_lock<std::mutex> lock(EventInfoMutex);
   EventInfo *info;
   if (eventInfos.size() > 0) {
     info = eventInfos.back();
@@ -163,10 +171,12 @@ ThreadPool::EventInfo* ThreadPool::GetUnusedEventInfo() {
 }
 
 void ThreadPool::FreeEventInfo(EventInfo *info) {
+  std::unique_lock<std::mutex> lock(EventInfoMutex);
   eventInfos.push_back(info);
 }
 
 event* ThreadPool::GetUnusedEvent(event_base* libeventBase, EventInfo* info) {
+  std::unique_lock<std::mutex> lock(EventMutex);
   event* event;
   if (events.size() > 0) {
     event = events.back();
@@ -179,6 +189,7 @@ event* ThreadPool::GetUnusedEvent(event_base* libeventBase, EventInfo* info) {
 }
 
 void ThreadPool::FreeEvent(event* event) {
+  std::unique_lock<std::mutex> lock(EventMutex);
   event_del(event);
   events.push_back(event);
 }

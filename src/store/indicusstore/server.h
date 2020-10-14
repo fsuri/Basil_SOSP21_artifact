@@ -211,6 +211,8 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::mutex transportMutex;
   std::mutex protoMutex;
 
+  //std::vector<proto::CommittedProof*> testing_committed_proof;
+
   /* Declare protobuf objects as members to avoid stack alloc/dealloc costs */
   proto::SignedMessage signedMessage;
   proto::Read read;

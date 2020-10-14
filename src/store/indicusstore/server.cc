@@ -64,9 +64,13 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
 
   // Testing purpose. TODO:: REMOVE
   // for(int i=0; i<100; ++i){
-  //     proto::Writeback *msg= new proto::Writeback();
-  //     WBmessages.push_back(msg);
+  //     proto::CommittedProof *proof = new proto::CommittedProof();
+  //     testing_committed_proof.push_back(proof);
+  //     // proto::Writeback *msg= new proto::Writeback();
+  //     // WBmessages.push_back(msg);
   // }
+
+
 
   Debug("Starting Indicus replica %d.", id);
   transport->Register(this, config, groupIdx, idx);
@@ -320,9 +324,20 @@ void Server::HandleRead(const TransportAddress &remote,
 
       if(params.multiThreading){
         proto::Write* write = new proto::Write(readReply->write());
-        std::function<void*()> f(std::bind(asyncSignMessage, write,
-          keyManager->GetPrivateKey(id), id, readReply->mutable_signed_write()));
-        transport->DispatchTP(std::move(f), [sendCB, write](void * ret){ sendCB(); delete write;});
+        // std::function<void*()> f(std::bind(asyncSignMessage, write,
+        //   keyManager->GetPrivateKey(id), id, readReply->mutable_signed_write()));
+        // transport->DispatchTP(std::move(f), [sendCB, write](void * ret){ sendCB(); delete write;});
+
+        auto f = [this, readReply, sendCB = std::move(sendCB), write]()
+        {
+          SignMessage(write, keyManager->GetPrivateKey(id), id, readReply->mutable_signed_write());
+          sendCB();
+          delete write;
+          return (void*) true;
+        };
+        transport->DispatchTP_noCB(std::move(f));
+
+
       }
       else{
         proto::Write write(readReply->write());
@@ -336,18 +351,23 @@ void Server::HandleRead(const TransportAddress &remote,
       if(params.multiThreading){
 
         std::vector<::google::protobuf::Message *> msgs;
-        proto::Write* write = new proto::Write(readReply->write());
+        proto::Write* write = new proto::Write(readReply->write()); //TODO might want to re-use
         msgs.push_back(write);
         std::vector<proto::SignedMessage *> smsgs;
         smsgs.push_back(readReply->mutable_signed_write());
 
-        std::function<void*()> f(std::bind(asyncSignMessages, msgs,
-          keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor));
-          // [this, msgs, smsgs](){
-          //   SignMessages(msgs, keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor);
-          //   bool* r = new bool(true);
-          //   return (void*) r; }
-        transport->DispatchTP(std::move(f) ,[sendCB, write](void * ret){ sendCB(); delete write;});
+        auto f = [this, msgs, smsgs, sendCB = std::move(sendCB), write]()
+        {
+          SignMessages(msgs, keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor);
+          sendCB();
+          delete write;
+          return (void*) true;
+        };
+        transport->DispatchTP_noCB(std::move(f));
+
+        // std::function<void*()> f(std::bind(asyncSignMessages, msgs,
+        //   keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor));
+        // transport->DispatchTP(std::move(f) ,[sendCB, write](void * ret){ sendCB(); delete write;});
       }
       else{
         proto::Write write(readReply->write());
@@ -653,7 +673,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
 }
 
 void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDigest,
-  proto::Transaction* txn, void* valid){//bool valid) { //void* valid){
+  proto::Transaction* txn, void* valid){
 
   Debug("WRITEBACK Callback[%s] being called", BytesToHex(*txnDigest, 16).c_str());
   if(! valid){
@@ -665,6 +685,8 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
     return;
   }
   //delete (bool*) valid;
+
+  ///////////////////////////// Below: Only executed by MainThread
 
   if (msg->decision() == proto::COMMIT) {
     Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
@@ -679,6 +701,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
         return;
       }
     }
+    Debug("COMMIT ONLY RUN BY MAINTHREAD: %d", sched_getcpu());
     Commit(*txnDigest, txn, p1Sigs ? msg->release_p1_sigs() : msg->release_p2_sigs(), p1Sigs, view);
   } else {
     Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
@@ -1441,7 +1464,10 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
   Value val;
   proto::CommittedProof *proof = nullptr;
   if (params.validateProofs) {
+    Debug("Access only by CPU: %d", sched_getcpu());
     proof = new proto::CommittedProof();
+    //proof = testing_committed_proof.back();
+    //testing_committed_proof.pop_back();
   }
   val.proof = proof;
 
@@ -1732,9 +1758,18 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
           // std::function<void*()> f(std::bind(asyncSignMessage, *msg_copy, keyManager->GetPrivateKey(id), id, signedMessage));
           //Assuming bind creates a copy this suffices:
           Debug("(multithreading) dispatching signing");
-      std::function<void*()> f(std::bind(asyncSignMessage, msg, keyManager->GetPrivateKey(id), id, signedMessage));
-      transport->DispatchTP(std::move(f), [cb](void * ret){ cb();});
+      // std::function<void*()> f(std::bind(asyncSignMessage, msg, keyManager->GetPrivateKey(id),
+      //  id, signedMessage));
+      // transport->DispatchTP(std::move(f), [cb](void * ret){ cb();});
+
+      auto f = [this, msg, signedMessage, cb = std::move(cb)](){
+        SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMessage);
+        cb();
+        return (void*) true;
+      };
+      transport->DispatchTP_noCB(std::move(f));
       }
+
       else {
         Debug("(multithreading) adding sig request to localbatchSigner");
         batchSigner->asyncMessageToSign(msg, signedMessage, std::move(cb));

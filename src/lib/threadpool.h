@@ -29,6 +29,7 @@ private:
 
   struct EventInfo {
       EventInfo(ThreadPool* tp): tp(tp) {}
+
       event* ev;
       std::function<void(void*)> cb;
       void* r;
@@ -45,10 +46,13 @@ private:
 
 
   std::mutex worklistMutex;
+  std::mutex EventInfoMutex;
+  std::mutex EventMutex;
   std::condition_variable cv;
   std::vector<EventInfo*> eventInfos;
   std::vector<event*> events;
   std::list<std::pair<std::function<void*()>, EventInfo*> > worklist;
+  std::list<std::function<void*()>> worklist2;
   bool running;
   std::vector<std::thread*> threads;
 

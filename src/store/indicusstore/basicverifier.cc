@@ -21,12 +21,16 @@ BasicVerifier::BasicVerifier(Transport* transport, uint64_t batchTimeoutMicro, b
 BasicVerifier::~BasicVerifier() {
 }
 
+bool BasicVerifier::Verify2(crypto::PubKey *publicKey, const std::string *message,
+    const std::string *signature) {
+  return Verify(publicKey, *message, *signature);
+}
+
 bool BasicVerifier::Verify(crypto::PubKey *publicKey, const std::string &message,
     const std::string &signature) {
       Debug("VERIFYING ON THIS cpu: %d",  sched_getcpu());
   return crypto::Verify(publicKey, &message[0], message.length(), &signature[0]);
 }
-
 
 //TODO: need to make this thread safe if being called from multiple threads. Depends on whether the call into verifier is made by original process or delegated thread. Delegated thread makes more sne
 void BasicVerifier::AddToBatch(crypto::PubKey *publicKey, const std::string &message,
@@ -103,10 +107,11 @@ void BasicVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::strin
 
         //TODO: add dispatching
         if(multithread){
-          std::string msg(message);
-          std::string sig(signature);
-          std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, msg, sig));
-          std::function<void*()> f(std::bind(pointerWrapperC<bool>, std::move(func)));
+          //std::string msg(message);
+          //std::string sig(signature);
+          std::function<bool()> func(std::bind(&Verifier::Verify, this, publicKey, message, signature));
+          //std::function<void*()> f(std::bind(pointerWrapperC<bool>, std::move(func)));
+          std::function<void*()> f(std::bind(BoolPointerWrapper, std::move(func)));
           transport->DispatchTP(std::move(f), std::move(vb));
         }
         else{
@@ -114,8 +119,8 @@ void BasicVerifier::asyncBatchVerify(crypto::PubKey *publicKey, const std::strin
           // //Verify(publicKey, message, signature)
           // void* res = pointerWrapperC<bool>(func);
           // vb(res);
-          bool* res = new bool(Verify(publicKey, message, signature));
-          vb((void*)res);
+          //bool* res = new bool(Verify(publicKey, message, signature));
+          vb((void*) Verify(publicKey, message, signature));
         }
       }
 
@@ -262,7 +267,7 @@ void BasicVerifier::Complete(bool multithread, bool force_complete){
 
 
 //bind the first argument
-void BasicVerifier::manageCallbacks(std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array){
+void BasicVerifier::manageCallbacks(std::vector<verifyCallback> &_pendingBatchCallbacks, void* valid_array){
 
   int* valid = (int*) valid_array;
   // int valid_size = sizeof(valid) / sizeof(valid[0]);
@@ -279,12 +284,12 @@ void BasicVerifier::manageCallbacks(std::vector<verifyCallback> _pendingBatchCal
 
       //Debug("valid[%d]: %d ", i, valid[i]);
       if(valid[i]){
-        bool* res = new bool(true);
-        _pendingBatchCallbacks[i]((void*) res);
+      //  bool* res = new bool(true);
+        _pendingBatchCallbacks[i]((void*) true);
       }
       else{
-        bool* res = new bool(false);
-        _pendingBatchCallbacks[i]((void*) res);
+        //bool* res = new bool(false);
+        _pendingBatchCallbacks[i]((void*) false);
       }
   }
   Debug("manageCallbacks complete");

@@ -23,6 +23,9 @@ class BasicVerifier : public Verifier {
     return current_fill;
   }
 
+  virtual bool Verify2(crypto::PubKey *publicKey, const std::string *message,
+      const std::string *signature) override;
+
   virtual bool Verify(crypto::PubKey *publicKey, const std::string &message,
       const std::string &signature) override;
 
@@ -70,7 +73,8 @@ private:
       std::vector<std::string*> _messages, std::vector<size_t> _messageLens,
       std::vector<std::string*> _signatures, int _current_fill);
 
-  void manageCallbacks(std::vector<verifyCallback> _pendingBatchCallbacks, void* valid_array);
+      //if this doesnt work, undo the ref &
+  void manageCallbacks(std::vector<verifyCallback> &_pendingBatchCallbacks, void* valid_array);
 
   void AdjustBatchSize();
 

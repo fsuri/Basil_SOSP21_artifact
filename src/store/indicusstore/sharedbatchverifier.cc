@@ -24,6 +24,10 @@ SharedBatchVerifier::~SharedBatchVerifier() {
   // delete segment;
   // delete alloc_inst;
 }
+bool SharedBatchVerifier::Verify2(crypto::PubKey *publicKey, const std::string *message,
+    const std::string *signature) {
+  return Verify(publicKey, *message, *signature);
+}
 
 bool SharedBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &message,
     const std::string &signature) {

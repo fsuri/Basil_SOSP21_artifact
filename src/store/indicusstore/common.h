@@ -19,7 +19,7 @@
 
 namespace indicusstore {
 
-static bool LocalDispatch = false; //TODO: Turn into config flag if a viable option.
+static bool LocalDispatch = true; //TODO: Turn into config flag if a viable option.
 
 typedef std::function<void()> signedCallback;
 typedef std::function<void()> cleanCallback;
@@ -136,7 +136,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision, bool fast, const pro
     Verifier *verifier, mainThreadCallback mcb, Transport *transport, bool multithread = false);
 
 void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
-void ThreadLocalAsyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
+//void ThreadLocalAsyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
 
 bool ValidateP1Replies(proto::CommitDecision decision, bool fast,
     const proto::Transaction *txn,
@@ -172,7 +172,7 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     mainThreadCallback mcb, Transport* transport, bool multithread = false);
 
 void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
-void ThreadLocalAsyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
+//void ThreadLocalAsyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
 
 bool ValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     const proto::Transaction *txn,
