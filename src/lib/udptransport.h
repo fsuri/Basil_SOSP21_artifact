@@ -88,6 +88,8 @@ public:
     virtual void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb) override;
     virtual void DispatchTP_local(std::function<void*()> f, std::function<void(void*)> cb) override;
     virtual void DispatchTP_noCB(std::function<void*()> f) override;
+    virtual void DispatchTP_noCB_ptr(std::function<void*()> *f) override;
+    virtual void DispatchTP_main(std::function<void*()> f) override;
     virtual void IssueCB(std::function<void(void*)> cb, void* arg) override;
 
 private:

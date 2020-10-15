@@ -89,6 +89,7 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
   // cv.wait(lk, [] { return !signing; });
   //declare return var
   // bool* ret = new bool;
+  //std::unique_lock<std::mutex> lock(this->batchMutex);
 
   if (initialBatchSize == 1) {
     Debug("Initial batch size = 1, immediately signing");
@@ -133,6 +134,7 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
       batchTimerRunning = true;
       Debug("Starting batch timer");
       batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this]() {
+        //std::unique_lock<std::mutex> lock(this->batchMutex);
         Debug("Batch timer expired with %lu items, sending",
             this->pendingBatchMessages.size());
         this->batchTimerRunning = false;

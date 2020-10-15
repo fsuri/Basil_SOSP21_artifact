@@ -153,6 +153,7 @@ Server::~Server() {
 void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
 
+  //std::unique_lock<std::mutex> main_lock(mainThreadMutex);
   //if(test_bool) return;
 
   if (type == read.GetTypeName()) {
@@ -160,7 +161,15 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     HandleRead(remote, read);
   } else if (type == phase1.GetTypeName()) {
     phase1.ParseFromString(data);
-    HandlePhase1(remote, phase1);
+     HandlePhase1(remote, phase1);
+    //testing main dispatch
+    // auto f = [this, &remote](){
+    //   std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
+    //   this->HandlePhase1(remote, this->phase1);
+    //   return (void*) true;
+    // };
+    // transport->DispatchTP_main(f);
+
   } else if (type == phase2.GetTypeName()) {
       if(params.multiThreading){
           proto::Phase2* p2 = GetUnusedPhase2message();
@@ -177,6 +186,13 @@ void Server::ReceiveMessage(const TransportAddress &remote,
           proto::Writeback *wb = GetUnusedWBmessage();
           wb->ParseFromString(data);
           HandleWriteback(remote, *wb);
+
+          // auto f = [this, &remote, wb](){
+          //   std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
+          //   this->HandleWriteback(remote, *wb);
+          //   return (void*) true;
+          // };
+          // transport->DispatchTP_main(f);
       }
       else{
         writeback.ParseFromString(data);
@@ -1772,6 +1788,12 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
 
       else {
         Debug("(multithreading) adding sig request to localbatchSigner");
+        // auto f = [this, msg, signedMessage, cb = std::move(cb)](){
+        //   //std::unique_lock<std::mutex> lock(this->batchSigner->batchMutex);
+        //   this->batchSigner->asyncMessageToSign(msg, signedMessage, std::move(cb));
+        //   return (void*) true;
+        // };
+        // transport->DispatchTP_noCB(std::move(f));
         batchSigner->asyncMessageToSign(msg, signedMessage, std::move(cb));
         Debug("crashing after delegating sig request");
       }
@@ -1809,7 +1831,7 @@ proto::Phase1Reply *Server::GetUnusedPhase1Reply() {
   proto::Phase1Reply *reply;
   if (p1Replies.size() > 0) {
     reply = p1Replies.back();
-    reply->Clear();
+    //reply->Clear(); //can move this to Free if want more work at threads
     p1Replies.pop_back();
   } else {
     reply = new proto::Phase1Reply();
@@ -1822,7 +1844,7 @@ proto::Phase2Reply *Server::GetUnusedPhase2Reply() {
   proto::Phase2Reply *reply;
   if (p2Replies.size() > 0) {
     reply = p2Replies.back();
-    reply->Clear();
+    //reply->Clear();
     p2Replies.pop_back();
   } else {
     reply = new proto::Phase2Reply();
@@ -1858,16 +1880,19 @@ proto::Writeback *Server::GetUnusedWBmessage() {
 
 void Server::FreeReadReply(proto::ReadReply *reply) {
   std::unique_lock<std::mutex> lock(protoMutex);
+  //reply->Clear();
   readReplies.push_back(reply);
 }
 
 void Server::FreePhase1Reply(proto::Phase1Reply *reply) {
   std::unique_lock<std::mutex> lock(protoMutex);
+  reply->Clear();
   p1Replies.push_back(reply);
 }
 
 void Server::FreePhase2Reply(proto::Phase2Reply *reply) {
   std::unique_lock<std::mutex> lock(protoMutex);
+  reply->Clear();
   p2Replies.push_back(reply);
 }
 

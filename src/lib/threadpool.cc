@@ -19,7 +19,34 @@ ThreadPool::ThreadPool() {
   running = true;
   for (uint32_t i = 1; i < num_threads; i++) {
     //if(i % 2 == 0) continue;
-    std::thread *t = new std::thread([this, i] {
+    std::thread *t;
+    //Mainthread
+    if(i==1){
+      t = new std::thread([this, i] {
+        while (true) {
+          std::function<void*()> job;
+          {
+            // only acquire the lock in this block so that the
+            // std::function execution is not holding the lock
+            Debug("Thread %d running on CPU %d.", i, sched_getcpu());
+            std::unique_lock<std::mutex> lock(this->main_worklistMutex);
+            cv_main.wait(lock, [this] { return this->main_worklist.size() > 0 || !running; });
+            if (!running) {
+              break;
+            }
+            if (this->main_worklist.size() == 0) {
+              continue;
+            }
+            job = std::move(this->main_worklist.front());
+            this->main_worklist.pop_front();
+          }
+          job();
+        }
+      });
+    }
+    //Cryptothread
+    else{
+    t = new std::thread([this, i] {
       while (true) {
         //std::pair<std::function<void*()>, EventInfo*> job;
         std::function<void*()> job;
@@ -50,6 +77,7 @@ ThreadPool::ThreadPool() {
 
       }
     });
+  }
     // Create a cpu_set_t object representing a set of CPUs. Clear it and mark
     // only CPU i as set.
     cpu_set_t cpuset;
@@ -135,7 +163,25 @@ void ThreadPool::detatch(std::function<void*()> f){
   std::lock_guard<std::mutex> lk(worklistMutex);
   //worklist.push_back(std::move(job));
   worklist2.push_back(std::move(f)); //does it still create a copy? //same with emplace_back?
+  //try queue/deque
   cv.notify_one();
+}
+
+void ThreadPool::detatch_ptr(std::function<void*()> *f){
+  EventInfo* info = nullptr;
+  //std::pair<std::function<void*()>, EventInfo*> job(std::move(f), info);
+  std::lock_guard<std::mutex> lk(worklistMutex);
+  //worklist.push_back(std::move(job));
+  worklist2.push_back(std::move(*f)); //does it still create a copy? //same with emplace_back?
+  //try queue/deque
+  cv.notify_one();
+}
+
+void ThreadPool::detatch_main(std::function<void*()> f){
+  EventInfo* info = nullptr;
+  std::lock_guard<std::mutex> lk(main_worklistMutex);
+  main_worklist.push_back(std::move(f));
+  cv_main.notify_one();
 }
 
 ////////////////////////////////

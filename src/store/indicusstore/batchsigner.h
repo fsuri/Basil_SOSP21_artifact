@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <vector>
+#include <mutex>
 
 #include <boost/interprocess/containers/vector.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
@@ -34,6 +35,8 @@ class BatchSigner {
       proto::SignedMessage *signedMessage, signedCallback cb,
       bool finishBatch = false) = 0;
 
+  std::mutex batchMutex;
+
  protected:
   Transport *transport;
   KeyManager *keyManager;
@@ -43,6 +46,7 @@ class BatchSigner {
   const uint64_t id;
   const bool adjustBatchSize;
   const uint64_t merkleBranchFactor;
+
 
 };
 

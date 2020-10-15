@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <thread>
 #include <event2/event.h>
+#include <deque>
 
 class ThreadPool {
 
@@ -23,6 +24,8 @@ public:
   void dispatch(std::function<void*()> f, std::function<void(void*)> cb, event_base* libeventBase);
   void dispatch_local(std::function<void*()> f, std::function<void(void*)> cb);
   void detatch(std::function<void*()> f);
+  void detatch_ptr(std::function<void*()> *f);
+  void detatch_main(std::function<void*()> f);
   void issueCallback(std::function<void(void*)> cb, void* arg, event_base* libeventBase);
 
 private:
@@ -51,11 +54,14 @@ private:
   std::condition_variable cv;
   std::vector<EventInfo*> eventInfos;
   std::vector<event*> events;
-  std::list<std::pair<std::function<void*()>, EventInfo*> > worklist;
-  std::list<std::function<void*()>> worklist2;
+  std::deque<std::pair<std::function<void*()>, EventInfo*> > worklist;
+  std::deque <std::function<void*()>> worklist2; //try with deque
   bool running;
   std::vector<std::thread*> threads;
 
+  std::deque <std::function<void*()>> main_worklist;
+  std::mutex main_worklistMutex;
+  std::condition_variable cv_main;
 };
 
 #endif  // _LIB_THREADPOOL_H_

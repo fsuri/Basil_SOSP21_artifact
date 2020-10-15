@@ -31,6 +31,7 @@ class LocalBatchSigner : public BatchSigner {
   virtual void asyncMessageToSign(::google::protobuf::Message* msg,
           proto::SignedMessage *signedMessage, signedCallback cb, bool finishBatch = false) override;
 
+  std::mutex batchMutex;
 
  private:
   void SignBatch();

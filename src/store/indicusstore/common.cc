@@ -401,7 +401,7 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
     concurrencyControl.SerializeToString(ccMsg);
     verifyObj->ccMsgs.push_back(ccMsg); //TODO: delete at callback
 
-    std::set<uint64_t> replicasVerified;
+    std::unordered_set<uint64_t> replicasVerified;
 
     for (const auto &sig : sigs.second.sigs()) {
       if (!IsReplicaInGroup(sig.process_id(), sigs.first, config)) {
@@ -486,9 +486,11 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
   }
 
   asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), txn->involved_groups_size(), decision, transport);
+  std::unique_lock<std::mutex> lock(verifyObj->objMutex);
 
   std::vector<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
   std::vector<std::function<void*()>> verificationJobs2;
+  std::vector<std::function<void*()> *> verificationJobs3;
 
   for (const auto &sigs : groupedSigs.grouped_sigs()) {
     concurrencyControl.set_involved_group(sigs.first);
@@ -536,17 +538,17 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
 
 
       //create copy of ccMsg, and signature on heap, put them in the verifyObj, and then delete then when deleting the object.
-      //std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(sig.process_id()),
-      //          std::ref(*ccMsg), std::ref(sig.signature())));
+      // std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(sig.process_id()),
+      //           std::ref(*ccMsg), std::ref(sig.signature())));
 
       crypto::PubKey* pubKey = keyManager->GetPublicKey(sig.process_id());
       const std::string* mut_sig = &sig.signature();
       uint64_t grpId = sigs.first;
-      auto f = [verifier, pubKey, ccMsg, mut_sig, verifyObj, grpId](){
+      std::function<void*()>* f = new std::function([verifier, pubKey, ccMsg, mut_sig, verifyObj, grpId](){
         void* res = (void*) verifier->Verify2(pubKey, ccMsg, mut_sig);
         asyncValidateP1RepliesCallback(verifyObj, grpId, res);
         return (void*) res;
-      };
+      });
 
       //std::function<void*()> f(std::bind(BoolPointerWrapper, std::move(func)));
       //turn into void* function in order to dispatch
@@ -555,39 +557,44 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
       //std::function<void(void*)> cb(std::bind(asyncValidateP1RepliesCallback, verifyObj, sigs.first, std::placeholders::_1));
 
       //verificationJobs.emplace_back(std::make_pair(std::move(f), std::move(cb)));
-      verificationJobs2.emplace_back(std::move(f));
-
+      //verificationJobs2.emplace_back(std::move(f));
+      //verificationJobs3.push_back(f);
+      transport->DispatchTP_noCB_ptr(f);
       }
     }
 
   verifyObj->deletable = verificationJobs.size();
 
 //does ref & make a difference here?
-  for (auto &verification : verificationJobs2){
-    transport->DispatchTP_noCB(std::move(verification));
-  }
+// for (std::function<void*()>* f : verificationJobs3){
+//   transport->DispatchTP_noCB_ptr(f);
+// }
 
-  for (auto &verification : verificationJobs){
-
-    //a)) Multithreading: Dispatched f: verify , cb: async Callback
-    if(multithread && LocalDispatch){
-      // Debug("P1 Validation is dispatched and parallel");
-      auto comb = [f = std::move(verification.first), cb = std::move(verification.second)](){
-        cb(f());
-        return (void*) true;
-      };
-      transport->DispatchTP_noCB(std::move(comb));
-      //transport->DispatchTP_local(std::move(verification.first), std::move(verification.second));
-    }
-    else if(multithread){
-      transport->DispatchTP(std::move(verification.first), std::move(verification.second));
-    }
-    //b) No multithreading: Calls verify + async Callback. Problem: Unecessary copying for bind.
-    else{
-      Debug("P1 Validation is local and serial");
-      verification.second(verification.first());
-    }
-  }
+  // for (auto &verification : verificationJobs2){
+  //   transport->DispatchTP_noCB(std::move(verification));
+  // }
+  //
+  // for (auto &verification : verificationJobs){
+  //
+  //   //a)) Multithreading: Dispatched f: verify , cb: async Callback
+  //   if(multithread && LocalDispatch){
+  //     // Debug("P1 Validation is dispatched and parallel");
+  //     auto comb = [f = std::move(verification.first), cb = std::move(verification.second)](){
+  //       cb(f());
+  //       return (void*) true;
+  //     };
+  //     transport->DispatchTP_noCB(std::move(comb));
+  //     //transport->DispatchTP_local(std::move(verification.first), std::move(verification.second));
+  //   }
+  //   else if(multithread){
+  //     transport->DispatchTP(std::move(verification.first), std::move(verification.second));
+  //   }
+  //   //b) No multithreading: Calls verify + async Callback. Problem: Unecessary copying for bind.
+  //   else{
+  //     Debug("P1 Validation is local and serial");
+  //     verification.second(verification.first());
+  //   }
+  // }
 }
 
 
@@ -628,7 +635,7 @@ bool ValidateP1Replies(proto::CommitDecision decision,
     concurrencyControl.set_involved_group(sigs.first);
     std::string ccMsg;
     concurrencyControl.SerializeToString(&ccMsg);
-    std::set<uint64_t> replicasVerified;
+    std::unordered_set<uint64_t> replicasVerified;
     uint32_t verified = 0;
     for (const auto &sig : sigs.second.sigs()) {
 
@@ -819,7 +826,7 @@ void asyncBatchValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     const auto &sigs = groupedSigs.grouped_sigs().begin(); //this is an iterator
     // verifyObj->deletable = sigs->second.sigs_size();  // redundant
 
-    std::set<uint64_t> replicasVerified;
+    std::unordered_set<uint64_t> replicasVerified;
     int64_t logGrp = GetLogGroup(*txn, *txnDigest);
     //verify that this group corresponds to the log group
     if(sigs->first != logGrp){
@@ -888,7 +895,7 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     const auto &sigs = groupedSigs.grouped_sigs().begin(); //this is an iterator
     // verifyObj->deletable = sigs->second.sigs_size();  // redundant
 
-    std::set<uint64_t> replicasVerified;
+    std::unordered_set<uint64_t> replicasVerified;
     int64_t logGrp = GetLogGroup(*txn, *txnDigest);
     //verify that this group corresponds to the log group
     if(sigs->first != logGrp){
@@ -991,7 +998,7 @@ bool ValidateP2Replies(proto::CommitDecision decision, uint64_t view,
 
   const auto &sigs = groupedSigs.grouped_sigs().begin();
   uint32_t verified = 0;
-  std::set<uint64_t> replicasVerified;
+  std::unordered_set<uint64_t> replicasVerified;
   for (const auto &sig : sigs->second.sigs()) {
     //Latency_Start(&lat);
 

@@ -84,6 +84,8 @@ public:
     void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb);
     void DispatchTP_local(std::function<void*()> f, std::function<void(void*)> cb);
     void DispatchTP_noCB(std::function<void*()> f);
+    void DispatchTP_noCB_ptr(std::function<void*()> *f);
+    void DispatchTP_main(std::function<void*()> f);
     void IssueCB(std::function<void(void*)> cb, void* arg);
 
 

@@ -136,6 +136,12 @@ void ReplTransport::DispatchTP_local(std::function<void*()> f, std::function<voi
 void ReplTransport::DispatchTP_noCB(std::function<void*()> f) {
   Panic("unimplemented");
 }
+void ReplTransport::DispatchTP_noCB_ptr(std::function<void*()> *f) {
+  Panic("unimplemented");
+}
+void ReplTransport::DispatchTP_main(std::function<void*()> f) {
+  Panic("unimplemented");
+}
 void ReplTransport::IssueCB(std::function<void(void*)> cb, void* arg){
   Panic("unimplemented");
 }

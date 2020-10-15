@@ -603,6 +603,12 @@ void TCPTransport::DispatchTP_local(std::function<void*()> f, std::function<void
 void TCPTransport::DispatchTP_noCB(std::function<void*()> f) {
   tp.detatch(std::move(f));
 }
+void TCPTransport::DispatchTP_noCB_ptr(std::function<void*()> *f) {
+  tp.detatch_ptr(f);
+}
+void TCPTransport::DispatchTP_main(std::function<void*()> f) {
+  tp.detatch_main(std::move(f));
+}
 void TCPTransport::IssueCB(std::function<void(void*)> cb, void* arg){
   tp.issueCallback(std::move(cb), arg, libeventBase);
 }

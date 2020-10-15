@@ -301,6 +301,12 @@ void SimulatedTransport::DispatchTP_local(std::function<void*()> f, std::functio
 void SimulatedTransport::DispatchTP_noCB(std::function<void*()> f) {
   Panic("unimplemented");
 }
+void SimulatedTransport::DispatchTP_noCB_ptr(std::function<void*()> *f) {
+  Panic("unimplemented");
+}
+void SimulatedTransport::DispatchTP_main(std::function<void*()> f) {
+  Panic("unimplemented");
+}
 void SimulatedTransport::IssueCB(std::function<void(void*)> cb, void* arg){
   Panic("unimplemented");
 }
