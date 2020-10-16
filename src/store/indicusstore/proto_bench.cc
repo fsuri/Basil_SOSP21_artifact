@@ -150,6 +150,9 @@ int main(int argc, char *argv[]) {
       delete p1;
       delete p1reply;
       delete txn;
+      //delete write;
+      //delete read;
+      delete tm;
   }
 
 
