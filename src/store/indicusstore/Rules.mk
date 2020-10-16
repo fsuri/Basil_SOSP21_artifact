@@ -2,7 +2,7 @@ d := $(dir $(lastword $(MAKEFILE_LIST)))
 
 SRCS += $(addprefix $(d), client.cc shardclient.cc server.cc store.cc common.cc \
 		phase1validator.cc localbatchsigner.cc sharedbatchsigner.cc \
-		basicverifier.cc localbatchverifier.cc sharedbatchverifier.cc) # proto_bench.cc)
+		basicverifier.cc localbatchverifier.cc sharedbatchverifier.cc proto_bench.cc)
 
 PROTOS += $(addprefix $(d), indicus-proto.proto)
 
@@ -18,8 +18,11 @@ LIB-indicus-client := $(LIB-udptransport) \
 	$(LIB-crypto) $(LIB-batched-sigs) $(o)common.o $(o)phase1validator.o \
 	$(o)basicverifier.o $(o)localbatchverifier.o
 
-#$(d)proto_bench: $(LIB-latency) $(LIB-crypto) $(LIB-store-common) $(o)indicus-proto.o $(o)proto_bench.o
 
-#BINS += $(d)proto_bench
+LIB-proto := $(o)indicus-proto.o
+#-I/home/floriansuri/Indicus/BFT-DB/src/store/common
+$(d)proto_bench: $(LIB-latency) $(LIB-crypto) $(LIB-batched-sigs) $(LIB-store-common) $(LIB-proto) $(o)proto_bench.o
+
+BINS += $(d)proto_bench
 
 include $(d)tests/Rules.mk

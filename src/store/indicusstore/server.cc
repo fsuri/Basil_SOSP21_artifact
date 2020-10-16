@@ -153,12 +153,24 @@ Server::~Server() {
 void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
 
+  bool mainThreadDispatching = false;
+
   //std::unique_lock<std::mutex> main_lock(mainThreadMutex);
   //if(test_bool) return;
 
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
-    HandleRead(remote, read);
+    if(!mainThreadDispatching){
+      HandleRead(remote, read);
+    }
+    else{
+      auto f = [this, &remote](){
+        std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
+        this->HandleRead(remote, this->read);
+        return (void*) true;
+      };
+      transport->DispatchTP_main(f);
+    }
   } else if (type == phase1.GetTypeName()) {
     phase1.ParseFromString(data);
      HandlePhase1(remote, phase1);

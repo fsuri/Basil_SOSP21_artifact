@@ -21,7 +21,7 @@ ThreadPool::ThreadPool() {
     //if(i % 2 == 0) continue;
     std::thread *t;
     //Mainthread
-    if(i==1){
+    if(i==1 ){
       t = new std::thread([this, i] {
         while (true) {
           std::function<void*()> job;
@@ -104,6 +104,7 @@ ThreadPool::~ThreadPool()
 void ThreadPool::stop() {
   running = false;
   cv.notify_all();
+  cv_main.notify_all();
  // for(auto t: threads){
  //    t->join();
  //    delete t;
