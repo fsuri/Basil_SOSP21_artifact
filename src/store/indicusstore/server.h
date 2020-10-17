@@ -65,6 +65,8 @@ enum OCCType {
   TAPIR = 1
 };
 
+static bool mainThreadDispatching = false;
+
 class Server : public TransportReceiver, public ::Server, public PingServer {
  public:
   Server(const transport::Configuration &config, int groupIdx, int idx,
@@ -211,6 +213,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::mutex transportMutex;
   std::mutex protoMutex;
   std::mutex mainThreadMutex;
+  std::mutex signMutex;
 
   //std::vector<proto::CommittedProof*> testing_committed_proof;
 

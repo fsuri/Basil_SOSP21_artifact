@@ -153,10 +153,9 @@ Server::~Server() {
 void Server::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
 
-  bool mainThreadDispatching = false;
 
   //std::unique_lock<std::mutex> main_lock(mainThreadMutex);
-  //if(test_bool) return;
+  //auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
 
   if (type == read.GetTypeName()) {
     read.ParseFromString(data);
@@ -165,7 +164,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     }
     else{
       auto f = [this, &remote](){
-        std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
+        //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
         this->HandleRead(remote, this->read);
         return (void*) true;
       };
@@ -173,48 +172,88 @@ void Server::ReceiveMessage(const TransportAddress &remote,
     }
   } else if (type == phase1.GetTypeName()) {
     phase1.ParseFromString(data);
+    if(!mainThreadDispatching){
      HandlePhase1(remote, phase1);
-    //testing main dispatch
-    // auto f = [this, &remote](){
-    //   std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
-    //   this->HandlePhase1(remote, this->phase1);
-    //   return (void*) true;
-    // };
-    // transport->DispatchTP_main(f);
+    }
+    else{
+      auto f = [this, &remote](){
+        //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
+        this->HandlePhase1(remote, this->phase1);
+        return (void*) true;
+      };
+      Debug("Dispatching HandlePhase1");
+      transport->DispatchTP_main(f);
+    }
 
   } else if (type == phase2.GetTypeName()) {
       if(params.multiThreading){
           proto::Phase2* p2 = GetUnusedPhase2message();
           p2->ParseFromString(data);
-          HandlePhase2(remote, *p2);
+          if(!mainThreadDispatching){
+            HandlePhase2(remote, *p2);
+          }
+          else{
+            auto f = [this, &remote, p2](){
+              //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
+              this->HandlePhase2(remote, *p2);
+              return (void*) true;
+            };
+            transport->DispatchTP_main(f);
+          }
       }
       else{
         phase2.ParseFromString(data);
-        HandlePhase2(remote, phase2);
+        if(!mainThreadDispatching){
+          HandlePhase2(remote, phase2);
+        }
+        else{
+          auto f = [this, &remote](){
+            //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
+            this->HandlePhase2(remote, this->phase2);
+            return (void*) true;
+          };
+          transport->DispatchTP_main(f);
+        }
       }
 
   } else if (type == writeback.GetTypeName()) {
       if(params.multiThreading){
           proto::Writeback *wb = GetUnusedWBmessage();
           wb->ParseFromString(data);
-          HandleWriteback(remote, *wb);
-
-          // auto f = [this, &remote, wb](){
-          //   std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
-          //   this->HandleWriteback(remote, *wb);
-          //   return (void*) true;
-          // };
-          // transport->DispatchTP_main(f);
+          if(!mainThreadDispatching){
+            HandleWriteback(remote, *wb);
+          }
+          else{
+            auto f = [this, &remote, wb](){
+              //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
+              this->HandleWriteback(remote, *wb);
+              return (void*) true;
+            };
+            transport->DispatchTP_main(f);
+          }
       }
       else{
         writeback.ParseFromString(data);
-        HandleWriteback(remote, writeback);
+        //HandleWriteback(remote, writeback);
+        if(!mainThreadDispatching){
+          HandleWriteback(remote, writeback);
+        }
+        else{
+          auto f = [this, &remote](){
+            //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
+            this->HandleWriteback(remote, this->writeback);
+            return (void*) true;
+          };
+          transport->DispatchTP_main(f);
+        }
+
       }
   } else if (type == abort.GetTypeName()) {
     abort.ParseFromString(data);
     HandleAbort(remote, abort);
   } else if (type == ping.GetTypeName()) {
     ping.ParseFromString(data);
+    Debug("Ping is called");
     HandlePingMessage(this, remote, ping);
 
 // Add all Fallback signedMessages
@@ -262,6 +301,8 @@ void Server::Load(const std::string &key, const std::string &value,
 
 void Server::HandleRead(const TransportAddress &remote,
     const proto::Read &msg) {
+
+  auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
   Debug("READ[%lu:%lu] for key %s with ts %lu.%lu.", msg.timestamp().id(),
       msg.req_id(), BytesToHex(msg.key(), 16).c_str(),
       msg.timestamp().timestamp(), msg.timestamp().id());
@@ -289,7 +330,9 @@ void Server::HandleRead(const TransportAddress &remote,
     }
   }
 
+  Debug("Aborting when trying to clone");
   TransportAddress *remoteCopy = remote.clone();
+  Debug("Aborting in sendCB generation");
   auto sendCB = [this, remoteCopy, readReply]() {
     std::unique_lock<std::mutex> lock(transportMutex);
     this->transport->SendMessage(this, *remoteCopy, *readReply);
@@ -335,6 +378,7 @@ void Server::HandleRead(const TransportAddress &remote,
       }
     }
   }
+
 
   if (params.validateProofs && params.signedMessages &&
       (readReply->write().has_committed_value() || (params.verifyDeps && readReply->write().has_prepared_value()))) {
@@ -416,6 +460,8 @@ void Server::HandleRead(const TransportAddress &remote,
 
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
+auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
+
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
@@ -477,6 +523,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
   signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid){ //bool valid) { //
 
+  auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
   Debug("HandlePhase2CB invoked");
 
   if(!valid){
@@ -521,6 +568,7 @@ if(params.multiThreading){
 if (params.validateProofs && params.signedMessages) {
   proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
   //Latency_Start(&signLat);
+  if(mainThreadDispatching) lockScope.unlock();
   MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
       [sendCB, p2Decision, txnDigest, phase2Reply]() { //TODO:: remove last 2, only for debug print
         //sanity checks
@@ -569,6 +617,7 @@ sendCB();
 
 void Server::HandlePhase2(const TransportAddress &remote,
        proto::Phase2 &msg) {
+  auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
 
   const proto::Transaction *txn;
   std::string computedTxnDigest;
@@ -696,12 +745,16 @@ void Server::HandlePhase2(const TransportAddress &remote,
   }
   // bool* valid = new bool(true);
   // HandlePhase2CB(msg, txnDigest, sendCB, phase2Reply, (void*) valid);
+
+  if(mainThreadDispatching) lockScope.unlock();
   HandlePhase2CB(&msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
 
 }
 
 void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDigest,
   proto::Transaction* txn, void* valid){
+
+  auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
 
   Debug("WRITEBACK Callback[%s] being called", BytesToHex(*txnDigest, 16).c_str());
   if(! valid){
@@ -751,6 +804,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
 
+  auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
   proto::Transaction *txn;
   const std::string *txnDigest;
   std::string computedTxnDigest;
@@ -994,6 +1048,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
   }
   // bool* valid = new bool(true);
   // WritebackCallback(msg, txnDigest, txn, (void*) valid);
+  if(mainThreadDispatching) lockScope.unlock();
   WritebackCallback(&msg, txnDigest, txn, (void*) true);
 }
 
@@ -1778,6 +1833,9 @@ uint64_t Server::DependencyDepth(const proto::Transaction *txn) const {
 
 void Server::MessageToSign(::google::protobuf::Message* msg,
       proto::SignedMessage *signedMessage, signedCallback cb) {
+
+  //auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
+  Debug("Exec MessageToSign by CPU: %d", sched_getcpu());
 
   if(params.multiThreading){
       if (params.signatureBatchSize == 1) {

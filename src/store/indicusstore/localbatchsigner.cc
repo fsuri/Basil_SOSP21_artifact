@@ -53,7 +53,11 @@ void LocalBatchSigner::MessageToSign(::google::protobuf::Message* msg,
   }
 }
 void LocalBatchSigner::SignBatch() {
+  //std::unique_lock<std::mutex> lock(this->batchMutex);
+
   uint64_t batchSize = pendingBatchMessages.size();
+  //if(batchSize==0) return; //could happen if both thread and timer fire at the same time
+
   stats.IncrementList("sig_batch", batchSize);
   stats.Add("sig_batch_sizes", batchSize);
   struct timeval curr;
@@ -84,11 +88,7 @@ void LocalBatchSigner::AdjustBatchSize() {
 
 void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
     proto::SignedMessage *signedMessage, signedCallback cb, bool finishBatch) {
-  //acquire lock.
-  // std::unique_lock<std::mutex> lk(verifierMutex);
-  // cv.wait(lk, [] { return !signing; });
-  //declare return var
-  // bool* ret = new bool;
+
   //std::unique_lock<std::mutex> lock(this->batchMutex);
 
   if (initialBatchSize == 1) {
@@ -138,6 +138,7 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
         Debug("Batch timer expired with %lu items, sending",
             this->pendingBatchMessages.size());
         this->batchTimerRunning = false;
+        //if(this->pendingBatchMessages.size() == 0) return;
 
         std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch, this,
           this->pendingBatchMessages, this->pendingBatchSignedMessages, this->pendingBatchCallbacks));
