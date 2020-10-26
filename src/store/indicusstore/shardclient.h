@@ -94,7 +94,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
       uint64_t client_id, int group, const std::vector<int> &closestReplicas,
       bool pingReplicas,
       Parameters params, KeyManager *keyManager, Verifier *verifier,
-      TrueTime &timeServer);
+      TrueTime &timeServer, uint64_t phase1DecisionTimeout);
   virtual ~ShardClient();
 
   virtual void ReceiveMessage(const TransportAddress &remote,

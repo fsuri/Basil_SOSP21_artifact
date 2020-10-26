@@ -29,16 +29,21 @@
   "run_locally": false,
   "replication_protocol_settings": [
     {
-      "message_transport_type": "tcp"
+      "message_transport_type": "tcp",
+      "strictly_serializable": false
     },
     {
       "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
+	  "_p1DecisionTimeout":10,
       "read_quorum": "one-honest",
-      "read_dep": "one-honest",
-      "validate_proofs": false,
-      "sign_messages": false,
-      "key_path": "/usr/local/etc/indicus-keys"
+      "validate_proofs": true,
+      "sign_messages": true,
+	  "sig_batch": 4,
+      "multi_threading": true,
+	  "batch_verification": false,
+	  "batch_verification_size": 6,
+      "key_path": "/usr/local/etc/indicus-keys/donna"
     }
   ],
   "experiment_name": "indicus",

@@ -64,7 +64,7 @@ class Client : public ::Client {
       int nGroups, const std::vector<int> &closestReplicas, bool pingReplicas,
       Transport *transport, Partitioner *part, bool syncCommit,
       uint64_t readMessages, uint64_t readQuorumSize,
-      Parameters params, KeyManager *keyManager,
+      Parameters params, KeyManager *keyManager, uint64_t phase1DecisionTimeout,
       TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 

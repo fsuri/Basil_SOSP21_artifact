@@ -399,12 +399,14 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
         m.GetTypeName().c_str(), inet_ntoa(dst.addr.sin_addr),
         htons(dst.addr.sin_port));
     auto dstSrc = std::make_pair(dst, src);
+    mtx.lock();
     auto kv = tcpOutgoing.find(dstSrc);
     // See if we have a connection open
     if (kv == tcpOutgoing.end()) {
         ConnectTCP(dstSrc);
         kv = tcpOutgoing.find(dstSrc);
     }
+    mtx.unlock();
 
     struct bufferevent *ev = kv->second;
     UW_ASSERT(ev != NULL);
@@ -693,12 +695,12 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
     info->connectionEvents.push_back(bev);
 	TCPTransportAddress client = TCPTransportAddress(sin);
 
-  //transport->mtx.lock();
+  transport->mtx.lock();
   auto dstSrc = std::make_pair(client, info->receiver);
 	transport->tcpOutgoing[dstSrc] = bev;
 	transport->tcpAddresses.insert(pair<struct bufferevent*,
         pair<TCPTransportAddress, TransportReceiver *>>(bev, dstSrc));
-  //transport->mtx.unlock();
+  transport->mtx.unlock();
 
     Debug("Opened incoming TCP connection from %s:%d",
                inet_ntoa(sin.sin_addr), htons(sin.sin_port));
@@ -766,6 +768,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         UW_ASSERT(addr != transport->tcpAddresses.end());
 
         // Dispatch
+
         info->receiver->ReceiveMessage(addr->second.first, msgType, msg, nullptr);
         // Debug("Done processing large %s message", msgType.c_str());
     }

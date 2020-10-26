@@ -642,6 +642,8 @@ int main(int argc, char **argv) {
 		Debug("MainThread running on CPU %d.", sched_getcpu());
 	//}
 
+	//event_enable_debug_logging(EVENT_DBG_ALL);
+
   tport->Run();
   CALLGRIND_STOP_INSTRUMENTATION;
   CALLGRIND_DUMP_STATS;

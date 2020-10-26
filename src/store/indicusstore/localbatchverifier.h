@@ -44,8 +44,8 @@ class LocalBatchVerifier : public Verifier {
   Transport *transport;
   const uint64_t merkleBranchFactor;
   Stats &stats;
-  Latency_t hashLat;
-  Latency_t cryptoLat;
+  std::vector<Latency_t> hashLats;
+  std::vector<Latency_t> cryptoLats;
   std::unordered_map<std::string, std::string> cache;
 
   bool batchTimerRunning;

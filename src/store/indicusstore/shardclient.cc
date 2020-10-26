@@ -41,13 +41,13 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int group, const std::vector<int> &closestReplicas_,
     bool pingReplicas,
     Parameters params, KeyManager *keyManager, Verifier *verifier,
-    TrueTime &timeServer) :
+    TrueTime &timeServer, uint64_t phase1DecisionTimeout) :
     PingInitiator(this, transport, config->n),
     client_id(client_id), transport(transport), config(config), group(group),
     timeServer(timeServer), pingReplicas(pingReplicas), params(params),
-    keyManager(keyManager), verifier(verifier), phase1DecisionTimeout(1000UL),
+    keyManager(keyManager), verifier(verifier), phase1DecisionTimeout(phase1DecisionTimeout),
     lastReqId(0UL) {
-  transport->Register(this, *config, -1, -1);
+  transport->Register(this, *config, -1, -1); //phase1DecisionTimeout(1000UL)
 
   if (closestReplicas_.size() == 0) {
     for  (int i = 0; i < config->n; ++i) {

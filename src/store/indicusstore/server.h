@@ -65,7 +65,9 @@ enum OCCType {
   TAPIR = 1
 };
 
-static bool mainThreadDispatching = false;
+static bool mainThreadDispatching = true;
+static bool testingRecvInternal = true;
+static bool testLocks = false; //Just used for debugging once.
 
 class Server : public TransportReceiver, public ::Server, public PingServer {
  public:
@@ -93,6 +95,9 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
     std::string val;
     const proto::CommittedProof *proof;
   };
+  void ReceiveMessageInternal(const TransportAddress &remote,
+      const std::string &type, const std::string &data,
+      void *meta_data);
 
   void HandleRead(const TransportAddress &remote, const proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
@@ -180,11 +185,16 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   proto::ReadReply *GetUnusedReadReply();
   proto::Phase1Reply *GetUnusedPhase1Reply();
   proto::Phase2Reply *GetUnusedPhase2Reply();
+
+  proto::Read *GetUnusedReadmessage();
+  proto::Phase1 *GetUnusedPhase1message();
   proto::Phase2 *GetUnusedPhase2message();
   proto::Writeback *GetUnusedWBmessage();
   void FreeReadReply(proto::ReadReply *reply);
   void FreePhase1Reply(proto::Phase1Reply *reply);
   void FreePhase2Reply(proto::Phase2Reply *reply);
+  void FreeReadmessage(proto::Read *msg);
+  void FreePhase1message(proto::Phase1 *msg);
   void FreePhase2message(proto::Phase2 *msg);
   void FreeWBmessage(proto::Writeback *msg);
 
@@ -233,6 +243,8 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::vector<proto::ReadReply *> readReplies;
   std::vector<proto::Phase1Reply *> p1Replies;
   std::vector<proto::Phase2Reply *> p2Replies;
+  std::vector<proto::Read *> readMessages;
+  std::vector<proto::Phase1 *> p1messages;
   std::vector<proto::Phase2 *> p2messages; //
   std::vector<proto::Writeback *> WBmessages; //
   proto::Phase1Reply phase1Reply;

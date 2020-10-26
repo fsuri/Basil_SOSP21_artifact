@@ -207,6 +207,7 @@ DEFINE_uint64(indicus_inject_failure_ms, 0, "number of milliseconds to wait"
 DEFINE_uint64(indicus_inject_failure_proportion, 0, "proportion of clients that"
     " will inject a failure (for Indicus)");
 
+DEFINE_uint64(indicus_phase1DecisionTimeout, 1000UL, "p1 timeout before going slowpath");
 DEFINE_bool(indicus_multi_threading, false, "dispatch crypto to parallel threads");
 DEFINE_bool(indicus_batch_verification, false, "using ed25519 donna batch verification");
 DEFINE_uint64(indicus_batch_verification_size, 64, "batch size for ed25519 donna batch verification");
@@ -888,7 +889,7 @@ int main(int argc, char **argv) {
             FLAGS_num_shards,
             FLAGS_num_groups, closestReplicas, FLAGS_ping_replicas, tport, part,
             FLAGS_tapir_sync_commit, readMessages, readQuorumSize,
-            params, keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+            params, keyManager, FLAGS_indicus_phase1DecisionTimeout, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
       }
 			case PROTO_PBFT: {

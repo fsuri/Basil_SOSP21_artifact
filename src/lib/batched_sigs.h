@@ -20,8 +20,8 @@ void bhash(unsigned char* in, size_t len, unsigned char* out);
 
 void generateBatchedSignatures(const std::vector<const std::string*> &messages, crypto::PrivKey* privateKey, std::vector<std::string> &sigs, uint64_t m = 2);
 
-extern uint64_t hashCount;
-extern uint64_t hashCatCount;
+extern thread_local uint64_t hashCount;
+extern thread_local uint64_t hashCatCount;
 extern thread_local blake3_hasher hasher;
 
 template<class S>

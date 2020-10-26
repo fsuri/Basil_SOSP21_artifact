@@ -9,8 +9,8 @@
 
 namespace BatchedSigs {
 
-uint64_t hashCount = 0;
-uint64_t hashCatCount = 0;
+thread_local uint64_t hashCount = 0;
+thread_local uint64_t hashCatCount = 0;
 
 // store an int into an unsigned char array
 void packInt(unsigned int i, unsigned char* out) {
@@ -68,7 +68,7 @@ static inline uint32_t log2(const uint32_t x) {
   return y;
 }
 
-std::vector<uint64_t> treeHeights;
+thread_local std::vector<uint64_t> treeHeights;
 uint64_t getTreeHeight(uint64_t n, uint64_t m) {
   treeHeights.resize(n + 1, 0UL);
   if (treeHeights[n] == 0UL) {

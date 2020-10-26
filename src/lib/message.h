@@ -35,6 +35,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <atomic>
 
 enum Message_Type {
         MSG_PANIC = 0,
@@ -87,7 +88,7 @@ void PanicOnSignal(int signo);
 
 // This is not a mistake.  We actually want exactly one of these flags
 // per file that uses the Debug macro.
-static __attribute__((unused)) signed char _Message_FileDebugFlag = -1;
+static __attribute__((unused)) std::atomic_schar _Message_FileDebugFlag = -1; //signed char
 
 #define Debug(msg...)                                   \
         do {                                            \
@@ -112,10 +113,17 @@ static __attribute__((unused)) signed char _Message_FileDebugFlag = -1;
 static inline bool
 Message_DebugEnabled(const char *fname)
 {
-        if (_Message_FileDebugFlag >= 0)
-                return _Message_FileDebugFlag;
-        _Message_FileDebugFlag = _Message_DebugEnabled(fname);
+        signed char flag = _Message_FileDebugFlag.load();
+        if (flag < 0){
+          _Message_FileDebugFlag.compare_exchange_strong(flag, _Message_DebugEnabled(fname));
+        }
+
         return _Message_FileDebugFlag;
+
+        // if (_Message_FileDebugFlag >= 0)
+        //         return _Message_FileDebugFlag;
+        // _Message_FileDebugFlag = _Message_DebugEnabled(fname);
+        // return _Message_FileDebugFlag;
 }
 
 #include "hash.h"

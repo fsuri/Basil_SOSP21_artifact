@@ -21,7 +21,7 @@ ThreadPool::ThreadPool() {
     //if(i % 2 == 0) continue;
     std::thread *t;
     //Mainthread
-    if(i==1 && false){
+    if(i==1 ){
       t = new std::thread([this, i] {
         while (true) {
           std::function<void*()> job;

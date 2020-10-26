@@ -40,12 +40,13 @@ namespace indicusstore {
 
 using namespace std;
 
+//TODO: add argument for p1Timeout, pass down to Shardclient as well.
 Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     int nGroups,
     const std::vector<int> &closestReplicas, bool pingReplicas, Transport *transport,
     Partitioner *part, bool syncCommit, uint64_t readMessages,
     uint64_t readQuorumSize, Parameters params,
-    KeyManager *keyManager, TrueTime timeServer)
+    KeyManager *keyManager, uint64_t phase1DecisionTimeout, TrueTime timeServer)
     : config(config), client_id(id), nshards(nShards), ngroups(nGroups),
     transport(transport), part(part), syncCommit(syncCommit), pingReplicas(pingReplicas),
     readMessages(readMessages), readQuorumSize(readQuorumSize),
@@ -66,7 +67,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
   for (uint64_t i = 0; i < ngroups; i++) {
     bclient.push_back(new ShardClient(config, transport, client_id, i,
         closestReplicas, pingReplicas, params,
-        keyManager, verifier, timeServer));
+        keyManager, verifier, timeServer, phase1DecisionTimeout));
   }
 
   Debug("Indicus client [%lu] created! %lu %lu", client_id, nshards,

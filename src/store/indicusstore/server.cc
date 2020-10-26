@@ -148,9 +148,23 @@ Server::~Server() {
   Latency_Dump(&signLat);
 }
 
+//TODO: Implement this
 
+ void Server::ReceiveMessage(const TransportAddress &remote,
+       const std::string &type, const std::string &data, void *meta_data) {
+  if(testingRecvInternal){
+    Debug("Dispatching message handling to Support Main Thread");
+   transport->DispatchTP_main([this, &remote, type, data, meta_data]() { //ends up with more copies here..
+     this->ReceiveMessageInternal(remote, type, data, meta_data);
+     return (void*) true;
+   });
+  }
+  else{
+    ReceiveMessageInternal(remote, type, data, meta_data);
+  }
+ }
 //Full CPU utilization parallelism: Assign all these functions to different threads. Add mutexes to every shared data structure function
-void Server::ReceiveMessage(const TransportAddress &remote,
+void Server::ReceiveMessageInternal(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
 
 
@@ -158,27 +172,33 @@ void Server::ReceiveMessage(const TransportAddress &remote,
   //auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
 
   if (type == read.GetTypeName()) {
-    read.ParseFromString(data);
-    if(!mainThreadDispatching){
+    if(!mainThreadDispatching || testingRecvInternal || testLocks){
+      read.ParseFromString(data);
       HandleRead(remote, read);
     }
     else{
-      auto f = [this, &remote](){
+      proto::Read* readCopy = GetUnusedReadmessage();
+      readCopy->ParseFromString(data);
+      auto f = [this, &remote, readCopy](){
         //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
-        this->HandleRead(remote, this->read);
+        this->HandleRead(remote, *readCopy);
+        //FreeReadmessage(readCopy); //TODO: can do in callback of reply?
         return (void*) true;
       };
       transport->DispatchTP_main(f);
     }
   } else if (type == phase1.GetTypeName()) {
-    phase1.ParseFromString(data);
-    if(!mainThreadDispatching){
+    if(!mainThreadDispatching || testingRecvInternal || testLocks){
+     phase1.ParseFromString(data);
      HandlePhase1(remote, phase1);
     }
     else{
-      auto f = [this, &remote](){
+      proto::Phase1 *phase1Copy = GetUnusedPhase1message();
+      phase1Copy->ParseFromString(data);
+      auto f = [this, &remote, phase1Copy]() {  //mutable keyword to change const into none
         //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
-        this->HandlePhase1(remote, this->phase1);
+        this->HandlePhase1(remote, *phase1Copy);
+        //FreePhase1message(phase1Copy); //TODO: Can do before sendphase1reply?
         return (void*) true;
       };
       Debug("Dispatching HandlePhase1");
@@ -189,7 +209,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
       if(params.multiThreading){
           proto::Phase2* p2 = GetUnusedPhase2message();
           p2->ParseFromString(data);
-          if(!mainThreadDispatching){
+          if(!mainThreadDispatching || testLocks){
             HandlePhase2(remote, *p2);
           }
           else{
@@ -203,7 +223,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
       }
       else{
         phase2.ParseFromString(data);
-        if(!mainThreadDispatching){
+        if(!mainThreadDispatching || testingRecvInternal){
           HandlePhase2(remote, phase2);
         }
         else{
@@ -220,7 +240,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
       if(params.multiThreading){
           proto::Writeback *wb = GetUnusedWBmessage();
           wb->ParseFromString(data);
-          if(!mainThreadDispatching){
+          if(!mainThreadDispatching || testLocks){
             HandleWriteback(remote, *wb);
           }
           else{
@@ -235,7 +255,7 @@ void Server::ReceiveMessage(const TransportAddress &remote,
       else{
         writeback.ParseFromString(data);
         //HandleWriteback(remote, writeback);
-        if(!mainThreadDispatching){
+        if(!mainThreadDispatching || testingRecvInternal){
           HandleWriteback(remote, writeback);
         }
         else{
@@ -330,11 +350,9 @@ void Server::HandleRead(const TransportAddress &remote,
     }
   }
 
-  Debug("Aborting when trying to clone");
   TransportAddress *remoteCopy = remote.clone();
-  Debug("Aborting in sendCB generation");
   auto sendCB = [this, remoteCopy, readReply]() {
-    std::unique_lock<std::mutex> lock(transportMutex);
+    //std::unique_lock<std::mutex> lock(transportMutex);
     this->transport->SendMessage(this, *remoteCopy, *readReply);
     delete remoteCopy;
     FreeReadReply(readReply);
@@ -513,7 +531,6 @@ auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThread
     //   client_starttime[txnDigest] = start_time;
     // }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
     SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, &remote);
-    Debug("Not failing as part of SendPhase1Reply");
   }
 
 }
@@ -570,13 +587,7 @@ if (params.validateProofs && params.signedMessages) {
   //Latency_Start(&signLat);
   if(mainThreadDispatching) lockScope.unlock();
   MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
-      [sendCB, p2Decision, txnDigest, phase2Reply]() { //TODO:: remove last 2, only for debug print
-        //sanity checks
-        // Debug("P2 SIGNATURE TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
-        //   BytesToHex(*txnDigest, 16).c_str(),
-        //   BytesToHex(phase2Reply->signed_p2_decision().signature(), 1024).c_str(),
-        //   phase2Reply->signed_p2_decision().process_id(),
-        //   BytesToHex(phase2Reply->signed_p2_decision().data(), 1024).c_str());
+      [sendCB, p2Decision]() {
       sendCB();
       delete p2Decision;
       });
@@ -648,7 +659,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   proto::Phase2Reply* phase2Reply = GetUnusedPhase2Reply();
   TransportAddress *remoteCopy = remote.clone();
   auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
-    std::unique_lock<std::mutex> lock(transportMutex);
+    //std::unique_lock<std::mutex> lock(transportMutex);
     this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
     FreePhase2Reply(phase2Reply);
@@ -706,14 +717,15 @@ void Server::HandlePhase2(const TransportAddress &remote,
             asyncBatchValidateP1Replies(msg.decision(),
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier, std::move(mcb), transport, true);
+            return;
 
           }
           else{
             asyncValidateP1Replies(msg.decision(),
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier, std::move(mcb), transport, true);
+            return;
           }
-          return;
         }
         else{
           if(params.batchVerification){
@@ -1734,7 +1746,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
   TransportAddress *remoteCopy = remote->clone();
 
   auto sendCB = [remoteCopy, this, phase1Reply]() {
-    std::unique_lock<std::mutex> lock(transportMutex);
+    //std::unique_lock<std::mutex> lock(transportMutex);
     this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
     FreePhase1Reply(phase1Reply);
     delete remoteCopy;
@@ -1834,6 +1846,7 @@ uint64_t Server::DependencyDepth(const proto::Transaction *txn) const {
 void Server::MessageToSign(::google::protobuf::Message* msg,
       proto::SignedMessage *signedMessage, signedCallback cb) {
 
+
   //auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
   Debug("Exec MessageToSign by CPU: %d", sched_getcpu());
 
@@ -1864,6 +1877,7 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
         //   return (void*) true;
         // };
         // transport->DispatchTP_noCB(std::move(f));
+        //batchSigner->MessageToSign(msg, signedMessage, std::move(cb));
         batchSigner->asyncMessageToSign(msg, signedMessage, std::move(cb));
         Debug("crashing after delegating sig request");
       }
@@ -1922,6 +1936,32 @@ proto::Phase2Reply *Server::GetUnusedPhase2Reply() {
   return reply;
 }
 
+proto::Read *Server::GetUnusedReadmessage() {
+  std::unique_lock<std::mutex> lock(protoMutex);
+  proto::Read *msg;
+  if (readMessages.size() > 0) {
+    msg = readMessages.back();
+    msg->Clear();
+    readMessages.pop_back();
+  } else {
+    msg = new proto::Read();
+  }
+  return msg;
+}
+
+proto::Phase1 *Server::GetUnusedPhase1message() {
+  std::unique_lock<std::mutex> lock(protoMutex);
+  proto::Phase1 *msg;
+  if (p1messages.size() > 0) {
+    msg = p1messages.back();
+    msg->Clear();
+    p1messages.pop_back();
+  } else {
+    msg = new proto::Phase1();
+  }
+  return msg;
+}
+
 proto::Phase2 *Server::GetUnusedPhase2message() {
   std::unique_lock<std::mutex> lock(protoMutex);
   proto::Phase2 *msg;
@@ -1964,6 +2004,16 @@ void Server::FreePhase2Reply(proto::Phase2Reply *reply) {
   std::unique_lock<std::mutex> lock(protoMutex);
   reply->Clear();
   p2Replies.push_back(reply);
+}
+
+void Server::FreeReadmessage(proto::Read *msg) {
+  std::unique_lock<std::mutex> lock(protoMutex);
+  readMessages.push_back(msg);
+}
+
+void Server::FreePhase1message(proto::Phase1 *msg) {
+  std::unique_lock<std::mutex> lock(protoMutex);
+  p1messages.push_back(msg);
 }
 
 void Server::FreePhase2message(proto::Phase2 *msg) {
