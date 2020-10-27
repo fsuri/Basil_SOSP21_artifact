@@ -217,7 +217,7 @@ void ShardClient::Phase2(uint64_t id,
 }
 
 void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
-  proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
+  proto::CommitDecision decision, bool fast, bool conflict_flag, const proto::CommittedProof &conflict,
   const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs) {
 
   writeback.Clear();
@@ -226,7 +226,11 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
   if (params.validateProofs && params.signedMessages) {
     if (fast && decision == proto::COMMIT) {
       *writeback.mutable_p1_sigs() = p1Sigs;
-    } else if (fast && decision == proto::ABORT) {
+    }
+    else if (fast && !conflict_flag && decision == proto::ABORT) {
+      *writeback.mutable_p1_sigs() = p1Sigs;
+    }
+    else if (fast && conflict_flag && decision == proto::ABORT) {
       *writeback.mutable_conflict() = conflict;
       if(conflict.has_p2_view()){
         writeback.set_p2_view(conflict.p2_view());
@@ -545,9 +549,15 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
     case FAST_ABORT:
       pendingPhase1->decision = proto::ABORT;
       pendingPhase1->fast = true;
+      pendingPhase1->conflict_flag = true;
       if (params.validateProofs) {
         pendingPhase1->conflict = cc->committed_conflict();
       }
+      Phase1Decision(itr);
+      break;
+    case FAST_ABSTAIN:  //INSERTED THIS NEW
+      pendingPhase1->decision = proto::ABORT;
+      pendingPhase1->fast = true;
       Phase1Decision(itr);
       break;
     case SLOW_COMMIT_FINAL:
@@ -685,7 +695,7 @@ void ShardClient::Phase1Decision(uint64_t reqId) {
 void ShardClient::Phase1Decision(
     std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr) {
   PendingPhase1 *pendingPhase1 = itr->second;
-  pendingPhase1->pcb(pendingPhase1->decision, pendingPhase1->fast,
+  pendingPhase1->pcb(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict_flag,
       pendingPhase1->conflict, pendingPhase1->p1ReplySigs);
   this->pendingPhase1s.erase(itr);
   delete pendingPhase1;

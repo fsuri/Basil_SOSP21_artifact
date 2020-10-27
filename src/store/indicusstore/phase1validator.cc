@@ -71,6 +71,11 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
     case proto::ConcurrencyControl::ABSTAIN:
       abstains++;
 
+      //TODO ADD FAST CASE: call it FAST_ABSTAIN
+      if (abstains >= FastAbortQuorumSize(config)){
+        state = FAST_ABSTAIN;
+      }
+
       if (state == SLOW_COMMIT_TENTATIVE) {
         state = SLOW_COMMIT_FINAL;
       } else if (abstains >= SlowAbortQuorumSize(config) &&

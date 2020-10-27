@@ -382,6 +382,9 @@ void asyncBatchValidateP1Replies(proto::CommitDecision decision, bool fast, cons
   } else if (decision == proto::COMMIT) {
     concurrencyControl.set_ccr(proto::ConcurrencyControl::COMMIT);
     quorumSize = SlowCommitQuorumSize(config);
+  } else if (fast && decision == proto::ABORT) {
+    concurrencyControl.set_ccr(proto::ConcurrencyControl::ABSTAIN);
+    quorumSize = FastAbortQuorumSize(config);
   } else if (decision == proto::ABORT) {
     concurrencyControl.set_ccr(proto::ConcurrencyControl::ABSTAIN);
     quorumSize = SlowAbortQuorumSize(config);
@@ -476,6 +479,9 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
   } else if (decision == proto::COMMIT) {
     concurrencyControl.set_ccr(proto::ConcurrencyControl::COMMIT);
     quorumSize = SlowCommitQuorumSize(config);
+  } else if (fast && decision == proto::ABORT) {
+    concurrencyControl.set_ccr(proto::ConcurrencyControl::ABSTAIN);
+    quorumSize = FastAbortQuorumSize(config);
   } else if (decision == proto::ABORT) {
     concurrencyControl.set_ccr(proto::ConcurrencyControl::ABSTAIN);
     quorumSize = SlowAbortQuorumSize(config);
@@ -484,6 +490,9 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
     mcb((void*) false);
     return; //false; //dont need to return anything
   }
+
+  //TODO: need to check if all involved groups are included... (for commit)
+  // For abort check whether the one group is part of the involved groups.
 
   asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), txn->involved_groups_size(), decision, transport);
   std::unique_lock<std::mutex> lock(verifyObj->objMutex);

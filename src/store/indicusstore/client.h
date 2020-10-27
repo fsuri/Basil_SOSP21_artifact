@@ -93,7 +93,7 @@ class Client : public ::Client {
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), outstandingPhase1s(0),
         outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
-        decision(proto::COMMIT), fast(true),
+        decision(proto::COMMIT), fast(true), conflict_flag(false),
         startedPhase2(false), startedWriteback(false),
         callbackInvoked(false), timeout(0UL), slowAbortGroup(-1) {
     }
@@ -110,6 +110,7 @@ class Client : public ::Client {
     uint64_t maxRepliedTs;
     proto::CommitDecision decision;
     bool fast;
+    bool conflict_flag;
     bool startedPhase2;
     bool startedWriteback;
     bool callbackInvoked;
@@ -118,6 +119,7 @@ class Client : public ::Client {
     proto::GroupedSignatures p2ReplySigsGrouped;
     std::string txnDigest;
     int slowAbortGroup;
+    int fastAbortGroup;
     proto::CommittedProof conflict;
     //added this for fallback handling
     proto::Transaction txn;
@@ -127,7 +129,7 @@ class Client : public ::Client {
 
   void Phase1(PendingRequest *req);
   void Phase1Callback(uint64_t reqId, int group, proto::CommitDecision decision,
-      bool fast, const proto::CommittedProof &conflict,
+      bool fast, bool conflict_flag, const proto::CommittedProof &conflict,
       const std::map<proto::ConcurrencyControl::Result,
       proto::Signatures> &sigs);
   void Phase1TimeoutCallback(int group, uint64_t reqId, int status);

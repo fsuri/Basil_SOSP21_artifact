@@ -236,7 +236,7 @@ void Client::Phase1(PendingRequest *req) {
   for (auto group : txn.involved_groups()) {
     bclient[group]->Phase1(client_seq_num, txn, req->txnDigest, std::bind(
           &Client::Phase1Callback, this, req->id, group, std::placeholders::_1,
-          std::placeholders::_2, std::placeholders::_3, std::placeholders::_4),
+          std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5),
         std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
           std::placeholders::_1), std::bind(&Client::RelayP1callback, this, std::placeholders::_1), req->timeout);
     req->outstandingPhase1s++;
@@ -246,7 +246,7 @@ void Client::Phase1(PendingRequest *req) {
 }
 
 void Client::Phase1Callback(uint64_t txnId, int group,
-    proto::CommitDecision decision, bool fast,
+    proto::CommitDecision decision, bool fast, bool conflict_flag,
     const proto::CommittedProof &conflict,
     const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs) {
   auto itr = this->pendingReqs.find(txnId);
@@ -266,14 +266,20 @@ void Client::Phase1Callback(uint64_t txnId, int group,
     return;
   }
 
-  if (decision == proto::ABORT && fast) {
-    if (params.validateProofs) {
+  if (decision == proto::ABORT && fast && conflict_flag) {
       req->conflict = conflict;
-    }
+      req->conflict_flag = true;
   }
 
   if (params.validateProofs && params.signedMessages) {
-    if (decision == proto::ABORT && !fast) {
+    if(decision == proto::ABORT && fast && !conflict_flag){
+      auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
+      UW_ASSERT(itr != sigs.end());
+      Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
+          group);
+      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
+      req->fastAbortGroup = group;
+    } else if (decision == proto::ABORT && !fast) {
       auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
       UW_ASSERT(itr != sigs.end());
       Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
@@ -455,9 +461,33 @@ void Client::Writeback(PendingRequest *req) {
     }
   }
 
+
+  //////Block to handle Fast Abort case with no conflict: Reduce groups sent... and total replies sent
+  if (params.validateProofs && params.signedMessages) {
+    if (req->decision == proto::ABORT && req->fast && !req->conflict_flag) {
+      UW_ASSERT(req->fastAbortGroup >= 0);
+      UW_ASSERT(req->p1ReplySigsGrouped.grouped_sigs().find(req->fastAbortGroup) != req->p1ReplySigsGrouped.grouped_sigs().end());
+      while (req->p1ReplySigsGrouped.grouped_sigs().size() > 1) {
+        auto itr = req->p1ReplySigsGrouped.mutable_grouped_sigs()->begin();
+        if (itr->first == req->fastAbortGroup) {
+          itr++;
+        }
+        req->p1ReplySigsGrouped.mutable_grouped_sigs()->erase(itr);
+      }
+    }
+
+    uint64_t quorumSize = FastAbortQuorumSize(config);
+    for (auto &groupSigs : *req->p1ReplySigsGrouped.mutable_grouped_sigs()) {
+      while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > quorumSize) {
+        groupSigs.second.mutable_sigs()->RemoveLast();
+      }
+    }
+  }
+////////////////////
+
   for (auto group : txn.involved_groups()) {
     bclient[group]->Writeback(client_seq_num, txn, req->txnDigest,
-        req->decision, req->fast, req->conflict, req->p1ReplySigsGrouped,
+        req->decision, req->fast, req->conflict_flag, req->conflict, req->p1ReplySigsGrouped,
         req->p2ReplySigsGrouped);
   }
 

@@ -60,7 +60,7 @@ typedef std::function<void(int, const std::string &,
     bool, bool)> read_callback;
 typedef std::function<void(int, const std::string &)> read_timeout_callback;
 
-typedef std::function<void(proto::CommitDecision, bool,
+typedef std::function<void(proto::CommitDecision, bool, bool,
     const proto::CommittedProof &,
     const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1_callback;
 typedef std::function<void(int)> phase1_timeout_callback;
@@ -121,7 +121,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
       const proto::GroupedSignatures &groupedSigs, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout);
   virtual void Writeback(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
-    proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
+    proto::CommitDecision decision, bool fast, bool conflict_flag, const proto::CommittedProof &conflict,
     const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs);
   //overloaded function for fallback
   virtual void WritebackFB(const proto::Transaction &transaction, const std::string &txnDigest,
@@ -176,7 +176,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
         decisionTimeoutStarted(false), txn_(txn), txnDigest_(txnDigest),
         p1Validator(group, &txn_, &txnDigest_, config, keyManager, params,
             verifier),
-        decision(proto::ABORT), fast(false) { }
+        decision(proto::ABORT), fast(false), conflict_flag(false) { }
     ~PendingPhase1() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
@@ -197,6 +197,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     Phase1Validator p1Validator;
     proto::CommitDecision decision;
     bool fast;
+    bool conflict_flag;
     proto::CommittedProof conflict;
     //relay Callbacks
     relayP1_callback rcb;
