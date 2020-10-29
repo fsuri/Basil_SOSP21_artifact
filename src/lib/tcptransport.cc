@@ -612,6 +612,7 @@ void TCPTransport::DispatchTP_main(std::function<void*()> f) {
   tp.detatch_main(std::move(f));
 }
 void TCPTransport::IssueCB(std::function<void(void*)> cb, void* arg){
+  std::lock_guard<std::mutex> lck(mtx);
   tp.issueCallback(std::move(cb), arg, libeventBase);
 }
 

@@ -115,6 +115,7 @@ void BenchmarkClient::CooldownDone() {
   Notice("Finished cooldown period.");
   std::sort(latencies.begin(), latencies.end());
 
+	Debug("crashing because latencies of size %d", latencies.size());
   uint64_t ns = latencies[latencies.size()/2];
   LatencyFmtNS(ns, buf);
   Notice("Median latency is %ld ns (%s)", ns, buf);
@@ -197,8 +198,8 @@ void BenchmarkClient::IncrementSent(int result) {
       } else {
         Debug("Not done after %ld seconds.", diff.tv_sec);
       }
-    } else if (n >= numRequests){ 
-      CooldownDone();  
+    } else if (n >= numRequests){
+      CooldownDone();
     }
   }
 
