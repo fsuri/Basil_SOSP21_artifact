@@ -262,6 +262,13 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   PingMessage ping;
 
 //FALLBACK helper functions
+
+//Simulated HMAC code
+  std::unordered_map<uint64_t, std::string> sessionKeys;
+  void CreateSessionKeys();
+  bool ValidateHMACedMessage(const proto::SignedMessage &signedMessage);
+  void CreateHMACedMessage(const ::google::protobuf::Message &msg, proto::SignedMessage& signedMessage);
+
 //TODO: make strings call by ref.
   void SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
   void SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision &decision);

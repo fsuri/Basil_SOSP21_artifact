@@ -10,6 +10,10 @@ enum CommitDecision {
   ABORT = 1;
 }
 
+message HMACs {
+  map<uint64, bytes> hmacs = 1;
+}
+
 message SignedMessage {
   required bytes data = 1;
   required uint64 process_id = 2;

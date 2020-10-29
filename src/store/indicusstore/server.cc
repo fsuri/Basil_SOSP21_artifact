@@ -62,15 +62,10 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     timeDelta(timeDelta),
     timeServer(timeServer) {
 
-  // Testing purpose. TODO:: REMOVE
-  // for(int i=0; i<100; ++i){
-  //     proto::CommittedProof *proof = new proto::CommittedProof();
-  //     testing_committed_proof.push_back(proof);
-  //     // proto::Writeback *msg= new proto::Writeback();
-  //     // WBmessages.push_back(msg);
-  // }
 
-
+  //Used for Fallback all to all:
+  CreateSessionKeys();
+  //////
 
   Debug("Starting Indicus replica %d.", id);
   transport->Register(this, config, groupIdx, idx);
@@ -2027,6 +2022,50 @@ void Server::FreeWBmessage(proto::Writeback *msg) {
 }
 
 ////////////////////// Fallback realm beings here... enter at own risk
+
+//Simulated HMAC code
+std::unordered_map<uint64_t, std::string> sessionKeys;
+void CreateSessionKeys();
+bool ValidateHMACedMessage(const proto::SignedMessage &signedMessage);
+void CreateHMACedMessage(const ::google::protobuf::Message &msg, proto::SignedMessage& signedMessage);
+// assume these are somehow secretly shared before hand
+
+
+void Server::CreateSessionKeys(){
+  for (uint64_t i = 0; i < config.n; i++) {
+    if (i > idx) {
+      sessionKeys[i] = std::string(8, (char) idx + 0x30) + std::string(8, (char) i + 0x30);
+    } else {
+      sessionKeys[i] = std::string(8, (char) i + 0x30) + std::string(8, (char) idx + 0x30);
+    }
+  }
+}
+
+// create MAC messages and verify them: Used for all to all leader election.
+bool Server::ValidateHMACedMessage(const proto::SignedMessage &signedMessage) {
+
+proto::HMACs hmacs;
+hmacs.ParseFromString(signedMessage.signature());
+return crypto::verifyHMAC(signedMessage.data(), (*hmacs.mutable_hmacs())[idx], sessionKeys[signedMessage.process_id() % config.n]);
+}
+
+void Server::CreateHMACedMessage(const ::google::protobuf::Message &msg, proto::SignedMessage& signedMessage) {
+
+std::string msgData = msg.SerializeAsString();
+signedMessage.set_data(msgData);
+signedMessage.set_process_id(id);
+
+proto::HMACs hmacs;
+for (uint64_t i = 0; i < config.n; i++) {
+  (*hmacs.mutable_hmacs())[i] = crypto::HMAC(msgData, sessionKeys[i]);
+}
+signedMessage.set_signature(hmacs.SerializeAsString());
+}
+
+
+/////////
+
+
 
 //TODO: all requestID entries can be deleted..
 void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg) {
