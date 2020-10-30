@@ -660,11 +660,13 @@ UDPTransport::Run()
 }
 
 void
-UDPTransport::Stop(bool immediately)
+UDPTransport::Stop()
 {
      tp.stop();
      //delete tp;
     event_base_loopbreak(libeventBase);
+}
+void UDPTransport::Close(TransportReceiver *receiver) {
 }
 
 static void

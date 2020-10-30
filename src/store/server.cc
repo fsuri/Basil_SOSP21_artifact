@@ -668,7 +668,7 @@ void Cleanup(int signal) {
   }
   Notice("Freeing transport.");
   if (tport != nullptr) {
-    tport->Stop(true);
+    tport->Stop();
     delete tport;
     tport = nullptr;
   }

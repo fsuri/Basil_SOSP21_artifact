@@ -233,7 +233,8 @@ public:
 
     // Launch the REPL.
     virtual void Run() override;
-    virtual void Stop(bool immediately = false) override;
+    virtual void Stop() override;
+    virtual void Close(TransportReceiver *receiver) override;
 
 protected:
     virtual bool SendMessageInternal(TransportReceiver *src,

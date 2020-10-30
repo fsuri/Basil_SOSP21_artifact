@@ -197,13 +197,35 @@ TCPTransport::TCPTransport(double dropRate, double reorderRate,
 
 TCPTransport::~TCPTransport()
 {
+  // Old version
+    // // XXX Shut down libevent?
+    // event_base_free(libeventBase);
+    // // for (auto kv : timers) {
+    // //     delete kv.second;
+    // // }
+    // Latency_Dump(&sockWriteLat);
+    mtx.lock();
+    for (auto itr = tcpOutgoing.begin(); itr != tcpOutgoing.end(); ) {
+      bufferevent_free(itr->second);
+      tcpAddresses.erase(itr->second);
+      //TCPTransportTCPListener* info = nullptr;
+      //bufferevent_getcb(itr->second, nullptr, nullptr, nullptr,
+      //    (void **) &info);
+      //if (info != nullptr) {
+      //  delete info;
+      //}
+      itr = tcpOutgoing.erase(itr);
+    }
+  // for (auto kv : timers) {
+  //     delete kv.second;
+  // }
+    Latency_Dump(&sockWriteLat);
+    for (const auto info : tcpListeners) {
+      delete info;
+    }
+    mtx.unlock();
     // XXX Shut down libevent?
     event_base_free(libeventBase);
-
-    // for (auto kv : timers) {
-    //     delete kv.second;
-    // }
-    Latency_Dump(&sockWriteLat);
 }
 
 void TCPTransport::ConnectTCP(
@@ -286,8 +308,11 @@ void TCPTransport::ConnectTCP(
     dstSrc.second->SetAddress(addr);
 
 
-    Debug("Opened TCP connection to %s:%d",
-	  inet_ntoa(dstSrc.first.addr.sin_addr), htons(dstSrc.first.addr.sin_port));
+    // Debug("Opened TCP connection to %s:%d",
+	  // inet_ntoa(dstSrc.first.addr.sin_addr), htons(dstSrc.first.addr.sin_port));
+    Debug("Opened TCP connection to %s:%d from %s:%d",
+	  inet_ntoa(dstSrc.first.addr.sin_addr), htons(dstSrc.first.addr.sin_port),
+	  inet_ntoa(sin.sin_addr), htons(sin.sin_port));
 }
 
 void
@@ -406,9 +431,10 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
         ConnectTCP(dstSrc);
         kv = tcpOutgoing.find(dstSrc);
     }
-    mtx.unlock();
 
     struct bufferevent *ev = kv->second;
+    mtx.unlock();
+
     UW_ASSERT(ev != NULL);
 
     // Serialize message
@@ -450,11 +476,17 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     memcpy(ptr, data.c_str(), dataLen);
     ptr += dataLen;
 
+    //mtx.lock();
+    //evbuffer_lock(ev);
     if (bufferevent_write(ev, buf, totalLen) < 0) {
         Warning("Failed to write to TCP buffer");
         fprintf(stderr, "tcp write failed\n");
+        //evbuffer_unlock(ev);
+        //mtx.unlock();
         return false;
     }
+    //evbuffer_unlock(ev);
+    //mtx.unlock();
 
     /*Latency_Start(&sockWriteLat);
     if (write(ev->ev_write.ev_fd, buf, totalLen) < 0) {
@@ -465,45 +497,79 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     return true;
 }
 
+// void TCPTransport::Flush() {
+//   event_base_loop(libeventBase, EVLOOP_NONBLOCK);
+// }
+
 void
 TCPTransport::Run()
 {
-    stopped = false;
+    //stopped = false;
     int ret = event_base_dispatch(libeventBase);
     Debug("event_base_dispatch returned %d.", ret);
 }
 
 void
-TCPTransport::Stop(bool immediately)
+TCPTransport::Stop()
 {
   // TODO: cleaning up TCP connections needs to be done better
   // - We want to close connections from client side when we kill clients so that
   //   server doesn't see many connections in TIME_WAIT and run out of file descriptors
   // - This is mainly a problem if the client is still running long after it should have
   //   finished (due to abort loops)
-  if (!stopped) {
 
-    auto stopFn = [this](){
-      if (!stopped) {
-        stopped = true;
-        for (auto itr = tcpOutgoing.begin(); itr != tcpOutgoing.end(); ) {
-          tcpAddresses.erase(itr->second);
-          bufferevent_free(itr->second);
-          itr = tcpOutgoing.erase(itr);
-        }
-        event_base_dump_events(libeventBase, stderr);
-        event_base_loopbreak(libeventBase);
-        tp.stop();
-        //delete tp;
-      }
-    };
-    if (immediately) {
-      stopFn();
-    } else {
-      Timer(500, stopFn);
+ //XXX old version
+  // if (!stopped) {
+  //
+  //   auto stopFn = [this](){
+  //     if (!stopped) {
+  //       stopped = true;
+  //       mtx.lock();
+  //       for (auto itr = tcpOutgoing.begin(); itr != tcpOutgoing.end(); ) {
+  //         tcpAddresses.erase(itr->second);
+  //         bufferevent_free(itr->second);
+  //         itr = tcpOutgoing.erase(itr);
+  //       }
+  //       event_base_dump_events(libeventBase, stderr);
+  //       event_base_loopbreak(libeventBase);
+  //       tp.stop();
+  //       //delete tp;
+  //       mtx.unlock();
+  //     }
+  //   };
+  //   if (immediately) {
+  //     stopFn();
+  //   } else {
+  //     Timer(500, stopFn);
+  //   }
+  // }
+
+  // mtx.lock();
+  // for (auto itr = tcpOutgoing.begin(); itr != tcpOutgoing.end(); ) {
+  //   bufferevent_free(itr->second);
+  //   tcpAddresses.erase(itr->second);
+  //   itr = tcpOutgoing.erase(itr);
+  // }
+
+  event_base_dump_events(libeventBase, stderr);
+  tp.stop();
+  //mtx.unlock();
+}
+
+void TCPTransport::Close(TransportReceiver *receiver) {
+  mtx.lock();
+  for (auto itr = tcpOutgoing.begin(); itr != tcpOutgoing.end(); ++itr) {
+    if (itr->first.second == receiver) {
+      bufferevent_free(itr->second);
+      tcpOutgoing.erase(itr);
+      tcpAddresses.erase(itr->second);
+      break;
     }
   }
+  mtx.unlock();
 }
+
+
 
 int TCPTransport::Timer(uint64_t ms, timer_callback_t cb) {
   struct timeval tv;
@@ -561,10 +627,15 @@ TCPTransport::CancelTimer(int id)
 void
 TCPTransport::CancelAllTimers()
 {
+    mtx.lock();
     while (!timers.empty()) {
         auto kv = timers.begin();
-        CancelTimer(kv->first);
+        int id = kv->first;
+        mtx.unlock();
+        CancelTimer(id);
+        mtx.lock();
     }
+    mtx.unlock();
 }
 
 void
@@ -612,7 +683,7 @@ void TCPTransport::DispatchTP_main(std::function<void*()> f) {
   tp.detatch_main(std::move(f));
 }
 void TCPTransport::IssueCB(std::function<void(void*)> cb, void* arg){
-  std::lock_guard<std::mutex> lck(mtx);
+  //std::lock_guard<std::mutex> lck(mtx);
   tp.issueCallback(std::move(cb), arg, libeventBase);
 }
 
@@ -687,7 +758,7 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
 
         // Create a buffered event
         bev = bufferevent_socket_new(transport->libeventBase, newfd,
-                                     BEV_OPT_CLOSE_ON_FREE);
+                                     BEV_OPT_CLOSE_ON_FREE | BEV_OPT_THREADSAFE);
         bufferevent_setcb(bev, TCPReadableCallback, NULL,
                           TCPIncomingEventCallback, info);
         if (bufferevent_enable(bev, EV_READ|EV_WRITE) < 0) {
@@ -763,17 +834,30 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         string msg(ptr, msgLen);
         ptr += msgLen;
 
-        //transport->mtx.lock();
+        transport->mtx.lock();
         auto addr = transport->tcpAddresses.find(bev);
-        //transport->mtx.unlock();
-        UW_ASSERT(addr != transport->tcpAddresses.end());
-
-        // Dispatch
-
-        info->receiver->ReceiveMessage(addr->second.first, msgType, msg, nullptr);
+        TCPTransportAddress &ad = addr->second.first; //Note: if address was removed from map, ref could still be in "use" by server
+        // transport->mtx.unlock();
+        // UW_ASSERT(addr != transport->tcpAddresses.end());
+        //
+        // // Dispatch
+        //
+        // info->receiver->ReceiveMessage(ad, msgType, msg, nullptr);
         // Debug("Done processing large %s message", msgType.c_str());
+
+        if (addr == transport->tcpAddresses.end()) {
+         Warning("Received message for closed connection.");
+         transport->mtx.unlock();
+       } else {
+         // Dispatch
+         transport->mtx.unlock();
+         Debug("Received %lu bytes %s message.", totalSize, msgType.c_str());
+         info->receiver->ReceiveMessage(ad, msgType, msg, nullptr);
+         // Debug("Done processing large %s message", msgType.c_str());
+       }
     }
 }
+
 
 void
 TCPTransport::TCPIncomingEventCallback(struct bufferevent *bev,
@@ -793,6 +877,7 @@ TCPTransport::TCPIncomingEventCallback(struct bufferevent *bev,
     }
 }
 
+//Note: If ever to make client multithreaded, add mutexes here. (same for ConnectTCP)
 void
 TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
                                        short what, void *arg)

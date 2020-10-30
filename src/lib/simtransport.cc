@@ -288,8 +288,10 @@ SimulatedTransport::CancelAllTimers()
 }
 
 void
-SimulatedTransport::Stop(bool immediately) {
+SimulatedTransport::Stop() {
     running = false;
+}
+void UDPTransport::Close(TransportReceiver *receiver) {
 }
 
 void SimulatedTransport::DispatchTP(std::function<void*()> f, std::function<void(void*)> cb)  {

@@ -130,7 +130,9 @@ public:
     virtual bool CancelTimer(int id) = 0;
     virtual void CancelAllTimers() = 0;
     virtual void Run() = 0;
-    virtual void Stop(bool immediately = false) = 0;
+    virtual void Stop() = 0;
+    virtual void Close(TransportReceiver *receiver) = 0;
+    //virtual void Flush();
 
     /* Dispatch function f to the thread pool
      * handle the result in cb

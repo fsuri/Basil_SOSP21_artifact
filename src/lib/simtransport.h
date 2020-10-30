@@ -79,7 +79,8 @@ public:
     int Timer(uint64_t ms, timer_callback_t cb);
     bool CancelTimer(int id);
     void CancelAllTimers();
-    void Stop(bool immediately = false) override;
+    void Stop() override;
+    virtual void Close(TransportReceiver *receiver) override;
 
     void DispatchTP(std::function<void*()> f, std::function<void(void*)> cb);
     void DispatchTP_local(std::function<void*()> f, std::function<void(void*)> cb);

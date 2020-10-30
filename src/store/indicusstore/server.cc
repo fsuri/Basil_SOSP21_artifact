@@ -347,7 +347,7 @@ void Server::HandleRead(const TransportAddress &remote,
 
   TransportAddress *remoteCopy = remote.clone();
   auto sendCB = [this, remoteCopy, readReply]() {
-    std::unique_lock<std::mutex> lock(transportMutex);
+    //std::unique_lock<std::mutex> lock(transportMutex);
     this->transport->SendMessage(this, *remoteCopy, *readReply);
     delete remoteCopy;
     FreeReadReply(readReply);
@@ -654,7 +654,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   proto::Phase2Reply* phase2Reply = GetUnusedPhase2Reply();
   TransportAddress *remoteCopy = remote.clone();
   auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
-    std::unique_lock<std::mutex> lock(transportMutex);
+    //std::unique_lock<std::mutex> lock(transportMutex);
     this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
     FreePhase2Reply(phase2Reply);
@@ -1741,7 +1741,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
   TransportAddress *remoteCopy = remote->clone();
 
   auto sendCB = [remoteCopy, this, phase1Reply]() {
-    std::unique_lock<std::mutex> lock(transportMutex);
+    //std::unique_lock<std::mutex> lock(transportMutex);
     this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
     FreePhase1Reply(phase1Reply);
     delete remoteCopy;

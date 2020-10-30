@@ -1083,7 +1083,7 @@ void Cleanup(int signal) {
   for (auto i : benchClients) {
     delete i;
   }
-  tport->Stop(true);
+  tport->Stop();
   delete tport;
   delete part;
 }

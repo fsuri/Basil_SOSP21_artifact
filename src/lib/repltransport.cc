@@ -265,7 +265,9 @@ void ReplTransport::Run() {
     }
 }
 
-void ReplTransport::Stop(bool immediately) {
+void ReplTransport::Stop() {
+}
+void ReplTransport::Close(TransportReceiver *receiver) {
 }
 
 bool ReplTransport::SendMessageInternal(TransportReceiver *src,
