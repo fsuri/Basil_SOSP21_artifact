@@ -256,8 +256,8 @@ void Client::Phase1Callback(uint64_t txnId, int group,
     return;
   }
 
-  Debug("PHASE1[%lu:%lu] callback decision %d from group %d", client_id,
-      client_seq_num, decision, group);
+  Debug("PHASE1[%lu:%lu] callback decision %d [Fast:%s][Conflict:%s] from group %d", client_id,
+      client_seq_num, decision, fast ? "yes" : "no", conflict_flag ? "yes" : "no", group);
 
   PendingRequest *req = itr->second;
   if (req->startedPhase2 || req->startedWriteback) {

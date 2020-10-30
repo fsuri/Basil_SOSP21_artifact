@@ -65,8 +65,8 @@ enum OCCType {
   TAPIR = 1
 };
 
-static bool mainThreadDispatching = false;
-static bool testingRecvInternal = false;
+static bool mainThreadDispatching = true;
+static bool testingRecvInternal = true;
 static bool testLocks = false; //Just used for debugging once.
 
 class Server : public TransportReceiver, public ::Server, public PingServer {
