@@ -474,7 +474,7 @@ void Client::Writeback(PendingRequest *req) {
         }
         req->p1ReplySigsGrouped.mutable_grouped_sigs()->erase(itr);
       }
-    }
+
 
     uint64_t quorumSize = FastAbortQuorumSize(config);
     for (auto &groupSigs : *req->p1ReplySigsGrouped.mutable_grouped_sigs()) {
@@ -482,6 +482,7 @@ void Client::Writeback(PendingRequest *req) {
         groupSigs.second.mutable_sigs()->RemoveLast();
       }
     }
+  }
   }
 ////////////////////
 

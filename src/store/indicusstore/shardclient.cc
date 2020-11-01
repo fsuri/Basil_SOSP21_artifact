@@ -556,6 +556,7 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
       Phase1Decision(itr);
       break;
     case FAST_ABSTAIN:  //INSERTED THIS NEW
+      Debug("Fast_abstain path is taken");
       pendingPhase1->decision = proto::ABORT;
       pendingPhase1->fast = true;
       Phase1Decision(itr);
