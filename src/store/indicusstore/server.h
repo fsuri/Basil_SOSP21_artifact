@@ -65,6 +65,8 @@ enum OCCType {
   TAPIR = 1
 };
 
+static int counter = 0; // map or vector
+
 static bool mainThreadDispatching = true;
 static bool testingRecvInternal = true;
 static bool testLocks = false; //Just used for debugging once.

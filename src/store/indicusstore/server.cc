@@ -147,6 +147,8 @@ Server::~Server() {
 
  void Server::ReceiveMessage(const TransportAddress &remote,
        const std::string &type, const std::string &data, void *meta_data) {
+  counter++;
+  //printf("Message received number: %d", counter); //print transport address.
   if(testingRecvInternal){
     Debug("Dispatching message handling to Support Main Thread");
    transport->DispatchTP_main([this, &remote, type, data, meta_data]() { //ends up with more copies here..
