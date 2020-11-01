@@ -116,31 +116,34 @@ void BenchmarkClient::CooldownDone() {
   std::sort(latencies.begin(), latencies.end());
 
 	Debug("crashing because latencies of size %d", latencies.size());
-  uint64_t ns = latencies[latencies.size()/2];
-  LatencyFmtNS(ns, buf);
-  Notice("Median latency is %ld ns (%s)", ns, buf);
+	if(latencies.size()>0){
+		uint64_t ns = latencies[latencies.size()/2];
+		LatencyFmtNS(ns, buf);
+		Notice("Median latency is %ld ns (%s)", ns, buf);
 
-  ns = 0;
-  for (auto latency : latencies) {
-    ns += latency;
-  }
-  ns = ns / latencies.size();
-  LatencyFmtNS(ns, buf);
-  Notice("Average latency is %ld ns (%s)", ns, buf);
+		ns = 0;
+		for (auto latency : latencies) {
+			ns += latency;
+		}
+		ns = ns / latencies.size();
+		LatencyFmtNS(ns, buf);
+		Notice("Average latency is %ld ns (%s)", ns, buf);
 
-  ns = latencies[latencies.size()*90/100];
-  LatencyFmtNS(ns, buf);
-  Notice("90th percentile latency is %ld ns (%s)", ns, buf);
+		ns = latencies[latencies.size()*90/100];
+		LatencyFmtNS(ns, buf);
+		Notice("90th percentile latency is %ld ns (%s)", ns, buf);
 
-  ns = latencies[latencies.size()*95/100];
-  LatencyFmtNS(ns, buf);
-  Notice("95th percentile latency is %ld ns (%s)", ns, buf);
+		ns = latencies[latencies.size()*95/100];
+		LatencyFmtNS(ns, buf);
+		Notice("95th percentile latency is %ld ns (%s)", ns, buf);
 
-  ns = latencies[latencies.size()*99/100];
-  LatencyFmtNS(ns, buf);
-  Notice("99th percentile latency is %ld ns (%s)", ns, buf);
+		ns = latencies[latencies.size()*99/100];
+		LatencyFmtNS(ns, buf);
+		Notice("99th percentile latency is %ld ns (%s)", ns, buf);
 
-  curr_bdcb();
+		curr_bdcb();
+	}
+
 }
 
 void BenchmarkClient::OnReply(int result) {

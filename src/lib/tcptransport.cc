@@ -551,8 +551,9 @@ TCPTransport::Stop()
   //   itr = tcpOutgoing.erase(itr);
   // }
 
-  event_base_dump_events(libeventBase, stderr);
   tp.stop();
+  event_base_dump_events(libeventBase, stderr);
+
   //mtx.unlock();
 }
 
