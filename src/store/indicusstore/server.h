@@ -73,7 +73,7 @@ void PrintRcvCount();
 void ParseProto(::google::protobuf::Message *msg, std::string &data);
 
 static bool mainThreadDispatching = true;
-static bool testingRecvInternal = true;
+static bool testingRecvInternal = false;
 static bool testLocks = false; //Just used for debugging once.
 
 class Server : public TransportReceiver, public ::Server, public PingServer {
@@ -106,7 +106,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       const std::string &type, const std::string &data,
       void *meta_data);
 
-  void HandleRead(const TransportAddress &remote, const proto::Read &msg);
+  void HandleRead(const TransportAddress &remote, proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
       proto::Phase1 &msg);
   void HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,

@@ -346,7 +346,7 @@ void Server::Load(const std::string &key, const std::string &value,
 }
 
 void Server::HandleRead(const TransportAddress &remote,
-    const proto::Read &msg) {
+     proto::Read &msg) {
 
   auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
   Debug("READ[%lu:%lu] for key %s with ts %lu.%lu.", msg.timestamp().id(),
@@ -499,6 +499,7 @@ void Server::HandleRead(const TransportAddress &remote,
   } else {
     sendCB();
   }
+  if(mainThreadDispatching && !testingRecvInternal) FreeReadmessage(&msg);
 }
 
 //////////////////////
@@ -550,6 +551,7 @@ auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThread
         committedProof);
   }
 
+
   if (result != proto::ConcurrencyControl::WAIT) {
     // if(client_starttime.find(txnDigest) == client_starttime.end()){
     //   struct timeval tv;
@@ -559,6 +561,7 @@ auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThread
     // }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
     SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, &remote);
   }
+  if(mainThreadDispatching && !testingRecvInternal) FreePhase1message(&msg);
 
 }
 
