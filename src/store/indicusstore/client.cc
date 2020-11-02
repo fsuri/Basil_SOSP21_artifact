@@ -482,7 +482,7 @@ void Client::Writeback(PendingRequest *req) {
         groupSigs.second.mutable_sigs()->RemoveLast();
       }
     }
-  }
+   }
   }
 ////////////////////
 

@@ -143,12 +143,38 @@ Server::~Server() {
   Latency_Dump(&signLat);
 }
 
-//TODO: Implement this
+ void PrintSendCount(){
+   send_count++;
+   fprintf(stderr, "send count: %d \n", send_count);
+ }
+
+ void PrintRcvCount(){
+   rcv_count++;
+   fprintf(stderr, "rcv count: %d\n", rcv_count);
+ }
+
+ void ParseProto(::google::protobuf::Message *msg, std::string &data){
+   msg->ParseFromString(data);
+ }
+// use like this: main dispatches lambda
+// auto f = [this, msg, type, data](){
+//   ParseProto;
+//   [this, msg, type](){
+//     this->HandleType(msg, type);
+//   };
+//   this->transport->DispatchTP_main(g);
+//   return (void*) true;
+// };
+// DispatchTP_noCB(f);
+// Main dispatches serialization, and lets serialization thread dispatch to main2
+
 
  void Server::ReceiveMessage(const TransportAddress &remote,
        const std::string &type, const std::string &data, void *meta_data) {
-  counter++;
-  //printf("Message received number: %d", counter); //print transport address.
+
+  // debug_counters[remote]++;
+  // //fprintf(stderr, "All message receptions go through CPU %d \n", sched_getcpu());
+  // fprintf(stderr, "Message received [%d][]%d]", debug_counters[remote]); //print transport address.
   if(testingRecvInternal){
     Debug("Dispatching message handling to Support Main Thread");
    transport->DispatchTP_main([this, &remote, type, data, meta_data]() { //ends up with more copies here..
@@ -169,6 +195,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
   //auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
 
   if (type == read.GetTypeName()) {
+
     if(!mainThreadDispatching || testingRecvInternal || testLocks){
       read.ParseFromString(data);
       HandleRead(remote, read);
@@ -185,6 +212,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       transport->DispatchTP_main(f);
     }
   } else if (type == phase1.GetTypeName()) {
+
     if(!mainThreadDispatching || testingRecvInternal || testLocks){
      phase1.ParseFromString(data);
      HandlePhase1(remote, phase1);
@@ -203,6 +231,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     }
 
   } else if (type == phase2.GetTypeName()) {
+
       if(params.multiThreading){
           proto::Phase2* p2 = GetUnusedPhase2message();
           p2->ParseFromString(data);
@@ -350,6 +379,7 @@ void Server::HandleRead(const TransportAddress &remote,
   TransportAddress *remoteCopy = remote.clone();
   auto sendCB = [this, remoteCopy, readReply]() {
     //std::unique_lock<std::mutex> lock(transportMutex);
+
     this->transport->SendMessage(this, *remoteCopy, *readReply);
     delete remoteCopy;
     FreeReadReply(readReply);
@@ -406,7 +436,7 @@ void Server::HandleRead(const TransportAddress &remote,
         sendCB();
         delete write;
       });
-      //TODO add multithreading:
+
     } else if (params.signatureBatchSize == 1) {
 
       if(params.multiThreading){
@@ -657,6 +687,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   TransportAddress *remoteCopy = remote.clone();
   auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
     //std::unique_lock<std::mutex> lock(transportMutex);
+
     this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
     FreePhase2Reply(phase2Reply);
@@ -1744,6 +1775,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
 
   auto sendCB = [remoteCopy, this, phase1Reply]() {
     //std::unique_lock<std::mutex> lock(transportMutex);
+
     this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
     FreePhase1Reply(phase1Reply);
     delete remoteCopy;

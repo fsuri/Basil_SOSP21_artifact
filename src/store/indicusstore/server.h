@@ -65,7 +65,12 @@ enum OCCType {
   TAPIR = 1
 };
 
-static int counter = 0; // map or vector
+static int rcv_count = 0;
+static int send_count = 0;
+//static unordered_map<TransportAddress*, int> debug_counters;
+void PrintSendCount();
+void PrintRcvCount();
+void ParseProto(::google::protobuf::Message *msg, std::string &data);
 
 static bool mainThreadDispatching = true;
 static bool testingRecvInternal = true;
