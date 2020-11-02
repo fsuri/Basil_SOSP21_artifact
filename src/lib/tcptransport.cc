@@ -759,7 +759,7 @@ TCPTransport::TCPAcceptCallback(evutil_socket_t fd, short what, void *arg)
 
         // Create a buffered event
         bev = bufferevent_socket_new(transport->libeventBase, newfd,
-                                     BEV_OPT_CLOSE_ON_FREE | BEV_OPT_THREADSAFE);
+                                     BEV_OPT_CLOSE_ON_FREE | BEV_OPT_THREADSAFE | BEV_OPT_UNLOCK_CALLBACKS);
         bufferevent_setcb(bev, TCPReadableCallback, NULL,
                           TCPIncomingEventCallback, info);
         if (bufferevent_enable(bev, EV_READ|EV_WRITE) < 0) {
