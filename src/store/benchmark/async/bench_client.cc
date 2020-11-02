@@ -140,10 +140,9 @@ void BenchmarkClient::CooldownDone() {
 		ns = latencies[latencies.size()*99/100];
 		LatencyFmtNS(ns, buf);
 		Notice("99th percentile latency is %ld ns (%s)", ns, buf);
-
-		curr_bdcb();
 	}
 
+	curr_bdcb();
 }
 
 void BenchmarkClient::OnReply(int result) {
