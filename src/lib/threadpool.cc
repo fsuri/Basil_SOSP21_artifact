@@ -48,32 +48,32 @@ ThreadPool::ThreadPool() {
     else{
     t = new std::thread([this, i] {
       while (true) {
-        //std::pair<std::function<void*()>, EventInfo*> job;
-        std::function<void*()> job;
+        std::pair<std::function<void*()>, EventInfo*> job;
+        //std::function<void*()> job;
         {
           // only acquire the lock in this block so that the
           // std::function execution is not holding the lock
           Debug("Thread %d running on CPU %d.", i, sched_getcpu());
           std::unique_lock<std::mutex> lock(this->worklistMutex);
-          cv.wait(lock, [this] { return this->worklist2.size() > 0 || !running; });
+          cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });
           if (!running) {
             break;
           }
-          if (this->worklist2.size() == 0) {
+          if (this->worklist.size() == 0) {
             continue;
           }
-          job = std::move(this->worklist2.front());
-          this->worklist2.pop_front();
+          job = std::move(this->worklist.front());
+          this->worklist.pop_front();
         }
-        job();
-        // if(job.second){
-        //     job.second->r = job.first();
-        // // This _should_ be thread safe
-        //     event_active(job.second->ev, 0, 0);
-        // }
-        // else{
-        //   job.first();
-        // }
+        //job();
+        if(job.second){
+            job.second->r = job.first();
+        // This _should_ be thread safe
+            event_active(job.second->ev, 0, 0);
+        }
+        else{
+          job.first();
+        }
 
       }
     });
@@ -133,10 +133,11 @@ void ThreadPool::dispatch(std::function<void*()> f, std::function<void(void*)> c
   event_add(info->ev, NULL);
 
   //safe to moveinfo? dont expect it to do anything though, since its just a pointer
-  std::pair<std::function<void*()>, EventInfo*> job(std::move(f), std::move(info));
+//  std::pair<std::function<void*()>, EventInfo*> job(std::move(f), std::move(info));
 
   std::lock_guard<std::mutex> lk(worklistMutex);
-  worklist.push_back(std::move(job));
+  //worklist.push_back(std::move(job));
+  worklist.emplace_back(std::move(f), std::move(info));
   cv.notify_one();
 }
 
@@ -151,9 +152,8 @@ void ThreadPool::dispatch_local(std::function<void*()> f, std::function<void(voi
   //std::function<void*()> combination(std::bind(ThreadPool::combiner, std::move(f), std::move(cb)));
   //std::pair<std::function<void*()>, EventInfo*> job(std::move(combination), info);
   std::lock_guard<std::mutex> lk(worklistMutex);
-  //worklist.emplace_back(std::make_pair(std::move(combination), info));
-  worklist2.push_back(std::move(combination));
-
+  worklist.emplace_back(std::move(combination), info);
+  //worklist2.push_back(std::move(combination));
   //worklist.push_back(std::move(job));
   cv.notify_one();
 }
@@ -162,8 +162,9 @@ void ThreadPool::detatch(std::function<void*()> f){
   EventInfo* info = nullptr;
   //std::pair<std::function<void*()>, EventInfo*> job(std::move(f), info);
   std::lock_guard<std::mutex> lk(worklistMutex);
-  //worklist.push_back(std::move(job));
-  worklist2.push_back(std::move(f)); //does it still create a copy? //same with emplace_back?
+
+  worklist.emplace_back(std::move(f), info);
+  //worklist2.push_back(std::move(f));
   //try queue/deque
   cv.notify_one();
 }
@@ -173,8 +174,9 @@ void ThreadPool::detatch_ptr(std::function<void*()> *f){
   //std::pair<std::function<void*()>, EventInfo*> job(std::move(f), info);
   std::lock_guard<std::mutex> lk(worklistMutex);
   //worklist.push_back(std::move(job));
-  worklist2.push_back(std::move(*f)); //does it still create a copy? //same with emplace_back?
-  //try queue/deque
+  worklist.emplace_back(std::move(*f), info);
+  //worklist2.push_back(std::move(*f));
+
   cv.notify_one();
 }
 

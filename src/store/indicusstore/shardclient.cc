@@ -608,6 +608,24 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
         pendingPhase1->decisionTimeoutStarted = true;
       }
       break;
+    case SLOW_ABORT_TENTATIVE2:
+        if (!pendingPhase1->decisionTimeoutStarted) {
+          uint64_t reqId = reply.req_id();
+          pendingPhase1->decisionTimeout = new Timeout(transport,
+              phase1DecisionTimeout, [this, reqId]() {
+                auto itr = pendingPhase1s.find(reqId);
+                if (itr == pendingPhase1s.end()) {
+                  return;
+                }
+                itr->second->decision = proto::ABORT;
+                itr->second->fast = false;
+                Phase1Decision(itr);
+              }
+            );
+          pendingPhase1->decisionTimeout->Reset();
+          pendingPhase1->decisionTimeoutStarted = true;
+        }
+        break;
     case NOT_ENOUGH:
       break;
     default:

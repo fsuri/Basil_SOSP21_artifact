@@ -57,7 +57,7 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
         Debug("[group %d] FAST_COMMIT after processing %u COMMIT replies.",
             group, commits);
         state = FAST_COMMIT;
-      } else if (commits >= SlowCommitQuorumSize(config) && abstains == 0) {
+      } else if (commits >= SlowCommitQuorumSize(config) && abstains == 0) { //Could still go FP
         Debug("[group %d] Tentative SLOW_COMMIT after processing %u COMMIT"
             " replies and %u ABSTAIN replies.", group, commits, abstains);
         state = SLOW_COMMIT_TENTATIVE;
@@ -67,23 +67,29 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
         state = SLOW_COMMIT_FINAL;
       }
       break;
-      //MISSING CASE FOR FAST ABORT WITH 3f+1 ABSTAIN
+
     case proto::ConcurrencyControl::ABSTAIN:
       abstains++;
 
-      //TODO ADD FAST CASE: call it FAST_ABSTAIN
+
       if (abstains >= FastAbortQuorumSize(config)){
         state = FAST_ABSTAIN;
       }
 
-      if (state == SLOW_COMMIT_TENTATIVE) {
+      else if (state == SLOW_COMMIT_TENTATIVE) { //can no longer go commit FP
         state = SLOW_COMMIT_FINAL;
       } else if (abstains >= SlowAbortQuorumSize(config) &&
-          config->n - abstains  >= SlowCommitQuorumSize(config)) {
+          config->n - abstains  >= SlowCommitQuorumSize(config)) {  //could still go commit slowpath
         Debug("[group %d] Tentative SLOW_ABORT after processing %u COMMIT"
             " replies and %u ABSTAIN replies.", group, commits, abstains);
         state = SLOW_ABORT_TENTATIVE;
-      } else if (abstains >= SlowAbortQuorumSize(config)) {
+      } else if (abstains >= SlowAbortQuorumSize(config)) { // if received 2f+1 aborts will go sp abort immediately, but really we would like to still go fast path abort
+        Debug("[group %d] Final SLOW_ABORT_TENTATIVE after processing %u COMMIT"
+            " replies and %u ABSTAIN replies.", group, commits, abstains);
+        state = SLOW_ABORT_TENTATIVE2;
+      }
+      else if(abstains >= SlowAbortQuorumSize(config) &&
+          config->n - commits < FastAbortQuorumSize(config)){ //not enough commits left for Abort fp, go slow always.
         Debug("[group %d] Final SLOW_ABORT after processing %u COMMIT"
             " replies and %u ABSTAIN replies.", group, commits, abstains);
         state = SLOW_ABORT_FINAL;
