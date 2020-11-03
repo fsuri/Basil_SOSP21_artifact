@@ -54,13 +54,16 @@ namespace indicusstore {
 Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     int numShards, int numGroups, Transport *transport, KeyManager *keyManager,
     Parameters params, uint64_t timeDelta, OCCType occType, Partitioner *part,
-    unsigned int batchTimeoutMicro, TrueTime timeServer) : PingServer(transport),
+    unsigned int batchTimeoutMicro, bool mainThreadDispatching, bool dispatchMessageReceive,
+    TrueTime timeServer) : PingServer(transport),
     config(config), groupIdx(groupIdx), idx(idx), numShards(numShards),
     numGroups(numGroups), id(groupIdx * config.n + idx),
     transport(transport), occType(occType), part(part),
     params(params), keyManager(keyManager),
     timeDelta(timeDelta),
-    timeServer(timeServer) {
+    timeServer(timeServer),
+    mainThreadDispatching(mainThreadDispatching),
+    dispatchMessageReceive(dispatchMessageReceive) {
 
 
   //Used for Fallback all to all:
@@ -175,7 +178,7 @@ Server::~Server() {
   // debug_counters[remote]++;
   // //fprintf(stderr, "All message receptions go through CPU %d \n", sched_getcpu());
   // fprintf(stderr, "Message received [%d][]%d]", debug_counters[remote]); //print transport address.
-  if(testingRecvInternal){
+  if(dispatchMessageReceive){
     Debug("Dispatching message handling to Support Main Thread");
    transport->DispatchTP_main([this, &remote, type, data, meta_data]() { //ends up with more copies here..
      this->ReceiveMessageInternal(remote, type, data, meta_data);
@@ -196,7 +199,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
 
   if (type == read.GetTypeName()) {
 
-    if(!mainThreadDispatching || testingRecvInternal || testLocks){
+    if(!mainThreadDispatching || dispatchMessageReceive){
       read.ParseFromString(data);
       HandleRead(remote, read);
     }
@@ -213,7 +216,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     }
   } else if (type == phase1.GetTypeName()) {
 
-    if(!mainThreadDispatching || testingRecvInternal || testLocks){
+    if(!mainThreadDispatching || dispatchMessageReceive){
      phase1.ParseFromString(data);
      HandlePhase1(remote, phase1);
     }
@@ -235,7 +238,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       if(params.multiThreading){
           proto::Phase2* p2 = GetUnusedPhase2message();
           p2->ParseFromString(data);
-          if(!mainThreadDispatching || testLocks){
+          if(!mainThreadDispatching){
             HandlePhase2(remote, *p2);
           }
           else{
@@ -249,7 +252,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       }
       else{
         phase2.ParseFromString(data);
-        if(!mainThreadDispatching || testingRecvInternal){
+        if(!mainThreadDispatching || dispatchMessageReceive){
           HandlePhase2(remote, phase2);
         }
         else{
@@ -266,7 +269,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       if(params.multiThreading){
           proto::Writeback *wb = GetUnusedWBmessage();
           wb->ParseFromString(data);
-          if(!mainThreadDispatching || testLocks){
+          if(!mainThreadDispatching){
             HandleWriteback(remote, *wb);
           }
           else{
@@ -281,7 +284,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       else{
         writeback.ParseFromString(data);
         //HandleWriteback(remote, writeback);
-        if(!mainThreadDispatching || testingRecvInternal){
+        if(!mainThreadDispatching || dispatchMessageReceive){
           HandleWriteback(remote, writeback);
         }
         else{
@@ -499,7 +502,7 @@ void Server::HandleRead(const TransportAddress &remote,
   } else {
     sendCB();
   }
-  if(mainThreadDispatching && !testingRecvInternal) FreeReadmessage(&msg);
+  if(mainThreadDispatching && !dispatchMessageReceive) FreeReadmessage(&msg);
 }
 
 //////////////////////
@@ -561,7 +564,7 @@ auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThread
     // }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
     SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, &remote);
   }
-  if(mainThreadDispatching && !testingRecvInternal) FreePhase1message(&msg);
+  if(mainThreadDispatching && !dispatchMessageReceive) FreePhase1message(&msg);
 
 }
 

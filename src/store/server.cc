@@ -266,6 +266,8 @@ DEFINE_bool(indicus_multi_threading, true, "dispatch crypto to parallel threads"
 DEFINE_bool(indicus_batch_verification, false, "using ed25519 donna batch verification");
 DEFINE_uint64(indicus_batch_verification_size, 64, "batch size for ed25519 donna batch verification");
 DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout, ms");
+DEFINE_bool(indicus_mainThreadDispatching, true, "dispatching main thread work to an additional thread");
+DEFINE_bool(indicus_dispatchMessageReceive, false, "delegating serialization to worker main thread");
 
 const std::string occ_type_args[] = {
 	"tapir",
@@ -549,7 +551,7 @@ int main(int argc, char **argv) {
       server = new indicusstore::Server(config, FLAGS_group_idx,
           FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
           &keyManager, params, timeDelta, indicusOCCType, part,
-          FLAGS_indicus_sig_batch_timeout);
+          FLAGS_indicus_sig_batch_timeout, FLAGS_indicus_mainThreadDispatching, FLAGS_indicus_dispatchMessageReceive);
       break;
     }
 		case PROTO_PBFT: {

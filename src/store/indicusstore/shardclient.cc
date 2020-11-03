@@ -359,6 +359,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   const proto::Write *write;
   if (params.validateProofs && params.signedMessages) {
     if (reply.has_signed_write()) {
+      //TODO: RECOMMENT, just testing
       if (!verifier->Verify(keyManager->GetPublicKey(reply.signed_write().process_id()),
               reply.signed_write().data(), reply.signed_write().signature())) {
         Debug("[group %i] Failed to validate signature for write.", group);
@@ -401,6 +402,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
 
       std::string committedTxnDigest = TransactionDigest(
           reply.proof().txn(), params.hashDigest);
+      //TODO: RECOMMENT, just testing
       if (!ValidateTransactionWrite(reply.proof(), &committedTxnDigest,
             req->key, write->committed_value(), write->committed_timestamp(),
             config, params.signedMessages, keyManager, verifier)) {
@@ -505,7 +507,7 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
           group, reply.signed_cc().process_id());
       return;
     }
-
+    //TODO: RECOMMENT, just testing
     if (!verifier->Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
           reply.signed_cc().data(), reply.signed_cc().signature())) {
       Debug("[group %i] Signature %s %s from replica %lu is not valid.", group,
@@ -654,6 +656,7 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
       return;
     }
 
+    //TODO: RECOMMENT, just testing
     if (!verifier->Verify(keyManager->GetPublicKey(
             reply.signed_p2_decision().process_id()),
           reply.signed_p2_decision().data(),

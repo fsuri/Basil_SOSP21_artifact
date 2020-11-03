@@ -39,6 +39,7 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
     case proto::ConcurrencyControl::ABORT: {
       std::string committedTxnDigest = TransactionDigest(
           cc.committed_conflict().txn(), params.hashDigest);
+      //TODO: RECOMMENT, just testing
       if (params.validateProofs && !ValidateCommittedConflict(cc.committed_conflict(),
             &committedTxnDigest, txn, txnDigest, params.signedMessages,
             keyManager, config, verifier)) {

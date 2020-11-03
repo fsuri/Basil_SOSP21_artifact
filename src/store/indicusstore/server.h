@@ -72,9 +72,8 @@ void PrintSendCount();
 void PrintRcvCount();
 void ParseProto(::google::protobuf::Message *msg, std::string &data);
 
-static bool mainThreadDispatching = true;
-static bool testingRecvInternal = false;
-static bool testLocks = false; //Just used for debugging once.
+// static bool mainThreadDispatching = true;
+// static bool dispatchMessageReceive = false;
 
 class Server : public TransportReceiver, public ::Server, public PingServer {
  public:
@@ -82,6 +81,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       int numShards, int numGroups,
       Transport *transport, KeyManager *keyManager, Parameters params, uint64_t timeDelta,
       OCCType occType, Partitioner *part, unsigned int batchTimeoutMS,
+      bool mainThreadDispatching, bool dispatchMessageReceive,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
@@ -96,6 +96,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
  private:
    //bool test_bool = false;
+   bool mainThreadDispatching;
+   bool dispatchMessageReceive;
 
   friend class ServerTest;
   struct Value {
