@@ -550,8 +550,16 @@ auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThread
     ongoing[txnDigest] = txn;
 
     Timestamp retryTs;
+
     result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
         committedProof);
+    // int flip = (msg.req_id() * msg.req_id()) % 10 ;
+    // if(flip < 3){
+    //   result = proto::ConcurrencyControl::ABSTAIN;
+    // }
+    // else{
+    //   result = proto::ConcurrencyControl::COMMIT;
+    // }
   }
 
 
@@ -1933,7 +1941,7 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
 
 
 proto::ReadReply *Server::GetUnusedReadReply() {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(readReplyProtoMutex);
   proto::ReadReply *reply;
   if (readReplies.size() > 0) {
     reply = readReplies.back();
@@ -1946,7 +1954,7 @@ proto::ReadReply *Server::GetUnusedReadReply() {
 }
 
 proto::Phase1Reply *Server::GetUnusedPhase1Reply() {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(p1ReplyProtoMutex);
   proto::Phase1Reply *reply;
   if (p1Replies.size() > 0) {
     reply = p1Replies.back();
@@ -1959,7 +1967,7 @@ proto::Phase1Reply *Server::GetUnusedPhase1Reply() {
 }
 
 proto::Phase2Reply *Server::GetUnusedPhase2Reply() {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(p2ReplyProtoMutex);
   proto::Phase2Reply *reply;
   if (p2Replies.size() > 0) {
     reply = p2Replies.back();
@@ -1972,7 +1980,7 @@ proto::Phase2Reply *Server::GetUnusedPhase2Reply() {
 }
 
 proto::Read *Server::GetUnusedReadmessage() {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(readProtoMutex);
   proto::Read *msg;
   if (readMessages.size() > 0) {
     msg = readMessages.back();
@@ -1985,7 +1993,7 @@ proto::Read *Server::GetUnusedReadmessage() {
 }
 
 proto::Phase1 *Server::GetUnusedPhase1message() {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(p1ProtoMutex);
   proto::Phase1 *msg;
   if (p1messages.size() > 0) {
     msg = p1messages.back();
@@ -1998,7 +2006,7 @@ proto::Phase1 *Server::GetUnusedPhase1message() {
 }
 
 proto::Phase2 *Server::GetUnusedPhase2message() {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(p2ProtoMutex);
   proto::Phase2 *msg;
   if (p2messages.size() > 0) {
     msg = p2messages.back();
@@ -2011,7 +2019,7 @@ proto::Phase2 *Server::GetUnusedPhase2message() {
 }
 
 proto::Writeback *Server::GetUnusedWBmessage() {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(WBProtoMutex);
   proto::Writeback *msg;
   if (WBmessages.size() > 0) {
     msg = WBmessages.back();
@@ -2024,40 +2032,40 @@ proto::Writeback *Server::GetUnusedWBmessage() {
 }
 
 void Server::FreeReadReply(proto::ReadReply *reply) {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(readReplyProtoMutex);
   //reply->Clear();
   readReplies.push_back(reply);
 }
 
 void Server::FreePhase1Reply(proto::Phase1Reply *reply) {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(p1ReplyProtoMutex);
   reply->Clear();
   p1Replies.push_back(reply);
 }
 
 void Server::FreePhase2Reply(proto::Phase2Reply *reply) {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(p2ReplyProtoMutex);
   reply->Clear();
   p2Replies.push_back(reply);
 }
 
 void Server::FreeReadmessage(proto::Read *msg) {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(readProtoMutex);
   readMessages.push_back(msg);
 }
 
 void Server::FreePhase1message(proto::Phase1 *msg) {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(p1ProtoMutex);
   p1messages.push_back(msg);
 }
 
 void Server::FreePhase2message(proto::Phase2 *msg) {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(p2ProtoMutex);
   p2messages.push_back(msg);
 }
 
 void Server::FreeWBmessage(proto::Writeback *msg) {
-  std::unique_lock<std::mutex> lock(protoMutex);
+  std::unique_lock<std::mutex> lock(WBProtoMutex);
   WBmessages.push_back(msg);
 }
 

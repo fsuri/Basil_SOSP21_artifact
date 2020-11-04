@@ -230,9 +230,19 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
   //ThreadPool* tp;
   std::mutex transportMutex;
-  std::mutex protoMutex;
+
   std::mutex mainThreadMutex;
   std::mutex signMutex;
+
+  //proto mutexes
+  std::mutex protoMutex;
+  std::mutex readReplyProtoMutex;
+  std::mutex p1ReplyProtoMutex;
+  std::mutex p2ReplyProtoMutex;
+  std::mutex readProtoMutex;
+  std::mutex p1ProtoMutex;
+  std::mutex p2ProtoMutex;
+  std::mutex WBProtoMutex;
 
   //std::vector<proto::CommittedProof*> testing_committed_proof;
 

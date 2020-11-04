@@ -301,6 +301,26 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   void Phase1Decision(
       std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
 
+
+//multithreading Support
+//TODO seperate the locks for these!!!!
+  std::mutex readProtoMutex;
+  std::mutex p1ProtoMutex;
+  std::mutex p2ProtoMutex;
+
+  proto::ReadReply *GetUnusedReadReply();
+  proto::Phase1Reply *GetUnusedPhase1Reply();
+  proto::Phase2Reply *GetUnusedPhase2Reply();
+
+  void FreeReadReply(proto::ReadReply *reply);
+  void FreePhase1Reply(proto::Phase1Reply *reply);
+  void FreePhase2Reply(proto::Phase2Reply *reply);
+
+  std::vector<proto::ReadReply *> readReplies;
+  std::vector<proto::Phase1Reply *> p1Replies;
+  std::vector<proto::Phase2Reply *> p2Replies;
+
+
   //private fallback functions
   void HandlePhase1Relay(proto::RelayP1 &relayP1);
   void HandlePhase1FBReply(proto::Phase1FBReply &p1fbr);

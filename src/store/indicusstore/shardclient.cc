@@ -723,6 +723,75 @@ void ShardClient::Phase1Decision(
   delete pendingPhase1;
 }
 
+///////////////// Utility /////////////////////////
+
+proto::ReadReply *ShardClient::GetUnusedReadReply() {
+  std::unique_lock<std::mutex> lock(readProtoMutex);
+  proto::ReadReply *reply;
+  if (readReplies.size() > 0) {
+    reply = readReplies.back();
+    reply->Clear();
+    readReplies.pop_back();
+  } else {
+    reply = new proto::ReadReply();
+  }
+  return reply;
+}
+
+proto::Phase1Reply *ShardClient::GetUnusedPhase1Reply() {
+  std::unique_lock<std::mutex> lock(p1ProtoMutex);
+  proto::Phase1Reply *reply;
+  if (p1Replies.size() > 0) {
+    reply = p1Replies.back();
+    //reply->Clear(); //can move this to Free if want more work at threads
+    p1Replies.pop_back();
+  } else {
+    reply = new proto::Phase1Reply();
+  }
+  return reply;
+}
+
+proto::Phase2Reply *ShardClient::GetUnusedPhase2Reply() {
+  std::unique_lock<std::mutex> lock(p2ProtoMutex);
+  proto::Phase2Reply *reply;
+  if (p2Replies.size() > 0) {
+    reply = p2Replies.back();
+    //reply->Clear();
+    p2Replies.pop_back();
+  } else {
+    reply = new proto::Phase2Reply();
+  }
+  return reply;
+}
+
+void ShardClient::FreeReadReply(proto::ReadReply *reply) {
+  std::unique_lock<std::mutex> lock(readProtoMutex);
+  //reply->Clear();
+  readReplies.push_back(reply);
+}
+
+void ShardClient::FreePhase1Reply(proto::Phase1Reply *reply) {
+  std::unique_lock<std::mutex> lock(p1ProtoMutex);
+  reply->Clear();
+  p1Replies.push_back(reply);
+}
+
+void ShardClient::FreePhase2Reply(proto::Phase2Reply *reply) {
+  std::unique_lock<std::mutex> lock(p2ProtoMutex);
+  reply->Clear();
+  p2Replies.push_back(reply);
+}
+
+
+
+
+
+
+
+
+
+
+
 /////////////////////////////////////////FALLBACK CODE STARTS HERE ///////////////////////////////////////////
 
 void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
