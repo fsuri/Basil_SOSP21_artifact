@@ -19,6 +19,7 @@ public:
   // copy constructor panics
   ThreadPool(const ThreadPool& tp) { Panic("Unimplemented"); }
 
+  void start(int process_id=0, int total_processes=1);
   void stop();
 
   void dispatch(std::function<void*()> f, std::function<void(void*)> cb, event_base* libeventBase);

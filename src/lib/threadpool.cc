@@ -7,12 +7,19 @@
 
 //TODO: make is so that all but the first core are used.
 ThreadPool::ThreadPool() {
+
+}
+
+void ThreadPool::start(int process_id, int total_processes){
   //printf("starting threadpool \n");
   //could pre-allocate some Events and EventInfos for a Hotstart
 
+  fprintf(stderr, "process_id: %d, total_processes: %d \n", process_id, total_processes);
   //TODO: add config param for hyperthreading
   bool hyperthreading = true;
   int num_cpus = std::thread::hardware_concurrency()/(2-hyperthreading);
+  num_cpus /= total_processes;
+  int offset = process_id * num_cpus;
   Debug("num cpus %d", num_cpus);
   uint32_t num_threads = (uint32_t) std::max(1, num_cpus);
   // Currently: First CPU = MainThread.
@@ -82,7 +89,7 @@ ThreadPool::ThreadPool() {
     // only CPU i as set.
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(i, &cpuset);
+    CPU_SET(i+offset, &cpuset);
     int rc = pthread_setaffinity_np(t->native_handle(),
                                     sizeof(cpu_set_t), &cpuset);
     if (rc != 0) {

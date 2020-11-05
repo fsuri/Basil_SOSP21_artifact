@@ -165,8 +165,10 @@ BindToPort(int fd, const string &host, const string &port)
 }
 
 TCPTransport::TCPTransport(double dropRate, double reorderRate,
-			   int dscp, bool handleSignals)
+			   int dscp, bool handleSignals, int process_id, int total_processes)
 {
+    tp.start(process_id, total_processes);
+
     lastTimerId = 0;
 
     // Set up libevent

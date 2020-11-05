@@ -212,6 +212,9 @@ UDPTransport::UDPTransport(double dropRate, double reorderRate,
                            int dscp, event_base *evbase)
     : dropRate(dropRate), reorderRate(reorderRate), dscp(dscp)
 {
+
+    tp.start();
+
     struct timeval tv;
     lastTimerId = 0;
     lastFragMsgId = 0;

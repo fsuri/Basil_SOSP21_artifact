@@ -269,6 +269,9 @@ DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout
 DEFINE_bool(indicus_mainThreadDispatching, true, "dispatching main thread work to an additional thread");
 DEFINE_bool(indicus_dispatchMessageReceive, false, "delegating serialization to worker main thread");
 
+DEFINE_uint64(indicus_process_id, 0, "id used for Threadpool core affinity");
+DEFINE_uint64(indicus_total_processes, 1, "number of server processes per machine");
+
 const std::string occ_type_args[] = {
 	"tapir",
   "mvtso"
@@ -400,7 +403,14 @@ int main(int argc, char **argv) {
 
   switch (trans) {
     case TRANS_TCP:
-      tport = new TCPTransport(0.0, 0.0, 0, false);  //TODO: need to add option for server to know process id, so I can pass it to threadpool etc.
+			Notice("process_id flag = %d", FLAGS_indicus_process_id);
+			Notice("total_processes flag = %d", FLAGS_indicus_total_processes);
+			// if(FLAGS_indicus_process_id != 0 || FLAGS_indicus_total_processes != 1){
+			// 	tport = new TCPTransport(0.0, 0.0, 0, false, 0, 1);
+			// 	break;
+			// }
+      tport = new TCPTransport(0.0, 0.0, 0, false, FLAGS_indicus_process_id, FLAGS_indicus_total_processes);
+			 //TODO: add: process_id + total processes (max_grpid/ machines (= servers/n))
       break;
     case TRANS_UDP:
       tport = new UDPTransport(0.0, 0.0, 0, nullptr);
@@ -636,10 +646,13 @@ int main(int argc, char **argv) {
 	//if(FLAGS_indicus_multi_threading){
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
-		//bool hyperthreading = true; //TODO::make this into a flag
-	  //int num_cpus = std::thread::hardware_concurrency()/(2-hyperthreading);
+		bool hyperthreading = true; //TODO::make this into a flag
+	  int num_cpus = std::thread::hardware_concurrency()/(2-hyperthreading);
 		//CPU_SET(num_cpus-1, &cpuset); //last core is for main
-		CPU_SET(0, &cpuset); //first core is for main
+		num_cpus /= FLAGS_indicus_total_processes;
+	  int offset = FLAGS_indicus_process_id * num_cpus;
+		//int offset = 0;
+		CPU_SET(0 + offset, &cpuset); //first assigned core is for main
 		pthread_setaffinity_np(pthread_self(),	sizeof(cpu_set_t), &cpuset);
 		Debug("MainThread running on CPU %d.", sched_getcpu());
 	//}

@@ -866,7 +866,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
   proto::Transaction* txn, void* valid){
 
   //auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
-
+  //auto f = [this, msg, txnDigest, txn, valid]() mutable {
   Debug("WRITEBACK Callback[%s] being called", BytesToHex(*txnDigest, 16).c_str());
   if(! valid){
     Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
@@ -874,7 +874,8 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
     if(params.multiThreading){
       FreeWBmessage(msg);
     }
-    return;
+    return; //XXX comment back
+    //return (void*) false;
   }
   //delete (bool*) valid;
 
@@ -890,7 +891,8 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
       }
       else{
         Debug("Writeback for P2 does not have view or sigs");
-        return;
+        return; //XXX comment back
+        //return (void*) false;
       }
     }
     Debug("COMMIT ONLY RUN BY MAINTHREAD: %d", sched_getcpu());
@@ -909,6 +911,10 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
     //proto::Writeback* msg2 = new proto::Writeback;
     FreeWBmessage(msg);
   }
+//   return (void*) true;
+// };
+// transport->DispatchTP_main(std::move(f));
+
 }
 
 
