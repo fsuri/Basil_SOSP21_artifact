@@ -4,6 +4,7 @@
 #include "lib/crypto.h"
 
 #include <map>
+#include <mutex>
 
 class KeyManager {
  public:
@@ -19,6 +20,7 @@ class KeyManager {
   const bool precompute;
   std::map<uint64_t, crypto::PubKey*> publicKeys;
   std::map<uint64_t, crypto::PrivKey*> privateKeys;
+  std::mutex keyMutex;
 };
 
 #endif

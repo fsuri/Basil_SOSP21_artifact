@@ -38,6 +38,8 @@
 #include <set>
 #include <map>
 #include <unordered_map>
+#include <mutex>
+#include <shared_mutex>
 
 template<class T, class V>
 class VersionedKVStore {
@@ -74,7 +76,9 @@ class VersionedKVStore {
 
   /* Global store which keeps key -> (timestamp, value) list. */
   std::unordered_map<std::string, std::set<VersionedValue>> store;
+  std::shared_mutex storeMutex;
   std::unordered_map<std::string, std::map<T, T>> lastReads;
+  std::shared_mutex lastReadsMutex;
   bool inStore(const std::string &key);
   void getValue(const std::string &key, const T &t,
       typename std::set<VersionedKVStore<T, V>::VersionedValue>::iterator &it);
@@ -88,12 +92,14 @@ VersionedKVStore<T, V>::~VersionedKVStore() { }
 
 template<class T, class V>
 bool VersionedKVStore<T, V>::inStore(const std::string &key) {
+  std::shared_lock lock(storeMutex);
   return store.find(key) != store.end() && store[key].size() > 0;
 }
 
 template<class T, class V>
 void VersionedKVStore<T, V>::getValue(const std::string &key, const T &t,
     typename std::set<VersionedKVStore<T, V>::VersionedValue>::iterator &it) {
+  std::shared_lock lock(storeMutex);
   VersionedKVStore<T, V>::VersionedValue v(t);
   it = store[key].upper_bound(v);
 
@@ -111,7 +117,9 @@ template<class T, class V>
 bool VersionedKVStore<T, V>::get(const std::string &key,
     std::pair<T, V> &value) {
   // check for existence of key in store
+
   if (inStore(key)) {
+    std::shared_lock lock(storeMutex);
     VersionedKVStore<T, V>::VersionedValue v = *(store[key].rbegin());
     value = std::make_pair(v.write, v.value);
     return true;
@@ -124,9 +132,11 @@ bool VersionedKVStore<T, V>::get(const std::string &key,
 template<class T, class V>
 bool VersionedKVStore<T, V>::get(const std::string &key, const T &t,
     std::pair<T, V> &value) {
+
   if (inStore(key)) {
     typename std::set<VersionedKVStore<T, V>::VersionedValue>::iterator it;
     getValue(key, t, it);
+    std::shared_lock lock(storeMutex);
     if (it != store[key].end()) {
       value = std::make_pair((*it).write, (*it).value);
       return true;
@@ -138,10 +148,12 @@ bool VersionedKVStore<T, V>::get(const std::string &key, const T &t,
 template<class T, class V>
 bool VersionedKVStore<T, V>::getRange(const std::string &key, const T &t,
     std::pair<T, T> &range) {
+
   if (inStore(key)) {
     typename std::set<VersionedKVStore<T, V>::VersionedValue>::iterator it;
     getValue(key, t, it);
 
+    std::shared_lock lock(storeMutex);
     if (it != store[key].end()) {
       range.first = (*it).write;
       it++;
@@ -156,6 +168,8 @@ bool VersionedKVStore<T, V>::getRange(const std::string &key, const T &t,
 
 template<class T, class V>
 bool VersionedKVStore<T, V>::getUpperBound(const std::string& key, const T& t, T& result) {
+
+  std::shared_lock lock(storeMutex);
   VersionedKVStore<T, V>::VersionedValue v(t);
   auto it = store[key].upper_bound(v);
 
@@ -173,6 +187,7 @@ template<class T, class V>
 void VersionedKVStore<T, V>::put(const std::string &key, const V &value,
     const T &t) {
   // Key does not exist. Create a list and an entry.
+  std::unique_lock lock(storeMutex);
   store[key].insert(VersionedKVStore<T, V>::VersionedValue(t, value));
 }
 
@@ -188,6 +203,7 @@ void VersionedKVStore<T, V>::commitGet(const std::string &key,
     typename std::set<VersionedKVStore<T, V>::VersionedValue>::iterator it;
     getValue(key, readTime, it);
 
+    std::unique_lock lock(storeMutex);
     if (it != store[key].end()) {
       // figure out if anyone has read this version before
       if (lastReads.find(key) != lastReads.end() &&
@@ -202,6 +218,7 @@ void VersionedKVStore<T, V>::commitGet(const std::string &key,
 template<class T, class V>
 bool VersionedKVStore<T, V>::getLastRead(const std::string &key, T &lastRead) {
   if (inStore(key)) {
+    std::shared_lock lock(storeMutex);
     VersionedValue v = *(store[key].rbegin());
     if (lastReads.find(key) != lastReads.end() &&
       lastReads[key].find(v.write) != lastReads[key].end()) {
@@ -227,6 +244,7 @@ bool VersionedKVStore<T, V>::getLastRead(const std::string &key, const T &t,
     // UW_ASSERT(it != store[key].end());
 
     // figure out if anyone has read this version before
+    std::shared_lock lock(storeMutex);
     if (lastReads.find(key) != lastReads.end() &&
       lastReads[key].find((*it).write) != lastReads[key].end()) {
       lastRead = lastReads[key][(*it).write];
@@ -239,6 +257,7 @@ bool VersionedKVStore<T, V>::getLastRead(const std::string &key, const T &t,
 template<class T, class V>
 bool VersionedKVStore<T, V>::getCommittedAfter(const std::string &key,
     const T &t, std::vector<std::pair<T, V>> &values) {
+  std::shared_lock lock(storeMutex);
   VersionedKVStore<T, V>::VersionedValue v(t);
   const auto itr = store.find(key);
   if (itr != store.end()) {

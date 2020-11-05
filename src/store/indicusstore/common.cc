@@ -1045,6 +1045,18 @@ bool ValidateP2Replies(proto::CommitDecision decision, uint64_t view,
   return true;
 }
 
+// void asyncValidateTransactionWrite(){
+//   // --> calls asyncValidateCommittedProof --> calls asyncvalp1 or asyncval2 --> call its cb
+//   // --> calls asyncValidateTransactionWriteCB
+// }
+//
+// void asyncValidateTransactionWriteCB(const proto::CommittedProof &proof,
+//    const std::string &key, const std::string &val){
+//   //XXX do key write tests
+//   //Callback to main shard function.
+// }
+
+
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     const std::string *txnDigest,
     const std::string &key, const std::string &val, const Timestamp &timestamp,

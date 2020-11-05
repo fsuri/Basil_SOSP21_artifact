@@ -400,7 +400,7 @@ int main(int argc, char **argv) {
 
   switch (trans) {
     case TRANS_TCP:
-      tport = new TCPTransport(0.0, 0.0, 0, false);
+      tport = new TCPTransport(0.0, 0.0, 0, false);  //TODO: need to add option for server to know process id, so I can pass it to threadpool etc.
       break;
     case TRANS_UDP:
       tport = new UDPTransport(0.0, 0.0, 0, nullptr);

@@ -232,6 +232,35 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::mutex transportMutex;
 
   std::mutex mainThreadMutex;
+  //finer mainThreadMutexes
+  //if requiring multiple ones, acquire in this order:
+  std::mutex storeMutex;
+  std::mutex dependentsMutex;
+  std::mutex waitingDependenciesMutex;
+  mutable std::mutex ongoingMutex;
+  std::mutex committedMutex;
+  std::mutex abortedMutex;
+  std::mutex preparedMutex;
+  std::mutex preparedReadsMutex;
+  std::mutex preparedWritesMutex;
+  std::mutex committedReadsMutex;
+
+
+  std::mutex rtsMutex;
+
+
+
+ //FB datastructure mutexes  //TODO: use them in all FB functions...
+  std::mutex p1ConflictsMutex;
+  mutable std::mutex p1DecisionsMutex;
+  mutable std::mutex p2DecisionsMutex;
+  std::mutex interestedClientsMutex;
+  std::mutex current_viewsMutex;
+  std::mutex decision_viewsMutex;
+  std::mutex ElectQuorumMutex;
+  std::mutex writebackMessagesMutex;
+
+
   std::mutex signMutex;
 
   //proto mutexes
@@ -243,6 +272,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::mutex p1ProtoMutex;
   std::mutex p2ProtoMutex;
   std::mutex WBProtoMutex;
+
 
   //std::vector<proto::CommittedProof*> testing_committed_proof;
 

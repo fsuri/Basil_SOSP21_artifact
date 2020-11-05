@@ -10,6 +10,7 @@ KeyManager::~KeyManager() {
 }
 
 crypto::PubKey* KeyManager::GetPublicKey(uint64_t id) {
+  std::unique_lock<std::mutex> lock(keyMutex);
   auto itr = publicKeys.find(id);
   if (itr == publicKeys.end()) {
     crypto::PubKey* publicKey =  crypto::LoadPublicKey(keyPath + "/" +
@@ -22,6 +23,7 @@ crypto::PubKey* KeyManager::GetPublicKey(uint64_t id) {
 }
 
 crypto::PrivKey* KeyManager::GetPrivateKey(uint64_t id) {
+  std::unique_lock<std::mutex> lock(keyMutex);
   auto itr = privateKeys.find(id);
   if (itr == privateKeys.end()) {
     crypto::PrivKey* privateKey =  crypto::LoadPrivateKey(keyPath + "/" +

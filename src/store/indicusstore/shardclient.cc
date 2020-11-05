@@ -347,6 +347,170 @@ void ShardClient::GetTimeout(uint64_t reqId) {
   }
 }
 
+
+//TODO: pass in reply as GetUnused. Free it at the end.
+// void ShardClient::HandleReadReplyMulti(const proto::ReadReply* reply) {
+//   auto itr = this->pendingGets.find(reply->req_id());
+//   if (itr == this->pendingGets.end()) {
+//     return; // this is a stale request
+//   }
+//   PendingQuorumGet *req = itr->second;
+//   Debug("[group %i] ReadReply for %lu.", group, reply->req_id());
+//   //dispatch first validation
+//
+//   if (params.validateProofs && params.signedMessages) {
+//     if (reply->has_signed_write()) {
+//       if(params.multithread){
+//       //TODO: RECOMMENT, just testing
+//       auto f = [this, reply](){
+//         return (void*) this->verifier->Verify(this->keyManager->GetPublicKey(reply->signed_write().process_id()),
+//                                               reply->signed_write().data(), reply->signed_write().signature());
+//       };
+//       auto cb = [this, reply, req](void* valid){
+//         if(!valid){
+//           Debug("[group %i] Failed to validate signature for write.", this->group);
+//           return;
+//         }
+//         this->HandleReadReplyCB1(reply, req);
+//       };
+//      }
+//     }
+//   }
+//
+//   HandleReadReplyCB1(reply, req);
+//
+// }
+//
+// void ShardClient::HandleReadReplyCB1(const proto::ReadReply*reply, PendingQuorumGet *req){
+//   const proto::Write *write;
+//   if (params.validateProofs && params.signedMessages) {
+//     if (reply->has_signed_write()) {
+//       if(!validatedPrepared.ParseFromString(reply->signed_write().data())) {
+//         Debug("[group %i] Invalid serialization of write.", group);
+//         return;
+//       }
+//
+//       write = &validatedPrepared;
+//     } else {
+//       if (reply->has_write() && reply->write().has_committed_value()) {
+//         Debug("[group %i] Reply contains unsigned committed value.", group);
+//         return;
+//       }
+//
+//       if (params.verifyDeps && reply->has_write() && reply->write().has_prepared_value()) {
+//         Debug("[group %i] Reply contains unsigned prepared value.", group);
+//         return;
+//       }
+//
+//       write = &reply->write();
+//       UW_ASSERT(!write->has_committed_value());
+//       UW_ASSERT(!write->has_prepared_value() || !params.verifyDeps);
+//     }
+//   } else {
+//     write = &reply->write();
+//   }
+//
+//   // value and timestamp are valid
+//   req->numReplies++;
+//   if (write->has_committed_value() && write->has_committed_timestamp()) {
+//     if (params.validateProofs) {
+//       if (!reply.has_proof()) {
+//         Debug("[group %i] Missing proof for committed write.", group);
+//         return;
+//       }
+//
+//       std::string committedTxnDigest = TransactionDigest(
+//           reply.proof().txn(), params.hashDigest);
+//       //TODO: Need an asyncValidateTransactionWrite --> calls asyncValidateCommittedProof
+//       // split asyncValidateTransactionWrite into 2 components: validation, and its own callback
+//       // which checks write set match, AND uses this callback as its own upon completion.
+//       if (!ValidateTransactionWrite(reply.proof(), &committedTxnDigest,
+//             req->key, write->committed_value(), write->committed_timestamp(),
+//             config, params.signedMessages, keyManager, verifier)) {
+//         Debug("[group %i] Failed to validate committed value for read %lu.",
+//             group, reply.req_id());
+//         // invalid replies can be treated as if we never received a reply from
+//         //     a crashed replica
+//         return;
+//       }
+//     }
+// //TODO: move to next callback.
+//     Timestamp replyTs(write->committed_timestamp());
+//     Debug("[group %i] ReadReply for %lu with committed %lu byte value and ts"
+//         " %lu.%lu.", group, reply.req_id(), write->committed_value().length(),
+//         replyTs.getTimestamp(), replyTs.getID());
+//     if (req->firstCommittedReply || req->maxTs < replyTs) {
+//       req->maxTs = replyTs;
+//       req->maxValue = write->committed_value();
+//     }
+//     req->firstCommittedReply = false;
+//   }
+//
+//
+//   //dispatch Committed if necessary, else call into next CB directly
+// }
+//
+// void ShardClient::HandleReadReplyCB2(const proto::ReadReply* reply, PendingQuorumGet *req){
+//   //XXX do stuff
+//
+//   if (params.maxDepDepth > -2 && write->has_prepared_value() &&
+//       write->has_prepared_timestamp() &&
+//       write->has_prepared_txn_digest()) {
+//     Timestamp preparedTs(write->prepared_timestamp());
+//     Debug("[group %i] ReadReply for %lu with prepared %lu byte value and ts"
+//         " %lu.%lu.", group, reply.req_id(), write->prepared_value().length(),
+//         preparedTs.getTimestamp(), preparedTs.getID());
+//     auto preparedItr = req->prepared.find(preparedTs);
+//     if (preparedItr == req->prepared.end()) {
+//       req->prepared.insert(std::make_pair(preparedTs,
+//             std::make_pair(*write, 1)));
+//     } else if (preparedItr->second.first == *write) {
+//       preparedItr->second.second += 1;
+//     }
+//
+//     if (params.validateProofs && params.signedMessages && params.verifyDeps) {
+//       proto::Signature *sig = req->preparedSigs[preparedTs].add_sigs();
+//       sig->set_process_id(reply.signed_write().process_id());
+//       *sig->mutable_signature() = reply.signed_write().signature();
+//     }
+//   }
+//
+//   if (req->numReplies >= req->rqs) {
+//     if (params.maxDepDepth > -2) {
+//       for (auto preparedItr = req->prepared.rbegin();
+//           preparedItr != req->prepared.rend(); ++preparedItr) {
+//         if (preparedItr->first < req->maxTs) {
+//           break;
+//         }
+//
+//         if (preparedItr->second.second >= req->rds) {
+//           req->maxTs = preparedItr->first;
+//           req->maxValue = preparedItr->second.first.prepared_value();
+//           *req->dep.mutable_write() = preparedItr->second.first;
+//           if (params.validateProofs && params.signedMessages && params.verifyDeps) {
+//             *req->dep.mutable_write_sigs() = req->preparedSigs[preparedItr->first];
+//           }
+//           req->dep.set_involved_group(group);
+//           req->hasDep = true;
+//           break;
+//         }
+//       }
+//     }
+//     pendingGets.erase(itr);
+//     ReadMessage *read = txn.add_read_set();
+//     *read->mutable_key() = req->key;
+//     req->maxTs.serialize(read->mutable_readtime());
+//     readValues[req->key] = req->maxValue;
+//     req->gcb(REPLY_OK, req->key, req->maxValue, req->maxTs, req->dep,
+//         req->hasDep, true);
+//     delete req; //TODO: VERY IMPORTANT: dont delete while something is still dispatched for this reqId
+//     //could cause segfault. Need to keep a counter of things that are dispatched and only delete
+//     //once its gone. (dont need counter: just check in each callback if req still in map.!)
+//   }
+// }
+
+
+
 /* Callback from a group replica on get operation completion. */
 void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   auto itr = this->pendingGets.find(reply.req_id());
