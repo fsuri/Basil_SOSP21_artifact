@@ -238,16 +238,16 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::mutex storeMutex;
   std::mutex dependentsMutex;
   std::mutex waitingDependenciesMutex;
-  mutable std::mutex ongoingMutex;
-  std::mutex committedMutex;
-  std::mutex abortedMutex;
-  std::mutex preparedMutex;
-  std::mutex preparedReadsMutex;
+  mutable std::shared_mutex ongoingMutex;
+  std::shared_mutex committedMutex;
+  std::shared_mutex abortedMutex;
+  std::shared_mutex preparedMutex;
+  std::shared_mutex preparedReadsMutex;
   std::shared_mutex preparedWritesMutex;
-  std::mutex committedReadsMutex;
+  std::shared_mutex committedReadsMutex;
 
 
-  std::mutex rtsMutex;
+  std::shared_mutex rtsMutex;
 
 
 

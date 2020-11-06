@@ -589,6 +589,8 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
     req->firstCommittedReply = false;
   }
 
+  //TODO: change so client does not accept reads with depth > some t... (fine for now since 
+  // servers dont fail and use the same param setting)
   if (params.maxDepDepth > -2 && write->has_prepared_value() &&
       write->has_prepared_timestamp() &&
       write->has_prepared_txn_digest()) {
