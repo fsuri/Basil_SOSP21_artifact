@@ -224,7 +224,8 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
         //FreeReadmessage(readCopy); //TODO: can do in callback of reply?
         return (void*) true;
       };
-      transport->DispatchTP_main(f);
+      //transport->DispatchTP_main(f);
+      transport->DispatchTP_noCB(f);
     }
   } else if (type == phase1.GetTypeName()) {
 
@@ -418,7 +419,7 @@ void Server::HandleRead(const TransportAddress &remote,
     if (params.maxDepDepth > -2) {
       const proto::Transaction *mostRecent = nullptr;
 
-      auto preparedWritesMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(preparedWritesMutex) : std::unique_lock<std::mutex>();
+      auto preparedWritesMutexScope = mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedWritesMutex) : std::shared_lock<std::shared_mutex>();
 
       auto itr = preparedWrites.find(msg.key());
       if (itr != preparedWrites.end() && itr->second.size() > 0) {
@@ -1266,7 +1267,7 @@ proto::ConcurrencyControl::Result Server::DoTAPIROCCCheck(
     // if the value is still valid
     if (!range.second.isValid()) {
       // check pending writes.
-      auto preparedWritesMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(preparedWritesMutex) : std::unique_lock<std::mutex>();
+      auto preparedWritesMutexScope = mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedWritesMutex) : std::shared_lock<std::shared_mutex>();
 
       if (preparedWrites.find(read.key()) != preparedWrites.end()) {
         Debug("[%lu,%lu] ABSTAIN rw conflict w/ prepared key %s.",
@@ -1688,7 +1689,7 @@ void Server::Prepare(const std::string &txnDigest,
   auto ongoingMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(ongoingMutex) : std::unique_lock<std::mutex>();
   auto preparedMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(preparedMutex) : std::unique_lock<std::mutex>();
   auto preparedReadsMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(preparedReadsMutex) : std::unique_lock<std::mutex>();
-  auto preparedWritesMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(preparedWritesMutex) : std::unique_lock<std::mutex>();
+  auto preparedWritesMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
 
   const proto::Transaction *ongoingTxn = ongoing.at(txnDigest);
   auto p = prepared.insert(std::make_pair(txnDigest, std::make_pair(
@@ -1816,7 +1817,7 @@ void Server::Clean(const std::string &txnDigest) {
   auto ongoingMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(ongoingMutex) : std::unique_lock<std::mutex>();
   auto preparedMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(preparedMutex) : std::unique_lock<std::mutex>();
   auto preparedReadsMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(preparedReadsMutex) : std::unique_lock<std::mutex>();
-  auto preparedWritesMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(preparedWritesMutex) : std::unique_lock<std::mutex>();
+  auto preparedWritesMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
 
   auto p1ConflictsMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(p1ConflictsMutex) : std::unique_lock<std::mutex>();
   auto p2DecisionsMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(p2DecisionsMutex) : std::unique_lock<std::mutex>();

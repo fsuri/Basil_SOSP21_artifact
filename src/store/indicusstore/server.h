@@ -53,6 +53,7 @@
 #include <unordered_set>
 #include <ctime>
 #include <mutex>
+#include <shared_mutex>
 
 //#include "lib/threadpool.cc"
 
@@ -242,7 +243,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::mutex abortedMutex;
   std::mutex preparedMutex;
   std::mutex preparedReadsMutex;
-  std::mutex preparedWritesMutex;
+  std::shared_mutex preparedWritesMutex;
   std::mutex committedReadsMutex;
 
 

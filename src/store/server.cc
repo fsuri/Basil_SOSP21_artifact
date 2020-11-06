@@ -651,7 +651,7 @@ int main(int argc, char **argv) {
 		//CPU_SET(num_cpus-1, &cpuset); //last core is for main
 		num_cpus /= FLAGS_indicus_total_processes;
 	  int offset = FLAGS_indicus_process_id * num_cpus;
-		//int offset = 0;
+		//int offset = FLAGS_indicus_process_id;
 		CPU_SET(0 + offset, &cpuset); //first assigned core is for main
 		pthread_setaffinity_np(pthread_self(),	sizeof(cpu_set_t), &cpuset);
 		Debug("MainThread running on CPU %d.", sched_getcpu());
