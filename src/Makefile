@@ -49,8 +49,10 @@ LDFLAGS += $(LIBSECP256K1_LDFLAGS)
 LDFLAGS +=  -lssl -lcrypto -led25519_donna
 
 # Google test framework. This doesn't use pkgconfig
-GTEST_DIR := /usr/src/gtest-1.10.0/googletest
-GMOCK_DIR := /usr/src/gtest-1.10.0/googlemock
+GTEST_DIR := /home/yunhao/florian/googletest-release-1.10.0/googletest
+GMOCK_DIR := /home/yunhao/florian/googletest-release-1.10.0/googlemock
+#GMOCK_DIR := /usr/src/gtest-1.10.0/googletest
+#GMOCK_DIR := /usr/src/gtest-1.10.0/googlemock
 
 CFLAGS += -I$(GTEST_DIR)/include -I$(GMOCK_DIR)/include -isystem $(GTEST_DIR) -isystem $(GMOCK_DIR)
 

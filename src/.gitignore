@@ -5,6 +5,7 @@
 lib/crypto_bench
 lib/batched_sigs_test
 lib/blake3_test
+lib/threadpool_test
 lockserver/client-main
 lockserver/server-main
 lockserver/lockserver-repl

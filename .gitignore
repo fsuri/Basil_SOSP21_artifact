@@ -42,6 +42,8 @@ store/mortystore/tests/branch-generator-test
 store/mortystore/tests/branch-compatible-test
 store/janusstore/tests/janus-client-test
 
+store/indicusstore/proto_bench
+
 
 ################################################################################
 # vim
