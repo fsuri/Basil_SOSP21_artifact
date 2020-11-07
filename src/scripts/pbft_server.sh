@@ -1,0 +1,1 @@
+export DEBUG=store/pbftstore/*; store/server --config_path shard-r0.config --group_idx 0 --num_groups 1 --num_shards 1 --replica_idx 0 --protocol pbft --num_keys 1 --debug_stats --indicus_key_path keys

@@ -49,6 +49,9 @@
 #include "store/indicusstore/server.h"
 #include "store/pbftstore/replica.h"
 #include "store/pbftstore/server.h"
+// HotStuff
+#include "store/hotstuffstore/replica.h"
+#include "store/hotstuffstore/server.h"
 
 #include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
 #include "store/indicusstore/common.h"
@@ -64,7 +67,9 @@ enum protocol_t {
   PROTO_JANUS,
   PROTO_MORTY,
   PROTO_INDICUS,
-	PROTO_PBFT
+	PROTO_PBFT,
+    // HotStuff
+    PROTO_HOTSTUFF
 };
 
 enum transmode_t {
@@ -102,7 +107,8 @@ const std::string protocol_args[] = {
   "janus",
   "morty",
   "indicus",
-	"pbft"
+	"pbft",
+    "hotstuff"
 };
 const protocol_t protos[] {
   PROTO_TAPIR,
@@ -111,7 +117,8 @@ const protocol_t protos[] {
   PROTO_JANUS,
   PROTO_MORTY,
   PROTO_INDICUS,
-	PROTO_PBFT
+      PROTO_PBFT,
+      PROTO_HOTSTUFF
 };
 static bool ValidateProtocol(const char* flagname,
     const std::string &value) {
@@ -484,88 +491,102 @@ int main(int argc, char **argv) {
   KeyManager keyManager(FLAGS_indicus_key_path, keyType, true);
 
   switch (proto) {
-    case PROTO_TAPIR: {
+  case PROTO_TAPIR: {
       server = new tapirstore::Server(FLAGS_tapir_linearizable);
       replica = new replication::ir::IRReplica(config, FLAGS_group_idx, FLAGS_replica_idx,
-          tport, dynamic_cast<replication::ir::IRAppReplica *>(server));
+                                               tport, dynamic_cast<replication::ir::IRAppReplica *>(server));
       break;
-    }
-    case PROTO_WEAK: {
+  }
+  case PROTO_WEAK: {
       server = new weakstore::Server(config, FLAGS_group_idx, FLAGS_replica_idx, tport);
       break;
-    }
-    case PROTO_STRONG: {
+  }
+  case PROTO_STRONG: {
       server = new strongstore::Server(strongMode, FLAGS_clock_skew,
-          FLAGS_clock_error);
+                                       FLAGS_clock_error);
       replica = new replication::vr::VRReplica(config, FLAGS_group_idx, FLAGS_replica_idx,
-          tport, 1, dynamic_cast<replication::AppReplica *>(server));
+                                               tport, 1, dynamic_cast<replication::AppReplica *>(server));
       break;
-    }
-    case PROTO_JANUS: {
+  }
+  case PROTO_JANUS: {
       server = new janusstore::Server(config, FLAGS_group_idx, FLAGS_replica_idx, tport);
       break;
-    }
-    case PROTO_MORTY: {
+  }
+  case PROTO_MORTY: {
       server = new mortystore::Server(config, FLAGS_group_idx, FLAGS_replica_idx,
-          tport, FLAGS_debug_stats, FLAGS_prepare_batch_period);
+                                      tport, FLAGS_debug_stats, FLAGS_prepare_batch_period);
       break;
-    }
-    case PROTO_INDICUS: {
+  }
+  case PROTO_INDICUS: {
       uint64_t readDepSize = 0;
       switch (read_dep) {
-        case READ_DEP_ONE:
+      case READ_DEP_ONE:
           readDepSize = 1;
           break;
-        case READ_DEP_ONE_HONEST:
+      case READ_DEP_ONE_HONEST:
           readDepSize = config.f + 1;
           break;
-        default:
+      default:
           NOT_REACHABLE();
       }
       indicusstore::OCCType indicusOCCType;
       switch (occ_type) {
-        case OCC_TYPE_TAPIR:
+      case OCC_TYPE_TAPIR:
           indicusOCCType = indicusstore::TAPIR;
           break;
-        case OCC_TYPE_MVTSO:
+      case OCC_TYPE_MVTSO:
           indicusOCCType = indicusstore::MVTSO;
           break;
-        default:
+      default:
           NOT_REACHABLE();
       }
       uint64_t timeDelta = (FLAGS_indicus_time_delta / 1000) << 32;
       timeDelta = timeDelta | (FLAGS_indicus_time_delta % 1000) * 1000;
 
 
-			indicusstore::Parameters params(FLAGS_indicus_sign_messages,
-				FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
-				FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
-        FLAGS_indicus_max_dep_depth, readDepSize,
-        FLAGS_indicus_read_reply_batch, FLAGS_indicus_adjust_batch_size,
-        FLAGS_indicus_shared_mem_batch, FLAGS_indicus_shared_mem_verify,
-        FLAGS_indicus_merkle_branch_factor, indicusstore::InjectFailure(),
-				FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, FLAGS_indicus_batch_verification_size);
-			Debug("Starting new server object");
+      indicusstore::Parameters params(FLAGS_indicus_sign_messages,
+                                      FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
+                                      FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
+                                      FLAGS_indicus_max_dep_depth, readDepSize,
+                                      FLAGS_indicus_read_reply_batch, FLAGS_indicus_adjust_batch_size,
+                                      FLAGS_indicus_shared_mem_batch, FLAGS_indicus_shared_mem_verify,
+                                      FLAGS_indicus_merkle_branch_factor, indicusstore::InjectFailure(),
+                                      FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, FLAGS_indicus_batch_verification_size);
+      Debug("Starting new server object");
       server = new indicusstore::Server(config, FLAGS_group_idx,
-          FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
-          &keyManager, params, timeDelta, indicusOCCType, part,
-          FLAGS_indicus_sig_batch_timeout);
+                                        FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
+                                        &keyManager, params, timeDelta, indicusOCCType, part,
+                                        FLAGS_indicus_sig_batch_timeout);
       break;
-    }
-		case PROTO_PBFT: {
-			server = new pbftstore::Server(config, &keyManager,
-				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
-				FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-        FLAGS_indicus_time_delta, part);
-			replica = new pbftstore::Replica(config, &keyManager,
-				dynamic_cast<pbftstore::App *>(server),
-				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, FLAGS_indicus_sig_batch_timeout,
-				FLAGS_indicus_sig_batch, FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
-			break;
-		}
-    default: {
+  }
+  case PROTO_PBFT: {
+      server = new pbftstore::Server(config, &keyManager,
+                                     FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
+                                     FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+                                     FLAGS_indicus_time_delta, part);
+      replica = new pbftstore::Replica(config, &keyManager,
+                                       dynamic_cast<pbftstore::App *>(server),
+                                       FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, FLAGS_indicus_sig_batch_timeout,
+                                       FLAGS_indicus_sig_batch, FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
+      break;
+  }
+
+      // HotStuff
+  case PROTO_HOTSTUFF: {
+      server = new hotstuffstore::Server(config, &keyManager,
+                                     FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
+                                     FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+                                     FLAGS_indicus_time_delta, part);
+      replica = new hotstuffstore::Replica(config, &keyManager,
+                                       dynamic_cast<hotstuffstore::App *>(server),
+                                       FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, FLAGS_indicus_sig_batch_timeout,
+                                       FLAGS_indicus_sig_batch, FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
+      break;
+  }
+            
+  default: {
       NOT_REACHABLE();
-    }
+  }
   }
 
   // parse keys
