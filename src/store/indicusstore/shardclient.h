@@ -304,23 +304,27 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   //multithreaded options:
   void HandleReadReplyMulti(proto::ReadReply* reply);
   void HandleReadReplyCB1(proto::ReadReply*reply);
-  void HandleReadReplyCB2(const proto::ReadReply* reply, const proto::Write *write);
+  void HandleReadReplyCB2(proto::ReadReply* reply, proto::Write *write);
 
 
 //multithreading Support
 //TODO seperate the locks for these!!!!
+  std::mutex writeProtoMutex;
   std::mutex readProtoMutex;
   std::mutex p1ProtoMutex;
   std::mutex p2ProtoMutex;
 
+  proto::Write *GetUnusedWrite();
   proto::ReadReply *GetUnusedReadReply();
   proto::Phase1Reply *GetUnusedPhase1Reply();
   proto::Phase2Reply *GetUnusedPhase2Reply();
 
+  void FreeWrite(proto::Write *write);
   void FreeReadReply(proto::ReadReply *reply);
   void FreePhase1Reply(proto::Phase1Reply *reply);
   void FreePhase2Reply(proto::Phase2Reply *reply);
 
+  std::vector<proto::Write *> writes;
   std::vector<proto::ReadReply *> readReplies;
   std::vector<proto::Phase1Reply *> p1Replies;
   std::vector<proto::Phase2Reply *> p2Replies;

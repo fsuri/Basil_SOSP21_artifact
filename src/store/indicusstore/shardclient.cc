@@ -66,8 +66,15 @@ ShardClient::~ShardClient() {
 void ShardClient::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
   if (type == readReply.GetTypeName()) {
-    readReply.ParseFromString(data);
-    HandleReadReply(readReply);
+    if(true){
+      proto::ReadReply *curr_read = GetUnusedReadReply();
+      curr_read->ParseFromString(data);
+      HandleReadReplyMulti(curr_read);
+    }
+    else{
+      readReply.ParseFromString(data);
+      HandleReadReply(readReply);
+    }
   } else if (type == phase1Reply.GetTypeName()) {
     phase1Reply.ParseFromString(data);
     HandlePhase1Reply(phase1Reply);
@@ -348,6 +355,9 @@ void ShardClient::GetTimeout(uint64_t reqId) {
 }
 
 
+
+
+
 //TODO: pass in reply as GetUnused. Free it at the end.
 void ShardClient::HandleReadReplyMulti(proto::ReadReply* reply) {
   auto itr = this->pendingGets.find(reply->req_id());
@@ -389,41 +399,47 @@ void ShardClient::HandleReadReplyCB1(proto::ReadReply*reply){
   }
   PendingQuorumGet *req = itr->second;
 
-  proto::Write *write; //TODO: Need to allocate (use GetUnusedWrite)
+  proto::Write *write = GetUnusedWrite(); //TODO: Need to allocate (use GetUnusedWrite)
   // XXX??? how to free in some cases, but assign write from reply->write otherwise...
   //Answer: probably need to make a copy. Or call release? But if I do that, not sure if I can re-use reply
   //Try this: Call getUnusedWrite and release in the if blocks respectively.
   // and always call FreeUnusedWrite  --> this way I can recycle the memory of the released write?
 
-  //TODO XXX: Add FreeReadReply, and FreeWrite to all returns
+
+  //TODO: Try this first, and if it works, add it to handle p1 and p2 as well. (not as important)
 
   if (params.validateProofs && params.signedMessages) {
     if (reply->has_signed_write()) {
+      //write = GetUnusedWrite();
       if(!write->ParseFromString(reply->signed_write().data())) {
         Debug("[group %i] Invalid serialization of write.", group);
+        FreeReadReply(reply);
+        FreeWrite(write);
         return;
       }
 
     } else {
       if (reply->has_write() && reply->write().has_committed_value()) {
         Debug("[group %i] Reply contains unsigned committed value.", group);
+        FreeReadReply(reply);
         return;
       }
 
       if (params.verifyDeps && reply->has_write() && reply->write().has_prepared_value()) {
         Debug("[group %i] Reply contains unsigned prepared value.", group);
+        FreeReadReply(reply);
         return;
       }
 
-      //write = &reply->write();
-      write = reply->release_write();
+      *write = reply->write();
+      //write = reply->release_write();
 
       UW_ASSERT(!write->has_committed_value());
       UW_ASSERT(!write->has_prepared_value() || !params.verifyDeps);
     }
   } else {
-    //write = &reply->write();
-    write = reply->release_write();
+    *write = reply->write();
+    //write = reply->release_write();
   }
 
   // value and timestamp are valid
@@ -432,6 +448,8 @@ void ShardClient::HandleReadReplyCB1(proto::ReadReply*reply){
     if (params.validateProofs) {
       if (!reply->has_proof()) {
         Debug("[group %i] Missing proof for committed write.", group);
+        FreeReadReply(reply);
+        FreeWrite(write);
         return;
       }
 
@@ -443,7 +461,8 @@ void ShardClient::HandleReadReplyCB1(proto::ReadReply*reply){
        if(!result){
          Debug("[group %i] Failed to validate committed value for read %lu.",
              this->group, reply->req_id());
-          ///TODO: XXX Free datastructures --> FreeReadReply(reply)
+         FreeReadReply(reply);
+         FreeWrite(write);
          return;
        }
        else{
@@ -459,10 +478,12 @@ void ShardClient::HandleReadReplyCB1(proto::ReadReply*reply){
 HandleReadReplyCB2(reply, write);
 }
 
-void ShardClient::HandleReadReplyCB2(const proto::ReadReply* reply, const proto::Write *write){
+void ShardClient::HandleReadReplyCB2(proto::ReadReply* reply, proto::Write *write){
 
   auto itr = this->pendingGets.find(reply->req_id());
   if (itr == this->pendingGets.end()) {
+    FreeReadReply(reply);
+    FreeWrite(write);
     return; // this is a stale request
     //Or has already terminated (i.e. f+1 reads where received and processed before our verification returned)
   }
@@ -539,7 +560,8 @@ void ShardClient::HandleReadReplyCB2(const proto::ReadReply* reply, const proto:
     //could cause segfault. Need to keep a counter of things that are dispatched and only delete
     //once its gone. (dont need counter: just check in each callback if req still in map.!)
   }
-  //TODO: FreeReadReply(reply); FreeWrite(write);
+  FreeReadReply(reply);
+  FreeWrite(write);
 }
 
 
@@ -924,6 +946,20 @@ void ShardClient::Phase1Decision(
 
 ///////////////// Utility /////////////////////////
 
+
+proto::Write *ShardClient::GetUnusedWrite() {
+  std::unique_lock<std::mutex> lock(writeProtoMutex);
+  proto::Write *write;
+  if (writes.size() > 0) {
+    write = writes.back();
+    write->Clear();
+    writes.pop_back();
+  } else {
+    write = new proto::Write();
+  }
+  return write;
+}
+
 proto::ReadReply *ShardClient::GetUnusedReadReply() {
   std::unique_lock<std::mutex> lock(readProtoMutex);
   proto::ReadReply *reply;
@@ -961,6 +997,13 @@ proto::Phase2Reply *ShardClient::GetUnusedPhase2Reply() {
     reply = new proto::Phase2Reply();
   }
   return reply;
+}
+
+
+void ShardClient::FreeWrite(proto::Write *write) {
+  std::unique_lock<std::mutex> lock(writeProtoMutex);
+  //reply->Clear();
+  writes.push_back(write);
 }
 
 void ShardClient::FreeReadReply(proto::ReadReply *reply) {
