@@ -192,6 +192,13 @@ bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     const transport::Configuration *config, bool signedMessages,
     KeyManager *keyManager, Verifier *verifier);
 
+void asyncValidateTransactionWrite(const proto::CommittedProof &proof,
+    const std::string *txnDigest,
+    const std::string &key, const std::string &val, const Timestamp &timestamp,
+    const transport::Configuration *config, bool signedMessages,
+    KeyManager *keyManager, Verifier *verifier, mainThreadCallback cb, Transport* transport,
+    bool multithread);
+
 // check must validate that proof replies are from all involved shards
 bool ValidateProofCommit1(const proto::CommittedProof &proof,
     const std::string &txnDigest,

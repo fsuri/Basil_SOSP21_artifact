@@ -301,6 +301,11 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   void Phase1Decision(
       std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
 
+  //multithreaded options:
+  void HandleReadReplyMulti(proto::ReadReply* reply);
+  void HandleReadReplyCB1(proto::ReadReply*reply);
+  void HandleReadReplyCB2(const proto::ReadReply* reply, const proto::Write *write);
+
 
 //multithreading Support
 //TODO seperate the locks for these!!!!

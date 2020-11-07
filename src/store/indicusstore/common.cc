@@ -1045,16 +1045,72 @@ bool ValidateP2Replies(proto::CommitDecision decision, uint64_t view,
   return true;
 }
 
-// void asyncValidateTransactionWrite(){
-//   // --> calls asyncValidateCommittedProof --> calls asyncvalp1 or asyncval2 --> call its cb
-//   // --> calls asyncValidateTransactionWriteCB
-// }
-//
-// void asyncValidateTransactionWriteCB(const proto::CommittedProof &proof,
-//    const std::string &key, const std::string &val){
-//   //XXX do key write tests
-//   //Callback to main shard function.
-// }
+void asyncValidateTransactionWrite(const proto::CommittedProof &proof,
+    const std::string *txnDigest,
+    const std::string &key, const std::string &val, const Timestamp &timestamp,
+    const transport::Configuration *config, bool signedMessages,
+    KeyManager *keyManager, Verifier *verifier, mainThreadCallback mcb, Transport* transport,
+    bool multithread){
+      if (proof.txn().client_id() == 0UL && proof.txn().client_seq_num() == 0UL) {
+        // TODO: this is unsafe, but a hack so that we can bootstrap a benchmark
+        //    without needing to write all existing data with transactions
+        return mcb((void*) true);
+      }
+      if (Timestamp(proof.txn().timestamp()) != timestamp) {
+        Debug("VALIDATE timestamp failed for txn %lu.%lu: txn ts %lu.%lu != returned"
+            " ts %lu.%lu.", proof.txn().client_id(), proof.txn().client_seq_num(),
+            proof.txn().timestamp().timestamp(), proof.txn().timestamp().id(),
+            timestamp.getTimestamp(), timestamp.getID());
+        return mcb((void*) false);
+      }
+
+      bool keyInWriteSet = false;
+      for (const auto &write : proof.txn().write_set()) {
+        if (write.key() == key) {
+          keyInWriteSet = true;
+          if (write.value() != val) {
+            Debug("VALIDATE value failed for txn %lu.%lu key %s: txn value %s != "
+                "returned value %s.", proof.txn().client_id(),
+                proof.txn().client_seq_num(), BytesToHex(key, 16).c_str(),
+                BytesToHex(write.value(), 16).c_str(), BytesToHex(val, 16).c_str());
+            return mcb((void*) false);
+          }
+          break;
+        }
+      }
+
+      if (!keyInWriteSet) {
+        Debug("VALIDATE value failed for txn %lu.%lu; key %s not written.",
+            proof.txn().client_id(), proof.txn().client_seq_num(),
+            BytesToHex(key, 16).c_str());
+        return mcb((void*) false);
+      }
+
+      if (!signedMessages){
+        return mcb((void*) true);
+      }
+      else{
+        auto cb = [mcb, &proof](void* result){
+          if(!result){
+            Debug("VALIDATE CommittedProof failed for txn %lu.%lu.",
+                proof.txn().client_id(), proof.txn().client_seq_num());
+          }
+          mcb(result);
+        };
+
+        asyncValidateCommittedProof(proof, txnDigest, keyManager, config, verifier,
+          std::move(cb), transport, multithread, false);
+      }
+}
+
+void asyncValidateTransactionWriteCB(const proto::CommittedProof &proof,
+   const std::string &key, const std::string &val, mainThreadCallback mcb, void* result){
+   mcb(result);
+}
+
+
+
+
 
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,
