@@ -30,7 +30,7 @@ Client::Client(const transport::Configuration& config, int nGroups, int nShards,
 
   bclient.reserve(ngroups);
 
-  Debug("Initializing HotStuff client with id [%lu] %lu", client_id, ngroups);
+  Notice("Initializing HotStuff client with id [%lu] %lu", client_id, ngroups);
 
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
@@ -38,7 +38,7 @@ Client::Client(const transport::Configuration& config, int nGroups, int nShards,
         signMessages, validateProofs, keyManager, &stats);
   }
 
-  Debug("HotStuff client [%lu] created! %lu %lu", client_id, ngroups,
+  Notice("HotStuff client [%lu] created! %lu %lu", client_id, ngroups,
       bclient.size());
 }
 

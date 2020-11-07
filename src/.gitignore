@@ -2,6 +2,8 @@
 
 .DS_Store
 
+stats-0.json
+
 lib/crypto_bench
 lib/batched_sigs_test
 lib/blake3_test
