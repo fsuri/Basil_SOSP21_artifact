@@ -92,108 +92,133 @@ void Replica::CreateHMACedMessage(const ::google::protobuf::Message &msg, proto:
 
 void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
                           const string &d, void *meta_data) {
-  string type;
-  string data;
-  bool recvSignedMessage = false;
+    string type;
+    string data;
+    bool recvSignedMessage = false;
 
-  Debug("Received message of type %s", t.c_str());
+    Debug("Received message of type %s", t.c_str());
 
-  if (t == tmpsignedMessage.GetTypeName()) {
-    if (!tmpsignedMessage.ParseFromString(d)) {
-      return;
-    }
+    if (t == tmpsignedMessage.GetTypeName()) {
+        if (!tmpsignedMessage.ParseFromString(d)) {
+            return;
+        }
 
-    if (!ValidateHMACedMessage(tmpsignedMessage, data, type)) {
-      Debug("Message is invalid!");
-      stats->Increment("invalid_sig",1);
-      return;
-    }
-    recvSignedMessage = true;
-    Debug("Message is valid!");
-    Debug("Message is from %lu", tmpsignedMessage.replica_id());
-  } else {
-    type = t;
-    data = d;
-  }
-
-  if (type == recvrequest.GetTypeName()) {
-    recvrequest.ParseFromString(data);
-    HandleRequest(remote, recvrequest);
-  } else if (type == recvbatchedRequest.GetTypeName()) {
-    recvbatchedRequest.ParseFromString(data);
-    HandleBatchedRequest(remote, recvbatchedRequest);
-  } else if (type == recvab.GetTypeName()) {
-    recvab.ParseFromString(data);
-    if (slots.getSlotDigest(recvab.seqnum(), recvab.viewnum()) == recvab.digest()) {
-      stats->Increment("valid_ab", 1);
-
-      proto::Preprepare preprepare;
-      preprepare.set_seqnum(recvab.seqnum());
-      preprepare.set_viewnum(recvab.viewnum());
-      preprepare.set_digest(recvab.digest());
-      sendMessageToAll(preprepare);
+        if (!ValidateHMACedMessage(tmpsignedMessage, data, type)) {
+            Debug("Message is invalid!");
+            stats->Increment("invalid_sig",1);
+            return;
+        }
+        recvSignedMessage = true;
+        Debug("Message is valid!");
+        Debug("Message is from %lu", tmpsignedMessage.replica_id());
     } else {
-      stats->Increment("invalid_ab", 1);
-    }
-  } else if (type == recvrr.GetTypeName()) {
-    recvrr.ParseFromString(data);
-    std::string digest = recvrr.digest();
-    if (requests.find(digest) != requests.end()) {
-      Debug("Resending request");
-      stats->Increment("request_rr",1);
-      DebugHash(digest);
-      proto::Request reqReply;
-      reqReply.set_digest(digest);
-      *reqReply.mutable_packed_msg() = requests[digest];
-      transport->SendMessage(this, remote, reqReply);
-    }
-    if (batchedRequests.find(digest) != batchedRequests.end()) {
-      Debug("Resending batch");
-      stats->Increment("batch_rr",1);
-      DebugHash(digest);
-      transport->SendMessage(this, remote, batchedRequests[digest]);
-    }
-  } else if (type == recvpreprepare.GetTypeName()) {
-    if (signMessages && !recvSignedMessage) {
-      stats->Increment("invalid_sig_pp",1);
-      return;
+        type = t;
+        data = d;
     }
 
-    recvpreprepare.ParseFromString(data);
-    HandlePreprepare(remote, recvpreprepare, tmpsignedMessage);
-  } else if (type == recvprepare.GetTypeName()) {
-    recvprepare.ParseFromString(data);
-    if (signMessages && !recvSignedMessage) {
-      stats->Increment("invalid_sig_p",1);
-      return;
+    if (type == recvrequest.GetTypeName()) {
+        // Prepare message from shardclient
+        recvrequest.ParseFromString(data);
+        HandleRequest(remote, recvrequest);
+    } else if (true) {
+        // Other requests from shardclient (Read)
+        Notice("Sending request to app");
+        ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+        if (reply != nullptr) {
+            transport->SendMessage(this, remote, *reply);
+            delete reply;
+        } else {
+            Debug("Invalid request of type %s", type.c_str());
+        }
+    } else if (type == recvgrouped.GetTypeName()) {
+        Panic("unimplemented: group messages received by replica");
+        // recvgrouped.ParseFromString(data);
+        // HandleGrouped(remote, recvgrouped);
+    } else if (type == recvbatchedRequest.GetTypeName()) {
+        Panic("unimplemented: batch request message received by replica");
+        // recvbatchedRequest.ParseFromString(data);
+        // HandleBatchedRequest(remote, recvbatchedRequest);
+    } else if (type == recvab.GetTypeName()) {
+        Panic("unimplemented: ABRequest message received by replica");
+        // recvab.ParseFromString(data);
+        // if (slots.getSlotDigest(recvab.seqnum(), recvab.viewnum()) == recvab.digest()) {
+        //     stats->Increment("valid_ab", 1);
+
+        //     proto::Preprepare preprepare;
+        //     preprepare.set_seqnum(recvab.seqnum());
+        //     preprepare.set_viewnum(recvab.viewnum());
+        //     preprepare.set_digest(recvab.digest());
+        //     sendMessageToAll(preprepare);
+        // } else {
+        //     stats->Increment("invalid_ab", 1);
+        // }
+    } else if (type == recvrr.GetTypeName()) {
+        Panic("unimplemented: RequestRequest message received by replica");
+        // recvrr.ParseFromString(data);
+        // std::string digest = recvrr.digest();
+        // if (requests.find(digest) != requests.end()) {
+        //     Debug("Resending request");
+        //     stats->Increment("request_rr",1);
+        //     DebugHash(digest);
+        //     proto::Request reqReply;
+        //     reqReply.set_digest(digest);
+        //     *reqReply.mutable_packed_msg() = requests[digest];
+        //     transport->SendMessage(this, remote, reqReply);
+        // }
+        // if (batchedRequests.find(digest) != batchedRequests.end()) {
+        //     Debug("Resending batch");
+        //     stats->Increment("batch_rr",1);
+        //     DebugHash(digest);
+        //     transport->SendMessage(this, remote, batchedRequests[digest]);
+        // }
+    } else if (type == recvpreprepare.GetTypeName()) {
+        Panic("unimplemented: PBFT message received by replica");
+        // if (signMessages && !recvSignedMessage) {
+        //     stats->Increment("invalid_sig_pp",1);
+        //     return;
+        // }
+
+        // recvpreprepare.ParseFromString(data);
+        // HandlePreprepare(remote, recvpreprepare, tmpsignedMessage);
+    } else if (type == recvprepare.GetTypeName()) {
+        Panic("unimplemented: PBFT message received by replica");
+        // recvprepare.ParseFromString(data);
+        // if (signMessages && !recvSignedMessage) {
+        //     stats->Increment("invalid_sig_p",1);
+        //     return;
+        // }
+
+        // HandlePrepare(remote, recvprepare, tmpsignedMessage);
+    } else if (type == recvcommit.GetTypeName()) {
+        Panic("unimplemented: PBFT message received by replica");
+        // recvcommit.ParseFromString(data);
+        // if (signMessages && !recvSignedMessage) {
+        //     stats->Increment("invalid_sig_c",1);
+        //     return;
+        // }
+
+        // HandleCommit(remote, recvcommit, tmpsignedMessage);
     }
+}
 
-    HandlePrepare(remote, recvprepare, tmpsignedMessage);
-  } else if (type == recvcommit.GetTypeName()) {
-    recvcommit.ParseFromString(data);
-    if (signMessages && !recvSignedMessage) {
-      stats->Increment("invalid_sig_c",1);
-      return;
-    }
+void Replica::HandleRequest(const TransportAddress &remote,
+                               const proto::Request &request) {
+  Notice("Handling request message");
 
-    HandleCommit(remote, recvcommit, tmpsignedMessage);
-  } else if (type == recvgrouped.GetTypeName()) {
-    recvgrouped.ParseFromString(data);
+  string digest = request.digest();
 
-    HandleGrouped(remote, recvgrouped);
-  } else {
-    Debug("Sending request to app");
-    ::google::protobuf::Message* reply = app->HandleMessage(type, data);
-    if (reply != nullptr) {
-      transport->SendMessage(this, remote, *reply);
-      delete reply;
-    } else {
-      Debug("Invalid request of type %s", type.c_str());
-    }
+  if (requests.find(digest) == requests.end()) {
+    Notice("new request: %s", request.packed_msg().type().c_str());
 
+    requests[digest] = request.packed_msg();
+    // clone remote mapped to request for reply
+    replyAddrs[digest] = remote.clone();
+
+    // use digest to go through HotStuff
   }
 }
 
+    
 bool Replica::sendMessageToPrimary(const ::google::protobuf::Message& msg) {
   int primaryIdx = config.GetLeaderIndex(currentView);
   if (signMessages) {
@@ -236,47 +261,6 @@ bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
   }
 }
 
-void Replica::HandleRequest(const TransportAddress &remote,
-                               const proto::Request &request) {
-  Debug("Handling request message");
-
-  string digest = request.digest();
-  DebugHash(digest);
-
-  if (requests.find(digest) == requests.end()) {
-    Debug("new request: %s", request.packed_msg().type().c_str());
-
-    requests[digest] = request.packed_msg();
-
-    // clone remote mapped to request for reply
-    replyAddrs[digest] = remote.clone();
-
-    int currentPrimaryIdx = config.GetLeaderIndex(currentView);
-    if (currentPrimaryIdx == idx) {
-      stats->Increment("handle_request",1);
-      pendingBatchedDigests[nextBatchNum++] = digest;
-      if (pendingBatchedDigests.size() >= maxBatchSize) {
-        Debug("Batch is full, sending");
-        if (batchTimerRunning) {
-          transport->CancelTimer(batchTimerId);
-          batchTimerRunning = false;
-        }
-        sendBatchedPreprepare();
-      } else if (!batchTimerRunning) {
-        batchTimerRunning = true;
-        Debug("Starting batch timer");
-        batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
-          Debug("Batch timer expired, sending");
-          this->batchTimerRunning = false;
-          this->sendBatchedPreprepare();
-        });
-      }
-    }
-
-    // this could be the message that allows us to execute a slot
-    executeSlots();
-  }
-}
 
 void Replica::sendBatchedPreprepare() {
   proto::BatchedRequest batchedRequest;

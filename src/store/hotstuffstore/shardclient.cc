@@ -76,56 +76,56 @@ bool ShardClient::validateReadProof(const proto::CommitProof& commitProof, const
 void ShardClient::ReceiveMessage(const TransportAddress &remote,
     const std::string &t, const std::string &d,
     void *meta_data) {
-      Debug("handling message of type %s", t.c_str());
-  proto::SignedMessage signedMessage;
-  std::string type;
-  std::string data;
+    Debug("handling message of type %s", t.c_str());
+    proto::SignedMessage signedMessage;
+    std::string type;
+    std::string data;
 
-  bool recvSignedMessage = false;
-  if (t == signedMessage.GetTypeName()) {
-    if (!signedMessage.ParseFromString(d)) {
-      return;
+    bool recvSignedMessage = false;
+    if (t == signedMessage.GetTypeName()) {
+        if (!signedMessage.ParseFromString(d)) {
+            return;
+        }
+
+        if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
+            Debug("signature was invalid");
+            return;
+        }
+        recvSignedMessage = true;
+        Debug("signature was valid");
+    } else {
+        type = t;
+        data = d;
     }
 
-    if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
-      Debug("signature was invalid");
-      return;
+    proto::ReadReply readReply;
+    proto::TransactionDecision transactionDecision;
+    proto::GroupedDecisionAck groupedDecisionAck;
+    if (type == readReply.GetTypeName()) {
+        readReply.ParseFromString(data);
+
+        if (signMessages && !recvSignedMessage) {
+            return;
+        }
+
+        HandleReadReply(readReply, signedMessage);
+    } else if (type == transactionDecision.GetTypeName()) {
+        transactionDecision.ParseFromString(data);
+
+        if (signMessages && !recvSignedMessage) {
+            return;
+        }
+
+        HandleTransactionDecision(transactionDecision, signedMessage);
+    } else if (type == groupedDecisionAck.GetTypeName()) {
+        groupedDecisionAck.ParseFromString(data);
+
+        if (signMessages && !recvSignedMessage) {
+            return;
+        }
+
+        HandleWritebackReply(groupedDecisionAck, signedMessage);
     }
-    recvSignedMessage = true;
-    Debug("signature was valid");
-  } else {
-    type = t;
-    data = d;
-  }
-
-  proto::ReadReply readReply;
-  proto::TransactionDecision transactionDecision;
-  proto::GroupedDecisionAck groupedDecisionAck;
-  if (type == readReply.GetTypeName()) {
-    readReply.ParseFromString(data);
-
-    if (signMessages && !recvSignedMessage) {
-      return;
-    }
-
-    HandleReadReply(readReply, signedMessage);
-  } else if (type == transactionDecision.GetTypeName()) {
-    transactionDecision.ParseFromString(data);
-
-    if (signMessages && !recvSignedMessage) {
-      return;
-    }
-
-    HandleTransactionDecision(transactionDecision, signedMessage);
-  } else if (type == groupedDecisionAck.GetTypeName()) {
-    groupedDecisionAck.ParseFromString(data);
-
-    if (signMessages && !recvSignedMessage) {
-      return;
-    }
-
-    HandleWritebackReply(groupedDecisionAck, signedMessage);
-  }
 }
 
 // ================================
