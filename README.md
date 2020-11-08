@@ -74,6 +74,13 @@ To install BLAKE3
 4. `sudo cp libblake3.so /usr/local/lib/`
 5. `sudo ldconfig`
 
+To install ed25519-donna 
+1. `git clone https://github.com/floodyberry/ed25519-donna`
+2. `cd ed25519-donna`
+3. `gcc -fPIC -shared -O3 -m64 -o libed25519_donna.so ed25519.c -lssl -lcrypto`
+4. `sudo cp libed25519_donna.so /usr/local/lib`
+5. `sudo ldconfig`
+
 ### On Mac
 The known Mac equivalents for the above packages, available through `brew install` are:
 - libevent
