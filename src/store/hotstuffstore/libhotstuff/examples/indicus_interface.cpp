@@ -1,7 +1,10 @@
 #include "indicus_interface.h"
+#include <iostream>
+
 
 namespace hotstuffstore {
     void IndicusInterface::propose(const std::string& hash, hotstuff_exec_callback execb) {
+        //std::cout << "############# HotStuff Interface #############" << std::endl;
         execb(hash);
     }
 }
