@@ -17,6 +17,10 @@
 #include "store/hotstuffstore/app.h"
 #include "store/hotstuffstore/common.h"
 
+// HotStuff library
+#include "store/hotstuffstore/libhotstuff/examples/indicus_interface.h"
+
+
 namespace hotstuffstore {
 
 class Replica : public TransportReceiver {
@@ -48,6 +52,7 @@ public:
  private:
   // HotStuff
   typedef std::function<void(const std::string&)> hotstuff_exec_callback;
+  IndicusInterface hotstuff_interface;
   
   const transport::Configuration &config;
   KeyManager *keyManager;

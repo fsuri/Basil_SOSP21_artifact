@@ -178,8 +178,8 @@ void Replica::HandleRequest(const TransportAddress &remote,
         }
     };
 
-    // use digest to go through HotStuff
-    execb(digest);
+    // use digest to go through HotStuff consensus
+    hotstuff_interface.propose(digest, execb);
   }
 }
 

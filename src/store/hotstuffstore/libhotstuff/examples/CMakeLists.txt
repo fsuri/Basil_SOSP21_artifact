@@ -21,15 +21,5 @@
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -W -Wall -Wextra -pedantic -Wsuggest-override -Wno-unused-result -DHOTSTUFF_ENABLE_BENCHMARK")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -W -Wall -Wextra -pedantic -Wsuggest-override -Wno-unused-result -DHOTSTUFF_ENABLE_BENCHMARK")
 
-add_executable(hotstuff-app hotstuff_app.cpp)
-target_link_libraries(hotstuff-app hotstuff_static)
-
-add_executable(hotstuff-client hotstuff_client.cpp)
-target_link_libraries(hotstuff-client hotstuff_static)
-
-
-add_executable(pompe-app pompe_app.cpp)
-target_link_libraries(pompe-app hotstuff_static)
-
-add_executable(pompe-client pompe_client.cpp)
-target_link_libraries(pompe-client hotstuff_static)
+add_library(indicus_interface hotstuff_app.cpp indicus_interface.cpp)
+target_link_libraries(indicus_interface hotstuff_static)
