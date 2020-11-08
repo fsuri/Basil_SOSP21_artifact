@@ -49,9 +49,9 @@ namespace hotstuffstore {
         auto opt_help = Config::OptValFlag::create(false);
         auto opt_pace_maker = Config::OptValStr::create("dummy");
         auto opt_fixed_proposer = Config::OptValInt::create(1);
-        auto opt_base_timeout = Config::OptValDouble::create(1);
+        auto opt_base_timeout = Config::OptValDouble::create(10000);
         auto opt_prop_delay = Config::OptValDouble::create(1);
-        auto opt_imp_timeout = Config::OptValDouble::create(11);
+        auto opt_imp_timeout = Config::OptValDouble::create(10000);
         auto opt_nworker = Config::OptValInt::create(1);
         auto opt_repnworker = Config::OptValInt::create(1);
         auto opt_repburst = Config::OptValInt::create(1000000);
