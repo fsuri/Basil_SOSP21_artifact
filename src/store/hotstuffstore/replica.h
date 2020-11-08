@@ -46,6 +46,9 @@ public:
                           const proto::GroupedSignedMessage &msg);
 
  private:
+  // HotStuff
+  typedef std::function<void(const std::string&)> hotstuff_exec_callback;
+  
   const transport::Configuration &config;
   KeyManager *keyManager;
   App *app;

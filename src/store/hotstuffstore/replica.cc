@@ -158,7 +158,28 @@ void Replica::HandleRequest(const TransportAddress &remote,
     // clone remote mapped to request for reply
     replyAddrs[digest] = remote.clone();
 
+    // prepare the callback function for HotStuff
+    hotstuff_exec_callback execb = [this](const std::string &digest) {
+        if (requests.find(digest) != requests.end()) {
+            proto::PackedMessage packedMsg = requests[digest];
+            std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
+            for (const auto& reply : replies) {
+                if (reply != nullptr) {
+                    Debug("Sending reply");
+                    stats->Increment("execs_sent",1);
+                    transport->SendMessage(this, *replyAddrs[digest], *reply);
+                    delete reply;
+                } else {
+                    Debug("Invalid execution");
+                }
+            }
+        } else {
+            Panic("unimplemented: try to execute request that has not been received");
+        }
+    };
+
     // use digest to go through HotStuff
+    execb(digest);
   }
 }
 
