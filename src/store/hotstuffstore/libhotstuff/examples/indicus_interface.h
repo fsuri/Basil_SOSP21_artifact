@@ -8,7 +8,7 @@ namespace hotstuffstore {
         const std::string config_dir_base = "/home/yunhao/florian/BFT-DB/src/store/hotstuffstore/libhotstuff/conf-indicus/";
 
         // on CloudLab
-        //const std::string config_dir_base = "/users/Yunhao/BFT-DB/src/store/hotstuffstore/libhotstuff/conf-indicus/"
+        //const std::string config_dir_base = "/users/Yunhao/BFT-DB/src/store/hotstuffstore/libhotstuff/conf-indicus/";
 
         int shardId;
         int replicaId;
