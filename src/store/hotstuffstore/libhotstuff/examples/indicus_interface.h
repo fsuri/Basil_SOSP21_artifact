@@ -1,8 +1,10 @@
+#include <string>
 #include <functional> 
 
 namespace hotstuffstore {
     class IndicusInterface {
         typedef std::function<void(const std::string&)> hotstuff_exec_callback;
+        const std::string config_dir_base = "/home/yunhao/florian/BFT-DB/src/store/hotstuffstore/libhotstuff/conf-indicus/";
 
         int shardId;
         int replicaId;

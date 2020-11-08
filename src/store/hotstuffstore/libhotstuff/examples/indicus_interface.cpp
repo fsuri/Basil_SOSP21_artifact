@@ -64,16 +64,14 @@ namespace hotstuffstore {
     IndicusInterface::IndicusInterface(int shardId, int replicaId):
         shardId(shardId), replicaId(replicaId)
     {
-        string config_dir = "store/hotstuffstore/libhotstuff/conf-indicus/";
-        config_dir += "shard" + std::to_string(shardId) + "/";
-
+        string config_dir = config_dir_base + "shard" + std::to_string(shardId) + "/";
 
         string config_file = config_dir + "hotstuff.gen.conf";
         string key_file = config_dir + "hotstuff.gen-sec" + std::to_string(replicaId) + ".conf";
         
         char* argv[4];
-        char arg1[100];
-        char arg3[100];
+        char arg1[200];
+        char arg3[200];
         memcpy(arg1, config_file.c_str(), config_file.length());
         memcpy(arg3, key_file.c_str(), key_file.length());
         argv[0] = "command";
@@ -142,7 +140,7 @@ namespace hotstuffstore {
         config.add_opt("help", opt_help, Config::SWITCH_ON, 'h', "show this help info");
         
         // EventContext ec;
-        // config.parse(argc, argv);
+        config.parse(argc, argv);
         // if (opt_help->get())
         //     {
         //         config.print_help();
