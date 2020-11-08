@@ -23,3 +23,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -W -Wall -Wextra -pedantic -
 
 add_library(indicus_interface indicus_interface.cpp)
 target_link_libraries(indicus_interface hotstuff_static)
+
+
+add_executable(hotstuff-client hotstuff_client.cpp)
+target_link_libraries(hotstuff-client hotstuff_static)
