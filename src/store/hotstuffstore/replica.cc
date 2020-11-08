@@ -116,6 +116,18 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
         data = d;
     }
 
+
+    if (type == recvgrouped.GetTypeName() ||
+        type == recvbatchedRequest.GetTypeName() ||
+        type == recvab.GetTypeName() ||
+        type == recvrr.GetTypeName() ||
+        type == recvpreprepare.GetTypeName() ||
+        type == recvprepare.GetTypeName() ||
+        type == recvcommit.GetTypeName()) {
+        // old message types for PBFT
+        Panic("unimplemented: PBFT message received by replica");
+    }
+
     if (type == recvrequest.GetTypeName()) {
         // Prepare message from shardclient
         recvrequest.ParseFromString(data);
@@ -130,74 +142,6 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
         } else {
             Debug("Invalid request of type %s", type.c_str());
         }
-    } else if (type == recvgrouped.GetTypeName()) {
-        Panic("unimplemented: group messages received by replica");
-        // recvgrouped.ParseFromString(data);
-        // HandleGrouped(remote, recvgrouped);
-    } else if (type == recvbatchedRequest.GetTypeName()) {
-        Panic("unimplemented: batch request message received by replica");
-        // recvbatchedRequest.ParseFromString(data);
-        // HandleBatchedRequest(remote, recvbatchedRequest);
-    } else if (type == recvab.GetTypeName()) {
-        Panic("unimplemented: ABRequest message received by replica");
-        // recvab.ParseFromString(data);
-        // if (slots.getSlotDigest(recvab.seqnum(), recvab.viewnum()) == recvab.digest()) {
-        //     stats->Increment("valid_ab", 1);
-
-        //     proto::Preprepare preprepare;
-        //     preprepare.set_seqnum(recvab.seqnum());
-        //     preprepare.set_viewnum(recvab.viewnum());
-        //     preprepare.set_digest(recvab.digest());
-        //     sendMessageToAll(preprepare);
-        // } else {
-        //     stats->Increment("invalid_ab", 1);
-        // }
-    } else if (type == recvrr.GetTypeName()) {
-        Panic("unimplemented: RequestRequest message received by replica");
-        // recvrr.ParseFromString(data);
-        // std::string digest = recvrr.digest();
-        // if (requests.find(digest) != requests.end()) {
-        //     Debug("Resending request");
-        //     stats->Increment("request_rr",1);
-        //     DebugHash(digest);
-        //     proto::Request reqReply;
-        //     reqReply.set_digest(digest);
-        //     *reqReply.mutable_packed_msg() = requests[digest];
-        //     transport->SendMessage(this, remote, reqReply);
-        // }
-        // if (batchedRequests.find(digest) != batchedRequests.end()) {
-        //     Debug("Resending batch");
-        //     stats->Increment("batch_rr",1);
-        //     DebugHash(digest);
-        //     transport->SendMessage(this, remote, batchedRequests[digest]);
-        // }
-    } else if (type == recvpreprepare.GetTypeName()) {
-        Panic("unimplemented: PBFT message received by replica");
-        // if (signMessages && !recvSignedMessage) {
-        //     stats->Increment("invalid_sig_pp",1);
-        //     return;
-        // }
-
-        // recvpreprepare.ParseFromString(data);
-        // HandlePreprepare(remote, recvpreprepare, tmpsignedMessage);
-    } else if (type == recvprepare.GetTypeName()) {
-        Panic("unimplemented: PBFT message received by replica");
-        // recvprepare.ParseFromString(data);
-        // if (signMessages && !recvSignedMessage) {
-        //     stats->Increment("invalid_sig_p",1);
-        //     return;
-        // }
-
-        // HandlePrepare(remote, recvprepare, tmpsignedMessage);
-    } else if (type == recvcommit.GetTypeName()) {
-        Panic("unimplemented: PBFT message received by replica");
-        // recvcommit.ParseFromString(data);
-        // if (signMessages && !recvSignedMessage) {
-        //     stats->Increment("invalid_sig_c",1);
-        //     return;
-        // }
-
-        // HandleCommit(remote, recvcommit, tmpsignedMessage);
     }
 }
 
@@ -208,7 +152,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
   string digest = request.digest();
 
   if (requests.find(digest) == requests.end()) {
-    Notice("new request: %s", request.packed_msg().type().c_str());
+      Notice("new request: %s with digest %d bytes", request.packed_msg().type().c_str(), digest.length());
 
     requests[digest] = request.packed_msg();
     // clone remote mapped to request for reply
