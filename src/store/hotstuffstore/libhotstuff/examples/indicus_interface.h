@@ -1,5 +1,6 @@
 #include <string>
 #include <functional> 
+using std::string;
 
 namespace hotstuffstore {
     class IndicusInterface {

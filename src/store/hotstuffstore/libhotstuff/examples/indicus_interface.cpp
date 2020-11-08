@@ -1,59 +1,5 @@
 #include "indicus_interface.h"
-
-
-#include <iostream>
-#include <cstring>
-#include <cassert>
-#include <algorithm>
-#include <random>
-#include <unistd.h>
-#include <signal.h>
-
-#include "salticidae/stream.h"
-#include "salticidae/util.h"
-#include "salticidae/network.h"
-#include "salticidae/msg.h"
-
-#include "hotstuff/promise.hpp"
-#include "hotstuff/type.h"
-#include "hotstuff/entity.h"
-#include "hotstuff/util.h"
-#include "hotstuff/client.h"
-#include "hotstuff/hotstuff.h"
-#include "hotstuff/liveness.h"
-
-#include <string>
-using std::string;
-
-using salticidae::MsgNetwork;
-using salticidae::ClientNetwork;
-using salticidae::ElapsedTime;
-using salticidae::Config;
-using salticidae::_1;
-using salticidae::_2;
-using salticidae::static_pointer_cast;
-using salticidae::trim_all;
-using salticidae::split;
-
-using hotstuff::TimerEvent;
-using hotstuff::EventContext;
-using hotstuff::NetAddr;
-using hotstuff::HotStuffError;
-using hotstuff::CommandDummy;
-using hotstuff::Finality;
-using hotstuff::command_t;
-using hotstuff::uint256_t;
-using hotstuff::opcode_t;
-using hotstuff::bytearray_t;
-using hotstuff::DataStream;
-using hotstuff::ReplicaID;
-using hotstuff::MsgReqCmd;
-using hotstuff::MsgRespCmd;
-using hotstuff::get_hash;
-using hotstuff::promise_t;
-
-using HotStuff = hotstuff::HotStuffSecp256k1;
-
+#include "hotstuff_app.cpp"
 
 namespace hotstuffstore {
     void IndicusInterface::propose(const std::string& hash, hotstuff_exec_callback execb) {
@@ -139,15 +85,103 @@ namespace hotstuffstore {
         config.add_opt("max-cli-msg", opt_max_cli_msg, Config::SET_VAL, 'S', "the maximum client message size");
         config.add_opt("help", opt_help, Config::SWITCH_ON, 'h', "show this help info");
         
-        // EventContext ec;
+        EventContext ec;
         config.parse(argc, argv);
-        // if (opt_help->get())
-        //     {
-        //         config.print_help();
-        //         exit(0);
-        //     }
+        if (opt_help->get())
+            {
+                config.print_help();
+                exit(0);
+            }
+        auto idx = opt_idx->get();
+        auto client_port = opt_client_port->get();
+        std::vector<std::tuple<std::string, std::string, std::string>> replicas;
+        for (const auto &s: opt_replicas->get())
+            {
+                auto res = trim_all(split(s, ","));
+                if (res.size() != 3)
+                    throw HotStuffError("invalid replica info");
+                replicas.push_back(std::make_tuple(res[0], res[1], res[2]));
+            }
 
-        std::cout << "################### HotStuff batch size config: " << opt_blk_size->get() << std::endl;
+        if (!(0 <= idx && (size_t)idx < replicas.size()))
+            throw HotStuffError("replica idx out of range");
+        std::string binding_addr = std::get<0>(replicas[idx]);
+        if (client_port == -1)
+            {
+                auto p = split_ip_port_cport(binding_addr);
+                size_t idx;
+                try {
+                    client_port = stoi(p.second, &idx);
+                } catch (std::invalid_argument &) {
+                    throw HotStuffError("client port not specified");
+                }
+            }
+
+        NetAddr plisten_addr{split_ip_port_cport(binding_addr).first};
+
+        auto parent_limit = opt_parent_limit->get();
+        hotstuff::pacemaker_bt pmaker;
+        if (opt_pace_maker->get() == "dummy")
+            pmaker = new hotstuff::PaceMakerDummyFixed(opt_fixed_proposer->get(), parent_limit);
+        else
+            pmaker = new hotstuff::PaceMakerRR(ec, parent_limit, opt_base_timeout->get(), opt_prop_delay->get());
+
+        HotStuffApp::Net::Config repnet_config;
+        ClientNetwork<opcode_t>::Config clinet_config;
+        repnet_config.max_msg_size(opt_max_rep_msg->get());
+        clinet_config.max_msg_size(opt_max_cli_msg->get());
+        if (!opt_tls_privkey->get().empty() && !opt_notls->get())
+            {
+                auto tls_priv_key = new salticidae::PKey(
+                                                         salticidae::PKey::create_privkey_from_der(
+                                                                                                   hotstuff::from_hex(opt_tls_privkey->get())));
+                auto tls_cert = new salticidae::X509(
+                                                     salticidae::X509::create_from_der(
+                                                                                       hotstuff::from_hex(opt_tls_cert->get())));
+                repnet_config
+                    .enable_tls(true)
+                    .tls_key(tls_priv_key)
+                    .tls_cert(tls_cert);
+            }
+        repnet_config
+            .burst_size(opt_repburst->get())
+            .nworker(opt_repnworker->get());
+        clinet_config
+            .burst_size(opt_cliburst->get())
+            .nworker(opt_clinworker->get());
+        papp = new HotStuffApp(opt_blk_size->get(),
+                               opt_stat_period->get(),
+                               opt_imp_timeout->get(),
+                               idx,
+                               hotstuff::from_hex(opt_privkey->get()),
+                               plisten_addr,
+                               NetAddr("0.0.0.0", client_port),
+                               std::move(pmaker),
+                               ec,
+                               opt_nworker->get(),
+                               repnet_config,
+                               clinet_config);
+        std::vector<std::tuple<NetAddr, bytearray_t, bytearray_t>> reps;
+        for (auto &r: replicas)
+            {
+                auto p = split_ip_port_cport(std::get<0>(r));
+                reps.push_back(std::make_tuple(
+                                               NetAddr(p.first),
+                                               hotstuff::from_hex(std::get<1>(r)),
+                                               hotstuff::from_hex(std::get<2>(r))));
+            }
+        auto shutdown = [&](int) { papp->stop(); };
+        salticidae::SigEvent ev_sigint(ec, shutdown);
+        salticidae::SigEvent ev_sigterm(ec, shutdown);
+        ev_sigint.add(SIGINT);
+        ev_sigterm.add(SIGTERM);
+
+        // spawning a new thread to run hotstuff logic asynchronously
+        std::thread t([this, papp, reps](){
+                papp->start(reps);
+                //elapsed.stop(true);
+            });
+        t.detach();
     }
 }
 

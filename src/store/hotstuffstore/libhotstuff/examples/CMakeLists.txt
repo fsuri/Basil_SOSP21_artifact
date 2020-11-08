@@ -21,5 +21,5 @@
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -W -Wall -Wextra -pedantic -Wsuggest-override -Wno-unused-result -DHOTSTUFF_ENABLE_BENCHMARK")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -W -Wall -Wextra -pedantic -Wsuggest-override -Wno-unused-result -DHOTSTUFF_ENABLE_BENCHMARK")
 
-add_library(indicus_interface hotstuff_app.cpp indicus_interface.cpp)
+add_library(indicus_interface indicus_interface.cpp)
 target_link_libraries(indicus_interface hotstuff_static)
