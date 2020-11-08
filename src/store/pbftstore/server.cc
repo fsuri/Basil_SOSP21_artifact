@@ -274,7 +274,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   }
 
 
-  results.push_back(returnMessage(decision));
+  results.push_back(decision);
 
   return results;
 }
@@ -330,12 +330,12 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 }
 
 ::google::protobuf::Message* Server::HandleGroupedCommitDecision(const proto::GroupedDecision& gdecision) {
-  proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
+  // proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
   Debug("Handling Grouped commit Decision");
   string digest = gdecision.txn_digest();
   DebugHash(digest);
 
-  groupedDecisionAck->set_txn_digest(digest);
+  // groupedDecisionAck->set_txn_digest(digest);
 
   if (pendingTransactions.find(digest) == pendingTransactions.end()) {
     Debug("Buffering gdecision");
@@ -390,24 +390,25 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
     // mark txn as commited
     cleanupPendingTx(digest);
-    groupedDecisionAck->set_status(REPLY_OK);
+    // groupedDecisionAck->set_status(REPLY_OK);
   } else {
     stats.Increment("gdec_failed_valid",1);
-    groupedDecisionAck->set_status(REPLY_FAIL);
+    // groupedDecisionAck->set_status(REPLY_FAIL);
   }
 
-  Debug("decision ack status: %d", groupedDecisionAck->status());
+  // Debug("decision ack status: %d", groupedDecisionAck->status());
 
-  return returnMessage(groupedDecisionAck);
+  // return returnMessage(groupedDecisionAck);
+  return nullptr;
 }
 
 ::google::protobuf::Message* Server::HandleGroupedAbortDecision(const proto::GroupedDecision& gdecision) {
-  proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
+  // proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
   Debug("Handling Grouped abort Decision");
   string digest = gdecision.txn_digest();
   DebugHash(digest);
 
-  groupedDecisionAck->set_txn_digest(digest);
+  // groupedDecisionAck->set_txn_digest(digest);
 
   stats.Increment("gdec_failed",1);
   // abort the tx
@@ -415,9 +416,10 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   // there is a chance that this abort comes before we see the tx, so save the decision
   abortedTxs.insert(digest);
 
-  groupedDecisionAck->set_status(REPLY_FAIL);
-
-  return returnMessage(groupedDecisionAck);
+  // groupedDecisionAck->set_status(REPLY_FAIL);
+  //
+  // return returnMessage(groupedDecisionAck);
+  return nullptr;
 }
 
 void Server::cleanupPendingTx(std::string digest) {

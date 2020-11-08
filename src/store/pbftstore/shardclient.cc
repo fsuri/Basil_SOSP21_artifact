@@ -1,4 +1,5 @@
 #include "store/pbftstore/shardclient.h"
+#include "store/pbftstore/pbft_batched_sigs.h"
 #include "store/pbftstore/common.h"
 
 namespace pbftstore {
@@ -80,6 +81,7 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   proto::SignedMessage signedMessage;
   std::string type;
   std::string data;
+  proto::TransactionDecision transactionDecision;
 
   bool recvSignedMessage = false;
   if (t == signedMessage.GetTypeName()) {
@@ -87,10 +89,26 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
       return;
     }
 
-    if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
-      Debug("signature was invalid");
-      return;
+    proto::PackedMessage pmsg;
+    pmsg.ParseFromString(signedMessage.packed_msg());
+    if (pmsg.type() == transactionDecision.GetTypeName()) {
+    crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(
+        signedMessage.replica_id());
+      if (!pbftBatchedSigs::verifyBatchedSignature(signedMessage.mutable_signature(), signedMessage.mutable_packed_msg(),
+            replicaPublicKey)) {
+             Debug("dec signature was invalid");
+             return;
+            }
+      data = pmsg.msg();
+      type = pmsg.type();
+
+    } else {
+      if(!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
+       Debug("signature was invalid");
+       return;
+      }
     }
+
     recvSignedMessage = true;
     Debug("signature was valid");
   } else {
@@ -99,7 +117,6 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   }
 
   proto::ReadReply readReply;
-  proto::TransactionDecision transactionDecision;
   proto::GroupedDecisionAck groupedDecisionAck;
   if (type == readReply.GetTypeName()) {
     readReply.ParseFromString(data);
@@ -529,7 +546,7 @@ void ShardClient::Commit(const std::string& txn_digest, const proto::ShardDecisi
       // this->pendingWritebacks.erase(digest);
       // wtcp(REPLY_FAIL);
     });
-    pwr.timeout->Start();
+    // pwr.timeout->Start();
     // pwr.timeout = nullptr;
 
     pendingWritebacks[txn_digest] = pwr;
@@ -569,7 +586,7 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
       // this->pendingWritebacks.erase(digest);
       // wtcp(REPLY_FAIL);
     });
-    pwr.timeout->Start();
+    // pwr.timeout->Start();
     // pwr.timeout = nullptr;
 
     pendingWritebacks[txn_digest] = pwr;

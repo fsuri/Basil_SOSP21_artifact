@@ -32,6 +32,7 @@ store/benchmark/async/smallbank/tests/smallbank_client_test
 store/benchmark/async/smallbank/tests/smallbank_generator_test
 timeserver/timeserver
 
+lib/threadpool_test
 lib/tests/configuration-test
 lib/tests/simtransport-test
 lockserver/tests/lockserver-test
@@ -43,6 +44,7 @@ store/common/backend/tests/lockserver-test
 store/common/backend/tests/versionstore-test
 store/indicusstore/tests/common-test
 store/indicusstore/tests/server-test
+store/indicusstore/proto_bench
 store/janusstore/tests/janus-client-test
 store/janusstore/tests/janus-server-test
 store/mortystore/tests/branch-generator-test

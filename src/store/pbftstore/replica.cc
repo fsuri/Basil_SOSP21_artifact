@@ -1,4 +1,5 @@
 #include "store/pbftstore/replica.h"
+#include "store/pbftstore/pbft_batched_sigs.h"
 #include "store/pbftstore/common.h"
 
 namespace pbftstore {
@@ -29,10 +30,10 @@ using namespace std;
 
 Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
-  uint64_t batchTimeoutMS, bool primaryCoordinator, bool requestTx, Transport *transport)
+  uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, Transport *transport)
     : config(config), keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
     id(groupIdx * config.n + idx), signMessages(signMessages), maxBatchSize(maxBatchSize),
-    batchTimeoutMS(batchTimeoutMS), primaryCoordinator(primaryCoordinator), requestTx(requestTx), transport(transport) {
+    batchTimeoutMS(batchTimeoutMS), EbatchSize(EbatchSize), EbatchTimeoutMS(EbatchTimeoutMS), primaryCoordinator(primaryCoordinator), requestTx(requestTx), transport(transport) {
   transport->Register(this, config, groupIdx, idx);
 
   // intial view
@@ -45,9 +46,20 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   batchTimerRunning = false;
   nextBatchNum = 0;
 
+  EbatchTimerRunning = false;
+  for (int i = 0; i < EbatchSize; i++) {
+    EsignedMessages.push_back(new proto::SignedMessage());
+  }
+  for (uint64_t i = 1; i <= EbatchSize; i++) {
+   EbStatNames[i] = "ebsize_" + std::to_string(i);
+  }
+
   Debug("Initialized replica at %d %d", groupIdx, idx);
 
   stats = app->mutableStats();
+  for (uint64_t i = 1; i <= maxBatchSize; i++) {
+   bStatNames[i] = "bsize_" + std::to_string(i);
+  }
 
 
   // assume these are somehow secretly shared before hand
@@ -280,6 +292,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
 
 void Replica::sendBatchedPreprepare() {
   proto::BatchedRequest batchedRequest;
+  stats->Increment(bStatNames[pendingBatchedDigests.size()], 1);
   for (const auto& pair : pendingBatchedDigests) {
     (*batchedRequest.mutable_digests())[pair.first] = pair.second;
   }
@@ -546,8 +559,10 @@ void Replica::executeSlots() {
   Debug("exec seq num: %lu", execSeqNum);
   while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
     // cancel the commit timer
-    transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
-    seqnumCommitTimers.erase(execSeqNum);
+    if (seqnumCommitTimers.find(execSeqNum) != seqnumCommitTimers.end()) {
+      transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
+      seqnumCommitTimers.erase(execSeqNum);
+    }
 
     string batchDigest = pendingExecutions[execSeqNum];
     // only execute when we have the batched request
@@ -564,8 +579,24 @@ void Replica::executeSlots() {
           if (reply != nullptr) {
             Debug("Sending reply");
             stats->Increment("execs_sent",1);
-            transport->SendMessage(this, *replyAddrs[digest], *reply);
-            delete reply;
+            EpendingBatchedMessages.push_back(reply);
+            EpendingBatchedDigs.push_back(digest);
+            if (EpendingBatchedMessages.size() >= EbatchSize) {
+              Debug("EBatch is full, sending");
+              if (EbatchTimerRunning) {
+                transport->CancelTimer(EbatchTimerId);
+                EbatchTimerRunning = false;
+              }
+              sendEbatch();
+            } else if (!EbatchTimerRunning) {
+              EbatchTimerRunning = true;
+              Debug("Starting ebatch timer");
+              EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
+                Debug("EBatch timer expired, sending");
+                this->EbatchTimerRunning = false;
+                this->sendEbatch();
+              });
+            }
           } else {
             Debug("Invalid execution");
           }
@@ -603,6 +634,34 @@ void Replica::executeSlots() {
       break;
     }
   }
+}
+
+void Replica::sendEbatch() {
+  stats->Increment(EbStatNames[EpendingBatchedMessages.size()], 1);
+  std::vector<std::string*> messageStrs;
+  for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
+    EsignedMessages[i]->Clear();
+    EsignedMessages[i]->set_replica_id(id);
+    proto::PackedMessage packedMsg;
+    *packedMsg.mutable_msg() = EpendingBatchedMessages[i]->SerializeAsString();
+    *packedMsg.mutable_type() = EpendingBatchedMessages[i]->GetTypeName();
+    UW_ASSERT(packedMsg.SerializeToString(EsignedMessages[i]->mutable_packed_msg()));
+    messageStrs.push_back(EsignedMessages[i]->mutable_packed_msg());
+  }
+
+  std::vector<std::string*> sigs;
+  for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
+    sigs.push_back(EsignedMessages[i]->mutable_signature());
+  }
+
+  pbftBatchedSigs::generateBatchedSignatures(messageStrs, keyManager->GetPrivateKey(id), sigs);
+
+  for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
+    transport->SendMessage(this, *replyAddrs[EpendingBatchedDigs[i]], *EsignedMessages[i]);
+    delete EpendingBatchedMessages[i];
+  }
+  EpendingBatchedDigs.clear();
+  EpendingBatchedMessages.clear();
 }
 
 void Replica::startActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest) {

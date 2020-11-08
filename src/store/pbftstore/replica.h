@@ -23,7 +23,7 @@ class Replica : public TransportReceiver {
 public:
   Replica(const transport::Configuration &config, KeyManager *keyManager,
     App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
-    uint64_t batchTimeoutMS, bool primaryCoordinator, bool requestTx, Transport *transport);
+    uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, Transport *transport);
   ~Replica();
 
   // Message handlers.
@@ -55,6 +55,8 @@ public:
   bool signMessages;
   uint64_t maxBatchSize;
   uint64_t batchTimeoutMS;
+  uint64_t EbatchSize;
+  uint64_t EbatchTimeoutMS;
   bool primaryCoordinator;
   bool requestTx;
   Transport *transport;
@@ -84,6 +86,16 @@ public:
   // the map from 0..(N-1) to pending digests
   std::unordered_map<uint64_t, std::string> pendingBatchedDigests;
   void sendBatchedPreprepare();
+  std::unordered_map<uint64_t, std::string> bStatNames;
+
+  bool EbatchTimerRunning;
+  int EbatchTimerId;
+  std::vector<::google::protobuf::Message*> EpendingBatchedMessages;
+  std::vector<std::string> EpendingBatchedDigs;
+  void EsendBatchedPreprepare();
+  std::unordered_map<uint64_t, std::string> EbStatNames;
+  void sendEbatch();
+  std::vector<proto::SignedMessage*> EsignedMessages;
 
   bool sendMessageToAll(const ::google::protobuf::Message& msg);
   bool sendMessageToPrimary(const ::google::protobuf::Message& msg);

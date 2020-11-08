@@ -71,10 +71,12 @@ int main(int argc, char **argv) {
   bool primaryCoordinator = false;
   bool signMessages = true;
   bool validateProofs = true;
+  uint64_t EbatchSize = 1;
+  uint64_t EbatchTimeoutMS = 10;
   uint64_t timeoutms = 10;
   DefaultPartitioner dp;
   pbftstore::Server* server = new pbftstore::Server(config, &keyManager, groupIdx, myId, numShards, numGroups, signMessages, validateProofs, 10, &dp);
-  pbftstore::Replica replica(config, &keyManager, dynamic_cast<pbftstore::App *>(server), groupIdx, myId, signMessages, maxBatchSize, timeoutms, primaryCoordinator, false, &transport);
+  pbftstore::Replica replica(config, &keyManager, dynamic_cast<pbftstore::App *>(server), groupIdx, myId, signMessages, maxBatchSize, timeoutms, EbatchSize, EbatchTimeoutMS, primaryCoordinator, false, &transport);
 
   printf("Running transport\n");
   transport.Run();
