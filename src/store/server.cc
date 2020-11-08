@@ -272,6 +272,11 @@ DEFINE_bool(indicus_dispatchMessageReceive, false, "delegating serialization to 
 DEFINE_uint64(indicus_process_id, 0, "id used for Threadpool core affinity");
 DEFINE_uint64(indicus_total_processes, 1, "number of server processes per machine");
 
+DEFINE_uint64(pbft_esig_batch, 1, "signature batch size"
+		" sig batch size (for PBFT decision phase)");
+DEFINE_uint64(pbft_esig_batch_timeout, 10, "signature batch timeout ms"
+		" sig batch timeout (for PBFT decision phase)");
+
 const std::string occ_type_args[] = {
 	"tapir",
   "mvtso"
@@ -571,8 +576,10 @@ int main(int argc, char **argv) {
         FLAGS_indicus_time_delta, part);
 			replica = new pbftstore::Replica(config, &keyManager,
 				dynamic_cast<pbftstore::App *>(server),
-				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, FLAGS_indicus_sig_batch_timeout,
-				FLAGS_indicus_sig_batch, FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
+				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
+				FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
+				FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
+					//FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
 			break;
 		}
     default: {
