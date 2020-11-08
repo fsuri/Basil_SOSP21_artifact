@@ -6,7 +6,7 @@ SRCS += $(addprefix $(d), app.cc replica.cc slots.cc common.cc server.cc shardcl
 PROTOS += $(addprefix $(d), pbft-proto.proto server-proto.proto)
 
 
-LIB-hotstuff-interface := store/hotstuffstore/libhotstuff/examples/libindicus_interface.a
+LIB-hotstuff-interface := store/hotstuffstore/libhotstuff/examples/libindicus_interface.a store/hotstuffstore/libhotstuff/salticidae/libsalticidae.a 
 
 LIB-hotstuff-store := $(o)common.o $(o)slots.o $(o)replica.o $(o)server.o \
 	$(o)pbft-proto.o $(o)server-proto.o $(o)app.o $(o)shardclient.o \

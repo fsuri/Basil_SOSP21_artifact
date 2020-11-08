@@ -30,7 +30,10 @@ using namespace std;
 Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
   uint64_t batchTimeoutMS, bool primaryCoordinator, bool requestTx, Transport *transport)
-    : config(config), keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
+    : config(config),
+      // HotStuff
+      hotstuff_interface(groupIdx, idx),
+      keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
     id(groupIdx * config.n + idx), signMessages(signMessages), maxBatchSize(maxBatchSize),
     batchTimeoutMS(batchTimeoutMS), primaryCoordinator(primaryCoordinator), requestTx(requestTx), transport(transport) {
   transport->Register(this, config, groupIdx, idx);
@@ -98,6 +101,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 
     Debug("Received message of type %s", t.c_str());
 
+    // This may be obsolete because it is for PBFT
     if (t == tmpsignedMessage.GetTypeName()) {
         if (!tmpsignedMessage.ParseFromString(d)) {
             return;
