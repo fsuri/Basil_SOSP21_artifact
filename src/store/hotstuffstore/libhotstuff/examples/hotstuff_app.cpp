@@ -131,6 +131,8 @@ class HotStuffApp: public HotStuff {
 
     void start(const std::vector<std::tuple<NetAddr, bytearray_t, bytearray_t>> &reps);
     void stop();
+
+    void interface_propose(const string &hash,  std::function<void(const std::string&)> cb);
 };
 
 std::pair<std::string, std::string> split_ip_port_cport(const std::string &s) {
@@ -193,6 +195,15 @@ void HotStuffApp::client_request_cmd_handler(MsgReqCmd &&msg, const conn_t &conn
         resp_queue.enqueue(std::make_pair(fin, addr));
     });
 }
+
+void HotStuffApp::interface_propose(const string &hash,  std::function<void(const std::string&)> cb) {
+    uint256_t cmd_hash((const uint8_t *)hash.c_str());
+    exec_command(cmd_hash, [this, hash, cb](Finality fin) {
+            //resp_queue.enqueue(std::make_pair(fin, addr));
+            cb(hash);
+    });
+}
+
 
 void HotStuffApp::start(const std::vector<std::tuple<NetAddr, bytearray_t, bytearray_t>> &reps) {
     ev_stat_timer = TimerEvent(ec, [this](TimerEvent &) {
