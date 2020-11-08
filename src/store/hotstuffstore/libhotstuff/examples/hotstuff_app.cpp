@@ -140,7 +140,7 @@ std::pair<std::string, std::string> split_ip_port_cport(const std::string &s) {
     return std::make_pair(ret[0], ret[1]);
 }
 
-salticidae::BoxObj<HotStuffApp> papp = nullptr;
+salticidae::BoxObj<HotStuffApp> hotstuff_papp = nullptr;
 
 
 HotStuffApp::HotStuffApp(uint32_t blk_size,
@@ -228,10 +228,10 @@ void HotStuffApp::start(const std::vector<std::tuple<NetAddr, bytearray_t, bytea
 }
 
 void HotStuffApp::stop() {
-    papp->req_tcall->async_call([this](salticidae::ThreadCall::Handle &) {
+    hotstuff_papp->req_tcall->async_call([this](salticidae::ThreadCall::Handle &) {
         req_ec.stop();
     });
-    papp->resp_tcall->async_call([this](salticidae::ThreadCall::Handle &) {
+    hotstuff_papp->resp_tcall->async_call([this](salticidae::ThreadCall::Handle &) {
         resp_ec.stop();
     });
 

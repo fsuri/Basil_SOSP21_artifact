@@ -149,7 +149,7 @@ namespace hotstuffstore {
         clinet_config
             .burst_size(opt_cliburst->get())
             .nworker(opt_clinworker->get());
-        papp = new HotStuffApp(opt_blk_size->get(),
+        hotstuff_papp = new HotStuffApp(opt_blk_size->get(),
                                opt_stat_period->get(),
                                opt_imp_timeout->get(),
                                idx,
@@ -170,15 +170,15 @@ namespace hotstuffstore {
                                                hotstuff::from_hex(std::get<1>(r)),
                                                hotstuff::from_hex(std::get<2>(r))));
             }
-        auto shutdown = [&](int) { papp->stop(); };
+        auto shutdown = [&](int) { hotstuff_papp->stop(); };
         salticidae::SigEvent ev_sigint(ec, shutdown);
         salticidae::SigEvent ev_sigterm(ec, shutdown);
         ev_sigint.add(SIGINT);
         ev_sigterm.add(SIGTERM);
 
         // spawning a new thread to run hotstuff logic asynchronously
-        std::thread t([this, papp, reps](){
-                papp->start(reps);
+        std::thread t([this, hotstuff_papp, reps](){
+                hotstuff_papp->start(reps);
                 //elapsed.stop(true);
             });
         t.detach();
