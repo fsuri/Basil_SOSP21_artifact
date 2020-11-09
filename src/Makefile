@@ -9,8 +9,14 @@ EXPAND = lib/tmpl/expand
 
 #CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNUW_ASSERT
 CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2#-O3#-O1#-O2
+<<<<<<< HEAD
 CXXFLAGS := -g -std=c++17  #-fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls #-fsanitize=thread 
 LDFLAGS := -levent_pthreads -lrt #-fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls #-fsanitize=thread #
+=======
+CXXFLAGS := -g -std=c++17 #-fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls #-fsanitize=thread
+# -luv for HotStuff
+LDFLAGS := -levent_pthreads -lrt -luv #-fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls #-fsanitize=thread #
+>>>>>>> threadpool_test_hs
 ## Debian package: check
 #CHECK_CFLAGS := $(shell pkg-config --cflags check)
 #CHECK_LDFLAGS := $(shell pkg-config --cflags --libs check)
@@ -156,6 +162,7 @@ include store/weakstore/Rules.mk
 include store/janusstore/Rules.mk
 include store/indicusstore/Rules.mk
 include store/pbftstore/Rules.mk
+include store/hotstuffstore/Rules.mk
 include store/benchmark/async/tpcc/Rules.mk
 include store/Rules.mk
 include store/benchmark/Rules.mk
