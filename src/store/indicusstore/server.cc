@@ -869,6 +869,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
   proto::Transaction* txn, void* valid){
 
   //auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
+
   auto f = [this, msg, txnDigest, txn, valid]() mutable {
   Debug("WRITEBACK Callback[%s] being called", BytesToHex(*txnDigest, 16).c_str());
   if(! valid){
@@ -895,7 +896,8 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
       else{
         Debug("Writeback for P2 does not have view or sigs");
         //return; //XXX comment back
-        return (void*) false;
+        view = 0;
+        //return (void*) false;
       }
     }
     Debug("COMMIT ONLY RUN BY MAINTHREAD: %d", sched_getcpu());
@@ -916,7 +918,12 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
   }
    return (void*) true;
  };
- transport->DispatchTP_main(std::move(f));
+ if(params.multiThreading){
+   transport->DispatchTP_main(std::move(f));
+ }
+ else{
+   f();
+ }
 
 }
 
@@ -949,7 +956,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
   } else {
     computedTxnDigest = TransactionDigest(msg.txn(), params.hashDigest);
     txn = msg.release_txn();
-    txnDigest = &computedTxnDigest;
+    txnDigest = &computedTxnDigest;  //Should make it async safe
   }
 
   Debug("WRITEBACK[%s] with decision %d.",
