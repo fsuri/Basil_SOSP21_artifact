@@ -572,28 +572,6 @@ int main(int argc, char **argv) {
                                       FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, FLAGS_indicus_batch_verification_size);
       Debug("Starting new server object");
       server = new indicusstore::Server(config, FLAGS_group_idx,
-<<<<<<< HEAD
-          FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
-          &keyManager, params, timeDelta, indicusOCCType, part,
-          FLAGS_indicus_sig_batch_timeout, FLAGS_indicus_mainThreadDispatching, FLAGS_indicus_dispatchMessageReceive);
-      break;
-    }
-		case PROTO_PBFT: {
-			server = new pbftstore::Server(config, &keyManager,
-				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
-				FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-        FLAGS_indicus_time_delta, part);
-			replica = new pbftstore::Replica(config, &keyManager,
-				dynamic_cast<pbftstore::App *>(server),
-				FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
-				FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
-				FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
-				FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
-					//FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
-			break;
-		}
-    default: {
-=======
                                         FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
                                         &keyManager, params, timeDelta, indicusOCCType, part,
                                         FLAGS_indicus_sig_batch_timeout);
@@ -625,7 +603,6 @@ int main(int argc, char **argv) {
   }
             
   default: {
->>>>>>> threadpool_test_hs
       NOT_REACHABLE();
   }
   }
