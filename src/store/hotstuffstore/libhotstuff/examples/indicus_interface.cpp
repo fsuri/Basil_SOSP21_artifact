@@ -103,8 +103,10 @@ namespace hotstuffstore {
                 replicas.push_back(std::make_tuple(res[0], res[1], res[2]));
             }
 
-        if (!(0 <= idx && (size_t)idx < replicas.size()))
+        if (!(0 <= idx && (size_t)idx < replicas.size())) {
+            std::cout << "########## OUT OF RANGE INDEX: " << idx << std::endl;
             throw HotStuffError("replica idx out of range");
+        }
         std::string binding_addr = std::get<0>(replicas[idx]);
         if (client_port == -1)
             {
