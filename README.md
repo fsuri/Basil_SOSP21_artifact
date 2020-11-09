@@ -81,6 +81,39 @@ To install ed25519-donna
 4. `sudo cp libed25519_donna.so /usr/local/lib`
 5. `sudo ldconfig`
 
+### HotStuff
+
+#### Before compile
+
+dependencies: `sudo apt-get install libssl-dev libuv1-dev cmake make`; The current string in `src/store/hotstuffstore/libhotstuff/examples/indicus_interface.h` is `/users/Yunhao/config/`. This is the directory I am using for my CloudLab config and one may change `Yunhao` to their own username.
+
+### Compile
+
+First, goto directory `src/store/hotstuffstore/libhotstuff` and run `./build.sh`. Then run `make` in `/src` as usual.
+
+### Crypto configuration for HotStuff
+
+I updated the experiment scripts for HotStuff and now the script `run_multiple_experiments.py` will create 3 shards and each 6 replicas -- 18 machines in total. The HotStuff config for this is in `src/scripts/config`. Use `src/scripts/config_remote.sh` to upload these config to remote machines before your experiments. If needed, remember to update `src/scripts/hosts` for the remote hosts and replace the `Yunhao` in `src/scripts/config_remote.sh` to your username.
+
+If you need the key configuration in another setup (different host names / different number of replias, etc.), let me know and I will write the instructions.
+
+### Local test
+
+Here are the steps for running a local experiment.
+
+1. In `src/store/hotstuff/libhotstuff/examples/indicus_interface.h`, modify the string `config_dir_base` to your local directory of `???/src/store/hotstuffstore/libhotstuff/conf-indicus/`.
+
+2. Compile the code use `build.sh` and `make` as mentioned above.
+
+3. Open one shell and goto `src/`, type `./scripts/hotstuff_server.sh`
+
+4. Open another shell and goto `src/`, type `./scripts/hotstuff_client.sh`
+
+5. The server shell should have debug output of HotStuff and the client shell should print continuously something like `rw,185119562,1112640505801878,16`.
+
+6. Run `./scripts/kill.sh` to terminate and clean the local test.
+
+
 ### On Mac
 The known Mac equivalents for the above packages, available through `brew install` are:
 - libevent
