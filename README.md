@@ -93,7 +93,7 @@ First, goto directory `src/store/hotstuffstore/libhotstuff` and run `./build.sh`
 
 #### Crypto configuration for HotStuff
 
-I updated the experiment scripts for HotStuff and now the script `run_multiple_experiments.py` will create 3 shards and each 6 replicas -- 18 machines in total. The HotStuff config for this is in `src/scripts/config`. Use `src/scripts/config_remote.sh` to upload these config to remote machines before your experiments. If needed, remember to update `src/scripts/hosts` for the remote hosts and replace the `Yunhao` in `src/scripts/config_remote.sh` to your username.
+I updated the experiment scripts for HotStuff and now the script `run_multiple_experiments.py` will create 3 shards and each 6 replicas -- 18 machines in total. The HotStuff config for this is in `src/scripts/config`. Use `src/scripts/config_remote.sh` to upload these config to remote machines before your experiments. If needed, remember to update `src/scripts/hosts` for the remote hosts and replace the *two* `Yunhao` in `src/scripts/config_remote.sh` to your username.
 
 If you need the crypto configuration in another setup (different host names / different number of replias, etc.), let me know and I will write the instructions.
 
