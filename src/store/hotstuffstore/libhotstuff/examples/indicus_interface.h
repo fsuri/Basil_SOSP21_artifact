@@ -5,10 +5,10 @@ using std::string;
 namespace hotstuffstore {
     class IndicusInterface {
         typedef std::function<void(const std::string&)> hotstuff_exec_callback;
-        const std::string config_dir_base = "/home/yunhao/florian/BFT-DB/src/store/hotstuffstore/libhotstuff/conf-indicus/";
+        //const std::string config_dir_base = "/home/yunhao/florian/BFT-DB/src/store/hotstuffstore/libhotstuff/conf-indicus/";
 
         // on CloudLab
-        //const std::string config_dir_base = "/users/Yunhao/BFT-DB/src/store/hotstuffstore/libhotstuff/conf-indicus/";
+        const std::string config_dir_base = "/users/Yunhao/config/";
 
         int shardId;
         int replicaId;
