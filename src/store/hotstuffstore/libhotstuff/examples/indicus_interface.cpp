@@ -18,6 +18,8 @@ namespace hotstuffstore {
         char* argv[4];
         char arg1[200];
         char arg3[200];
+        memset(arg1, 0, sizeof(arg1));
+        memset(arg3, 0, sizeof(arg3));
         memcpy(arg1, config_file.c_str(), config_file.length());
         memcpy(arg3, key_file.c_str(), key_file.length());
         argv[0] = "command";
