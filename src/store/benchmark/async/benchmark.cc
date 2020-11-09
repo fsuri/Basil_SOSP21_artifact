@@ -31,6 +31,8 @@
 #include "store/janusstore/client.h"
 #include "store/indicusstore/client.h"
 #include "store/pbftstore/client.h"
+// HotStuff
+#include "store/hotstuffstore/client.h"
 #include "store/common/frontend/one_shot_client.h"
 #include "store/common/frontend/async_one_shot_adapter_client.h"
 #include "store/benchmark/async/common/zipf_key_selector.h"
@@ -53,6 +55,8 @@ enum protomode_t {
   PROTO_MORTY,
   PROTO_INDICUS,
 	PROTO_PBFT,
+    // HotStuff
+    PROTO_HOTSTUFF
 };
 
 enum benchmode_t {
@@ -273,7 +277,9 @@ const std::string protocol_args[] = {
   "janus",
   "morty",
   "indicus",
-	"pbft"
+	"pbft",
+// HotStuff
+    "hotstuff"
 };
 const protomode_t protomodes[] {
   PROTO_TAPIR,
@@ -286,7 +292,9 @@ const protomode_t protomodes[] {
   PROTO_JANUS,
   PROTO_MORTY,
   PROTO_INDICUS,
-	PROTO_PBFT
+      PROTO_PBFT,
+  // HotStuff
+      PROTO_HOTSTUFF
 };
 const strongstore::Mode strongmodes[] {
   strongstore::Mode::MODE_UNKNOWN,
@@ -793,69 +801,69 @@ int main(int argc, char **argv) {
 
     uint64_t clientId = (FLAGS_client_id << 6) | i;
     switch (mode) {
-      case PROTO_TAPIR: {
+    case PROTO_TAPIR: {
         client = new tapirstore::Client(config, clientId,
-            FLAGS_num_shards, FLAGS_num_groups, FLAGS_closest_replica,
-            tport, part, FLAGS_ping_replicas, FLAGS_tapir_sync_commit,
-            TrueTime(FLAGS_clock_skew,
-              FLAGS_clock_error));
+                                        FLAGS_num_shards, FLAGS_num_groups, FLAGS_closest_replica,
+                                        tport, part, FLAGS_ping_replicas, FLAGS_tapir_sync_commit,
+                                        TrueTime(FLAGS_clock_skew,
+                                                 FLAGS_clock_error));
         break;
-      }
-      case PROTO_JANUS: {
+    }
+    case PROTO_JANUS: {
         oneShotClient = new janusstore::Client(config,
-            FLAGS_num_shards, FLAGS_closest_replica, tport);
+                                               FLAGS_num_shards, FLAGS_closest_replica, tport);
         asyncClient = new AsyncOneShotAdapterClient(oneShotClient);
         break;
-      }
-      /*case MODE_WEAK: {
-        protoClient = new weakstore::Client(configPath, nshards, closestReplica);
-        break;
-      }
-      case MODE_STRONG: {
-        protoClient = new strongstore::Client(strongmode, configPath, nshards,
-            closestReplica, TrueTime(skew, error));
-        break;
-      }*/
-      case PROTO_MORTY: {
+    }
+        /*case MODE_WEAK: {
+          protoClient = new weakstore::Client(configPath, nshards, closestReplica);
+          break;
+          }
+          case MODE_STRONG: {
+          protoClient = new strongstore::Client(strongmode, configPath, nshards,
+          closestReplica, TrueTime(skew, error));
+          break;
+          }*/
+    case PROTO_MORTY: {
         asyncClient = new mortystore::Client(config,
-            clientId, FLAGS_num_shards, FLAGS_num_groups,
-            FLAGS_closest_replica, tport, part, FLAGS_debug_stats);
+                                             clientId, FLAGS_num_shards, FLAGS_num_groups,
+                                             FLAGS_closest_replica, tport, part, FLAGS_debug_stats);
         break;
-      }
-      case PROTO_INDICUS: {
+    }
+    case PROTO_INDICUS: {
         uint64_t readQuorumSize = 0;
         switch (read_quorum) {
-          case READ_QUORUM_ONE:
+        case READ_QUORUM_ONE:
             readQuorumSize = 1;
             break;
-          case READ_QUORUM_ONE_HONEST:
+        case READ_QUORUM_ONE_HONEST:
             readQuorumSize = config->f + 1;
             break;
-          case READ_QUORUM_MAJORITY_HONEST:
+        case READ_QUORUM_MAJORITY_HONEST:
             readQuorumSize = config->f * 2 + 1;
             break;
-          case READ_QUORUM_MAJORITY:
+        case READ_QUORUM_MAJORITY:
             readQuorumSize = (config->n + 1) / 2;
             break;
-          case READ_QUORUM_ALL:
+        case READ_QUORUM_ALL:
             readQuorumSize = config->f * 4 + 1;
             break;
-          default:
+        default:
             NOT_REACHABLE();
         }
 
         uint64_t readMessages = 0;
         switch (read_messages) {
-          case READ_MESSAGES_READ_QUORUM:
+        case READ_MESSAGES_READ_QUORUM:
             readMessages = readQuorumSize;
             break;
-          case READ_MESSAGES_MAJORITY:
+        case READ_MESSAGES_MAJORITY:
             readMessages = (config->n + 1) / 2;
             break;
-          case READ_MESSAGES_ALL:
+        case READ_MESSAGES_ALL:
             readMessages = config->n;
             break;
-          default:
+        default:
             NOT_REACHABLE();
         }
         Debug("Configuring Indicus to send read messages to %lu replicas and wait for %lu replies.", readMessages, readQuorumSize);
@@ -863,13 +871,13 @@ int main(int argc, char **argv) {
 
         uint64_t readDepSize = 0;
         switch (read_dep) {
-          case READ_DEP_ONE:
+        case READ_DEP_ONE:
             readDepSize = 1;
             break;
-          case READ_DEP_ONE_HONEST:
+        case READ_DEP_ONE_HONEST:
             readDepSize = config->f + 1;
             break;
-          default:
+        default:
             NOT_REACHABLE();
         }
 
@@ -878,44 +886,71 @@ int main(int argc, char **argv) {
         failure.timeMs = FLAGS_indicus_inject_failure_ms;
         failure.enabled = rand() % 100 < FLAGS_indicus_inject_failure_proportion;
 
-				indicusstore::Parameters params(FLAGS_indicus_sign_messages,
-					FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
-					FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
-          FLAGS_indicus_max_dep_depth, readDepSize, false, false, false, false,
-          FLAGS_indicus_merkle_branch_factor, failure,
-					FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, FLAGS_indicus_batch_verification_size);
+        indicusstore::Parameters params(FLAGS_indicus_sign_messages,
+                                        FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
+                                        FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
+                                        FLAGS_indicus_max_dep_depth, readDepSize, false, false, false, false,
+                                        FLAGS_indicus_merkle_branch_factor, failure,
+                                        FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, FLAGS_indicus_batch_verification_size);
 
         client = new indicusstore::Client(config, clientId,
-            FLAGS_num_shards,
-            FLAGS_num_groups, closestReplicas, FLAGS_ping_replicas, tport, part,
-            FLAGS_tapir_sync_commit, readMessages, readQuorumSize,
-            params, keyManager, FLAGS_indicus_phase1DecisionTimeout, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+                                          FLAGS_num_shards,
+                                          FLAGS_num_groups, closestReplicas, FLAGS_ping_replicas, tport, part,
+                                          FLAGS_tapir_sync_commit, readMessages, readQuorumSize,
+                                          params, keyManager, FLAGS_indicus_phase1DecisionTimeout, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
-      }
-			case PROTO_PBFT: {
-				uint64_t readQuorumSize = 0;
+    }
+    case PROTO_PBFT: {
+        uint64_t readQuorumSize = 0;
         switch (read_quorum) {
-          case READ_QUORUM_ONE:
+        case READ_QUORUM_ONE:
             readQuorumSize = 1;
             break;
-          case READ_QUORUM_ONE_HONEST:
+        case READ_QUORUM_ONE_HONEST:
             readQuorumSize = config->f + 1;
             break;
-          case READ_QUORUM_MAJORITY_HONEST:
+        case READ_QUORUM_MAJORITY_HONEST:
             readQuorumSize = config->f * 2 + 1;
             break;
-          default:
+        default:
             NOT_REACHABLE();
         }
 
         client = new pbftstore::Client(*config, FLAGS_num_shards,
-            FLAGS_num_groups, tport, part,
-            readQuorumSize,
-            FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-            keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+                                       FLAGS_num_groups, tport, part,
+                                       readQuorumSize,
+                                       FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+                                       keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
-			}
-      default:
+    }
+
+// HotStuff
+    case PROTO_HOTSTUFF: {
+        uint64_t readQuorumSize = 0;
+        switch (read_quorum) {
+        case READ_QUORUM_ONE:
+            readQuorumSize = 1;
+            break;
+        case READ_QUORUM_ONE_HONEST:
+            readQuorumSize = config->f + 1;
+            break;
+        case READ_QUORUM_MAJORITY_HONEST:
+            readQuorumSize = config->f * 2 + 1;
+            break;
+        default:
+            NOT_REACHABLE();
+        }
+
+        client = new hotstuffstore::Client(*config, FLAGS_num_shards,
+                                           FLAGS_num_groups, tport, part,
+                                           readQuorumSize,
+                                           FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+                                           keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+        break;
+    }
+
+
+    default:
         NOT_REACHABLE();
     }
 
