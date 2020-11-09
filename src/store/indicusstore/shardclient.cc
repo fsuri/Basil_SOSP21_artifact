@@ -66,7 +66,7 @@ ShardClient::~ShardClient() {
 void ShardClient::ReceiveMessage(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
   if (type == readReply.GetTypeName()) {
-    if(true){
+    if(params.multiThreading){
       proto::ReadReply *curr_read = GetUnusedReadReply();
       curr_read->ParseFromString(data);
       HandleReadReplyMulti(curr_read);
