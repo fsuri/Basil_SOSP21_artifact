@@ -10,8 +10,8 @@
   ],
   "replication_protocol": ["pbft"],
   "client_protocol_mode": ["pbft"],
-  "num_shards": [ 24],
-  "num_groups": [ 24],
+  "num_shards": [1],
+  "num_groups": [1],
   "benchmark_name": "tpcc-sync",
   "partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
@@ -43,14 +43,16 @@
       "validate_proofs": true,
       "sign_messages": true,
       "signature_type": 4,
-      "sig_batch": 8,
+      "sig_batch": 16,
       "sig_batch_timeout": 10,
+      "ebatch_size": 2,
+      "ebatch_tout": 10,
       "multi_threading": false,
 	  "mainThreadDispatching": false,
 	  "dispatchMessageReceive": false,
       "batch_verification": false,
-      "key_path": "/usr/local/etc/indicus-keys/secp256k1",
-      "_key_path": "/usr/local/etc/indicus-keys/donna"
+      "_key_path": "/usr/local/etc/indicus-keys/secp256k1",
+      "key_path": "/usr/local/etc/indicus-keys/donna"
     }
   ],
   "experiment_name": "indicus",
@@ -61,7 +63,7 @@
   ],
   "client_processes_per_client_node": [
    
-    [ 4]
+    [ 5]
   ],
   "client_threads_per_process": [
    
@@ -74,9 +76,9 @@
   "server_debug_output": false,
   "server_debug_stats": false,
   "client_debug_stats": false,
-  "client_experiment_length": 100,
+  "client_experiment_length": 60,
   "client_ramp_down": 5,
-  "client_ramp_up": 30,
+  "client_ramp_up": 20,
   "default_remote_shell": "bash",
   "server_host_format_str": "%s.%s.%s.utah.cloudlab.us",
   "client_host_format_str": "client-%d-%d.%s.%s.utah.cloudlab.us",
@@ -84,18 +86,13 @@
   "fault_tolerance": 1,
   "server_names": [
    
-	["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
-    "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
-    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2"]
+	["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0"]
   ],
   "server_regions": [
     
 	{
       "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2"],
-      "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
-      "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
-        "ap-northeast-1-2"],
-      "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2"]
+      "eu-west-1": ["eu-west-1-0"]
     }
   ],
   "region_rtt_latencies": {

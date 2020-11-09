@@ -653,9 +653,10 @@ int main(int argc, char **argv) {
   CALLGRIND_START_INSTRUMENTATION;
 	//SET THREAD AFFINITY if running multi_threading:
 	//if(FLAGS_indicus_multi_threading){
+	if(proto == PROTO_INDICUS){
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
-		bool hyperthreading = true; //TODO::make this into a flag
+		bool hyperthreading = true; //TODO::turn this into a flag
 	  int num_cpus = std::thread::hardware_concurrency()/(2-hyperthreading);
 		//CPU_SET(num_cpus-1, &cpuset); //last core is for main
 		num_cpus /= FLAGS_indicus_total_processes;
@@ -664,7 +665,7 @@ int main(int argc, char **argv) {
 		CPU_SET(0 + offset, &cpuset); //first assigned core is for main
 		pthread_setaffinity_np(pthread_self(),	sizeof(cpu_set_t), &cpuset);
 		Debug("MainThread running on CPU %d.", sched_getcpu());
-	//}
+	}
 
 	//event_enable_debug_logging(EVENT_DBG_ALL);
 

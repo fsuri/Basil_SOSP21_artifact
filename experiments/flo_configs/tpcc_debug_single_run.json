@@ -10,7 +10,7 @@
   ],
   "replication_protocol": ["indicus"],
   "client_protocol_mode": ["indicus"],
-  "num_shards": [ 3],
+  "num_shards": [3],
   "num_groups": [3],
   "benchmark_name": "tpcc-sync",
   "partitioner": "warehouse",
@@ -62,10 +62,10 @@
   "experiment_name": "indicus",
   "codebase_name": "indicus",
   "client_total": [
-    [ 63]
+    [ 144]
   ],
   "client_processes_per_client_node": [
-    [ 4]
+    [ 8]
   ],
   "client_threads_per_process": [
     [ 1]
