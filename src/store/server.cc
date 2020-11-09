@@ -574,7 +574,7 @@ int main(int argc, char **argv) {
       server = new indicusstore::Server(config, FLAGS_group_idx,
                                         FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
                                         &keyManager, params, timeDelta, indicusOCCType, part,
-                                        FLAGS_indicus_sig_batch_timeout);
+                                        FLAGS_indicus_sig_batch_timeout, FLAGS_indicus_mainThreadDispatching, FLAGS_indicus_dispatchMessageReceive);
       break;
   }
   case PROTO_PBFT: {
@@ -584,11 +584,13 @@ int main(int argc, char **argv) {
                                      FLAGS_indicus_time_delta, part);
       replica = new pbftstore::Replica(config, &keyManager,
                                        dynamic_cast<pbftstore::App *>(server),
-                                       FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages, FLAGS_indicus_sig_batch_timeout,
-                                       FLAGS_indicus_sig_batch, FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
+                                       FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
+                                       FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
+                                       FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
+                                       FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
+      //FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
       break;
   }
-
       // HotStuff
   case PROTO_HOTSTUFF: {
       server = new hotstuffstore::Server(config, &keyManager,
