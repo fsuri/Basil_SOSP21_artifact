@@ -51,7 +51,7 @@ public:
 
  private:
   // HotStuff
-  typedef std::function<void(const std::string&)> hotstuff_exec_callback;
+  typedef std::function<void(const std::string&, uint32_t seqnum)> hotstuff_exec_callback;
   IndicusInterface hotstuff_interface;
   
   const transport::Configuration &config;
@@ -105,7 +105,7 @@ public:
   uint64_t execSeqNum;
   uint64_t execBatchNum;
   // map from seqnum to the digest pending execution at that sequence number
-  std::unordered_map<uint64_t, std::string> pendingExecutions;
+  std::unordered_map<uint32_t, std::string> pendingExecutions;
 
   void SendPreprepare(uint64_t seqnum, const proto::Preprepare& preprepare);
   // map from seqnum to timer ids. If the primary commits the sequence number

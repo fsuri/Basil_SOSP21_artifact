@@ -42,7 +42,7 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   currentView = 0;
   // initial seqnum
   nextSeqNum = 0;
-  execSeqNum = 0;
+  execSeqNum = 1;
   execBatchNum = 0;
 
   batchTimerRunning = false;
@@ -163,22 +163,40 @@ void Replica::HandleRequest(const TransportAddress &remote,
     replyAddrs[digest] = remote.clone();
 
     // prepare the callback function for HotStuff
-    hotstuff_exec_callback execb = [this](const std::string &digest) {
-        if (requests.find(digest) != requests.end()) {
-            proto::PackedMessage packedMsg = requests[digest];
-            std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
-            for (const auto& reply : replies) {
-                if (reply != nullptr) {
-                    Debug("Sending reply");
-                    stats->Increment("execs_sent",1);
-                    transport->SendMessage(this, *replyAddrs[digest], *reply);
-                    delete reply;
+    hotstuff_exec_callback execb = [this](const std::string &digest_param, uint32_t seqnum) {
+
+        std::string digest(digest_param);
+
+        if (seqnum != execSeqNum) {
+            // put to pending buffer
+            pendingExecutions[seqnum] = digest;
+        } else {
+            // starts execution
+            while (true) {
+                if (requests.find(digest) != requests.end()) {
+                    proto::PackedMessage packedMsg = requests[digest];
+                    std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
+                    for (const auto& reply : replies) {
+                        if (reply != nullptr) {
+                            Debug("Sending reply");
+                            stats->Increment("execs_sent",1);
+                            transport->SendMessage(this, *replyAddrs[digest], *reply);
+                            delete reply;
+                        } else {
+                            Debug("Invalid execution");
+                        }
+                    }
                 } else {
-                    Debug("Invalid execution");
+                    Panic("unimplemented: try to execute request that has not been received");
+                }
+
+                execSeqNum++;
+                if (pendingExecutions.count(execSeqNum)) {
+                    digest = pendingExecutions[execSeqNum];
+                } else {
+                    break;
                 }
             }
-        } else {
-            Panic("unimplemented: try to execute request that has not been received");
         }
     };
 

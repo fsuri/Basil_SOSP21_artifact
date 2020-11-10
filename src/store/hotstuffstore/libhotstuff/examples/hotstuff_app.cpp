@@ -132,7 +132,7 @@ class HotStuffApp: public HotStuff {
     void start(const std::vector<std::tuple<NetAddr, bytearray_t, bytearray_t>> &reps);
     void stop();
 
-    void interface_propose(const string &hash,  std::function<void(const std::string&)> cb);
+    void interface_propose(const string &hash,  std::function<void(const std::string&, uint32_t seqnum)> cb);
 };
 
 std::pair<std::string, std::string> split_ip_port_cport(const std::string &s) {
@@ -196,11 +196,12 @@ void HotStuffApp::client_request_cmd_handler(MsgReqCmd &&msg, const conn_t &conn
     });
 }
 
-void HotStuffApp::interface_propose(const string &hash,  std::function<void(const std::string&)> cb) {
+void HotStuffApp::interface_propose(const string &hash,  std::function<void(const std::string&, uint32_t seqnum)> cb) {
     uint256_t cmd_hash((const uint8_t *)hash.c_str());
     exec_command(cmd_hash, [this, hash, cb](Finality fin) {
             //resp_queue.enqueue(std::make_pair(fin, addr));
-            cb(hash);
+            // fin->cmd_height
+            cb(hash, fin.cmd_height);
     });
 }
 
