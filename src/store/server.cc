@@ -279,6 +279,7 @@ DEFINE_bool(indicus_dispatchMessageReceive, false, "delegating serialization to 
 
 DEFINE_uint64(indicus_process_id, 0, "id used for Threadpool core affinity");
 DEFINE_uint64(indicus_total_processes, 1, "number of server processes per machine");
+DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
 
 DEFINE_uint64(pbft_esig_batch, 1, "signature batch size"
 		" sig batch size (for PBFT decision phase)");
@@ -422,7 +423,7 @@ int main(int argc, char **argv) {
 			// 	tport = new TCPTransport(0.0, 0.0, 0, false, 0, 1);
 			// 	break;
 			// }
-      tport = new TCPTransport(0.0, 0.0, 0, false, FLAGS_indicus_process_id, FLAGS_indicus_total_processes);
+      tport = new TCPTransport(0.0, 0.0, 0, false, FLAGS_indicus_process_id, FLAGS_indicus_total_processes, FLAGS_indicus_hyper_threading, true);
 			 //TODO: add: process_id + total processes (max_grpid/ machines (= servers/n))
       break;
     case TRANS_UDP:
@@ -677,8 +678,8 @@ int main(int argc, char **argv) {
 	if(proto == PROTO_INDICUS && FLAGS_indicus_multi_threading){
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
-		bool hyperthreading = true; //TODO::turn this into a flag
-	  int num_cpus = std::thread::hardware_concurrency()/(2-hyperthreading);
+		//bool hyperthreading = true;
+	  int num_cpus = std::thread::hardware_concurrency()/(2-FLAGS_indicus_hyper_threading);
 		//CPU_SET(num_cpus-1, &cpuset); //last core is for main
 		num_cpus /= FLAGS_indicus_total_processes;
 	  int offset = FLAGS_indicus_process_id * num_cpus;

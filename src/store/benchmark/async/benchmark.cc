@@ -217,6 +217,8 @@ DEFINE_bool(indicus_batch_verification, false, "using ed25519 donna batch verifi
 DEFINE_uint64(indicus_batch_verification_size, 64, "batch size for ed25519 donna batch verification");
 DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout, ms");
 
+DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
+
 const std::string if_args[] = {
   "client-crash",
 	"client-equivocate"
@@ -679,7 +681,7 @@ int main(int argc, char **argv) {
 
   switch (trans) {
     case TRANS_TCP:
-      tport = new TCPTransport(0.0, 0.0, 0, false);
+      tport = new TCPTransport(0.0, 0.0, 0, false, 0, 1, FLAGS_indicus_hyper_threading, false);
       break;
     case TRANS_UDP:
       tport = new UDPTransport(0.0, 0.0, 0, nullptr);

@@ -918,7 +918,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
   }
    return (void*) true;
  };
- if(params.multiThreading){
+ if(params.multiThreading && mainThreadDispatching){
    transport->DispatchTP_main(std::move(f));
  }
  else{

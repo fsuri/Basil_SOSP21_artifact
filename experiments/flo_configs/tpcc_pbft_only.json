@@ -10,12 +10,12 @@
   ],
   "replication_protocol": ["pbft"],
   "client_protocol_mode": ["pbft"],
-  "num_shards": [8],
-  "num_groups": [8],
+  "num_shards": [6],
+  "num_groups": [6],
   "benchmark_name": "tpcc-sync",
   "partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
-  "server_load_time":  20,
+  "server_load_time":  10,
   "tpcc_stock_level_ratio": 4,
   "tpcc_delivery_ratio": 4,
   "tpcc_order_status_ratio": 4,
@@ -43,10 +43,10 @@
       "validate_proofs": true,
       "sign_messages": true,
       "signature_type": 4,
-      "sig_batch": 16,
-      "sig_batch_timeout": 10,
+      "sig_batch": 2,
+      "sig_batch_timeout": 4,
       "ebatch_size": 2,
-      "ebatch_tout": 10,
+      "ebatch_tout": 4,
       "multi_threading": false,
 	  "mainThreadDispatching": false,
 	  "dispatchMessageReceive": false,
@@ -59,11 +59,11 @@
   "codebase_name": "indicus",
   "client_total": [
    
-    [64]
+    [126]
   ],
   "client_processes_per_client_node": [
    
-    [8]
+    [6]
   ],
   "client_threads_per_process": [
    
@@ -86,13 +86,18 @@
   "fault_tolerance": 1,
   "server_names": [
    
-	["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0"]
+	 ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
+    "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
+    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2"]
   ],
   "server_regions": [
     
 	{
       "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2"],
-      "eu-west-1": ["eu-west-1-0"]
+      "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
+      "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
+        "ap-northeast-1-2"],
+      "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2"]
     }
   ],
   "region_rtt_latencies": {

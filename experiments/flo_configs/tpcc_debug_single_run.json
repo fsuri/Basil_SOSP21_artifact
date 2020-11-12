@@ -10,8 +10,8 @@
   ],
   "replication_protocol": ["indicus"],
   "client_protocol_mode": ["indicus"],
-  "num_shards": [24],
-  "num_groups": [24],
+  "num_shards": [3],
+  "num_groups": [3],
   "benchmark_name": "tpcc-sync",
   "partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
@@ -85,6 +85,7 @@
      
 	  "multi_threading": true,
 	  "mainThreadDispatching": true,
+      "client_multi_threading": false,
 	  "dispatchMessageReceive": false,
       "batch_verification": false,
       "_key_path": "/usr/local/etc/indicus-keys/secp256k1",
@@ -97,7 +98,7 @@
     [126]
   ],
   "client_processes_per_client_node": [
-    [ 7]
+    [ 6]
   ],
   "client_threads_per_process": [
     [ 1]
