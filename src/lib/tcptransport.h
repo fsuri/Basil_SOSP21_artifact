@@ -73,7 +73,8 @@ class TCPTransport : public TransportCommon<TCPTransportAddress>
 public:
     TCPTransport(double dropRate = 0.0, double reogrderRate = 0.0,
                     int dscp = 0, bool handleSignals = true,
-                     int process_id = 0, int total_processes = 1, bool hyperthreading = true, bool server = true);
+                     int process_id = 0, int total_processes = 1,
+                     bool hyperthreading = true, bool server = true);
     virtual ~TCPTransport();
     virtual void Register(TransportReceiver *receiver,
                   const transport::Configuration &config,

@@ -251,7 +251,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
 
 
- //FB datastructure mutexes  //TODO: use them in all FB functions...
+ //FB datastructure mutexes //TODO make them shared too //TODO: use them in all FB functions...
   std::mutex p1ConflictsMutex;
   mutable std::mutex p1DecisionsMutex;
   mutable std::mutex p2DecisionsMutex;

@@ -107,7 +107,7 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
     int num_cpus = std::thread::hardware_concurrency()/(2-hyperthreading);
     fprintf(stderr, "Num_cpus: %d \n", num_cpus);
     num_cpus /= total_processes;
-    int offset = process_id * num_cpus;
+    //int offset = process_id * num_cpus;
     Debug("num cpus %d", num_cpus);
     uint32_t num_threads = (uint32_t) std::max(1, num_cpus);
     running = true;
@@ -140,7 +140,7 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
       });
       cpu_set_t cpuset;
       CPU_ZERO(&cpuset);
-      CPU_SET(i+offset, &cpuset);
+      CPU_SET(i, &cpuset);
       int rc = pthread_setaffinity_np(t->native_handle(),
                                       sizeof(cpu_set_t), &cpuset);
       if (rc != 0) {

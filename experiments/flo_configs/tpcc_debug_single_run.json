@@ -28,7 +28,7 @@
   "client_retry_aborted": true,
   "client_max_attempts": -1,
   "client_max_backoff": 2500,
-  "client_message_timeout": 30000,
+  "client_message_timeout": 10000,
   "run_locally": false,
   "stats_merge_lists": ["txn_groups", "sig_batch"],
 
@@ -85,7 +85,8 @@
      
 	  "multi_threading": true,
 	  "mainThreadDispatching": true,
-      "client_multi_threading": false,
+      "client_multi_threading": true,
+      "hyper_threading": false,
 	  "dispatchMessageReceive": false,
       "batch_verification": false,
       "_key_path": "/usr/local/etc/indicus-keys/secp256k1",
@@ -95,13 +96,13 @@
   "experiment_name": "indicus",
   "codebase_name": "indicus",
   "client_total": [
-    [126]
+    [144]
   ],
   "client_processes_per_client_node": [
-    [ 6]
+    [8]
   ],
   "client_threads_per_process": [
-    [ 1]
+    [1]
   ],
   "client_nodes_per_server": 1,
   "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],
