@@ -34,6 +34,7 @@
 #include "lib/assert.h"
 #include "lib/message.h"
 #include "store/common/timestamp.h"
+#include "lib/latency.h"
 
 #include <set>
 #include <map>
@@ -41,11 +42,14 @@
 #include <mutex>
 #include <shared_mutex>
 
+
 template<class T, class V>
 class VersionedKVStore {
  public:
   VersionedKVStore();
   ~VersionedKVStore();
+
+  Latency_t storeLockLat;
 
   bool get(const std::string &key, std::pair<T, V> &value);
   bool get(const std::string &key, const T &t, std::pair<T, V> &value);
@@ -85,7 +89,7 @@ class VersionedKVStore {
 };
 
 template<class T, class V>
-VersionedKVStore<T, V>::VersionedKVStore() { }
+VersionedKVStore<T, V>::VersionedKVStore() { }//_Latency_Init(&storeLockLat, "store_lock_lat");}
 
 template<class T, class V>
 VersionedKVStore<T, V>::~VersionedKVStore() { }
@@ -187,7 +191,9 @@ template<class T, class V>
 void VersionedKVStore<T, V>::put(const std::string &key, const V &value,
     const T &t) {
   // Key does not exist. Create a list and an entry.
+  //Latency_Start(&storeLockLat);
   std::unique_lock lock(storeMutex);
+  //Latency_End(&storeLockLat);
   store[key].insert(VersionedKVStore<T, V>::VersionedValue(t, value));
 }
 
@@ -203,7 +209,9 @@ void VersionedKVStore<T, V>::commitGet(const std::string &key,
     typename std::set<VersionedKVStore<T, V>::VersionedValue>::iterator it;
     getValue(key, readTime, it);
 
+    //Latency_Start(&storeLockLat);
     std::unique_lock lock(storeMutex);
+    //Latency_End(&storeLockLat);
     if (it != store[key].end()) {
       // figure out if anyone has read this version before
       if (lastReads.find(key) != lastReads.end() &&
@@ -257,7 +265,9 @@ bool VersionedKVStore<T, V>::getLastRead(const std::string &key, const T &t,
 template<class T, class V>
 bool VersionedKVStore<T, V>::getCommittedAfter(const std::string &key,
     const T &t, std::vector<std::pair<T, V>> &values) {
+  //Latency_Start(&storeLockLat);
   std::shared_lock lock(storeMutex);
+  //Latency_End(&storeLockLat);
   VersionedKVStore<T, V>::VersionedValue v(t);
   const auto itr = store.find(key);
   if (itr != store.end()) {

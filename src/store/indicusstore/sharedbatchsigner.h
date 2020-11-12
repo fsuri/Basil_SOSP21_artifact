@@ -42,6 +42,8 @@ class SharedBatchSigner : public BatchSigner {
           proto::SignedMessage *signedMessage, signedCallback cb,
           bool finishBatch = false) override;
 
+  //Latency_t waitOnBatchLock;
+
  private:
   void BatchTimeout();
   void SignBatch();
@@ -106,6 +108,8 @@ class SharedBatchSigner : public BatchSigner {
   std::map<uint64_t, named_mutex *> completionQueueMtx;
   std::map<uint64_t, named_condition *> completionQueueReady;
   std::map<uint64_t, SignatureWorkQueue *> completionQueues;
+
+
 
 
 };

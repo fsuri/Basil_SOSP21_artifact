@@ -14,6 +14,7 @@
 #include "store/indicusstore/indicus-proto.pb.h"
 #include "store/indicusstore/common.h"
 #include "store/common/stats.h"
+#include "lib/latency.h"
 
 namespace indicusstore {
 
@@ -36,6 +37,7 @@ class BatchSigner {
       bool finishBatch = false) = 0;
 
   std::mutex batchMutex;
+  //Latency_t waitOnBatchLock;
 
  protected:
   Transport *transport;
@@ -46,6 +48,8 @@ class BatchSigner {
   const uint64_t id;
   const bool adjustBatchSize;
   const uint64_t merkleBranchFactor;
+
+
 
 
 };

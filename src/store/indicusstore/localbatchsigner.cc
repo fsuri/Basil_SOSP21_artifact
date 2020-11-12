@@ -15,14 +15,18 @@ LocalBatchSigner::LocalBatchSigner(Transport *transport, KeyManager *keyManager,
     transport->TimerMicro(batchTimeoutMicro, std::bind(
         &LocalBatchSigner::AdjustBatchSize, this));
   }
+  //_Latency_Init(&waitOnBatchLock, "batch_lock_lat");
 }
 
 LocalBatchSigner::~LocalBatchSigner() {
+  //Latency_Dump(&waitOnBatchLock);
 }
 
 void LocalBatchSigner::MessageToSign(::google::protobuf::Message* msg,
     proto::SignedMessage *signedMessage, signedCallback cb, bool finishBatch) {
+  //Latency_Start(&waitOnBatchLock);
   std::unique_lock<std::mutex> lock(this->batchMutex);
+  //Latency_End(&waitOnBatchLock);
   if (initialBatchSize == 1) {
     Debug("Initial batch size = 1, immediately signing");
     SignMessage(msg, keyManager->GetPrivateKey(id), id,
