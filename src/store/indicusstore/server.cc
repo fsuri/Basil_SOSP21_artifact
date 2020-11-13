@@ -76,7 +76,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   _Latency_Init(&verifyLat, "verify_lat");
   _Latency_Init(&signLat, "sign_lat");
   _Latency_Init(&waitingOnLocks, "lock_lat");
-  _Latency_Init(&waitOnProtoLock, "proto_lock_lat");
+  //_Latency_Init(&waitOnProtoLock, "proto_lock_lat");
   //_Latency_Init(&store.storeLockLat, "store_lock_lat");
 
   if (params.signatureBatchSize == 1) {
@@ -127,9 +127,9 @@ Server::~Server() {
   std::cerr << "Hash cat count: " << BatchedSigs::hashCatCount << std::endl;
   std::cerr << "Total count: " << BatchedSigs::hashCount + BatchedSigs::hashCatCount << std::endl;
 
-
+  std::cerr << "Store wait latency (ms): " << store.lock_time << std::endl; 
   Latency_Dump(&waitingOnLocks);
-  Latency_Dump(&waitOnProtoLock);
+  //Latency_Dump(&waitOnProtoLock);
   //Latency_Dump(&batchSigner->waitOnBatchLock);
   //Latency_Dump(&(store.storeLockLat));
   Notice("Freeing verifier.");
@@ -2185,9 +2185,9 @@ proto::ReadReply *Server::GetUnusedReadReply() {
 }
 
 proto::Phase1Reply *Server::GetUnusedPhase1Reply() {
-  Latency_Start(&waitOnProtoLock);
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p1ReplyProtoMutex);
-  Latency_End(&waitOnProtoLock);
+  //Latency_End(&waitOnProtoLock);
   proto::Phase1Reply *reply;
   if (p1Replies.size() > 0) {
     reply = p1Replies.back();
@@ -2200,9 +2200,9 @@ proto::Phase1Reply *Server::GetUnusedPhase1Reply() {
 }
 
 proto::Phase2Reply *Server::GetUnusedPhase2Reply() {
-  Latency_Start(&waitOnProtoLock);
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p2ReplyProtoMutex);
-  Latency_End(&waitOnProtoLock);
+  //Latency_End(&waitOnProtoLock);
   proto::Phase2Reply *reply;
   if (p2Replies.size() > 0) {
     reply = p2Replies.back();
@@ -2228,9 +2228,9 @@ proto::Read *Server::GetUnusedReadmessage() {
 }
 
 proto::Phase1 *Server::GetUnusedPhase1message() {
-  Latency_Start(&waitOnProtoLock);
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p1ProtoMutex);
-  Latency_End(&waitOnProtoLock);
+  //Latency_End(&waitOnProtoLock);
   proto::Phase1 *msg;
   if (p1messages.size() > 0) {
     msg = p1messages.back();
@@ -2243,9 +2243,9 @@ proto::Phase1 *Server::GetUnusedPhase1message() {
 }
 
 proto::Phase2 *Server::GetUnusedPhase2message() {
-  Latency_Start(&waitOnProtoLock);
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p2ProtoMutex);
-  Latency_End(&waitOnProtoLock);
+  //Latency_End(&waitOnProtoLock);
   proto::Phase2 *msg;
   if (p2messages.size() > 0) {
     msg = p2messages.back();
@@ -2258,9 +2258,9 @@ proto::Phase2 *Server::GetUnusedPhase2message() {
 }
 
 proto::Writeback *Server::GetUnusedWBmessage() {
-  Latency_Start(&waitOnProtoLock);
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(WBProtoMutex);
-  Latency_End(&waitOnProtoLock);
+  //Latency_End(&waitOnProtoLock);
   proto::Writeback *msg;
   if (WBmessages.size() > 0) {
     msg = WBmessages.back();
@@ -2297,23 +2297,23 @@ void Server::FreeReadmessage(proto::Read *msg) {
 }
 
 void Server::FreePhase1message(proto::Phase1 *msg) {
-  Latency_Start(&waitOnProtoLock);
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p1ProtoMutex);
-  Latency_End(&waitOnProtoLock);
+  //Latency_End(&waitOnProtoLock);
   p1messages.push_back(msg);
 }
 
 void Server::FreePhase2message(proto::Phase2 *msg) {
-  Latency_Start(&waitOnProtoLock);
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p2ProtoMutex);
-  Latency_End(&waitOnProtoLock);
+  //Latency_End(&waitOnProtoLock);
   p2messages.push_back(msg);
 }
 
 void Server::FreeWBmessage(proto::Writeback *msg) {
-  Latency_Start(&waitOnProtoLock);
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(WBProtoMutex);
-  Latency_End(&waitOnProtoLock);
+  //Latency_End(&waitOnProtoLock);
   WBmessages.push_back(msg);
 }
 

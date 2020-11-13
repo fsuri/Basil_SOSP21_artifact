@@ -384,7 +384,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
   Latency_t waitingOnLocks;
 
-  Latency_t waitOnProtoLock;
+  //Latency_t waitOnProtoLock;
 };
 
 } // namespace indicusstore
