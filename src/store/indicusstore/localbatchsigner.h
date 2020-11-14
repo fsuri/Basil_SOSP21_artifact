@@ -32,6 +32,7 @@ class LocalBatchSigner : public BatchSigner {
           proto::SignedMessage *signedMessage, signedCallback cb, bool finishBatch = false) override;
 
   std::mutex batchMutex;
+  //Latency_t waitOnBatchLock;
 
  private:
   void SignBatch();
@@ -56,6 +57,7 @@ class LocalBatchSigner : public BatchSigner {
   std::mutex verifierMutex;
   bool signing; //true if Sign has been called. False at end of sign.
   std::condition_variable cv;
+
 
 };
 

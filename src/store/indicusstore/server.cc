@@ -75,6 +75,9 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
   _Latency_Init(&verifyLat, "verify_lat");
   _Latency_Init(&signLat, "sign_lat");
+  _Latency_Init(&waitingOnLocks, "lock_lat");
+  //_Latency_Init(&waitOnProtoLock, "proto_lock_lat");
+  //_Latency_Init(&store.storeLockLat, "store_lock_lat");
 
   if (params.signatureBatchSize == 1) {
     //verifier = new BasicVerifier(transport);
@@ -123,6 +126,12 @@ Server::~Server() {
   std::cerr << "Hash count: " << BatchedSigs::hashCount << std::endl;
   std::cerr << "Hash cat count: " << BatchedSigs::hashCatCount << std::endl;
   std::cerr << "Total count: " << BatchedSigs::hashCount + BatchedSigs::hashCatCount << std::endl;
+
+  std::cerr << "Store wait latency (ms): " << store.lock_time << std::endl; 
+  Latency_Dump(&waitingOnLocks);
+  //Latency_Dump(&waitOnProtoLock);
+  //Latency_Dump(&batchSigner->waitOnBatchLock);
+  //Latency_Dump(&(store.storeLockLat));
   Notice("Freeing verifier.");
   delete verifier;
    if(mainThreadDispatching) committedMutex.lock();
@@ -156,6 +165,7 @@ Server::~Server() {
   }
   Latency_Dump(&verifyLat);
   Latency_Dump(&signLat);
+
 }
 
  void PrintSendCount(){
@@ -545,9 +555,11 @@ void Server::HandlePhase1(const TransportAddress &remote,
   proto::ConcurrencyControl::Result result;
   const proto::CommittedProof *committedProof;
   // no-replays property, i.e. recover existing decision/result from storage
+  Latency_Start(&waitingOnLocks);
    if(mainThreadDispatching) p1ConflictsMutex.lock();
    if(mainThreadDispatching) p1DecisionsMutex.lock();
    if(mainThreadDispatching) interestedClientsMutex.lock();
+  Latency_End(&waitingOnLocks);
 
   if(p1Decisions.find(txnDigest) != p1Decisions.end()){
     result = p1Decisions[txnDigest];
@@ -582,8 +594,10 @@ void Server::HandlePhase1(const TransportAddress &remote,
       }
     }
     //KEEP track of interested client
+    Latency_Start(&waitingOnLocks);
      if(mainThreadDispatching) interestedClientsMutex.lock();
      if(mainThreadDispatching) current_viewsMutex.lock();
+    Latency_End(&waitingOnLocks);
     current_views[txnDigest] = 0;
     interestedClients[txnDigest].insert(remote.clone());
      if(mainThreadDispatching) interestedClientsMutex.unlock();
@@ -591,7 +605,9 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
     proto::Transaction *txn = msg.release_txn();
 
+    Latency_Start(&waitingOnLocks);
      if(mainThreadDispatching) ongoingMutex.lock();
+     Latency_End(&waitingOnLocks);
     ongoing[txnDigest] = txn;
      if(mainThreadDispatching) ongoingMutex.unlock();
 
@@ -918,7 +934,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
   }
    return (void*) true;
  };
- if(params.multiThreading){
+ if(params.multiThreading && mainThreadDispatching){
    transport->DispatchTP_main(std::move(f));
  }
  else{
@@ -1389,7 +1405,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       txn.timestamp().timestamp(), txn.timestamp().id());
   Timestamp ts(txn.timestamp());
 
+  Latency_Start(&waitingOnLocks);
    if(mainThreadDispatching) preparedMutex.lock_shared();
+  Latency_End(&waitingOnLocks);
 
   if (prepared.find(txnDigest) == prepared.end()) {
     if (CheckHighWatermark(ts)) {
@@ -1434,8 +1452,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
           return proto::ConcurrencyControl::ABORT;
         }
       }
-
+      Latency_Start(&waitingOnLocks);
        if(mainThreadDispatching) preparedWritesMutex.lock_shared();
+      Latency_End(&waitingOnLocks);
 
       const auto preparedWritesItr = preparedWrites.find(read.key());
       if (preparedWritesItr != preparedWrites.end()) {
@@ -1464,8 +1483,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       if (!IsKeyOwned(write.key())) {
         continue;
       }
-
+      Latency_Start(&waitingOnLocks);
        if(mainThreadDispatching) committedReadsMutex.lock_shared();
+      Latency_End(&waitingOnLocks);
       auto committedReadsItr = committedReads.find(write.key());
 
       if (committedReadsItr != committedReads.end() && committedReadsItr->second.size() > 0) {
@@ -1498,7 +1518,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       }
        if(mainThreadDispatching) committedReadsMutex.unlock_shared();
 
+       Latency_Start(&waitingOnLocks);
        if(mainThreadDispatching) preparedReadsMutex.lock_shared();
+       Latency_End(&waitingOnLocks);
       const auto preparedReadsItr = preparedReads.find(write.key());
       if (preparedReadsItr != preparedReads.end()) {
         for (const auto preparedReadTxn : preparedReadsItr->second) {
@@ -1539,8 +1561,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         }
       }
        if(mainThreadDispatching) preparedReadsMutex.unlock_shared();
+       Latency_Start(&waitingOnLocks);
        if(mainThreadDispatching) rtsMutex.lock_shared();
-
+       Latency_End(&waitingOnLocks);
       auto rtsItr = rts.find(write.key());
       if (rtsItr != rts.end()) {
         auto rtsRBegin = rtsItr->second.rbegin();
@@ -1581,9 +1604,11 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     }
 
     if (params.validateProofs && params.signedMessages && !params.verifyDeps) {
+      Latency_Start(&waitingOnLocks);
       auto committedMutexScope = mainThreadDispatching ? std::shared_lock<std::shared_mutex>(committedMutex) : std::shared_lock<std::shared_mutex>();
       auto abortedMutexScope = mainThreadDispatching ? std::shared_lock<std::shared_mutex>(abortedMutex) : std::shared_lock<std::shared_mutex>();
       auto preparedMutexScope = mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedMutex) : std::shared_lock<std::shared_mutex>();
+      Latency_End(&waitingOnLocks);
       Debug("Exec MessageToSign by CPU: %d", sched_getcpu());
       for (const auto &dep : txn.deps()) {
         if (dep.involved_group() != groupIdx) {
@@ -1607,12 +1632,13 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
 
   bool allFinished = true;
 
-
+  Latency_Start(&waitingOnLocks);
    if(mainThreadDispatching) dependentsMutex.lock();
    if(mainThreadDispatching) waitingDependenciesMutex.lock();
    if(mainThreadDispatching) ongoingMutex.lock_shared();
    if(mainThreadDispatching) committedMutex.lock_shared();
    if(mainThreadDispatching) abortedMutex.lock_shared();
+  Latency_End(&waitingOnLocks);
 
 
   for (const auto &dep : txn.deps()) {
@@ -1746,8 +1772,9 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
     //testing_committed_proof.pop_back();
   }
   val.proof = proof;
-
+  Latency_Start(&waitingOnLocks);
    if(mainThreadDispatching) committedMutex.lock();
+  Latency_End(&waitingOnLocks);
   auto committedItr = committed.insert(std::make_pair(txnDigest, proof));
   //auto committedItr =committed.emplace(txnDigest, proof);
    if(mainThreadDispatching) committedMutex.unlock();
@@ -1775,7 +1802,9 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
     store.commitGet(read.key(), read.readtime(), ts);
      //if(mainThreadDispatching) storeMutex.unlock();
     //Latency_Start(&committedReadInsertLat);
+    Latency_Start(&waitingOnLocks);
      if(mainThreadDispatching) committedReadsMutex.lock();
+     Latency_End(&waitingOnLocks);
      //this could be a readlock for dstruct + a lock per object. (need write lock the first time)
     committedReads[read.key()].insert(std::make_tuple(ts, read.readtime(),
           committedItr.first->second));
@@ -1797,8 +1826,9 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
      //if(mainThreadDispatching) storeMutex.lock();
     store.put(write.key(), val, ts);
      //if(mainThreadDispatching) storeMutex.unlock();
-
+     Latency_Start(&waitingOnLocks);
      if(mainThreadDispatching) rtsMutex.lock();
+     Latency_End(&waitingOnLocks);
     auto rtsItr = rts.find(write.key());
     if (rtsItr != rts.end()) {
       auto itr = rtsItr->second.begin();
@@ -1826,6 +1856,7 @@ void Server::Abort(const std::string &txnDigest) {
 
 void Server::Clean(const std::string &txnDigest) {
 
+  Latency_Start(&waitingOnLocks);
   auto ongoingMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(ongoingMutex) : std::unique_lock<std::shared_mutex>();
   auto preparedMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedMutex) : std::unique_lock<std::shared_mutex>();
   auto preparedReadsMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedReadsMutex) : std::unique_lock<std::shared_mutex>();
@@ -1837,7 +1868,7 @@ void Server::Clean(const std::string &txnDigest) {
   auto current_viewsMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(current_viewsMutex) : std::unique_lock<std::mutex>();
   auto decision_viewsMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(decision_viewsMutex) : std::unique_lock<std::mutex>();
   auto ElectQuorumMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(ElectQuorumMutex) : std::unique_lock<std::mutex>();
-
+  Latency_End(&waitingOnLocks);
 
   auto itr = prepared.find(txnDigest);
   if (itr != prepared.end()) {
@@ -1879,8 +1910,10 @@ void Server::Clean(const std::string &txnDigest) {
 }
 
 void Server::CheckDependents(const std::string &txnDigest) {
+  Latency_Start(&waitingOnLocks);
    if(mainThreadDispatching) dependentsMutex.lock(); //read lock
    if(mainThreadDispatching) waitingDependenciesMutex.lock();
+  Latency_End(&waitingOnLocks);
 
   auto dependentsItr = dependents.find(txnDigest);
   if (dependentsItr != dependents.end()) {
@@ -1911,7 +1944,9 @@ void Server::CheckDependents(const std::string &txnDigest) {
 
 proto::ConcurrencyControl::Result Server::CheckDependencies(
     const std::string &txnDigest) {
+      Latency_Start(&waitingOnLocks);
    if(mainThreadDispatching) ongoingMutex.lock_shared();
+   Latency_End(&waitingOnLocks);
 
   auto txnItr = ongoing.find(txnDigest);
   UW_ASSERT(txnItr != ongoing.end());
@@ -2150,7 +2185,9 @@ proto::ReadReply *Server::GetUnusedReadReply() {
 }
 
 proto::Phase1Reply *Server::GetUnusedPhase1Reply() {
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p1ReplyProtoMutex);
+  //Latency_End(&waitOnProtoLock);
   proto::Phase1Reply *reply;
   if (p1Replies.size() > 0) {
     reply = p1Replies.back();
@@ -2163,7 +2200,9 @@ proto::Phase1Reply *Server::GetUnusedPhase1Reply() {
 }
 
 proto::Phase2Reply *Server::GetUnusedPhase2Reply() {
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p2ReplyProtoMutex);
+  //Latency_End(&waitOnProtoLock);
   proto::Phase2Reply *reply;
   if (p2Replies.size() > 0) {
     reply = p2Replies.back();
@@ -2189,7 +2228,9 @@ proto::Read *Server::GetUnusedReadmessage() {
 }
 
 proto::Phase1 *Server::GetUnusedPhase1message() {
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p1ProtoMutex);
+  //Latency_End(&waitOnProtoLock);
   proto::Phase1 *msg;
   if (p1messages.size() > 0) {
     msg = p1messages.back();
@@ -2202,7 +2243,9 @@ proto::Phase1 *Server::GetUnusedPhase1message() {
 }
 
 proto::Phase2 *Server::GetUnusedPhase2message() {
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p2ProtoMutex);
+  //Latency_End(&waitOnProtoLock);
   proto::Phase2 *msg;
   if (p2messages.size() > 0) {
     msg = p2messages.back();
@@ -2215,7 +2258,9 @@ proto::Phase2 *Server::GetUnusedPhase2message() {
 }
 
 proto::Writeback *Server::GetUnusedWBmessage() {
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(WBProtoMutex);
+  //Latency_End(&waitOnProtoLock);
   proto::Writeback *msg;
   if (WBmessages.size() > 0) {
     msg = WBmessages.back();
@@ -2235,6 +2280,7 @@ void Server::FreeReadReply(proto::ReadReply *reply) {
 
 void Server::FreePhase1Reply(proto::Phase1Reply *reply) {
   std::unique_lock<std::mutex> lock(p1ReplyProtoMutex);
+
   reply->Clear();
   p1Replies.push_back(reply);
 }
@@ -2251,17 +2297,23 @@ void Server::FreeReadmessage(proto::Read *msg) {
 }
 
 void Server::FreePhase1message(proto::Phase1 *msg) {
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p1ProtoMutex);
+  //Latency_End(&waitOnProtoLock);
   p1messages.push_back(msg);
 }
 
 void Server::FreePhase2message(proto::Phase2 *msg) {
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(p2ProtoMutex);
+  //Latency_End(&waitOnProtoLock);
   p2messages.push_back(msg);
 }
 
 void Server::FreeWBmessage(proto::Writeback *msg) {
+  //Latency_Start(&waitOnProtoLock);
   std::unique_lock<std::mutex> lock(WBProtoMutex);
+  //Latency_End(&waitOnProtoLock);
   WBmessages.push_back(msg);
 }
 

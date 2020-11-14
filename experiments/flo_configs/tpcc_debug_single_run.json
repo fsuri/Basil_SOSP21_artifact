@@ -28,9 +28,35 @@
   "client_retry_aborted": true,
   "client_max_attempts": -1,
   "client_max_backoff": 2500,
-  "client_message_timeout": 30000,
+  "client_message_timeout": 10000,
   "run_locally": false,
   "stats_merge_lists": ["txn_groups", "sig_batch"],
+
+  "_replication_protocol_settings": [{
+    "adjust_batch_size": false,
+    "hash_digest": true,
+    "key_path": "/usr/local/etc/indicus-keys/secp256k1",
+    "max_dep_depth": -1,
+    "message_transport_type": "tcp",
+    "read_dep": "one-honest",
+    "read_messages": "read-quorum",
+    "read_quorum": "one-honest",
+    "read_reply_batch": false,
+    "shared_mem_batch": false,
+    "shared_mem_verify": false,
+    "sig_batch": 128,
+    "sig_batch_timeout": 20000,
+    "sign_messages": false,
+    "signature_type": 3,
+    "validate_proofs": false,
+    "verify_deps": false,
+    "watermark_time_delta": 30000,
+    "multi_threading": false,
+    "mainThreadDispatching": false
+    
+  }
+],
+
   "replication_protocol_settings": [
     
 
@@ -47,18 +73,20 @@
       "read_quorum": "one-honest",
 	  "p1DecisionTimeout":10,
 
-      "_max_dep_depth": -1,
-	  "hash_digest": false,
+      "_max_dep_depth": 1,
+	  "hash_digest": true,
       "verify_deps": false,
 	
-      "validate_proofs": false,
-      "sign_messages": false,
+      "validate_proofs": true,
+      "sign_messages": true,
       "signature_type": 4,
       "sig_batch": 2,
       "_sig_batch_timeout": 5000,
      
-	  "multi_threading": false,
-	  "mainThreadDispatching": false,
+	  "multi_threading": true,
+	  "mainThreadDispatching": true,
+      "client_multi_threading": true,
+      "hyper_threading": false,
 	  "dispatchMessageReceive": false,
       "batch_verification": false,
       "_key_path": "/usr/local/etc/indicus-keys/secp256k1",
@@ -68,13 +96,13 @@
   "experiment_name": "indicus",
   "codebase_name": "indicus",
   "client_total": [
-    [9]
+    [144]
   ],
   "client_processes_per_client_node": [
-    [ 1]
+    [8]
   ],
   "client_threads_per_process": [
-    [ 1]
+    [1]
   ],
   "client_nodes_per_server": 1,
   "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],
@@ -275,5 +303,7 @@
   "server_rpc_port": 8087,
   "client_gc_debug_trace": false,
   "client_cpuprofile": false,
-  "server_gc_debug_trace": false
+  "server_gc_debug_trace": false,
+  "_server_wrap_command": "valgrind --tool=none %s"
+
 }
