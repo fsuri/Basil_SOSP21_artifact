@@ -144,6 +144,6 @@ class ShardClient : public TransportReceiver {
   Stats* stats;
 };
 
-} // namespace hotstuffstore
+} // namespace pbftstore
 
 #endif /* _INDICUS_SHARDCLIENT_H_ */

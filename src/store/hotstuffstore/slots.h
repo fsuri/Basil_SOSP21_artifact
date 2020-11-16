@@ -63,6 +63,6 @@ class Slots {
     std::unordered_map<uint64_t, std::unordered_map<uint64_t, Slot>> slots;
 };
 
-}  // namespace hotstuffstore
+}  // namespace pbftstore
 
 #endif

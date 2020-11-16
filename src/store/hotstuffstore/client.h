@@ -116,6 +116,6 @@ class Client : public ::Client {
   bool IsParticipant(int g);
 };
 
-} // namespace hotstuffstore
+} // namespace pbftstore
 
-#endif /* _HOTSTUFF_CLIENT_H_ */
+#endif /* _PBFT_CLIENT_H_ */

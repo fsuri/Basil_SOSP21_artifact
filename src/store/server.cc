@@ -601,8 +601,10 @@ int main(int argc, char **argv) {
       replica = new hotstuffstore::Replica(config, &keyManager,
                                        dynamic_cast<hotstuffstore::App *>(server),
                                        FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
-                                       FLAGS_indicus_sig_batch,
-																			 FLAGS_indicus_sig_batch_timeout, FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
+                                       FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
+                                       FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
+                                       FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
+
       break;
   }
 

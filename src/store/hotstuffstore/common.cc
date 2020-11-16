@@ -5,6 +5,7 @@
 
 #include "store/common/timestamp.h"
 #include "store/common/transaction.h"
+#include "store/hotstuffstore/pbft_batched_sigs.h"
 
 namespace hotstuffstore {
 
@@ -14,13 +15,10 @@ bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager, ::google::protobuf::Message &plaintextMsg) {
   proto::PackedMessage packedMessage;
   if (!__PreValidateSignedMessage(signedMessage, keyManager, packedMessage)) {
-    Debug("PreValidate failed.");
     return false;
   }
 
   if (packedMessage.type() != plaintextMsg.GetTypeName()) {
-    Debug("Packed message type %s different from expected %s.",
-        packedMessage.type().c_str(), plaintextMsg.GetTypeName().c_str());
     return false;
   }
 
@@ -32,7 +30,6 @@ bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager, std::string &data, std::string &type) {
   proto::PackedMessage packedMessage;
   if (!__PreValidateSignedMessage(signedMessage, keyManager, packedMessage)) {
-    Debug("PreValidate failed.");
     return false;
   }
 
@@ -44,7 +41,6 @@ bool ValidateSignedMessage(const proto::SignedMessage &signedMessage,
 bool __PreValidateSignedMessage(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager, proto::PackedMessage &packedMessage) {
   if (!CheckSignature(signedMessage, keyManager)) {
-    Debug("CheckSignature failed.");
     return false;
   }
 
@@ -55,7 +51,6 @@ bool CheckSignature(const proto::SignedMessage &signedMessage,
     KeyManager *keyManager) {
     crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(
         signedMessage.replica_id());
-    Debug("Verifying with public key from replica %lu.", signedMessage.replica_id());
     // verify that the replica actually sent this reply and that we are expecting
     // this reply
     return crypto::IsMessageValid(replicaPublicKey, signedMessage.packed_msg(),
@@ -196,7 +191,9 @@ bool verifyGDecision(const proto::GroupedDecision& gdecision,
                 signedMsg.set_signature(id_sig_pair.second);
                 // Debug("signature for %lu: %s", id_sig_pair.first, string_to_hex(id_sig_pair.second).c_str());
 
-                if (CheckSignature(signedMsg, keyManager)) {
+    crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(
+        signedMsg.replica_id());
+                if (hotstuffBatchedSigs::verifyBatchedSignature(signedMsg.mutable_signature(), signedMsg.mutable_packed_msg(), replicaPublicKey)) {
                   valid_signatures.insert(id_sig_pair.first);
                 } else {
                   Debug("Failed to validate transaction decision signature for %lu", id_sig_pair.first);

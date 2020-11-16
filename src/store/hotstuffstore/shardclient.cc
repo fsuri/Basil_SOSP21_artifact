@@ -1,4 +1,5 @@
 #include "store/hotstuffstore/shardclient.h"
+#include "store/hotstuffstore/pbft_batched_sigs.h"
 #include "store/hotstuffstore/common.h"
 
 namespace hotstuffstore {
@@ -76,56 +77,72 @@ bool ShardClient::validateReadProof(const proto::CommitProof& commitProof, const
 void ShardClient::ReceiveMessage(const TransportAddress &remote,
     const std::string &t, const std::string &d,
     void *meta_data) {
-    Debug("handling message of type %s", t.c_str());
-    proto::SignedMessage signedMessage;
-    std::string type;
-    std::string data;
+      Debug("handling message of type %s", t.c_str());
+  proto::SignedMessage signedMessage;
+  std::string type;
+  std::string data;
+  proto::TransactionDecision transactionDecision;
 
-    bool recvSignedMessage = false;
-    if (t == signedMessage.GetTypeName()) {
-        if (!signedMessage.ParseFromString(d)) {
-            return;
-        }
+  bool recvSignedMessage = false;
+  if (t == signedMessage.GetTypeName()) {
+    if (!signedMessage.ParseFromString(d)) {
+      return;
+    }
 
-        if (!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
-            Debug("signature was invalid");
-            return;
-        }
-        recvSignedMessage = true;
-        Debug("signature was valid");
+    proto::PackedMessage pmsg;
+    pmsg.ParseFromString(signedMessage.packed_msg());
+    if (pmsg.type() == transactionDecision.GetTypeName()) {
+    crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(
+        signedMessage.replica_id());
+      if (!hotstuffBatchedSigs::verifyBatchedSignature(signedMessage.mutable_signature(), signedMessage.mutable_packed_msg(),
+            replicaPublicKey)) {
+             Debug("dec signature was invalid");
+             return;
+            }
+      data = pmsg.msg();
+      type = pmsg.type();
+
     } else {
-        type = t;
-        data = d;
+      if(!ValidateSignedMessage(signedMessage, keyManager, data, type)) {
+       Debug("signature was invalid");
+       return;
+      }
     }
 
-    proto::ReadReply readReply;
-    proto::TransactionDecision transactionDecision;
-    proto::GroupedDecisionAck groupedDecisionAck;
-    if (type == readReply.GetTypeName()) {
-        readReply.ParseFromString(data);
+    recvSignedMessage = true;
+    Debug("signature was valid");
+  } else {
+    type = t;
+    data = d;
+  }
 
-        if (signMessages && !recvSignedMessage) {
-            return;
-        }
+  proto::ReadReply readReply;
+  proto::GroupedDecisionAck groupedDecisionAck;
+  if (type == readReply.GetTypeName()) {
+    readReply.ParseFromString(data);
 
-        HandleReadReply(readReply, signedMessage);
-    } else if (type == transactionDecision.GetTypeName()) {
-        transactionDecision.ParseFromString(data);
-
-        if (signMessages && !recvSignedMessage) {
-            return;
-        }
-
-        HandleTransactionDecision(transactionDecision, signedMessage);
-    } else if (type == groupedDecisionAck.GetTypeName()) {
-        groupedDecisionAck.ParseFromString(data);
-
-        if (signMessages && !recvSignedMessage) {
-            return;
-        }
-
-        HandleWritebackReply(groupedDecisionAck, signedMessage);
+    if (signMessages && !recvSignedMessage) {
+      return;
     }
+
+    HandleReadReply(readReply, signedMessage);
+  } else if (type == transactionDecision.GetTypeName()) {
+    transactionDecision.ParseFromString(data);
+
+    if (signMessages && !recvSignedMessage) {
+      return;
+    }
+
+    HandleTransactionDecision(transactionDecision, signedMessage);
+  } else if (type == groupedDecisionAck.GetTypeName()) {
+    groupedDecisionAck.ParseFromString(data);
+
+    if (signMessages && !recvSignedMessage) {
+      return;
+    }
+
+    HandleWritebackReply(groupedDecisionAck, signedMessage);
+  }
 }
 
 // ================================
@@ -529,7 +546,7 @@ void ShardClient::Commit(const std::string& txn_digest, const proto::ShardDecisi
       // this->pendingWritebacks.erase(digest);
       // wtcp(REPLY_FAIL);
     });
-    pwr.timeout->Start();
+    // pwr.timeout->Start();
     // pwr.timeout = nullptr;
 
     pendingWritebacks[txn_digest] = pwr;
@@ -569,7 +586,7 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
       // this->pendingWritebacks.erase(digest);
       // wtcp(REPLY_FAIL);
     });
-    pwr.timeout->Start();
+    // pwr.timeout->Start();
     // pwr.timeout = nullptr;
 
     pendingWritebacks[txn_digest] = pwr;
