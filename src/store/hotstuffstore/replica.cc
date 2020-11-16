@@ -325,32 +325,32 @@ void Replica::HandleBatchedRequest(const TransportAddress &remote,
 
   string digest = BatchedDigest(request);
 
-  // if (!batchedRequests.count(digest)) {
-  //     batchedRequests[digest] = request;
+  // HotStuff
+  batchedRequests[digest] = request;
+  assert(digest.size() == 32);
+  hotstuff_exec_callback execb = [this](const std::string &digest_param, uint32_t seqnum) {
+      // Debug("Callback: %d, %ld", idx, seqnum);
+      pendingExecutions[seqnum] = digest_param;
 
-  //     // HotStuff
-  //     assert(digest.size() == 32);
-  //     hotstuff_exec_callback execb = [this](const std::string &digest_param, uint32_t seqnum) {
-  //         Debug("Callback: %d, %ld", idx, seqnum);
-  //         pendingExecutions[seqnum] = digest_param;
-  //         executeSlots();
-  //     };
-  //     Debug("Replica propose: %d", idx);
-  //     hotstuff_interface.propose(digest, execb);      
-  // }
+      // cannot call executeSlots() here
+      // because this function is NOT thread-safe
+      // executeSlots();
+  };
+  // Debug("Replica propose: %d", idx);
+  hotstuff_interface.propose(digest, execb);      
 
   
-  batchedRequests[digest] = request;
-  int currentPrimaryIdx = config.GetLeaderIndex(currentView);
-  if (currentPrimaryIdx == idx) {
-      proto::Preprepare preprepare;
-      uint64_t seqnum = nextSeqNum++;
-      preprepare.set_seqnum(seqnum);
-      preprepare.set_viewnum(currentView);
-      preprepare.set_digest(digest);
+  // batchedRequests[digest] = request;
+  // int currentPrimaryIdx = config.GetLeaderIndex(currentView);
+  // if (currentPrimaryIdx == idx) {
+  //     proto::Preprepare preprepare;
+  //     uint64_t seqnum = nextSeqNum++;
+  //     preprepare.set_seqnum(seqnum);
+  //     preprepare.set_viewnum(currentView);
+  //     preprepare.set_digest(digest);
 
-      SendPreprepare(seqnum, preprepare);
-  } 
+  //     SendPreprepare(seqnum, preprepare);
+  // } 
 
   executeSlots();
 }
