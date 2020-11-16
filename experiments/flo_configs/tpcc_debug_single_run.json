@@ -10,8 +10,8 @@
   ],
   "replication_protocol": ["indicus"],
   "client_protocol_mode": ["indicus"],
-  "num_shards": [2],
-  "num_groups": [2],
+  "num_shards": [3],
+  "num_groups": [3],
   "benchmark_name": "tpcc-sync",
   "partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
@@ -75,10 +75,10 @@
 
       "_max_dep_depth": 1,
 	  "hash_digest": true,
-      "verify_deps": true,
+      "verify_deps": false,
 	
       "validate_proofs": true,
-      "sign_messages": false,
+      "sign_messages": true,
       "signature_type": 4,
       "sig_batch": 2,
       "_sig_batch_timeout": 5000,

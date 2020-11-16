@@ -8,10 +8,10 @@ LD = g++
 EXPAND = lib/tmpl/expand
 
 #CFLAGS := -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2 -DNUW_ASSERT
-CFLAGS :=  -pg -no-pie -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2#-O3#-O1#-O2
-CXXFLAGS := -pg -no-pie -std=c++17 #-fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls #-fsanitize=thread
+CFLAGS :=  -g -no-pie -Wall -pthread -iquote.obj/gen -Wno-uninitialized -O2#-O3#-O1#-O2
+CXXFLAGS := -g -no-pie -std=c++17 #-fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls #-fsanitize=thread
 # -luv for HotStuff
-LDFLAGS :=  -pg -levent_pthreads -lrt -luv #-fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls #-fsanitize=thread #
+LDFLAGS := -levent_pthreads -lrt -luv #-fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls #-fsanitize=thread #
 
 ## Debian package: check
 #CHECK_CFLAGS := $(shell pkg-config --cflags check)
@@ -49,6 +49,7 @@ LDFLAGS += $(LIBSECP256K1_LDFLAGS)
 #CFLAGS += -lssl 
 #-lcrypto #need this? try out, somehow neither are necessary? what about mbits?
 LDFLAGS +=  -lssl -lcrypto -led25519_donna
+LDFLAGS += -ltbb
 
 # Google test framework. This doesn't use pkgconfig
 GTEST_DIR := /usr/src/gtest-1.10.0/googletest

@@ -4,12 +4,15 @@
 #include "assert.h"
 #include <list>
 #include <mutex>
+#include <shared_mutex>
 #include <functional>
 #include <condition_variable>
 #include <thread>
 #include <event2/event.h>
 #include <deque>
-#include "tbb/concurrent_queue.h"
+//#include "tbb/concurrent_queue.h"
+
+//using namespace tbb;
 
 class ThreadPool {
 
@@ -62,7 +65,11 @@ private:
   std::vector<std::thread*> threads;
 
   std::deque <std::function<void*()>> main_worklist;
-  //tbb::concurrent_queue <std::function<void*()>> test_list;
+  //tbb::concurrent_queue <std::pair<std::function<void*()>, EventInfo*>> testlist;
+  std::shared_mutex dummyMutex;
+  //testlist.push()
+  //testlist.try_pop(&job)
+  //testlist.size_type
   std::mutex main_worklistMutex;
   std::condition_variable cv_main;
 };
