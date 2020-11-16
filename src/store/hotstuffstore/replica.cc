@@ -331,10 +331,7 @@ void Replica::HandleBatchedRequest(const TransportAddress &remote,
   hotstuff_exec_callback execb = [this](const std::string &digest_param, uint32_t seqnum) {
       // Debug("Callback: %d, %ld", idx, seqnum);
       pendingExecutions[seqnum] = digest_param;
-
-      // cannot call executeSlots() here
-      // because this function is NOT thread-safe
-      // executeSlots();
+      executeSlots();
   };
   // Debug("Replica propose: %d", idx);
   hotstuff_interface.propose(digest, execb);      
@@ -576,6 +573,13 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
 }
 
 void Replica::executeSlots() {
+    // HotStuff
+    // this function was NOT thread-safe
+    // so I add a lock to make it thread-safe
+  static std::mutex mtx;
+  mtx.lock();
+  
+    
   Debug("exec seq num: %lu", execSeqNum);
   while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
     // cancel the commit timer
@@ -654,6 +658,10 @@ void Replica::executeSlots() {
       break;
     }
   }
+
+
+  // HotStuff
+  mtx.unlock();
 }
 
 void Replica::sendEbatch() {
