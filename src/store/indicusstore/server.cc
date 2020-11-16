@@ -66,6 +66,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     dispatchMessageReceive(dispatchMessageReceive) {
 
 
+  //store.reserve(10000);
   //Used for Fallback all to all:
   CreateSessionKeys();
   //////
@@ -127,7 +128,7 @@ Server::~Server() {
   std::cerr << "Hash cat count: " << BatchedSigs::hashCatCount << std::endl;
   std::cerr << "Total count: " << BatchedSigs::hashCount + BatchedSigs::hashCatCount << std::endl;
 
-  std::cerr << "Store wait latency (ms): " << store.lock_time << std::endl; 
+  std::cerr << "Store wait latency (ms): " << store.lock_time << std::endl;
   Latency_Dump(&waitingOnLocks);
   //Latency_Dump(&waitOnProtoLock);
   //Latency_Dump(&batchSigner->waitOnBatchLock);

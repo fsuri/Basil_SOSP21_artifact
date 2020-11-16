@@ -679,7 +679,7 @@ int main(int argc, char **argv) {
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
 		//bool hyperthreading = true;
-	  int num_cpus = std::thread::hardware_concurrency()/(2-FLAGS_indicus_hyper_threading);
+	  int num_cpus = std::thread::hardware_concurrency();///(2-FLAGS_indicus_hyper_threading);
 		//CPU_SET(num_cpus-1, &cpuset); //last core is for main
 		num_cpus /= FLAGS_indicus_total_processes;
 	  int offset = FLAGS_indicus_process_id * num_cpus;

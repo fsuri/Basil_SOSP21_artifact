@@ -9,6 +9,7 @@
 #include <thread>
 #include <event2/event.h>
 #include <deque>
+#include "tbb/concurrent_queue.h"
 
 class ThreadPool {
 
@@ -61,6 +62,7 @@ private:
   std::vector<std::thread*> threads;
 
   std::deque <std::function<void*()>> main_worklist;
+  //tbb::concurrent_queue <std::function<void*()>> test_list;
   std::mutex main_worklistMutex;
   std::condition_variable cv_main;
 };

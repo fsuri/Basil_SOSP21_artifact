@@ -10,8 +10,8 @@
   ],
   "replication_protocol": ["indicus"],
   "client_protocol_mode": ["indicus"],
-  "num_shards": [3],
-  "num_groups": [3],
+  "num_shards": [2],
+  "num_groups": [2],
   "benchmark_name": "tpcc-sync",
   "partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
@@ -75,10 +75,10 @@
 
       "_max_dep_depth": 1,
 	  "hash_digest": true,
-      "verify_deps": false,
+      "verify_deps": true,
 	
       "validate_proofs": true,
-      "sign_messages": true,
+      "sign_messages": false,
       "signature_type": 4,
       "sig_batch": 2,
       "_sig_batch_timeout": 5000,
@@ -111,7 +111,7 @@
   "server_debug_output": false,
   "server_debug_stats": false,
   "client_debug_stats": false,
-  "client_experiment_length": 100,
+  "client_experiment_length": 1000,
   "client_ramp_down": 5,
   "client_ramp_up": 30,
   "default_remote_shell": "bash",
@@ -123,11 +123,14 @@
    
     ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
     "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
-    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2",
-    "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
-    "ap-southeast-2-1", "ap-southeast-2-2"]
+    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2"] 
 	
   ],
+"__server_names" : [
+    "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
+    "ap-southeast-2-1", "ap-southeast-2-2"],
+
+
   "server_regions": [
    
     {
@@ -135,11 +138,18 @@
       "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
       "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
         "ap-northeast-1-2"],
-      "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2"],
-      "eu-central-1": ["eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
-      "ap-southeast-2": ["ap-southeast-2-0", "ap-southeast-2-1", "ap-southeast-2-2"]
+      "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2"]
     }
   ],
+
+  "__server_regions" : [
+	{
+		
+      "eu-central-1": ["eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
+      "ap-southeast-2": ["ap-southeast-2-0", "ap-southeast-2-1", "ap-southeast-2-2"]
+	}
+	],
+
   "region_rtt_latencies": {
     "us-east-1": {
       "us-east-1": 0,
