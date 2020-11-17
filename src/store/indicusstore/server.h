@@ -68,6 +68,7 @@ enum OCCType {
 
 static int rcv_count = 0;
 static int send_count = 0;
+static int commitGet_count = 0;
 //static unordered_map<TransportAddress*, int> debug_counters;
 void PrintSendCount();
 void PrintRcvCount();

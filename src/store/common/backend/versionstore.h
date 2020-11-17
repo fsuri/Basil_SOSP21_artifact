@@ -436,6 +436,9 @@ class VersionedKVStore {
   ~VersionedKVStore();
 
   long int lock_time;
+  int KVStore_size();
+  void KVStore_Reserve(int size);
+  int ReadStore_size();
 
   bool get(const std::string &key, std::pair<T, V> &value);
   bool get(const std::string &key, const T &t, std::pair<T, V> &value);
@@ -479,6 +482,22 @@ VersionedKVStore<T, V>::VersionedKVStore() { lock_time = 0;}
 
 template<class T, class V>
 VersionedKVStore<T, V>::~VersionedKVStore() { }
+
+template<class T, class V>
+int VersionedKVStore<T, V>::KVStore_size() {
+    return store.size();
+ }
+
+ template<class T, class V>
+ void VersionedKVStore<T, V>::KVStore_Reserve(int size) {
+     store.reserve(size);
+  }
+
+
+ template<class T, class V>
+ int VersionedKVStore<T, V>::ReadStore_size() {
+     return lastReads.size();
+  }
 
 template<class T, class V>
 bool VersionedKVStore<T, V>::inStore(const std::string &key) {

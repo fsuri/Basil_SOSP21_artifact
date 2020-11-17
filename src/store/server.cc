@@ -648,8 +648,10 @@ int main(int argc, char **argv) {
         ++loaded;
       }
     }
-    Debug("Stored %lu out of %lu key-value pairs from file %s.", stored,
+		Notice("Stored %lu out of %lu key-value pairs from file %s.", stored,
         loaded, FLAGS_data_file_path.c_str());
+    // Debug("Stored %lu out of %lu key-value pairs from file %s.", stored,
+    //     loaded, FLAGS_data_file_path.c_str());
   } else {
     std::ifstream in;
     in.open(FLAGS_keys_path);

@@ -66,7 +66,7 @@ private:
 
   std::deque <std::function<void*()>> main_worklist;
   //tbb::concurrent_queue <std::pair<std::function<void*()>, EventInfo*>> testlist;
-  std::shared_mutex dummyMutex;
+  //std::shared_mutex dummyMutex;
   //testlist.push()
   //testlist.try_pop(&job)
   //testlist.size_type

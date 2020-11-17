@@ -111,7 +111,7 @@
   "server_debug_output": false,
   "server_debug_stats": false,
   "client_debug_stats": false,
-  "client_experiment_length": 1000,
+  "client_experiment_length": 50,
   "client_ramp_down": 5,
   "client_ramp_up": 30,
   "default_remote_shell": "bash",
@@ -123,7 +123,8 @@
    
     ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
     "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
-    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2"] 
+    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2", "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
+    "ap-southeast-2-1", "ap-southeast-2-2"] 
 	
   ],
 "__server_names" : [
@@ -138,7 +139,9 @@
       "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
       "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
         "ap-northeast-1-2"],
-      "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2"]
+      "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2"],
+"eu-central-1": ["eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
+      "ap-southeast-2": ["ap-southeast-2-0", "ap-southeast-2-1", "ap-southeast-2-2"]
     }
   ],
 

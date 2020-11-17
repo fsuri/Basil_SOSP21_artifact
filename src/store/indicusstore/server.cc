@@ -66,7 +66,8 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     dispatchMessageReceive(dispatchMessageReceive) {
 
 
-  //store.reserve(10000);
+
+  store.KVStore_Reserve(4200000);
   //Used for Fallback all to all:
   CreateSessionKeys();
   //////
@@ -124,6 +125,10 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
 }
 
 Server::~Server() {
+  std::cerr << "KVStore size: " << store.KVStore_size() << std::endl;
+  std::cerr << "ReadStore size: " << store.ReadStore_size() << std::endl;
+  std::cerr << "commitGet count: " << commitGet_count << std::endl;
+
   std::cerr << "Hash count: " << BatchedSigs::hashCount << std::endl;
   std::cerr << "Hash cat count: " << BatchedSigs::hashCatCount << std::endl;
   std::cerr << "Total count: " << BatchedSigs::hashCount + BatchedSigs::hashCatCount << std::endl;
@@ -410,6 +415,7 @@ void Server::HandleRead(const TransportAddress &remote,
   }
 
   TransportAddress *remoteCopy = remote.clone();
+
   auto sendCB = [this, remoteCopy, readReply]() {
     //std::unique_lock<std::mutex> lock(transportMutex);
 
@@ -417,6 +423,19 @@ void Server::HandleRead(const TransportAddress &remote,
     delete remoteCopy;
     FreeReadReply(readReply);
   };
+  //TESTING:
+  // auto sendCB_wrapped = [this, remoteCopy, readReply](void* arg) {
+  //   //std::unique_lock<std::mutex> lock(transportMutex);
+  //
+  //   this->transport->SendMessage(this, *remoteCopy, *readReply);
+  //   delete remoteCopy;
+  //   FreeReadReply(readReply);
+  // };
+  //
+  // auto sendCB = [this, scb = std::move(sendCB_wrapped)]() {
+  //   //std::unique_lock<std::mutex> lock(transportMutex);
+  //   this->transport->IssueCB(scb, (void*) true);
+  // };
 
   if (occType == MVTSO) {
     /* update rts */
@@ -522,6 +541,19 @@ void Server::HandleRead(const TransportAddress &remote,
           return (void*) true;
         };
         transport->DispatchTP_noCB(std::move(f));
+
+
+        //TESTING
+        // auto g = [this, msgs, smsgs, sendCB = std::move(sendCB), write](void* arg)
+        // {
+        //   SignMessages(msgs, keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor);
+        //   sendCB();
+        //   delete write;
+        //   return (void*) true;
+        // };
+        // transport->IssueCB(std::move(g), (void*) true);
+
+        ////
 
         // std::function<void*()> f(std::bind(asyncSignMessages, msgs,
         //   keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor));
@@ -773,9 +805,9 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   proto::Phase2Reply* phase2Reply = GetUnusedPhase2Reply();
   TransportAddress *remoteCopy = remote.clone();
+
   auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
     //std::unique_lock<std::mutex> lock(transportMutex);
-
     this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
     FreePhase2Reply(phase2Reply);
@@ -785,6 +817,21 @@ void Server::HandlePhase2(const TransportAddress &remote,
     FreePhase2Reply(phase2Reply);
     delete remoteCopy;
   };
+
+  // auto sendCB_wrapped = [this, remoteCopy, phase2Reply, txnDigest](void* arg) {
+  //   //std::unique_lock<std::mutex> lock(transportMutex);
+  //
+  //   this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
+  //   Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
+  //   FreePhase2Reply(phase2Reply);
+  //   delete remoteCopy;
+  // };
+  //
+  //
+  // auto sendCB = [this, scb = std::move(sendCB_wrapped)]() {
+  //   //std::unique_lock<std::mutex> lock(transportMutex);
+  //   this->transport->IssueCB(scb, (void*) true);
+  // };
 
   phase2Reply->set_req_id(msg.req_id());
   *phase2Reply->mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
@@ -1800,7 +1847,9 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
       continue;
     }
      //if(mainThreadDispatching) storeMutex.lock(); //probably dont need? --> add locks to store.
-    store.commitGet(read.key(), read.readtime(), ts);
+
+    //store.commitGet(read.key(), read.readtime(), ts);   //SEEMINGLY NEVER USED XXX
+    //commitGet_count++;
      //if(mainThreadDispatching) storeMutex.unlock();
     //Latency_Start(&committedReadInsertLat);
     Latency_Start(&waitingOnLocks);
@@ -2015,6 +2064,18 @@ void Server::SendPhase1Reply(uint64_t reqId,
     delete remoteCopy;
   };
 
+  // auto sendCB_wrapped = [remoteCopy, this, phase1Reply](void* arg) {
+  //   //std::unique_lock<std::mutex> lock(transportMutex);
+  //
+  //   this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
+  //   FreePhase1Reply(phase1Reply);
+  //   delete remoteCopy;
+  // };
+  // auto sendCB = [this, scb = std::move(sendCB_wrapped)]() {
+  //   //std::unique_lock<std::mutex> lock(transportMutex);
+  //   this->transport->IssueCB(scb, (void*) true);
+  // };
+
   phase1Reply->mutable_cc()->set_ccr(result);
   if (params.validateProofs) {
     *phase1Reply->mutable_cc()->mutable_txn_digest() = txnDigest;
@@ -2153,8 +2214,8 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
         // };
         // transport->DispatchTP_noCB(std::move(f));
         //batchSigner->MessageToSign(msg, signedMessage, std::move(cb));
+
         batchSigner->asyncMessageToSign(msg, signedMessage, std::move(cb));
-        Debug("crashing after delegating sig request");
       }
   }
   else{

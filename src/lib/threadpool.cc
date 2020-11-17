@@ -63,20 +63,21 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
             // only acquire the lock in this block so that the
             // std::function execution is not holding the lock
             Debug("Thread %d running on CPU %d.", i, sched_getcpu());
-            std::unique_lock<std::mutex> lock(this->worklistMutex);
-            cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });
+            std::unique_lock<std::mutex> lock(this->worklistMutex);                    //STABLE_VERSION
+            cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });   //STABLE_VERSION
 
             //std::shared_lock lock(this->dummyMutex);
             //cv.wait(lock, [this, &job] { return this->testlist.try_pop(job) || !running; });
-            //while(testlist.try_pop(job) || !running) {}
+            //while(!testlist.try_pop(job) || !running) {}
+            Debug("popped job on CPU %d.", i);
             if (!running) {
               break;
             }
-            if (this->worklist.size() == 0) {
+            if (this->worklist.size() == 0) {                                        //STABLE_VERSION
               continue;
             }
-            //job = std::move(this->worklist.front());
-            //this->worklist.pop_front();
+            job = std::move(this->worklist.front());                                 //STABLE_VERSION
+            this->worklist.pop_front();                                              //STABLE_VERSION
           }
           //job();
           if(job.second){
@@ -216,8 +217,8 @@ void ThreadPool::dispatch_local(std::function<void*()> f, std::function<void(voi
   //std::pair<std::function<void*()>, EventInfo*> job(std::move(combination), info);
 
 
-  std::lock_guard<std::mutex> lk(worklistMutex);
-  worklist.emplace_back(std::move(combination), info);
+  std::lock_guard<std::mutex> lk(worklistMutex);               //STABLE_VERSION
+  worklist.emplace_back(std::move(combination), info);         //STABLE_VERSION
 
   // std::pair<std::function<void*()>, EventInfo*> job(std::move(combination), info);
   // testlist.push(job);
@@ -231,8 +232,8 @@ void ThreadPool::detatch(std::function<void*()> f){
   EventInfo* info = nullptr;
   //std::pair<std::function<void*()>, EventInfo*> job(std::move(f), info);
 
-  std::lock_guard<std::mutex> lk(worklistMutex);
-  worklist.emplace_back(std::move(f), info);
+  std::lock_guard<std::mutex> lk(worklistMutex);               //STABLE_VERSION
+  worklist.emplace_back(std::move(f), info);                   //STABLE_VERSION
   // std::pair<std::function<void*()>, EventInfo*> job(std::move(f), info);
   // testlist.push(job);
 
@@ -244,8 +245,8 @@ void ThreadPool::detatch_ptr(std::function<void*()> *f){
   EventInfo* info = nullptr;
   //std::pair<std::function<void*()>, EventInfo*> job(std::move(f), info);
 
-  std::lock_guard<std::mutex> lk(worklistMutex);
-  worklist.emplace_back(std::move(*f), info);
+  std::lock_guard<std::mutex> lk(worklistMutex);               //STABLE_VERSION
+  worklist.emplace_back(std::move(*f), info);                  //STABLE_VERSION
 
   // std::pair<std::function<void*()>, EventInfo*> job(std::move(*f), info);
   // testlist.push(job);
