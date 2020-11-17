@@ -120,6 +120,11 @@ std::string BatchedDigest(proto::BatchedRequest& breq) {
     hash.Update((CryptoPP::byte*) &dig[0], dig.length());
   }
 
+  // HotStuff
+  std::string dig = std::to_string(breq.seqnum());
+  hash.Update((CryptoPP::byte*) &dig[0], dig.length());
+
+  
   digest.resize(hash.DigestSize());
   hash.Final((CryptoPP::byte*) &digest[0]);
 

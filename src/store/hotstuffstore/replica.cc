@@ -303,6 +303,10 @@ void Replica::sendBatchedPreprepare() {
   }
   pendingBatchedDigests.clear();
   nextBatchNum = 0;
+
+  // HotStuff: distinguish different batches with seqnum
+  batchedRequest.set_seqnum(nextSeqNum++);
+
   // send the batched preprepare to everyone
   sendMessageToAll(batchedRequest);
 }
@@ -324,17 +328,22 @@ void Replica::HandleBatchedRequest(const TransportAddress &remote,
   Debug("Handling batched request message");
 
   string digest = BatchedDigest(request);
-
+  
   // HotStuff
-  batchedRequests[digest] = request;
-  assert(digest.size() == 32);
-  hotstuff_exec_callback execb = [this](const std::string &digest_param, uint32_t seqnum) {
-      // Debug("Callback: %d, %ld", idx, seqnum);
-      pendingExecutions[seqnum] = digest_param;
-      executeSlots();
-  };
-  // Debug("Replica propose: %d", idx);
-  hotstuff_interface.propose(digest, execb);      
+  if (!batchedRequests.count(digest)) {
+      batchedRequests[digest] = request;
+      assert(digest.size() == 32);
+      hotstuff_exec_callback execb = [this, digest](const std::string &digest_param, uint32_t seqnum) {
+          // Debug("Callback: %d, %ld", idx, seqnum);
+          stats->Increment("exec_callback",1);
+          pendingExecutions[seqnum] = digest;
+          // std::cout << "Callback seqnum: " << seqnum << std::endl;
+          // std::cout << "exec seqNum: " << execSeqNum << std::endl;
+          executeSlots();
+      };
+      // Debug("Replica propose: %d", idx);
+      hotstuff_interface.propose(digest, execb);
+  }
 
   
   // batchedRequests[digest] = request;
@@ -582,6 +591,7 @@ void Replica::executeSlots() {
     
   Debug("exec seq num: %lu", execSeqNum);
   while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
+      stats->Increment("exec_seqnum",1);
     // cancel the commit timer
     if (seqnumCommitTimers.find(execSeqNum) != seqnumCommitTimers.end()) {
       transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
@@ -591,6 +601,7 @@ void Replica::executeSlots() {
     string batchDigest = pendingExecutions[execSeqNum];
     // only execute when we have the batched request
     if (batchedRequests.find(batchDigest) != batchedRequests.end()) {
+        stats->Increment("exec_batch",1);
       string digest = (*batchedRequests[batchDigest].mutable_digests())[execBatchNum];
       DebugHash(digest);
       // only execute if we have the full request
@@ -622,6 +633,7 @@ void Replica::executeSlots() {
               });
             }
           } else {
+              stats->Increment("execs_invalid",1);
               Debug("Invalid execution: %d, %lu, %lu", idx, execSeqNum, execBatchNum);
           }
         }
