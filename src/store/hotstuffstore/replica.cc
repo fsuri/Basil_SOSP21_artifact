@@ -278,6 +278,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
           transport->CancelTimer(batchTimerId);
           batchTimerRunning = false;
         }
+        stats->Increment("batch_gen_count",1);
         sendBatchedPreprepare();
       } else if (!batchTimerRunning) {
         batchTimerRunning = true;
@@ -285,7 +286,9 @@ void Replica::HandleRequest(const TransportAddress &remote,
         batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
           Debug("Batch timer expired, sending");
           this->batchTimerRunning = false;
-          this->sendBatchedPreprepare();
+
+          // HotStuff
+          //this->sendBatchedPreprepare();
         });
       }
     }
@@ -330,6 +333,7 @@ void Replica::HandleBatchedRequest(const TransportAddress &remote,
   string digest = BatchedDigest(request);
   
   // HotStuff
+  stats->Increment("batch_recv_count",1);
   if (!batchedRequests.count(digest)) {
       batchedRequests[digest] = request;
       assert(digest.size() == 32);
@@ -342,7 +346,33 @@ void Replica::HandleBatchedRequest(const TransportAddress &remote,
           executeSlots();
       };
       // Debug("Replica propose: %d", idx);
+      stats->Increment("batch_propose_count",1);
+      std::cout << "Batch seqnum: " << request.seqnum() << std::endl;
+      
       hotstuff_interface.propose(digest, execb);
+
+      // Insert bubble command to HotStuff for progress
+      digest[0] = 'b';
+      digest[1] = 'u';
+      digest[2] = 'b';
+      digest[3] = 'b';
+      digest[4] = 'l';
+      digest[5] = 'e';
+      hotstuff_exec_callback execb_bubble = [this](const std::string &digest_param, uint32_t seqnum) {
+          // Debug("Callback: %d, %ld", idx, seqnum);
+          stats->Increment("exec_callback",1);
+          pendingExecutions[seqnum] = "bubble";
+          executeSlots();
+      };
+      // Insert some bubbles
+      digest[6] = '1';
+      hotstuff_interface.propose(digest, execb_bubble);
+      digest[6] = '2';
+      hotstuff_interface.propose(digest, execb_bubble);
+      // digest[6] = '3';
+      // hotstuff_interface.propose(digest, execb_bubble);
+      // digest[6] = '4';
+      // hotstuff_interface.propose(digest, execb_bubble);
   }
 
   
@@ -596,6 +626,12 @@ void Replica::executeSlots() {
     if (seqnumCommitTimers.find(execSeqNum) != seqnumCommitTimers.end()) {
       transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
       seqnumCommitTimers.erase(execSeqNum);
+    }
+
+    // HotStuff
+    if (pendingExecutions[execSeqNum] == "bubble") {
+        execSeqNum++;
+        continue;
     }
 
     string batchDigest = pendingExecutions[execSeqNum];
