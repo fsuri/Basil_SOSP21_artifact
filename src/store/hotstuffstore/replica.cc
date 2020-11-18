@@ -260,6 +260,9 @@ void Replica::HandleRequest(const TransportAddress &remote,
   string digest = request.digest();
   DebugHash(digest);
 
+  static std::mutex mtx;
+  mtx.lock();
+  
   if (requests.find(digest) == requests.end()) {
     Debug("new request: %s", request.packed_msg().type().c_str());
 
@@ -267,35 +270,84 @@ void Replica::HandleRequest(const TransportAddress &remote,
 
     // clone remote mapped to request for reply
     replyAddrs[digest] = remote.clone();
-    
-    int currentPrimaryIdx = config.GetLeaderIndex(currentView);
-    if (currentPrimaryIdx == idx) {
-      stats->Increment("handle_request",1);
-      pendingBatchedDigests[nextBatchNum++] = digest;
-      if (pendingBatchedDigests.size() >= maxBatchSize) {
-        Debug("Batch is full, sending");
-        if (batchTimerRunning) {
-          transport->CancelTimer(batchTimerId);
-          batchTimerRunning = false;
-        }
-        stats->Increment("batch_gen_count",1);
-        sendBatchedPreprepare();
-      } else if (!batchTimerRunning) {
-        batchTimerRunning = true;
-        Debug("Starting batch timer");
-        batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
-          Debug("Batch timer expired, sending");
-          this->batchTimerRunning = false;
 
-          // HotStuff
-          //this->sendBatchedPreprepare();
-        });
-      }
+    // HotStuff
+    // a batch with only 1 request
+    pendingBatchedDigests[0] = digest;
+    proto::BatchedRequest batchedRequest;
+    for (const auto& pair : pendingBatchedDigests) {
+        (*batchedRequest.mutable_digests())[pair.first] = pair.second;
     }
+    pendingBatchedDigests.clear();
+    // batchedRequest.set_seqnum(nextSeqNum++);
+    // above is wrong: different replicas will give different seqnum to the same batch
+    // batchedRequest.set_seqnum(0);
+    
+    string batchedDigest = BatchedDigest(batchedRequest);
+    batchedRequests[batchedDigest] = batchedRequest;
+    hotstuff_exec_callback execb = [this, batchedDigest](const std::string &digest_param, uint32_t seqnum) {
+        // Debug("Callback: %d, %ld", idx, seqnum);
+        stats->Increment("exec_callback",1);
+        pendingExecutions[seqnum] = batchedDigest;
+        std::cout << "Execute request: " << seqnum << std::endl;
+        executeSlots();
+    };
+    // Debug("Replica propose: %d", idx);
+    stats->Increment("batch_propose_count",1);
+      
+    hotstuff_interface.propose(batchedDigest, execb);
+
+    // Insert bubble command to HotStuff for progress
+    batchedDigest[0] = 'b';
+    batchedDigest[1] = 'u';
+    batchedDigest[2] = 'b';
+    batchedDigest[3] = 'b';
+    batchedDigest[4] = 'l';
+    batchedDigest[5] = 'e';
+    hotstuff_exec_callback execb_bubble = [this](const std::string &digest_param, uint32_t seqnum) {
+        pendingExecutions[seqnum] = "bubble";
+        std::cout << "Execute bubble: " << seqnum << std::endl;
+        executeSlots();
+    };
+    // Insert some bubbles
+    batchedDigest[6] = '1';
+    hotstuff_interface.propose(batchedDigest, execb_bubble);
+    batchedDigest[6] = '2';
+    hotstuff_interface.propose(batchedDigest, execb_bubble);
+    batchedDigest[6] = '3';
+    hotstuff_interface.propose(batchedDigest, execb_bubble);
+    
+
+    // int currentPrimaryIdx = config.GetLeaderIndex(currentView);
+    // if (currentPrimaryIdx == idx) {
+    //   stats->Increment("handle_request",1);
+    //   pendingBatchedDigests[nextBatchNum++] = digest;
+    //   if (pendingBatchedDigests.size() >= maxBatchSize) {
+    //     Debug("Batch is full, sending");
+    //     if (batchTimerRunning) {
+    //       transport->CancelTimer(batchTimerId);
+    //       batchTimerRunning = false;
+    //     }
+    //     stats->Increment("batch_gen_count",1);
+    //     sendBatchedPreprepare();
+    //   } else if (!batchTimerRunning) {
+    //     batchTimerRunning = true;
+    //     Debug("Starting batch timer");
+    //     batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
+    //       Debug("Batch timer expired, sending");
+    //       this->batchTimerRunning = false;
+
+    //       // HotStuff
+    //       //this->sendBatchedPreprepare();
+    //     });
+    //   }
+    // }
 
     // this could be the message that allows us to execute a slot
     executeSlots();
   }
+
+  mtx.unlock();
 }
 
 void Replica::sendBatchedPreprepare() {
@@ -341,8 +393,6 @@ void Replica::HandleBatchedRequest(const TransportAddress &remote,
           // Debug("Callback: %d, %ld", idx, seqnum);
           stats->Increment("exec_callback",1);
           pendingExecutions[seqnum] = digest;
-          // std::cout << "Callback seqnum: " << seqnum << std::endl;
-          // std::cout << "exec seqNum: " << execSeqNum << std::endl;
           executeSlots();
       };
       // Debug("Replica propose: %d", idx);
@@ -367,8 +417,8 @@ void Replica::HandleBatchedRequest(const TransportAddress &remote,
       // Insert some bubbles
       digest[6] = '1';
       hotstuff_interface.propose(digest, execb_bubble);
-      digest[6] = '2';
-      hotstuff_interface.propose(digest, execb_bubble);
+      // digest[6] = '2';
+      // hotstuff_interface.propose(digest, execb_bubble);
       // digest[6] = '3';
       // hotstuff_interface.propose(digest, execb_bubble);
       // digest[6] = '4';
@@ -612,6 +662,8 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
 }
 
 void Replica::executeSlots() {
+  stats->Increment("exec_executeslots",1);
+
     // HotStuff
     // this function was NOT thread-safe
     // so I add a lock to make it thread-safe
@@ -665,7 +717,7 @@ void Replica::executeSlots() {
               EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
                 Debug("EBatch timer expired, sending");
                 this->EbatchTimerRunning = false;
-                this->sendEbatch();
+                // this->sendEbatch();
               });
             }
           } else {
