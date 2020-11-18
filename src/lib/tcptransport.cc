@@ -426,7 +426,7 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
         m.GetTypeName().c_str(), inet_ntoa(dst.addr.sin_addr),
         htons(dst.addr.sin_port));
     auto dstSrc = std::make_pair(dst, src);
-    mtx.lock();
+    mtx.lock_shared();
     auto kv = tcpOutgoing.find(dstSrc);
     // See if we have a connection open
     if (kv == tcpOutgoing.end()) {
@@ -435,7 +435,7 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     }
 
     struct bufferevent *ev = kv->second;
-    mtx.unlock();
+    mtx.unlock_shared();
 
     UW_ASSERT(ev != NULL);
 
@@ -591,7 +591,7 @@ int TCPTransport::TimerMicro(uint64_t us, timer_callback_t cb) {
 }
 
 int TCPTransport::TimerInternal(struct timeval &tv, timer_callback_t cb) {
-  std::lock_guard<std::mutex> lck(mtx);
+  std::unique_lock<std::shared_mutex> lck(mtx);
 
   TCPTransportTimerInfo *info = new TCPTransportTimerInfo();
 
@@ -612,7 +612,7 @@ int TCPTransport::TimerInternal(struct timeval &tv, timer_callback_t cb) {
 bool
 TCPTransport::CancelTimer(int id)
 {
-    std::lock_guard<std::mutex> lck(mtx);
+    std::unique_lock<std::shared_mutex> lck(mtx);
     TCPTransportTimerInfo *info = timers[id];
 
     if (info == NULL) {
@@ -645,7 +645,7 @@ void
 TCPTransport::OnTimer(TCPTransportTimerInfo *info)
 {
     {
-	    std::lock_guard<std::mutex> lck(mtx);
+	    std::unique_lock<std::shared_mutex> lck(mtx);
 
 	    timers.erase(info->id);
 	    event_del(info->ev);
@@ -837,7 +837,7 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
         string msg(ptr, msgLen);
         ptr += msgLen;
 
-        transport->mtx.lock();
+        transport->mtx.lock_shared();
         auto addr = transport->tcpAddresses.find(bev);
         TCPTransportAddress &ad = addr->second.first; //Note: if address was removed from map, ref could still be in "use" by server
         // transport->mtx.unlock();
@@ -850,10 +850,10 @@ TCPTransport::TCPReadableCallback(struct bufferevent *bev, void *arg)
 
         if (addr == transport->tcpAddresses.end()) {
          Warning("Received message for closed connection.");
-         transport->mtx.unlock();
+         transport->mtx.unlock_shared();
        } else {
          // Dispatch
-         transport->mtx.unlock();
+         transport->mtx.unlock_shared();
          Debug("Received %lu bytes %s message.", totalSize, msgType.c_str());
          info->receiver->ReceiveMessage(ad, msgType, msg, nullptr);
          // Debug("Done processing large %s message", msgType.c_str());

@@ -74,13 +74,14 @@
 	  "p1DecisionTimeout":10,
 
       "_max_dep_depth": 1,
+      "max_dep_depth": -2, 
 	  "hash_digest": true,
       "verify_deps": false,
 	
       "validate_proofs": true,
       "sign_messages": true,
       "signature_type": 4,
-      "sig_batch": 2,
+      "sig_batch": 8,
       "_sig_batch_timeout": 5000,
      
 	  "multi_threading": true,
@@ -111,7 +112,7 @@
   "server_debug_output": false,
   "server_debug_stats": false,
   "client_debug_stats": false,
-  "client_experiment_length": 50,
+  "client_experiment_length": 100,
   "client_ramp_down": 5,
   "client_ramp_up": 30,
   "default_remote_shell": "bash",

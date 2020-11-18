@@ -54,6 +54,10 @@
 #include <ctime>
 #include <mutex>
 #include <shared_mutex>
+#include <atomic>
+
+#include "tbb/concurrent_unordered_map.h"
+#include "tbb/concurrent_hash_map.h"
 
 //#include "lib/threadpool.cc"
 
@@ -332,7 +336,9 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
   std::unordered_map<std::string, std::set<std::tuple<Timestamp, Timestamp, const proto::CommittedProof *>>> committedReads;
-  std::unordered_map<std::string, std::set<Timestamp>> rts;
+  //std::unordered_map<std::string, std::set<Timestamp>> rts;
+  tbb::concurrent_unordered_map<std::string, std::atomic_int> rts;
+  //tbb::concurrent_hash_map<std::string, std::set<Timestamp>> rts;
 
   // Digest -> V
   std::unordered_map<std::string, proto::Transaction *> ongoing;

@@ -29,6 +29,7 @@
  *
  **********************************************************************/
 
+
 #include "store/indicusstore/server.h"
 
 #include <bitset>
@@ -440,9 +441,22 @@ void Server::HandleRead(const TransportAddress &remote,
   if (occType == MVTSO) {
     /* update rts */
     // TODO: how to track RTS by transaction without knowing transaction digest?
-     if(mainThreadDispatching) rtsMutex.lock();
-    rts[msg.key()].insert(ts);
-     if(mainThreadDispatching) rtsMutex.unlock();
+
+
+    //RECOMMENT
+    //  if(mainThreadDispatching) rtsMutex.lock();
+    // rts[msg.key()].insert(ts);
+    //  if(mainThreadDispatching) rtsMutex.unlock();
+     //Testing:
+     auto itr = rts.find(msg.key());
+     if(itr != rts.end()){
+       if(ts.getTimestamp() > itr->second ) {
+         rts[msg.key()] = ts.getTimestamp();
+       }
+     }
+     else{
+       rts[msg.key()] = ts.getTimestamp();
+     }
 
 
     /* add prepared deps */
@@ -1276,11 +1290,12 @@ void Server::HandleAbort(const TransportAddress &remote,
     abort = &msg.internal();
   }
 
-   if(mainThreadDispatching) rtsMutex.lock();
-  for (const auto &read : abort->read_set()) {
-    rts[read].erase(abort->ts());
-  }
-   if(mainThreadDispatching) rtsMutex.unlock();
+  //RECOMMENT
+  //  if(mainThreadDispatching) rtsMutex.lock();
+  // for (const auto &read : abort->read_set()) {
+  //   rts[read].erase(abort->ts());
+  // }
+  //  if(mainThreadDispatching) rtsMutex.unlock();
 }
 
 proto::ConcurrencyControl::Result Server::DoOCCCheck(
@@ -1609,44 +1624,55 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         }
       }
        if(mainThreadDispatching) preparedReadsMutex.unlock_shared();
-       Latency_Start(&waitingOnLocks);
-       if(mainThreadDispatching) rtsMutex.lock_shared();
-       Latency_End(&waitingOnLocks);
+
+       //RECOMMENT
+      //  Latency_Start(&waitingOnLocks);
+      //  if(mainThreadDispatching) rtsMutex.lock_shared();
+      //  Latency_End(&waitingOnLocks);
+      // auto rtsItr = rts.find(write.key());
+      // if (rtsItr != rts.end()) {
+      //   auto rtsRBegin = rtsItr->second.rbegin();
+      //   if (rtsRBegin != rtsItr->second.rend()) {
+      //     Debug("Largest rts for write to key %s: %lu.%lu.",
+      //       BytesToHex(write.key(), 16).c_str(), rtsRBegin->getTimestamp(),
+      //       rtsRBegin->getID());
+      //   }
+      //   auto rtsLB = rtsItr->second.lower_bound(ts);
+      //   if (rtsLB != rtsItr->second.end()) {
+      //     Debug("Lower bound rts for write to key %s: %lu.%lu.",
+      //       BytesToHex(write.key(), 16).c_str(), rtsLB->getTimestamp(),
+      //       rtsLB->getID());
+      //     if (*rtsLB == ts) {
+      //       rtsLB++;
+      //     }
+      //     if (rtsLB != rtsItr->second.end()) {
+      //       if (*rtsLB > ts) {
+      //         Debug("[%lu:%lu][%s] ABSTAIN larger rts acquired for key %s: rts %lu.%lu >"
+      //             " this txn's ts %lu.%lu.",
+      //             txn.client_id(),
+      //             txn.client_seq_num(),
+      //             BytesToHex(txnDigest, 16).c_str(),
+      //             BytesToHex(write.key(), 16).c_str(),
+      //             rtsLB->getTimestamp(),
+      //             rtsLB->getID(), ts.getTimestamp(), ts.getID());
+      //         stats.Increment("cc_abstains", 1);
+      //         stats.Increment("cc_abstains_rts", 1);
+      //          if(mainThreadDispatching) rtsMutex.unlock_shared();
+      //         return proto::ConcurrencyControl::ABSTAIN;
+      //       }
+      //     }
+      //   }
+      // }
+      //  if(mainThreadDispatching) rtsMutex.unlock_shared();
       auto rtsItr = rts.find(write.key());
-      if (rtsItr != rts.end()) {
-        auto rtsRBegin = rtsItr->second.rbegin();
-        if (rtsRBegin != rtsItr->second.rend()) {
-          Debug("Largest rts for write to key %s: %lu.%lu.",
-            BytesToHex(write.key(), 16).c_str(), rtsRBegin->getTimestamp(),
-            rtsRBegin->getID());
-        }
-        auto rtsLB = rtsItr->second.lower_bound(ts);
-        if (rtsLB != rtsItr->second.end()) {
-          Debug("Lower bound rts for write to key %s: %lu.%lu.",
-            BytesToHex(write.key(), 16).c_str(), rtsLB->getTimestamp(),
-            rtsLB->getID());
-          if (*rtsLB == ts) {
-            rtsLB++;
-          }
-          if (rtsLB != rtsItr->second.end()) {
-            if (*rtsLB > ts) {
-              Debug("[%lu:%lu][%s] ABSTAIN larger rts acquired for key %s: rts %lu.%lu >"
-                  " this txn's ts %lu.%lu.",
-                  txn.client_id(),
-                  txn.client_seq_num(),
-                  BytesToHex(txnDigest, 16).c_str(),
-                  BytesToHex(write.key(), 16).c_str(),
-                  rtsLB->getTimestamp(),
-                  rtsLB->getID(), ts.getTimestamp(), ts.getID());
-              stats.Increment("cc_abstains", 1);
-              stats.Increment("cc_abstains_rts", 1);
-               if(mainThreadDispatching) rtsMutex.unlock_shared();
-              return proto::ConcurrencyControl::ABSTAIN;
-            }
-          }
+      if(rtsItr != rts.end()){
+        if(rtsItr->second >= ts.getTimestamp()){ ///TODO XXX URGENT FIX: TX can abort itself.
+          stats.Increment("cc_abstains", 1);
+          stats.Increment("cc_abstains_rts", 1);
+          return proto::ConcurrencyControl::ABSTAIN;
         }
       }
-       if(mainThreadDispatching) rtsMutex.unlock_shared();
+
       // TODO: add additional rts dep check to shrink abort window
       //    Is this still a thing?
     }
@@ -1876,18 +1902,21 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
      //if(mainThreadDispatching) storeMutex.lock();
     store.put(write.key(), val, ts);
      //if(mainThreadDispatching) storeMutex.unlock();
-     Latency_Start(&waitingOnLocks);
-     if(mainThreadDispatching) rtsMutex.lock();
-     Latency_End(&waitingOnLocks);
-    auto rtsItr = rts.find(write.key());
-    if (rtsItr != rts.end()) {
-      auto itr = rtsItr->second.begin();
-      auto endItr = rtsItr->second.upper_bound(ts);
-      while (itr != endItr) {
-        itr = rtsItr->second.erase(itr);
-      }
-    }
-     if(mainThreadDispatching) rtsMutex.unlock();
+
+
+     //RECOMMENT
+    //  Latency_Start(&waitingOnLocks);
+    //  if(mainThreadDispatching) rtsMutex.lock();
+    //  Latency_End(&waitingOnLocks);
+    // auto rtsItr = rts.find(write.key());
+    // if (rtsItr != rts.end()) {
+    //   auto itr = rtsItr->second.begin();
+    //   auto endItr = rtsItr->second.upper_bound(ts);
+    //   while (itr != endItr) {
+    //     itr = rtsItr->second.erase(itr);
+    //   }
+    // }
+    //  if(mainThreadDispatching) rtsMutex.unlock();
   }
 
   Clean(txnDigest);
@@ -2234,149 +2263,170 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
 
 
 proto::ReadReply *Server::GetUnusedReadReply() {
-  std::unique_lock<std::mutex> lock(readReplyProtoMutex);
-  proto::ReadReply *reply;
-  if (readReplies.size() > 0) {
-    reply = readReplies.back();
-    reply->Clear();
-    readReplies.pop_back();
-  } else {
-    reply = new proto::ReadReply();
-  }
-  return reply;
+  return new proto::ReadReply();
+
+  // std::unique_lock<std::mutex> lock(readReplyProtoMutex);
+  // proto::ReadReply *reply;
+  // if (readReplies.size() > 0) {
+  //   reply = readReplies.back();
+  //   reply->Clear();
+  //   readReplies.pop_back();
+  // } else {
+  //   reply = new proto::ReadReply();
+  // }
+  // return reply;
 }
 
 proto::Phase1Reply *Server::GetUnusedPhase1Reply() {
-  //Latency_Start(&waitOnProtoLock);
-  std::unique_lock<std::mutex> lock(p1ReplyProtoMutex);
-  //Latency_End(&waitOnProtoLock);
-  proto::Phase1Reply *reply;
-  if (p1Replies.size() > 0) {
-    reply = p1Replies.back();
-    //reply->Clear(); //can move this to Free if want more work at threads
-    p1Replies.pop_back();
-  } else {
-    reply = new proto::Phase1Reply();
-  }
-  return reply;
+  return new proto::Phase1Reply();
+
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(p1ReplyProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // proto::Phase1Reply *reply;
+  // if (p1Replies.size() > 0) {
+  //   reply = p1Replies.back();
+  //   //reply->Clear(); //can move this to Free if want more work at threads
+  //   p1Replies.pop_back();
+  // } else {
+  //   reply = new proto::Phase1Reply();
+  // }
+  // return reply;
 }
 
 proto::Phase2Reply *Server::GetUnusedPhase2Reply() {
-  //Latency_Start(&waitOnProtoLock);
-  std::unique_lock<std::mutex> lock(p2ReplyProtoMutex);
-  //Latency_End(&waitOnProtoLock);
-  proto::Phase2Reply *reply;
-  if (p2Replies.size() > 0) {
-    reply = p2Replies.back();
-    //reply->Clear();
-    p2Replies.pop_back();
-  } else {
-    reply = new proto::Phase2Reply();
-  }
-  return reply;
+  return new proto::Phase2Reply();
+
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(p2ReplyProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // proto::Phase2Reply *reply;
+  // if (p2Replies.size() > 0) {
+  //   reply = p2Replies.back();
+  //   //reply->Clear();
+  //   p2Replies.pop_back();
+  // } else {
+  //   reply = new proto::Phase2Reply();
+  // }
+  // return reply;
 }
 
 proto::Read *Server::GetUnusedReadmessage() {
-  std::unique_lock<std::mutex> lock(readProtoMutex);
-  proto::Read *msg;
-  if (readMessages.size() > 0) {
-    msg = readMessages.back();
-    msg->Clear();
-    readMessages.pop_back();
-  } else {
-    msg = new proto::Read();
-  }
-  return msg;
+  return new proto::Read();
+
+  // std::unique_lock<std::mutex> lock(readProtoMutex);
+  // proto::Read *msg;
+  // if (readMessages.size() > 0) {
+  //   msg = readMessages.back();
+  //   msg->Clear();
+  //   readMessages.pop_back();
+  // } else {
+  //   msg = new proto::Read();
+  // }
+  // return msg;
 }
 
 proto::Phase1 *Server::GetUnusedPhase1message() {
-  //Latency_Start(&waitOnProtoLock);
-  std::unique_lock<std::mutex> lock(p1ProtoMutex);
-  //Latency_End(&waitOnProtoLock);
-  proto::Phase1 *msg;
-  if (p1messages.size() > 0) {
-    msg = p1messages.back();
-    msg->Clear();
-    p1messages.pop_back();
-  } else {
-    msg = new proto::Phase1();
-  }
-  return msg;
+  return new proto::Phase1();
+
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(p1ProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // proto::Phase1 *msg;
+  // if (p1messages.size() > 0) {
+  //   msg = p1messages.back();
+  //   msg->Clear();
+  //   p1messages.pop_back();
+  // } else {
+  //   msg = new proto::Phase1();
+  // }
+  // return msg;
 }
 
 proto::Phase2 *Server::GetUnusedPhase2message() {
-  //Latency_Start(&waitOnProtoLock);
-  std::unique_lock<std::mutex> lock(p2ProtoMutex);
-  //Latency_End(&waitOnProtoLock);
-  proto::Phase2 *msg;
-  if (p2messages.size() > 0) {
-    msg = p2messages.back();
-    msg->Clear();
-    p2messages.pop_back();
-  } else {
-    msg = new proto::Phase2();
-  }
-  return msg;
+  return new proto::Phase2();
+
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(p2ProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // proto::Phase2 *msg;
+  // if (p2messages.size() > 0) {
+  //   msg = p2messages.back();
+  //   msg->Clear();
+  //   p2messages.pop_back();
+  // } else {
+  //   msg = new proto::Phase2();
+  // }
+  // return msg;
 }
 
 proto::Writeback *Server::GetUnusedWBmessage() {
-  //Latency_Start(&waitOnProtoLock);
-  std::unique_lock<std::mutex> lock(WBProtoMutex);
-  //Latency_End(&waitOnProtoLock);
-  proto::Writeback *msg;
-  if (WBmessages.size() > 0) {
-    msg = WBmessages.back();
-    msg->Clear();
-    WBmessages.pop_back();
-  } else {
-    msg = new proto::Writeback();
-  }
-  return msg;
+  return new proto::Writeback();
+
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(WBProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // proto::Writeback *msg;
+  // if (WBmessages.size() > 0) {
+  //   msg = WBmessages.back();
+  //   msg->Clear();
+  //   WBmessages.pop_back();
+  // } else {
+  //   msg = new proto::Writeback();
+  // }
+  // return msg;
 }
 
 void Server::FreeReadReply(proto::ReadReply *reply) {
-  std::unique_lock<std::mutex> lock(readReplyProtoMutex);
-  //reply->Clear();
-  readReplies.push_back(reply);
+  delete reply;
+  // std::unique_lock<std::mutex> lock(readReplyProtoMutex);
+  // //reply->Clear();
+  // readReplies.push_back(reply);
 }
 
 void Server::FreePhase1Reply(proto::Phase1Reply *reply) {
-  std::unique_lock<std::mutex> lock(p1ReplyProtoMutex);
-
-  reply->Clear();
-  p1Replies.push_back(reply);
+  delete reply;
+  // std::unique_lock<std::mutex> lock(p1ReplyProtoMutex);
+  //
+  // reply->Clear();
+  // p1Replies.push_back(reply);
 }
 
 void Server::FreePhase2Reply(proto::Phase2Reply *reply) {
-  std::unique_lock<std::mutex> lock(p2ReplyProtoMutex);
-  reply->Clear();
-  p2Replies.push_back(reply);
+  delete reply;
+  // std::unique_lock<std::mutex> lock(p2ReplyProtoMutex);
+  // reply->Clear();
+  // p2Replies.push_back(reply);
 }
 
 void Server::FreeReadmessage(proto::Read *msg) {
-  std::unique_lock<std::mutex> lock(readProtoMutex);
-  readMessages.push_back(msg);
+  delete msg;
+  // std::unique_lock<std::mutex> lock(readProtoMutex);
+  // readMessages.push_back(msg);
 }
 
 void Server::FreePhase1message(proto::Phase1 *msg) {
-  //Latency_Start(&waitOnProtoLock);
-  std::unique_lock<std::mutex> lock(p1ProtoMutex);
-  //Latency_End(&waitOnProtoLock);
-  p1messages.push_back(msg);
+  delete msg;
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(p1ProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // p1messages.push_back(msg);
 }
 
 void Server::FreePhase2message(proto::Phase2 *msg) {
-  //Latency_Start(&waitOnProtoLock);
-  std::unique_lock<std::mutex> lock(p2ProtoMutex);
-  //Latency_End(&waitOnProtoLock);
-  p2messages.push_back(msg);
+  delete msg;
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(p2ProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // p2messages.push_back(msg);
 }
 
 void Server::FreeWBmessage(proto::Writeback *msg) {
-  //Latency_Start(&waitOnProtoLock);
-  std::unique_lock<std::mutex> lock(WBProtoMutex);
-  //Latency_End(&waitOnProtoLock);
-  WBmessages.push_back(msg);
+  delete msg;
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(WBProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // WBmessages.push_back(msg);
 }
 
 ////////////////////// Fallback realm beings here... enter at own risk
