@@ -228,6 +228,8 @@ class HotStuffBase: public HotStuffCore {
     std::unordered_map<const uint256_t, BlockFetchContext> blk_fetch_waiting;
     std::unordered_map<const uint256_t, BlockDeliveryContext> blk_delivery_waiting;
     std::unordered_map<const uint256_t, commit_cb_t> decision_waiting;
+    std::unordered_map<const uint256_t, uint32_t> decision_made;
+    
     using cmd_queue_t = salticidae::MPSCQueueEventDriven<std::pair<uint256_t, commit_cb_t>>;
     using ordering1_queue_t = salticidae::MPSCQueueEventDriven<std::pair<uint256_t, ordering1_cb_t>>;
     using ordering2_queue_t = salticidae::MPSCQueueEventDriven<std::pair<uint256_t, ordering2_cb_t>>;

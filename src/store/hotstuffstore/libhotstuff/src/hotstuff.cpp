@@ -19,6 +19,8 @@
 #include "hotstuff/client.h"
 #include "hotstuff/liveness.h"
 
+#include <iostream>
+
 #include <sys/time.h>
 
 using salticidae::static_pointer_cast;
@@ -524,6 +526,9 @@ void HotStuffBase::do_decide(Finality &&fin) {
     {
         it->second(std::move(fin));
         decision_waiting.erase(it);
+    } else {
+        std::cout << "hotstuff do_decide not finding cmd_hash at height" << fin.cmd_height << std::endl;
+        decision_made[fin.cmd_hash] = fin.cmd_height;
     }
 }
 
@@ -643,6 +648,16 @@ void HotStuffBase::start(
         {
             ReplicaID proposer = pmaker->get_proposer();
             const auto &cmd_hash = e.first;
+
+            // Fix bug triggered by Indicus
+            if (decision_made.count(cmd_hash)) {
+                // command has been committed
+                uint32_t height = decision_made[cmd_hash];
+                e.second(Finality(id, 0, 0, height, cmd_hash, uint256_t()));
+                std::cout << "decision_made is used" << std::endl;
+                continue;
+            }
+            
             auto it = decision_waiting.find(cmd_hash);
 
             if (it == decision_waiting.end())
