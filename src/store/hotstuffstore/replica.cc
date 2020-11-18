@@ -265,6 +265,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
   
   if (requests.find(digest) == requests.end()) {
     Debug("new request: %s", request.packed_msg().type().c_str());
+    stats->Increment("handle_new_count",1);
 
     requests[digest] = request.packed_msg();
 
@@ -272,6 +273,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
     replyAddrs[digest] = remote.clone();
 
     // HotStuff
+    /*
     // a batch with only 1 request
     pendingBatchedDigests[0] = digest;
     proto::BatchedRequest batchedRequest;
@@ -310,38 +312,38 @@ void Replica::HandleRequest(const TransportAddress &remote,
         executeSlots();
     };
     // Insert some bubbles
-    batchedDigest[6] = '1';
-    hotstuff_interface.propose(batchedDigest, execb_bubble);
-    batchedDigest[6] = '2';
-    hotstuff_interface.propose(batchedDigest, execb_bubble);
-    batchedDigest[6] = '3';
-    hotstuff_interface.propose(batchedDigest, execb_bubble);
-    
+    // batchedDigest[6] = '1';
+    // hotstuff_interface.propose(batchedDigest, execb_bubble);
+    // batchedDigest[6] = '2';
+    // hotstuff_interface.propose(batchedDigest, execb_bubble);
+    // batchedDigest[6] = '3';
+    // hotstuff_interface.propose(batchedDigest, execb_bubble);
+  */    
 
-    // int currentPrimaryIdx = config.GetLeaderIndex(currentView);
-    // if (currentPrimaryIdx == idx) {
-    //   stats->Increment("handle_request",1);
-    //   pendingBatchedDigests[nextBatchNum++] = digest;
-    //   if (pendingBatchedDigests.size() >= maxBatchSize) {
-    //     Debug("Batch is full, sending");
-    //     if (batchTimerRunning) {
-    //       transport->CancelTimer(batchTimerId);
-    //       batchTimerRunning = false;
-    //     }
-    //     stats->Increment("batch_gen_count",1);
-    //     sendBatchedPreprepare();
-    //   } else if (!batchTimerRunning) {
-    //     batchTimerRunning = true;
-    //     Debug("Starting batch timer");
-    //     batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
-    //       Debug("Batch timer expired, sending");
-    //       this->batchTimerRunning = false;
+    int currentPrimaryIdx = config.GetLeaderIndex(currentView);
+    if (currentPrimaryIdx == idx) {
+      stats->Increment("handle_request",1);
+      pendingBatchedDigests[nextBatchNum++] = digest;
+      if (pendingBatchedDigests.size() >= maxBatchSize) {
+        Debug("Batch is full, sending");
+        if (batchTimerRunning) {
+          transport->CancelTimer(batchTimerId);
+          batchTimerRunning = false;
+        }
+        stats->Increment("batch_gen_count",1);
+        sendBatchedPreprepare();
+      } else if (!batchTimerRunning) {
+        batchTimerRunning = true;
+        Debug("Starting batch timer");
+        batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
+          Debug("Batch timer expired, sending");
+          this->batchTimerRunning = false;
 
-    //       // HotStuff
-    //       //this->sendBatchedPreprepare();
-    //     });
-    //   }
-    // }
+          // HotStuff
+          //this->sendBatchedPreprepare();
+        });
+      }
+    }
 
     // this could be the message that allows us to execute a slot
     executeSlots();
@@ -359,11 +361,18 @@ void Replica::sendBatchedPreprepare() {
   pendingBatchedDigests.clear();
   nextBatchNum = 0;
 
-  // HotStuff: distinguish different batches with seqnum
-  batchedRequest.set_seqnum(nextSeqNum++);
-
   // send the batched preprepare to everyone
   sendMessageToAll(batchedRequest);
+
+  // send a preprepare for the batched request
+  proto::Preprepare preprepare;
+  string digest = BatchedDigest(batchedRequest);
+  uint64_t seqnum = nextSeqNum++;
+  preprepare.set_seqnum(seqnum);
+  preprepare.set_viewnum(currentView);
+  preprepare.set_digest(digest);
+
+  SendPreprepare(seqnum, preprepare);
 }
 
 void Replica::SendPreprepare(uint64_t seqnum, const proto::Preprepare& preprepare) {
@@ -383,61 +392,9 @@ void Replica::HandleBatchedRequest(const TransportAddress &remote,
   Debug("Handling batched request message");
 
   string digest = BatchedDigest(request);
-  
-  // HotStuff
-  stats->Increment("batch_recv_count",1);
-  if (!batchedRequests.count(digest)) {
-      batchedRequests[digest] = request;
-      assert(digest.size() == 32);
-      hotstuff_exec_callback execb = [this, digest](const std::string &digest_param, uint32_t seqnum) {
-          // Debug("Callback: %d, %ld", idx, seqnum);
-          stats->Increment("exec_callback",1);
-          pendingExecutions[seqnum] = digest;
-          executeSlots();
-      };
-      // Debug("Replica propose: %d", idx);
-      stats->Increment("batch_propose_count",1);
-      std::cout << "Batch seqnum: " << request.seqnum() << std::endl;
-      
-      hotstuff_interface.propose(digest, execb);
+  batchedRequests[digest] = request;
 
-      // Insert bubble command to HotStuff for progress
-      digest[0] = 'b';
-      digest[1] = 'u';
-      digest[2] = 'b';
-      digest[3] = 'b';
-      digest[4] = 'l';
-      digest[5] = 'e';
-      hotstuff_exec_callback execb_bubble = [this](const std::string &digest_param, uint32_t seqnum) {
-          // Debug("Callback: %d, %ld", idx, seqnum);
-          stats->Increment("exec_callback",1);
-          pendingExecutions[seqnum] = "bubble";
-          executeSlots();
-      };
-      // Insert some bubbles
-      digest[6] = '1';
-      hotstuff_interface.propose(digest, execb_bubble);
-      // digest[6] = '2';
-      // hotstuff_interface.propose(digest, execb_bubble);
-      // digest[6] = '3';
-      // hotstuff_interface.propose(digest, execb_bubble);
-      // digest[6] = '4';
-      // hotstuff_interface.propose(digest, execb_bubble);
-  }
-
-  
-  // batchedRequests[digest] = request;
-  // int currentPrimaryIdx = config.GetLeaderIndex(currentView);
-  // if (currentPrimaryIdx == idx) {
-  //     proto::Preprepare preprepare;
-  //     uint64_t seqnum = nextSeqNum++;
-  //     preprepare.set_seqnum(seqnum);
-  //     preprepare.set_viewnum(currentView);
-  //     preprepare.set_digest(digest);
-
-  //     SendPreprepare(seqnum, preprepare);
-  // } 
-
+  // this could be the message that allows us to execute a slot
   executeSlots();
 }
 
