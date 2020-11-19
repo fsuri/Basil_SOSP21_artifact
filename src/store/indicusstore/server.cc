@@ -469,13 +469,19 @@ void Server::HandleRead(const TransportAddress &remote,
     if (params.maxDepDepth > -2) {
       const proto::Transaction *mostRecent = nullptr;
 
-      //fprintf(stderr, "1: getting stuck acquiring lock\n");
-      auto preparedWritesMutexScope = mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedWritesMutex) : std::shared_lock<std::shared_mutex>();
-      //fprintf(stderr, "2: getting stuck AFTER acquiring lock\n");
+
+      //auto preparedWritesMutexScope = mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedWritesMutex) : std::shared_lock<std::shared_mutex>();
+
       auto itr = preparedWrites.find(msg.key());
-      if (itr != preparedWrites.end() && itr->second.size() > 0) {
+      if (itr != preparedWrites.end()){
+
+        //std::pair &x = preparedWrites[write.key()];
+        std::shared_lock lock(itr->second.first);
+        //if(itr->second.second.size() > 0) {
+
         // there is a prepared write for the key being read
-        for (const auto &t : itr->second) {
+
+        for (const auto &t : itr->second.second) {
           if (mostRecent == nullptr || t.first > Timestamp(mostRecent->timestamp())) {
             mostRecent = t.second;
           }
@@ -500,6 +506,7 @@ void Server::HandleRead(const TransportAddress &remote,
           }
 
         }
+      // }
       }
     }
   }
@@ -1378,7 +1385,7 @@ proto::ConcurrencyControl::Result Server::DoTAPIROCCCheck(
     // if the value is still valid
     if (!range.second.isValid()) {
       // check pending writes.
-      auto preparedWritesMutexScope = mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedWritesMutex) : std::shared_lock<std::shared_mutex>();
+      //auto preparedWritesMutexScope = mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedWritesMutex) : std::shared_lock<std::shared_mutex>();
 
       if (preparedWrites.find(read.key()) != preparedWrites.end()) {
         Debug("[%lu,%lu] ABSTAIN rw conflict w/ prepared key %s.",
@@ -1444,20 +1451,29 @@ proto::ConcurrencyControl::Result Server::DoTAPIROCCCheck(
 
     // if there is a pending write for this key, greater than the
     // proposed timestamp, retry
-     if(mainThreadDispatching) preparedWritesMutex.lock_shared();
-    if (preparedWrites.find(write.key()) != preparedWrites.end()) {
+
+     //if(mainThreadDispatching) preparedWritesMutex.lock_shared();
+
+     auto itr = preparedWrites.find(write.key());
+
+    if (itr != preparedWrites.end()) {
+      itr->second.first.lock_shared();
       std::map<Timestamp, const proto::Transaction *>::iterator it =
-          preparedWrites[write.key()].upper_bound(txn.timestamp());
-      if (it != preparedWrites[write.key()].end() ) {
+          itr->second.second.upper_bound(txn.timestamp());
+      if (it != itr->second.second.end() ) {
         Debug("[%s] RETRY ww conflict w/ prepared key:%s", txnDigest.c_str(),
             write.key().c_str());
         retryTs = it->first;
         stats.Increment("cc_retries_prepared_write", 1);
-         if(mainThreadDispatching) preparedWritesMutex.unlock_shared();
+         //if(mainThreadDispatching) preparedWritesMutex.unlock_shared();
+         itr->second.first.unlock_shared();
         return proto::ConcurrencyControl::ABSTAIN;
       }
+      itr->second.first.unlock_shared();
     }
-     if(mainThreadDispatching) preparedWritesMutex.unlock_shared();
+     //if(mainThreadDispatching) preparedWritesMutex.unlock_shared();
+
+
     //if there is a pending read for this key, greater than the
     //propsed timestamp, abstain
     if (pReads.find(write.key()) != pReads.end() &&
@@ -1536,12 +1552,14 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         }
       }
       Latency_Start(&waitingOnLocks);
-       if(mainThreadDispatching) preparedWritesMutex.lock_shared();
+       //if(mainThreadDispatching) preparedWritesMutex.lock_shared();
       Latency_End(&waitingOnLocks);
 
       const auto preparedWritesItr = preparedWrites.find(read.key());
       if (preparedWritesItr != preparedWrites.end()) {
-        for (const auto &preparedTs : preparedWritesItr->second) {
+
+        std::shared_lock lock(preparedWritesItr->second.first);
+        for (const auto &preparedTs : preparedWritesItr->second.second) {
           if (Timestamp(read.readtime()) < preparedTs.first && preparedTs.first < ts) {
             Debug("[%lu:%lu][%s] ABSTAIN wr conflict prepared write for key %s:"
               " this txn's read ts %lu.%lu < prepared ts %lu.%lu < this txn's ts %lu.%lu.",
@@ -1554,12 +1572,12 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
                 preparedTs.first.getID(), ts.getTimestamp(), ts.getID());
             stats.Increment("cc_abstains", 1);
             stats.Increment("cc_abstains_wr_conflict", 1);
-             if(mainThreadDispatching) preparedWritesMutex.unlock_shared();
+             //if(mainThreadDispatching) preparedWritesMutex.unlock_shared();
             return proto::ConcurrencyControl::ABSTAIN;
           }
         }
       }
-       if(mainThreadDispatching) preparedWritesMutex.unlock_shared();
+       //if(mainThreadDispatching) preparedWritesMutex.unlock_shared();
     }
 
     for (const auto &write : txn.write_set()) {
@@ -1823,7 +1841,7 @@ void Server::Prepare(const std::string &txnDigest,
   auto ongoingMutexScope = mainThreadDispatching ? std::shared_lock<std::shared_mutex>(ongoingMutex) : std::shared_lock<std::shared_mutex>();
   auto preparedMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedMutex) : std::unique_lock<std::shared_mutex>();
   auto preparedReadsMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedReadsMutex) : std::unique_lock<std::shared_mutex>();
-  auto preparedWritesMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
+  //auto preparedWritesMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
 
   const proto::Transaction *ongoingTxn = ongoing.at(txnDigest);
   auto p = prepared.insert(std::make_pair(txnDigest, std::make_pair(
@@ -1837,7 +1855,11 @@ void Server::Prepare(const std::string &txnDigest,
     std::make_pair(p.first->second.first, p.first->second.second);
   for (const auto &write : txn.write_set()) {
     if (IsKeyOwned(write.key())) {
-      preparedWrites[write.key()].insert(pWrite);
+      std::pair<std::shared_mutex,std::map<Timestamp, const proto::Transaction *>> &x = preparedWrites[write.key()];
+      std::unique_lock lock(x.first);
+      x.second.insert(pWrite);
+      // std::unique_lock lock(preparedWrites[write.key()].first);
+      // preparedWrites[write.key()].second.insert(pWrite);
     }
   }
 }
@@ -1961,7 +1983,7 @@ void Server::Clean(const std::string &txnDigest) {
   auto ongoingMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(ongoingMutex) : std::unique_lock<std::shared_mutex>();
   auto preparedMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedMutex) : std::unique_lock<std::shared_mutex>();
   auto preparedReadsMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedReadsMutex) : std::unique_lock<std::shared_mutex>();
-  auto preparedWritesMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
+  //auto preparedWritesMutexScope = mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
 
   auto p1ConflictsMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(p1ConflictsMutex) : std::unique_lock<std::mutex>();
   auto p2DecisionsMutexScope = mainThreadDispatching ? std::unique_lock<std::mutex>(p2DecisionsMutex) : std::unique_lock<std::mutex>();
@@ -1980,7 +2002,10 @@ void Server::Clean(const std::string &txnDigest) {
     }
     for (const auto &write : itr->second.second->write_set()) {
       if (IsKeyOwned(write.key())) {
-        preparedWrites[write.key()].erase(itr->second.first);
+        //preparedWrites[write.key()].erase(itr->second.first);
+        std::pair<std::shared_mutex,std::map<Timestamp, const proto::Transaction *>> &x = preparedWrites[write.key()];
+        std::unique_lock lock(x.first);
+        x.second.erase(itr->second.first);
       }
     }
     prepared.erase(itr);

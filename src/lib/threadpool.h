@@ -10,6 +10,8 @@
 #include <thread>
 #include <event2/event.h>
 #include <deque>
+#include "concurrentqueue/concurrentqueue.h"
+#include "concurrentqueue/blockingconcurrentqueue.h"
 //#include "tbb/concurrent_queue.h"
 
 //using namespace tbb;
@@ -65,6 +67,10 @@ private:
   std::vector<std::thread*> threads;
 
   std::deque <std::function<void*()>> main_worklist;
+
+  moodycamel::BlockingConcurrentQueue<std::pair<std::function<void*()>, EventInfo*>> test_worklist;
+  moodycamel::BlockingConcurrentQueue<std::function<void*()>> test_main_worklist;
+
   //tbb::concurrent_queue <std::pair<std::function<void*()>, EventInfo*>> testlist;
   //std::shared_mutex dummyMutex;
   //testlist.push()

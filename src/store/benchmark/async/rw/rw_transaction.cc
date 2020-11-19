@@ -21,7 +21,7 @@ RWTransaction::~RWTransaction() {
 Operation RWTransaction::GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
     std::map<std::string, std::string> readValues) {
   if (outstandingOpCount < GetNumOps()) {
-    std::cerr << "outstanding: " << outstandingOpCount << "; finished: " << finishedOpCount << "num ops: " << GetNumOps() << std::endl;
+    //std::cerr << "outstanding: " << outstandingOpCount << "; finished: " << finishedOpCount << "num ops: " << GetNumOps() << std::endl;
     if(finishedOpCount != outstandingOpCount){
       return Wait();
     }

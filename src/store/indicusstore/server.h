@@ -346,7 +346,8 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::unordered_map<std::string, proto::Transaction *> ongoing;
   std::unordered_map<std::string, std::pair<Timestamp, const proto::Transaction *>> prepared;
   std::unordered_map<std::string, std::set<const proto::Transaction *>> preparedReads;
-  std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
+  //std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
+  tbb::concurrent_unordered_map<std::string, std::pair<std::shared_mutex,std::map<Timestamp, const proto::Transaction *>>> preparedWrites;
 
 
 

@@ -21,7 +21,7 @@
 
   "benchmark_name": "tpcc-sync",
   "partitioner": "warehouse",
-  "tpcc_num_warehouses": 20,
+  "tpcc_num_warehouses": 40,
   "server_load_time":  10,
   "tpcc_stock_level_ratio": 4,
   "tpcc_delivery_ratio": 4,
@@ -31,7 +31,7 @@
 
   "tpcc_c_c_id": 0,
   "tpcc_c_c_last": 0,
-  "tpcc_data_file_path": "/usr/local/etc/tpcc-20-warehouse",
+  "tpcc_data_file_path": "/usr/local/etc/tpcc-40-warehouse",
   "client_abort_backoff": 2,
   "client_retry_aborted": true,
   "client_max_attempts": -1,
@@ -90,7 +90,7 @@
       "validate_proofs": true,
       "sign_messages": true,
       "signature_type": 4,
-      "sig_batch": 2,
+      "sig_batch": 4,
       "_sig_batch_timeout": 5000,
      
 	  "multi_threading": true,
