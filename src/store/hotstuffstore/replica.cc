@@ -114,7 +114,8 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   bool recvSignedMessage = false;
 
   Debug("Received message of type %s", t.c_str());
-
+  stats->Increment("recv_msg_count",1);
+ 
   if (t == tmpsignedMessage.GetTypeName()) {
     if (!tmpsignedMessage.ParseFromString(d)) {
       return;
@@ -253,6 +254,11 @@ bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
   }
 }
 
+// HotStuff
+// define this macro if switching to pbft store
+// undefine this macro if use hotstuff store
+//#define USE_PBFT_STORE
+
 void Replica::HandleRequest(const TransportAddress &remote,
                                const proto::Request &request) {
   Debug("Handling request message");
@@ -272,8 +278,38 @@ void Replica::HandleRequest(const TransportAddress &remote,
     // clone remote mapped to request for reply
     replyAddrs[digest] = remote.clone();
 
+
+    #ifdef USE_PBFT_STORE
+
+    // PBFT
+    int currentPrimaryIdx = config.GetLeaderIndex(currentView);
+    if (currentPrimaryIdx == idx) {
+      stats->Increment("handle_request",1);
+      pendingBatchedDigests[nextBatchNum++] = digest;
+      if (pendingBatchedDigests.size() >= maxBatchSize) {
+        Debug("Batch is full, sending");
+        if (batchTimerRunning) {
+          transport->CancelTimer(batchTimerId);
+          batchTimerRunning = false;
+        }
+        stats->Increment("batch_gen_count",1);
+        sendBatchedPreprepare();
+      } else if (!batchTimerRunning) {
+        batchTimerRunning = true;
+        Debug("Starting batch timer");
+        batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
+          Debug("Batch timer expired, sending");
+          this->batchTimerRunning = false;
+
+          // HotStuff
+          //this->sendBatchedPreprepare();
+        });
+      }
+    }
+
+    #else // if not use pbft store
+
     // HotStuff
-    /*
     // a batch with only 1 request
     pendingBatchedDigests[0] = digest;
     proto::BatchedRequest batchedRequest;
@@ -312,38 +348,14 @@ void Replica::HandleRequest(const TransportAddress &remote,
         executeSlots();
     };
     // Insert some bubbles
-    // batchedDigest[6] = '1';
-    // hotstuff_interface.propose(batchedDigest, execb_bubble);
-    // batchedDigest[6] = '2';
-    // hotstuff_interface.propose(batchedDigest, execb_bubble);
+    batchedDigest[6] = '1';
+    hotstuff_interface.propose(batchedDigest, execb_bubble);
+    batchedDigest[6] = '2';
+    hotstuff_interface.propose(batchedDigest, execb_bubble);
     // batchedDigest[6] = '3';
     // hotstuff_interface.propose(batchedDigest, execb_bubble);
-  */    
 
-    int currentPrimaryIdx = config.GetLeaderIndex(currentView);
-    if (currentPrimaryIdx == idx) {
-      stats->Increment("handle_request",1);
-      pendingBatchedDigests[nextBatchNum++] = digest;
-      if (pendingBatchedDigests.size() >= maxBatchSize) {
-        Debug("Batch is full, sending");
-        if (batchTimerRunning) {
-          transport->CancelTimer(batchTimerId);
-          batchTimerRunning = false;
-        }
-        stats->Increment("batch_gen_count",1);
-        sendBatchedPreprepare();
-      } else if (!batchTimerRunning) {
-        batchTimerRunning = true;
-        Debug("Starting batch timer");
-        batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
-          Debug("Batch timer expired, sending");
-          this->batchTimerRunning = false;
-
-          // HotStuff
-          //this->sendBatchedPreprepare();
-        });
-      }
-    }
+    #endif
 
     // this could be the message that allows us to execute a slot
     executeSlots();
