@@ -344,10 +344,10 @@ void Replica::HandleRequest(const TransportAddress &remote,
         std::cout << "Complete callback: " << seqnum << std::endl;
     };
     // Insert some bubbles
-    bubbleDigest[6] = '1';
-    hotstuff_interface.propose(bubbleDigest, execb_bubble);
-    bubbleDigest[6] = '2';
-    hotstuff_interface.propose(bubbleDigest, execb_bubble);
+    // bubbleDigest[6] = '1';
+    // hotstuff_interface.propose(bubbleDigest, execb_bubble);
+    // bubbleDigest[6] = '2';
+    // hotstuff_interface.propose(bubbleDigest, execb_bubble);
     // bubbleDigest[6] = '3';
     // hotstuff_interface.propose(bubbleDigest, execb_bubble);
 
@@ -644,6 +644,8 @@ void Replica::executeSlots() {
   }
   
   Debug("exec seq num: %lu", execSeqNum);
+
+  int startSeqNum = execSeqNum;
   while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
       stats->Increment("exec_seqnum",1);
     // cancel the commit timer
@@ -657,6 +659,9 @@ void Replica::executeSlots() {
         execSeqNum++;
         continue;
     }
+    // solve HotStuff liveness problem with callback
+    if (execSeqNum > startSeqNum + 30)
+        break;
 
     string batchDigest = pendingExecutions[execSeqNum];
     // only execute when we have the batched request
