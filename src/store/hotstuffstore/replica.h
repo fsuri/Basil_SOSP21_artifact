@@ -53,6 +53,8 @@ public:
   // HotStuff
   typedef std::function<void(const std::string&, uint32_t seqnum)> hotstuff_exec_callback;
   IndicusInterface hotstuff_interface;
+  std::mutex handleRequestMtx;
+  std::mutex execSlotsMtx;
   
   const transport::Configuration &config;
   KeyManager *keyManager;

@@ -266,8 +266,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
   string digest = request.digest();
   DebugHash(digest);
 
-  static std::mutex mtx;
-  mtx.lock();
+  handleRequestMtx.lock();
   
   if (requests.find(digest) == requests.end()) {
     Debug("new request: %s", request.packed_msg().type().c_str());
@@ -307,28 +306,23 @@ void Replica::HandleRequest(const TransportAddress &remote,
       }
     }
 
-    #else // if not use pbft store
+    #else // use HotStuff instead of PBFT
 
     // HotStuff
     // a batch with only 1 request
-    pendingBatchedDigests[0] = digest;
     proto::BatchedRequest batchedRequest;
-    for (const auto& pair : pendingBatchedDigests) {
-        (*batchedRequest.mutable_digests())[pair.first] = pair.second;
-    }
-    pendingBatchedDigests.clear();
-    // batchedRequest.set_seqnum(nextSeqNum++);
-    // above is wrong: different replicas will give different seqnum to the same batch
-    // batchedRequest.set_seqnum(0);
-    
+    (*batchedRequest.mutable_digests())[0] = digest;
     string batchedDigest = BatchedDigest(batchedRequest);
     batchedRequests[batchedDigest] = batchedRequest;
+
     hotstuff_exec_callback execb = [this, batchedDigest](const std::string &digest_param, uint32_t seqnum) {
         // Debug("Callback: %d, %ld", idx, seqnum);
         stats->Increment("exec_callback",1);
+        assert(batchedDigest == digest_param);
         pendingExecutions[seqnum] = batchedDigest;
         std::cout << "Execute request: " << seqnum << std::endl;
         executeSlots();
+        std::cout << "Complete callback: " << seqnum << std::endl;
     };
     // Debug("Replica propose: %d", idx);
     stats->Increment("batch_propose_count",1);
@@ -336,24 +330,26 @@ void Replica::HandleRequest(const TransportAddress &remote,
     hotstuff_interface.propose(batchedDigest, execb);
 
     // Insert bubble command to HotStuff for progress
-    batchedDigest[0] = 'b';
-    batchedDigest[1] = 'u';
-    batchedDigest[2] = 'b';
-    batchedDigest[3] = 'b';
-    batchedDigest[4] = 'l';
-    batchedDigest[5] = 'e';
+    string bubbleDigest = batchedDigest;
+    bubbleDigest[0] = 'b';
+    bubbleDigest[1] = 'u';
+    bubbleDigest[2] = 'b';
+    bubbleDigest[3] = 'b';
+    bubbleDigest[4] = 'l';
+    bubbleDigest[5] = 'e';
     hotstuff_exec_callback execb_bubble = [this](const std::string &digest_param, uint32_t seqnum) {
         pendingExecutions[seqnum] = "bubble";
         std::cout << "Execute bubble: " << seqnum << std::endl;
         executeSlots();
+        std::cout << "Complete callback: " << seqnum << std::endl;
     };
     // Insert some bubbles
-    batchedDigest[6] = '1';
-    hotstuff_interface.propose(batchedDigest, execb_bubble);
-    batchedDigest[6] = '2';
-    hotstuff_interface.propose(batchedDigest, execb_bubble);
-    // batchedDigest[6] = '3';
-    // hotstuff_interface.propose(batchedDigest, execb_bubble);
+    bubbleDigest[6] = '1';
+    hotstuff_interface.propose(bubbleDigest, execb_bubble);
+    bubbleDigest[6] = '2';
+    hotstuff_interface.propose(bubbleDigest, execb_bubble);
+    // bubbleDigest[6] = '3';
+    // hotstuff_interface.propose(bubbleDigest, execb_bubble);
 
     #endif
 
@@ -361,7 +357,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
     executeSlots();
   }
 
-  mtx.unlock();
+  handleRequestMtx.unlock();
 }
 
 void Replica::sendBatchedPreprepare() {
@@ -636,10 +632,17 @@ void Replica::executeSlots() {
     // HotStuff
     // this function was NOT thread-safe
     // so I add a lock to make it thread-safe
-  static std::mutex mtx;
-  mtx.lock();
+  std::mutex t1;
+  int r = std::try_lock(execSlotsMtx, t1);
+  if (r == -1) {
+      // lock successfully
+      t1.unlock();
+  }
+  else {
+      // others are executing this fuction
+      return;
+  }
   
-    
   Debug("exec seq num: %lu", execSeqNum);
   while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
       stats->Increment("exec_seqnum",1);
@@ -730,7 +733,7 @@ void Replica::executeSlots() {
 
 
   // HotStuff
-  mtx.unlock();
+  execSlotsMtx.unlock();
 }
 
 void Replica::sendEbatch() {
