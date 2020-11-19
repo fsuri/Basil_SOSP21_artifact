@@ -241,7 +241,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
         //FreeReadmessage(readCopy); //TODO: can do in callback of reply?
         return (void*) true;
       };
-      //transport->DispatchTP_main(f);
+      //transport->DispatchTP_main(f);  ///XXX change back
       transport->DispatchTP_noCB(f);
     }
   } else if (type == phase1.GetTypeName()) {
@@ -281,14 +281,17 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           }
       }
       else{
-        phase2.ParseFromString(data);
+
         if(!mainThreadDispatching || dispatchMessageReceive){
+          phase2.ParseFromString(data);
           HandlePhase2(remote, phase2);
         }
         else{
-          auto f = [this, &remote](){
+          proto::Phase2* p2 = GetUnusedPhase2message();
+          p2->ParseFromString(data);
+          auto f = [this, &remote, p2](){
             //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
-            this->HandlePhase2(remote, this->phase2);
+            this->HandlePhase2(remote, *p2);
             return (void*) true;
           };
           transport->DispatchTP_main(f);
@@ -312,15 +315,18 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           }
       }
       else{
-        writeback.ParseFromString(data);
+
         //HandleWriteback(remote, writeback);
         if(!mainThreadDispatching || dispatchMessageReceive){
+          writeback.ParseFromString(data);
           HandleWriteback(remote, writeback);
         }
         else{
-          auto f = [this, &remote](){
+          proto::Writeback *wb = GetUnusedWBmessage();
+          wb->ParseFromString(data);
+          auto f = [this, &remote, wb](){
             //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
-            this->HandleWriteback(remote, this->writeback);
+            this->HandleWriteback(remote, *wb);
             return (void*) true;
           };
           transport->DispatchTP_main(f);
@@ -693,14 +699,15 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
   //auto lockScope = mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
   Debug("HandlePhase2CB invoked");
 
+  auto f = [this, msg, txnDigest, sendCB = std::move(sendCB), phase2Reply, cleanCB = std::move(cleanCB), valid ](){
   if(!valid){
     Debug("VALIDATE P1Replies for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
     //delete (bool*) valid;
     cleanCB(); //deletes SendCB resources should it not be called.
-    if(params.multiThreading){
+    if(params.multiThreading || mainThreadDispatching){
       FreePhase2message(msg); //const_cast<proto::Phase2&>(msg));
     }
-    return;
+    return (void*) true;
   }
 
    if(mainThreadDispatching) p2DecisionsMutex.lock();
@@ -738,7 +745,7 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
 
 //Free allocated memory
 //delete (bool*) valid;
-if(params.multiThreading){
+if(params.multiThreading || mainThreadDispatching){
   FreePhase2message(msg); // const_cast<proto::Phase2&>(msg));
 }
 
@@ -752,9 +759,19 @@ if (params.validateProofs && params.signedMessages) {
       delete p2Decision;
       });
   //Latency_End(&signLat);
-  return;
+  return (void*) true;
 }
 sendCB();
+
+return (void*) true;
+};
+if(params.multiThreading && mainThreadDispatching){
+  transport->DispatchTP_main(std::move(f));
+}
+else{
+  f();
+}
+
 }
 
 
@@ -815,6 +832,9 @@ void Server::HandlePhase2(const TransportAddress &remote,
       computedTxnDigest = TransactionDigest(msg.txn(), params.hashDigest);
       txnDigest = &computedTxnDigest;
     }
+  }
+  else{
+    txnDigest = &dummyString;  //just so I can run with validate turned off while using mainThreadDispatching
   }
 
   proto::Phase2Reply* phase2Reply = GetUnusedPhase2Reply();
@@ -953,7 +973,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
   if(! valid){
     Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
     //delete (bool*) valid;
-    if(params.multiThreading){
+    if(params.multiThreading || mainThreadDispatching){
       FreeWBmessage(msg);
     }
     //return; //XXX comment back
@@ -987,7 +1007,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
     Abort(*txnDigest);
   }
 
-  if(params.multiThreading){
+  if(params.multiThreading || mainThreadDispatching){
     // proto::GroupedSignatures* test = new proto::GroupedSignatures();
     // msg.set_allocated_p1_sigs(test);
     //delete msg;
@@ -1666,7 +1686,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       //  if(mainThreadDispatching) rtsMutex.unlock_shared();
       auto rtsItr = rts.find(write.key());
       if(rtsItr != rts.end()){
-        if(rtsItr->second >= ts.getTimestamp()){ ///TODO XXX URGENT FIX: TX can abort itself.
+        if(rtsItr->second > ts.getTimestamp()){
+          ///TODO XXX Re-introduce ID also, for finer ordering. This is safe, since the
+          //RTS check is just an additional heuristic; The prepare/commit checks guarantee serializability on their own
           stats.Increment("cc_abstains", 1);
           stats.Increment("cc_abstains_rts", 1);
           return proto::ConcurrencyControl::ABSTAIN;

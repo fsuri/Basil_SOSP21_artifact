@@ -22,9 +22,10 @@ transaction_status_t SyncPayment::Execute(SyncClient &client) {
   Debug("PAYMENT");
   Debug("Amount: %u", h_amount);
   Debug("Warehouse: %u", w_id);
+  //std::cerr << "warehouse: " << w_id << std::endl;
 
   client.Begin(timeout);
-  
+
   std::string w_key = WarehouseRowKey(w_id);
   client.Get(w_key, timeout);
   Debug("District: %u", d_id);
@@ -66,7 +67,7 @@ transaction_status_t SyncPayment::Execute(SyncClient &client) {
   Debug("  YTD: %u", w_row.ytd());
   w_row.SerializeToString(&str);
   client.Put(w_key, str, timeout);
-  
+
   DistrictRow d_row;
   UW_ASSERT(d_row.ParseFromString(strs[1]));
   d_row.set_ytd(d_row.ytd() + h_amount);
@@ -85,7 +86,7 @@ transaction_status_t SyncPayment::Execute(SyncClient &client) {
   if (c_row.credit() == "BC") {
     std::stringstream ss;
     ss << c_id << "," << c_d_id << "," << c_w_id << "," << d_id << ","
-             << w_id << "," << h_amount; 
+             << w_id << "," << h_amount;
     std::string new_data = ss.str() +  c_row.data();
     new_data = new_data.substr(std::min(new_data.size(), 500UL));
     c_row.set_data(new_data);

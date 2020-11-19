@@ -19,9 +19,10 @@ transaction_status_t SyncDelivery::Execute(SyncClient &client) {
   Debug("DELIVERY");
   Debug("Warehouse: %u", w_id);
   Debug("District: %u", d_id);
+  //std::cerr << "warehouse: " << w_id << std::endl;
 
   client.Begin(timeout);
-  
+
   std::string eno_key = EarliestNewOrderRowKey(w_id, d_id);
   client.Get(eno_key, str, timeout);
   EarliestNewOrderRow eno_row;

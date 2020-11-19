@@ -21,15 +21,21 @@ RWTransaction::~RWTransaction() {
 Operation RWTransaction::GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
     std::map<std::string, std::string> readValues) {
   if (outstandingOpCount < GetNumOps()) {
-    if (outstandingOpCount % 2 == 0) {
+    std::cerr << "outstanding: " << outstandingOpCount << "; finished: " << finishedOpCount << "num ops: " << GetNumOps() << std::endl;
+    if(finishedOpCount != outstandingOpCount){
+      return Wait();
+    }
+    else if (outstandingOpCount % 2 == 0) {
+      //std::cerr << "read: " << GetKey(finishedOpCount) << std::endl;
       return Get(GetKey(finishedOpCount));
-    } else if (finishedOpCount == outstandingOpCount) {
+    } else  {
+      //std::cerr << "write: " << GetKey(finishedOpCount) << std::endl;
       auto strValueItr = readValues.find(GetKey(finishedOpCount));
       UW_ASSERT(strValueItr != readValues.end());
       std::string strValue = strValueItr->second;
       std::string writeValue;
       if (strValue.length() == 0) {
-        writeValue = std::string(4, '\0');
+        writeValue = std::string(350, '\0'); //make a longer string
       } else {
         uint64_t intValue = 0;
         for (int i = 0; i < 4; ++i) {
@@ -41,8 +47,6 @@ Operation RWTransaction::GetNextOperation(size_t outstandingOpCount, size_t fini
         }
       }
       return Put(GetKey(finishedOpCount), writeValue);
-    } else {
-      return Wait();
     }
   } else if (finishedOpCount == GetNumOps()) {
     return Commit();

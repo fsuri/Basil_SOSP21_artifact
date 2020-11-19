@@ -105,6 +105,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
    bool mainThreadDispatching;
    bool dispatchMessageReceive;
 
+   std::string dummyString;
+
   friend class ServerTest;
   struct Value {
     std::string val;
