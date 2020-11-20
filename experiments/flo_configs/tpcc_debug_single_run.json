@@ -10,8 +10,8 @@
   ],
   "replication_protocol": ["indicus"],
   "client_protocol_mode": ["indicus"],
-  "num_shards": [3],
-  "num_groups": [3],
+  "num_shards": [24],
+  "num_groups": [24],
 
   "client_num_keys": 10000000,
   "_benchmark_name": "rw",
@@ -41,7 +41,7 @@
   "run_locally": false,
   "stats_merge_lists": ["txn_groups", "sig_batch"],
 
-  "_replication_protocol_settings": [{
+  "replication_protocol_settings": [{
     "adjust_batch_size": false,
     "hash_digest": true,
     "key_path": "/usr/local/etc/indicus-keys/secp256k1",
@@ -60,13 +60,10 @@
     "validate_proofs": false,
     "verify_deps": false,
     "watermark_time_delta": 30000,
-    "multi_threading": false,
-    "mainThreadDispatching": false
-    
   }
 ],
 
-  "replication_protocol_settings": [
+  "_replication_protocol_settings": [
     
 
     {
@@ -95,7 +92,7 @@
      
 	  "multi_threading": true,
 	  "mainThreadDispatching": true,
-      "client_multi_threading": true,
+      "client_multi_threading": false,
       "hyper_threading": false,
 	  "dispatchMessageReceive": false,
       "batch_verification": false,
