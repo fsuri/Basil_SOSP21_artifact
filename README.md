@@ -66,6 +66,8 @@ In addition, you need to install the following libraries from source:
 - [cryptopp-8.2](htps://cryptopp.com/cryptopp820.zip)
 - [bitcoin-core/secp256k1](https://github.com/bitcoin-core/secp256k1/)
 - [BLAKE3](https://github.com/BLAKE3-team/BLAKE3)
+- [ed25519-donna] (https://github.com/floodyberry/ed25519-donna)
+- [Intel TBB] (https://software.intel.com/content/www/us/en/develop/tools/oneapi/base-toolkit/get-the-toolkit.html). In order to compile, will need to configure CPU: https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html
 
 To install BLAKE3
 1. `git clone https://github.com/BLAKE3-team/BLAKE3`
