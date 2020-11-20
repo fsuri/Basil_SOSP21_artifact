@@ -632,13 +632,8 @@ void Replica::executeSlots() {
     // HotStuff
     // this function was NOT thread-safe
     // so I add a lock to make it thread-safe
-  std::mutex t1;
-  int r = std::try_lock(execSlotsMtx, t1);
-  if (r == -1) {
-      // lock successfully
-      t1.unlock();
-  }
-  else {
+
+  if (!execSlotsMtx.try_lock()) {
       // others are executing this fuction
       return;
   }
@@ -649,10 +644,10 @@ void Replica::executeSlots() {
   while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
       stats->Increment("exec_seqnum",1);
     // cancel the commit timer
-    if (seqnumCommitTimers.find(execSeqNum) != seqnumCommitTimers.end()) {
-      transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
-      seqnumCommitTimers.erase(execSeqNum);
-    }
+    // if (seqnumCommitTimers.find(execSeqNum) != seqnumCommitTimers.end()) {
+    //   transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
+    //   seqnumCommitTimers.erase(execSeqNum);
+    // }
 
     // HotStuff
     if (pendingExecutions[execSeqNum] == "bubble") {
@@ -660,7 +655,7 @@ void Replica::executeSlots() {
         continue;
     }
     // solve HotStuff liveness problem with callback
-    if (execSeqNum > startSeqNum + 30)
+    if (execSeqNum > startSeqNum + 20)
         break;
 
     string batchDigest = pendingExecutions[execSeqNum];
@@ -671,31 +666,35 @@ void Replica::executeSlots() {
       DebugHash(digest);
       // only execute if we have the full request
       if (requests.find(digest) != requests.end()) {
+          
         stats->Increment("exec_request",1);
         Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
         proto::PackedMessage packedMsg = requests[digest];
         std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
         for (const auto& reply : replies) {
           if (reply != nullptr) {
+              
             Debug("Sending reply");
             stats->Increment("execs_sent",1);
             EpendingBatchedMessages.push_back(reply);
             EpendingBatchedDigs.push_back(digest);
             if (EpendingBatchedMessages.size() >= EbatchSize) {
               Debug("EBatch is full, sending");
-              if (EbatchTimerRunning) {
-                transport->CancelTimer(EbatchTimerId);
-                EbatchTimerRunning = false;
-              }
+              // if (EbatchTimerRunning) {
+              //   transport->CancelTimer(EbatchTimerId);
+              //   EbatchTimerRunning = false;
+              // }
+                std::cout << "debug point before sendEbatch " << execSeqNum << std::endl;
               sendEbatch();
+                std::cout << "debug point after sendEbatch " << execSeqNum << std::endl;
             } else if (!EbatchTimerRunning) {
-              EbatchTimerRunning = true;
+                EbatchTimerRunning = true;
               Debug("Starting ebatch timer");
-              EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
-                Debug("EBatch timer expired, sending");
-                this->EbatchTimerRunning = false;
-                // this->sendEbatch();
-              });
+              // EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
+              //   Debug("EBatch timer expired, sending");
+              //   this->EbatchTimerRunning = false;
+              //   this->sendEbatch();
+              // });
             }
           } else {
               stats->Increment("execs_invalid",1);
@@ -710,29 +709,29 @@ void Replica::executeSlots() {
           execSeqNum++;
         }
       } else {
-        Debug("request from batch %lu not yet received", execSeqNum);
-        if (requestTx) {
-          stats->Increment("req_txn",1);
-          proto::RequestRequest rr;
-          rr.set_digest(digest);
-          int primaryIdx = config.GetLeaderIndex(currentView);
-          if (primaryIdx == idx) {
-            stats->Increment("primary_req_txn",1);
-          }
-          transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-        }
-        break;
+        // Debug("request from batch %lu not yet received", execSeqNum);
+        // if (requestTx) {
+        //   stats->Increment("req_txn",1);
+        //   proto::RequestRequest rr;
+        //   rr.set_digest(digest);
+        //   int primaryIdx = config.GetLeaderIndex(currentView);
+        //   if (primaryIdx == idx) {
+        //     stats->Increment("primary_req_txn",1);
+        //   }
+        //   transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+        // }
+        // break;
       }
     } else {
-      Debug("Batch request not yet received");
-      if (requestTx) {
-        stats->Increment("req_batch",1);
-        proto::RequestRequest rr;
-        rr.set_digest(batchDigest);
-        int primaryIdx = config.GetLeaderIndex(currentView);
-        transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-      }
-      break;
+      // Debug("Batch request not yet received");
+      // if (requestTx) {
+      //   stats->Increment("req_batch",1);
+      //   proto::RequestRequest rr;
+      //   rr.set_digest(batchDigest);
+      //   int primaryIdx = config.GetLeaderIndex(currentView);
+      //   transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+      // }
+      // break;
     }
   }
 
@@ -742,7 +741,7 @@ void Replica::executeSlots() {
 }
 
 void Replica::sendEbatch() {
-  stats->Increment(EbStatNames[EpendingBatchedMessages.size()], 1);
+        stats->Increment(EbStatNames[EpendingBatchedMessages.size()], 1);
   std::vector<std::string*> messageStrs;
   for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
     EsignedMessages[i]->Clear();
