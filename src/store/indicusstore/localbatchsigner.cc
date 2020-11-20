@@ -15,6 +15,9 @@ LocalBatchSigner::LocalBatchSigner(Transport *transport, KeyManager *keyManager,
     transport->TimerMicro(batchTimeoutMicro, std::bind(
         &LocalBatchSigner::AdjustBatchSize, this));
   }
+  pendingBatchMessages.reserve(batchSize);
+  pendingBatchSignedMessages.reserve(batchSize);
+  pendingBatchCallbacks.reserve(batchSize);
   //_Latency_Init(&waitOnBatchLock, "batch_lock_lat");
 }
 
@@ -91,12 +94,103 @@ void LocalBatchSigner::AdjustBatchSize() {
 //Main calls DispatchTP(asyncMessageToSign, ManageCallbacks) asyncMessageToSign will call asyncSignBatch
 
 
+// void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
+//     proto::SignedMessage *signedMessage, signedCallback cb, bool finishBatch) {
+//
+//   Debug("calling asyncMessageToSign from CPU: %d", sched_getcpu());
+//   std::unique_lock<std::mutex> lock(this->batchMutex);
+//
+//   if (initialBatchSize == 1) {
+//     Debug("Initial batch size = 1, immediately signing");
+//
+//     // std::function<void*()> f(std::bind(asyncSignMessage, msg, keyManager->GetPrivateKey(id),
+//     //   id, signedMessage));
+//     // transport->DispatchTP(std::move(f), [cb](void * ret){ cb();});
+//     auto f = [this, msg, signedMessage, cb](){
+//       SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMessage);
+//       cb();
+//       return (void*) true;
+//     };
+//     transport->DispatchTP_noCB(std::move(f));
+//
+//   } else {
+//     Debug("Adding to Sig batch");
+//     messagesBatchedInterval++;
+//     pendingBatchMessages.push_back(msg);
+//     pendingBatchSignedMessages.push_back(signedMessage);
+//     pendingBatchCallbacks.push_back(std::move(cb));
+//
+//     if (finishBatch || pendingBatchMessages.size() >= batchSize) {
+//       Debug("Batch is full, sending");
+//       if (batchTimerRunning && false) {
+//         transport->CancelTimer(batchTimerId);
+//         batchTimerRunning = false;
+//       }
+//
+// //move these too? After moving I have a clear vector so it should be fine.
+//       std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch, this,
+//         pendingBatchMessages, pendingBatchSignedMessages, std::move(pendingBatchCallbacks)));
+//
+//       pendingBatchMessages.clear();
+//       pendingBatchSignedMessages.clear();
+//       pendingBatchCallbacks.clear();
+//       Debug("Batch request bound, dispatching");
+//       //transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
+//       transport->DispatchTP_noCB(std::move(f));
+//
+//
+//     } else if (!batchTimerRunning) {
+//       batchTimerRunning = true;
+//       Debug("Starting batch timer");
+//       // auto f = [this](void* input){
+//       //   this->transport->TimerMicro(this->batchTimeoutMicro, [this]() {
+//       //     std::unique_lock<std::mutex> lock(this->batchMutex);
+//       //     Debug("Batch timer expired with %lu items, sending",
+//       //         this->pendingBatchMessages.size());
+//       //     this->batchTimerRunning = false;
+//       //     if(this->pendingBatchMessages.size() == 0) return;
+//       //
+//       //     std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch, this,
+//       //       this->pendingBatchMessages, this->pendingBatchSignedMessages, this->pendingBatchCallbacks));
+//       //
+//       //     this->pendingBatchMessages.clear();
+//       //     this->pendingBatchSignedMessages.clear();
+//       //     this->pendingBatchCallbacks.clear();
+//       //     //this->transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
+//       //     this->transport->DispatchTP_noCB(std::move(f));
+//       //
+//       //   });
+//       // };
+//       // transport->IssueCB(std::move(f), (void*) true);
+//
+//       //batchTimeoutMicro
+//       batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this]() {
+//         std::unique_lock<std::mutex> lock(this->batchMutex);
+//         Debug("Batch timer expired with %lu items, sending",
+//             this->pendingBatchMessages.size());
+//         this->batchTimerRunning = false;
+//         if(this->pendingBatchMessages.size() == 0) return;
+//
+//         std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch, this,
+//           this->pendingBatchMessages, this->pendingBatchSignedMessages, this->pendingBatchCallbacks));
+//
+//         this->pendingBatchMessages.clear();
+//         this->pendingBatchSignedMessages.clear();
+//         this->pendingBatchCallbacks.clear();
+//         //this->transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
+//         this->transport->DispatchTP_noCB(std::move(f));
+//
+//       });
+//
+//     }
+//
+//   }
+// }
+
 void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
     proto::SignedMessage *signedMessage, signedCallback cb, bool finishBatch) {
 
   Debug("calling asyncMessageToSign from CPU: %d", sched_getcpu());
-  std::unique_lock<std::mutex> lock(this->batchMutex);
-
   if (initialBatchSize == 1) {
     Debug("Initial batch size = 1, immediately signing");
 
@@ -111,13 +205,16 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
     transport->DispatchTP_noCB(std::move(f));
 
   } else {
+    //std::unique_lock<std::mutex> lock(batchMutex);
     Debug("Adding to Sig batch");
     messagesBatchedInterval++;
-    pendingBatchMessages.push_back(msg);
-    pendingBatchSignedMessages.push_back(signedMessage);
-    pendingBatchCallbacks.push_back(std::move(cb));
 
-    if (finishBatch || pendingBatchMessages.size() >= batchSize) {
+    Triplet triplet(msg, signedMessage, std::move(cb));
+    //Batch.push_back(std::move(triplet));
+    Batch.enqueue(triplet);
+
+
+    if (finishBatch || Batch.size_approx() >= batchSize) {
       Debug("Batch is full, sending");
       if (batchTimerRunning && false) {
         transport->CancelTimer(batchTimerId);
@@ -125,67 +222,85 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
       }
 
 //move these too? After moving I have a clear vector so it should be fine.
-      std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch, this,
-        pendingBatchMessages, pendingBatchSignedMessages, std::move(pendingBatchCallbacks)));
+      std::vector<Triplet> results;     // Could also be any iterator
+      for(int i = 0; i < batchSize; ++i){
+        results.push_back(Triplet());
+      }
+      size_t count = Batch.try_dequeue_bulk(results.begin(), Batch.size_approx());
+      if(count == 0) return;
+      results.resize(count);
+      std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch2, this,
+        std::move(results))); //can I move results?
 
-      pendingBatchMessages.clear();
-      pendingBatchSignedMessages.clear();
-      pendingBatchCallbacks.clear();
+      //Batch.clear();
+
+
+
       Debug("Batch request bound, dispatching");
       //transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
       transport->DispatchTP_noCB(std::move(f));
 
 
-    } else if (!batchTimerRunning) {
-      batchTimerRunning = true;
-      Debug("Starting batch timer");
-      // auto f = [this](void* input){
-      //   this->transport->TimerMicro(this->batchTimeoutMicro, [this]() {
-      //     std::unique_lock<std::mutex> lock(this->batchMutex);
-      //     Debug("Batch timer expired with %lu items, sending",
-      //         this->pendingBatchMessages.size());
-      //     this->batchTimerRunning = false;
-      //     if(this->pendingBatchMessages.size() == 0) return;
-      //
-      //     std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch, this,
-      //       this->pendingBatchMessages, this->pendingBatchSignedMessages, this->pendingBatchCallbacks));
-      //
-      //     this->pendingBatchMessages.clear();
-      //     this->pendingBatchSignedMessages.clear();
-      //     this->pendingBatchCallbacks.clear();
-      //     //this->transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
-      //     this->transport->DispatchTP_noCB(std::move(f));
-      //
-      //   });
-      // };
-      // transport->IssueCB(std::move(f), (void*) true);
-
-      //batchTimeoutMicro
-      batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this]() {
-        std::unique_lock<std::mutex> lock(this->batchMutex);
-        Debug("Batch timer expired with %lu items, sending",
-            this->pendingBatchMessages.size());
-        this->batchTimerRunning = false;
-        if(this->pendingBatchMessages.size() == 0) return;
-
-        std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch, this,
-          this->pendingBatchMessages, this->pendingBatchSignedMessages, this->pendingBatchCallbacks));
-
-        this->pendingBatchMessages.clear();
-        this->pendingBatchSignedMessages.clear();
-        this->pendingBatchCallbacks.clear();
-        //this->transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
-        this->transport->DispatchTP_noCB(std::move(f));
-
-      });
-
     }
+    else if (!batchTimerRunning) {
+          batchTimerRunning = true;
+          Debug("Starting batch timer");
+
+          batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this]() {
+            //std::unique_lock<std::mutex> lock(this->batchMutex);
+            Debug("Batch timer expired with %lu items, sending",
+                this->Batch.size_approx());
+            this->batchTimerRunning = false;
+            if(this->Batch.size_approx() == 0) return;
+
+            std::vector<Triplet> results;     // Could also be any iterator
+            for(int i = 0; i < this->batchSize; ++i){
+              results.push_back(Triplet());
+            }
+            //results.reserve(this->Batch.size_approx;)
+            size_t count = this->Batch.try_dequeue_bulk(results.begin(), this->Batch.size_approx());
+            if(count == 0) return;
+            results.resize(count);
+            //std::vector<Triplet> _batch(results.begin(), results.end());
+            std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch2, this,
+              std::move(results)));
+
+            //this->Batch.clear();
+            //this->transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
+            this->transport->DispatchTP_noCB(std::move(f));
+
+          });
+
+        }
 
   }
 }
 
 //Change: main thread assembles batches. Then dispatches the batches:
 // managecallback takes as arg the callback list runs those callbacks.
+void* LocalBatchSigner::asyncSignBatch2(std::vector<Triplet> _Batch) {
+
+  uint64_t batchSize = _Batch.size();
+  {
+  //std::lock_guard<std::mutex> lk(stat_mutex);
+    stats.IncrementList("sig_batch", batchSize);
+    stats.Add("sig_batch_sizes", batchSize);
+    struct timeval curr;
+    gettimeofday(&curr, NULL);
+    uint64_t currMicros = curr.tv_sec * 1000000ULL + curr.tv_usec;
+    stats.Add("sig_batch_sizes_ts",  currMicros);
+  }
+  Debug("(CPU:%d) Signing batch", sched_getcpu());
+  SignMessages(_Batch, keyManager->GetPrivateKey(id), id, merkleBranchFactor);
+
+  Debug("(CPU:%d) Issuing sender callbacks", sched_getcpu());
+  for (const auto& triplet : _Batch) {
+    triplet.cb();
+  }
+
+  //bool* ret = new bool;
+  return (void*) true;
+}
 
 void* LocalBatchSigner::asyncSignBatch(std::vector<::google::protobuf::Message*> _pendingBatchMessages,
 std::vector<proto::SignedMessage*> _pendingBatchSignedMessages,

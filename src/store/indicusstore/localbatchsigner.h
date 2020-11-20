@@ -15,6 +15,9 @@
 #include "store/common/stats.h"
 #include "store/indicusstore/batchsigner.h"
 
+#include "tbb/concurrent_vector.h"
+#include "lib/concurrentqueue/concurrentqueue.h"
+
 namespace indicusstore {
 
 class LocalBatchSigner : public BatchSigner {
@@ -41,6 +44,8 @@ class LocalBatchSigner : public BatchSigner {
           std::vector<proto::SignedMessage*> pendingBatchSignedMessages,
           std::vector<signedCallback> pendingBatchCallbacks);
 
+          void* asyncSignBatch2(std::vector<Triplet> _Batch);
+
   void ManageCallbacks(void* result);
 
   bool batchTimerRunning;
@@ -51,6 +56,13 @@ class LocalBatchSigner : public BatchSigner {
   std::vector<::google::protobuf::Message*> pendingBatchMessages;
   std::vector<proto::SignedMessage*> pendingBatchSignedMessages;
   std::vector<signedCallback> pendingBatchCallbacks;
+
+  // tbb::concurrent_vector<::google::protobuf::Message*> pendingBatchMessages;
+  // tbb::concurrent_vector<proto::SignedMessage*> pendingBatchSignedMessages;
+  // tbb::concurrent_vector<signedCallback> pendingBatchCallbacks;
+
+  //tbb::concurrent_vector<Triplet> Batch;
+  moodycamel::ConcurrentQueue<Triplet> Batch;
 
   //sync logic for multithreading
   std::mutex stat_mutex;

@@ -14,10 +14,14 @@
 #include <vector>
 #include <functional>
 #include <mutex>
+#include "tbb/concurrent_vector.h"
 
 #include <google/protobuf/message.h>
 
+
 namespace indicusstore {
+
+
 
 static bool LocalDispatch = true; //TODO: Turn into config flag if a viable option.
 
@@ -26,6 +30,19 @@ typedef std::function<void()> cleanCallback;
 //typedef std::function<void(void*)> verifyCallback;
 typedef std::function<void(void*)> mainThreadCallback; //TODO change back to this...
 //typedef std::function<void(bool)> mainThreadCallback;
+
+struct Triplet {
+  Triplet() {};
+  Triplet(::google::protobuf::Message* msg,
+  proto::SignedMessage* sig_msg,
+  signedCallback cb) : msg(msg), sig_msg(sig_msg), cb(cb) { };
+  ~Triplet() { };
+  ::google::protobuf::Message* msg;
+  proto::SignedMessage* sig_msg;
+  signedCallback cb;
+};
+
+
 
 //static bool True = true;
 //static bool False = false;
@@ -90,6 +107,10 @@ void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
     crypto::PrivKey* privateKey, uint64_t processId,
     const std::vector<proto::SignedMessage*>& signedMessages,
     uint64_t merkleBranchFactor);
+
+    void SignMessages(const std::vector<Triplet>& batch,
+        crypto::PrivKey* privateKey, uint64_t processId,
+        uint64_t merkleBranchFactor);
 
 void* asyncSignMessages(const std::vector<::google::protobuf::Message*> msgs,
     crypto::PrivKey* privateKey, uint64_t processId,

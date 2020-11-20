@@ -40,6 +40,8 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
               Debug("Thread %d running on CPU %d.", i, sched_getcpu());
 
               test_main_worklist.wait_dequeue(job);
+              //while(!test_main_worklist.try_dequeue(job)) {};
+
               // std::unique_lock<std::mutex> lock(this->main_worklistMutex);
               // cv_main.wait(lock, [this] { return this->main_worklist.size() > 0 || !running; });
               if (!running) {
@@ -68,7 +70,9 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
 
             //std::unique_lock<std::mutex> lock(this->worklistMutex);                    //STABLE_VERSION
             //cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });   //STABLE_VERSION
+
             test_worklist.wait_dequeue(job);
+            //while(!test_worklist.try_dequeue(job)) {};
 
             //std::shared_lock lock(this->dummyMutex);
             //cv.wait(lock, [this, &job] { return this->testlist.try_pop(job) || !running; });
@@ -113,9 +117,10 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
   }
   else{
     fprintf(stderr, "starting client threadpool\n");
-    int num_cpus = std::thread::hardware_concurrency()/(2-hyperthreading);
+    int num_cpus = std::thread::hardware_concurrency(); ///(2-hyperthreading);
     fprintf(stderr, "Num_cpus: %d \n", num_cpus);
     num_cpus /= total_processes;
+    //num_cpus = 8; //XXX change back to dynamic
     //int offset = process_id * num_cpus;
     Debug("num cpus %d", num_cpus);
     uint32_t num_threads = (uint32_t) std::max(1, num_cpus);
@@ -129,6 +134,8 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
             Debug("Thread %d running on CPU %d.", i, sched_getcpu());
 
             test_worklist.wait_dequeue(job);
+            //while(!test_worklist.try_dequeue(job)) {};
+
             // std::unique_lock<std::mutex> lock(this->worklistMutex);
             // cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });
             if (!running) {
