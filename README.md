@@ -69,6 +69,9 @@ In addition, you need to install the following libraries from source:
 - [ed25519-donna] (https://github.com/floodyberry/ed25519-donna)
 - [Intel TBB] (https://software.intel.com/content/www/us/en/develop/tools/oneapi/base-toolkit/get-the-toolkit.html). In order to compile, will need to configure CPU: https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html
 
+Indicus additionally relies on:
+- [moodycamel/concurrentqueue] (https://github.com/cameron314/concurrentqueue). Already part of code-base, nothing to be done.
+
 To install BLAKE3
 1. `git clone https://github.com/BLAKE3-team/BLAKE3`
 2. `cd BLAKE3/c`
