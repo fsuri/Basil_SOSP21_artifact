@@ -10,8 +10,8 @@
   ],
   "replication_protocol": ["indicus"],
   "client_protocol_mode": ["indicus"],
-  "num_shards": [3],
-  "num_groups": [3],
+  "num_shards": [24],
+  "num_groups": [24],
 
   "client_num_keys": 10000000,
   "_benchmark_name": "rw",
@@ -35,8 +35,9 @@
   "client_abort_backoff": 2,
   "client_retry_aborted": true,
   "client_max_attempts": -1,
-  "client_max_backoff": 150,
-  "client_rand_sleep": 2,
+  "client_max_backoff": 2500,
+  "client_rand_sleep": 100,
+  "__CLIENT RAND SLEEP NEEDS TO BE HIGH FOR NON CRYPTO; backoff too": true,
   "client_message_timeout": 10000,
   "run_locally": false,
   "stats_merge_lists": ["txn_groups", "sig_batch"],
@@ -84,14 +85,14 @@
 	  "hash_digest": true,
       "verify_deps": false,
 	
-      "validate_proofs": true,
-      "sign_messages": true,
+      "validate_proofs": false,
+      "sign_messages": false,
       "signature_type": 4,
       "sig_batch": 4,
       "_sig_batch_timeout": 5000,
      
 	  "multi_threading": true,
-	  "mainThreadDispatching": true,
+	  "mainThreadDispatching": false,
       "client_multi_threading": false,
       "hyper_threading": false,
 	  "dispatchMessageReceive": false,
@@ -103,10 +104,10 @@
   "experiment_name": "indicus",
   "codebase_name": "indicus",
   "client_total": [
-    [144]
+    [126]
   ],
   "client_processes_per_client_node": [
-    [8]
+    [7]
   ],
   "client_threads_per_process": [
     [1]
