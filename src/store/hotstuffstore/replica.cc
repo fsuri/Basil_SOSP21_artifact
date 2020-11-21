@@ -257,7 +257,7 @@ bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
 // HotStuff
 // define this macro if switching to pbft store
 // undefine this macro if use hotstuff store
-//#define USE_PBFT_STORE
+#define USE_PBFT_STORE
 
 void Replica::HandleRequest(const TransportAddress &remote,
                                const proto::Request &request) {
@@ -305,6 +305,9 @@ void Replica::HandleRequest(const TransportAddress &remote,
         });
       }
     }
+    // this could be the message that allows us to execute a slot
+    executeSlots();
+
 
     #else // use HotStuff instead of PBFT
 
@@ -353,8 +356,6 @@ void Replica::HandleRequest(const TransportAddress &remote,
 
     #endif
 
-    // this could be the message that allows us to execute a slot
-    executeSlots();
   }
 
   handleRequestMtx.unlock();
@@ -629,14 +630,13 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
 void Replica::executeSlots() {
   stats->Increment("exec_executeslots",1);
 
-    // HotStuff
-    // this function was NOT thread-safe
-    // so I add a lock to make it thread-safe
-
-  if (!execSlotsMtx.try_lock()) {
-      // others are executing this fuction
-      return;
-  }
+  // HotStuff
+  // this function was NOT thread-safe
+  // so I add a lock to make it thread-safe
+  // if (!execSlotsMtx.try_lock()) {
+  //     // others are executing this fuction
+  //     return;
+  // }
   
   Debug("exec seq num: %lu", execSeqNum);
 
@@ -655,8 +655,8 @@ void Replica::executeSlots() {
         continue;
     }
     // solve HotStuff liveness problem with callback
-    if (execSeqNum > startSeqNum + 20)
-        break;
+    // if (execSeqNum > startSeqNum + 20)
+    //     break;
 
     string batchDigest = pendingExecutions[execSeqNum];
     // only execute when we have the batched request
@@ -684,9 +684,9 @@ void Replica::executeSlots() {
               //   transport->CancelTimer(EbatchTimerId);
               //   EbatchTimerRunning = false;
               // }
-                std::cout << "debug point before sendEbatch " << execSeqNum << std::endl;
+                // std::cout << "debug point before sendEbatch " << execSeqNum << std::endl;
               sendEbatch();
-                std::cout << "debug point after sendEbatch " << execSeqNum << std::endl;
+                // std::cout << "debug point after sendEbatch " << execSeqNum << std::endl;
             } else if (!EbatchTimerRunning) {
                 EbatchTimerRunning = true;
               Debug("Starting ebatch timer");
@@ -709,35 +709,35 @@ void Replica::executeSlots() {
           execSeqNum++;
         }
       } else {
-        // Debug("request from batch %lu not yet received", execSeqNum);
-        // if (requestTx) {
-        //   stats->Increment("req_txn",1);
-        //   proto::RequestRequest rr;
-        //   rr.set_digest(digest);
-        //   int primaryIdx = config.GetLeaderIndex(currentView);
-        //   if (primaryIdx == idx) {
-        //     stats->Increment("primary_req_txn",1);
-        //   }
-        //   transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-        // }
-        // break;
+        Debug("request from batch %lu not yet received", execSeqNum);
+        if (requestTx) {
+          stats->Increment("req_txn",1);
+          proto::RequestRequest rr;
+          rr.set_digest(digest);
+          int primaryIdx = config.GetLeaderIndex(currentView);
+          if (primaryIdx == idx) {
+            stats->Increment("primary_req_txn",1);
+          }
+          transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+        }
+        break;
       }
     } else {
-      // Debug("Batch request not yet received");
-      // if (requestTx) {
-      //   stats->Increment("req_batch",1);
-      //   proto::RequestRequest rr;
-      //   rr.set_digest(batchDigest);
-      //   int primaryIdx = config.GetLeaderIndex(currentView);
-      //   transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-      // }
-      // break;
+      Debug("Batch request not yet received");
+      if (requestTx) {
+        stats->Increment("req_batch",1);
+        proto::RequestRequest rr;
+        rr.set_digest(batchDigest);
+        int primaryIdx = config.GetLeaderIndex(currentView);
+        transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+      }
+      break;
     }
   }
 
 
   // HotStuff
-  execSlotsMtx.unlock();
+  // execSlotsMtx.unlock();
 }
 
 void Replica::sendEbatch() {

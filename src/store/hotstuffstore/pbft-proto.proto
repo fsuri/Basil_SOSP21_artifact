@@ -50,7 +50,6 @@ message ABRequest {
 message BatchedRequest {
   // map from the batched seq num to message digest
   map<uint64, bytes> digests = 1;
-  required uint64 seqnum = 2;
 }
 
 message Preprepare {
