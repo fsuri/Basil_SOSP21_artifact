@@ -266,8 +266,6 @@ void Replica::HandleRequest(const TransportAddress &remote,
   string digest = request.digest();
   DebugHash(digest);
 
-  handleRequestMtx.lock();
-  
   if (requests.find(digest) == requests.end()) {
     Debug("new request: %s", request.packed_msg().type().c_str());
     stats->Increment("handle_new_count",1);
@@ -299,9 +297,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
         batchTimerId = transport->Timer(batchTimeoutMS, [this]() {
           Debug("Batch timer expired, sending");
           this->batchTimerRunning = false;
-
-          // HotStuff
-          //this->sendBatchedPreprepare();
+          this->sendBatchedPreprepare();
         });
       }
     }
@@ -333,20 +329,20 @@ void Replica::HandleRequest(const TransportAddress &remote,
     hotstuff_interface.propose(batchedDigest, execb);
 
     // Insert bubble command to HotStuff for progress
-    string bubbleDigest = batchedDigest;
-    bubbleDigest[0] = 'b';
-    bubbleDigest[1] = 'u';
-    bubbleDigest[2] = 'b';
-    bubbleDigest[3] = 'b';
-    bubbleDigest[4] = 'l';
-    bubbleDigest[5] = 'e';
-    hotstuff_exec_callback execb_bubble = [this](const std::string &digest_param, uint32_t seqnum) {
-        pendingExecutions[seqnum] = "bubble";
-        std::cout << "Execute bubble: " << seqnum << std::endl;
-        executeSlots();
-        std::cout << "Complete callback: " << seqnum << std::endl;
-    };
-    // Insert some bubbles
+    // string bubbleDigest = batchedDigest;
+    // bubbleDigest[0] = 'b';
+    // bubbleDigest[1] = 'u';
+    // bubbleDigest[2] = 'b';
+    // bubbleDigest[3] = 'b';
+    // bubbleDigest[4] = 'l';
+    // bubbleDigest[5] = 'e';
+    // hotstuff_exec_callback execb_bubble = [this](const std::string &digest_param, uint32_t seqnum) {
+    //     pendingExecutions[seqnum] = "bubble";
+    //     std::cout << "Execute bubble: " << seqnum << std::endl;
+    //     executeSlots();
+    //     std::cout << "Complete callback: " << seqnum << std::endl;
+    // };
+    // // Insert some bubbles
     // bubbleDigest[6] = '1';
     // hotstuff_interface.propose(bubbleDigest, execb_bubble);
     // bubbleDigest[6] = '2';
@@ -357,8 +353,6 @@ void Replica::HandleRequest(const TransportAddress &remote,
     #endif
 
   }
-
-  handleRequestMtx.unlock();
 }
 
 void Replica::sendBatchedPreprepare() {
@@ -644,10 +638,10 @@ void Replica::executeSlots() {
   while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
       stats->Increment("exec_seqnum",1);
     // cancel the commit timer
-    // if (seqnumCommitTimers.find(execSeqNum) != seqnumCommitTimers.end()) {
-    //   transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
-    //   seqnumCommitTimers.erase(execSeqNum);
-    // }
+    if (seqnumCommitTimers.find(execSeqNum) != seqnumCommitTimers.end()) {
+      transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
+      seqnumCommitTimers.erase(execSeqNum);
+    }
 
     // HotStuff
     if (pendingExecutions[execSeqNum] == "bubble") {
