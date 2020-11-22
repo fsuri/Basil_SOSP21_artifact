@@ -257,7 +257,7 @@ bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
 // HotStuff
 // define this macro if switching to pbft store
 // undefine this macro if use hotstuff store
-#define USE_PBFT_STORE
+//#define USE_PBFT_STORE
 
 void Replica::HandleRequest(const TransportAddress &remote,
                                const proto::Request &request) {
@@ -725,7 +725,7 @@ void Replica::executeSlots() {
           //     rr.set_digest(digest);
           //     transport->SendMessageToGroup(this, groupIdx, rr);
           // }
-          // break;
+          break;
 
           #endif
       }
@@ -745,9 +745,9 @@ void Replica::executeSlots() {
         break;
 
         #else
-
-        // This should not happen in hotstuffstore
-        assert(false);
+        
+        stats->Increment("miss_hotstuff_req_batch",1);
+        break;
 
         #endif
     }
