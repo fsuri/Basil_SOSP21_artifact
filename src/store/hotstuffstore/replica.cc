@@ -313,7 +313,9 @@ void Replica::HandleRequest(const TransportAddress &remote,
         stats->Increment("exec_callback",1);
         assert(digest == digest_param);
 
-        // prepare data structures for executeSlots()
+        execSlotsMtx.lock();
+        
+        // prepare data structures for executeSlots()        
         proto::BatchedRequest batchedRequest;
         (*batchedRequest.mutable_digests())[0] = digest;
         string batchedDigest = BatchedDigest(batchedRequest);
@@ -323,6 +325,8 @@ void Replica::HandleRequest(const TransportAddress &remote,
         std::cout << "Execute request: " << seqnum << ", succeed seqnum: " << execSeqNum << std::endl;
         executeSlots();
         std::cout << "Complete callback: " << seqnum << ", succeed seqnum: " << execSeqNum << std::endl;
+
+        execSlotsMtx.unlock();
     };      
     hotstuff_interface.propose(digest, execb);
 
@@ -391,6 +395,11 @@ void Replica::SendPreprepare(uint64_t seqnum, const proto::Preprepare& preprepar
 void Replica::HandleBatchedRequest(const TransportAddress &remote,
                                proto::BatchedRequest &request) {
   Debug("Handling batched request message");
+
+  #ifndef USE_PBFT_STORE
+  // HotStuff should never use this function
+  assert(false);
+  #endif
 
   string digest = BatchedDigest(request);
   batchedRequests[digest] = request;
@@ -621,14 +630,6 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
 
 void Replica::executeSlots() {
   stats->Increment("exec_executeslots",1);
-
-  // HotStuff
-  // (obsolete) this function was NOT thread-safe
-  // so I add a lock to make it thread-safe
-  // if (!execSlotsMtx.try_lock()) {
-  //     // others are executing this fuction
-  //     return;
-  // }
   
   Debug("exec seq num: %lu", execSeqNum);
 
@@ -640,15 +641,6 @@ void Replica::executeSlots() {
       transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
       seqnumCommitTimers.erase(execSeqNum);
     }
-
-    // HotStuff
-    // if (pendingExecutions[execSeqNum] == "bubble") {
-    //     execSeqNum++;
-    //     continue;
-    // }
-    // (obsolete) solve HotStuff liveness problem with callback
-    // if (execSeqNum > startSeqNum + 20)
-    //     break;
 
     string batchDigest = pendingExecutions[execSeqNum];
     // only execute when we have the batched request
@@ -677,7 +669,9 @@ void Replica::executeSlots() {
               //   transport->CancelTimer(EbatchTimerId);
               //   EbatchTimerRunning = false;
               // }
+              std::cout << "    debug point before sendEbatch" << std::endl;
               sendEbatch();
+              std::cout << "    debug point after sendEbatch" << std::endl;
             } else if (!EbatchTimerRunning) {
                 EbatchTimerRunning = true;
               Debug("Starting ebatch timer");
@@ -752,10 +746,6 @@ void Replica::executeSlots() {
         #endif
     }
   }
-
-
-  // HotStuff
-  // execSlotsMtx.unlock();
 }
 
 void Replica::sendEbatch() {
@@ -780,15 +770,9 @@ void Replica::sendEbatch() {
     hotstuffBatchedSigs::generateBatchedSignatures(messageStrs, keyManager->GetPrivateKey(id), sigs);
 
     for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
-        std::cout << "debug point sendEbatch before" << std::endl;
-        try {
-            transport->SendMessage(this, *replyAddrs[EpendingBatchedDigs[i]], *EsignedMessages[i]);
-        }
-        catch (...) {
-            std::cout << "exception occurred in sendEbatch" << std::endl;
-        }
-        std::cout << "debug point sendEbatch after" << std::endl;
-
+        std::cout << "    debug point before transport->SendMessage" << std::endl;
+        transport->SendMessage(this, *replyAddrs[EpendingBatchedDigs[i]], *EsignedMessages[i]);
+        std::cout << "    debug point after transport->SendMessage" << std::endl;
         delete EpendingBatchedMessages[i];
     }
     EpendingBatchedDigs.clear();
