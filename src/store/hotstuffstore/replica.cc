@@ -642,10 +642,10 @@ void Replica::executeSlots() {
     }
 
     // HotStuff
-    if (pendingExecutions[execSeqNum] == "bubble") {
-        execSeqNum++;
-        continue;
-    }
+    // if (pendingExecutions[execSeqNum] == "bubble") {
+    //     execSeqNum++;
+    //     continue;
+    // }
     // (obsolete) solve HotStuff liveness problem with callback
     // if (execSeqNum > startSeqNum + 20)
     //     break;
@@ -706,19 +706,20 @@ void Replica::executeSlots() {
           
           Debug("request from batch %lu not yet received", execSeqNum);
           stats->Increment("miss_req_txn",1);
-          // if (requestTx) {
-          //     stats->Increment("req_txn",1);
-          //     proto::RequestRequest rr;
-          //     rr.set_digest(digest);
-          //     int primaryIdx = config.GetLeaderIndex(currentView);
-          //     if (primaryIdx == idx) {
-          //         stats->Increment("primary_req_txn",1);
-          //     }
-          //     transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-          // }
+          if (requestTx) {
+              stats->Increment("req_txn",1);
+              proto::RequestRequest rr;
+              rr.set_digest(digest);
+              int primaryIdx = config.GetLeaderIndex(currentView);
+              if (primaryIdx == idx) {
+                  stats->Increment("primary_req_txn",1);
+              }
+              transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+          }
           break;
 
           #else
+
           stats->Increment("miss_hotstuff_req_txn",1);
           // if (requestTx) {
           //     proto::RequestRequest rr;
@@ -734,14 +735,14 @@ void Replica::executeSlots() {
         #ifdef USE_PBFT_STORE
         
         stats->Increment("miss_req_batch",1);        
-        // Debug("Batch request not yet received");
-        // if (requestTx) {
-        //     stats->Increment("req_batch",1);
-        //     proto::RequestRequest rr;
-        //     rr.set_digest(batchDigest);
-        //     int primaryIdx = config.GetLeaderIndex(currentView);
-        //     transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-        // }
+        Debug("Batch request not yet received");
+        if (requestTx) {
+            stats->Increment("req_batch",1);
+            proto::RequestRequest rr;
+            rr.set_digest(batchDigest);
+            int primaryIdx = config.GetLeaderIndex(currentView);
+            transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+        }
         break;
 
         #else
