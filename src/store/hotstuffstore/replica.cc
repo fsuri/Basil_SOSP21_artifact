@@ -319,11 +319,10 @@ void Replica::HandleRequest(const TransportAddress &remote,
         string batchedDigest = BatchedDigest(batchedRequest);
         batchedRequests[batchedDigest] = batchedRequest;
         pendingExecutions[seqnum] = batchedDigest;
-        hotstuffBatchToRequest[batchedDigest] = digest;
 
-        std::cout << "Execute request: " << seqnum << std::endl;
+        std::cout << "Execute request: " << seqnum << ", succeed seqnum: " << execSeqNum << std::endl;
         executeSlots();
-        std::cout << "Complete callback: " << seqnum << std::endl;
+        std::cout << "Complete callback: " << seqnum << ", succeed seqnum: " << execSeqNum << std::endl;
     };      
     hotstuff_interface.propose(digest, execb);
 
@@ -718,6 +717,16 @@ void Replica::executeSlots() {
           }
           break;
 
+          #else
+
+          // if (requestTx) {
+              stats->Increment("hotstuff_req_txn",1);
+          //     proto::RequestRequest rr;
+          //     rr.set_digest(digest);
+          //     transport->SendMessageToGroup(this, groupIdx, rr);
+          // }
+          // break;
+
           #endif
       }
     } else {
@@ -736,15 +745,8 @@ void Replica::executeSlots() {
 
         #else
 
-        // string digest = hotstuffBatchToRequest[batchDigest];
-        // if (requestTx) {
-            stats->Increment("hotstuff_req_txn",1);
-            std::cout << "request for seqnum " << execSeqNum << " not found" << std::endl;
-        //     proto::RequestRequest rr;
-        //     rr.set_digest(digest);
-        //     transport->SendMessageToGroup(this, groupIdx, rr);
-        // }
-        // break;
+        // This should not happen in hotstuffstore
+        assert(false);
 
         #endif
     }
