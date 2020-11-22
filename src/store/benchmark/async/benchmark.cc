@@ -893,7 +893,8 @@ int main(int argc, char **argv) {
                                         FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
                                         FLAGS_indicus_max_dep_depth, readDepSize, false, false, false, false,
                                         FLAGS_indicus_merkle_branch_factor, failure,
-                                        FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, FLAGS_indicus_batch_verification_size);
+                                        FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, 
+																				FLAGS_indicus_batch_verification_size, false, false, false, false);
 
         client = new indicusstore::Client(config, clientId,
                                           FLAGS_num_shards,

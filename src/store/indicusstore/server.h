@@ -87,7 +87,6 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       int numShards, int numGroups,
       Transport *transport, KeyManager *keyManager, Parameters params, uint64_t timeDelta,
       OCCType occType, Partitioner *part, unsigned int batchTimeoutMS,
-      bool mainThreadDispatching, bool dispatchMessageReceive,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
@@ -102,8 +101,10 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
  private:
    //bool test_bool = false;
-   bool mainThreadDispatching;
-   bool dispatchMessageReceive;
+   // bool mainThreadDispatching;
+   // bool dispatchMessageReceive;
+   // bool parallel_reads;
+   // bool dispatchCallbacks;
 
    std::string dummyString;
 

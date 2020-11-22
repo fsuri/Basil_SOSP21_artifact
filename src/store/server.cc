@@ -276,6 +276,8 @@ DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout
 
 DEFINE_bool(indicus_mainThreadDispatching, true, "dispatching main thread work to an additional thread");
 DEFINE_bool(indicus_dispatchMessageReceive, false, "delegating serialization to worker main thread");
+DEFINE_bool(indicus_parallel_reads, true, "dispatching reads to worker threads");
+DEFINE_bool(indicus_dispatchCallbacks, true, "dispatching P2 and WB callbacks to main worker thread");
 
 DEFINE_uint64(indicus_process_id, 0, "id used for Threadpool core affinity");
 DEFINE_uint64(indicus_total_processes, 1, "number of server processes per machine");
@@ -570,12 +572,17 @@ int main(int argc, char **argv) {
                                       FLAGS_indicus_read_reply_batch, FLAGS_indicus_adjust_batch_size,
                                       FLAGS_indicus_shared_mem_batch, FLAGS_indicus_shared_mem_verify,
                                       FLAGS_indicus_merkle_branch_factor, indicusstore::InjectFailure(),
-                                      FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, FLAGS_indicus_batch_verification_size);
+                                      FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification,
+																			FLAGS_indicus_batch_verification_size,
+																			FLAGS_indicus_mainThreadDispatching,
+																			FLAGS_indicus_dispatchMessageReceive,
+																			FLAGS_indicus_parallel_reads,
+																			FLAGS_indicus_dispatchCallbacks);
       Debug("Starting new server object");
       server = new indicusstore::Server(config, FLAGS_group_idx,
                                         FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
                                         &keyManager, params, timeDelta, indicusOCCType, part,
-                                        FLAGS_indicus_sig_batch_timeout, FLAGS_indicus_mainThreadDispatching, FLAGS_indicus_dispatchMessageReceive);
+                                        FLAGS_indicus_sig_batch_timeout);
       break;
   }
   case PROTO_PBFT: {

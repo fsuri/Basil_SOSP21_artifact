@@ -311,18 +311,29 @@ typedef struct Parameters {
   const bool batchVerification;
   const int verificationBatchSize;
 
+  const bool mainThreadDispatching;
+  const bool dispatchMessageReceive;
+  const bool parallel_reads;
+  const bool dispatchCallbacks;
+
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     int signatureBatchSize, int64_t maxDepDepth, uint64_t readDepSize,
     bool readReplyBatch, bool adjustBatchSize, bool sharedMemBatches,
     bool sharedMemVerify, uint64_t merkleBranchFactor, const InjectFailure &injectFailure,
-    bool multiThreading, bool batchVerification, int verificationBatchSize) :
+    bool multiThreading, bool batchVerification, int verificationBatchSize,
+    bool mainThreadDispatching, bool dispatchMessageReceive, bool parallel_reads, bool dispatchCallbacks) :
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
     maxDepDepth(maxDepDepth), readDepSize(readDepSize),
     readReplyBatch(readReplyBatch), adjustBatchSize(adjustBatchSize),
     sharedMemBatches(sharedMemBatches), sharedMemVerify(sharedMemVerify),
     merkleBranchFactor(merkleBranchFactor), injectFailure(injectFailure),
-    multiThreading(multiThreading), batchVerification(batchVerification), verificationBatchSize(verificationBatchSize){ }
+    multiThreading(multiThreading), batchVerification(batchVerification),
+    verificationBatchSize(verificationBatchSize),
+    mainThreadDispatching(mainThreadDispatching),
+    dispatchMessageReceive(dispatchMessageReceive),
+    parallel_reads(parallel_reads),
+    dispatchCallbacks(dispatchCallbacks) { }
 } Parameters;
 
 } // namespace indicusstore
