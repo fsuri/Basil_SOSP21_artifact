@@ -257,7 +257,7 @@ bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
 // HotStuff
 // define this macro if switching to pbft store
 // undefine this macro if use hotstuff store
-//#define USE_PBFT_STORE
+#define USE_PBFT_STORE
 
 void Replica::HandleRequest(const TransportAddress &remote,
                                const proto::Request &request) {
@@ -623,7 +623,7 @@ void Replica::executeSlots() {
   stats->Increment("exec_executeslots",1);
 
   // HotStuff
-  // this function was NOT thread-safe
+  // (obsolete) this function was NOT thread-safe
   // so I add a lock to make it thread-safe
   // if (!execSlotsMtx.try_lock()) {
   //     // others are executing this fuction
@@ -646,7 +646,7 @@ void Replica::executeSlots() {
         execSeqNum++;
         continue;
     }
-    // solve HotStuff liveness problem with callback
+    // (obsolete) solve HotStuff liveness problem with callback
     // if (execSeqNum > startSeqNum + 20)
     //     break;
 
@@ -705,22 +705,22 @@ void Replica::executeSlots() {
           #ifdef USE_PBFT_STORE
           
           Debug("request from batch %lu not yet received", execSeqNum);
-          if (requestTx) {
-              stats->Increment("req_txn",1);
-              proto::RequestRequest rr;
-              rr.set_digest(digest);
-              int primaryIdx = config.GetLeaderIndex(currentView);
-              if (primaryIdx == idx) {
-                  stats->Increment("primary_req_txn",1);
-              }
-              transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-          }
+          stats->Increment("miss_req_txn",1);
+          // if (requestTx) {
+          //     stats->Increment("req_txn",1);
+          //     proto::RequestRequest rr;
+          //     rr.set_digest(digest);
+          //     int primaryIdx = config.GetLeaderIndex(currentView);
+          //     if (primaryIdx == idx) {
+          //         stats->Increment("primary_req_txn",1);
+          //     }
+          //     transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+          // }
           break;
 
           #else
-
+          stats->Increment("miss_hotstuff_req_txn",1);
           // if (requestTx) {
-              stats->Increment("hotstuff_req_txn",1);
           //     proto::RequestRequest rr;
           //     rr.set_digest(digest);
           //     transport->SendMessageToGroup(this, groupIdx, rr);
@@ -733,14 +733,15 @@ void Replica::executeSlots() {
         // HotStuff: this request message is different for PBFT and HotStuff
         #ifdef USE_PBFT_STORE
         
-        Debug("Batch request not yet received");
-        if (requestTx) {
-            stats->Increment("req_batch",1);
-            proto::RequestRequest rr;
-            rr.set_digest(batchDigest);
-            int primaryIdx = config.GetLeaderIndex(currentView);
-            transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-        }
+        stats->Increment("miss_req_batch",1);        
+        // Debug("Batch request not yet received");
+        // if (requestTx) {
+        //     stats->Increment("req_batch",1);
+        //     proto::RequestRequest rr;
+        //     rr.set_digest(batchDigest);
+        //     int primaryIdx = config.GetLeaderIndex(currentView);
+        //     transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+        // }
         break;
 
         #else
