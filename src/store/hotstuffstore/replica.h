@@ -54,6 +54,8 @@ public:
   typedef std::function<void(const std::string&, uint32_t seqnum)> hotstuff_exec_callback;
   IndicusInterface hotstuff_interface;
   std::mutex execSlotsMtx;
+  std::unordered_map<std::string, std::string> hotstuffBatchToRequest;
+  
   
   const transport::Configuration &config;
   KeyManager *keyManager;

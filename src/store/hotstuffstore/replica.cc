@@ -257,7 +257,7 @@ bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
 // HotStuff
 // define this macro if switching to pbft store
 // undefine this macro if use hotstuff store
-#define USE_PBFT_STORE
+//#define USE_PBFT_STORE
 
 void Replica::HandleRequest(const TransportAddress &remote,
                                const proto::Request &request) {
@@ -308,25 +308,24 @@ void Replica::HandleRequest(const TransportAddress &remote,
     #else // use HotStuff instead of PBFT
 
     // HotStuff
-    // a batch with only 1 request
-    proto::BatchedRequest batchedRequest;
-    (*batchedRequest.mutable_digests())[0] = digest;
-    string batchedDigest = BatchedDigest(batchedRequest);
-    batchedRequests[batchedDigest] = batchedRequest;
-
-    hotstuff_exec_callback execb = [this, batchedDigest](const std::string &digest_param, uint32_t seqnum) {
+    hotstuff_exec_callback execb = [this, digest](const std::string &digest_param, uint32_t seqnum) {
         // Debug("Callback: %d, %ld", idx, seqnum);
         stats->Increment("exec_callback",1);
-        assert(batchedDigest == digest_param);
+        assert(digest == digest_param);
+
+        // prepare data structures for executeSlots()
+        proto::BatchedRequest batchedRequest;
+        (*batchedRequest.mutable_digests())[0] = digest;
+        string batchedDigest = BatchedDigest(batchedRequest);
+        batchedRequests[batchedDigest] = batchedRequest;
         pendingExecutions[seqnum] = batchedDigest;
+        hotstuffBatchToRequest[batchedDigest] = digest;
+
         std::cout << "Execute request: " << seqnum << std::endl;
         executeSlots();
         std::cout << "Complete callback: " << seqnum << std::endl;
-    };
-    // Debug("Replica propose: %d", idx);
-    stats->Increment("batch_propose_count",1);
-      
-    hotstuff_interface.propose(batchedDigest, execb);
+    };      
+    hotstuff_interface.propose(digest, execb);
 
     // Insert bubble command to HotStuff for progress
     // string bubbleDigest = batchedDigest;
@@ -698,34 +697,56 @@ void Replica::executeSlots() {
 
         execBatchNum++;
         if ((int) execBatchNum >= batchedRequests[batchDigest].digests_size()) {
-          Debug("Done executing batch");
-          execBatchNum = 0;
-          execSeqNum++;
+            Debug("Done executing batch");
+            execBatchNum = 0;
+            execSeqNum++;
         }
       } else {
-        Debug("request from batch %lu not yet received", execSeqNum);
-        if (requestTx) {
-          stats->Increment("req_txn",1);
-          proto::RequestRequest rr;
-          rr.set_digest(digest);
-          int primaryIdx = config.GetLeaderIndex(currentView);
-          if (primaryIdx == idx) {
-            stats->Increment("primary_req_txn",1);
+          // HotStuff: this request message is only for PBFT store
+          #ifdef USE_PBFT_STORE
+          
+          Debug("request from batch %lu not yet received", execSeqNum);
+          if (requestTx) {
+              stats->Increment("req_txn",1);
+              proto::RequestRequest rr;
+              rr.set_digest(digest);
+              int primaryIdx = config.GetLeaderIndex(currentView);
+              if (primaryIdx == idx) {
+                  stats->Increment("primary_req_txn",1);
+              }
+              transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
           }
-          transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-        }
-        break;
+          break;
+
+          #endif
       }
     } else {
-      Debug("Batch request not yet received");
-      if (requestTx) {
-        stats->Increment("req_batch",1);
-        proto::RequestRequest rr;
-        rr.set_digest(batchDigest);
-        int primaryIdx = config.GetLeaderIndex(currentView);
-        transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-      }
-      break;
+        // HotStuff: this request message is different for PBFT and HotStuff
+        #ifdef USE_PBFT_STORE
+        
+        Debug("Batch request not yet received");
+        if (requestTx) {
+            stats->Increment("req_batch",1);
+            proto::RequestRequest rr;
+            rr.set_digest(batchDigest);
+            int primaryIdx = config.GetLeaderIndex(currentView);
+            transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+        }
+        break;
+
+        #else
+
+        // string digest = hotstuffBatchToRequest[batchDigest];
+        // if (requestTx) {
+            stats->Increment("hotstuff_req_txn",1);
+            std::cout << "request for seqnum " << execSeqNum << " not found" << std::endl;
+        //     proto::RequestRequest rr;
+        //     rr.set_digest(digest);
+        //     transport->SendMessageToGroup(this, groupIdx, rr);
+        // }
+        // break;
+
+        #endif
     }
   }
 
