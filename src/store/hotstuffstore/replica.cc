@@ -658,11 +658,11 @@ void Replica::executeSlots() {
       DebugHash(digest);
       // only execute if we have the full request
       if (requests.find(digest) != requests.end()) {
-          
         stats->Increment("exec_request",1);
         Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
         proto::PackedMessage packedMsg = requests[digest];
         std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
+
         for (const auto& reply : replies) {
           if (reply != nullptr) {
               
@@ -670,15 +670,14 @@ void Replica::executeSlots() {
             stats->Increment("execs_sent",1);
             EpendingBatchedMessages.push_back(reply);
             EpendingBatchedDigs.push_back(digest);
+
             if (EpendingBatchedMessages.size() >= EbatchSize) {
               Debug("EBatch is full, sending");
               // if (EbatchTimerRunning) {
               //   transport->CancelTimer(EbatchTimerId);
               //   EbatchTimerRunning = false;
               // }
-                // std::cout << "debug point before sendEbatch " << execSeqNum << std::endl;
               sendEbatch();
-                // std::cout << "debug point after sendEbatch " << execSeqNum << std::endl;
             } else if (!EbatchTimerRunning) {
                 EbatchTimerRunning = true;
               Debug("Starting ebatch timer");
@@ -746,7 +745,7 @@ void Replica::executeSlots() {
         break;
 
         #else
-        
+
         stats->Increment("miss_hotstuff_req_batch",1);
         break;
 
@@ -760,31 +759,40 @@ void Replica::executeSlots() {
 }
 
 void Replica::sendEbatch() {
-        stats->Increment(EbStatNames[EpendingBatchedMessages.size()], 1);
-  std::vector<std::string*> messageStrs;
-  for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
-    EsignedMessages[i]->Clear();
-    EsignedMessages[i]->set_replica_id(id);
-    proto::PackedMessage packedMsg;
-    *packedMsg.mutable_msg() = EpendingBatchedMessages[i]->SerializeAsString();
-    *packedMsg.mutable_type() = EpendingBatchedMessages[i]->GetTypeName();
-    UW_ASSERT(packedMsg.SerializeToString(EsignedMessages[i]->mutable_packed_msg()));
-    messageStrs.push_back(EsignedMessages[i]->mutable_packed_msg());
-  }
+    stats->Increment(EbStatNames[EpendingBatchedMessages.size()], 1);
+    std::vector<std::string*> messageStrs;
 
-  std::vector<std::string*> sigs;
-  for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
-    sigs.push_back(EsignedMessages[i]->mutable_signature());
-  }
+    for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
+        EsignedMessages[i]->Clear();
+        EsignedMessages[i]->set_replica_id(id);
+        proto::PackedMessage packedMsg;
+        *packedMsg.mutable_msg() = EpendingBatchedMessages[i]->SerializeAsString();
+        *packedMsg.mutable_type() = EpendingBatchedMessages[i]->GetTypeName();
+        UW_ASSERT(packedMsg.SerializeToString(EsignedMessages[i]->mutable_packed_msg()));
+        messageStrs.push_back(EsignedMessages[i]->mutable_packed_msg());
+    }
 
-  hotstuffBatchedSigs::generateBatchedSignatures(messageStrs, keyManager->GetPrivateKey(id), sigs);
+    std::vector<std::string*> sigs;
+    for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
+        sigs.push_back(EsignedMessages[i]->mutable_signature());
+    }
 
-  for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
-    transport->SendMessage(this, *replyAddrs[EpendingBatchedDigs[i]], *EsignedMessages[i]);
-    delete EpendingBatchedMessages[i];
-  }
-  EpendingBatchedDigs.clear();
-  EpendingBatchedMessages.clear();
+    hotstuffBatchedSigs::generateBatchedSignatures(messageStrs, keyManager->GetPrivateKey(id), sigs);
+
+    for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
+        std::cout << "debug point sendEbatch before" << std::endl;
+        try {
+            transport->SendMessage(this, *replyAddrs[EpendingBatchedDigs[i]], *EsignedMessages[i]);
+        }
+        catch (...) {
+            std::cout << "exception occurred in sendEbatch" << std::endl;
+        }
+        std::cout << "debug point sendEbatch after" << std::endl;
+
+        delete EpendingBatchedMessages[i];
+    }
+    EpendingBatchedDigs.clear();
+    EpendingBatchedMessages.clear();
 }
 
 void Replica::startActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest) {
