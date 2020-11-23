@@ -272,19 +272,21 @@ void Replica::HandleRequest(const TransportAddress &remote,
   string digest = request.digest();
   DebugHash(digest);
 
-  if (requests.find(digest) == requests.end()) {
+  if (requests_dup.find(digest) == requests_dup.end()) {
     Debug("new request: %s", request.packed_msg().type().c_str());
     stats->Increment("handle_new_count",1);
 
-    requests[digest] = request.packed_msg();
-
-    // clone remote mapped to request for reply
-    replyAddrs[digest] = remote.clone();
-
+    // HotStuff
+    // This unordered map is only used here so it doesn't require locks.
+    requests_dup[digest] = request.packed_msg();
 
     #ifdef USE_PBFT_STORE
 
     // PBFT
+    requests[digest] = request.packed_msg();
+    // clone remote mapped to request for reply
+    replyAddrs[digest] = remote.clone();
+
     int currentPrimaryIdx = config.GetLeaderIndex(currentView);
     if (currentPrimaryIdx == idx) {
       stats->Increment("handle_request",1);
@@ -314,49 +316,30 @@ void Replica::HandleRequest(const TransportAddress &remote,
     #else // use HotStuff instead of PBFT
 
     // HotStuff
-    hotstuff_exec_callback execb = [this](const std::string &digest_param, uint32_t seqnum) {
+    TransportAddress* clientAddr = remote.clone();
+    proto::PackedMessage packedMsg = request.packed_msg();
+    std::function<void(const std::string&, uint32_t seqnum)> execb = [this, digest, packedMsg, clientAddr](const std::string &digest_param, uint32_t seqnum) {
         // Debug("Callback: %d, %ld", idx, seqnum);
-        // assert(digest == digest_param);
-
         execSlotsMtx.lock();
         stats->Increment("exec_callback",1);
-        
-        // prepare data structures for executeSlots()        
+
+        // prepare data structures for executeSlots()
+        assert(digest == digest_param);
+        requests[digest] = packedMsg;
+        replyAddrs[digest] = clientAddr;
+
         proto::BatchedRequest batchedRequest;
         (*batchedRequest.mutable_digests())[0] = digest_param;
         string batchedDigest = BatchedDigest(batchedRequest);
         batchedRequests[batchedDigest] = batchedRequest;
         pendingExecutions[seqnum] = batchedDigest;
 
-        std::cout << "Execute request: " << seqnum << ", succeed seqnum: " << execSeqNum << std::endl;
         executeSlots();
-        std::cout << "Complete callback: " << seqnum << ", succeed seqnum: " << execSeqNum << std::endl;
+        // std::cout << "Complete callback: " << seqnum << ", succeed seqnum: " << execSeqNum << std::endl;
 
         execSlotsMtx.unlock();
     };      
     hotstuff_interface.propose(digest, execb);
-
-    // Insert bubble command to HotStuff for progress
-    // string bubbleDigest = batchedDigest;
-    // bubbleDigest[0] = 'b';
-    // bubbleDigest[1] = 'u';
-    // bubbleDigest[2] = 'b';
-    // bubbleDigest[3] = 'b';
-    // bubbleDigest[4] = 'l';
-    // bubbleDigest[5] = 'e';
-    // hotstuff_exec_callback execb_bubble = [this](const std::string &digest_param, uint32_t seqnum) {
-    //     pendingExecutions[seqnum] = "bubble";
-    //     std::cout << "Execute bubble: " << seqnum << std::endl;
-    //     executeSlots();
-    //     std::cout << "Complete callback: " << seqnum << std::endl;
-    // };
-    // // Insert some bubbles
-    // bubbleDigest[6] = '1';
-    // hotstuff_interface.propose(bubbleDigest, execb_bubble);
-    // bubbleDigest[6] = '2';
-    // hotstuff_interface.propose(bubbleDigest, execb_bubble);
-    // bubbleDigest[6] = '3';
-    // hotstuff_interface.propose(bubbleDigest, execb_bubble);
 
     #endif
 
@@ -683,9 +666,7 @@ void Replica::executeSlots() {
               //   transport->CancelTimer(EbatchTimerId);
               //   EbatchTimerRunning = false;
               // }
-              std::cout << "    debug point before sendEbatch" << std::endl;
               sendEbatch();
-              std::cout << "    debug point after sendEbatch" << std::endl;
             } else if (!EbatchTimerRunning) {
                 EbatchTimerRunning = true;
               Debug("Starting ebatch timer");
@@ -784,9 +765,7 @@ void Replica::sendEbatch() {
     hotstuffBatchedSigs::generateBatchedSignatures(messageStrs, keyManager->GetPrivateKey(id), sigs);
 
     for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
-        std::cout << "    debug point before transport->SendMessage" << std::endl;
         transport->SendMessage(this, *replyAddrs[EpendingBatchedDigs[i]], *EsignedMessages[i]);
-        std::cout << "    debug point after transport->SendMessage" << std::endl;
         delete EpendingBatchedMessages[i];
     }
     EpendingBatchedDigs.clear();
