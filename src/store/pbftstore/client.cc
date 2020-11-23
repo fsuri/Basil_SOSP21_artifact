@@ -10,10 +10,12 @@ Client::Client(const transport::Configuration& config, int nGroups, int nShards,
       Transport *transport, Partitioner *part,
       uint64_t readQuorumSize, bool signMessages,
       bool validateProofs, KeyManager *keyManager,
+      bool order_commit, bool validate_abort,
       TrueTime timeserver) : config(config), nshards(nShards),
     ngroups(nGroups), transport(transport), part(part), readQuorumSize(readQuorumSize),
     signMessages(signMessages),
     validateProofs(validateProofs), keyManager(keyManager),
+    order_commit(order_commit), validate_abort(validate_abort),
     timeServer(timeserver) {
   // just an invariant for now for everything to work ok
   assert(nGroups == nShards);
@@ -35,7 +37,7 @@ Client::Client(const transport::Configuration& config, int nGroups, int nShards,
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
     bclient[i] = new ShardClient(config, transport, i,
-        signMessages, validateProofs, keyManager, &stats);
+        signMessages, validateProofs, keyManager, &stats, order_commit, validate_abort);
   }
 
   Debug("PBFT client [%lu] created! %lu %lu", client_id, ngroups,
@@ -241,6 +243,16 @@ void Client::HandlePrepareReply(std::string digest, uint64_t shard_id, int statu
   }
 }
 
+
+void Client::WriteBackSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn, std::string digest) {
+
+    for (const auto& shard_id : txn.participating_shards()) {
+      bclient[shard_id]->CommitSigned(digest, dec);
+    }
+  }
+
+
+
 void Client::WriteBackSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn,
   commit_callback ccb, commit_timeout_callback ctcb, uint32_t timeout) {
   std::string digest = TransactionDigest(txn);
@@ -315,8 +327,9 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
 void Client::AbortTxn(const proto::Transaction& txn) {
   stats.Increment("abort", 1);
   std::string digest = TransactionDigest(txn);
+  proto::ShardSignedDecisions dec;
   for (const auto& shard_id : txn.participating_shards()) {
-    bclient[shard_id]->Abort(digest);
+    bclient[shard_id]->Abort(digest, dec);
   }
 }
 

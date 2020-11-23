@@ -7,11 +7,11 @@ namespace pbftstore {
 ShardClient::ShardClient(const transport::Configuration& config, Transport *transport,
     uint64_t group_idx,
     bool signMessages, bool validateProofs,
-    KeyManager *keyManager, Stats* stats) :
+    KeyManager *keyManager, Stats* stats, bool order_commit, bool validate_abort) :
     config(config), transport(transport),
     group_idx(group_idx),
     signMessages(signMessages), validateProofs(validateProofs),
-    keyManager(keyManager), stats(stats) {
+    keyManager(keyManager), stats(stats), order_commit(order_commit), validate_abort(validate_abort) {
   transport->Register(this, config, -1, -1);
   readReq = 0;
 }
@@ -600,15 +600,50 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
   }
 }
 
-void ShardClient::Abort(std::string txn_digest) {
+void ShardClient::CommitSigned(const std::string& txn_digest, const proto::ShardSignedDecisions& dec) {
+  Debug("Handling client commit signed");
+  if (pendingWritebacks.find(txn_digest) == pendingWritebacks.end()) {
+    proto::GroupedDecision groupedDecision;
+    groupedDecision.set_status(REPLY_OK);
+    groupedDecision.set_txn_digest(txn_digest);
+    *groupedDecision.mutable_signed_decisions() = dec;
+    stats->Increment("shard_commit_s", 1);
+
+    Debug("Sending commit to all replicas in shard");
+
+    if(order_commit){
+      proto::Request request;
+      request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
+      request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
+      request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+
+      transport->SendMessageToGroup(this, group_idx, request);
+    }
+    else{
+      transport->SendMessageToGroup(this, group_idx, groupedDecision);
+    }
+
+    // TODO timeout
+  } else {
+    Debug("commit signed called on already committed tx");
+  }
+}
+
+void ShardClient::Abort(std::string& txn_digest, const proto::ShardSignedDecisions& dec) {
   Debug("Handling client abort");
   // TODO should techincally include a proof
   if (pendingWritebacks.find(txn_digest) == pendingWritebacks.end()) {
     proto::GroupedDecision groupedDecision;
     groupedDecision.set_status(REPLY_FAIL);
     groupedDecision.set_txn_digest(txn_digest);
-    proto::ShardDecisions sd;
-    *groupedDecision.mutable_decisions() = sd;
+
+    if(validate_abort){
+        *groupedDecision.mutable_signed_decisions() = dec;
+    }
+    else{
+      proto::ShardDecisions sd;
+      *groupedDecision.mutable_decisions() = sd;
+    }
 
     proto::Request request;
     request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));

@@ -288,6 +288,10 @@ DEFINE_uint64(pbft_esig_batch, 1, "signature batch size"
 DEFINE_uint64(pbft_esig_batch_timeout, 10, "signature batch timeout ms"
 		" sig batch timeout (for PBFT decision phase)");
 
+DEFINE_bool(pbft_order_commit, false, "order commit writebacks as well");
+DEFINE_bool(pbft_validate_abort, false, "validate abort writebacks as well");
+
+
 const std::string occ_type_args[] = {
 	"tapir",
   "mvtso"
@@ -589,7 +593,8 @@ int main(int argc, char **argv) {
       server = new pbftstore::Server(config, &keyManager,
                                      FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
                                      FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-                                     FLAGS_indicus_time_delta, part);
+                                     FLAGS_indicus_time_delta, part,
+																	   FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort);
       replica = new pbftstore::Replica(config, &keyManager,
                                        dynamic_cast<pbftstore::App *>(server),
                                        FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,

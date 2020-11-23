@@ -217,6 +217,10 @@ DEFINE_bool(indicus_batch_verification, false, "using ed25519 donna batch verifi
 DEFINE_uint64(indicus_batch_verification_size, 64, "batch size for ed25519 donna batch verification");
 DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout, ms");
 
+DEFINE_bool(pbft_order_commit, false, "order commit writebacks as well");
+DEFINE_bool(pbft_validate_abort, false, "validate abort writebacks as well");
+
+
 DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
 
 const std::string if_args[] = {
@@ -893,7 +897,7 @@ int main(int argc, char **argv) {
                                         FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
                                         FLAGS_indicus_max_dep_depth, readDepSize, false, false, false, false,
                                         FLAGS_indicus_merkle_branch_factor, failure,
-                                        FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, 
+                                        FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification,
 																				FLAGS_indicus_batch_verification_size, false, false, false, false);
 
         client = new indicusstore::Client(config, clientId,
@@ -923,7 +927,9 @@ int main(int argc, char **argv) {
                                        FLAGS_num_groups, tport, part,
                                        readQuorumSize,
                                        FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-                                       keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+                                       keyManager,
+																			 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort,
+																			 TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
     }
 

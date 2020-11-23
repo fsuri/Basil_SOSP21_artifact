@@ -10,10 +10,12 @@ using namespace std;
 Server::Server(const transport::Configuration& config, KeyManager *keyManager,
   int groupIdx, int idx, int numShards, int numGroups, bool signMessages,
   bool validateProofs, uint64_t timeDelta, Partitioner *part,
+  bool order_commit, bool validate_abort,
   TrueTime timeServer) : config(config), keyManager(keyManager),
   groupIdx(groupIdx), idx(idx), id(groupIdx * config.n + idx),
   numShards(numShards), numGroups(numGroups), signMessages(signMessages),
   validateProofs(validateProofs),  timeDelta(timeDelta), part(part),
+  order_commit(order_commit), validate_abort(validate_abort),
   timeServer(timeServer) {
   dummyProof = std::make_shared<proto::CommitProof>();
 
@@ -218,7 +220,11 @@ std::vector<::google::protobuf::Message*> Server::Execute(const string& type, co
       std::vector<::google::protobuf::Message*> results;
       results.push_back(HandleGroupedAbortDecision(gdecision));
       return results;
-    } else {
+    } else if(order_commit && gdecision.status() == REPLY_OK) {
+      std::vector<::google::protobuf::Message*> results;
+      results.push_back(HandleGroupedCommitDecision(gdecision));
+    }
+    else{
       Panic("Only failed grouped decisions should be atomically broadcast");
     }
   }
@@ -300,7 +306,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     read.ParseFromString(msg);
 
     return HandleRead(read);
-  } else if (type == gdecision.GetTypeName()) {
+  } else if (type == gdecision.GetTypeName() && !order_commit) {
     gdecision.ParseFromString(msg);
     if (gdecision.status() == REPLY_OK) {
       return HandleGroupedCommitDecision(gdecision);
@@ -308,6 +314,9 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
       Panic("Only commit grouped decisions allowed to be sent directly to server");
     }
 
+  }
+  else{
+    Panic("Should be ordering all Writeback messages");
   }
 
   return nullptr;
