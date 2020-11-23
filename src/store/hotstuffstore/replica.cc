@@ -201,13 +201,19 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     HandleGrouped(remote, recvgrouped);
   } else {
     Debug("Sending request to app");
+
+    // HotStuff
+    appMtx.lock();
     ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+    appMtx.unlock();
+    
     if (reply != nullptr) {
       transport->SendMessage(this, remote, *reply);
       delete reply;
     } else {
       Debug("Invalid request of type %s", type.c_str());
     }
+    
 
   }
 }
@@ -308,16 +314,16 @@ void Replica::HandleRequest(const TransportAddress &remote,
     #else // use HotStuff instead of PBFT
 
     // HotStuff
-    hotstuff_exec_callback execb = [this, digest](const std::string &digest_param, uint32_t seqnum) {
+    hotstuff_exec_callback execb = [this](const std::string &digest_param, uint32_t seqnum) {
         // Debug("Callback: %d, %ld", idx, seqnum);
-        stats->Increment("exec_callback",1);
-        assert(digest == digest_param);
+        // assert(digest == digest_param);
 
         execSlotsMtx.lock();
+        stats->Increment("exec_callback",1);
         
         // prepare data structures for executeSlots()        
         proto::BatchedRequest batchedRequest;
-        (*batchedRequest.mutable_digests())[0] = digest;
+        (*batchedRequest.mutable_digests())[0] = digest_param;
         string batchedDigest = BatchedDigest(batchedRequest);
         batchedRequests[batchedDigest] = batchedRequest;
         pendingExecutions[seqnum] = batchedDigest;
@@ -624,6 +630,10 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
 
     Debug("seqnum: %lu", seqnum);
 
+    #ifndef USE_PBFT_STORE
+    assert(false);
+    #endif
+    
     executeSlots();
   }
 }
@@ -653,7 +663,11 @@ void Replica::executeSlots() {
         stats->Increment("exec_request",1);
         Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
         proto::PackedMessage packedMsg = requests[digest];
+
+        // HotStuff
+        appMtx.lock();
         std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
+        appMtx.unlock();
 
         for (const auto& reply : replies) {
           if (reply != nullptr) {
@@ -664,7 +678,7 @@ void Replica::executeSlots() {
             EpendingBatchedDigs.push_back(digest);
 
             if (EpendingBatchedMessages.size() >= EbatchSize) {
-              Debug("EBatch is full, sending");
+                Debug("EBatch is full, sending");
               // if (EbatchTimerRunning) {
               //   transport->CancelTimer(EbatchTimerId);
               //   EbatchTimerRunning = false;

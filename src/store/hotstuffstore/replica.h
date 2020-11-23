@@ -53,7 +53,8 @@ public:
   // HotStuff
   typedef std::function<void(const std::string&, uint32_t seqnum)> hotstuff_exec_callback;
   IndicusInterface hotstuff_interface;
-  std::mutex execSlotsMtx;  
+  std::mutex execSlotsMtx;
+  std::mutex appMtx; // app->Execute and app->HandleMessage cannot work in parallel
   
   const transport::Configuration &config;
   KeyManager *keyManager;

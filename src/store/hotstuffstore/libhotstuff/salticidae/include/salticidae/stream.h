@@ -250,6 +250,10 @@ class Blob: public Serializable {
 
     Blob(const uint8_t *arr) { load(arr); }
 
+    _impl_type* get_data() {
+        return data;
+    }
+
     void load(const uint8_t *arr) {
         arr += N / 8;
         for (_impl_type *ptr = data + _len; ptr > data;)

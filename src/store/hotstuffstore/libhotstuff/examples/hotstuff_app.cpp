@@ -130,6 +130,8 @@ class HotStuffApp: public HotStuff {
                 const ClientNetwork<opcode_t>::Config &clinet_config);
 
     void start(const std::vector<std::tuple<NetAddr, bytearray_t, bytearray_t>> &reps);
+    void interface_entry();
+    
     void stop();
 
     void interface_propose(const string &hash,  std::function<void(const std::string&, uint32_t seqnum)> cb);
@@ -196,12 +198,32 @@ void HotStuffApp::client_request_cmd_handler(MsgReqCmd &&msg, const conn_t &conn
     });
 }
 
+
+static std::mutex mtx;
 void HotStuffApp::interface_propose(const string &hash,  std::function<void(const std::string&, uint32_t seqnum)> cb) {
+
+    static std::unordered_map<const uint256_t, string> uint256_to_str;
+    static std::unordered_map<const uint256_t, std::function<void(const std::string&, uint32_t)>> uint256_to_cb;    
+
     uint256_t cmd_hash((const uint8_t *)hash.c_str());
-    exec_command(cmd_hash, [this, hash, cb](Finality fin) {
+
+    mtx.lock();
+    uint256_to_str[cmd_hash] = hash;
+    uint256_to_cb[cmd_hash] = cb;
+    mtx.unlock();
+    
+    exec_command(cmd_hash, [this](Finality fin) {
             //resp_queue.enqueue(std::make_pair(fin, addr));
             // fin->cmd_height
-            cb(hash, fin.cmd_height);
+
+            mtx.lock();
+
+            string hash_ready = uint256_to_str[fin.cmd_hash];
+            auto cb = uint256_to_cb[fin.cmd_hash];
+
+            mtx.unlock();
+
+            cb(hash_ready, fin.cmd_height);
     });
 }
 
@@ -225,14 +247,17 @@ void HotStuffApp::start(const std::vector<std::tuple<NetAddr, bytearray_t, bytea
     HOTSTUFF_LOG_INFO("conns = %lu", HotStuff::size());
     HOTSTUFF_LOG_INFO("** starting the event loop...");
     HotStuff::start(reps);
-    cn.reg_conn_handler([this](const salticidae::ConnPool::conn_t &_conn, bool connected) {
-        auto conn = salticidae::static_pointer_cast<conn_t::type>(_conn);
-        if (connected)
-            client_conns.insert(conn);
-        else
-            client_conns.erase(conn);
-        return true;
-    });
+}
+
+void HotStuffApp::interface_entry() {
+    // cn.reg_conn_handler([this](const salticidae::ConnPool::conn_t &_conn, bool connected) {
+    //     auto conn = salticidae::static_pointer_cast<conn_t::type>(_conn);
+    //     if (connected)
+    //         client_conns.insert(conn);
+    //     else
+    //         client_conns.erase(conn);
+    //     return true;
+    // });
     req_thread = std::thread([this]() { req_ec.dispatch(); });
     resp_thread = std::thread([this]() { resp_ec.dispatch(); });
     /* enter the event main loop */

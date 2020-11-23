@@ -48,6 +48,7 @@
 #include <list>
 #include <random>
 #include <mutex>
+#include <shared_mutex>
 #include <netinet/in.h>
 
 class TCPTransportAddress : public TransportAddress
@@ -114,7 +115,7 @@ public:
 
 private:
     int TimerInternal(struct timeval &tv, timer_callback_t cb);
-    std::mutex mtx;
+    std::shared_mutex mtx;
     struct TCPTransportTimerInfo
     {
         TCPTransport *transport;

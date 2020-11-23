@@ -180,9 +180,11 @@ namespace hotstuffstore {
         ev_sigint.add(SIGINT);
         ev_sigterm.add(SIGTERM);
 
+        hotstuff_papp->start(reps);
+
         // spawning a new thread to run hotstuff logic asynchronously
-        std::thread t([this, hotstuff_papp, reps](){
-                hotstuff_papp->start(reps);
+        std::thread t([this](){
+                hotstuff_papp->interface_entry();
                 //elapsed.stop(true);
             });
         t.detach();
