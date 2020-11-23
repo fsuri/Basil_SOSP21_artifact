@@ -233,7 +233,13 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
             psp->receivedValidSigs[add_id] = signedMsg.signature();
             // Debug("signature for %lu: %s", add_id, string_to_hex(signedMsg.signature()).c_str());
           } else {
-            psp->receivedFailedIds.insert(add_id); //TODO XXX: add signatures here too. make it flag based(?)
+            if(validate_abort){
+              psp->receivedFailedSigs[add_id] = signedMsg.signature();
+            }
+            else{
+              psp->receivedFailedIds.insert(add_id);
+            }
+
           }
         }
 
@@ -242,9 +248,11 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
         // once we have enough valid requests, construct the grouped decision
         // and return success
         if (psp->receivedValidSigs.size() >= (uint64_t) config.f + 1) {
-          Debug("Got enough transaction decisions, executing callback");
+          Debug("Got enough *valid* transaction decisions, executing callback");
           // set the packed decision
-          groupSignedMsg.set_packed_msg(psp->validDecisionPacked);
+
+          //groupSignedMsg.set_packed_msg(psp->validDecisionPacked);
+          groupSignedMsg.set_packed_msg(CreateValidPackedDecision(digest));
           // Debug("packed decision: %s", string_to_hex(psp->validDecisionPacked).c_str());
 
           // add the signatures
@@ -261,8 +269,29 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
           pcb(REPLY_OK, groupSignedMsg);
           return;
         }
+        else if(validate_abort && psp->receivedFailedSigs.size() >= (uint64_t) config.f + 1 ){
+          Debug("Got enough *failed* transaction decisions, executing callback");
+          // set the packed decision
+
+          //groupSignedMsg.set_packed_msg(psp->validDecisionPacked);
+          groupSignedMsg.set_packed_msg(CreateFailedPackedDecision(digest));
+
+          // add the signatures
+          for (const auto& pair : psp->receivedFailedSigs) {
+            (*groupSignedMsg.mutable_signatures())[pair.first] = pair.second;
+          }
+
+          // invoke the callback with the signed grouped decision
+          signed_prepare_callback pcb = psp->pcb;
+          if (psp->timeout != nullptr) {
+            psp->timeout->Stop();
+          }
+          pendingSignedPrepares.erase(digest);
+          pcb(REPLY_FAIL, groupSignedMsg);
+          return;
+        }
         // if we get f+1 failures, we can return early
-        if (psp->receivedFailedIds.size() >= (uint64_t) config.f + 1) {
+        else if (!validate_abort && psp->receivedFailedIds.size() >= (uint64_t) config.f + 1) {
           Debug("Not enough valid txn decisions, failing");
           signed_prepare_callback pcb = psp->pcb;
           if (psp->timeout != nullptr) {
@@ -422,6 +451,19 @@ std::string ShardClient::CreateValidPackedDecision(std::string digest) {
   return packedDecision.SerializeAsString();
 }
 
+std::string ShardClient::CreateFailedPackedDecision(std::string digest) {
+  proto::TransactionDecision validDecision;
+  validDecision.set_status(REPLY_FAIL);
+  validDecision.set_txn_digest(digest);
+  validDecision.set_shard_id(group_idx);
+
+  proto::PackedMessage packedDecision;
+  packedDecision.set_type(validDecision.GetTypeName());
+  packedDecision.set_msg(validDecision.SerializeAsString());
+
+  return packedDecision.SerializeAsString();
+}
+
 // send a request with this as the packed message
 void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
     prepare_timeout_callback ptcb, uint32_t timeout) {
@@ -489,7 +531,8 @@ void ShardClient::SignedPrepare(const proto::Transaction& txn, signed_prepare_ca
     PendingSignedPrepare psp;
     psp.pcb = pcb;
     // this is what the tx decisions should look like for valid replies
-    psp.validDecisionPacked = CreateValidPackedDecision(digest);
+
+    //psp.validDecisionPacked = CreateValidPackedDecision(digest);  //XXX do this work only later..
     psp.timeout = new Timeout(transport, timeout, [this, digest, ptcb]() {
       Debug("Prepare signed timeout called (but nothing was done)");
       stats->Increment("ps_tout", 1);

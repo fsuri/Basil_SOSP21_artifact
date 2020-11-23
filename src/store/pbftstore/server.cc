@@ -428,11 +428,13 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   string digest = gdecision.txn_digest();
   DebugHash(digest);
 
-//TODO: need to verifyGDecision as well. Need to make sure that clients send the proofs in this gdecision too.
-                              //TODO: shard client currently only adds signature proofs for commit.
-                              //TODO: need to modify client HandleSignedPrepareReply as well.
-                              //TODO: Abort and Commit paths need to be the same...
-//TODO: modify verifyGDecision to process Aborts too..
+ if(validate_abort){
+   if(!verifyGDecision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)){
+     Debug("failed validation for abort decision");
+     return nullptr;
+   }
+ }
+
 
   // groupedDecisionAck->set_txn_digest(digest);
 

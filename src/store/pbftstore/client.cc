@@ -164,14 +164,22 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
     PendingPrepare* pp = &pendingPrepares[digest];
 
     if (pp->signedShardDecisions.find(shard_id) == pp->signedShardDecisions.end()) {
-      pp->signedShardDecisions[shard_id] = gsm;
+      pp->signedShardDecisions[shard_id] = std::move(gsm);  //instead of copying, can I move. Or release?
       // abort on even a single shard abort
       if (status != REPLY_OK) {
         proto::Transaction txn = pp->txn;
         commit_callback ccb = pp->ccb;
         pendingPrepares.erase(digest);
         ccb(ABORTED_SYSTEM);
-        AbortTxn(txn);
+        if(validate_abort){
+          proto::ShardSignedDecisions dec;
+          (*dec.mutable_grouped_decisions())[shard_id] = pp->signedShardDecisions[shard_id];
+          AbortTxnSigned(dec, txn, digest);
+        }
+        else{
+          AbortTxn(txn);
+        }
+
         return;
       }
 
@@ -180,20 +188,24 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
         for (const auto& pair : pp->signedShardDecisions) {
           (*dec.mutable_grouped_decisions())[pair.first] = pair.second;
         }
+        proto::Transaction txn = pp->txn;
         commit_callback ccb = pp->ccb;
         commit_timeout_callback ctcb = pp->ctcb;
         uint32_t timeout = pp->timeout;
-        proto::Transaction txn = pp->txn;
         pendingPrepares.erase(digest);
         ccb(COMMITTED);
-        this->WriteBackSigned(dec, txn, [](transaction_status_t tx_stat) {
-          if (tx_stat != COMMITTED) {
-            Panic("Writeback confirmation failed");
-          }
-          Debug("Got confirmation of writeback");
-        }, []() {
-          Debug("writeback confirmation timed out");
-        }, timeout);
+        //TODO:: remove callbacks...
+
+        WriteBackSigned(dec, txn, digest);
+
+        // this->WriteBackSigned(dec, txn, [](transaction_status_t tx_stat) {
+        //   if (tx_stat != COMMITTED) {
+        //     Panic("Writeback confirmation failed");
+        //   }
+        //   Debug("Got confirmation of writeback");
+        // }, []() {
+        //   Debug("writeback confirmation timed out");
+        // }, timeout);
       }
     }
   }
@@ -328,6 +340,14 @@ void Client::AbortTxn(const proto::Transaction& txn) {
   stats.Increment("abort", 1);
   std::string digest = TransactionDigest(txn);
   proto::ShardSignedDecisions dec;
+  for (const auto& shard_id : txn.participating_shards()) {
+    bclient[shard_id]->Abort(digest, dec);
+  }
+}
+
+void Client::AbortTxnSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn, std::string& digest){
+  stats.Increment("abort", 1);
+  //std::string digest = TransactionDigest(txn);
   for (const auto& shard_id : txn.participating_shards()) {
     bclient[shard_id]->Abort(digest, dec);
   }

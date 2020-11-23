@@ -98,6 +98,7 @@ class ShardClient : public TransportReceiver {
   void HandleReadReply(const proto::ReadReply& reply, const proto::SignedMessage& signedMsg);
 
   std::string CreateValidPackedDecision(std::string digest);
+  std::string CreateFailedPackedDecision(std::string digest);
 
   struct PendingPrepare {
     proto::TransactionDecision validDecision;
@@ -113,8 +114,10 @@ class ShardClient : public TransportReceiver {
   struct PendingSignedPrepare {
     // the serialized packed message containing the valid transaction decision
     std::string validDecisionPacked;
+    std::string failedDecisionPacked;
     // map from id to valid signature
     std::unordered_map<uint64_t, std::string> receivedValidSigs;
+    std::unordered_map<uint64_t, std::string> receivedFailedSigs;
     std::unordered_set<uint64_t> receivedFailedIds;
     signed_prepare_callback pcb;
 

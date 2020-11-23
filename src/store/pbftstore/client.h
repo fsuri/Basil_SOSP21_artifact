@@ -118,6 +118,8 @@ class Client : public ::Client {
   void WriteBack(const proto::ShardDecisions& dec, const proto::Transaction& txn,
     commit_callback ccb, commit_timeout_callback ctcb, uint32_t timeout);
 
+  void AbortTxnSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn, std::string& digest);
+
   void AbortTxn(const proto::Transaction& txn);
 
   bool IsParticipant(int g);
