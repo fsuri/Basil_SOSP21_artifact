@@ -32,8 +32,9 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
   uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, Transport *transport)
     : config(config),
-      // HotStuff
+#ifdef USE_HOTSTUFF_STORE
       hotstuff_interface(groupIdx, idx),
+#endif
       keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
     id(groupIdx * config.n + idx), signMessages(signMessages), maxBatchSize(maxBatchSize),
     batchTimeoutMS(batchTimeoutMS), EbatchSize(EbatchSize), EbatchTimeoutMS(EbatchTimeoutMS), primaryCoordinator(primaryCoordinator), requestTx(requestTx), transport(transport) {
@@ -202,11 +203,14 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   } else {
     Debug("Sending request to app");
 
-    // HotStuff
+#ifdef USE_HOTSTUFF_STORE
     appMtx.lock();
     ::google::protobuf::Message* reply = app->HandleMessage(type, data);
     appMtx.unlock();
-    
+#else
+    ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+#endif
+
     if (reply != nullptr) {
       transport->SendMessage(this, remote, *reply);
       delete reply;
@@ -260,10 +264,6 @@ bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
   }
 }
 
-// HotStuff
-// define this macro if switching to pbft store
-// undefine this macro if use hotstuff store
-//#define USE_PBFT_STORE
 
 void Replica::HandleRequest(const TransportAddress &remote,
                                const proto::Request &request) {
@@ -272,17 +272,47 @@ void Replica::HandleRequest(const TransportAddress &remote,
   string digest = request.digest();
   DebugHash(digest);
 
+#ifdef USE_HOTSTUFF_STORE
+
   if (requests_dup.find(digest) == requests_dup.end()) {
-    Debug("new request: %s", request.packed_msg().type().c_str());
-    stats->Increment("handle_new_count",1);
+      Debug("new request: %s", request.packed_msg().type().c_str());
+      stats->Increment("handle_new_count",1);
 
-    // HotStuff
-    // This unordered map is only used here so it doesn't require locks.
-    requests_dup[digest] = request.packed_msg();
+      // This unordered map is only used here so read doesn't require locks.
+      requests_dup[digest] = request.packed_msg();
 
-    #ifdef USE_PBFT_STORE
+      TransportAddress* clientAddr = remote.clone();
+      proto::PackedMessage packedMsg = request.packed_msg();
+      std::function<void(const std::string&, uint32_t seqnum)> execb = [this, digest, packedMsg, clientAddr](const std::string &digest_param, uint32_t seqnum) {
+          // Debug("Callback: %d, %ld", idx, seqnum);
+          execSlotsMtx.lock();
+          stats->Increment("exec_callback",1);
 
-    // PBFT
+          // prepare data structures for executeSlots()
+          assert(digest == digest_param);
+          requests[digest] = packedMsg;
+          replyAddrs[digest] = clientAddr;
+
+          proto::BatchedRequest batchedRequest;
+          (*batchedRequest.mutable_digests())[0] = digest_param;
+          string batchedDigest = BatchedDigest(batchedRequest);
+          batchedRequests[batchedDigest] = batchedRequest;
+          pendingExecutions[seqnum] = batchedDigest;
+
+          executeSlots();
+          // std::cout << "Complete callback: " << seqnum << ", succeed seqnum: " << execSeqNum << std::endl;
+
+          execSlotsMtx.unlock();
+      };      
+      hotstuff_interface.propose(digest, execb);
+  }
+
+#else // use PBFT store
+  
+  if (requests.find(digest) == requests.end()) {
+      Debug("new request: %s", request.packed_msg().type().c_str());
+      stats->Increment("handle_new_count",1);
+  
     requests[digest] = request.packed_msg();
     // clone remote mapped to request for reply
     replyAddrs[digest] = remote.clone();
@@ -311,39 +341,8 @@ void Replica::HandleRequest(const TransportAddress &remote,
     }
     // this could be the message that allows us to execute a slot
     executeSlots();
-
-
-    #else // use HotStuff instead of PBFT
-
-    // HotStuff
-    TransportAddress* clientAddr = remote.clone();
-    proto::PackedMessage packedMsg = request.packed_msg();
-    std::function<void(const std::string&, uint32_t seqnum)> execb = [this, digest, packedMsg, clientAddr](const std::string &digest_param, uint32_t seqnum) {
-        // Debug("Callback: %d, %ld", idx, seqnum);
-        execSlotsMtx.lock();
-        stats->Increment("exec_callback",1);
-
-        // prepare data structures for executeSlots()
-        assert(digest == digest_param);
-        requests[digest] = packedMsg;
-        replyAddrs[digest] = clientAddr;
-
-        proto::BatchedRequest batchedRequest;
-        (*batchedRequest.mutable_digests())[0] = digest_param;
-        string batchedDigest = BatchedDigest(batchedRequest);
-        batchedRequests[batchedDigest] = batchedRequest;
-        pendingExecutions[seqnum] = batchedDigest;
-
-        executeSlots();
-        // std::cout << "Complete callback: " << seqnum << ", succeed seqnum: " << execSeqNum << std::endl;
-
-        execSlotsMtx.unlock();
-    };      
-    hotstuff_interface.propose(digest, execb);
-
-    #endif
-
   }
+#endif
 }
 
 void Replica::sendBatchedPreprepare() {
@@ -385,7 +384,7 @@ void Replica::HandleBatchedRequest(const TransportAddress &remote,
                                proto::BatchedRequest &request) {
   Debug("Handling batched request message");
 
-  #ifndef USE_PBFT_STORE
+  #ifdef USE_HOTSTUFF_STORE
   // HotStuff should never use this function
   assert(false);
   #endif
@@ -613,10 +612,10 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
 
     Debug("seqnum: %lu", seqnum);
 
-    #ifndef USE_PBFT_STORE
+    #ifdef USE_HOTSTUFF_STORE
     assert(false);
     #endif
-    
+
     executeSlots();
   }
 }
@@ -647,10 +646,13 @@ void Replica::executeSlots() {
         Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
         proto::PackedMessage packedMsg = requests[digest];
 
-        // HotStuff
+#ifdef USE_HOTSTUFF_STORE
         appMtx.lock();
         std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
         appMtx.unlock();
+#else
+        std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
+#endif  
 
         for (const auto& reply : replies) {
           if (reply != nullptr) {
@@ -690,8 +692,13 @@ void Replica::executeSlots() {
         }
       } else {
           // HotStuff: this request message is only for PBFT store
-          #ifdef USE_PBFT_STORE
+#ifdef USE_HOTSTUFF_STORE
           
+          stats->Increment("miss_hotstuff_req_txn",1);
+          // request resend not implemented for HotStuff
+          break;
+
+#else
           Debug("request from batch %lu not yet received", execSeqNum);
           stats->Increment("miss_req_txn",1);
           if (requestTx) {
@@ -705,23 +712,16 @@ void Replica::executeSlots() {
               transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
           }
           break;
-
-          #else
-
-          stats->Increment("miss_hotstuff_req_txn",1);
-          // if (requestTx) {
-          //     proto::RequestRequest rr;
-          //     rr.set_digest(digest);
-          //     transport->SendMessageToGroup(this, groupIdx, rr);
-          // }
-          break;
-
-          #endif
+#endif
       }
     } else {
-        // HotStuff: this request message is different for PBFT and HotStuff
-        #ifdef USE_PBFT_STORE
+#ifdef USE_HOTSTUFF_STORE
+
+        stats->Increment("miss_hotstuff_req_batch",1);
+        // batch resend not implemented for HotStuff
+        break;
         
+#else
         stats->Increment("miss_req_batch",1);        
         Debug("Batch request not yet received");
         if (requestTx) {
@@ -732,13 +732,7 @@ void Replica::executeSlots() {
             transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
         }
         break;
-
-        #else
-
-        stats->Increment("miss_hotstuff_req_batch",1);
-        break;
-
-        #endif
+#endif
     }
   }
 }

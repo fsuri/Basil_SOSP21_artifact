@@ -17,7 +17,9 @@
 #include "store/hotstuffstore/app.h"
 #include "store/hotstuffstore/common.h"
 
-// HotStuff library
+// use HotStuff library
+// comment out the below macro to switch back to pbftstore
+#define USE_HOTSTUFF_STORE
 #include "store/hotstuffstore/libhotstuff/examples/indicus_interface.h"
 
 
@@ -50,11 +52,12 @@ public:
                           const proto::GroupedSignedMessage &msg);
 
  private:
-  // HotStuff
+#ifdef USE_HOTSTUFF_STORE
   IndicusInterface hotstuff_interface;
   std::unordered_map<std::string, proto::PackedMessage> requests_dup;
   std::mutex execSlotsMtx;
   std::mutex appMtx; // app->Execute and app->HandleMessage cannot work in parallel
+#endif
   
   const transport::Configuration &config;
   KeyManager *keyManager;
