@@ -79,6 +79,14 @@ bool Server::CCC2(const proto::Transaction& txn) {
     // our writes
 
     // check commited reads
+    // for (const auto& read : committedReads[write.key()]) {
+    //   // second is the read ts, first is the txTs that did the read
+    //   if (read.second < txTs && txTs < read.first) {
+    //       Debug("found committed conflict with write for key: %s", write.key().c_str());
+    //       return false;
+    //     }
+    //   }
+
     auto committedReadsItr = committedReads.find(write.key());
 
     if (committedReadsItr != committedReads.end() && committedReadsItr->second.size() > 0) {
