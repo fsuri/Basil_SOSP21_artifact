@@ -25,7 +25,7 @@
   "_rw_num_ops_txn": 2,
 
   "benchmark_name": "smallbank",
-  "smallbank_hotspot_probability" ???????????
+  "smallbank_hotspot_probability": 0.9,
   "smallbank_balance_ratio": 60,
   "smallbank_deposit_checking_ratio": 10,
   "smallbank_transact_saving_ratio": 10,
@@ -125,6 +125,8 @@
      
 	  "multi_threading": true,
 	  "mainThreadDispatching": true,
+      "parallel_reads": true,
+      "dispatchCallbacks": true,
       "client_multi_threading": false,
       "hyper_threading": false,
 	  "dispatchMessageReceive": false,

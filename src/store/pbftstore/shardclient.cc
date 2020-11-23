@@ -233,7 +233,7 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
             psp->receivedValidSigs[add_id] = signedMsg.signature();
             // Debug("signature for %lu: %s", add_id, string_to_hex(signedMsg.signature()).c_str());
           } else {
-            psp->receivedFailedIds.insert(add_id);
+            psp->receivedFailedIds.insert(add_id); //TODO XXX: add signatures here too. make it flag based(?)
           }
         }
 
@@ -320,6 +320,7 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
   }
 }
 
+//deprecated
 void ShardClient::HandleWritebackReply(const proto::GroupedDecisionAck& groupedDecisionAck, const proto::SignedMessage& signedMsg) {
   Debug("Handling Writeback reply");
 
@@ -556,6 +557,8 @@ void ShardClient::Commit(const std::string& txn_digest, const proto::ShardDecisi
   }
 }
 
+//TODO: add flag, and wrap Commit in a Request in that case. In doing so, it will automatically be ordered.
+// THEN: make sure to adapt Execute to also handle Commits.
 void ShardClient::CommitSigned(const std::string& txn_digest, const proto::ShardSignedDecisions& dec,
     writeback_callback wcb, writeback_timeout_callback wtcp, uint32_t timeout) {
   Debug("Handling client commit signed");

@@ -77,11 +77,21 @@ bool Server::CCC2(const proto::Transaction& txn) {
     // our writes
 
     // check commited reads
-    for (const auto& read : committedReads[write.key()]) {
-      // second is the read ts, first is the txTs that did the read
-      if (read.second < txTs && txTs < read.first) {
-          Debug("found committed conflict with write for key: %s", write.key().c_str());
-          return false;
+    auto committedReadsItr = committedReads.find(write.key());
+
+    if (committedReadsItr != committedReads.end() && committedReadsItr->second.size() > 0) {
+
+      for (auto read = committedReadsItr->second.rbegin(); read != committedReadsItr->second.rend(); ++read) {
+      //for (const auto& read : committedReads[write.key()]) {
+        // second is the read ts, first is the txTs that did the read
+        if (txTs >= read->first){
+          break;
+        }
+        if (read->second < txTs && txTs < read->first) {
+            Debug("found committed conflict with write for key: %s", write.key().c_str());
+            return false;
+        }
+
       }
     }
 
@@ -258,7 +268,8 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     }
 
     // check if this transaction was already aborted
-    if (abortedTxs.find(digest) != abortedTxs.end()) {
+    if (false & abortedTxs.find(digest) != abortedTxs.end() ) { //this branch of code is not used anymore
+      //it was only used for Writeback Acks...
       stats.Increment("gdec_failed_buf",1);
       // abort the tx
       cleanupPendingTx(digest);
@@ -407,6 +418,12 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   Debug("Handling Grouped abort Decision");
   string digest = gdecision.txn_digest();
   DebugHash(digest);
+
+//TODO: need to verifyGDecision as well. Need to make sure that clients send the proofs in this gdecision too.
+                              //TODO: shard client currently only adds signature proofs for commit.
+                              //TODO: need to modify client HandleSignedPrepareReply as well.
+                              //TODO: Abort and Commit paths need to be the same...
+//TODO: modify verifyGDecision to process Aborts too..
 
   // groupedDecisionAck->set_txn_digest(digest);
 

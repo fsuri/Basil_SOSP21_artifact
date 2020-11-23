@@ -191,8 +191,7 @@ bool verifyGDecision(const proto::GroupedDecision& gdecision,
                 signedMsg.set_signature(id_sig_pair.second);
                 // Debug("signature for %lu: %s", id_sig_pair.first, string_to_hex(id_sig_pair.second).c_str());
 
-    crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(
-        signedMsg.replica_id());
+                crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(signedMsg.replica_id());
                 if (pbftBatchedSigs::verifyBatchedSignature(signedMsg.mutable_signature(), signedMsg.mutable_packed_msg(), replicaPublicKey)) {
                   valid_signatures.insert(id_sig_pair.first);
                 } else {

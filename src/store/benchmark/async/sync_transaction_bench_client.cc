@@ -42,7 +42,7 @@ void SyncTransactionBenchClient::SendNext(transaction_status_t *result) {
         stats.Increment(GetLastOp() +  "_" + std::to_string(*result), 1);
       }
       if (retryAborted) {
-        stats.Add(GetLastOp() + "_attempts_list", currTxnAttempts);
+        //stats.Add(GetLastOp() + "_attempts_list", currTxnAttempts); //TODO: uncomment if need stats files
       }
       delete currTxn;
       currTxn = nullptr;
@@ -63,4 +63,3 @@ void SyncTransactionBenchClient::SendNext(transaction_status_t *result) {
   }
   Debug("Transaction finished with result %d.", *result);
 }
-
