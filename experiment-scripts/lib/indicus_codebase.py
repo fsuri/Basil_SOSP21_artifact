@@ -91,6 +91,11 @@ class IndicusCodebase(ExperimentCodebase):
             if 'hyper_threading' in config['replication_protocol_settings']:
                 client_command += ' --indicus_hyper_threading=%s' % str(config['replication_protocol_settings']['hyper_threading']).lower()
 
+            if 'order_commit' in config['replication_protocol_settings']:
+                client_command += ' --pbft_order_commit=%s' % str(config['replication_protocol_settings']['order_commit']).lower()
+            if 'validate_abort' in config['replication_protocol_settings']:
+                client_command += ' --pbft_validate_abort=%s' % str(config['replication_protocol_settings']['validate_abort']).lower()
+
 
         if config['replication_protocol'] == 'morty':
             if 'send_writes' in config['replication_protocol_settings']:
@@ -325,8 +330,18 @@ class IndicusCodebase(ExperimentCodebase):
                 replica_command += ' --indicus_mainThreadDispatching=%s' % str(config['replication_protocol_settings']['mainThreadDispatching']).lower()
             if 'dispatchMessageReceive' in config['replication_protocol_settings']:
                 replica_command += ' --indicus_dispatchMessageReceive=%s' % str(config['replication_protocol_settings']['dispatchMessageReceive']).lower()
+            if 'parallel_reads' in config['replication_protocol_settings']:
+                replica_command += ' --indicus_parallel_reads=%s' % str(config['replication_protocol_settings']['parallel_reads']).lower()
+            if 'dispatchCallbacks' in config['replication_protocol_settings']:
+                replica_command += ' --indicus_dispatchCallbacks=%s' % str(config['replication_protocol_settings']['dispatchCallbacks']).lower()
+            #disable hyperthreading and boosting
             if 'hyper_threading' in config['replication_protocol_settings']:
                 replica_command += ' --indicus_hyper_threading=%s' % str(config['replication_protocol_settings']['hyper_threading']).lower()
+
+            if 'order_commit' in config['replication_protocol_settings']:
+                replica_command += ' --pbft_order_commit=%s' % str(config['replication_protocol_settings']['order_commit']).lower()
+            if 'validate_abort' in config['replication_protocol_settings']:
+                replica_command += ' --pbft_validate_abort=%s' % str(config['replication_protocol_settings']['validate_abort']).lower()
 
 
 
