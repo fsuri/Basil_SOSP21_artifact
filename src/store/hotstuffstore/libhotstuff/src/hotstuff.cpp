@@ -529,7 +529,7 @@ void HotStuffBase::do_decide(Finality &&fin) {
         decision_waiting.erase(it);
     } else {
         // std::cout << "hotstuff do_decide not finding cmd_hash at height" << fin.cmd_height << std::endl;
-        decision_made[fin.cmd_hash] = fin.cmd_height;
+        decision_made[fin.cmd_hash] = std::make_pair(fin.cmd_idx, fin.cmd_height);
     }
 }
 
@@ -663,9 +663,9 @@ void HotStuffBase::start(
             // Fix bug triggered by Indicus
             if (decision_made.count(cmd_hash)) {
                 // command has been committed
-                uint32_t height = decision_made[cmd_hash];
+                auto seqinfo = decision_made[cmd_hash];
                 //e.second(Finality(id, 0, 0, height, cmd_hash, uint256_t()));
-                exec_pending.enqueue(std::make_pair(e.second, Finality(id, 0, 0, height, cmd_hash, uint256_t())));
+                exec_pending.enqueue(std::make_pair(e.second, Finality(id, 0, seqinfo.first, seqinfo.second, cmd_hash, uint256_t())));
                 continue;
             }
             
