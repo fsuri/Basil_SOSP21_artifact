@@ -199,31 +199,11 @@ void HotStuffApp::client_request_cmd_handler(MsgReqCmd &&msg, const conn_t &conn
 }
 
 
-static std::mutex interface_mtx;
 void HotStuffApp::interface_propose(const string &hash,  std::function<void(const std::string&, uint32_t seqnum)> cb) {
 
-    static std::unordered_map<const uint256_t, string> uint256_to_str;
-    static std::unordered_map<const uint256_t, std::function<void(const std::string&, uint32_t)>> uint256_to_cb;    
-
     uint256_t cmd_hash((const uint8_t *)hash.c_str());
-
-    interface_mtx.lock();
-    uint256_to_str[cmd_hash] = hash;
-    uint256_to_cb[cmd_hash] = cb;
-    interface_mtx.unlock();
-    
-    exec_command(cmd_hash, [this](Finality fin) {
-            //resp_queue.enqueue(std::make_pair(fin, addr));
-            // fin->cmd_height
-
-            interface_mtx.lock();
-
-            string hash_ready = uint256_to_str[fin.cmd_hash];
-            auto cb = uint256_to_cb[fin.cmd_hash];
-
-            interface_mtx.unlock();
-
-            cb(hash_ready, fin.cmd_height);
+    exec_command(cmd_hash, [this, hash, cb](Finality fin) {
+            cb(hash, fin.cmd_height);
     });
 }
 
