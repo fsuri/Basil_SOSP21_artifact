@@ -55,7 +55,6 @@ public:
 #ifdef USE_HOTSTUFF_STORE
   IndicusInterface hotstuff_interface;
   std::unordered_map<std::string, proto::PackedMessage> requests_dup;
-  std::mutex execSlotsMtx;
   std::mutex appMtx; // app->Execute and app->HandleMessage cannot work in parallel
 #endif
   
