@@ -524,10 +524,11 @@ void HotStuffBase::do_decide(Finality &&fin) {
     auto it = decision_waiting.find(fin.cmd_hash);
     if (it != decision_waiting.end())
     {
-        it->second(std::move(fin));
+        //it->second(std::move(fin));
+        exec_pending.enqueue(std::make_pair(it->second, std::move(fin)));
         decision_waiting.erase(it);
     } else {
-        std::cout << "hotstuff do_decide not finding cmd_hash at height" << fin.cmd_height << std::endl;
+        // std::cout << "hotstuff do_decide not finding cmd_hash at height" << fin.cmd_height << std::endl;
         decision_made[fin.cmd_hash] = fin.cmd_height;
     }
 }
@@ -642,6 +643,16 @@ void HotStuffBase::start(
              return false;
      });
 
+    exec_pending.reg_handler(ec, [this](exec_queue_t &q) {
+        std::pair<commit_cb_t, Finality> e;
+        while (q.try_dequeue(e))
+        {
+            // execute the command
+            e.first(e.second);
+        }
+        return false;
+    });
+
     cmd_pending.reg_handler(ec, [this](cmd_queue_t &q) {
         std::pair<uint256_t, commit_cb_t> e;
         while (q.try_dequeue(e))
@@ -663,7 +674,9 @@ void HotStuffBase::start(
             if (it == decision_waiting.end())
                 it = decision_waiting.insert(std::make_pair(cmd_hash, e.second)).first;
             else
-                e.second(Finality(id, 0, 0, 0, cmd_hash, uint256_t()));
+                //e.second(Finality(id, 0, 0, 0, cmd_hash, uint256_t()));
+                exec_pending.enqueue(std::make_pair(e.second, Finality(id, 0, 0, 0, cmd_hash, uint256_t())));
+
             if (proposer != get_id()) continue;
             cmd_pending_buffer.push(cmd_hash);
             if (cmd_pending_buffer.size() >= blk_size)

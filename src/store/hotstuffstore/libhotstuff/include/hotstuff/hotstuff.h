@@ -231,12 +231,14 @@ class HotStuffBase: public HotStuffCore {
     std::unordered_map<const uint256_t, uint32_t> decision_made;
     
     using cmd_queue_t = salticidae::MPSCQueueEventDriven<std::pair<uint256_t, commit_cb_t>>;
+    using exec_queue_t = salticidae::MPSCQueueEventDriven<std::pair<commit_cb_t, Finality>>;
     using ordering1_queue_t = salticidae::MPSCQueueEventDriven<std::pair<uint256_t, ordering1_cb_t>>;
     using ordering2_queue_t = salticidae::MPSCQueueEventDriven<std::pair<uint256_t, ordering2_cb_t>>;
     using consensus_queue_t = salticidae::MPSCQueueEventDriven<std::pair<uint64_t, consensus_cb_t>>;
     using consensus_nonleader_queue_t = salticidae::MPSCQueueEventDriven<MsgConsensusReqCmd>;
 
     cmd_queue_t cmd_pending;
+    exec_queue_t exec_pending;
     ordering1_queue_t ordering1;
     ordering2_queue_t ordering2;
     consensus_queue_t consensus;
