@@ -664,8 +664,8 @@ void HotStuffBase::start(
             if (decision_made.count(cmd_hash)) {
                 // command has been committed
                 uint32_t height = decision_made[cmd_hash];
-                e.second(Finality(id, 0, 0, height, cmd_hash, uint256_t()));
-                std::cout << "decision_made is used" << std::endl;
+                //e.second(Finality(id, 0, 0, height, cmd_hash, uint256_t()));
+                exec_pending.enqueue(std::make_pair(e.second, Finality(id, 0, 0, height, cmd_hash, uint256_t())));
                 continue;
             }
             
