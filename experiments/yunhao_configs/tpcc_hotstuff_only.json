@@ -70,7 +70,7 @@
     [2]
   ],
   "client_nodes_per_server": 1,
-  "_pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],
+  "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],
   "pin_client_processes": [0, 1, 2, 3, 4, 5, 6, 7],
   "client_debug_output": false,
   "server_debug_output": false,
