@@ -286,7 +286,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
       std::function<void(const std::string&, uint32_t seqnum)> execb = [this, digest, packedMsg, clientAddr](const std::string &digest_param, uint32_t seqnum) {
           // Debug("Callback: %d, %ld", idx, seqnum);
           execSlotsMtx.lock();
-          stats->Increment("exec_callback",1);
+          stats->Increment("hotstuff_exec_callback",1);
 
           // prepare data structures for executeSlots()
           assert(digest == digest_param);
