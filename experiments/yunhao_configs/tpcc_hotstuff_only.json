@@ -10,8 +10,8 @@
   ],
   "replication_protocol": ["hotstuff"],
   "client_protocol_mode": ["hotstuff"],
-  "num_shards": [3],
-  "num_groups": [3],
+  "num_shards": [24],
+  "num_groups": [24],
   "benchmark_name": "tpcc-sync",
   "partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
@@ -43,10 +43,10 @@
       "validate_proofs": true,
       "sign_messages": true,
       "signature_type": 4,
-      "sig_batch": 2,
-      "sig_batch_timeout": 4,
+      "sig_batch": 4,
+      "sig_batch_timeout": 10,
       "ebatch_size": 2,
-      "ebatch_tout": 4,
+      "ebatch_tout": 10,
       "multi_threading": false,
 	  "mainThreadDispatching": false,
 	  "dispatchMessageReceive": false,
@@ -59,7 +59,7 @@
   "codebase_name": "indicus",
   "client_total": [
    
-    [36]
+    [144]
   ],
   "client_processes_per_client_node": [
    
