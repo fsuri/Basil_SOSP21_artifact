@@ -2,6 +2,7 @@
 #include "store/pbftstore/common.h"
 #include "store/common/transaction.h"
 #include <iostream>
+#include <sys/time.h>
 
 namespace pbftstore {
 
@@ -214,6 +215,7 @@ bool Server::CCC(const proto::Transaction& txn) {
 
 std::vector<::google::protobuf::Message*> Server::Execute(const string& type, const string& msg) {
   Debug("Execute: %s", type.c_str());
+  std::unique_lock lock(atomicMutex);
 
   proto::Transaction transaction;
   proto::GroupedDecision gdecision;
@@ -231,6 +233,7 @@ std::vector<::google::protobuf::Message*> Server::Execute(const string& type, co
     } else if(order_commit && gdecision.status() == REPLY_OK) {
       std::vector<::google::protobuf::Message*> results;
       results.push_back(HandleGroupedCommitDecision(gdecision));
+      return results;
     }
     else{
       Panic("Only failed grouped decisions should be atomically broadcast");
@@ -251,6 +254,21 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   stats.Increment("handle_tx",1);
   decision->set_txn_digest(digest);
   decision->set_shard_id(groupIdx);
+
+  pendingTransactions[digest] = transaction;
+  if (bufferedGDecs.find(digest) != bufferedGDecs.end()) {
+    stats.Increment("used_buffered_gdec",1);
+    Debug("found buffered gdecision");
+    if(bufferedGDecs[digest].status() == REPLY_OK){
+      results.push_back(HandleGroupedCommitDecision(bufferedGDecs[digest]));
+    }
+    else{
+      results.push_back(HandleGroupedAbortDecision(bufferedGDecs[digest]));
+    }
+    bufferedGDecs.erase(digest);
+    return results;
+  }
+
   // OCC check
   if (CCC2(transaction)) {
     stats.Increment("ccc_succeed",1);
@@ -274,12 +292,12 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     }
 
     // check for buffered gdecision
-    if (bufferedGDecs.find(digest) != bufferedGDecs.end()) {
-      stats.Increment("used_buffered_gdec",1);
-      Debug("found buffered gdecision");
-      results.push_back(HandleGroupedCommitDecision(bufferedGDecs[digest]));
-      bufferedGDecs.erase(digest);
-    }
+    // if (bufferedGDecs.find(digest) != bufferedGDecs.end()) {
+    //   stats.Increment("used_buffered_gdec",1);
+    //   Debug("found buffered gdecision");
+    //   results.push_back(HandleGroupedCommitDecision(bufferedGDecs[digest]));
+    //   bufferedGDecs.erase(digest);
+    // }
 
     // check if this transaction was already aborted
     if (false & abortedTxs.find(digest) != abortedTxs.end() ) { //this branch of code is not used anymore
@@ -296,6 +314,14 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     Debug("ccc failed");
     stats.Increment("ccc_fail",1);
     decision->set_status(REPLY_FAIL);
+    pendingTransactions[digest] = transaction;
+
+    // if (bufferedGDecs.find(digest) != bufferedGDecs.end()) {
+    //   stats.Increment("used_buffered_gdec",1);
+    //   Debug("found buffered gdecision");
+    //   results.push_back(HandleGroupedAbortDecision(bufferedGDecs[digest]));
+    //   bufferedGDecs.erase(digest);
+    // }
   }
 
 
@@ -306,6 +332,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
 ::google::protobuf::Message* Server::HandleMessage(const string& type, const string& msg) {
   Debug("Handle %s", type.c_str());
+  std::unique_lock lock(atomicMutex);
 
   proto::Read read;
   proto::GroupedDecision gdecision;
@@ -314,7 +341,10 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     read.ParseFromString(msg);
 
     return HandleRead(read);
-  } else if (type == gdecision.GetTypeName() && !order_commit) {
+  } else if (type == gdecision.GetTypeName()) {
+    if(order_commit){
+      Panic("Should be ordering all Writeback messages");
+    }
     gdecision.ParseFromString(msg);
     if (gdecision.status() == REPLY_OK) {
       return HandleGroupedCommitDecision(gdecision);
@@ -324,7 +354,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
   }
   else{
-    Panic("Should be ordering all Writeback messages");
+    Panic("Request not of type Read (or Commit Writeback)");
   }
 
   return nullptr;
@@ -374,7 +404,17 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   }
 
   // verify gdecision
+
+    // struct timeval tp;
+    // gettimeofday(&tp, NULL);
+    // long int us = tp.tv_sec * 1000 * 1000 + tp.tv_usec;
+
   if (verifyGDecision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)) {
+
+    // gettimeofday(&tp, NULL);
+    // long int lock_time = ((tp.tv_sec * 1000 * 1000 + tp.tv_usec) -us);
+    // std::cerr << "Commit Verification takes " << lock_time << " microseconds" << std::endl;
+
     stats.Increment("apply_tx",1);
     proto::Transaction txn = pendingTransactions[digest];
     Timestamp ts(txn.timestamp());
@@ -432,15 +472,32 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
 ::google::protobuf::Message* Server::HandleGroupedAbortDecision(const proto::GroupedDecision& gdecision) {
   // proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
+
   Debug("Handling Grouped abort Decision");
   string digest = gdecision.txn_digest();
   DebugHash(digest);
 
+  if (pendingTransactions.find(digest) == pendingTransactions.end()) {
+    Debug("Buffering gdecision");
+    stats.Increment("buff_dec",1);
+    // we haven't yet received the tx so buffer this gdecision until we get it
+    bufferedGDecs[digest] = gdecision;
+    return nullptr;
+  }
+
  if(validate_abort){
-   if(!verifyGDecision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)){
+   // struct timeval tp;
+   // gettimeofday(&tp, NULL);
+   // long int us = tp.tv_sec * 1000 * 1000 + tp.tv_usec;
+
+   if(!verifyG_Abort_Decision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)){
      Debug("failed validation for abort decision");
      return nullptr;
    }
+
+   // gettimeofday(&tp, NULL);
+   // long int lock_time = ((tp.tv_sec * 1000 * 1000 + tp.tv_usec) -us);
+   // std::cerr << "Abort Verification takes " << lock_time << " microseconds" << std::endl;
  }
 
 

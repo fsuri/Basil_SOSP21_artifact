@@ -195,6 +195,28 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     HandleGrouped(remote, recvgrouped);
   } else {
     Debug("Sending request to app");
+    handleMessage(remote, type, data);
+
+  }
+}
+
+void Replica::handleMessage(const TransportAddress &remote, const string &type, const string &data){
+  if(true){
+    //need to copy type and data.
+    auto f = [this, &remote, type, data](){
+      //std::unique_lock lock(atomicMutex);
+      ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+      if (reply != nullptr) {
+        this->transport->SendMessage(this, remote, *reply);
+        delete reply;
+      } else {
+        Debug("Invalid request of type %s", type.c_str());
+      }
+      return (void*) true;
+    };
+    transport->DispatchTP_main(f);
+  }
+  else{
     ::google::protobuf::Message* reply = app->HandleMessage(type, data);
     if (reply != nullptr) {
       transport->SendMessage(this, remote, *reply);
@@ -202,8 +224,8 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     } else {
       Debug("Invalid request of type %s", type.c_str());
     }
-
   }
+
 }
 
 bool Replica::sendMessageToPrimary(const ::google::protobuf::Message& msg) {
@@ -555,7 +577,126 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
   }
 }
 
-void Replica::executeSlots() {
+void Replica::executeSlots(){
+  if(false){
+    // auto f = [this](){
+    //   //std::unique_lock lock(atomicMutex);
+    //   this->executeSlots_internal();
+    //   return (void*) true;
+    // };
+    // transport->DispatchTP_main(f);
+    executeSlots_internal_multi();
+  }
+  else{
+    executeSlots_internal();
+  }
+
+}
+
+void Replica::executeSlots_internal_multi() {
+  Debug("exec seq num: %lu", execSeqNum);
+  while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
+    // cancel the commit timer
+    if (seqnumCommitTimers.find(execSeqNum) != seqnumCommitTimers.end()) {
+      transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
+      seqnumCommitTimers.erase(execSeqNum);
+    }
+
+    string batchDigest = pendingExecutions[execSeqNum];
+    // only execute when we have the batched request
+    if (batchedRequests.find(batchDigest) != batchedRequests.end()) {
+      string digest = (*batchedRequests[batchDigest].mutable_digests())[execBatchNum];
+      DebugHash(digest);
+      // only execute if we have the full request
+      if (requests.find(digest) != requests.end()) {
+        stats->Increment("exec_request",1);
+        Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
+        proto::PackedMessage packedMsg = requests[digest];
+
+        ///DISPATCH EXECUTE TO TP
+        auto f = [this, packedMsg, batchDigest, digest](){
+          std::vector<::google::protobuf::Message*> *replies = new std::vector<::google::protobuf::Message*>();
+          *replies = this->app->Execute(packedMsg.type(), packedMsg.msg());
+
+          auto cb = [this, batchDigest, digest](void* replies_void){
+            this->executeSlots_callback(replies_void, batchDigest, digest);
+          };
+          this->transport->IssueCB(cb, (void*) replies);
+          return (void*) true;
+        };
+        transport->DispatchTP_main(f);
+
+
+//
+      } else {
+        Debug("request from batch %lu not yet received", execSeqNum);
+        if (requestTx) {
+          stats->Increment("req_txn",1);
+          proto::RequestRequest rr;
+          rr.set_digest(digest);
+          int primaryIdx = config.GetLeaderIndex(currentView);
+          if (primaryIdx == idx) {
+            stats->Increment("primary_req_txn",1);
+          }
+          transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+        }
+        break;
+      }
+    } else {
+      Debug("Batch request not yet received");
+      if (requestTx) {
+        stats->Increment("req_batch",1);
+        proto::RequestRequest rr;
+        rr.set_digest(batchDigest);
+        int primaryIdx = config.GetLeaderIndex(currentView);
+        transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+      }
+      break;
+    }
+  }
+}
+
+
+void Replica::executeSlots_callback(void* replies_void, string batchDigest, string digest){
+        std::vector<::google::protobuf::Message*> *replies = (std::vector<::google::protobuf::Message*> *) replies_void;
+        for (const auto& reply : *replies) {
+          if (reply != nullptr) {
+            Debug("Sending reply");
+            stats->Increment("execs_sent",1);
+            EpendingBatchedMessages.push_back(reply);
+            EpendingBatchedDigs.push_back(digest);
+            if (EpendingBatchedMessages.size() >= EbatchSize) {
+              Debug("EBatch is full, sending");
+              if (EbatchTimerRunning) {
+                transport->CancelTimer(EbatchTimerId);
+                EbatchTimerRunning = false;
+              }
+              sendEbatch();
+            } else if (!EbatchTimerRunning) {
+              EbatchTimerRunning = true;
+              Debug("Starting ebatch timer");
+              EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
+                Debug("EBatch timer expired, sending");
+                this->EbatchTimerRunning = false;
+                this->sendEbatch();
+              });
+            }
+          } else {
+            Debug("Invalid execution");
+          }
+        }
+        delete replies;
+
+        execBatchNum++;
+        if ((int) execBatchNum >= batchedRequests[batchDigest].digests_size()) {
+          Debug("Done executing batch");
+          execBatchNum = 0;
+          execSeqNum++;
+        }
+
+}
+
+void Replica::executeSlots_internal() {
   Debug("exec seq num: %lu", execSeqNum);
   while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
     // cancel the commit timer
@@ -600,7 +741,7 @@ void Replica::executeSlots() {
           } else {
             Debug("Invalid execution");
           }
-        }
+        }void executeSlots_internal();
 
         execBatchNum++;
         if ((int) execBatchNum >= batchedRequests[batchDigest].digests_size()) {

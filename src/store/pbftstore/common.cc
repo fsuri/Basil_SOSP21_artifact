@@ -160,6 +160,9 @@ bool verifyGDecision(const proto::GroupedDecision& gdecision,
     remaining_shards.insert(id);
   }
 
+  //return true;
+  int max_counter = 2; //just a hack to artificially reduce verification to get an upper bound on tput
+
   if (signMessages) {
     // iterate over all shards
     for (const auto& pair : gdecision.signed_decisions().grouped_decisions()) {
@@ -194,8 +197,11 @@ bool verifyGDecision(const proto::GroupedDecision& gdecision,
                 crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(signedMsg.replica_id());
                 if (pbftBatchedSigs::verifyBatchedSignature(signedMsg.mutable_signature(), signedMsg.mutable_packed_msg(), replicaPublicKey)) {
                   valid_signatures.insert(id_sig_pair.first);
+                  max_counter--;
+                  if(max_counter == 0) return true;
                 } else {
                   Debug("Failed to validate transaction decision signature for %lu", id_sig_pair.first);
+                  Panic("should not fail verifications");
                 }
               }
 
@@ -236,6 +242,7 @@ bool verifyG_Abort_Decision(const proto::GroupedDecision& gdecision,
   // decision is valid. Then, we will mark the shard for those decisions
   // as valid. We return true if all participating shard decisions are valid
 
+
   // This will hold the remaining shards that we need to verify
   std::unordered_set<uint64_t> remaining_shards;
   for (auto id : txn.participating_shards()) {
@@ -243,9 +250,11 @@ bool verifyG_Abort_Decision(const proto::GroupedDecision& gdecision,
     remaining_shards.insert(id);
   }
 
+
   if (signMessages) {
     // iterate over all shards
     for (const auto& pair : gdecision.signed_decisions().grouped_decisions()) {
+
       uint64_t shard_id = pair.first;
 
       proto::GroupedSignedMessage grouped = pair.second;
@@ -269,6 +278,7 @@ bool verifyG_Abort_Decision(const proto::GroupedDecision& gdecision,
 
               // now verify all of the signatures
               for (const auto& id_sig_pair: grouped.signatures()) {
+
                 Debug("ungrouped transaction decision for %lu", id_sig_pair.first);
                 // recreate the signed message for the given replica id
                 signedMsg.set_replica_id(id_sig_pair.first);
@@ -276,10 +286,14 @@ bool verifyG_Abort_Decision(const proto::GroupedDecision& gdecision,
                 // Debug("signature for %lu: %s", id_sig_pair.first, string_to_hex(id_sig_pair.second).c_str());
 
                 crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(signedMsg.replica_id());
+
                 if (pbftBatchedSigs::verifyBatchedSignature(signedMsg.mutable_signature(), signedMsg.mutable_packed_msg(), replicaPublicKey)) {
                   valid_signatures.insert(id_sig_pair.first);
+                  //max_counter--;
+                  //if(max_counter == 0) return true;
                 } else {
                   Debug("Failed to validate transaction decision signature for %lu", id_sig_pair.first);
+                  Panic("verification fails");
                   return false; //got a false verification.
                 }
               }

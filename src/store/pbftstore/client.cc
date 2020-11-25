@@ -159,18 +159,28 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
   });
 }
 
-void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int status, const proto::GroupedSignedMessage& gsm) {
+void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int status,
+  const proto::GroupedSignedMessage& gsm) {
   if (pendingPrepares.find(digest) != pendingPrepares.end()) {
     PendingPrepare* pp = &pendingPrepares[digest];
 
+    if(status == REPLY_OK){
+      std::cerr << "got commit shard decision from shard_id " << shard_id << std::endl;
+    }
+    else{
+      std::cerr << "got abort shard decision from shard_id " << shard_id << std::endl;
+    }
+
     if (pp->signedShardDecisions.find(shard_id) == pp->signedShardDecisions.end()) {
+
       pp->signedShardDecisions[shard_id] = std::move(gsm);  //instead of copying, can I move. Or release?
+
       // abort on even a single shard abort
       if (status != REPLY_OK) {
         proto::Transaction txn = pp->txn;
         commit_callback ccb = pp->ccb;
-        pendingPrepares.erase(digest);
-        ccb(ABORTED_SYSTEM);
+
+        std::cerr << "ABORTING " << std::endl;
         if(validate_abort){
           proto::ShardSignedDecisions dec;
           (*dec.mutable_grouped_decisions())[shard_id] = pp->signedShardDecisions[shard_id];
@@ -179,11 +189,14 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
         else{
           AbortTxn(txn);
         }
+        pendingPrepares.erase(digest);
+        ccb(ABORTED_SYSTEM);
 
         return;
       }
 
       if (pp->signedShardDecisions.size() == (uint64_t) pp->txn.participating_shards_size()) {
+        std::cerr << "COMMITTING " << std::endl;
         proto::ShardSignedDecisions dec;
         for (const auto& pair : pp->signedShardDecisions) {
           (*dec.mutable_grouped_decisions())[pair.first] = pair.second;
@@ -196,16 +209,16 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
         ccb(COMMITTED);
         //TODO:: remove callbacks...
 
-        WriteBackSigned(dec, txn, digest);
+        //WriteBackSigned(dec, txn, digest);
 
-        // this->WriteBackSigned(dec, txn, [](transaction_status_t tx_stat) {
-        //   if (tx_stat != COMMITTED) {
-        //     Panic("Writeback confirmation failed");
-        //   }
-        //   Debug("Got confirmation of writeback");
-        // }, []() {
-        //   Debug("writeback confirmation timed out");
-        // }, timeout);
+        this->WriteBackSigned(dec, txn, [](transaction_status_t tx_stat) {
+          if (tx_stat != COMMITTED) {
+            Panic("Writeback confirmation failed");
+          }
+          Debug("Got confirmation of writeback");
+        }, []() {
+          Debug("writeback confirmation timed out");
+        }, timeout);
       }
     }
   }
@@ -348,9 +361,17 @@ void Client::AbortTxn(const proto::Transaction& txn) {
 void Client::AbortTxnSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn, std::string& digest){
   stats.Increment("abort", 1);
   //std::string digest = TransactionDigest(txn);
-  for (const auto& shard_id : txn.participating_shards()) {
-    bclient[shard_id]->Abort(digest, dec);
+  if (pendingWritebacks.find(digest) == pendingWritebacks.end()) {
+    PendingWriteback pendingWriteback;
+    // pendingWriteback.ccb = ccb;
+    // pendingWriteback.txn = txn;
+    pendingWritebacks[digest] = pendingWriteback;
+    std::cerr << "Downcalling to Shard client to send out Abort" << '\n';
+    for (const auto& shard_id : txn.participating_shards()) {
+      bclient[shard_id]->Abort(digest, dec);
+    }
   }
+
 }
 
 bool Client::IsParticipant(int g) {

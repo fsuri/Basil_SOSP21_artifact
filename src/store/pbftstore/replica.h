@@ -16,6 +16,7 @@
 #include "store/pbftstore/slots.h"
 #include "store/pbftstore/app.h"
 #include "store/pbftstore/common.h"
+#include <mutex>
 
 namespace pbftstore {
 
@@ -123,6 +124,15 @@ public:
   void testSlot(uint64_t seqnum, uint64_t viewnum, std::string digest, bool gotPrepare);
 
   void executeSlots();
+
+  void executeSlots_internal();
+  void executeSlots_internal_multi();
+
+  void executeSlots_callback(void* replies_void, string batchDigest, string digest);
+
+  std::mutex atomicMutex;
+
+  void handleMessage(const TransportAddress &remote, const string &type, const string &data);
 
   // map from seqnum to view num to
   std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::unordered_map<std::string, int>>> actionTimers;

@@ -312,7 +312,9 @@ const strongstore::Mode strongmodes[] {
   strongstore::Mode::MODE_SPAN_LOCK,
   strongstore::Mode::MODE_UNKNOWN,
   strongstore::Mode::MODE_UNKNOWN,
-  strongstore::Mode::MODE_UNKNOWN
+  strongstore::Mode::MODE_UNKNOWN,
+	strongstore::Mode::MODE_UNKNOWN,
+	strongstore::Mode::MODE_UNKNOWN
 };
 static bool ValidateProtocolMode(const char* flagname,
     const std::string &value) {

@@ -4,6 +4,7 @@
 #include <memory>
 #include <map>
 #include <unordered_map>
+#include <mutex>
 
 #include "store/pbftstore/app.h"
 #include "store/pbftstore/server-proto.pb.h"
@@ -52,6 +53,8 @@ private:
   //addtional knobs: 1) order commit, 2) validate abort
   bool order_commit;
   bool validate_abort;
+
+  std::mutex atomicMutex;
 
   struct ValueAndProof {
     std::string value;

@@ -287,6 +287,7 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
             psp->timeout->Stop();
           }
           pendingSignedPrepares.erase(digest);
+
           pcb(REPLY_FAIL, groupSignedMsg);
           return;
         }
@@ -613,7 +614,18 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
     stats->Increment("shard_commit_s", 1);
 
     Debug("Sending commit to all replicas in shard");
-    transport->SendMessageToGroup(this, group_idx, groupedDecision);
+
+    if(order_commit){
+      proto::Request request;
+      request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
+      request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
+      request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+
+      transport->SendMessageToGroup(this, group_idx, request);
+    }
+    else{
+      transport->SendMessageToGroup(this, group_idx, groupedDecision);
+    }
 
     PendingWritebackReply pwr;
     pwr.wcb = wcb;
@@ -681,6 +693,7 @@ void ShardClient::Abort(std::string& txn_digest, const proto::ShardSignedDecisio
     groupedDecision.set_txn_digest(txn_digest);
 
     if(validate_abort){
+
         *groupedDecision.mutable_signed_decisions() = dec;
     }
     else{
@@ -696,6 +709,10 @@ void ShardClient::Abort(std::string& txn_digest, const proto::ShardSignedDecisio
     stats->Increment("shard_abort", 1);
     Debug("AB abort to all replicas in shard");
     transport->SendMessageToGroup(this, group_idx, request);
+
+    PendingWritebackReply pwr;
+    pendingWritebacks[txn_digest] = pwr;  //not sure what use this has
+
   } else {
     Debug("abort called on already aborted tx");
   }
