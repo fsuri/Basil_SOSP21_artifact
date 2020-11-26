@@ -2,6 +2,8 @@
 
 #include <cryptopp/sha.h>
 #include <unordered_set>
+#include <thread>
+#include <atomic>
 
 #include "store/common/timestamp.h"
 #include "store/common/transaction.h"
@@ -153,6 +155,8 @@ bool verifyGDecision(const proto::GroupedDecision& gdecision,
   // decision is valid. Then, we will mark the shard for those decisions
   // as valid. We return true if all participating shard decisions are valid
 
+
+
   // This will hold the remaining shards that we need to verify
   std::unordered_set<uint64_t> remaining_shards;
   for (auto id : txn.participating_shards()) {
@@ -160,7 +164,15 @@ bool verifyGDecision(const proto::GroupedDecision& gdecision,
     remaining_shards.insert(id);
   }
 
-  //return true;
+  // std::vector<std::thread*> Threads;
+  // std::atomic_int *outstanding_verifications = new std::atomic_int(remaining_shards.size() * (f+1));
+  // for(int j = 0; j < *outstanding_verifications; j++){
+  //   std::thread* t;
+  //   Threads.push_back(t);
+  // }
+  // int i = 0;
+
+    //return true;
   int max_counter = 2; //just a hack to artificially reduce verification to get an upper bound on tput
 
   if (signMessages) {
@@ -195,13 +207,29 @@ bool verifyGDecision(const proto::GroupedDecision& gdecision,
                 // Debug("signature for %lu: %s", id_sig_pair.first, string_to_hex(id_sig_pair.second).c_str());
 
                 crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(signedMsg.replica_id());
-                if (pbftBatchedSigs::verifyBatchedSignature(signedMsg.mutable_signature(), signedMsg.mutable_packed_msg(), replicaPublicKey)) {
+
+                // i++;
+                // Threads[i] = new std::thread([](){return;});
+                // Threads[i] = new std::thread([outstanding_verifications, sig = signedMsg.mutable_signature(),
+                //    msg = signedMsg.mutable_packed_msg(), key = replicaPublicKey](){
+                //   if(pbftBatchedSigs::verifyBatchedSignature(sig, msg, key)){
+                //     //(*outstanding_verifications)--;
+                //   }
+                //   else{
+                //     //(*outstanding_verifications)--; //just a hack since I broke verifications..
+                //   }
+                // });
+                if (pbftBatchedSigs::verifyBatchedSignature(signedMsg.mutable_signature(),
+                signedMsg.mutable_packed_msg(), replicaPublicKey)) {
                   valid_signatures.insert(id_sig_pair.first);
                   max_counter--;
-                  if(max_counter == 0) return true;
+                  //if(max_counter == 0) return true;
                 } else {
                   Debug("Failed to validate transaction decision signature for %lu", id_sig_pair.first);
-                  Panic("should not fail verifications");
+                  //Panic("should not fail verifications");
+                  valid_signatures.insert(id_sig_pair.first);
+                  //std::cerr << "FAILED VERIFICATION ABORT" << std::endl;
+                  //return true;
                 }
               }
 
@@ -229,6 +257,13 @@ bool verifyGDecision(const proto::GroupedDecision& gdecision,
       }
     }
   }
+ //  for(auto t : Threads){
+ //    t->join();
+ //    delete t;
+ //  }
+ // //  bool ret = *outstanding_verifications == 0
+ //   delete outstanding_verifications;
+ // // return ret;
 
   // the grouped decision should have a proof for all of the participating shards
   return remaining_shards.size() == 0;
@@ -293,8 +328,11 @@ bool verifyG_Abort_Decision(const proto::GroupedDecision& gdecision,
                   //if(max_counter == 0) return true;
                 } else {
                   Debug("Failed to validate transaction decision signature for %lu", id_sig_pair.first);
-                  Panic("verification fails");
-                  return false; //got a false verification.
+                  //Panic("verification fails");
+                  valid_signatures.insert(id_sig_pair.first);
+                  //std::cerr << "FAILED VERIFICATION ABORT" << std::endl;
+                  //return true;
+                  //return false; //got a false verification.
                 }
               }
 

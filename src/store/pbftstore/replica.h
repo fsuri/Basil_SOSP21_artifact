@@ -17,6 +17,7 @@
 #include "store/pbftstore/app.h"
 #include "store/pbftstore/common.h"
 #include <mutex>
+#include "tbb/concurrent_unordered_map.h"
 
 namespace pbftstore {
 
@@ -118,7 +119,9 @@ public:
   std::unordered_map<uint64_t, int> seqnumCommitTimers;
 
   // map from tx digest to reply address
-  std::unordered_map<std::string, TransportAddress*> replyAddrs;
+  //std::unordered_map<std::string, TransportAddress*> replyAddrs;
+  tbb::concurrent_unordered_map<std::string, TransportAddress*> replyAddrs;
+  //std::mutex replyAddrsMutex;
 
   // tests to see if we are ready to send commit or executute the slot
   void testSlot(uint64_t seqnum, uint64_t viewnum, std::string digest, bool gotPrepare);
@@ -128,9 +131,9 @@ public:
   void executeSlots_internal();
   void executeSlots_internal_multi();
 
-  void executeSlots_callback(void* replies_void, string batchDigest, string digest);
+  void executeSlots_callback(std::vector<::google::protobuf::Message*> &replies, string batchDigest, string digest);
 
-  std::mutex atomicMutex;
+  std::mutex batchMutex;
 
   void handleMessage(const TransportAddress &remote, const string &type, const string &data);
 

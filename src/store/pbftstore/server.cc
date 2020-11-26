@@ -247,6 +247,7 @@ std::vector<::google::protobuf::Message*> Server::Execute(const string& type, co
 std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto::Transaction& transaction) {
   std::vector<::google::protobuf::Message*> results;
   proto::TransactionDecision* decision = new proto::TransactionDecision();
+  //std::cerr << "allocating reply" << std::endl;
 
   string digest = TransactionDigest(transaction);
   Debug("Handling transaction");
@@ -332,7 +333,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
 ::google::protobuf::Message* Server::HandleMessage(const string& type, const string& msg) {
   Debug("Handle %s", type.c_str());
-  std::unique_lock lock(atomicMutex);
+  std::shared_lock lock(atomicMutex);
 
   proto::Read read;
   proto::GroupedDecision gdecision;

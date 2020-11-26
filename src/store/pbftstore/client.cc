@@ -164,12 +164,12 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
   if (pendingPrepares.find(digest) != pendingPrepares.end()) {
     PendingPrepare* pp = &pendingPrepares[digest];
 
-    if(status == REPLY_OK){
-      std::cerr << "got commit shard decision from shard_id " << shard_id << std::endl;
-    }
-    else{
-      std::cerr << "got abort shard decision from shard_id " << shard_id << std::endl;
-    }
+    // if(status == REPLY_OK){
+    //   std::cerr << "got commit shard decision from shard_id " << shard_id << std::endl;
+    // }
+    // else{
+    //   std::cerr << "got abort shard decision from shard_id " << shard_id << std::endl;
+    // }
 
     if (pp->signedShardDecisions.find(shard_id) == pp->signedShardDecisions.end()) {
 
@@ -180,7 +180,7 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
         proto::Transaction txn = pp->txn;
         commit_callback ccb = pp->ccb;
 
-        std::cerr << "ABORTING " << std::endl;
+        //std::cerr << "ABORTING " << std::endl;
         if(validate_abort){
           proto::ShardSignedDecisions dec;
           (*dec.mutable_grouped_decisions())[shard_id] = pp->signedShardDecisions[shard_id];
@@ -196,7 +196,7 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
       }
 
       if (pp->signedShardDecisions.size() == (uint64_t) pp->txn.participating_shards_size()) {
-        std::cerr << "COMMITTING " << std::endl;
+        //std::cerr << "COMMITTING " << std::endl;
         proto::ShardSignedDecisions dec;
         for (const auto& pair : pp->signedShardDecisions) {
           (*dec.mutable_grouped_decisions())[pair.first] = pair.second;

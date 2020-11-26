@@ -10,8 +10,8 @@
   ],
   "replication_protocol": ["pbft"],
   "client_protocol_mode": ["pbft"],
-  "num_shards": [12],
-  "num_groups": [12],
+  "num_shards": [6],
+  "num_groups": [6],
 
   "_benchmark_name": "rw",
   "client_num_keys": 10000000,
@@ -272,5 +272,7 @@
   "server_rpc_port": 8087,
   "client_gc_debug_trace": false,
   "client_cpuprofile": false,
-  "server_gc_debug_trace": false
+  "server_gc_debug_trace": false,
+  
+  "_server_wrap_command": "valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all %s" 
 }

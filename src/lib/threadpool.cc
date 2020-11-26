@@ -3,7 +3,7 @@
 #include <thread>
 #include <sched.h>
 #include <utility>
-
+#include <iostream>
 
 //TODO: make is so that all but the first core are used.
 ThreadPool::ThreadPool() {
@@ -30,7 +30,7 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
       //if(i % 2 == 0) continue;
       std::thread *t;
       //Mainthread
-      if(i==1  ){
+      if(i==1){
         t = new std::thread([this, i] {
           while (true) {
             std::function<void*()> job;
@@ -88,6 +88,7 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
             // this->worklist.pop_front();                                              //STABLE_VERSION
           }
           //job();
+
           if(job.second){
               job.second->r = job.first();
           // This _should_ be thread safe
@@ -212,9 +213,12 @@ void ThreadPool::dispatch(std::function<void*()> f, std::function<void(void*)> c
   //safe to moveinfo? dont expect it to do anything though, since its just a pointer
 //  std::pair<std::function<void*()>, EventInfo*> job(std::move(f), std::move(info));
 
-  std::lock_guard<std::mutex> lk(worklistMutex);
-  //worklist.push_back(std::move(job));
-  worklist.emplace_back(std::move(f), std::move(info));
+  // std::lock_guard<std::mutex> lk(worklistMutex);
+  // //worklist.push_back(std::move(job));
+  // worklist.emplace_back(std::move(f), std::move(info));
+
+  test_worklist.enqueue(std::make_pair(std::move(f), info));
+
   cv.notify_one();
 }
 
@@ -282,6 +286,7 @@ void ThreadPool::detatch_main(std::function<void*()> f){
   // main_worklist.push_back(std::move(f));
 
   test_main_worklist.enqueue(std::move(f));
+  //test_worklist.enqueue(std::make_pair(std::move(f), info));
 
   cv_main.notify_one();
 }
