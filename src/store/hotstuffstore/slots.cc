@@ -145,4 +145,4 @@ proto::GroupedSignedMessage Slots::getCommitProof(uint64_t seq_num, uint64_t vie
   return proof;
 }
 
-}  // namespace pbftstore
+}  // namespace hotstuffstore

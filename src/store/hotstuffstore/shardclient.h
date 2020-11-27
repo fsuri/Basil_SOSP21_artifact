@@ -36,7 +36,7 @@ class ShardClient : public TransportReceiver {
   ShardClient(const transport::Configuration& config, Transport *transport,
       uint64_t group_idx,
       bool signMessages, bool validateProofs,
-      KeyManager *keyManager, Stats* stats);
+      KeyManager *keyManager, Stats* stats, bool order_commit = false, bool validate_abort = false);
   ~ShardClient();
 
   void ReceiveMessage(const TransportAddress &remote,
@@ -59,7 +59,9 @@ class ShardClient : public TransportReceiver {
   void CommitSigned(const std::string& txn_digest, const proto::ShardSignedDecisions& dec,
       writeback_callback wcb, writeback_timeout_callback wtcp, uint32_t timeout);
 
-  void Abort(std::string txn_digest);
+  void CommitSigned(const std::string& txn_digest, const proto::ShardSignedDecisions& dec);
+
+  void Abort(std::string& txn_digest, const proto::ShardSignedDecisions& dec);
 
  private:
 
@@ -69,6 +71,10 @@ class ShardClient : public TransportReceiver {
   bool signMessages;
   bool validateProofs;
   KeyManager *keyManager;
+
+  //addtional knobs: 1) order commit, 2) validate abort
+  bool order_commit = false;
+  bool validate_abort = false;
 
   uint64_t readReq;
 
@@ -92,6 +98,7 @@ class ShardClient : public TransportReceiver {
   void HandleReadReply(const proto::ReadReply& reply, const proto::SignedMessage& signedMsg);
 
   std::string CreateValidPackedDecision(std::string digest);
+  std::string CreateFailedPackedDecision(std::string digest);
 
   struct PendingPrepare {
     proto::TransactionDecision validDecision;
@@ -107,8 +114,10 @@ class ShardClient : public TransportReceiver {
   struct PendingSignedPrepare {
     // the serialized packed message containing the valid transaction decision
     std::string validDecisionPacked;
+    std::string failedDecisionPacked;
     // map from id to valid signature
     std::unordered_map<uint64_t, std::string> receivedValidSigs;
+    std::unordered_map<uint64_t, std::string> receivedFailedSigs;
     std::unordered_set<uint64_t> receivedFailedIds;
     signed_prepare_callback pcb;
 
@@ -144,6 +153,6 @@ class ShardClient : public TransportReceiver {
   Stats* stats;
 };
 
-} // namespace pbftstore
+} // namespace hotstuffstore
 
 #endif /* _INDICUS_SHARDCLIENT_H_ */

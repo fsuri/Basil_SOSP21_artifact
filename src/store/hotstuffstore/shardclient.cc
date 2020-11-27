@@ -7,11 +7,11 @@ namespace hotstuffstore {
 ShardClient::ShardClient(const transport::Configuration& config, Transport *transport,
     uint64_t group_idx,
     bool signMessages, bool validateProofs,
-    KeyManager *keyManager, Stats* stats) :
+    KeyManager *keyManager, Stats* stats, bool order_commit, bool validate_abort) :
     config(config), transport(transport),
     group_idx(group_idx),
     signMessages(signMessages), validateProofs(validateProofs),
-    keyManager(keyManager), stats(stats) {
+    keyManager(keyManager), stats(stats), order_commit(order_commit), validate_abort(validate_abort) {
   transport->Register(this, config, -1, -1);
   readReq = 0;
 }
@@ -233,7 +233,13 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
             psp->receivedValidSigs[add_id] = signedMsg.signature();
             // Debug("signature for %lu: %s", add_id, string_to_hex(signedMsg.signature()).c_str());
           } else {
-            psp->receivedFailedIds.insert(add_id);
+            if(validate_abort){
+              psp->receivedFailedSigs[add_id] = signedMsg.signature();
+            }
+            else{
+              psp->receivedFailedIds.insert(add_id);
+            }
+
           }
         }
 
@@ -242,9 +248,11 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
         // once we have enough valid requests, construct the grouped decision
         // and return success
         if (psp->receivedValidSigs.size() >= (uint64_t) config.f + 1) {
-          Debug("Got enough transaction decisions, executing callback");
+          Debug("Got enough *valid* transaction decisions, executing callback");
           // set the packed decision
-          groupSignedMsg.set_packed_msg(psp->validDecisionPacked);
+
+          //groupSignedMsg.set_packed_msg(psp->validDecisionPacked);
+          groupSignedMsg.set_packed_msg(CreateValidPackedDecision(digest));
           // Debug("packed decision: %s", string_to_hex(psp->validDecisionPacked).c_str());
 
           // add the signatures
@@ -261,8 +269,30 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
           pcb(REPLY_OK, groupSignedMsg);
           return;
         }
+        else if(validate_abort && psp->receivedFailedSigs.size() >= (uint64_t) config.f + 1 ){
+          Debug("Got enough *failed* transaction decisions, executing callback");
+          // set the packed decision
+
+          //groupSignedMsg.set_packed_msg(psp->validDecisionPacked);
+          groupSignedMsg.set_packed_msg(CreateFailedPackedDecision(digest));
+
+          // add the signatures
+          for (const auto& pair : psp->receivedFailedSigs) {
+            (*groupSignedMsg.mutable_signatures())[pair.first] = pair.second;
+          }
+
+          // invoke the callback with the signed grouped decision
+          signed_prepare_callback pcb = psp->pcb;
+          if (psp->timeout != nullptr) {
+            psp->timeout->Stop();
+          }
+          pendingSignedPrepares.erase(digest);
+
+          pcb(REPLY_FAIL, groupSignedMsg);
+          return;
+        }
         // if we get f+1 failures, we can return early
-        if (psp->receivedFailedIds.size() >= (uint64_t) config.f + 1) {
+        else if (!validate_abort && psp->receivedFailedIds.size() >= (uint64_t) config.f + 1) {
           Debug("Not enough valid txn decisions, failing");
           signed_prepare_callback pcb = psp->pcb;
           if (psp->timeout != nullptr) {
@@ -320,6 +350,7 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
   }
 }
 
+//deprecated
 void ShardClient::HandleWritebackReply(const proto::GroupedDecisionAck& groupedDecisionAck, const proto::SignedMessage& signedMsg) {
   Debug("Handling Writeback reply");
 
@@ -421,6 +452,19 @@ std::string ShardClient::CreateValidPackedDecision(std::string digest) {
   return packedDecision.SerializeAsString();
 }
 
+std::string ShardClient::CreateFailedPackedDecision(std::string digest) {
+  proto::TransactionDecision validDecision;
+  validDecision.set_status(REPLY_FAIL);
+  validDecision.set_txn_digest(digest);
+  validDecision.set_shard_id(group_idx);
+
+  proto::PackedMessage packedDecision;
+  packedDecision.set_type(validDecision.GetTypeName());
+  packedDecision.set_msg(validDecision.SerializeAsString());
+
+  return packedDecision.SerializeAsString();
+}
+
 // send a request with this as the packed message
 void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
     prepare_timeout_callback ptcb, uint32_t timeout) {
@@ -488,7 +532,8 @@ void ShardClient::SignedPrepare(const proto::Transaction& txn, signed_prepare_ca
     PendingSignedPrepare psp;
     psp.pcb = pcb;
     // this is what the tx decisions should look like for valid replies
-    psp.validDecisionPacked = CreateValidPackedDecision(digest);
+
+    //psp.validDecisionPacked = CreateValidPackedDecision(digest);  //XXX do this work only later..
     psp.timeout = new Timeout(transport, timeout, [this, digest, ptcb]() {
       Debug("Prepare signed timeout called (but nothing was done)");
       stats->Increment("ps_tout", 1);
@@ -556,6 +601,8 @@ void ShardClient::Commit(const std::string& txn_digest, const proto::ShardDecisi
   }
 }
 
+//TODO: add flag, and wrap Commit in a Request in that case. In doing so, it will automatically be ordered.
+// THEN: make sure to adapt Execute to also handle Commits.
 void ShardClient::CommitSigned(const std::string& txn_digest, const proto::ShardSignedDecisions& dec,
     writeback_callback wcb, writeback_timeout_callback wtcp, uint32_t timeout) {
   Debug("Handling client commit signed");
@@ -567,7 +614,18 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
     stats->Increment("shard_commit_s", 1);
 
     Debug("Sending commit to all replicas in shard");
-    transport->SendMessageToGroup(this, group_idx, groupedDecision);
+
+    if(order_commit){
+      proto::Request request;
+      request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
+      request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
+      request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+
+      transport->SendMessageToGroup(this, group_idx, request);
+    }
+    else{
+      transport->SendMessageToGroup(this, group_idx, groupedDecision);
+    }
 
     PendingWritebackReply pwr;
     pwr.wcb = wcb;
@@ -597,15 +655,51 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
   }
 }
 
-void ShardClient::Abort(std::string txn_digest) {
+void ShardClient::CommitSigned(const std::string& txn_digest, const proto::ShardSignedDecisions& dec) {
+  Debug("Handling client commit signed");
+  if (pendingWritebacks.find(txn_digest) == pendingWritebacks.end()) {
+    proto::GroupedDecision groupedDecision;
+    groupedDecision.set_status(REPLY_OK);
+    groupedDecision.set_txn_digest(txn_digest);
+    *groupedDecision.mutable_signed_decisions() = dec;
+    stats->Increment("shard_commit_s", 1);
+
+    Debug("Sending commit to all replicas in shard");
+
+    if(order_commit){
+      proto::Request request;
+      request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
+      request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
+      request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+
+      transport->SendMessageToGroup(this, group_idx, request);
+    }
+    else{
+      transport->SendMessageToGroup(this, group_idx, groupedDecision);
+    }
+
+    // TODO timeout
+  } else {
+    Debug("commit signed called on already committed tx");
+  }
+}
+
+void ShardClient::Abort(std::string& txn_digest, const proto::ShardSignedDecisions& dec) {
   Debug("Handling client abort");
   // TODO should techincally include a proof
   if (pendingWritebacks.find(txn_digest) == pendingWritebacks.end()) {
     proto::GroupedDecision groupedDecision;
     groupedDecision.set_status(REPLY_FAIL);
     groupedDecision.set_txn_digest(txn_digest);
-    proto::ShardDecisions sd;
-    *groupedDecision.mutable_decisions() = sd;
+
+    if(validate_abort){
+
+        *groupedDecision.mutable_signed_decisions() = dec;
+    }
+    else{
+      proto::ShardDecisions sd;
+      *groupedDecision.mutable_decisions() = sd;
+    }
 
     proto::Request request;
     request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
@@ -615,6 +709,10 @@ void ShardClient::Abort(std::string txn_digest) {
     stats->Increment("shard_abort", 1);
     Debug("AB abort to all replicas in shard");
     transport->SendMessageToGroup(this, group_idx, request);
+
+    PendingWritebackReply pwr;
+    pendingWritebacks[txn_digest] = pwr;  //not sure what use this has
+
   } else {
     Debug("abort called on already aborted tx");
   }

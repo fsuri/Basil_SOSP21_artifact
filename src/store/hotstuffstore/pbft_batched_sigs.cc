@@ -26,7 +26,7 @@ unsigned int unpackInt(unsigned char* in) {
 }
 
 // hasher struct
-thread_local blake3_hasher hasher;
+blake3_hasher hasher;
 
 // hash [len] bytes from [in] into [out]. Requires that
 // [out] is BLAKE3_OUT_LEN bytes. It is safe for [out] to alias [in]

@@ -24,4 +24,4 @@ public:
 
 }
 
-#endif /* _PBFT_APP_H_ */
+#endif /* _HOTSTUFF_APP_H_ */

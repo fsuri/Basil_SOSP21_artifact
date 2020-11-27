@@ -43,6 +43,9 @@ void DebugHash(const std::string& hash);
 bool verifyGDecision(const proto::GroupedDecision& gdecision,
   const proto::Transaction& txn, KeyManager* keyManager, bool signMessages, uint64_t f);
 
-} // namespace pbftstore
+bool verifyG_Abort_Decision(const proto::GroupedDecision& gdecision,
+  const proto::Transaction& txn, KeyManager* keyManager, bool signMessages, uint64_t f);
 
-#endif /* PBFT_COMMON_H */
+} // namespace hotstuffstore
+
+#endif /* HOTSTUFF_COMMON_H */

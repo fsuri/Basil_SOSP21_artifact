@@ -16,12 +16,8 @@
 #include "store/hotstuffstore/slots.h"
 #include "store/hotstuffstore/app.h"
 #include "store/hotstuffstore/common.h"
-
-// use HotStuff library
-// comment out the below macro to switch back to pbftstore
-#define USE_HOTSTUFF_STORE
-#include "store/hotstuffstore/libhotstuff/examples/indicus_interface.h"
-
+#include <mutex>
+#include "tbb/concurrent_unordered_map.h"
 
 namespace hotstuffstore {
 
@@ -52,12 +48,6 @@ public:
                           const proto::GroupedSignedMessage &msg);
 
  private:
-#ifdef USE_HOTSTUFF_STORE
-  IndicusInterface hotstuff_interface;
-  std::unordered_map<std::string, proto::PackedMessage> requests_dup;
-  std::mutex appMtx; // app->Execute and app->HandleMessage cannot work in parallel
-#endif
-  
   const transport::Configuration &config;
   KeyManager *keyManager;
   App *app;
@@ -129,12 +119,23 @@ public:
   std::unordered_map<uint64_t, int> seqnumCommitTimers;
 
   // map from tx digest to reply address
-  std::unordered_map<std::string, TransportAddress*> replyAddrs;
+  //std::unordered_map<std::string, TransportAddress*> replyAddrs;
+  tbb::concurrent_unordered_map<std::string, TransportAddress*> replyAddrs;
+  //std::mutex replyAddrsMutex;
 
   // tests to see if we are ready to send commit or executute the slot
   void testSlot(uint64_t seqnum, uint64_t viewnum, std::string digest, bool gotPrepare);
 
   void executeSlots();
+
+  void executeSlots_internal();
+  void executeSlots_internal_multi();
+
+  void executeSlots_callback(std::vector<::google::protobuf::Message*> &replies, string batchDigest, string digest);
+
+  std::mutex batchMutex;
+
+  void handleMessage(const TransportAddress &remote, const string &type, const string &data);
 
   // map from seqnum to view num to
   std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::unordered_map<std::string, int>>> actionTimers;
@@ -146,6 +147,6 @@ public:
   Stats* stats;
 };
 
-} // namespace pbftstore
+} // namespace hotstuffstore
 
 #endif

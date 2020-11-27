@@ -953,10 +953,12 @@ int main(int argc, char **argv) {
         }
 
         client = new hotstuffstore::Client(*config, FLAGS_num_shards,
-                                           FLAGS_num_groups, tport, part,
-                                           readQuorumSize,
-                                           FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-                                           keyManager, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+                                       FLAGS_num_groups, tport, part,
+                                       readQuorumSize,
+                                       FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+                                       keyManager,
+																			 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort,
+																			 TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
     }
 
