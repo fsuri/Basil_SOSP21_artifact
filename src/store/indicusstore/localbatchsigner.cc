@@ -223,14 +223,22 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
 
 //move these too? After moving I have a clear vector so it should be fine.
       std::vector<Triplet> results;     // Could also be any iterator
-      for(int i = 0; i < batchSize; ++i){
+
+      try {
+
+      int batch_count = Batch.size_approx(); //std::min(batchSize, Batch.size_approx());
+      for(int i = 0; i < batch_count; ++i){
         results.push_back(Triplet());
       }
-      size_t count = Batch.try_dequeue_bulk(results.begin(), Batch.size_approx());
+      size_t count = Batch.try_dequeue_bulk(results.begin(), batch_count);
       if(count == 0) return;
       results.resize(count);
+    } catch(...) {
+       Panic("Caught exception");
+    }
       std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch2, this,
         std::move(results))); //can I move results?
+
 
       //Batch.clear();
 
@@ -253,12 +261,13 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
             this->batchTimerRunning = false;
             if(this->Batch.size_approx() == 0) return;
 
+            int batch_count = this->Batch.size_approx();
             std::vector<Triplet> results;     // Could also be any iterator
-            for(int i = 0; i < this->batchSize; ++i){
+            for(int i = 0; i < batch_count; ++i){
               results.push_back(Triplet());
             }
             //results.reserve(this->Batch.size_approx;)
-            size_t count = this->Batch.try_dequeue_bulk(results.begin(), this->Batch.size_approx());
+            size_t count = this->Batch.try_dequeue_bulk(results.begin(), batch_count);
             if(count == 0) return;
             results.resize(count);
             //std::vector<Triplet> _batch(results.begin(), results.end());

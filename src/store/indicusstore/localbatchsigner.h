@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <vector>
+#include <atomic>
 
 #include <boost/interprocess/containers/vector.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
@@ -48,9 +49,9 @@ class LocalBatchSigner : public BatchSigner {
 
   void ManageCallbacks(void* result);
 
-  bool batchTimerRunning;
+  std::atomic_bool batchTimerRunning;
   uint64_t batchSize;
-  uint64_t messagesBatchedInterval;
+  std::atomic_uint64_t messagesBatchedInterval;
 
   int batchTimerId;
   std::vector<::google::protobuf::Message*> pendingBatchMessages;

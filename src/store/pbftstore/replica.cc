@@ -201,7 +201,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 }
 
 void Replica::handleMessage(const TransportAddress &remote, const string &type, const string &data){
-  if(true){
+  if(false){
     //need to copy type and data.
     auto f = [this, &remote, type, data](){
       //std::unique_lock lock(atomicMutex);
@@ -214,8 +214,8 @@ void Replica::handleMessage(const TransportAddress &remote, const string &type, 
       }
       return (void*) true;
     };
-    //transport->DispatchTP_main(f);
-    transport->DispatchTP_noCB(f);
+    transport->DispatchTP_main(f);
+    //transport->DispatchTP_noCB(f);
   }
   else{
     ::google::protobuf::Message* reply = app->HandleMessage(type, data);
@@ -581,7 +581,7 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
 }
 
 void Replica::executeSlots(){
-  if(true){
+  if(false){
     // auto f = [this](){
     //   //std::unique_lock lock(atomicMutex);
     //   this->executeSlots_internal();

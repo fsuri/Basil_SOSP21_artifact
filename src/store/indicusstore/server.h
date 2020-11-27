@@ -120,6 +120,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void HandleRead(const TransportAddress &remote, proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
       proto::Phase1 &msg);
+  void HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
+        const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote);
   void HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
         signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid); //bool valid);
 
