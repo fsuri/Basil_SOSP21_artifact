@@ -31,7 +31,11 @@ using namespace std;
 Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
   uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, Transport *transport)
-    : config(config), keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
+    : config(config),
+#ifdef USE_HOTSTUFF_STORE
+      hotstuff_interface(groupIdx, idx),
+#endif
+      keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
     id(groupIdx * config.n + idx), signMessages(signMessages), maxBatchSize(maxBatchSize),
     batchTimeoutMS(batchTimeoutMS), EbatchSize(EbatchSize), EbatchTimeoutMS(EbatchTimeoutMS), primaryCoordinator(primaryCoordinator), requestTx(requestTx), transport(transport) {
   transport->Register(this, config, groupIdx, idx);
@@ -205,7 +209,14 @@ void Replica::handleMessage(const TransportAddress &remote, const string &type, 
     //need to copy type and data.
     auto f = [this, &remote, type, data](){
       //std::unique_lock lock(atomicMutex);
-      ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+#ifdef USE_HOTSTUFF_STORE
+        assert(false);
+        appMtx.lock();
+        ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+        appMtx.unlock();
+#else
+        ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+#endif
       if (reply != nullptr) {
         this->transport->SendMessage(this, remote, *reply);
         delete reply;
@@ -218,7 +229,13 @@ void Replica::handleMessage(const TransportAddress &remote, const string &type, 
     //transport->DispatchTP_noCB(f);
   }
   else{
-    ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+#ifdef USE_HOTSTUFF_STORE
+      appMtx.lock();
+      ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+      appMtx.unlock();
+#else
+      ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+#endif
     if (reply != nullptr) {
       transport->SendMessage(this, remote, *reply);
       delete reply;
@@ -278,6 +295,40 @@ void Replica::HandleRequest(const TransportAddress &remote,
   string digest = request.digest();
   DebugHash(digest);
 
+#ifdef USE_HOTSTUFF_STORE
+
+  if (requests_dup.find(digest) == requests_dup.end()) {
+      Debug("new request: %s", request.packed_msg().type().c_str());
+      stats->Increment("handle_new_count",1);
+
+      // This unordered map is only used here so read doesn't require locks.
+      requests_dup[digest] = request.packed_msg();
+
+      TransportAddress* clientAddr = remote.clone();
+      proto::PackedMessage packedMsg = request.packed_msg();
+      std::function<void(const std::string&, uint32_t seqnum)> execb = [this, digest, packedMsg, clientAddr](const std::string &digest_param, uint32_t seqnum) {
+          // Debug("Callback: %d, %ld", idx, seqnum);
+          stats->Increment("hotstuff_exec_callback",1);
+
+          // prepare data structures for executeSlots()
+          assert(digest == digest_param);
+          requests[digest] = packedMsg;
+          replyAddrs[digest] = clientAddr;
+
+          proto::BatchedRequest batchedRequest;
+          (*batchedRequest.mutable_digests())[0] = digest_param;
+          string batchedDigest = BatchedDigest(batchedRequest);
+          batchedRequests[batchedDigest] = batchedRequest;
+          pendingExecutions[seqnum] = batchedDigest;
+
+          executeSlots();
+          // std::cout << "Complete callback: " << seqnum << ", succeed seqnum: " << execSeqNum << std::endl;
+      };      
+      hotstuff_interface.propose(digest, execb);
+  }
+
+#else // use PBFT store
+
   if (requests.find(digest) == requests.end()) {
     Debug("new request: %s", request.packed_msg().type().c_str());
 
@@ -313,6 +364,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
     // this could be the message that allows us to execute a slot
     executeSlots();
   }
+#endif
 }
 
 void Replica::sendBatchedPreprepare() {
@@ -353,6 +405,11 @@ void Replica::HandleBatchedRequest(const TransportAddress &remote,
                                proto::BatchedRequest &request) {
   Debug("Handling batched request message");
 
+  #ifdef USE_HOTSTUFF_STORE
+  // HotStuff should never use this function
+  assert(false);
+  #endif
+  
   string digest = BatchedDigest(request);
   batchedRequests[digest] = request;
 
@@ -576,6 +633,10 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
 
     Debug("seqnum: %lu", seqnum);
 
+    #ifdef USE_HOTSTUFF_STORE
+    assert(false);
+    #endif
+    
     executeSlots();
   }
 }
@@ -588,6 +649,10 @@ void Replica::executeSlots(){
     //   return (void*) true;
     // };
     // transport->DispatchTP_main(f);
+#ifdef USE_HOTSTUFF_STORE
+      assert(false);
+#endif
+      
     executeSlots_internal_multi();
   }
   else{
@@ -649,8 +714,13 @@ void Replica::executeSlots_internal_multi() {
         auto f = [this, packedMsg, batchDigest, digest](){
 
           //std::cerr << "running on CPU: " << sched_getcpu() << std::endl;
+#ifdef USE_HOTSTUFF_STORE
+          appMtx.lock();
           std::vector<::google::protobuf::Message*> replies = this->app->Execute(packedMsg.type(), packedMsg.msg());
-
+          appMtx.unlock();
+#else
+          std::vector<::google::protobuf::Message*> replies = this->app->Execute(packedMsg.type(), packedMsg.msg());
+#endif
           //std::unique_lock lock(this->atomicMutex);
           this->executeSlots_callback(replies, batchDigest, digest);
           //replies->clear();
@@ -676,6 +746,13 @@ void Replica::executeSlots_internal_multi() {
         }
 
       } else {
+#ifdef USE_HOTSTUFF_STORE
+          
+          stats->Increment("miss_hotstuff_req_txn",1);
+          // request resend not implemented for HotStuff
+          break;
+
+#else
         Debug("request from batch %lu not yet received", execSeqNum);
         if (requestTx) {
           stats->Increment("req_txn",1);
@@ -688,8 +765,17 @@ void Replica::executeSlots_internal_multi() {
           transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
         }
         break;
+#endif
       }
     } else {
+#ifdef USE_HOTSTUFF_STORE
+
+        stats->Increment("miss_hotstuff_req_batch",1);
+        // batch resend not implemented for HotStuff
+        break;
+        
+#else
+
       Debug("Batch request not yet received");
       if (requestTx) {
         stats->Increment("req_batch",1);
@@ -699,6 +785,7 @@ void Replica::executeSlots_internal_multi() {
         transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
       }
       break;
+#endif
     }
   }
 }
@@ -719,24 +806,24 @@ void Replica::executeSlots_callback(std::vector<::google::protobuf::Message*> &r
             EpendingBatchedDigs.push_back(digest);
             if (EpendingBatchedMessages.size() >= EbatchSize) {
               Debug("EBatch is full, sending");
-              if (false && EbatchTimerRunning) {
-                transport->CancelTimer(EbatchTimerId);
-                EbatchTimerRunning = false;
-              }
+              // if (false && EbatchTimerRunning) {
+              //   transport->CancelTimer(EbatchTimerId);
+              //   EbatchTimerRunning = false;
+              // }
               //std::cerr << "callingEbatch" << std::endl;
               sendEbatch();
             } else if (!EbatchTimerRunning) {
               EbatchTimerRunning = true;
               Debug("Starting ebatch timer");
-              EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
-                std::unique_lock lock(batchMutex);
+              // EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
+              //   std::unique_lock lock(batchMutex);
 
-                Debug("EBatch timer expired, sending");
-                this->EbatchTimerRunning = false;
-                if(this->EpendingBatchedMessages.size()==0) return;
-                //std::cerr << "calling Timer Ebatch" << std::endl;
-                this->sendEbatch();
-              });
+              //   Debug("EBatch timer expired, sending");
+              //   this->EbatchTimerRunning = false;
+              //   if(this->EpendingBatchedMessages.size()==0) return;
+              //   //std::cerr << "calling Timer Ebatch" << std::endl;
+              //   this->sendEbatch();
+              // });
             }
           } else {
             Debug("Invalid execution");
@@ -772,7 +859,15 @@ void Replica::executeSlots_internal() {
         stats->Increment("exec_request",1);
         Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
         proto::PackedMessage packedMsg = requests[digest];
+
+#ifdef USE_HOTSTUFF_STORE
+        appMtx.lock();
         std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
+        appMtx.unlock();
+#else
+        std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
+#endif
+
         for (const auto& reply : replies) {
           if (reply != nullptr) {
             Debug("Sending reply");
@@ -781,19 +876,21 @@ void Replica::executeSlots_internal() {
             EpendingBatchedDigs.push_back(digest);
             if (EpendingBatchedMessages.size() >= EbatchSize) {
               Debug("EBatch is full, sending");
-              if (EbatchTimerRunning) {
-                transport->CancelTimer(EbatchTimerId);
-                EbatchTimerRunning = false;
-              }
+
+              // HotStuff: disable timer for HotStuff due to concurrency bugs
+              // if (EbatchTimerRunning) {
+              //   transport->CancelTimer(EbatchTimerId);
+              //   EbatchTimerRunning = false;
+              // }
               sendEbatch();
             } else if (!EbatchTimerRunning) {
               EbatchTimerRunning = true;
               Debug("Starting ebatch timer");
-              EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
-                Debug("EBatch timer expired, sending");
-                this->EbatchTimerRunning = false;
-                this->sendEbatch();
-              });
+              // EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
+              //   Debug("EBatch timer expired, sending");
+              //   this->EbatchTimerRunning = false;
+              //   this->sendEbatch();
+              // });
             }
           } else {
             Debug("Invalid execution");
@@ -807,29 +904,47 @@ void Replica::executeSlots_internal() {
           execSeqNum++;
         }
       } else {
-        Debug("request from batch %lu not yet received", execSeqNum);
-        if (requestTx) {
-          stats->Increment("req_txn",1);
-          proto::RequestRequest rr;
-          rr.set_digest(digest);
-          int primaryIdx = config.GetLeaderIndex(currentView);
-          if (primaryIdx == idx) {
-            stats->Increment("primary_req_txn",1);
+#ifdef USE_HOTSTUFF_STORE
+          
+          stats->Increment("miss_hotstuff_req_txn",1);
+          // request resend not implemented for HotStuff
+          break;
+
+#else
+
+          Debug("request from batch %lu not yet received", execSeqNum);
+          if (requestTx) {
+              stats->Increment("req_txn",1);
+              proto::RequestRequest rr;
+              rr.set_digest(digest);
+              int primaryIdx = config.GetLeaderIndex(currentView);
+              if (primaryIdx == idx) {
+                  stats->Increment("primary_req_txn",1);
+              }
+              transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
           }
-          transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-        }
-        break;
+          break;
+#endif
       }
     } else {
-      Debug("Batch request not yet received");
-      if (requestTx) {
-        stats->Increment("req_batch",1);
-        proto::RequestRequest rr;
-        rr.set_digest(batchDigest);
-        int primaryIdx = config.GetLeaderIndex(currentView);
-        transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
-      }
-      break;
+#ifdef USE_HOTSTUFF_STORE
+
+        stats->Increment("miss_hotstuff_req_batch",1);
+        // batch resend not implemented for HotStuff
+        break;
+        
+#else
+
+        Debug("Batch request not yet received");
+        if (requestTx) {
+            stats->Increment("req_batch",1);
+            proto::RequestRequest rr;
+            rr.set_digest(batchDigest);
+            int primaryIdx = config.GetLeaderIndex(currentView);
+            transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+        }
+        break;
+#endif
     }
   }
 }
