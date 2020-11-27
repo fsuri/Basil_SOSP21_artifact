@@ -195,6 +195,29 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     HandleGrouped(remote, recvgrouped);
   } else {
     Debug("Sending request to app");
+    handleMessage(remote, type, data);
+
+  }
+}
+
+void Replica::handleMessage(const TransportAddress &remote, const string &type, const string &data){
+  if(false){
+    //need to copy type and data.
+    auto f = [this, &remote, type, data](){
+      //std::unique_lock lock(atomicMutex);
+      ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+      if (reply != nullptr) {
+        this->transport->SendMessage(this, remote, *reply);
+        delete reply;
+      } else {
+        Debug("Invalid request of type %s", type.c_str());
+      }
+      return (void*) true;
+    };
+    transport->DispatchTP_main(f);
+    //transport->DispatchTP_noCB(f);
+  }
+  else{
     ::google::protobuf::Message* reply = app->HandleMessage(type, data);
     if (reply != nullptr) {
       transport->SendMessage(this, remote, *reply);
@@ -202,8 +225,8 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     } else {
       Debug("Invalid request of type %s", type.c_str());
     }
-
   }
+
 }
 
 bool Replica::sendMessageToPrimary(const ::google::protobuf::Message& msg) {
@@ -261,7 +284,9 @@ void Replica::HandleRequest(const TransportAddress &remote,
     requests[digest] = request.packed_msg();
 
     // clone remote mapped to request for reply
+    //replyAddrsMutex.lock();
     replyAddrs[digest] = remote.clone();
+    //replyAddrsMutex.unlock();
 
     int currentPrimaryIdx = config.GetLeaderIndex(currentView);
     if (currentPrimaryIdx == idx) {
@@ -555,7 +580,180 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
   }
 }
 
-void Replica::executeSlots() {
+void Replica::executeSlots(){
+  if(false){
+    // auto f = [this](){
+    //   //std::unique_lock lock(atomicMutex);
+    //   this->executeSlots_internal();
+    //   return (void*) true;
+    // };
+    // transport->DispatchTP_main(f);
+    executeSlots_internal_multi();
+  }
+  else{
+    executeSlots_internal();
+  }
+
+}
+
+void Replica::executeSlots_internal_multi() {
+  Debug("exec seq num: %lu", execSeqNum);
+  //std::unique_lock lock(batchMutex);
+  while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
+    // cancel the commit timer
+    if (seqnumCommitTimers.find(execSeqNum) != seqnumCommitTimers.end()) {
+      transport->CancelTimer(seqnumCommitTimers[execSeqNum]);
+      seqnumCommitTimers.erase(execSeqNum);
+    }
+
+    string batchDigest = pendingExecutions[execSeqNum];
+    // only execute when we have the batched request
+    if (batchedRequests.find(batchDigest) != batchedRequests.end()) {
+      string digest = (*batchedRequests[batchDigest].mutable_digests())[execBatchNum];
+      DebugHash(digest);
+      // only execute if we have the full request
+      if (requests.find(digest) != requests.end()) {
+        stats->Increment("exec_request",1);
+        Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
+        proto::PackedMessage packedMsg = requests[digest];
+
+        ///DISPATCH EXECUTE TO TP
+        // auto f = [this, packedMsg, batchDigest, digest](){
+        //   std::vector<::google::protobuf::Message*> *replies = new std::vector<::google::protobuf::Message*>();
+        //   *replies = this->app->Execute(packedMsg.type(), packedMsg.msg());
+        //
+        //   auto cb = [this, batchDigest, digest, replies](void* arg){
+        //     std::cerr << "Calling Issued CB" << std::endl;
+        //     this->executeSlots_callback(replies, batchDigest, digest);
+        //     replies->clear();
+        //     delete replies;
+        //   };
+        //   std::cerr << "Issuing CB" << std::endl;
+        //   this->transport->IssueCB(cb, (void*) true);
+        // //
+        //   // this->transport->Timer(0, [this, batchDigest, digest, replies]() {
+        //   //   std::cerr << "Calling execSlots callback" << std::endl;
+        //   //   this->executeSlots_callback(replies, batchDigest, digest);
+        //   //   replies->clear();
+        //   //   delete replies;
+        //   // }
+        //   // );
+        //   return (void*) true;
+        // };
+        //  transport->DispatchTP_main(f);
+
+
+
+        //std::vector<::google::protobuf::Message*> *replies = new std::vector<::google::protobuf::Message*>();
+        //lock.unlock();
+        auto f = [this, packedMsg, batchDigest, digest](){
+
+          //std::cerr << "running on CPU: " << sched_getcpu() << std::endl;
+          std::vector<::google::protobuf::Message*> replies = this->app->Execute(packedMsg.type(), packedMsg.msg());
+
+          //std::unique_lock lock(this->atomicMutex);
+          this->executeSlots_callback(replies, batchDigest, digest);
+          //replies->clear();
+          //delete replies;
+
+          return (void*) true;
+        };
+        //
+        // // auto cb = [this, batchDigest, digest, replies](void* arg){
+        // //     this->executeSlots_callback(replies, batchDigest, digest);
+        // //     replies->clear();
+        // //     delete replies;
+        // //   };
+        // // transport->DispatchTP(f, cb);
+        transport->DispatchTP_main(f);
+
+        //std::unique_lock lock(batchMutex);
+        execBatchNum++;
+        if ((int) execBatchNum >= batchedRequests[batchDigest].digests_size()) {
+          Debug("Done executing batch");
+          execBatchNum = 0;
+          execSeqNum++;
+        }
+
+      } else {
+        Debug("request from batch %lu not yet received", execSeqNum);
+        if (requestTx) {
+          stats->Increment("req_txn",1);
+          proto::RequestRequest rr;
+          rr.set_digest(digest);
+          int primaryIdx = config.GetLeaderIndex(currentView);
+          if (primaryIdx == idx) {
+            stats->Increment("primary_req_txn",1);
+          }
+          transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+        }
+        break;
+      }
+    } else {
+      Debug("Batch request not yet received");
+      if (requestTx) {
+        stats->Increment("req_batch",1);
+        proto::RequestRequest rr;
+        rr.set_digest(batchDigest);
+        int primaryIdx = config.GetLeaderIndex(currentView);
+        transport->SendMessageToReplica(this, groupIdx, primaryIdx, rr);
+      }
+      break;
+    }
+  }
+}
+
+
+void Replica::executeSlots_callback(std::vector<::google::protobuf::Message*> &replies,
+  string batchDigest, string digest){
+        //std::vector<::google::protobuf::Message*> *replies = (std::vector<::google::protobuf::Message*> *) replies_void;
+
+        //std::cerr << "executing callback on CPU " << sched_getcpu() << std::endl;
+
+        std::unique_lock lock(batchMutex);
+        for (const auto& reply : replies) {
+          if (reply != nullptr) {
+            Debug("Sending reply");
+            stats->Increment("execs_sent",1);
+            EpendingBatchedMessages.push_back(reply);
+            EpendingBatchedDigs.push_back(digest);
+            if (EpendingBatchedMessages.size() >= EbatchSize) {
+              Debug("EBatch is full, sending");
+              if (false && EbatchTimerRunning) {
+                transport->CancelTimer(EbatchTimerId);
+                EbatchTimerRunning = false;
+              }
+              //std::cerr << "callingEbatch" << std::endl;
+              sendEbatch();
+            } else if (!EbatchTimerRunning) {
+              EbatchTimerRunning = true;
+              Debug("Starting ebatch timer");
+              EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
+                std::unique_lock lock(batchMutex);
+
+                Debug("EBatch timer expired, sending");
+                this->EbatchTimerRunning = false;
+                if(this->EpendingBatchedMessages.size()==0) return;
+                //std::cerr << "calling Timer Ebatch" << std::endl;
+                this->sendEbatch();
+              });
+            }
+          } else {
+            Debug("Invalid execution");
+          }
+        }
+        //delete replies;
+        // std::unique_lock lock(batchMutex);
+        // execBatchNum++;
+        // if ((int) execBatchNum >= batchedRequests[batchDigest].digests_size()) {
+        //   Debug("Done executing batch");
+        //   execBatchNum = 0;
+        //   execSeqNum++;
+        // }
+
+}
+
+void Replica::executeSlots_internal() {
   Debug("exec seq num: %lu", execSeqNum);
   while(pendingExecutions.find(execSeqNum) != pendingExecutions.end()) {
     // cancel the commit timer
@@ -637,8 +835,10 @@ void Replica::executeSlots() {
 }
 
 void Replica::sendEbatch() {
+  //std::cerr << "executing sendEbatch" << std::endl;
   stats->Increment(EbStatNames[EpendingBatchedMessages.size()], 1);
   std::vector<std::string*> messageStrs;
+  //std::cerr << "EbatchMessages.size: " << EpendingBatchedMessages.size() << std::endl;
   for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
     EsignedMessages[i]->Clear();
     EsignedMessages[i]->set_replica_id(id);
@@ -656,10 +856,13 @@ void Replica::sendEbatch() {
 
   pbftBatchedSigs::generateBatchedSignatures(messageStrs, keyManager->GetPrivateKey(id), sigs);
 
+  //replyAddrsMutex.lock();
   for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
     transport->SendMessage(this, *replyAddrs[EpendingBatchedDigs[i]], *EsignedMessages[i]);
+    //std::cerr << "deleting reply" << std::endl;
     delete EpendingBatchedMessages[i];
   }
+  //replyAddrsMutex.unlock();
   EpendingBatchedDigs.clear();
   EpendingBatchedMessages.clear();
 }

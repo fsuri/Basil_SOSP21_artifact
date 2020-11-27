@@ -54,6 +54,10 @@
 #include <ctime>
 #include <mutex>
 #include <shared_mutex>
+#include <atomic>
+
+#include "tbb/concurrent_unordered_map.h"
+#include "tbb/concurrent_hash_map.h"
 
 //#include "lib/threadpool.cc"
 
@@ -68,6 +72,7 @@ enum OCCType {
 
 static int rcv_count = 0;
 static int send_count = 0;
+static int commitGet_count = 0;
 //static unordered_map<TransportAddress*, int> debug_counters;
 void PrintSendCount();
 void PrintRcvCount();
@@ -82,7 +87,6 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       int numShards, int numGroups,
       Transport *transport, KeyManager *keyManager, Parameters params, uint64_t timeDelta,
       OCCType occType, Partitioner *part, unsigned int batchTimeoutMS,
-      bool mainThreadDispatching, bool dispatchMessageReceive,
       TrueTime timeServer = TrueTime(0, 0));
   virtual ~Server();
 
@@ -97,8 +101,12 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
  private:
    //bool test_bool = false;
-   bool mainThreadDispatching;
-   bool dispatchMessageReceive;
+   // bool mainThreadDispatching;
+   // bool dispatchMessageReceive;
+   // bool parallel_reads;
+   // bool dispatchCallbacks;
+
+   std::string dummyString;
 
   friend class ServerTest;
   struct Value {
@@ -112,6 +120,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void HandleRead(const TransportAddress &remote, proto::Read &msg);
   void HandlePhase1(const TransportAddress &remote,
       proto::Phase1 &msg);
+  void HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
+        const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote);
   void HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
         signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid); //bool valid);
 
@@ -331,13 +341,16 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
   std::unordered_map<std::string, std::set<std::tuple<Timestamp, Timestamp, const proto::CommittedProof *>>> committedReads;
-  std::unordered_map<std::string, std::set<Timestamp>> rts;
+  //std::unordered_map<std::string, std::set<Timestamp>> rts;
+  tbb::concurrent_unordered_map<std::string, std::atomic_int> rts;
+  //tbb::concurrent_hash_map<std::string, std::set<Timestamp>> rts;
 
   // Digest -> V
   std::unordered_map<std::string, proto::Transaction *> ongoing;
   std::unordered_map<std::string, std::pair<Timestamp, const proto::Transaction *>> prepared;
   std::unordered_map<std::string, std::set<const proto::Transaction *>> preparedReads;
-  std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
+  //std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
+  tbb::concurrent_unordered_map<std::string, std::pair<std::shared_mutex,std::map<Timestamp, const proto::Transaction *>>> preparedWrites;
 
 
 

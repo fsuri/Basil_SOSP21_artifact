@@ -12,8 +12,33 @@
   "client_protocol_mode": ["indicus"],
   "num_shards": [3],
   "num_groups": [3],
-  "benchmark_name": "tpcc-sync",
-  "partitioner": "warehouse",
+
+  "client_num_keys": 10000000,
+  "benchmark_name": "rw",
+  "_client_zipf_coefficient": 1.2,
+  "_client_key_selector": "zipf",
+  "_rw_num_ops_txn": 25,
+
+  "_benchmark_name": "retwis",
+  "client_zipf_coefficient": 0.75,   
+  "client_key_selector": "zipf",
+  "rw_num_ops_txn": 2,
+
+  "_benchmark_name": "smallbank",
+  "smallbank_hotspot_probability": 0.9,
+  "smallbank_balance_ratio": 60,
+  "smallbank_deposit_checking_ratio": 10,
+  "smallbank_transact_saving_ratio": 10,
+  "smallbank_amalgamate_ratio": 10,
+  "smallbank_write_check_ratio": 10,
+  "smallbank_num_hotspots": 1000,
+  "smallbank_num_customers": 18000,
+  "smallbank_data_file_path": "/usr/local/etc/smallbank_data",
+  "smallbank_customer_name_file_path": "/usr/local/etc/smallbank_names",
+
+
+  "_benchmark_name": "tpcc-sync",
+  "_partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
   "server_load_time":  10,
   "tpcc_stock_level_ratio": 4,
@@ -21,38 +46,52 @@
   "tpcc_order_status_ratio": 4,
   "tpcc_payment_ratio": 44,
   "tpcc_new_order_ratio": 44,
+
   "tpcc_c_c_id": 0,
   "tpcc_c_c_last": 0,
   "tpcc_data_file_path": "/usr/local/etc/tpcc-20-warehouse",
   "client_abort_backoff": 2,
   "client_retry_aborted": true,
   "client_max_attempts": -1,
-  "client_max_backoff": 2500,
+  "client_max_backoff": 250,
+  "client_rand_sleep": 2,
+  "__CLIENT RAND SLEEP NEEDS TO BE HIGH FOR NON CRYPTO; backoff too": true,
   "client_message_timeout": 10000,
   "run_locally": false,
   "stats_merge_lists": ["txn_groups", "sig_batch"],
 
   "_replication_protocol_settings": [{
-    "adjust_batch_size": false,
-    "hash_digest": true,
-    "key_path": "/usr/local/etc/indicus-keys/secp256k1",
-    "max_dep_depth": -1,
-    "message_transport_type": "tcp",
-    "read_dep": "one-honest",
-    "read_messages": "read-quorum",
-    "read_quorum": "one-honest",
-    "read_reply_batch": false,
-    "shared_mem_batch": false,
-    "shared_mem_verify": false,
-    "sig_batch": 128,
-    "sig_batch_timeout": 20000,
-    "sign_messages": false,
-    "signature_type": 3,
-    "validate_proofs": false,
-    "verify_deps": false,
-    "watermark_time_delta": 30000,
-    "multi_threading": false,
-    "mainThreadDispatching": false
+	"_read_dep": "one-honest",
+	  "_read_messages": "read-quorum",
+      "_read_reply_batch": false,
+      "_adjust_batch_size": false,
+      "_shared_mem_batch": false,
+      "_shared_mem_verify": false,
+	
+      "message_transport_type": "tcp",
+      "watermark_time_delta": 30000,
+      "read_quorum": "one-honest",
+	  "p1DecisionTimeout":10,
+
+      "_max_dep_depth": 1,
+      "_max_dep_depth": -2, 
+	  "hash_digest": true,
+      "verify_deps": false,
+	
+      "validate_proofs": false,
+      "sign_messages": false,
+      "signature_type": 4,
+      "sig_batch": 4,
+      "_sig_batch_timeout": 5000,
+     
+	  "multi_threading": true,
+	  "mainThreadDispatching": false,
+      "client_multi_threading": false,
+      "hyper_threading": false,
+	  "dispatchMessageReceive": false,
+      "batch_verification": false,
+      "_key_path": "/usr/local/etc/indicus-keys/secp256k1",
+      "key_path": "/usr/local/etc/indicus-keys/donna"
     
   }
 ],
@@ -74,18 +113,21 @@
 	  "p1DecisionTimeout":10,
 
       "_max_dep_depth": 1,
+      "_max_dep_depth": -2, 
 	  "hash_digest": true,
       "verify_deps": false,
 	
       "validate_proofs": true,
       "sign_messages": true,
       "signature_type": 4,
-      "sig_batch": 2,
+      "sig_batch": 4,
       "_sig_batch_timeout": 5000,
      
 	  "multi_threading": true,
 	  "mainThreadDispatching": true,
-      "client_multi_threading": true,
+      "parallel_reads": false,
+      "dispatchCallbacks": true,
+      "client_multi_threading": false,
       "hyper_threading": false,
 	  "dispatchMessageReceive": false,
       "batch_verification": false,
@@ -111,7 +153,7 @@
   "server_debug_output": false,
   "server_debug_stats": false,
   "client_debug_stats": false,
-  "client_experiment_length": 100,
+  "client_experiment_length": 60,
   "client_ramp_down": 5,
   "client_ramp_up": 30,
   "default_remote_shell": "bash",
@@ -123,11 +165,15 @@
    
     ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
     "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
-    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2",
-    "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
-    "ap-southeast-2-1", "ap-southeast-2-2"]
+    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2", "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
+    "ap-southeast-2-1", "ap-southeast-2-2"] 
 	
   ],
+"__server_names" : [
+    "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
+    "ap-southeast-2-1", "ap-southeast-2-2"],
+
+
   "server_regions": [
    
     {
@@ -136,10 +182,19 @@
       "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
         "ap-northeast-1-2"],
       "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2"],
-      "eu-central-1": ["eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
+"eu-central-1": ["eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
       "ap-southeast-2": ["ap-southeast-2-0", "ap-southeast-2-1", "ap-southeast-2-2"]
     }
   ],
+
+  "__server_regions" : [
+	{
+		
+      "eu-central-1": ["eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
+      "ap-southeast-2": ["ap-southeast-2-0", "ap-southeast-2-1", "ap-southeast-2-2"]
+	}
+	],
+
   "region_rtt_latencies": {
     "us-east-1": {
       "us-east-1": 0,
@@ -297,7 +352,6 @@
   "master_server_name": "california",
   "client_disable_gc": true,
   "server_disable_gc": true,
-  "client_rand_sleep": 2,
   "server_cpuprofile": false,
   "server_durable": false,
   "server_rpc_port": 8087,

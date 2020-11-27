@@ -179,6 +179,9 @@ void Client::Get(const std::string &key, get_callback gcb,
 void Client::Put(const std::string &key, const std::string &value,
     put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
   transport->Timer(0, [this, key, value, pcb, ptcb, timeout]() {
+
+    //std::cerr << "value size: " << value.size() << "; key " << BytesToHex(key,16).c_str() << std::endl;
+
     Debug("PUT[%lu:%lu] for key %s", client_id, client_seq_num, BytesToHex(key,
           16).c_str());
 

@@ -18,6 +18,7 @@ transaction_status_t SyncNewOrder::Execute(SyncClient &client) {
 
   Debug("NEW_ORDER");
   Debug("Warehouse: %u", w_id);
+  //std::cerr << "warehouse: " << w_id << std::endl;
 
   client.Begin(timeout);
 
@@ -104,7 +105,7 @@ transaction_status_t SyncNewOrder::Execute(SyncClient &client) {
       ItemRow i_row;
       UW_ASSERT(i_row.ParseFromString(strs[ol_number]));
       Debug("    Item Name: %s", i_row.name().c_str());
-  
+
       StockRow s_row;
       std::string s_key = StockRowKey(o_ol_supply_w_ids[ol_number],
           o_ol_i_ids[ol_number]);

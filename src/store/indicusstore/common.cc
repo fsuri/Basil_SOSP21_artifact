@@ -94,6 +94,24 @@ void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
   }
 }
 
+void SignMessages(const std::vector<Triplet>& batch,
+    crypto::PrivKey* privateKey, uint64_t processId,
+    uint64_t merkleBranchFactor) {
+
+  std::vector<const std::string*> messageStrs;
+  for (auto &triplet : batch) {
+    triplet.sig_msg->set_process_id(processId);
+    triplet.msg->SerializeToString(triplet.sig_msg->mutable_data());
+    messageStrs.push_back(&triplet.sig_msg->data());
+  }
+
+  std::vector<std::string> sigs;
+  BatchedSigs::generateBatchedSignatures(messageStrs, privateKey, sigs, merkleBranchFactor);
+  for (unsigned int i = 0; i < batch.size(); i++) {
+    *batch[i].sig_msg->mutable_signature() = sigs[i];
+  }
+}
+
 void* asyncSignMessages(const std::vector<::google::protobuf::Message*> msgs,
     crypto::PrivKey* privateKey, uint64_t processId,
     const std::vector<proto::SignedMessage*> signedMessages,

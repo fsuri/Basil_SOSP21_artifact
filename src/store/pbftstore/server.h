@@ -4,6 +4,8 @@
 #include <memory>
 #include <map>
 #include <unordered_map>
+#include <mutex>
+#include <shared_mutex>
 
 #include "store/pbftstore/app.h"
 #include "store/pbftstore/server-proto.pb.h"
@@ -18,7 +20,10 @@ namespace pbftstore {
 
 class Server : public App, public ::Server {
 public:
-  Server(const transport::Configuration& config, KeyManager *keyManager, int groupIdx, int idx, int numShards, int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, Partitioner *part, TrueTime timeServer = TrueTime(0, 0));
+  Server(const transport::Configuration& config, KeyManager *keyManager, int groupIdx, int idx, int numShards,
+    int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, Partitioner *part,
+    bool order_commit = false, bool validate_abort = false,
+    TrueTime timeServer = TrueTime(0, 0));
   ~Server();
 
   std::vector<::google::protobuf::Message*> Execute(const std::string& type, const std::string& msg);
@@ -45,6 +50,12 @@ private:
   uint64_t timeDelta;
   Partitioner *part;
   TrueTime timeServer;
+
+  //addtional knobs: 1) order commit, 2) validate abort
+  bool order_commit;
+  bool validate_abort;
+
+  std::shared_mutex atomicMutex;
 
   struct ValueAndProof {
     std::string value;

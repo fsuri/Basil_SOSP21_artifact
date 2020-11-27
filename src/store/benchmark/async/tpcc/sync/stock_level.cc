@@ -20,7 +20,8 @@ transaction_status_t SyncStockLevel::Execute(SyncClient &client) {
   Debug("STOCK_LEVEL");
   Debug("Warehouse: %u", w_id);
   Debug("District: %u", d_id);
-  
+  //std::cerr << "warehouse: " << w_id << std::endl;
+
   client.Begin(timeout);
 
   std::string d_key = DistrictRowKey(w_id, d_id);

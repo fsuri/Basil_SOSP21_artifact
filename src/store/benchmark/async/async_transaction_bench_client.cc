@@ -32,14 +32,14 @@ void AsyncTransactionBenchClient::ExecuteCallback(transaction_status_t result,
   Debug("ExecuteCallback with result %d.", result);
   stats.Increment(GetLastOp() + "_attempts", 1);
   ++currTxnAttempts;
-  if (result == COMMITTED || result == ABORTED_USER || 
+  if (result == COMMITTED || result == ABORTED_USER ||
       (maxAttempts != -1 && currTxnAttempts >= static_cast<uint64_t>(maxAttempts)) ||
       !retryAborted) {
     if (result == COMMITTED) {
       stats.Increment(GetLastOp() + "_committed", 1);
     }
     if (retryAborted) {
-      stats.Add(GetLastOp() + "_attempts_list", currTxnAttempts);
+      //stats.Add(GetLastOp() + "_attempts_list", currTxnAttempts);  //TODO: uncomment if want to collect attempt stats
     }
     delete currTxn;
     currTxn = nullptr;

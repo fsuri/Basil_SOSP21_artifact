@@ -23,6 +23,7 @@ class Client : public ::Client {
       Transport *transport, Partitioner *part,
       uint64_t readQuorumSize, bool signMessages,
       bool validateProofs, KeyManager *keyManager,
+      bool order_commit = false, bool validate_abort = false,
       TrueTime timeserver = TrueTime(0,0));
   ~Client();
 
@@ -68,6 +69,10 @@ class Client : public ::Client {
   TrueTime timeServer;
   int client_seq_num;
 
+  //addtional knobs: 1) order commit, 2) validate abort
+  bool order_commit = false;
+  bool validate_abort = false;
+
   struct PendingPrepare {
     proto::Transaction txn;
     // collected decisions from each shard
@@ -105,11 +110,15 @@ class Client : public ::Client {
   /* Debug State */
   std::unordered_map<std::string, uint32_t> statInts;
 
+  void WriteBackSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn, std::string digest);
+
   void WriteBackSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn,
     commit_callback ccb, commit_timeout_callback ctcb, uint32_t timeout);
 
   void WriteBack(const proto::ShardDecisions& dec, const proto::Transaction& txn,
     commit_callback ccb, commit_timeout_callback ctcb, uint32_t timeout);
+
+  void AbortTxnSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn, std::string& digest);
 
   void AbortTxn(const proto::Transaction& txn);
 

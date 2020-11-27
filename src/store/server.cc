@@ -276,6 +276,8 @@ DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout
 
 DEFINE_bool(indicus_mainThreadDispatching, true, "dispatching main thread work to an additional thread");
 DEFINE_bool(indicus_dispatchMessageReceive, false, "delegating serialization to worker main thread");
+DEFINE_bool(indicus_parallel_reads, true, "dispatching reads to worker threads");
+DEFINE_bool(indicus_dispatchCallbacks, true, "dispatching P2 and WB callbacks to main worker thread");
 
 DEFINE_uint64(indicus_process_id, 0, "id used for Threadpool core affinity");
 DEFINE_uint64(indicus_total_processes, 1, "number of server processes per machine");
@@ -285,6 +287,10 @@ DEFINE_uint64(pbft_esig_batch, 1, "signature batch size"
 		" sig batch size (for PBFT decision phase)");
 DEFINE_uint64(pbft_esig_batch_timeout, 10, "signature batch timeout ms"
 		" sig batch timeout (for PBFT decision phase)");
+
+DEFINE_bool(pbft_order_commit, false, "order commit writebacks as well");
+DEFINE_bool(pbft_validate_abort, false, "validate abort writebacks as well");
+
 
 const std::string occ_type_args[] = {
 	"tapir",
@@ -570,19 +576,25 @@ int main(int argc, char **argv) {
                                       FLAGS_indicus_read_reply_batch, FLAGS_indicus_adjust_batch_size,
                                       FLAGS_indicus_shared_mem_batch, FLAGS_indicus_shared_mem_verify,
                                       FLAGS_indicus_merkle_branch_factor, indicusstore::InjectFailure(),
-                                      FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification, FLAGS_indicus_batch_verification_size);
+                                      FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification,
+																			FLAGS_indicus_batch_verification_size,
+																			FLAGS_indicus_mainThreadDispatching,
+																			FLAGS_indicus_dispatchMessageReceive,
+																			FLAGS_indicus_parallel_reads,
+																			FLAGS_indicus_dispatchCallbacks);
       Debug("Starting new server object");
       server = new indicusstore::Server(config, FLAGS_group_idx,
                                         FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,
                                         &keyManager, params, timeDelta, indicusOCCType, part,
-                                        FLAGS_indicus_sig_batch_timeout, FLAGS_indicus_mainThreadDispatching, FLAGS_indicus_dispatchMessageReceive);
+                                        FLAGS_indicus_sig_batch_timeout);
       break;
   }
   case PROTO_PBFT: {
       server = new pbftstore::Server(config, &keyManager,
                                      FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
                                      FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-                                     FLAGS_indicus_time_delta, part);
+                                     FLAGS_indicus_time_delta, part,
+																	   FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort);
       replica = new pbftstore::Replica(config, &keyManager,
                                        dynamic_cast<pbftstore::App *>(server),
                                        FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
@@ -650,8 +662,10 @@ int main(int argc, char **argv) {
         ++loaded;
       }
     }
-    Debug("Stored %lu out of %lu key-value pairs from file %s.", stored,
+		Notice("Stored %lu out of %lu key-value pairs from file %s.", stored,
         loaded, FLAGS_data_file_path.c_str());
+    // Debug("Stored %lu out of %lu key-value pairs from file %s.", stored,
+    //     loaded, FLAGS_data_file_path.c_str());
   } else {
     std::ifstream in;
     in.open(FLAGS_keys_path);
@@ -677,11 +691,11 @@ int main(int argc, char **argv) {
   CALLGRIND_START_INSTRUMENTATION;
 	//SET THREAD AFFINITY if running multi_threading:
 	//if(FLAGS_indicus_multi_threading){
-	if(proto == PROTO_INDICUS && FLAGS_indicus_multi_threading){
+	if((proto == PROTO_INDICUS || proto == PROTO_PBFT)&& FLAGS_indicus_multi_threading){
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
 		//bool hyperthreading = true;
-	  int num_cpus = std::thread::hardware_concurrency()/(2-FLAGS_indicus_hyper_threading);
+	  int num_cpus = std::thread::hardware_concurrency();///(2-FLAGS_indicus_hyper_threading);
 		//CPU_SET(num_cpus-1, &cpuset); //last core is for main
 		num_cpus /= FLAGS_indicus_total_processes;
 	  int offset = FLAGS_indicus_process_id * num_cpus;

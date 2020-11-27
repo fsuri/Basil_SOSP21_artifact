@@ -14,10 +14,14 @@
 #include <vector>
 #include <functional>
 #include <mutex>
+#include "tbb/concurrent_vector.h"
 
 #include <google/protobuf/message.h>
 
+
 namespace indicusstore {
+
+
 
 static bool LocalDispatch = true; //TODO: Turn into config flag if a viable option.
 
@@ -26,6 +30,19 @@ typedef std::function<void()> cleanCallback;
 //typedef std::function<void(void*)> verifyCallback;
 typedef std::function<void(void*)> mainThreadCallback; //TODO change back to this...
 //typedef std::function<void(bool)> mainThreadCallback;
+
+struct Triplet {
+  Triplet() {};
+  Triplet(::google::protobuf::Message* msg,
+  proto::SignedMessage* sig_msg,
+  signedCallback cb) : msg(msg), sig_msg(sig_msg), cb(cb) { };
+  ~Triplet() { };
+  ::google::protobuf::Message* msg;
+  proto::SignedMessage* sig_msg;
+  signedCallback cb;
+};
+
+
 
 //static bool True = true;
 //static bool False = false;
@@ -90,6 +107,10 @@ void SignMessages(const std::vector<::google::protobuf::Message*>& msgs,
     crypto::PrivKey* privateKey, uint64_t processId,
     const std::vector<proto::SignedMessage*>& signedMessages,
     uint64_t merkleBranchFactor);
+
+    void SignMessages(const std::vector<Triplet>& batch,
+        crypto::PrivKey* privateKey, uint64_t processId,
+        uint64_t merkleBranchFactor);
 
 void* asyncSignMessages(const std::vector<::google::protobuf::Message*> msgs,
     crypto::PrivKey* privateKey, uint64_t processId,
@@ -290,18 +311,29 @@ typedef struct Parameters {
   const bool batchVerification;
   const int verificationBatchSize;
 
+  const bool mainThreadDispatching;
+  const bool dispatchMessageReceive;
+  const bool parallel_reads;
+  const bool dispatchCallbacks;
+
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     int signatureBatchSize, int64_t maxDepDepth, uint64_t readDepSize,
     bool readReplyBatch, bool adjustBatchSize, bool sharedMemBatches,
     bool sharedMemVerify, uint64_t merkleBranchFactor, const InjectFailure &injectFailure,
-    bool multiThreading, bool batchVerification, int verificationBatchSize) :
+    bool multiThreading, bool batchVerification, int verificationBatchSize,
+    bool mainThreadDispatching, bool dispatchMessageReceive, bool parallel_reads, bool dispatchCallbacks) :
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
     maxDepDepth(maxDepDepth), readDepSize(readDepSize),
     readReplyBatch(readReplyBatch), adjustBatchSize(adjustBatchSize),
     sharedMemBatches(sharedMemBatches), sharedMemVerify(sharedMemVerify),
     merkleBranchFactor(merkleBranchFactor), injectFailure(injectFailure),
-    multiThreading(multiThreading), batchVerification(batchVerification), verificationBatchSize(verificationBatchSize){ }
+    multiThreading(multiThreading), batchVerification(batchVerification),
+    verificationBatchSize(verificationBatchSize),
+    mainThreadDispatching(mainThreadDispatching),
+    dispatchMessageReceive(dispatchMessageReceive),
+    parallel_reads(parallel_reads),
+    dispatchCallbacks(dispatchCallbacks) { }
 } Parameters;
 
 } // namespace indicusstore

@@ -20,6 +20,7 @@ transaction_status_t SyncOrderStatus::Execute(SyncClient &client) {
   Debug("ORDER_STATUS");
   Debug("Warehouse: %u", c_w_id);
   Debug("District: %u", c_d_id);
+  //std::cerr << "warehouse: " << w_id << std::endl;
 
   client.Begin(timeout);
 
@@ -38,7 +39,7 @@ transaction_status_t SyncOrderStatus::Execute(SyncClient &client) {
   } else {
     Debug("Customer: %u", c_id);
   }
-  
+
   std::string c_key = CustomerRowKey(c_w_id, c_d_id, c_id);
   client.Get(c_key, timeout);
   std::string obc_key = OrderByCustomerRowKey(c_w_id, c_d_id, c_id);
