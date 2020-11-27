@@ -14,7 +14,7 @@
   "num_groups": [3],
 
   "client_num_keys": 10000000,
-  "benchmark_name": "rw",
+  "_benchmark_name": "rw",
   "_client_zipf_coefficient": 1.2,
   "_client_key_selector": "zipf",
   "_rw_num_ops_txn": 25,
@@ -37,8 +37,8 @@
   "smallbank_customer_name_file_path": "/usr/local/etc/smallbank_names",
 
 
-  "_benchmark_name": "tpcc-sync",
-  "_partitioner": "warehouse",
+  "benchmark_name": "tpcc-sync",
+  "partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
   "server_load_time":  10,
   "tpcc_stock_level_ratio": 4,
@@ -125,7 +125,7 @@
      
 	  "multi_threading": true,
 	  "mainThreadDispatching": true,
-      "parallel_reads": false,
+      "parallel_reads": true,
       "dispatchCallbacks": true,
       "client_multi_threading": false,
       "hyper_threading": false,
@@ -153,9 +153,9 @@
   "server_debug_output": false,
   "server_debug_stats": false,
   "client_debug_stats": false,
-  "client_experiment_length": 60,
+  "client_experiment_length": 30,
   "client_ramp_down": 5,
-  "client_ramp_up": 30,
+  "client_ramp_up": 5,
   "default_remote_shell": "bash",
   "server_host_format_str": "%s.%s.%s.utah.cloudlab.us",
   "client_host_format_str": "client-%d-%d.%s.%s.utah.cloudlab.us",

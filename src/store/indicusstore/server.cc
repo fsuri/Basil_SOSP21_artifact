@@ -476,7 +476,7 @@ void Server::HandleRead(const TransportAddress &remote,
       const proto::Transaction *mostRecent = nullptr;
 
 
-      //auto preparedWritesMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedWritesMutex) : std::shared_lock<std::shared_mutex>();
+      auto preparedWritesMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedWritesMutex) : std::shared_lock<std::shared_mutex>();
 
       auto itr = preparedWrites.find(msg.key());
       if (itr != preparedWrites.end()){
@@ -684,18 +684,31 @@ void Server::HandlePhase1(const TransportAddress &remote,
           committedProof);
     }
     else{
-      auto cb = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn,  &committedProof](void* result) mutable{
-        this->HandlePhase1CB(msg_ptr, *((proto::ConcurrencyControl::Result *) result), committedProof, txnDigest, *remote_ptr);
-      };
-      auto f = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn,  &committedProof]() mutable {
+      // auto cb = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn,  committedProof](void* result) mutable{
+      //   this->HandlePhase1CB(msg_ptr, *((proto::ConcurrencyControl::Result *) result), committedProof, txnDigest, *remote_ptr);
+      // };
+
+      //std::cerr << "TxnDigest: " << BytesToHex(txnDigest, 16) << std::endl;
+      auto f = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn, committedProof]() mutable {
         Timestamp retryTs;
+
+        {
+          std::shared_lock<std::shared_mutex> lock(ongoingMutex);
+          if(ongoing.find(txnDigest) == ongoing.end()){
+            Debug("Already concurrently Committed/Aborted txn[%s]", BytesToHex(txnDigest, 16).c_str());
+            return (void*) false;
+          }
+        }
+
         proto::ConcurrencyControl::Result *result = new proto::ConcurrencyControl::Result(this->DoOCCCheck(msg_ptr->req_id(),
         *remote_ptr, txnDigest, *txn, retryTs, committedProof));
-        //HandlePhase1CB(msg_ptr, result, committedProof, txnDigest, *remote_ptr);
-        return (void*) result;
+
+        HandlePhase1CB(msg_ptr, *result, committedProof, txnDigest, *remote_ptr);
+        delete result;
+        return (void*) true;
       };
-      //transport->DispatchTP_noCB(std::move(f));
-      transport->DispatchTP(std::move(f), std::move(cb));
+      transport->DispatchTP_noCB(std::move(f));
+      //transport->DispatchTP(std::move(f), std::move(cb));
       return;
     }
 
@@ -1768,7 +1781,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         }
         if (committed.find(dep.write().prepared_txn_digest()) == committed.end() &&
             aborted.find(dep.write().prepared_txn_digest()) == aborted.end()) {
-
+          //check whether we have prepared it ourselves: This alleviates having to verify dep proofs
           if (prepared.find(dep.write().prepared_txn_digest()) == prepared.end()) {
             return proto::ConcurrencyControl::ABSTAIN;
           }
@@ -1876,19 +1889,29 @@ void Server::Prepare(const std::string &txnDigest,
   Debug("PREPARE[%s] agreed to commit with ts %lu.%lu.",
       BytesToHex(txnDigest, 16).c_str(), txn.timestamp().timestamp(), txn.timestamp().id());
 
+
   auto ongoingMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(ongoingMutex) : std::shared_lock<std::shared_mutex>();
   auto preparedMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedMutex) : std::unique_lock<std::shared_mutex>();
   auto preparedReadsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedReadsMutex) : std::unique_lock<std::shared_mutex>();
-  //auto preparedWritesMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
+  auto preparedWritesMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
 
-  const proto::Transaction *ongoingTxn = ongoing.at(txnDigest);
+  auto ongoingItr = ongoing.find(txnDigest);
+  if(ongoingItr == ongoing.end()){
+    Debug("Already concurrently Committed/Aborted txn[%s]", BytesToHex(txnDigest, 16).c_str());
+    return;
+  }
+  const proto::Transaction *ongoingTxn = ongoingItr->second;
+  //const proto::Transaction *ongoingTxn = ongoing.at(txnDigest);
+
   auto p = prepared.insert(std::make_pair(txnDigest, std::make_pair(
           Timestamp(txn.timestamp()), ongoingTxn)));
+
   for (const auto &read : txn.read_set()) {
     if (IsKeyOwned(read.key())) {
       preparedReads[read.key()].insert(p.first->second.second);
     }
   }
+
   std::pair<Timestamp, const proto::Transaction *> pWrite =
     std::make_pair(p.first->second.first, p.first->second.second);
   for (const auto &write : txn.write_set()) {
@@ -2021,7 +2044,7 @@ void Server::Clean(const std::string &txnDigest) {
   auto ongoingMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(ongoingMutex) : std::unique_lock<std::shared_mutex>();
   auto preparedMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedMutex) : std::unique_lock<std::shared_mutex>();
   auto preparedReadsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedReadsMutex) : std::unique_lock<std::shared_mutex>();
-  //auto preparedWritesMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
+  auto preparedWritesMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
 
   auto p1ConflictsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(p1ConflictsMutex) : std::unique_lock<std::mutex>();
   auto p2DecisionsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(p2DecisionsMutex) : std::unique_lock<std::mutex>();
@@ -2113,7 +2136,25 @@ proto::ConcurrencyControl::Result Server::CheckDependencies(
    //Latency_End(&waitingOnLocks);
 
   auto txnItr = ongoing.find(txnDigest);
-  UW_ASSERT(txnItr != ongoing.end());
+  if(txnItr == ongoing.end()){
+    Debug("Tx with txn digest [%s] has already committed/aborted", BytesToHex(txnDigest, 16).c_str());
+    {
+      std::shared_lock lock(committedMutex);
+      std::shared_lock lock2(abortedMutex);
+      if(committed.find(txnDigest) != committed.end()){
+        if(params.mainThreadDispatching) ongoingMutex.unlock_shared();
+        return proto::ConcurrencyControl::COMMIT;
+      }
+      else if(aborted.find(txnDigest) != aborted.end()){
+        if(params.mainThreadDispatching) ongoingMutex.unlock_shared();
+        return proto::ConcurrencyControl::ABSTAIN;
+      }
+      else{
+        Panic("has to be either committed or aborted");
+      }
+    }
+  }
+  //UW_ASSERT(txnItr != ongoing.end());
    if(params.mainThreadDispatching) ongoingMutex.unlock_shared();
   return CheckDependencies(*txnItr->second);
 }
