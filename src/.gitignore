@@ -1,4 +1,5 @@
 .obj/
+bin/
 
 .DS_Store
 
@@ -35,7 +36,6 @@ store/benchmark/async/smallbank/tests/smallbank_client_test
 store/benchmark/async/smallbank/tests/smallbank_generator_test
 timeserver/timeserver
 
-lib/threadpool_test
 lib/tests/configuration-test
 lib/tests/simtransport-test
 lockserver/tests/lockserver-test
