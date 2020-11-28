@@ -211,9 +211,9 @@ void Replica::handleMessage(const TransportAddress &remote, const string &type, 
       //std::unique_lock lock(atomicMutex);
 #ifdef USE_HOTSTUFF_STORE
         assert(false);
-        appMtx.lock();
+        // appMtx.lock();
         ::google::protobuf::Message* reply = app->HandleMessage(type, data);
-        appMtx.unlock();
+        // appMtx.unlock();
 #else
         ::google::protobuf::Message* reply = app->HandleMessage(type, data);
 #endif
@@ -230,9 +230,9 @@ void Replica::handleMessage(const TransportAddress &remote, const string &type, 
   }
   else{
 #ifdef USE_HOTSTUFF_STORE
-      appMtx.lock();
+      // appMtx.lock();
       ::google::protobuf::Message* reply = app->HandleMessage(type, data);
-      appMtx.unlock();
+      // appMtx.unlock();
 #else
       ::google::protobuf::Message* reply = app->HandleMessage(type, data);
 #endif
@@ -715,9 +715,9 @@ void Replica::executeSlots_internal_multi() {
 
           //std::cerr << "running on CPU: " << sched_getcpu() << std::endl;
 #ifdef USE_HOTSTUFF_STORE
-          appMtx.lock();
+          // appMtx.lock();
           std::vector<::google::protobuf::Message*> replies = this->app->Execute(packedMsg.type(), packedMsg.msg());
-          appMtx.unlock();
+          // appMtx.unlock();
 #else
           std::vector<::google::protobuf::Message*> replies = this->app->Execute(packedMsg.type(), packedMsg.msg());
 #endif
@@ -861,9 +861,9 @@ void Replica::executeSlots_internal() {
         proto::PackedMessage packedMsg = requests[digest];
 
 #ifdef USE_HOTSTUFF_STORE
-        appMtx.lock();
+        // appMtx.lock();
         std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
-        appMtx.unlock();
+        // appMtx.unlock();
 #else
         std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
 #endif
