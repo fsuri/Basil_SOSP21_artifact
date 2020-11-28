@@ -56,7 +56,6 @@ public:
 #ifdef USE_HOTSTUFF_STORE
   IndicusInterface hotstuff_interface;
   std::unordered_map<std::string, proto::PackedMessage> requests_dup;
-  //std::mutex appMtx; // obsolete
 #endif
 
   const transport::Configuration &config;

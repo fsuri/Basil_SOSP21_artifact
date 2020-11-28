@@ -209,39 +209,26 @@ void Replica::handleMessage(const TransportAddress &remote, const string &type, 
     //need to copy type and data.
     auto f = [this, &remote, type, data](){
       //std::unique_lock lock(atomicMutex);
-#ifdef USE_HOTSTUFF_STORE
-        assert(false);
-        // appMtx.lock();
         ::google::protobuf::Message* reply = app->HandleMessage(type, data);
-        // appMtx.unlock();
-#else
-        ::google::protobuf::Message* reply = app->HandleMessage(type, data);
-#endif
-      if (reply != nullptr) {
-        this->transport->SendMessage(this, remote, *reply);
-        delete reply;
-      } else {
-        Debug("Invalid request of type %s", type.c_str());
-      }
-      return (void*) true;
+        if (reply != nullptr) {
+            this->transport->SendMessage(this, remote, *reply);
+            delete reply;
+        } else {
+            Debug("Invalid request of type %s", type.c_str());
+        }
+        return (void*) true;
     };
     transport->DispatchTP_main(f);
     //transport->DispatchTP_noCB(f);
   }
   else{
-#ifdef USE_HOTSTUFF_STORE
-      // appMtx.lock();
       ::google::protobuf::Message* reply = app->HandleMessage(type, data);
-      // appMtx.unlock();
-#else
-      ::google::protobuf::Message* reply = app->HandleMessage(type, data);
-#endif
-    if (reply != nullptr) {
-      transport->SendMessage(this, remote, *reply);
-      delete reply;
-    } else {
-      Debug("Invalid request of type %s", type.c_str());
-    }
+      if (reply != nullptr) {
+          transport->SendMessage(this, remote, *reply);
+          delete reply;
+      } else {
+          Debug("Invalid request of type %s", type.c_str());
+      }
   }
 
 }
@@ -714,13 +701,7 @@ void Replica::executeSlots_internal_multi() {
         auto f = [this, packedMsg, batchDigest, digest](){
 
           //std::cerr << "running on CPU: " << sched_getcpu() << std::endl;
-#ifdef USE_HOTSTUFF_STORE
-          // appMtx.lock();
           std::vector<::google::protobuf::Message*> replies = this->app->Execute(packedMsg.type(), packedMsg.msg());
-          // appMtx.unlock();
-#else
-          std::vector<::google::protobuf::Message*> replies = this->app->Execute(packedMsg.type(), packedMsg.msg());
-#endif
           //std::unique_lock lock(this->atomicMutex);
           this->executeSlots_callback(replies, batchDigest, digest);
           //replies->clear();
@@ -860,13 +841,7 @@ void Replica::executeSlots_internal() {
         Debug("executing seq num: %lu %lu", execSeqNum, execBatchNum);
         proto::PackedMessage packedMsg = requests[digest];
 
-#ifdef USE_HOTSTUFF_STORE
-        // appMtx.lock();
         std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
-        // appMtx.unlock();
-#else
-        std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
-#endif
 
         for (const auto& reply : replies) {
           if (reply != nullptr) {
