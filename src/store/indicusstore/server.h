@@ -58,6 +58,7 @@
 
 #include "tbb/concurrent_unordered_map.h"
 #include "tbb/concurrent_hash_map.h"
+#include "tbb/concurrent_unordered_set.h"
 
 //#include "lib/threadpool.cc"
 
@@ -340,29 +341,50 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
-  std::unordered_map<std::string, std::set<std::tuple<Timestamp, Timestamp, const proto::CommittedProof *>>> committedReads;
+  //std::unordered_map<std::string, std::set<std::tuple<Timestamp, Timestamp, const proto::CommittedProof *>>> committedReads;
+  typedef std::tuple<Timestamp, Timestamp, const proto::CommittedProof *> committedRead;
+  tbb::concurrent_unordered_map<std::string, std::pair<std::shared_mutex, std::set<committedRead>>> committedReads;
   //std::unordered_map<std::string, std::set<Timestamp>> rts;
   tbb::concurrent_unordered_map<std::string, std::atomic_int> rts;
   //tbb::concurrent_hash_map<std::string, std::set<Timestamp>> rts;
 
   // Digest -> V
-  std::unordered_map<std::string, proto::Transaction *> ongoing;
-  std::unordered_map<std::string, std::pair<Timestamp, const proto::Transaction *>> prepared;
-  std::unordered_map<std::string, std::set<const proto::Transaction *>> preparedReads;
+  //std::unordered_map<std::string, proto::Transaction *> ongoing;
+  typedef tbb::concurrent_hash_map<std::string, proto::Transaction *> ongoingMap;
+  ongoingMap ongoing;
+  // Digest -> V
+  //std::unordered_map<std::string, std::pair<Timestamp, const proto::Transaction *>> prepared;
+  typedef tbb::concurrent_hash_map<std::string, std::pair<Timestamp, const proto::Transaction *>> preparedMap;
+  preparedMap prepared;
+
+  // Key -> Tx
+  //std::unordered_map<std::string, std::set<const proto::Transaction *>> preparedReads;
+  tbb::concurrent_unordered_map<std::string, std::pair<std::shared_mutex, std::set<const proto::Transaction *>>> preparedReads;
   //std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
   tbb::concurrent_unordered_map<std::string, std::pair<std::shared_mutex,std::map<Timestamp, const proto::Transaction *>>> preparedWrites;
 
 
 
-  std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
-  std::unordered_map<std::string, const proto::CommittedProof *> p1Conflicts;
+  //std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
+  //std::unordered_map<std::string, const proto::CommittedProof *> p1Conflicts;
   std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
-  std::unordered_map<std::string, proto::CommittedProof *> committed;
-  std::unordered_set<std::string> aborted;    //ADD Aborted proof to it.(in order to reply to Fallback)
+  //std::unordered_map<std::string, proto::CommittedProof *> committed;
+  //std::unordered_set<std::string> aborted;
+  //XXX TODO: p1Decisions and p1Conflicts erase only threadsafe if Clean called by a single thread.
+  typedef tbb::concurrent_hash_map<std::string, proto::ConcurrencyControl::Result> p1DecisionsMap;
+  p1DecisionsMap p1Decisions;
+  typedef tbb::concurrent_hash_map<std::string, const proto::CommittedProof *> p1ConflictsMap;
+  p1ConflictsMap p1Conflicts;
+  tbb::concurrent_unordered_map<std::string, proto::CommittedProof *> committed;
+  tbb::concurrent_unordered_set<std::string> aborted;
+  //ADD Aborted proof to it.(in order to reply to Fallback)
   //creating new map to store writeback messages..  Need to find a better way, but suffices as placeholder
 
   //keep list of all remote addresses == interested client_seq_num
-  std::unordered_map<std::string, std::unordered_set<const TransportAddress*>> interestedClients;
+  //std::unordered_map<std::string, std::unordered_set<const TransportAddress*>> interestedClients;
+  typedef tbb::concurrent_hash_map<std::string, tbb::concurrent_unordered_set<const TransportAddress*>> interestedClientsMap;
+  interestedClientsMap interestedClients;
+
   //keep list of timeouts
   //std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> FBclient_timeouts;
   std::unordered_map<std::string, uint64_t> client_starttime;
@@ -382,10 +404,11 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::unordered_map<std::string, proto::Writeback> writebackMessages;
 
   std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
+  //tbb hashmap<string,
   struct WaitingDependency {
     uint64_t reqId;
     const TransportAddress *remote;
-    std::unordered_set<std::string> deps;
+    std::unordered_set<std::string> deps;  //needs to be a tbb::hashmap.
   };
   std::unordered_map<std::string, WaitingDependency> waitingDependencies; // K depends on each V
 

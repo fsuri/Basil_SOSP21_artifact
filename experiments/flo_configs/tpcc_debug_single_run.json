@@ -14,7 +14,7 @@
   "num_groups": [3],
 
   "client_num_keys": 10000000,
-  "_benchmark_name": "rw",
+  "benchmark_name": "rw",
   "_client_zipf_coefficient": 1.2,
   "_client_key_selector": "zipf",
   "_rw_num_ops_txn": 25,
@@ -37,8 +37,8 @@
   "smallbank_customer_name_file_path": "/usr/local/etc/smallbank_names",
 
 
-  "benchmark_name": "tpcc-sync",
-  "partitioner": "warehouse",
+  "_benchmark_name": "tpcc-sync",
+  "_partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
   "server_load_time":  10,
   "tpcc_stock_level_ratio": 4,
@@ -81,7 +81,7 @@
       "validate_proofs": false,
       "sign_messages": false,
       "signature_type": 4,
-      "sig_batch": 4,
+      "sig_batch": 8,
       "_sig_batch_timeout": 5000,
      
 	  "multi_threading": true,
@@ -144,7 +144,7 @@
     [8]
   ],
   "client_threads_per_process": [
-    [1]
+    [2]
   ],
   "client_nodes_per_server": 1,
   "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],
