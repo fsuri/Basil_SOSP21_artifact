@@ -27,148 +27,148 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
     // Currently: First CPU = MainThread.
     running = true;
     for (uint32_t i = 1; i < num_threads; i++) {
-      //if(i % 2 == 0) continue;
-      std::thread *t;
-      //Mainthread
-      if(i==1){
-        t = new std::thread([this, i] {
-          while (true) {
-            std::function<void*()> job;
-            {
-              // only acquire the lock in this block so that the
-              // std::function execution is not holding the lock
-              Debug("Thread %d running on CPU %d.", i, sched_getcpu());
+        //if(i % 2 == 0) continue;
+        std::thread *t;
+        //Mainthread
+        if(i==1){
+            t = new std::thread([this, i] {
+                    while (true) {
+                        std::function<void*()> job;
+                        {
+                            // only acquire the lock in this block so that the
+                            // std::function execution is not holding the lock
+                            Debug("Thread %d running on CPU %d.", i, sched_getcpu());
 
-              test_main_worklist.wait_dequeue(job);
-              //while(!test_main_worklist.try_dequeue(job)) {};
+                            test_main_worklist.wait_dequeue(job);
+                            //while(!test_main_worklist.try_dequeue(job)) {};
 
-              // std::unique_lock<std::mutex> lock(this->main_worklistMutex);
-              // cv_main.wait(lock, [this] { return this->main_worklist.size() > 0 || !running; });
-              if (!running) {
-                break;
-              }
-              // if (this->main_worklist.size() == 0) {
-              //   continue;
-              // }
-              // job = std::move(this->main_worklist.front());
-              // this->main_worklist.pop_front();
-            }
-            job();
-          }
-        });
-      }
-      //Cryptothread
-      else{
-      t = new std::thread([this, i] {
-        while (true) {
-          std::pair<std::function<void*()>, EventInfo*> job;
-          //std::function<void*()> job;
-          {
-            // only acquire the lock in this block so that the
-            // std::function execution is not holding the lock
-            Debug("Thread %d running on CPU %d.", i, sched_getcpu());
-
-            //std::unique_lock<std::mutex> lock(this->worklistMutex);                    //STABLE_VERSION
-            //cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });   //STABLE_VERSION
-
-            test_worklist.wait_dequeue(job);
-            //while(!test_worklist.try_dequeue(job)) {};
-
-            //std::shared_lock lock(this->dummyMutex);
-            //cv.wait(lock, [this, &job] { return this->testlist.try_pop(job) || !running; });
-            //while(!testlist.try_pop(job) || !running) {}
-            Debug("popped job on CPU %d.", i);
-            if (!running) {
-              break;
-            }
-            // if (this->worklist.size() == 0) {                                        //STABLE_VERSION
-            //   continue;
-            // }
-            // job = std::move(this->worklist.front());                                 //STABLE_VERSION
-            // this->worklist.pop_front();                                              //STABLE_VERSION
-          }
-          //job();
-
-          if(job.second){
-              job.second->r = job.first();
-          // This _should_ be thread safe
-              event_active(job.second->ev, 0, 0);
-          }
-          else{
-            job.first();
-          }
-
+                            // std::unique_lock<std::mutex> lock(this->main_worklistMutex);
+                            // cv_main.wait(lock, [this] { return this->main_worklist.size() > 0 || !running; });
+                            if (!running) {
+                                break;
+                            }
+                            // if (this->main_worklist.size() == 0) {
+                            //   continue;
+                            // }
+                            // job = std::move(this->main_worklist.front());
+                            // this->main_worklist.pop_front();
+                        }
+                        job();
+                    }
+                });
         }
-      });
-    }
-      // Create a cpu_set_t object representing a set of CPUs. Clear it and mark
-      // only CPU i as set.
-      cpu_set_t cpuset;
-      CPU_ZERO(&cpuset);
-      CPU_SET(i+offset, &cpuset);
-      int rc = pthread_setaffinity_np(t->native_handle(),
-                                      sizeof(cpu_set_t), &cpuset);
-      if (rc != 0) {
-          Panic("Error calling pthread_setaffinity_np: %d", rc);
-      }
-      Debug("MainThread running on CPU %d.", sched_getcpu());
-      threads.push_back(t);
-      t->detach();
+        //Cryptothread
+        else{
+            t = new std::thread([this, i] {
+                    while (true) {
+                        std::pair<std::function<void*()>, EventInfo*> job;
+                        //std::function<void*()> job;
+                        {
+                            // only acquire the lock in this block so that the
+                            // std::function execution is not holding the lock
+                            Debug("Thread %d running on CPU %d.", i, sched_getcpu());
+
+                            //std::unique_lock<std::mutex> lock(this->worklistMutex);                    //STABLE_VERSION
+                            //cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });   //STABLE_VERSION
+
+                            test_worklist.wait_dequeue(job);
+                            //while(!test_worklist.try_dequeue(job)) {};
+
+                            //std::shared_lock lock(this->dummyMutex);
+                            //cv.wait(lock, [this, &job] { return this->testlist.try_pop(job) || !running; });
+                            //while(!testlist.try_pop(job) || !running) {}
+                            Debug("popped job on CPU %d.", i);
+                            if (!running) {
+                                break;
+                            }
+                            // if (this->worklist.size() == 0) {                                        //STABLE_VERSION
+                            //   continue;
+                            // }
+                            // job = std::move(this->worklist.front());                                 //STABLE_VERSION
+                            // this->worklist.pop_front();                                              //STABLE_VERSION
+                        }
+                        //job();
+
+                        if(job.second){
+                            job.second->r = job.first();
+                            // This _should_ be thread safe
+                            event_active(job.second->ev, 0, 0);
+                        }
+                        else{
+                            job.first();
+                        }
+
+                    }
+                });
+        }
+        // Create a cpu_set_t object representing a set of CPUs. Clear it and mark
+        // only CPU i as set.
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(i+offset, &cpuset);
+        int rc = pthread_setaffinity_np(t->native_handle(),
+                                        sizeof(cpu_set_t), &cpuset);
+        if (rc != 0) {
+            Panic("Error calling pthread_setaffinity_np: %d", rc);
+        }
+        Debug("MainThread running on CPU %d.", sched_getcpu());
+        threads.push_back(t);
+        t->detach();
     }
   }
   else{
-    fprintf(stderr, "starting client threadpool\n");
-    int num_cpus = std::thread::hardware_concurrency(); ///(2-hyperthreading);
-    fprintf(stderr, "Num_cpus: %d \n", num_cpus);
-    num_cpus /= total_processes;
-    num_cpus = 8; //XXX change back to dynamic
-    //int offset = process_id * num_cpus;
-    Debug("num cpus %d", num_cpus);
-    uint32_t num_threads = (uint32_t) std::max(1, num_cpus);
-    running = true;
-    for (uint32_t i = 0; i < num_threads; i++) {
-      std::thread *t;
-      t = new std::thread([this, i] {
-        while (true) {
-          std::pair<std::function<void*()>, EventInfo*> job;
-          {
-            Debug("Thread %d running on CPU %d.", i, sched_getcpu());
+      fprintf(stderr, "starting client threadpool\n");
+      int num_cpus = std::thread::hardware_concurrency(); ///(2-hyperthreading);
+      fprintf(stderr, "Num_cpus: %d \n", num_cpus);
+      num_cpus /= total_processes;
+      num_cpus = 8; //XXX change back to dynamic
+      //int offset = process_id * num_cpus;
+      Debug("num cpus %d", num_cpus);
+      uint32_t num_threads = (uint32_t) std::max(1, num_cpus);
+      running = true;
+      for (uint32_t i = 0; i < num_threads; i++) {
+          std::thread *t;
+          t = new std::thread([this, i] {
+                  while (true) {
+                      std::pair<std::function<void*()>, EventInfo*> job;
+                      {
+                          Debug("Thread %d running on CPU %d.", i, sched_getcpu());
 
-            test_worklist.wait_dequeue(job);
-            //while(!test_worklist.try_dequeue(job)) {};
+                          test_worklist.wait_dequeue(job);
+                          //while(!test_worklist.try_dequeue(job)) {};
 
-            // std::unique_lock<std::mutex> lock(this->worklistMutex);
-            // cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });
-            if (!running) {
-              break;
-            }
-            // if (this->worklist.size() == 0) {
-            //   continue;
-            // }
-            // job = std::move(this->worklist.front());
-            // this->worklist.pop_front();
+                          // std::unique_lock<std::mutex> lock(this->worklistMutex);
+                          // cv.wait(lock, [this] { return this->worklist.size() > 0 || !running; });
+                          if (!running) {
+                              break;
+                          }
+                          // if (this->worklist.size() == 0) {
+                          //   continue;
+                          // }
+                          // job = std::move(this->worklist.front());
+                          // this->worklist.pop_front();
+                      }
+                      if(job.second){
+                          job.second->r = job.first();
+                          event_active(job.second->ev, 0, 0);
+                      }
+                      else{
+                          job.first();
+                      }
+                  }
+              });
+          cpu_set_t cpuset;
+          CPU_ZERO(&cpuset);
+          CPU_SET(i, &cpuset);
+          int rc = pthread_setaffinity_np(t->native_handle(),
+                                          sizeof(cpu_set_t), &cpuset);
+          if (rc != 0) {
+              Panic("Error calling pthread_setaffinity_np: %d", rc);
           }
-          if(job.second){
-              job.second->r = job.first();
-              event_active(job.second->ev, 0, 0);
-          }
-          else{
-            job.first();
-          }
-        }
-      });
-      cpu_set_t cpuset;
-      CPU_ZERO(&cpuset);
-      CPU_SET(i, &cpuset);
-      int rc = pthread_setaffinity_np(t->native_handle(),
-                                      sizeof(cpu_set_t), &cpuset);
-      if (rc != 0) {
-          Panic("Error calling pthread_setaffinity_np: %d", rc);
+          Debug("MainThread running on CPU %d.", sched_getcpu());
+          threads.push_back(t);
+          t->detach();
       }
-      Debug("MainThread running on CPU %d.", sched_getcpu());
-      threads.push_back(t);
-      t->detach();
-    }
   }
 }
 
