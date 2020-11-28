@@ -10,8 +10,8 @@
   ],
   "replication_protocol": ["hotstuff"],
   "client_protocol_mode": ["hotstuff"],
-  "num_shards": [24],
-  "num_groups": [24],
+  "num_shards": [6],
+  "num_groups": [6],
   "benchmark_name": "tpcc-sync",
   "partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
@@ -59,7 +59,7 @@
   "codebase_name": "indicus",
   "client_total": [
    
-    [144]
+    [36]
   ],
   "client_processes_per_client_node": [
    
