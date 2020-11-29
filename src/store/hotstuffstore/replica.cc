@@ -207,11 +207,13 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 void Replica::handleMessage(const TransportAddress &remote, const string &type, const string &data){
   if(true){
     //need to copy type and data.
-    auto f = [this, &remote, type, data](){
+
+    TransportAddress* clientAddr = remote.clone();
+    auto f = [this, clientAddr, type, data](){
       //std::unique_lock lock(atomicMutex);
         ::google::protobuf::Message* reply = app->HandleMessage(type, data);
         if (reply != nullptr) {
-            this->transport->SendMessage(this, remote, *reply);
+            this->transport->SendMessage(this, *clientAddr, *reply);
             delete reply;
         } else {
             Debug("Invalid request of type %s", type.c_str());
