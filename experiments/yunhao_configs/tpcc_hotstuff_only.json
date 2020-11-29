@@ -47,7 +47,7 @@
       "sig_batch_timeout": 10,
       "ebatch_size": 2,
       "ebatch_tout": 10,
-      "multi_threading": false,
+      "multi_threading": true,
 	  "mainThreadDispatching": false,
 	  "dispatchMessageReceive": false,
       "batch_verification": false,
@@ -59,7 +59,7 @@
   "codebase_name": "indicus",
   "client_total": [
    
-    [36]
+    [48]
   ],
   "client_processes_per_client_node": [
    

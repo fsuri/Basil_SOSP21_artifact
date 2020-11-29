@@ -606,6 +606,10 @@ int main(int argc, char **argv) {
   }
       // HotStuff
   case PROTO_HOTSTUFF: {
+      int num_cpus = std::thread::hardware_concurrency();
+      num_cpus /= FLAGS_indicus_total_processes;
+      int hotstuff_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+
       server = new hotstuffstore::Server(config, &keyManager,
                                      FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
                                      FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
@@ -615,7 +619,7 @@ int main(int argc, char **argv) {
                                        FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
                                        FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
                                        FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
-                                       FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, tport);
+                                       FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, hotstuff_cpu, tport);
 
       break;
   }
@@ -691,14 +695,14 @@ int main(int argc, char **argv) {
   CALLGRIND_START_INSTRUMENTATION;
 	//SET THREAD AFFINITY if running multi_threading:
 	//if(FLAGS_indicus_multi_threading){
-	if((proto == PROTO_INDICUS || proto == PROTO_PBFT)&& FLAGS_indicus_multi_threading){
+	if((proto == PROTO_INDICUS || proto == PROTO_PBFT || proto == PROTO_HOTSTUFF) && FLAGS_indicus_multi_threading){
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
 		//bool hyperthreading = true;
-	  int num_cpus = std::thread::hardware_concurrency();///(2-FLAGS_indicus_hyper_threading);
+        int num_cpus = std::thread::hardware_concurrency();///(2-FLAGS_indicus_hyper_threading);
 		//CPU_SET(num_cpus-1, &cpuset); //last core is for main
 		num_cpus /= FLAGS_indicus_total_processes;
-	  int offset = FLAGS_indicus_process_id * num_cpus;
+        int offset = FLAGS_indicus_process_id * num_cpus;
 		//int offset = FLAGS_indicus_process_id;
 		CPU_SET(0 + offset, &cpuset); //first assigned core is for main
 		pthread_setaffinity_np(pthread_self(),	sizeof(cpu_set_t), &cpuset);

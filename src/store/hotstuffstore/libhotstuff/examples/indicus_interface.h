@@ -12,11 +12,12 @@ namespace hotstuffstore {
 
         int shardId;
         int replicaId;
+        int cpuId;
 
         void initialize(int argc, char** argv);
         
     public:
-        IndicusInterface(int shardId, int replicaId);
+        IndicusInterface(int shardId, int replicaId, int cpuId);
         
         void propose(const std::string& hash, hotstuff_exec_callback execb);
     };

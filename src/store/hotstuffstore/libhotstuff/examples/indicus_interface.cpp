@@ -7,8 +7,8 @@ namespace hotstuffstore {
         hotstuff_papp->interface_propose(hash, execb);
     }
 
-    IndicusInterface::IndicusInterface(int shardId, int replicaId):
-        shardId(shardId), replicaId(replicaId)
+    IndicusInterface::IndicusInterface(int shardId, int replicaId, int cpuId):
+        shardId(shardId), replicaId(replicaId), cpuId(cpuId)
     {
         string config_dir = config_dir_base + "shard" + std::to_string(shardId) + "/";
 
@@ -184,6 +184,11 @@ namespace hotstuffstore {
 
         // spawning a new thread to run hotstuff logic asynchronously
         std::thread t([this](){
+                cpu_set_t cpuset;
+                CPU_ZERO(&cpuset);
+                CPU_SET(cpuId, &cpuset);
+                pthread_setaffinity_np(pthread_self(),	sizeof(cpu_set_t), &cpuset);
+                std::cout << "HotStuff runs on CPU" << cpuId << std::endl;
                 hotstuff_papp->interface_entry();
                 //elapsed.stop(true);
             });

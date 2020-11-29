@@ -30,10 +30,10 @@ using namespace std;
 
 Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
-  uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, Transport *transport)
+                 uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, int hotstuff_cpu, Transport *transport)
     : config(config),
 #ifdef USE_HOTSTUFF_STORE
-      hotstuff_interface(groupIdx, idx),
+      hotstuff_interface(groupIdx, idx, hotstuff_cpu),
 #endif
       keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
     id(groupIdx * config.n + idx), signMessages(signMessages), maxBatchSize(maxBatchSize),
@@ -205,7 +205,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 }
 
 void Replica::handleMessage(const TransportAddress &remote, const string &type, const string &data){
-  if(false){
+  if(true){
     //need to copy type and data.
     auto f = [this, &remote, type, data](){
       //std::unique_lock lock(atomicMutex);

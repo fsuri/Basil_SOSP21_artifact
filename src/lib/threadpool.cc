@@ -21,16 +21,19 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
     int num_cpus = std::thread::hardware_concurrency(); ///(2-hyperthreading);
     fprintf(stderr, "Num_cpus: %d \n", num_cpus);
     num_cpus /= total_processes;
+    fprintf(stderr, "Num_cpus used for replica #%d: %d \n", process_id, num_cpus);
     int offset = process_id * num_cpus;
     Debug("num cpus %d", num_cpus);
     uint32_t num_threads = (uint32_t) std::max(1, num_cpus);
     // Currently: First CPU = MainThread.
     running = true;
-    for (uint32_t i = 1; i < num_threads; i++) {
-        //if(i % 2 == 0) continue;
+
+    int num_core_for_hotstuff = 1;
+    for (uint32_t i = 1; i < num_threads - num_core_for_hotstuff; i++) {
         std::thread *t;
         //Mainthread
         if(i==1){
+        //if(false){
             t = new std::thread([this, i] {
                     while (true) {
                         std::function<void*()> job;
