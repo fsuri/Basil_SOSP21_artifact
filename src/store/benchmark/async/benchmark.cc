@@ -217,7 +217,7 @@ DEFINE_bool(indicus_batch_verification, false, "using ed25519 donna batch verifi
 DEFINE_uint64(indicus_batch_verification_size, 64, "batch size for ed25519 donna batch verification");
 DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout, ms");
 
-DEFINE_bool(pbft_order_commit, false, "order commit writebacks as well");
+DEFINE_bool(pbft_order_commit, true, "order commit writebacks as well");
 DEFINE_bool(pbft_validate_abort, false, "validate abort writebacks as well");
 
 
