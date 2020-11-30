@@ -10,8 +10,8 @@
   ],
   "replication_protocol": ["indicus"],
   "client_protocol_mode": ["indicus"],
-  "num_shards": [3],
-  "num_groups": [3],
+  "num_shards": [24],
+  "num_groups": [24],
 
   "client_num_keys": 10000000,
   "benchmark_name": "rw",
@@ -21,8 +21,8 @@
 
   "_benchmark_name": "retwis",
   "client_zipf_coefficient": 0.75,   
-  "client_key_selector": "zipf",
-  "rw_num_ops_txn": 2,
+  "client_key_selector": "uniform",
+  "rw_num_ops_txn": 4,
 
   "_rw_or_retwis": true,
 
@@ -62,7 +62,7 @@
   "run_locally": false,
   "stats_merge_lists": ["txn_groups", "sig_batch"],
 
-  "_replication_protocol_settings": [{
+  "replication_protocol_settings": [{
 	"_read_dep": "one-honest",
 	  "_read_messages": "read-quorum",
       "_read_reply_batch": false,
@@ -98,7 +98,7 @@
 	  }
 	],
 
-	"replication_protocol_settings": [
+	"_replication_protocol_settings": [
   {
 	  "read_dep": "one",
 	  "read_messages": "read-quorum",
@@ -186,7 +186,7 @@
     [8]
   ],
   "client_threads_per_process": [
-    [2]
+    [4]
   ],
   "client_nodes_per_server": 1,
   "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],
