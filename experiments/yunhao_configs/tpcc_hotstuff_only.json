@@ -51,6 +51,8 @@
 	  "mainThreadDispatching": false,
 	  "dispatchMessageReceive": false,
       "batch_verification": false,
+      "order_commit": true,
+      "validate_abort": true,
       "_key_path": "/usr/local/etc/indicus-keys/secp256k1",
       "key_path": "/usr/local/etc/indicus-keys/donna"
     }
@@ -59,7 +61,7 @@
   "codebase_name": "indicus",
   "client_total": [
    
-    [30]
+    [42]
   ],
   "client_processes_per_client_node": [
    
