@@ -296,22 +296,26 @@ void Replica::HandleRequest(const TransportAddress &remote,
       TransportAddress* clientAddr = remote.clone();
       proto::PackedMessage packedMsg = request.packed_msg();
       std::function<void(const std::string&, uint32_t seqnum)> execb = [this, digest, packedMsg, clientAddr](const std::string &digest_param, uint32_t seqnum) {
-          // Debug("Callback: %d, %ld", idx, seqnum);
-          stats->Increment("hotstuff_exec_callback",1);
+          auto f = [this, digest, packedMsg, clientAddr, digest_param, seqnum](){
+              // Debug("Callback: %d, %ld", idx, seqnum);
+              stats->Increment("hotstuff_exec_callback",1);
 
-          // prepare data structures for executeSlots()
-          assert(digest == digest_param);
-          requests[digest] = packedMsg;
-          replyAddrs[digest] = clientAddr;
+              // prepare data structures for executeSlots()
+              assert(digest == digest_param);
+              requests[digest] = packedMsg;
+              replyAddrs[digest] = clientAddr;
 
-          proto::BatchedRequest batchedRequest;
-          (*batchedRequest.mutable_digests())[0] = digest_param;
-          string batchedDigest = BatchedDigest(batchedRequest);
-          batchedRequests[batchedDigest] = batchedRequest;
-          pendingExecutions[seqnum] = batchedDigest;
+              proto::BatchedRequest batchedRequest;
+              (*batchedRequest.mutable_digests())[0] = digest_param;
+              string batchedDigest = BatchedDigest(batchedRequest);
+              batchedRequests[batchedDigest] = batchedRequest;
+              pendingExecutions[seqnum] = batchedDigest;
 
-          executeSlots();
-          // std::cout << "Complete callback: " << seqnum << ", succeed seqnum: " << execSeqNum << std::endl;
+              executeSlots();
+              return (void*) true;
+          };
+          transport->DispatchTP_main(f);
+          //transport->DispatchTP_noCB(f);
       };      
       hotstuff_interface.propose(digest, execb);
   }
