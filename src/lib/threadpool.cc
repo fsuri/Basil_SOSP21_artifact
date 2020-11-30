@@ -18,7 +18,7 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
     fprintf(stderr, "process_id: %d, total_processes: %d \n", process_id, total_processes);
     //TODO: add config param for hyperthreading
     //bool hyperthreading = true;
-    int num_cpus = std::thread::hardware_concurrency(); ///(2-hyperthreading);
+    int num_cpus = 8; //std::thread::hardware_concurrency(); ///(2-hyperthreading);
     fprintf(stderr, "Num_cpus: %d \n", num_cpus);
     num_cpus /= total_processes;
     int offset = process_id * num_cpus;

@@ -24,6 +24,8 @@
   "client_key_selector": "zipf",
   "rw_num_ops_txn": 2,
 
+  "_rw_or_retwis": true,
+
   "_benchmark_name": "smallbank",
   "smallbank_hotspot_probability": 0.9,
   "smallbank_balance_ratio": 60,
@@ -33,8 +35,8 @@
   "smallbank_write_check_ratio": 10,
   "smallbank_num_hotspots": 1000,
   "smallbank_num_customers": 18000,
-  "smallbank_data_file_path": "/usr/local/etc/smallbank_data",
-  "smallbank_customer_name_file_path": "/usr/local/etc/smallbank_names",
+  "smallbank_data_file_path": "/usr/local/etc/smallbank_data_small",
+  "smallbank_customer_name_file_path": "/usr/local/etc/smallbank_names_small",
 
 
   "_benchmark_name": "tpcc-sync",
@@ -55,7 +57,7 @@
   "client_max_attempts": -1,
   "client_max_backoff": 250,
   "client_rand_sleep": 2,
-  "__CLIENT RAND SLEEP NEEDS TO BE HIGH FOR NON CRYPTO; backoff too": true,
+  "__CLIENT RAND SLEEP NEEDS TO BE HIGH FOR NON CRYPTO contention workloads; backoff too (or fewer clients)": true,
   "client_message_timeout": 10000,
   "run_locally": false,
   "stats_merge_lists": ["txn_groups", "sig_batch"],
@@ -93,10 +95,49 @@
       "_key_path": "/usr/local/etc/indicus-keys/secp256k1",
       "key_path": "/usr/local/etc/indicus-keys/donna"
     
-  }
+	  }
+	],
+
+	"replication_protocol_settings": [
+  {
+	  "read_dep": "one",
+	  "read_messages": "read-quorum",
+      "_read_reply_batch": false,
+      "_adjust_batch_size": false,
+      "_shared_mem_batch": false,
+      "_shared_mem_verify": false,
+	
+      "message_transport_type": "tcp",
+      "watermark_time_delta": 30000,
+      "read_quorum": "one",
+	  "_read_quorum": "majority-honest",
+	  "p1DecisionTimeout":10,
+
+      "_max_dep_depth": 1,
+      "_max_dep_depth": -2, 
+	  "hash_digest": true,
+      "verify_deps": false,
+	
+      "validate_proofs": true,
+      "sign_messages": true,
+      "signature_type": 4,
+      "sig_batch": 16,
+      "_sig_batch_timeout": 5000,
+     
+	  "multi_threading": true,
+	  "mainThreadDispatching": true,
+      "parallel_reads": true,
+      "dispatchCallbacks": true,
+      "client_multi_threading": false,
+      "hyper_threading": false,
+	  "dispatchMessageReceive": false,
+      "batch_verification": false,
+      "_key_path": "/usr/local/etc/indicus-keys/secp256k1",
+      "key_path": "/usr/local/etc/indicus-keys/donna"
+    }
 ],
 
-  "replication_protocol_settings": [
+  "_replication_protocol_settings": [
     
 
     {
@@ -110,6 +151,7 @@
       "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
+	  "_read_quorum": "majority-honest",
 	  "p1DecisionTimeout":10,
 
       "_max_dep_depth": 1,
@@ -120,7 +162,7 @@
       "validate_proofs": true,
       "sign_messages": true,
       "signature_type": 4,
-      "sig_batch": 4,
+      "sig_batch": 16,
       "_sig_batch_timeout": 5000,
      
 	  "multi_threading": true,

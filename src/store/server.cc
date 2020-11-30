@@ -100,6 +100,7 @@ DEFINE_uint64(num_groups, 1, "number of replica groups in the system");
 DEFINE_uint64(num_shards, 1, "number of shards in the system");
 DEFINE_bool(debug_stats, false, "record stats related to debugging");
 
+DEFINE_bool(rw_or_retwis, true, "true for rw, false for retwis");
 const std::string protocol_args[] = {
 	"tapir",
   "weak",
@@ -635,6 +636,32 @@ int main(int argc, char **argv) {
                 << std::endl;
       return 1;
     }*/
+		//TODO: only do if it is RW workload
+		if (FLAGS_num_keys > 0) {
+			size_t loaded = 0;
+	    size_t stored = 0;
+			std::vector<int> txnGroups;
+			for (size_t i = 0; i < FLAGS_num_keys; ++i) {
+				//TODO add partition. Figure out how client key partitioning is done..
+				std::string key;
+				key = std::to_string(i);
+				std::string value;
+				if(FLAGS_rw_or_retwis){
+				  value = std::move(std::string(100, '\0')); //turn the size into a flag
+			  }
+				else{
+					value = std::to_string(i);
+				}
+
+				if ((*part)(key, FLAGS_num_shards, FLAGS_group_idx, txnGroups) % FLAGS_num_groups == FLAGS_group_idx) {
+					server->Load(key, value, Timestamp());
+					++stored;
+				}
+				++loaded;
+			}
+			Notice("Created and Stored %lu out of %lu key-value pairs", stored,
+	        loaded);
+		}
   } else if (FLAGS_data_file_path.length() > 0 && FLAGS_keys_path.empty()) {
     std::ifstream in;
     in.open(FLAGS_data_file_path);

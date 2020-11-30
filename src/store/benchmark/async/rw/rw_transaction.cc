@@ -35,15 +35,15 @@ Operation RWTransaction::GetNextOperation(size_t outstandingOpCount, size_t fini
       std::string strValue = strValueItr->second;
       std::string writeValue;
       if (strValue.length() == 0) {
-        writeValue = std::string(350, '\0'); //make a longer string
+        writeValue = std::string(100, '\0'); //make a longer string
       } else {
         uint64_t intValue = 0;
-        for (int i = 0; i < 4; ++i) {
-          intValue = intValue | (static_cast<uint64_t>(strValue[i]) << ((3 - i) * 8));
+        for (int i = 0; i < 100; ++i) {
+          intValue = intValue | (static_cast<uint64_t>(strValue[i]) << ((99 - i) * 8));
         }
         intValue++;
-        for (int i = 0; i < 4; ++i) {
-          writeValue += static_cast<char>((intValue >> (3 - i) * 8) & 0xFF);
+        for (int i = 0; i < 100; ++i) {
+          writeValue += static_cast<char>((intValue >> (99 - i) * 8) & 0xFF);
         }
       }
       return Put(GetKey(finishedOpCount), writeValue);
