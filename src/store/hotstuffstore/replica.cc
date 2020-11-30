@@ -220,8 +220,8 @@ void Replica::handleMessage(const TransportAddress &remote, const string &type, 
         }
         return (void*) true;
     };
-    transport->DispatchTP_main(f);
-    //transport->DispatchTP_noCB(f);
+    //transport->DispatchTP_main(f);
+    transport->DispatchTP_noCB(f);
   }
   else{
       ::google::protobuf::Message* reply = app->HandleMessage(type, data);

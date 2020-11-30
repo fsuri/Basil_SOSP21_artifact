@@ -333,7 +333,8 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
 ::google::protobuf::Message* Server::HandleMessage(const string& type, const string& msg) {
   Debug("Handle %s", type.c_str());
-  std::shared_lock lock(atomicMutex);
+  //std::shared_lock lock(atomicMutex);
+  std::unique_lock lock(atomicMutex);
 
   proto::Read read;
   proto::GroupedDecision gdecision;

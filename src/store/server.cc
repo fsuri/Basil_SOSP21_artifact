@@ -288,7 +288,7 @@ DEFINE_uint64(pbft_esig_batch, 1, "signature batch size"
 DEFINE_uint64(pbft_esig_batch_timeout, 10, "signature batch timeout ms"
 		" sig batch timeout (for PBFT decision phase)");
 
-DEFINE_bool(pbft_order_commit, false, "order commit writebacks as well");
+DEFINE_bool(pbft_order_commit, true, "order commit writebacks as well");
 DEFINE_bool(pbft_validate_abort, false, "validate abort writebacks as well");
 
 

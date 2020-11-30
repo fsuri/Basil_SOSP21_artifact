@@ -32,8 +32,8 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
     for (uint32_t i = 1; i < num_threads - num_core_for_hotstuff; i++) {
         std::thread *t;
         //Mainthread
-        if(i==1){
-        //if(false){
+        //if(i==1){
+        if(false){
             t = new std::thread([this, i] {
                     while (true) {
                         std::function<void*()> job;
