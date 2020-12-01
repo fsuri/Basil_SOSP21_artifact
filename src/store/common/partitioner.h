@@ -28,6 +28,8 @@ class DefaultPartitioner : public Partitioner {
 
   virtual uint64_t operator()(const std::string &key, uint64_t numShards,
       int group, const std::vector<int> &txnGroups);
+ private:
+  std::hash<std::string> hash;
 };
 
 class WarehouseDistItemsPartitioner : public Partitioner {

@@ -14,7 +14,7 @@ namespace hotstuffstore {
 
         string config_file = config_dir + "hotstuff.gen.conf";
         string key_file = config_dir + "hotstuff.gen-sec" + std::to_string(replicaId) + ".conf";
-        
+
         char* argv[4];
         char arg1[200];
         char arg3[200];
@@ -54,8 +54,8 @@ namespace hotstuffstore {
         auto opt_base_timeout = Config::OptValDouble::create(10000);
         auto opt_prop_delay = Config::OptValDouble::create(1);
         auto opt_imp_timeout = Config::OptValDouble::create(10000);
-        auto opt_nworker = Config::OptValInt::create(6);
-        auto opt_repnworker = Config::OptValInt::create(6);
+        auto opt_nworker = Config::OptValInt::create(3);
+        auto opt_repnworker = Config::OptValInt::create(3);
         auto opt_repburst = Config::OptValInt::create(1000000);
         auto opt_clinworker = Config::OptValInt::create(1);
         auto opt_cliburst = Config::OptValInt::create(1000000);
@@ -86,7 +86,7 @@ namespace hotstuffstore {
         config.add_opt("max-rep-msg", opt_max_rep_msg, Config::SET_VAL, 'S', "the maximum replica message size");
         config.add_opt("max-cli-msg", opt_max_cli_msg, Config::SET_VAL, 'S', "the maximum client message size");
         config.add_opt("help", opt_help, Config::SWITCH_ON, 'h', "show this help info");
-        
+
         EventContext ec;
         config.parse(argc, argv);
         if (opt_help->get())
@@ -195,4 +195,3 @@ namespace hotstuffstore {
         t.detach();
     }
 }
-

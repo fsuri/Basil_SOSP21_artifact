@@ -291,6 +291,7 @@ DEFINE_uint64(pbft_esig_batch_timeout, 10, "signature batch timeout ms"
 DEFINE_bool(pbft_order_commit, false, "order commit writebacks as well");
 DEFINE_bool(pbft_validate_abort, false, "validate abort writebacks as well");
 
+DEFINE_bool(rw_or_retwis, false, "load rw workload or retwis");
 
 const std::string occ_type_args[] = {
 	"tapir",
@@ -650,6 +651,31 @@ int main(int argc, char **argv) {
                 << std::endl;
       return 1;
     }*/
+		if (FLAGS_num_keys > 0) {
+			size_t loaded = 0;
+	    size_t stored = 0;
+			std::vector<int> txnGroups;
+			for (size_t i = 0; i < FLAGS_num_keys; ++i) {
+				//TODO add partition. Figure out how client key partitioning is done..
+				std::string key;
+				key = std::to_string(i);
+				std::string value;
+				if(FLAGS_rw_or_retwis){
+				  value = std::move(std::string(100, '\0')); //turn the size into a flag
+			  }
+				else{
+					value = std::to_string(i);
+				}
+
+				if ((*part)(key, FLAGS_num_shards, FLAGS_group_idx, txnGroups) % FLAGS_num_groups == FLAGS_group_idx) {
+					server->Load(key, value, Timestamp());
+					++stored;
+				}
+				++loaded;
+			}
+			Notice("Created and Stored %lu out of %lu key-value pairs", stored,
+	        loaded);
+		}
   } else if (FLAGS_data_file_path.length() > 0 && FLAGS_keys_path.empty()) {
     std::ifstream in;
     in.open(FLAGS_data_file_path);

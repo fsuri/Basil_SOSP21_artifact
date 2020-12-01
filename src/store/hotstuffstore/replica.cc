@@ -205,7 +205,9 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 }
 
 void Replica::handleMessage(const TransportAddress &remote, const string &type, const string &data){
-    if(numShards == 6 || numShards == 12){
+    static int count = 0;
+    count++;
+    if((numShards == 6 || numShards == 12)){
         TransportAddress* clientAddr = remote.clone();
         auto f = [this, clientAddr, type, data](){
             //std::unique_lock lock(atomicMutex);
@@ -226,8 +228,8 @@ void Replica::handleMessage(const TransportAddress &remote, const string &type, 
             transport->DispatchTP_main(f);
     }
     else{
-        if (numShards != 24)
-            Panic("Currently only support numShards = 6, 12 or 24");
+        // if (numShards != 24)
+        //     Panic("Currently only support numShards = 6, 12 or 24");
 
         ::google::protobuf::Message* reply = app->HandleMessage(type, data);
         if (reply != nullptr) {
@@ -342,8 +344,8 @@ void Replica::HandleRequest(const TransportAddress &remote,
 
               executeSlots();
           }
-          
-      };      
+
+      };
       hotstuff_interface.propose(digest, execb);
   }
 
@@ -429,7 +431,7 @@ void Replica::HandleBatchedRequest(const TransportAddress &remote,
   // HotStuff should never use this function
   assert(false);
   #endif
-  
+
   string digest = BatchedDigest(request);
   batchedRequests[digest] = request;
 
@@ -656,7 +658,7 @@ void Replica::testSlot(uint64_t seqnum, uint64_t viewnum, string digest, bool go
     #ifdef USE_HOTSTUFF_STORE
     assert(false);
     #endif
-    
+
     executeSlots();
   }
 }
@@ -672,7 +674,7 @@ void Replica::executeSlots(){
 #ifdef USE_HOTSTUFF_STORE
       assert(false);
 #endif
-      
+
     executeSlots_internal_multi();
   }
   else{
@@ -761,7 +763,7 @@ void Replica::executeSlots_internal_multi() {
 
       } else {
 #ifdef USE_HOTSTUFF_STORE
-          
+
           stats->Increment("miss_hotstuff_req_txn",1);
           // request resend not implemented for HotStuff
           break;
@@ -787,7 +789,7 @@ void Replica::executeSlots_internal_multi() {
         stats->Increment("miss_hotstuff_req_batch",1);
         // batch resend not implemented for HotStuff
         break;
-        
+
 #else
 
       Debug("Batch request not yet received");
@@ -913,7 +915,7 @@ void Replica::executeSlots_internal() {
         }
       } else {
 #ifdef USE_HOTSTUFF_STORE
-          
+
           stats->Increment("miss_hotstuff_req_txn",1);
           // request resend not implemented for HotStuff
           break;
@@ -940,7 +942,7 @@ void Replica::executeSlots_internal() {
         stats->Increment("miss_hotstuff_req_batch",1);
         // batch resend not implemented for HotStuff
         break;
-        
+
 #else
 
         Debug("Batch request not yet received");

@@ -49,7 +49,7 @@ SmallbankClient::SmallbankClient(
       num_hotspot_keys_(num_hotspot_keys),  // first `num_hotpost_keys_` in
                                             // `all_keys_` is the hotspot
       num_non_hotspot_keys_(num_non_hotspot_keys),
-      hotspot_probability_(hotspot_probability) { 
+      hotspot_probability_(hotspot_probability) {
   std::string str;
   std::ifstream file(customer_name_file_path);
   while (getline(file, str, ',')) {
@@ -74,72 +74,61 @@ SyncTransaction *SmallbankClient::GetNextTransaction() {
   // https://github.com/microsoft/CCF/blob/master/samples/apps/smallbank/clients/small_bank_client.cpp
   if (ttype < balanceThreshold) {
     last_op_ = "balance";
-    return new Bal(GetCustomerKey(all_keys_, num_hotspot_keys_,
-                                  num_non_hotspot_keys_, hotspot_probability_),
+    return new Bal(GetCustomerKey(),
                    timeout_);
   }
   if (ttype < depositThreshold) {
     last_op_ = "deposit";
     return new DepositChecking(
-        GetCustomerKey(all_keys_, num_hotspot_keys_,
-                       num_non_hotspot_keys_, hotspot_probability_),
+        GetCustomerKey(),
         GetRand()() % 50 + 1, timeout_);
   }
   if (ttype < transactThreshold) {
     last_op_ = "transact";
     return new TransactSaving(
-        GetCustomerKey(all_keys_, num_hotspot_keys_,
-                       num_non_hotspot_keys_, hotspot_probability_),
+        GetCustomerKey(),
         GetRand()() % 101 - 50, timeout_);
   }
   if (ttype < amalgamateThreshold) {
     last_op_ = "amalgamate";
     std::pair<string, string> keyPair =
-        GetCustomerKeyPair(all_keys_, num_hotspot_keys_,
-                           num_non_hotspot_keys_, hotspot_probability_);
+        GetCustomerKeyPair();
     return new Amalgamate(keyPair.first, keyPair.second, timeout_);
   }
   last_op_ = "write_check";
   return new WriteCheck(
-      GetCustomerKey(all_keys_, num_hotspot_keys_, num_non_hotspot_keys_,
-                     hotspot_probability_),
+      GetCustomerKey(),
       GetRand()() % 50, timeout_);
 }
 
 std::string SmallbankClient::GetLastOp() const { return last_op_; }
 
-std::string SmallbankClient::GetCustomerKey(std::vector<std::string> all_keys,
-                                            uint32_t num_hotspot_keys,
-                                            uint32_t num_non_hotspot_keys,
-                                            double hotspot_probability) {
+std::string SmallbankClient::GetCustomerKey() {
   std::uniform_int_distribution<int> hotspotDistribution(
-      0, num_hotspot_keys + num_non_hotspot_keys - 1);
+      0, num_hotspot_keys_ + num_non_hotspot_keys_ - 1);
   bool inHotspot =
       hotspotDistribution(GetRand()) <
-      hotspot_probability * (num_hotspot_keys + num_non_hotspot_keys);
-  int range = inHotspot ? num_hotspot_keys : num_non_hotspot_keys;
+      hotspot_probability_ * (num_hotspot_keys_ + num_non_hotspot_keys_);
+  int range = inHotspot ? num_hotspot_keys_ : num_non_hotspot_keys_;
   std::uniform_int_distribution<int> relevantKeyDistribution(0, range - 1);
-  int offset = inHotspot ? 0 : num_hotspot_keys;
-  return all_keys[relevantKeyDistribution(GetRand()) + offset];
+  int offset = inHotspot ? 0 : num_hotspot_keys_;
+  return all_keys_[relevantKeyDistribution(GetRand()) + offset];
 };
 
-std::pair<std::string, std::string> SmallbankClient::GetCustomerKeyPair(
-    std::vector<std::string> all_keys,
-    uint32_t num_hotspot_keys, uint32_t num_non_hotspot_keys,
-    double hotspot_probability) {
+std::pair<std::string, std::string> SmallbankClient::GetCustomerKeyPair() {
   std::uniform_int_distribution<int> hotspotDistribution(
-      0, num_hotspot_keys + num_non_hotspot_keys - 1);
+      0, num_hotspot_keys_ + num_non_hotspot_keys_ - 1);
   bool inHotspot =
       hotspotDistribution(GetRand()) <
-      hotspot_probability * (num_hotspot_keys + num_non_hotspot_keys);
-  int range = inHotspot ? num_hotspot_keys : num_non_hotspot_keys;
+      hotspot_probability_ * (num_hotspot_keys_ + num_non_hotspot_keys_);
+  int range = inHotspot ? num_hotspot_keys_ : num_non_hotspot_keys_;
   std::uniform_int_distribution<int> relevantKey1Distribution(0, range - 1);
-  int offset = inHotspot ? 0 : num_hotspot_keys;
+  int offset = inHotspot ? 0 : num_hotspot_keys_;
   int key1Idx = relevantKey1Distribution(GetRand()) + offset;
-  string key1 = all_keys[key1Idx];
-  std::swap(all_keys[key1Idx], all_keys[range + offset - 1]);
+  string key1 = all_keys_[key1Idx];
+  std::swap(all_keys_[key1Idx], all_keys_[range + offset - 1]);
   std::uniform_int_distribution<int> relevantKey2Distribution(0, range - 2);
-  string key2 = all_keys[relevantKey2Distribution(GetRand()) + offset];
+  string key2 = all_keys_[relevantKey2Distribution(GetRand()) + offset];
   return std::make_pair(key1, key2);
 };
 
