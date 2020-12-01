@@ -16,6 +16,10 @@ class RWTransaction : public AsyncTransaction {
 
   virtual Operation GetNextOperation(size_t outstandingOpCount, size_t finishedOpCount,
       std::map<std::string, std::string> readValues);
+
+  inline const std::vector<int> getKeyIdxs() const {
+    return keyIdxs;
+  }
  protected:
   inline const std::string &GetKey(int i) const {
     return keySelector->GetKey(keyIdxs[i]);

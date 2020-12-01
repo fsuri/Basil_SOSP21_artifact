@@ -20,7 +20,12 @@ RWClient::~RWClient() {
 }
 
 AsyncTransaction *RWClient::GetNextTransaction() {
-  return new RWTransaction(keySelector, numKeys, GetRand());
+  RWTransaction *rw_tx = new RWTransaction(keySelector, numKeys, GetRand());
+  // for(int key : rw_tx->getKeyIdxs()){
+  //   //key_counts[key]++;
+  //   stats.IncrementList("key distribution", key, 1);
+  // }
+  return rw_tx;
 }
 
 std::string RWClient::GetLastOp() const {

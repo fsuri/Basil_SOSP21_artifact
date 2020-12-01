@@ -4,12 +4,13 @@
 
 uint64_t DefaultPartitioner::operator()(const std::string &key, uint64_t nshards,
     int group, const std::vector<int> &txnGroups) {
-  uint64_t hash = 5381;
-  const char* str = key.c_str();
-  for (unsigned int i = 0; i < key.length(); i++) {
-    hash = ((hash << 5) + hash) + (uint64_t)str[i];
-  }
-  return (hash % nshards);
+  // uint64_t hash = 5381;
+  // const char* str = key.c_str();
+  // for (unsigned int i = 0; i < key.length(); i++) {
+  //   hash = ((hash << 5) + hash) + (uint64_t)str[i];
+  // }
+  // return (hash % nshards);
+  return hash(key) % nshards;
 };
 
 /*partitioner warehouse_partitioner = [](const std::string &key, uint64_t nshards,
@@ -72,4 +73,3 @@ uint64_t WarehousePartitioner::operator()(const std::string &key,
       return 0UL;
   }
 }
-

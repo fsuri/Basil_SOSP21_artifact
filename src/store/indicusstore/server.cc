@@ -488,7 +488,7 @@ void Server::HandleRead(const TransportAddress &remote,
         // there is a prepared write for the key being read
 
         for (const auto &t : itr->second.second) {
-          if (mostRecent == nullptr || t.first > Timestamp(mostRecent->timestamp())) {
+          if (mostRecent == nullptr || t.first > Timestamp(mostRecent->timestamp())) { //TODO: only use it if its bigger than the committed write..
             mostRecent = t.second;
           }
         }

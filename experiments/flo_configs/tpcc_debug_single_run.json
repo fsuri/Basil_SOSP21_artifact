@@ -10,8 +10,8 @@
   ],
   "replication_protocol": ["indicus"],
   "client_protocol_mode": ["indicus"],
-  "num_shards": [24],
-  "num_groups": [24],
+  "num_shards": [3],
+  "num_groups": [3],
 
   "client_num_keys": 10000000,
   "benchmark_name": "rw",
@@ -62,7 +62,7 @@
   "run_locally": false,
   "stats_merge_lists": ["txn_groups", "sig_batch"],
 
-  "replication_protocol_settings": [{
+  "_replication_protocol_settings": [{
 	"_read_dep": "one-honest",
 	  "_read_messages": "read-quorum",
       "_read_reply_batch": false,
@@ -137,7 +137,7 @@
     }
 ],
 
-  "_replication_protocol_settings": [
+  "replication_protocol_settings": [
     
 
     {
@@ -186,7 +186,7 @@
     [8]
   ],
   "client_threads_per_process": [
-    [4]
+    [1]
   ],
   "client_nodes_per_server": 1,
   "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],

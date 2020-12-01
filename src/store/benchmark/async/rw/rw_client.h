@@ -4,6 +4,7 @@
 #include "store/benchmark/async/async_transaction_bench_client.h"
 #include "store/benchmark/async/rw/rw_transaction.h"
 #include "store/benchmark/async/common/key_selector.h"
+#include <unordered_map>
 
 namespace rw {
 
@@ -22,12 +23,14 @@ class RWClient : public AsyncTransactionBenchClient {
 
   virtual ~RWClient();
 
+  std::unordered_map<int, int> key_counts;
+
  protected:
   virtual AsyncTransaction *GetNextTransaction();
   virtual std::string GetLastOp() const;
 
  private:
-  KeySelector *keySelector; 
+  KeySelector *keySelector;
   uint64_t numKeys;
   uint64_t tid = 0;
 };

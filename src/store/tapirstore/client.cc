@@ -44,6 +44,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     syncCommit(syncCommit), timeServer(timeServer), lastReqId(0UL),
     first(true), startedPings(false) {
     t_id = client_id << 26;
+    std::cerr<< "client_id:" << client_id << " t_id: " << t_id << std::endl;
 
     bclient.reserve(nshards);
 
@@ -144,7 +145,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     req->timeout = timeout;
 
     stats.IncrementList("txn_groups", participants.size());
-    
+
     Prepare(req, timeout);
   });
 }
@@ -265,10 +266,10 @@ void Client::HandleAllPreparesReceived(PendingRequest *req) {
         }
         Debug("RETRY [%lu] at [%lu.%lu]", t_id, req->prepareTimestamp.getTimestamp(),
             req->prepareTimestamp.getID());
-        Prepare(req, req->timeout); // this timeout should probably be the same as 
+        Prepare(req, req->timeout); // this timeout should probably be the same as
         // the timeout passed to Client::Commit, or maybe that timeout / COMMIT_RETRIES
         break;
-      } 
+      }
       statInts["aborts_max_retries"] += 1;
       abortResult = ABORTED_MAX_RETRIES;
       break;
