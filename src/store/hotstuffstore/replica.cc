@@ -30,14 +30,14 @@ using namespace std;
 
 Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
-                 uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, int hotstuff_cpu, Transport *transport)
+                 uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, int hotstuff_cpu, int numShards, Transport *transport)
     : config(config),
 #ifdef USE_HOTSTUFF_STORE
       hotstuff_interface(groupIdx, idx, hotstuff_cpu),
 #endif
       keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
     id(groupIdx * config.n + idx), signMessages(signMessages), maxBatchSize(maxBatchSize),
-    batchTimeoutMS(batchTimeoutMS), EbatchSize(EbatchSize), EbatchTimeoutMS(EbatchTimeoutMS), primaryCoordinator(primaryCoordinator), requestTx(requestTx), transport(transport) {
+      batchTimeoutMS(batchTimeoutMS), EbatchSize(EbatchSize), EbatchTimeoutMS(EbatchTimeoutMS), primaryCoordinator(primaryCoordinator), requestTx(requestTx), numShards(numShards), transport(transport) {
   transport->Register(this, config, groupIdx, idx);
 
   // intial view
@@ -205,34 +205,38 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 }
 
 void Replica::handleMessage(const TransportAddress &remote, const string &type, const string &data){
-  if(true){
-    //need to copy type and data.
+    if(numShards == 6 || numShards == 12){
+        TransportAddress* clientAddr = remote.clone();
+        auto f = [this, clientAddr, type, data](){
+            //std::unique_lock lock(atomicMutex);
+            ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+            if (reply != nullptr) {
+                this->transport->SendMessage(this, *clientAddr, *reply);
+                delete reply;
+            } else {
+                Debug("Invalid request of type %s", type.c_str());
+            }
+            return (void*) true;
+        };
+        //transport->DispatchTP_main(f);
 
-    TransportAddress* clientAddr = remote.clone();
-    auto f = [this, clientAddr, type, data](){
-      //std::unique_lock lock(atomicMutex);
+        if (numShards == 6)
+            transport->DispatchTP_noCB(f);
+        else // numShards == 12
+            transport->DispatchTP_main(f);
+    }
+    else{
+        if (numShards != 24)
+            Panic("Currently only support numShards = 6, 12 or 24");
+
         ::google::protobuf::Message* reply = app->HandleMessage(type, data);
         if (reply != nullptr) {
-            this->transport->SendMessage(this, *clientAddr, *reply);
+            transport->SendMessage(this, remote, *reply);
             delete reply;
         } else {
             Debug("Invalid request of type %s", type.c_str());
         }
-        return (void*) true;
-    };
-    //transport->DispatchTP_main(f);
-    transport->DispatchTP_noCB(f);
-  }
-  else{
-      ::google::protobuf::Message* reply = app->HandleMessage(type, data);
-      if (reply != nullptr) {
-          transport->SendMessage(this, remote, *reply);
-          delete reply;
-      } else {
-          Debug("Invalid request of type %s", type.c_str());
-      }
-  }
-
+    }
 }
 
 bool Replica::sendMessageToPrimary(const ::google::protobuf::Message& msg) {
@@ -296,7 +300,32 @@ void Replica::HandleRequest(const TransportAddress &remote,
       TransportAddress* clientAddr = remote.clone();
       proto::PackedMessage packedMsg = request.packed_msg();
       std::function<void(const std::string&, uint32_t seqnum)> execb = [this, digest, packedMsg, clientAddr](const std::string &digest_param, uint32_t seqnum) {
-          auto f = [this, digest, packedMsg, clientAddr, digest_param, seqnum](){
+          if(numShards == 6 || numShards == 12){
+              auto f = [this, digest, packedMsg, clientAddr, digest_param, seqnum](){
+                  // Debug("Callback: %d, %ld", idx, seqnum);
+                  stats->Increment("hotstuff_exec_callback",1);
+
+                  // prepare data structures for executeSlots()
+                  assert(digest == digest_param);
+                  requests[digest] = packedMsg;
+                  replyAddrs[digest] = clientAddr;
+
+                  proto::BatchedRequest batchedRequest;
+                  (*batchedRequest.mutable_digests())[0] = digest_param;
+                  string batchedDigest = BatchedDigest(batchedRequest);
+                  batchedRequests[batchedDigest] = batchedRequest;
+                  pendingExecutions[seqnum] = batchedDigest;
+
+                  executeSlots();
+                  return (void*) true;
+              };
+              transport->DispatchTP_main(f);
+              //transport->DispatchTP_noCB(f);
+          } else {
+              // numShards should be 24
+              if (numShards != 24)
+                  Panic("Currently only support numShards == 6, 12 or 24");
+
               // Debug("Callback: %d, %ld", idx, seqnum);
               stats->Increment("hotstuff_exec_callback",1);
 
@@ -312,10 +341,8 @@ void Replica::HandleRequest(const TransportAddress &remote,
               pendingExecutions[seqnum] = batchedDigest;
 
               executeSlots();
-              return (void*) true;
-          };
-          transport->DispatchTP_main(f);
-          //transport->DispatchTP_noCB(f);
+          }
+          
       };      
       hotstuff_interface.propose(digest, execb);
   }

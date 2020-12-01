@@ -608,7 +608,14 @@ int main(int argc, char **argv) {
   case PROTO_HOTSTUFF: {
       int num_cpus = std::thread::hardware_concurrency();
       num_cpus /= FLAGS_indicus_total_processes;
-      int hotstuff_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+
+      int hotstuff_cpu;
+      if (FLAGS_num_shards == 6) {
+          hotstuff_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+      } else {
+          // FLAGS_num_shards should be 12 or 24
+          hotstuff_cpu = FLAGS_indicus_process_id * num_cpus;
+      }
 
       server = new hotstuffstore::Server(config, &keyManager,
                                      FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
@@ -621,7 +628,7 @@ int main(int argc, char **argv) {
                                        FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
                                        FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
                                        FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
-                                       FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, hotstuff_cpu, tport);
+                                       FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx, hotstuff_cpu, FLAGS_num_shards, tport);
 
       break;
   }

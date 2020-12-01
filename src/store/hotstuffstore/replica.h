@@ -30,7 +30,7 @@ class Replica : public TransportReceiver {
 public:
   Replica(const transport::Configuration &config, KeyManager *keyManager,
     App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
-          uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, int hotstuff_cpu, Transport *transport);
+          uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, int hotstuff_cpu, int numShards, Transport *transport);
   ~Replica();
 
   // Message handlers.
@@ -74,6 +74,7 @@ public:
   Transport *transport;
   int currentView;
   int nextSeqNum;
+  int numShards;
 
   // members to reduce alloc
   proto::SignedMessage tmpsignedMessage;

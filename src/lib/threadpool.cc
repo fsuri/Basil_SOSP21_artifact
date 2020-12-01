@@ -28,7 +28,18 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
     // Currently: First CPU = MainThread.
     running = true;
 
-    int num_core_for_hotstuff = 1;
+    int num_core_for_hotstuff;
+    if (total_processes == 2) {
+        // numShards == 6
+        // spawn both test_main_worklist and test_worklist
+        num_core_for_hotstuff = 1;
+    } else {
+        // numShards == 12 or 24
+        // if numShards == 12, spawn test_main_worklist
+        // if numShards == 24, don't spawn any additional threads
+        num_core_for_hotstuff = 0;
+    }
+
     for (uint32_t i = 1; i < num_threads - num_core_for_hotstuff; i++) {
         std::thread *t;
         //Mainthread
