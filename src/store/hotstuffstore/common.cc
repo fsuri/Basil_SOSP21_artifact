@@ -173,7 +173,7 @@ bool verifyGDecision(const proto::GroupedDecision& gdecision,
   // int i = 0;
 
     //return true;
-  int max_counter = 2; //just a hack to artificially reduce verification to get an upper bound on tput
+  int max_counter = 0; //just a hack to artificially reduce verification to get an upper bound on tput
 
   if (signMessages) {
     // iterate over all shards
