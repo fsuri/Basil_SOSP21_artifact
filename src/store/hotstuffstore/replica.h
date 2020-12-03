@@ -108,6 +108,9 @@ public:
   void EsendBatchedPreprepare();
   std::unordered_map<uint64_t, std::string> EbStatNames;
   void sendEbatch();
+  void sendEbatch_internal();
+  void delegateEbatch(std::vector<::google::protobuf::Message*> EpendingBatchedMessages_,
+     std::vector<std::string> EpendingBatchedDigs_);
   std::vector<proto::SignedMessage*> EsignedMessages;
 
   bool sendMessageToAll(const ::google::protobuf::Message& msg);

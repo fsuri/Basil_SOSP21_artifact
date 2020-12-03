@@ -26,6 +26,8 @@
 
 namespace hotstuff {
 
+  extern int hotstuff_core_offset;
+
 class VeriTask {
     friend class VeriPool;
     bool result;
@@ -70,7 +72,14 @@ class VeriPool {
         workers.resize(nworker);
         for (size_t i = 0; i < nworker; i++)
         {
-            in_queue.reg_handler(workers[i].ec, [this, burst_size](mpmc_queue_t &q) {
+            in_queue.reg_handler(workers[i].ec, [this, burst_size, i](mpmc_queue_t &q) {
+              // cpu_set_t cpuset;
+              // CPU_ZERO(&cpuset);
+              // int k = 0;
+              // if(i!=0) k = i + 1;
+              // CPU_SET(hotstuff_core_offset + k, &cpuset);
+              // int rc = pthread_setaffinity_np(pthread_self(),
+              //                                 sizeof(cpu_set_t), &cpuset);
                 size_t cnt = burst_size;
                 VeriTask *task;
                 while (q.try_dequeue(task))

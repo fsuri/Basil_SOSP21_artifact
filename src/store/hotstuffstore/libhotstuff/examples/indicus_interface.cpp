@@ -1,7 +1,12 @@
 #include "indicus_interface.h"
 #include "hotstuff_app.cpp"
 
+namespace hotstuff {
+  int hotstuff_core_offset;
+}
+
 namespace hotstuffstore {
+
     void IndicusInterface::propose(const std::string& hash, hotstuff_exec_callback execb) {
         //std::cout << "############# HotStuff Interface #############" << std::endl;
         hotstuff_papp->interface_propose(hash, execb);
@@ -10,6 +15,9 @@ namespace hotstuffstore {
     IndicusInterface::IndicusInterface(int shardId, int replicaId, int cpuId):
         shardId(shardId), replicaId(replicaId), cpuId(cpuId)
     {
+
+        hotstuff::hotstuff_core_offset = (cpuId + 4) % 8;
+
         string config_dir = config_dir_base + "shard" + std::to_string(shardId) + "/";
 
         string config_file = config_dir + "hotstuff.gen.conf";

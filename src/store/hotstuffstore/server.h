@@ -15,13 +15,14 @@
 #include "store/common/backend/versionstore.h"
 #include "store/common/partitioner.h"
 #include "store/common/truetime.h"
+#include "lib/transport.h"
 
 namespace hotstuffstore {
 
 class Server : public App, public ::Server {
 public:
   Server(const transport::Configuration& config, KeyManager *keyManager, int groupIdx, int idx, int numShards,
-    int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, Partitioner *part,
+    int numGroups, bool signMessages, bool validateProofs, uint64_t timeDelta, Partitioner *part, Transport* tp,
     bool order_commit = false, bool validate_abort = false,
     TrueTime timeServer = TrueTime(0, 0));
   ~Server();
@@ -37,6 +38,7 @@ public:
   Stats* mutableStats();
 
 private:
+  Transport* tp;
   Stats stats;
   transport::Configuration config;
   KeyManager* keyManager;

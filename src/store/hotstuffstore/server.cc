@@ -10,12 +10,12 @@ using namespace std;
 
 Server::Server(const transport::Configuration& config, KeyManager *keyManager,
   int groupIdx, int idx, int numShards, int numGroups, bool signMessages,
-  bool validateProofs, uint64_t timeDelta, Partitioner *part,
+  bool validateProofs, uint64_t timeDelta, Partitioner *part, Transport* tp,
   bool order_commit, bool validate_abort,
   TrueTime timeServer) : config(config), keyManager(keyManager),
   groupIdx(groupIdx), idx(idx), id(groupIdx * config.n + idx),
   numShards(numShards), numGroups(numGroups), signMessages(signMessages),
-  validateProofs(validateProofs),  timeDelta(timeDelta), part(part),
+  validateProofs(validateProofs),  timeDelta(timeDelta), part(part), tp(tp),
   order_commit(order_commit), validate_abort(validate_abort),
   timeServer(timeServer) {
   dummyProof = std::make_shared<proto::CommitProof>();
@@ -215,7 +215,7 @@ bool Server::CCC(const proto::Transaction& txn) {
 
 std::vector<::google::protobuf::Message*> Server::Execute(const string& type, const string& msg) {
   Debug("Execute: %s", type.c_str());
-  std::unique_lock lock(atomicMutex);
+  //std::unique_lock lock(atomicMutex);
 
   proto::Transaction transaction;
   proto::GroupedDecision gdecision;
@@ -245,6 +245,8 @@ std::vector<::google::protobuf::Message*> Server::Execute(const string& type, co
 }
 
 std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto::Transaction& transaction) {
+  std::unique_lock lock(atomicMutex); //TODO: might be able to make it finer.
+
   std::vector<::google::protobuf::Message*> results;
   proto::TransactionDecision* decision = new proto::TransactionDecision();
   //std::cerr << "allocating reply" << std::endl;
@@ -333,7 +335,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
 ::google::protobuf::Message* Server::HandleMessage(const string& type, const string& msg) {
   Debug("Handle %s", type.c_str());
-  std::shared_lock lock(atomicMutex);
+  //std::shared_lock lock(atomicMutex);
   //std::unique_lock lock(atomicMutex);
 
   proto::Read read;
@@ -344,11 +346,12 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
     return HandleRead(read);
   } else if (type == gdecision.GetTypeName()) {
-    if(order_commit){
+    if(order_commit && signMessages){
       Panic("Should be ordering all Writeback messages");
     }
     gdecision.ParseFromString(msg);
     if (gdecision.status() == REPLY_OK) {
+      //std::unique_lock lock(atomicMutex);
       return HandleGroupedCommitDecision(gdecision);
     } else {
       Panic("Only commit grouped decisions allowed to be sent directly to server");
@@ -364,6 +367,8 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
 ::google::protobuf::Message* Server::HandleRead(const proto::Read& read) {
   Timestamp ts(read.timestamp());
+  //std::shared_lock lock(atomicMutex); //come back to this: probably dont need it at all.
+
   pair<Timestamp, ValueAndProof> result;
   bool exists = commitStore.get(read.key(), ts, result);
 
@@ -385,38 +390,44 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     Debug("Read does not exit for key: %s", read.key().c_str());
     readReply->set_status(REPLY_FAIL);
   }
-
+  //lock.unlock_shared();
   return returnMessage(readReply);
 }
 
 ::google::protobuf::Message* Server::HandleGroupedCommitDecision(const proto::GroupedDecision& gdecision) {
   // proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
+
+
   Debug("Handling Grouped commit Decision");
   string digest = gdecision.txn_digest();
   DebugHash(digest);
 
   // groupedDecisionAck->set_txn_digest(digest);
-
+  atomicMutex.lock();
   if (pendingTransactions.find(digest) == pendingTransactions.end()) {
+
     Debug("Buffering gdecision");
     stats.Increment("buff_dec",1);
     // we haven't yet received the tx so buffer this gdecision until we get it
     bufferedGDecs[digest] = gdecision;
+    atomicMutex.unlock();
     return nullptr;
   }
-
+  atomicMutex.unlock();
   // verify gdecision
 
     // struct timeval tp;
     // gettimeofday(&tp, NULL);
     // long int us = tp.tv_sec * 1000 * 1000 + tp.tv_usec;
 
-  if (verifyGDecision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)) {
-
+  if (verifyGDecision_parallel(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f, tp)) {
+  //if (verifyGDecision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)) {
+ //if(true){
     // gettimeofday(&tp, NULL);
     // long int lock_time = ((tp.tv_sec * 1000 * 1000 + tp.tv_usec) -us);
     // std::cerr << "Commit Verification takes " << lock_time << " microseconds" << std::endl;
 
+    std::unique_lock lock(atomicMutex);
     stats.Increment("apply_tx",1);
     proto::Transaction txn = pendingTransactions[digest];
     Timestamp ts(txn.timestamp());
@@ -472,20 +483,26 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   return nullptr;
 }
 
+
 ::google::protobuf::Message* Server::HandleGroupedAbortDecision(const proto::GroupedDecision& gdecision) {
   // proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
+
 
   Debug("Handling Grouped abort Decision");
   string digest = gdecision.txn_digest();
   DebugHash(digest);
 
+  atomicMutex.lock();
   if (pendingTransactions.find(digest) == pendingTransactions.end()) {
+
     Debug("Buffering gdecision");
     stats.Increment("buff_dec",1);
     // we haven't yet received the tx so buffer this gdecision until we get it
     bufferedGDecs[digest] = gdecision;
+    atomicMutex.unlock();
     return nullptr;
   }
+  atomicMutex.unlock();
 
  if(validate_abort){
    // struct timeval tp;
@@ -501,7 +518,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
    // long int lock_time = ((tp.tv_sec * 1000 * 1000 + tp.tv_usec) -us);
    // std::cerr << "Abort Verification takes " << lock_time << " microseconds" << std::endl;
  }
-
+ std::unique_lock lock(atomicMutex);
 
   // groupedDecisionAck->set_txn_digest(digest);
 

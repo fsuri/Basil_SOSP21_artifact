@@ -207,7 +207,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 void Replica::handleMessage(const TransportAddress &remote, const string &type, const string &data){
     static int count = 0;
     count++;
-    if((numShards == 6 || numShards == 12)){
+    if((numShards <= 6 || numShards == 12)){
         TransportAddress* clientAddr = remote.clone();
         auto f = [this, clientAddr, type, data](){
             //std::unique_lock lock(atomicMutex);
@@ -222,12 +222,13 @@ void Replica::handleMessage(const TransportAddress &remote, const string &type, 
         };
         //transport->DispatchTP_main(f);
 
-        if (numShards == 6)
+        if (numShards <= 6)
             transport->DispatchTP_noCB(f);
         else // numShards == 12
             transport->DispatchTP_main(f);
     }
     else{
+       std::cerr<< "handle message not being dispatched for pbft" << std::endl;
         // if (numShards != 24)
         //     Panic("Currently only support numShards = 6, 12 or 24");
 
@@ -302,7 +303,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
       TransportAddress* clientAddr = remote.clone();
       proto::PackedMessage packedMsg = request.packed_msg();
       std::function<void(const std::string&, uint32_t seqnum)> execb = [this, digest, packedMsg, clientAddr](const std::string &digest_param, uint32_t seqnum) {
-          if(numShards == 6 || numShards == 12){
+          if(numShards <= 6 || numShards == 12){
               auto f = [this, digest, packedMsg, clientAddr, digest_param, seqnum](){
                   // Debug("Callback: %d, %ld", idx, seqnum);
                   stats->Increment("hotstuff_exec_callback",1);
@@ -958,8 +959,26 @@ void Replica::executeSlots_internal() {
     }
   }
 }
+void Replica::sendEbatch(){
+  if(true){
+    // std::function<void*> f(std::bind(&Replica::delegateEbatch, this, EpendingBatchedMessages,
+    //            EsignedMessages, EpendingBatchedDigs));
+    auto f = [this, EpendingBatchedMessages_ = EpendingBatchedMessages,
+               EpendingBatchedDigs_ = EpendingBatchedDigs](){
+      this->delegateEbatch(EpendingBatchedMessages_,
+                 EpendingBatchedDigs_);
+      return (void*) true;
+    };
+    EpendingBatchedDigs.clear();
+    EpendingBatchedMessages.clear();
+    transport->DispatchTP_noCB(std::move(f));
+  }
+  else{
+    sendEbatch_internal();
+  }
+}
 
-void Replica::sendEbatch() {
+void Replica::sendEbatch_internal() {
   //std::cerr << "executing sendEbatch" << std::endl;
   stats->Increment(EbStatNames[EpendingBatchedMessages.size()], 1);
   std::vector<std::string*> messageStrs;
@@ -990,6 +1009,41 @@ void Replica::sendEbatch() {
   //replyAddrsMutex.unlock();
   EpendingBatchedDigs.clear();
   EpendingBatchedMessages.clear();
+}
+
+//Use:
+// auto f = [args](){ delegateEbatch}, Clear structures, dispatch->
+void Replica::delegateEbatch(std::vector<::google::protobuf::Message*> EpendingBatchedMessages_,
+   std::vector<std::string> EpendingBatchedDigs_){
+
+    std::vector<proto::SignedMessage> EsignedMessages_;
+    std::vector<std::string*> messageStrs;
+    //std::cerr << "EbatchMessages.size: " << EpendingBatchedMessages.size() << std::endl;
+    for (unsigned int i = 0; i < EpendingBatchedMessages_.size(); i++) {
+      EsignedMessages_.push_back(proto::SignedMessage());
+      //EsignedMessages_[i].Clear();
+      EsignedMessages_[i].set_replica_id(id);
+      proto::PackedMessage packedMsg;
+      *packedMsg.mutable_msg() = EpendingBatchedMessages_[i]->SerializeAsString();
+      *packedMsg.mutable_type() = EpendingBatchedMessages_[i]->GetTypeName();
+      UW_ASSERT(packedMsg.SerializeToString(EsignedMessages_[i].mutable_packed_msg()));
+      messageStrs.push_back(EsignedMessages_[i].mutable_packed_msg());
+    }
+
+    std::vector<std::string*> sigs;
+    for (unsigned int i = 0; i < EpendingBatchedMessages_.size(); i++) {
+      sigs.push_back(EsignedMessages_[i].mutable_signature());
+    }
+
+    hotstuffBatchedSigs::generateBatchedSignatures(messageStrs, keyManager->GetPrivateKey(id), sigs);
+
+    //replyAddrsMutex.lock();
+    for (unsigned int i = 0; i < EpendingBatchedMessages_.size(); i++) {
+      transport->SendMessage(this, *replyAddrs[EpendingBatchedDigs_[i]], EsignedMessages_[i]);
+      //std::cerr << "deleting reply" << std::endl;
+      delete EpendingBatchedMessages_[i];
+    }
+
 }
 
 void Replica::startActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest) {
