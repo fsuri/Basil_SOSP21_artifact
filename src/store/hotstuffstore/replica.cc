@@ -348,6 +348,22 @@ void Replica::HandleRequest(const TransportAddress &remote,
 
       };
       hotstuff_interface.propose(digest, execb);
+
+      // digest[0] = 'b';
+      // digest[1] = 'u';
+      // digest[2] = 'b';
+      // digest[3] = 'b';
+      // digest[4] = 'l';
+      // digest[5] = 'e';
+      // digest = "bubble";
+      //
+      // std::function<void(const std::string&, uint32_t seqnum)> execb_bubble =
+      //   [this](const std::string&, uint32_t seqnum){
+      //     stats->Increment("hotstuff_exec_bubble", 1);
+      //     pendingExecutions[seqnum] = "bubble";
+      //     executeSlots();
+      //   };
+      //   hotstuff_interface.propose(digest, execb_bubble);
   }
 
 #else // use PBFT store
@@ -867,6 +883,11 @@ void Replica::executeSlots_internal() {
     }
 
     string batchDigest = pendingExecutions[execSeqNum];
+
+    if(batchDigest == "bubble") {
+      execSeqNum++;
+      continue;
+    }
     // only execute when we have the batched request
     if (batchedRequests.find(batchDigest) != batchedRequests.end()) {
       string digest = (*batchedRequests[batchDigest].mutable_digests())[execBatchNum];

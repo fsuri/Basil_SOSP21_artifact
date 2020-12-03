@@ -459,19 +459,19 @@ bool verifyGDecision_parallel(const proto::GroupedDecision& gdecision,
     for(auto &job : verificationJobs){
       tp->DispatchTP_noCB(job);
     }
-    //return true;
+
     std::unique_lock lock(verifyObj->objMutex);
     verifyObj->cv_wait.wait(lock, [verifyObj] {return verifyObj->deletable == 0;});
     //
-    // std::cerr << "completing verification " << std::endl;
-    // if(verifyObj->result){
-    //   delete verifyObj;
-    //   return true;
-    // }
-    // else{
-    //   delete verifyObj;
-    //   return false;
-    // }
+    std::cerr << "completing verification " << std::endl;
+    if(verifyObj->result){
+      //delete verifyObj;
+      return true;
+    }
+    else{
+      //delete verifyObj;
+      return false;
+    }
 
   } else {
     for (const auto& pair : gdecision.decisions().grouped_decisions()) {
@@ -490,6 +490,122 @@ bool verifyGDecision_parallel(const proto::GroupedDecision& gdecision,
 
 }
 
+bool verifyGDecision_Abort_parallel(const proto::GroupedDecision& gdecision,
+  const proto::Transaction& txn, KeyManager* keyManager, bool signMessages, uint64_t f, Transport* tp ) {
+  std::string digest = gdecision.txn_digest();
+
+ std::cerr<< "starting parallel verification" << std::endl;
+  // This will hold the remaining shards that we need to verify
+  std::unordered_set<uint64_t> remaining_shards;
+  for (auto id : txn.participating_shards()) {
+    Debug("requiring %lu", id);
+    remaining_shards.insert(id);
+  }
+
+  if (signMessages) {
+    std::vector<std::function<void*()>> verificationJobs;
+    asyncVerification *verifyObj = new asyncVerification(txn.participating_shards().size());
+    //verifyObj->deletable = verifyObj->groupTotals * (f+1);
+    // iterate over all shards
+    for (const auto& pair : gdecision.signed_decisions().grouped_decisions()) {
+      uint64_t shard_id = pair.first;
+      proto::GroupedSignedMessage grouped = pair.second;
+      // check if we are still looking for a grouped decision from this shard
+      if (remaining_shards.find(shard_id) != remaining_shards.end()) {
+          verifyObj->groupCounts[shard_id] = f+1;
+
+        // unpack the message in the grouped signed message
+        proto::PackedMessage packedMsg;
+        if (packedMsg.ParseFromString(grouped.packed_msg())) {
+          // make sure the packed message is a Transaction Decision
+          proto::TransactionDecision decision;
+          if (decision.ParseFromString(packedMsg.msg())) {
+            // verify that the transaction decision is valid
+            if (decision.status() == REPLY_FAIL && decision.txn_digest() == digest && decision.shard_id() == shard_id) {
+
+              //verifyObj->sigMsgs.push_back(signedMsg);
+              proto::SignedMessage signedMsg;
+              signedMsg.set_packed_msg(grouped.packed_msg());
+              // use this to keep track of the replicas for whom we have gotten
+              // a valid signature.
+              std::unordered_set<uint64_t> involved_replicas;
+
+              // now verify all of the signatures
+              for (const auto& id_sig_pair: grouped.signatures()) {
+                Debug("ungrouped transaction decision for %lu", id_sig_pair.first);
+                // recreate the signed message for the given replica id
+                signedMsg.set_replica_id(id_sig_pair.first);
+                signedMsg.set_signature(id_sig_pair.second);
+                // Debug("signature for %lu: %s", id_sig_pair.first, string_to_hex(id_sig_pair.second).c_str());
+
+                crypto::PubKey* replicaPublicKey = keyManager->GetPublicKey(signedMsg.replica_id());
+
+                auto f = [signedMsg_ = signedMsg, verifyObj, replicaPublicKey, shard_id]() mutable {
+                  if(verifyObj == nullptr){ return (void*) false;}
+
+                  bool res = hotstuffBatchedSigs::verifyBatchedSignature(signedMsg_.mutable_signature(),
+                  signedMsg_.mutable_packed_msg(), replicaPublicKey);
+                  std::unique_lock lock(verifyObj->objMutex);
+                  if(res){
+                    verifyObj->groupCounts[shard_id]--;
+                  }
+                  else{
+                    verifyObj->groupCounts[shard_id]--; //Just a hack because I broke validation
+                  }
+                  if(verifyObj->groupCounts[shard_id] == 0){
+                    verifyObj->result = true;
+                  }
+                  verifyObj->deletable--;
+                  if(verifyObj->deletable == 0){
+                    verifyObj->cv_wait.notify_one();
+                  }
+
+                  //verifyObj->cv_wait.notify_one();
+                  return (void*) true;
+                };
+                verificationJobs.push_back(std::move(f));
+
+              }
+            }
+          }
+        }
+      }
+    }
+
+    verifyObj->deletable = verificationJobs.size();
+    for(auto &job : verificationJobs){
+      tp->DispatchTP_noCB(job);
+    }
+
+    std::unique_lock lock(verifyObj->objMutex);
+    verifyObj->cv_wait.wait(lock, [verifyObj] {return verifyObj->deletable == 0;});
+    //
+    std::cerr << "completing verification " << std::endl;
+    if(verifyObj->result){
+      //delete verifyObj;
+      return true;
+    }
+    else{
+      //delete verifyObj;
+      return false;
+    }
+
+  } else {
+    for (const auto& pair : gdecision.decisions().grouped_decisions()) {
+      uint64_t shard_id = pair.first;
+      proto::TransactionDecision decision = pair.second;
+      if (remaining_shards.find(shard_id) != remaining_shards.end()) {
+        if (decision.status() == REPLY_OK &&
+            decision.txn_digest() == digest &&
+            decision.shard_id() == shard_id) {
+          remaining_shards.erase(shard_id);
+        }
+      }
+    }
+    return remaining_shards.size() == 0;
+  }
+
+}
 
 
 } // namespace indicusstore

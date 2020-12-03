@@ -1,5 +1,5 @@
 #include <string>
-#include <functional> 
+#include <functional>
 using std::string;
 
 namespace hotstuffstore {
@@ -15,10 +15,10 @@ namespace hotstuffstore {
         int cpuId;
 
         void initialize(int argc, char** argv);
-        
+
     public:
         IndicusInterface(int shardId, int replicaId, int cpuId);
-        
+
         void propose(const std::string& hash, hotstuff_exec_callback execb);
     };
 }

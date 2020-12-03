@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include "lib/blake3.h"
 #include <stdint.h>
+#include <shared_mutex>
 
 namespace hotstuffBatchedSigs {
 
@@ -119,6 +120,7 @@ void generateBatchedSignatures(std::vector<std::string*> messages, crypto::PrivK
 // map from signatures to hashes because it is _possible_ for two nodes
 // to have the same batch and thus the same merkle tree
 std::unordered_map<std::string, std::string> batchedSigsCache;
+std::shared_mutex CacheMutex;
 
 bool verifyBatchedSignature(const std::string* signature, const std::string* message, crypto::PubKey* publicKey) {
   size_t hash_size = BLAKE3_OUT_LEN;
@@ -152,14 +154,19 @@ bool verifyBatchedSignature(const std::string* signature, const std::string* mes
   }
   std::string hashStr(&hash[0], &hash[hash_size]);
 
+  CacheMutex.lock_shared();
   if (batchedSigsCache.find(rootSig) != batchedSigsCache.end()) {
+  CacheMutex.unlock_shared();
     // if the root signature exists in the cache, check if it verifies the hash
     // derived from the signature
+    std::unique_lock lock(CacheMutex);
     return batchedSigsCache[rootSig] == hashStr;
   } else {
+    CacheMutex.unlock_shared();
     // otherwise, verify the computed root hash
     if (crypto::Verify(publicKey, &hashStr[0], hashStr.length(), &rootSig[0])) {
       // if it is valid, store it in the cache.
+      std::unique_lock lock(CacheMutex);
       batchedSigsCache[rootSig] = hashStr;
       return true;
     } else {

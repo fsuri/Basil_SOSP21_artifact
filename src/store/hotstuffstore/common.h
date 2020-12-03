@@ -79,6 +79,9 @@ bool verifyG_Abort_Decision(const proto::GroupedDecision& gdecision,
 bool verifyGDecision_parallel(const proto::GroupedDecision& gdecision,
   const proto::Transaction& txn, KeyManager* keyManager, bool signMessages, uint64_t f, Transport* tp);
 
+bool verifyGDecision_Abort_parallel(const proto::GroupedDecision& gdecision,
+  const proto::Transaction& txn, KeyManager* keyManager, bool signMessages, uint64_t f, Transport* tp );
+
 } // namespace hotstuffstore
 
 #endif /* HOTSTUFF_COMMON_H */

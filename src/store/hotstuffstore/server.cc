@@ -510,6 +510,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
    // long int us = tp.tv_sec * 1000 * 1000 + tp.tv_usec;
 
    if(!verifyG_Abort_Decision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)){
+    //if(!verifyGDecision_Abort_parallel(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f, tp)){
      Debug("failed validation for abort decision");
      return nullptr;
    }
