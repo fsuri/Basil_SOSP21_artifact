@@ -106,6 +106,8 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
       cpu_set_t cpuset;
       CPU_ZERO(&cpuset);
       CPU_SET(i+offset, &cpuset);
+      if(i+offset > 7) return;
+      std::cerr << "Trying to pin to core: " << i << " + " << offset << std::endl;
       int rc = pthread_setaffinity_np(t->native_handle(),
                                       sizeof(cpu_set_t), &cpuset);
       if (rc != 0) {
