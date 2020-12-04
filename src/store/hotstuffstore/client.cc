@@ -6,13 +6,14 @@ namespace hotstuffstore {
 
 using namespace std;
 
-Client::Client(const transport::Configuration& config, int nGroups, int nShards,
+Client::Client(const transport::Configuration& config, uint64_t id, int nShards, int nGroups,
+      const std::vector<int> &closestReplicas,
       Transport *transport, Partitioner *part,
-      uint64_t readQuorumSize, bool signMessages,
+      uint64_t readMessages, uint64_t readQuorumSize, bool signMessages,
       bool validateProofs, KeyManager *keyManager,
       bool order_commit, bool validate_abort,
       TrueTime timeserver) : config(config), nshards(nShards),
-    ngroups(nGroups), transport(transport), part(part), readQuorumSize(readQuorumSize),
+    ngroups(nGroups), transport(transport), part(part), readMessages(readMessages), readQuorumSize(readQuorumSize),
     signMessages(signMessages),
     validateProofs(validateProofs), keyManager(keyManager),
     order_commit(order_commit), validate_abort(validate_abort),
@@ -20,14 +21,15 @@ Client::Client(const transport::Configuration& config, int nGroups, int nShards,
   // just an invariant for now for everything to work ok
   assert(nGroups == nShards);
 
+  client_id = id;
   // generate a random client uuid
-  client_id = 0;
-  while (client_id == 0) {
-    random_device rd;
-    mt19937_64 gen(rd());
-    uniform_int_distribution<uint64_t> dis;
-    client_id = dis(gen);
-  }
+  // client_id = 0;
+  // while (client_id == 0) {
+  //   random_device rd;
+  //   mt19937_64 gen(rd());
+  //   uniform_int_distribution<uint64_t> dis;
+  //   client_id = dis(gen);
+  // }
   client_seq_num = 0;
 
   bclient.reserve(ngroups);
@@ -36,7 +38,7 @@ Client::Client(const transport::Configuration& config, int nGroups, int nShards,
 
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
-    bclient[i] = new ShardClient(config, transport, i,
+    bclient[i] = new ShardClient(config, transport, client_id, i, closestReplicas,
         signMessages, validateProofs, keyManager, &stats, order_commit, validate_abort);
   }
 
@@ -93,7 +95,7 @@ void Client::Get(const std::string &key, get_callback gcb,
     read_timeout_callback rtcb = gtcb;
 
     // Send the GET operation to appropriate shard.
-    bclient[i]->Get(key, currentTxn.timestamp(), readQuorumSize, rcb,
+    bclient[i]->Get(key, currentTxn.timestamp(), readMessages, readQuorumSize, rcb,
         rtcb, timeout);
   });
 }

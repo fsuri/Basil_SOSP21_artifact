@@ -34,7 +34,7 @@ class ShardClient : public TransportReceiver {
  public:
   /* Constructor needs path to shard config. */
   ShardClient(const transport::Configuration& config, Transport *transport,
-      uint64_t group_idx,
+      uint64_t client_id, uint64_t group_idx, const std::vector<int> &closestReplicas_,
       bool signMessages, bool validateProofs,
       KeyManager *keyManager, Stats* stats, bool order_commit = false, bool validate_abort = false);
   ~ShardClient();
@@ -45,7 +45,7 @@ class ShardClient : public TransportReceiver {
 
   // Get the value corresponding to key.
   void Get(const std::string &key, const Timestamp &ts,
-      uint64_t numResults, read_callback gcb, read_timeout_callback gtcb,
+      uint64_t readMessages, uint64_t numResults, read_callback gcb, read_timeout_callback gtcb,
       uint32_t timeout);
 
   // send a request with this as the packed message
@@ -77,6 +77,10 @@ class ShardClient : public TransportReceiver {
   bool validate_abort = false;
 
   uint64_t readReq;
+  std::vector<int> closestReplicas;
+  inline size_t GetNthClosestReplica(size_t idx) const {
+    return closestReplicas[idx];
+  }
 
   struct PendingRead {
     // the set of ids that we have received a read reply for

@@ -19,9 +19,10 @@ namespace hotstuffstore {
 
 class Client : public ::Client {
  public:
-  Client(const transport::Configuration& config, int nGroups, int nShards,
+  Client(const transport::Configuration& config, uint64_t id, int nShards, int nGroups,
+      const std::vector<int> &closestReplicas,
       Transport *transport, Partitioner *part,
-      uint64_t readQuorumSize, bool signMessages,
+      uint64_t readMessages, uint64_t readQuorumSize, bool signMessages,
       bool validateProofs, KeyManager *keyManager,
       bool order_commit = false, bool validate_abort = false,
       TrueTime timeserver = TrueTime(0,0));
@@ -61,6 +62,7 @@ class Client : public ::Client {
   // Client for each shard
   std::vector<ShardClient *> bclient;
   Partitioner *part;
+  uint64_t readMessages;
   uint64_t readQuorumSize;
   bool signMessages;
   bool validateProofs;

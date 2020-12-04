@@ -5,7 +5,7 @@
 namespace hotstuffstore {
 
 ShardClient::ShardClient(const transport::Configuration& config, Transport *transport,
-    uint64_t group_idx,
+    uint64_t client_id, uint64_t group_idx, const std::vector<int> &closestReplicas_,
     bool signMessages, bool validateProofs,
     KeyManager *keyManager, Stats* stats, bool order_commit, bool validate_abort) :
     config(config), transport(transport),
@@ -14,6 +14,17 @@ ShardClient::ShardClient(const transport::Configuration& config, Transport *tran
     keyManager(keyManager), stats(stats), order_commit(order_commit), validate_abort(validate_abort) {
   transport->Register(this, config, -1, -1);
   readReq = 0;
+
+  if (closestReplicas_.size() == 0) {
+    for  (int i = 0; i < config.n; ++i) {
+      closestReplicas.push_back((i + client_id) % config.n);
+      // Debug("i: %d; client_id: %d", i, client_id);
+      // Debug("Calculations: %d", (i + client_id) % config->n);
+    }
+  } else {
+    closestReplicas = closestReplicas_;
+  }
+
 }
 
 ShardClient::~ShardClient() {}
@@ -404,7 +415,7 @@ void ShardClient::HandleWritebackReply(const proto::GroupedDecisionAck& groupedD
 
 // Get the value corresponding to key.
 void ShardClient::Get(const std::string &key, const Timestamp &ts,
-    uint64_t numResults, read_callback gcb, read_timeout_callback gtcb,
+    uint64_t readMessages, uint64_t numResults, read_callback gcb, read_timeout_callback gtcb,
     uint32_t timeout) {
   Debug("Client get for %s", key.c_str());
 
@@ -415,7 +426,14 @@ void ShardClient::Get(const std::string &key, const Timestamp &ts,
   read.set_key(key);
   ts.serialize(read.mutable_timestamp());
 
-  transport->SendMessageToGroup(this, group_idx, read);
+
+  UW_ASSERT(readMessages <= closestReplicas.size());
+  for (size_t i = 0; i < readMessages; ++i) {
+    Debug("[group %i] Sending GET to replica %lu", group_idx, GetNthClosestReplica(i));
+    transport->SendMessageToReplica(this, group_idx, GetNthClosestReplica(i), read);
+  }
+  //transport->SendMessageToGroup(this, group_idx, read);
+
   PendingRead pr;
   pr.rcb = gcb;
   pr.numResultsRequired = numResults;
