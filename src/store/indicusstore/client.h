@@ -47,6 +47,7 @@
 #include "store/indicusstore/shardclient.h"
 #include "store/indicusstore/indicus-proto.pb.h"
 #include <sys/time.h>
+#include "store/common/stats.h"
 
 #include <thread>
 #include <set>
@@ -89,7 +90,12 @@ class Client : public ::Client {
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
       uint32_t timeout) override;
 
+  inline const Stats &GetStats() const { return stats; }
  private:
+   Stats stats;
+   int fast_path_counter;
+   int total_counter;
+
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), outstandingPhase1s(0),
         outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),

@@ -863,7 +863,7 @@ int main(int argc, char **argv) {
         uint64_t readMessages = 0;
         switch (read_messages) {
         case READ_MESSAGES_READ_QUORUM:
-            readMessages = readQuorumSize; //readQuorumSize + config->f;
+            readMessages = readQuorumSize;// + config->f;
             break;
         case READ_MESSAGES_MAJORITY:
             readMessages = (config->n + 1) / 2;

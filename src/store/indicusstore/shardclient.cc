@@ -795,43 +795,38 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
       Phase1Decision(itr);
       break;
     case SLOW_COMMIT_TENTATIVE:
-      if (!pendingPhase1->decisionTimeoutStarted) {
-        uint64_t reqId = reply.req_id();
-        pendingPhase1->decisionTimeout = new Timeout(transport,
-            phase1DecisionTimeout, [this, reqId]() {
-              auto itr = pendingPhase1s.find(reqId);
-              if (itr == pendingPhase1s.end()) {
-                return;
+      if(phase1DecisionTimeout == 0){
+        itr->second->decision = proto::COMMIT;
+        itr->second->fast = false;
+        Phase1Decision(itr);
+      }
+      else{
+        if (!pendingPhase1->decisionTimeoutStarted) {
+          uint64_t reqId = reply.req_id();
+          pendingPhase1->decisionTimeout = new Timeout(transport,
+              phase1DecisionTimeout, [this, reqId]() {
+                auto itr = pendingPhase1s.find(reqId);
+                if (itr == pendingPhase1s.end()) {
+                  return;
+                }
+                itr->second->decision = proto::COMMIT;
+                itr->second->fast = false;
+                Phase1Decision(itr);
               }
-              itr->second->decision = proto::COMMIT;
-              itr->second->fast = false;
-              Phase1Decision(itr);
-            }
-          );
-        pendingPhase1->decisionTimeout->Reset();
-        pendingPhase1->decisionTimeoutStarted = true;
+            );
+          pendingPhase1->decisionTimeout->Reset();
+          pendingPhase1->decisionTimeoutStarted = true;
+        }
       }
       break;
 
     case SLOW_ABORT_TENTATIVE:
-      if (!pendingPhase1->decisionTimeoutStarted) {
-        uint64_t reqId = reply.req_id();
-        pendingPhase1->decisionTimeout = new Timeout(transport,
-            phase1DecisionTimeout, [this, reqId]() {
-              auto itr = pendingPhase1s.find(reqId);
-              if (itr == pendingPhase1s.end()) {
-                return;
-              }
-              itr->second->decision = proto::ABORT;
-              itr->second->fast = false;
-              Phase1Decision(itr);
-            }
-          );
-        pendingPhase1->decisionTimeout->Reset();
-        pendingPhase1->decisionTimeoutStarted = true;
+      if(phase1DecisionTimeout == 0){
+        itr->second->decision = proto::ABORT;
+        itr->second->fast = false;
+        Phase1Decision(itr);
       }
-      break;
-    case SLOW_ABORT_TENTATIVE2:
+      else{
         if (!pendingPhase1->decisionTimeoutStarted) {
           uint64_t reqId = reply.req_id();
           pendingPhase1->decisionTimeout = new Timeout(transport,
@@ -847,6 +842,32 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
             );
           pendingPhase1->decisionTimeout->Reset();
           pendingPhase1->decisionTimeoutStarted = true;
+        }
+      }
+      break;
+    case SLOW_ABORT_TENTATIVE2:
+        if(phase1DecisionTimeout == 0){
+          itr->second->decision = proto::ABORT;
+          itr->second->fast = false;
+          Phase1Decision(itr);
+        }
+        else{
+          if (!pendingPhase1->decisionTimeoutStarted) {
+            uint64_t reqId = reply.req_id();
+            pendingPhase1->decisionTimeout = new Timeout(transport,
+                phase1DecisionTimeout, [this, reqId]() {
+                  auto itr = pendingPhase1s.find(reqId);
+                  if (itr == pendingPhase1s.end()) {
+                    return;
+                  }
+                  itr->second->decision = proto::ABORT;
+                  itr->second->fast = false;
+                  Phase1Decision(itr);
+                }
+              );
+            pendingPhase1->decisionTimeout->Reset();
+            pendingPhase1->decisionTimeoutStarted = true;
+          }
         }
         break;
     case NOT_ENOUGH:

@@ -1115,6 +1115,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
 
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
+  stats.Increment("total_transactions", 1);
 
   //auto lockScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
   proto::Transaction *txn;
@@ -1167,6 +1168,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
             txnDigest, txn, std::placeholders::_1));
 
           if(params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()){
+            stats.Increment("total_transactions_fast", 1);
             int64_t myProcessId;
             proto::ConcurrencyControl::Result myResult;
             LookupP1Decision(*txnDigest, myProcessId, myResult);
@@ -1188,6 +1190,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
           }
           else if(params.signedMessages && msg.decision() == proto::ABORT && msg.has_p1_sigs()){
+            stats.Increment("total_transactions_fast", 1);
             int64_t myProcessId;
             proto::ConcurrencyControl::Result myResult;
             LookupP1Decision(*txnDigest, myProcessId, myResult);
@@ -1231,6 +1234,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
 
           else if (msg.decision() == proto::ABORT && msg.has_conflict()) {
+             stats.Increment("total_transactions_fast", 1);
               //TODO:Make Async ValidateCommittedConflict
               std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
                   params.hashDigest);

@@ -56,6 +56,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     client_seq_num(0UL), lastReqId(0UL), getIdx(0UL) {
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
+  std::cerr<< "P1 Decision Timeout: " <<phase1DecisionTimeout<< std::endl;
 
   if (params.signatureBatchSize == 1) {
     verifier = new BasicVerifier(transport);//transport, 1000000UL,false); //Need to change interface so client can use it too?
@@ -85,6 +86,8 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
 
 Client::~Client()
 {
+  //std::cerr<< "total prepares: " << total_counter << std::endl;
+  //std::cerr<< "fast path prepares: " << fast_path_counter << std::endl;
   Latency_Dump(&executeLatency);
   Latency_Dump(&getLatency);
   Latency_Dump(&commitLatency);
@@ -258,6 +261,10 @@ void Client::Phase1Callback(uint64_t txnId, int group,
         " or aborted.", txnId);
     return;
   }
+  //total_counter++;
+  //if(fast) fast_path_counter++;
+  stats.Increment("total_prepares", 1);
+  if(fast) stats.Increment("total_prepares_fast", 1);
 
   Debug("PHASE1[%lu:%lu] callback decision %d [Fast:%s][Conflict:%s] from group %d", client_id,
       client_seq_num, decision, fast ? "yes" : "no", conflict_flag ? "yes" : "no", group);
