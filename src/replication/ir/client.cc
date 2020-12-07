@@ -539,6 +539,7 @@ IRClient::HandleConsensusReply(const TransportAddress &remote,
         req->consensusReplyQuorum.GetMessages(msg.view());
 
     if (msg.finalized()) {
+        //total_consensus_counter++;
         Debug("The HandleConsensusReply for request %lu was finalized.", reqId);
         // If we receive a finalized message, then we immediately transition
         // into the slow path.
@@ -553,6 +554,7 @@ IRClient::HandleConsensusReply(const TransportAddress &remote,
     } else if (req->on_slow_path && msgs.size() >= req->quorumSize) {
         HandleSlowPathConsensus(reqId, msgs, false, req);
     } else if (!req->on_slow_path && msgs.size() >= req->superQuorumSize) {
+        //fast_path_counter++;
         HandleFastPathConsensus(reqId, msgs, req);
     }
 }

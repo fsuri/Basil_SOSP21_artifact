@@ -49,6 +49,9 @@ namespace ir {
 class IRClient : public Client
 {
 public:
+    int total_consensus_counter;
+    int fast_path_counter;
+
     using result_set_t = std::map<string, std::size_t>;
     using decide_t = std::function<string(const result_set_t &)>;
 
