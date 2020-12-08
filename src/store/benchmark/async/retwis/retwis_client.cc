@@ -31,7 +31,7 @@ AsyncTransaction *RetwisClient::GetNextTransaction() {
   } else if (ttype < 20) {
     lastOp = "follow";
     return new Follow(keySelector, GetRand());
-  } else if (ttype < 50) {
+  } else if (ttype < 50) { //change to 100/true to avoid any timeline.
     lastOp = "post_tweet";
     return new PostTweet(keySelector, GetRand());
   } else {
