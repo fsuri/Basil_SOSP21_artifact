@@ -137,6 +137,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
         fprintf(stderr, "0 participating shards\n");
       }
       stats.Increment("called_commit",1);
+      stats.IncrementList("txn_groups", currentTxn.participating_shards_size());
 
       for (const auto& shard_id : currentTxn.participating_shards()) {
 

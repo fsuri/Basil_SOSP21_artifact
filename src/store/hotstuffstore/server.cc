@@ -369,6 +369,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   Timestamp ts(read.timestamp());
   //std::shared_lock lock(atomicMutex); //come back to this: probably dont need it at all.
 
+  stats.Increment("total_reads_processed", 1);
   pair<Timestamp, ValueAndProof> result;
   bool exists = commitStore.get(read.key(), ts, result);
 

@@ -355,15 +355,17 @@ void Replica::HandleRequest(const TransportAddress &remote,
       // digest[3] = 'b';
       // digest[4] = 'l';
       // digest[5] = 'e';
-      // digest = "bubble";
+
+      // std::string digest_b("bubble");
       //
       // std::function<void(const std::string&, uint32_t seqnum)> execb_bubble =
-      //   [this](const std::string&, uint32_t seqnum){
+      //   [this, digest_b](const std::string&, uint32_t seqnum){
       //     stats->Increment("hotstuff_exec_bubble", 1);
-      //     pendingExecutions[seqnum] = "bubble";
+      //     std::cerr<<"Calling bubble dummt execute slots" << std::endl;
+      //     pendingExecutions[seqnum] = digest_b;
       //     executeSlots();
       //   };
-      //   hotstuff_interface.propose(digest, execb_bubble);
+      //   hotstuff_interface.propose(digest_b, execb_bubble);
   }
 
 #else // use PBFT store
@@ -884,10 +886,12 @@ void Replica::executeSlots_internal() {
 
     string batchDigest = pendingExecutions[execSeqNum];
 
-    if(batchDigest == "bubble") {
-      execSeqNum++;
-      continue;
-    }
+    // std::string digest_b("bubble");
+    // if(batchDigest == digest_b) {
+    //   std::cerr<<"Calling bubble dummt execute slots" << std::endl;
+    //   execSeqNum++;
+    //   continue;
+    // }
     // only execute when we have the batched request
     if (batchedRequests.find(batchDigest) != batchedRequests.end()) {
       string digest = (*batchedRequests[batchDigest].mutable_digests())[execBatchNum];
