@@ -1168,7 +1168,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
             txnDigest, txn, std::placeholders::_1));
 
           if(params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()){
-            stats.Increment("total_transactions_fast", 1);
+            stats.Increment("total_transactions_fast_commit", 1);
             int64_t myProcessId;
             proto::ConcurrencyControl::Result myResult;
             LookupP1Decision(*txnDigest, myProcessId, myResult);
@@ -1190,7 +1190,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
           }
           else if(params.signedMessages && msg.decision() == proto::ABORT && msg.has_p1_sigs()){
-            stats.Increment("total_transactions_fast", 1);
+            stats.Increment("total_transactions_fast_Abort_sigs", 1);
             int64_t myProcessId;
             proto::ConcurrencyControl::Result myResult;
             LookupP1Decision(*txnDigest, myProcessId, myResult);
@@ -1211,6 +1211,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
           }
 
           else if (params.signedMessages && msg.has_p2_sigs()) {
+             stats.Increment("total_transactions_slow", 1);
               //TODO: Make async validate P2 replies func
               if(!msg.has_p2_view()) return;
               int64_t myProcessId;
@@ -1234,7 +1235,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
 
           else if (msg.decision() == proto::ABORT && msg.has_conflict()) {
-             stats.Increment("total_transactions_fast", 1);
+             stats.Increment("total_transactions_fast_Abort_conflict", 1);
               //TODO:Make Async ValidateCommittedConflict
               std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
                   params.hashDigest);

@@ -66,12 +66,12 @@ void LocalBatchSigner::SignBatch() {
 
   uint64_t batchSize = pendingBatchMessages.size();
 
-  stats.IncrementList("sig_batch", batchSize);
-  stats.Add("sig_batch_sizes", batchSize);
+  //stats.IncrementList("sig_batch", batchSize);
+  //stats.Add("sig_batch_sizes", batchSize);
   struct timeval curr;
   gettimeofday(&curr, NULL);
   uint64_t currMicros = curr.tv_sec * 1000000ULL + curr.tv_usec;
-  stats.Add("sig_batch_sizes_ts",  currMicros);
+  //stats.Add("sig_batch_sizes_ts",  currMicros);
   SignMessages(pendingBatchMessages, keyManager->GetPrivateKey(id), id,
     pendingBatchSignedMessages, merkleBranchFactor);
   pendingBatchMessages.clear();
@@ -292,12 +292,12 @@ void* LocalBatchSigner::asyncSignBatch2(std::vector<Triplet> _Batch) {
   uint64_t batchSize = _Batch.size();
   {
   //std::lock_guard<std::mutex> lk(stat_mutex);
-    stats.IncrementList("sig_batch", batchSize);
-    stats.Add("sig_batch_sizes", batchSize);
+    //stats.IncrementList("sig_batch", batchSize);
+    //stats.Add("sig_batch_sizes", batchSize);
     struct timeval curr;
     gettimeofday(&curr, NULL);
     uint64_t currMicros = curr.tv_sec * 1000000ULL + curr.tv_usec;
-    stats.Add("sig_batch_sizes_ts",  currMicros);
+    //stats.Add("sig_batch_sizes_ts",  currMicros);
   }
   Debug("(CPU:%d) Signing batch", sched_getcpu());
   SignMessages(_Batch, keyManager->GetPrivateKey(id), id, merkleBranchFactor);
@@ -319,11 +319,11 @@ std::vector<signedCallback> _pendingBatchCallbacks) {
   {
   //std::lock_guard<std::mutex> lk(stat_mutex);
     stats.IncrementList("sig_batch", batchSize);
-    stats.Add("sig_batch_sizes", batchSize);
+    //stats.Add("sig_batch_sizes", batchSize);
     struct timeval curr;
     gettimeofday(&curr, NULL);
     uint64_t currMicros = curr.tv_sec * 1000000ULL + curr.tv_usec;
-    stats.Add("sig_batch_sizes_ts",  currMicros);
+    //stats.Add("sig_batch_sizes_ts",  currMicros);
   }
   Debug("(CPU:%d) Signing batch", sched_getcpu());
   SignMessages(_pendingBatchMessages, keyManager->GetPrivateKey(id), id,
