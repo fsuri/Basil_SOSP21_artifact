@@ -614,6 +614,17 @@ void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
 //auto lockScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
 
+//TODO:: lock all as merge:
+//for i in readset.size + writeset.size
+// itr_r = readset.begin
+// itr_w = writeset.begin
+// if itr_r.second < itr.w <second
+// lock itr_r.second; itr_r ++
+// else: lock itr_w.second; itr_w ++
+// else if one itr == end automatically choose the other.
+
+
+
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),

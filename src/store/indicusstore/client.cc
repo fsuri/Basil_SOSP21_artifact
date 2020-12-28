@@ -162,9 +162,21 @@ void Client::Get(const std::string &key, get_callback gcb,
         }
       }
       if (addReadSet) {
-        ReadMessage *read = txn.add_read_set();
-        read->set_key(key);
-        ts.serialize(read->mutable_readtime());
+        // if(!sortKeySets){
+          ReadMessage *read = txn.add_read_set();
+          read->set_key(key);
+          ts.serialize(read->mutable_readtime());
+        // }
+        // else{ //XXX use this branch only for the sorting approach used for parallel OCC
+        //   ReadMessage read;
+        //   read.set_key(key);
+        //   ts.serialize(read.mutable_readtime());
+        //   readSetSorter.push_back(std::move(read));
+        //   //alternatively"
+        //   // readSetSorter.emplace_back();
+        //   // readSetSorter.back().set_key(key);
+        //   // ts.serialize(readSetSorter.back().mutable_readtime());
+        // }
       }
       if (hasDep) {
         *txn.add_deps() = dep;
@@ -198,9 +210,23 @@ void Client::Put(const std::string &key, const std::string &value,
       bclient[i]->Begin(client_seq_num);
     }
 
-    WriteMessage *write = txn.add_write_set();
-    write->set_key(key);
-    write->set_value(value);
+
+
+    //if(true !sortKeySets){
+      WriteMessage *write = txn.add_write_set();
+      write->set_key(key);
+      write->set_value(value);
+    // }
+    // else{ //XXX use this branch only for the sorting approach used for parallel OCC
+    //   WriteMessage write;
+    //   write.set_key(key);
+    //   write.set_value(value);
+    //   writeSetSorter.push_back(std::move(write));
+    //   // writeSetSorter.emplace_back();
+    //   // writeSetSorter.back().set_key(key);
+    //   // writeSetSorter.back().set_value(value);
+    // }
+
 
     // Buffering, so no need to wait.
     bclient[i]->Put(client_seq_num, key, value, pcb, ptcb, timeout);
@@ -212,6 +238,12 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
   transport->Timer(0, [this, ccb, ctcb, timeout]() {
     uint64_t ns = Latency_End(&executeLatency);
     Latency_Start(&commitLatency);
+
+    //XXX flag to sort read/write sets for parallel OCC
+    if(sortKeySets){
+      std::sort(txn.mutable_read_set()->begin(), txn.mutable_read_set()->end(), sortReadByKey);
+      std::sort(txn.mutable_write_set()->begin(), txn.mutable_write_set()->end(), sortWriteByKey);
+    }
 
     PendingRequest *req = new PendingRequest(client_seq_num);
     pendingReqs[client_seq_num] = req;
