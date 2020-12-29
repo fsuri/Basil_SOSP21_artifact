@@ -614,17 +614,6 @@ void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
 //auto lockScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
 
-//TODO:: lock all as merge:
-//for i in readset.size + writeset.size
-// itr_r = readset.begin
-// itr_w = writeset.begin
-// if itr_r.second < itr.w <second
-// lock itr_r.second; itr_r ++
-// else: lock itr_w.second; itr_w ++
-// else if one itr == end automatically choose the other.
-
-
-
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
@@ -640,7 +629,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
   p1DecisionsMap::const_accessor c;
   bool p1DecItr = p1Decisions.find(c, txnDigest);
-  if(p1DecItr){
+  if(p1DecItr){  //TODO: only do Phase1 if one has not committed/aborted already.
   //if(p1Decisions.find(txnDigest) != p1Decisions.end()){
     //result = p1Decisions[txnDigest];
     result = c->second;
@@ -747,14 +736,6 @@ void Server::HandlePhase1(const TransportAddress &remote,
       //transport->DispatchTP(std::move(f), std::move(cb));
       return;
     }
-
-    // int flip = (msg.req_id() * msg.req_id()) % 10 ;
-    // if(flip < 3){
-    //   result = proto::ConcurrencyControl::ABSTAIN;
-    // }
-    // else{
-    //   result = proto::ConcurrencyControl::COMMIT;
-    // }
   }
 
   HandlePhase1CB(&msg, result, committedProof, txnDigest, remote);
@@ -1614,8 +1595,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
   //Latency_End(&waitingOnLocks);
 
   preparedMap::const_accessor a;
-  auto preparedItr = prepared.find(a, txnDigest);
+  bool preparedItr = prepared.find(a, txnDigest);
   //if (preparedItr == prepared.end()) {
+  //TODO need to lock before, so 2 parallel OCC dont accidentally set a decision twice.
   if(!preparedItr){
     a.release();
     if (CheckHighWatermark(ts)) {
@@ -1629,6 +1611,41 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       return proto::ConcurrencyControl::ABSTAIN;
     }
      //if(params.mainThreadDispatching) preparedMutex.unlock_shared();
+
+/// Lock all keys in order for atomicity if using parallel OCC
+//TODO:: lock all as merge:
+if(false){
+  auto itr_r = txn.read_set().begin();
+  auto itr_w = txn.write_set().begin();
+  for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
+    if(itr_r == txn.read_set().end()){
+      //lock itr_w
+      itr_w++;
+    }
+    else if(itr_w == txn.write_set().end()){
+      //lock itr_r,
+      itr_r++;
+    }
+    else{
+      if(itr_r->key() < itr_w->key()){
+        itr_r++;
+      }
+      else{
+        //lock itr_w
+        itr_w++;
+      }
+    }
+  }
+}
+
+
+
+
+
+///
+
+
+
 
     for (const auto &read : txn.read_set()) {
       // TODO: remove this check when txns only contain read set/write set for the
@@ -1975,12 +1992,12 @@ void Server::Prepare(const std::string &txnDigest,
   }
   const proto::Transaction *ongoingTxn = b->second;
   //const proto::Transaction *ongoingTxn = ongoing.at(txnDigest);
-  b.release();
+
 
   preparedMap::accessor a;
   auto p = prepared.insert(a, std::make_pair(txnDigest, std::make_pair(
           Timestamp(txn.timestamp()), ongoingTxn)));
-
+  b.release();
 
   for (const auto &read : txn.read_set()) {
     if (IsKeyOwned(read.key())) {
@@ -2138,6 +2155,7 @@ void Server::Clean(const std::string &txnDigest) {
   //auto preparedWritesMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
 
   //auto p1ConflictsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(p1ConflictsMutex) : std::unique_lock<std::mutex>();
+  //p1Decisions..
   auto p2DecisionsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(p2DecisionsMutex) : std::unique_lock<std::mutex>();
   //auto interestedClientsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(interestedClientsMutex) : std::unique_lock<std::mutex>();
   auto current_viewsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(current_viewsMutex) : std::unique_lock<std::mutex>();
