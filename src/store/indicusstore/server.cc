@@ -753,6 +753,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
 }
 
+//TODO: move p1Decision into this function (not sendp1: Then, can unlock here.)
 void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
   const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote){
   if (result != proto::ConcurrencyControl::WAIT) {
@@ -1612,40 +1613,33 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     }
      //if(params.mainThreadDispatching) preparedMutex.unlock_shared();
 
-/// Lock all keys in order for atomicity if using parallel OCC
-//TODO:: lock all as merge:
+
+//TODO:: /// Lock all (read/write) keys in order for atomicity if using parallel OCC
 if(false){
   auto itr_r = txn.read_set().begin();
   auto itr_w = txn.write_set().begin();
   for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
     if(itr_r == txn.read_set().end()){
-      //lock itr_w
+      std::unique_lock<std::mutex> lock(lock_keys[itr_w->key()]);
       itr_w++;
     }
     else if(itr_w == txn.write_set().end()){
-      //lock itr_r,
+      std::unique_lock<std::mutex> lock(lock_keys[itr_r->key()]);
       itr_r++;
     }
     else{
       if(itr_r->key() < itr_w->key()){
+        std::unique_lock<std::mutex> lock(lock_keys[itr_r->key()]);
         itr_r++;
       }
       else{
-        //lock itr_w
+        std::unique_lock<std::mutex> lock(lock_keys[itr_w->key()]);
         itr_w++;
       }
     }
   }
 }
-
-
-
-
-
 ///
-
-
-
 
     for (const auto &read : txn.read_set()) {
       // TODO: remove this check when txns only contain read set/write set for the

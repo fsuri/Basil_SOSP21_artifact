@@ -154,7 +154,7 @@
 	  "_read_quorum": "majority-honest",
 	  "p1DecisionTimeout":10,
 
-      "_max_dep_depth": 1,
+      "max_dep_depth": 1,
       "_max_dep_depth": -2, 
 	  "hash_digest": true,
       "verify_deps": false,

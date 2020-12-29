@@ -363,7 +363,8 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   //std::unordered_map<std::string, std::map<Timestamp, const proto::Transaction *>> preparedWrites;
   tbb::concurrent_unordered_map<std::string, std::pair<std::shared_mutex,std::map<Timestamp, const proto::Transaction *>>> preparedWrites;
 
-
+  //XXX key locks for atomicity of OCC check
+  tbb::concurrent_unordered_map<std::string, std::mutex> lock_keys;
 
   //std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
   //std::unordered_map<std::string, const proto::CommittedProof *> p1Conflicts;
@@ -411,6 +412,18 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
     std::unordered_set<std::string> deps;  //needs to be a tbb::hashmap.
   };
   std::unordered_map<std::string, WaitingDependency> waitingDependencies; // K depends on each V
+
+//XXX re-writing concurrent:
+tbb::concurrent_hash_map<std::string, std::unordered_set<std::string> > dependents_new; //can be unordered set, as long as i keep lock access long enough
+
+struct WaitingDependency_new {
+  uint64_t reqId;
+  const TransportAddress *remote;
+  std::mutex deps_mutex;
+  std::unordered_set<std::string> deps; //acquire mutex before erasing (or use hashmap)
+};
+tbb::concurrent_hash_map<std::string, WaitingDependency_new> waitingDependencies_new;
+//
 
   Stats stats;
   std::unordered_set<std::string> active;
