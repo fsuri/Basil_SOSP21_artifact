@@ -1422,6 +1422,57 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
   }
 }
 
+void Server::LockTxnKeys(proto::Transaction &txn){
+  // Lock all (read/write) keys in order for atomicity if using parallel OCC
+    auto itr_r = txn.read_set().begin();
+    auto itr_w = txn.write_set().begin();
+    for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
+      if(itr_r == txn.read_set().end()){
+        lock_keys[itr_w->key()].lock();
+        itr_w++;
+      }
+      else if(itr_w == txn.write_set().end()){
+        lock_keys[itr_r->key()].lock();
+        itr_r++;
+      }
+      else{
+        if(itr_r->key() < itr_w->key()){
+          lock_keys[itr_r->key()].lock();
+          itr_r++;
+        }
+        else{
+          lock_keys[itr_w->key()].lock();
+          itr_w++;
+        }
+      }
+    }
+}
+void Server::UnlockTxnKeys(proto::Transaction &txn){
+  // Lock all (read/write) keys in order for atomicity if using parallel OCC
+    auto itr_r = txn.read_set().rbegin();
+    auto itr_w = txn.write_set().rbegin();
+    for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
+      if(itr_r == txn.read_set().rend()){
+        lock_keys[itr_w->key()].unlock();
+        itr_w++;
+      }
+      else if(itr_w == txn.write_set().rend()){
+        lock_keys[itr_r->key()].unlock();
+        itr_r++;
+      }
+      else{
+        if(itr_r->key() >= itr_w->key()){
+          lock_keys[itr_r->key()].unlock();
+          itr_r++;
+        }
+        else{
+          lock_keys[itr_w->key()].unlock();
+          itr_w++;
+        }
+      }
+    }
+}
+
 proto::ConcurrencyControl::Result Server::DoTAPIROCCCheck(
     const std::string &txnDigest, const proto::Transaction &txn,
     Timestamp &retryTs) {
@@ -1612,34 +1663,6 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       return proto::ConcurrencyControl::ABSTAIN;
     }
      //if(params.mainThreadDispatching) preparedMutex.unlock_shared();
-
-
-//TODO:: /// Lock all (read/write) keys in order for atomicity if using parallel OCC
-if(false){
-  auto itr_r = txn.read_set().begin();
-  auto itr_w = txn.write_set().begin();
-  for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
-    if(itr_r == txn.read_set().end()){
-      std::unique_lock<std::mutex> lock(lock_keys[itr_w->key()]);
-      itr_w++;
-    }
-    else if(itr_w == txn.write_set().end()){
-      std::unique_lock<std::mutex> lock(lock_keys[itr_r->key()]);
-      itr_r++;
-    }
-    else{
-      if(itr_r->key() < itr_w->key()){
-        std::unique_lock<std::mutex> lock(lock_keys[itr_r->key()]);
-        itr_r++;
-      }
-      else{
-        std::unique_lock<std::mutex> lock(lock_keys[itr_w->key()]);
-        itr_w++;
-      }
-    }
-  }
-}
-///
 
     for (const auto &read : txn.read_set()) {
       // TODO: remove this check when txns only contain read set/write set for the

@@ -365,6 +365,8 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
   //XXX key locks for atomicity of OCC check
   tbb::concurrent_unordered_map<std::string, std::mutex> lock_keys;
+  void LockTxnKeys(proto::Transaction &txn);
+  void UnlockTxnKeys(proto::Transaction &txn);
 
   //std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
   //std::unordered_map<std::string, const proto::CommittedProof *> p1Conflicts;
