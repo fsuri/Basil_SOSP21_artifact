@@ -680,13 +680,13 @@ void Server::HandlePhase1(const TransportAddress &remote,
      if(params.mainThreadDispatching) current_viewsMutex.lock();
     //Latency_End(&waitingOnLocks);
     current_views[txnDigest] = 0;
-
+      std::cout << "ABORTING Before clients" << std::endl;
       interestedClientsMap::accessor i;
       bool interestedClientsItr = interestedClients.insert(i, txnDigest);
       i->second.insert(remote.clone());
       i.release();
       //interestedClients[txnDigest].insert(remote.clone());
-
+      std::cout << "ABORTING AFTEr clients" << std::endl;
      //if(params.mainThreadDispatching) interestedClientsMutex.unlock();
      if(params.mainThreadDispatching) current_viewsMutex.unlock();
 
@@ -1932,7 +1932,12 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //   //RelayP1(remote, *tx, reqId);
         // }
         allFinished = false;
-        dependents[dep.write().prepared_txn_digest()].insert(txnDigest);
+        std::cout << "ABORTING AT 1" << std::endl;
+        dependentsMap::accessor e;
+        //dependents[dep.write().prepared_txn_digest()].insert(e, txnDigest);
+        dependents.insert(e, dep.write().prepared_txn_digest());
+        e->second.insert(txnDigest);
+        e.release();
         auto dependenciesItr = waitingDependencies.find(txnDigest);
         if (dependenciesItr == waitingDependencies.end()) {
           auto inserted = waitingDependencies.insert(std::make_pair(txnDigest,
@@ -2262,9 +2267,13 @@ void Server::CheckDependents(const std::string &txnDigest) {
    if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
   //Latency_End(&waitingOnLocks);
 
-  auto dependentsItr = dependents.find(txnDigest);
-  if (dependentsItr != dependents.end()) {
-    for (const auto &dependent : dependentsItr->second) {
+  std::cout << "ABORTING AT 2" << std::endl;
+  dependentsMap::const_accessor e;
+  auto dependentsItr = dependents.find(e, txnDigest);
+  if(dependentsItr){
+  //if (dependentsItr != dependents.end()) {
+    for (const auto &dependent : e->second) {
+    //for (const auto &dependent : dependentsItr->second) {
       auto dependenciesItr = waitingDependencies.find(dependent);
       UW_ASSERT(dependenciesItr != waitingDependencies.end());
 
@@ -2285,6 +2294,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
       }
     }
   }
+  e.release();
    if(params.mainThreadDispatching) dependentsMutex.unlock();
    if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
 }
@@ -2444,14 +2454,25 @@ void Server::CleanDependencies(const std::string &txnDigest) {
   auto dependenciesItr = waitingDependencies.find(txnDigest);
   if (dependenciesItr != waitingDependencies.end()) {
     for (const auto &dependency : dependenciesItr->second.deps) {
-      auto dependentItr = dependents.find(dependency);
-      if (dependentItr != dependents.end()) {
-        dependentItr->second.erase(txnDigest);
+      std::cout << "ABORTING AT 3" << std::endl;
+      dependentsMap::accessor e;
+      auto dependentItr = dependents.find(e, dependency);
+      // if (dependentItr != dependents.end()) {
+      //   dependentItr->second.erase(txnDigest);
+      // }
+      if (dependentItr) {
+        e->second.erase(txnDigest);
       }
+      e.release();
     }
     waitingDependencies.erase(dependenciesItr);
   }
-  dependents.erase(txnDigest);
+  std::cout << "ABORTING AT 4" << std::endl;
+  dependentsMap::accessor e;
+  dependents.find(e, txnDigest);
+  dependents.erase(e);
+  e.release();
+  //dependents.erase(txnDigest);
 
    if(params.mainThreadDispatching) dependentsMutex.unlock();
    if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();

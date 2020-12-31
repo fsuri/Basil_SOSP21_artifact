@@ -406,7 +406,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
   std::unordered_map<std::string, proto::Writeback> writebackMessages;
 
-  std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
+  std::unordered_map<std::string, std::unordered_set<std::string>> dependents_old; // Each V depends on K
   //tbb hashmap<string,
   struct WaitingDependency {
     uint64_t reqId;
@@ -416,7 +416,8 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::unordered_map<std::string, WaitingDependency> waitingDependencies; // K depends on each V
 
 //XXX re-writing concurrent:
-tbb::concurrent_hash_map<std::string, std::unordered_set<std::string> > dependents_new; //can be unordered set, as long as i keep lock access long enough
+typedef tbb::concurrent_hash_map<std::string, std::unordered_set<std::string> > dependentsMap; //can be unordered set, as long as i keep lock access long enough
+dependentsMap dependents;
 
 struct WaitingDependency_new {
   uint64_t reqId;
