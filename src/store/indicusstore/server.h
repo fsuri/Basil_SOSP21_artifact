@@ -406,7 +406,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
   std::unordered_map<std::string, proto::Writeback> writebackMessages;
 
-  std::unordered_map<std::string, std::unordered_set<std::string>> dependents_old; // Each V depends on K
+  //std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
   //tbb hashmap<string,
   struct WaitingDependency {
     uint64_t reqId;

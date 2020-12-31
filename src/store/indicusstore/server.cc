@@ -1903,7 +1903,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
 
   if(params.maxDepDepth > -2){
     //Latency_Start(&waitingOnLocks);
-     if(params.mainThreadDispatching) dependentsMutex.lock();
+     //if(params.mainThreadDispatching) dependentsMutex.lock();
      if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
      //if(params.mainThreadDispatching) ongoingMutex.lock_shared();
      //if(params.mainThreadDispatching) committedMutex.lock_shared();
@@ -1932,9 +1932,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //   //RelayP1(remote, *tx, reqId);
         // }
         allFinished = false;
-        std::cout << "ABORTING AT 1" << std::endl;
+        std::cerr << "ABORTING AT 1" << std::endl;
         dependentsMap::accessor e;
-        //dependents[dep.write().prepared_txn_digest()].insert(e, txnDigest);
+        //dependents[dep.write().prepared_txn_digest()].insert(txnDigest);
         dependents.insert(e, dep.write().prepared_txn_digest());
         e->second.insert(txnDigest);
         e.release();
@@ -1951,7 +1951,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       }
     }
 
-     if(params.mainThreadDispatching) dependentsMutex.unlock();
+     //if(params.mainThreadDispatching) dependentsMutex.unlock();
      if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
      //if(params.mainThreadDispatching) ongoingMutex.unlock_shared();
      //if(params.mainThreadDispatching) committedMutex.unlock_shared();
@@ -2263,13 +2263,14 @@ void Server::Clean(const std::string &txnDigest) {
 
 void Server::CheckDependents(const std::string &txnDigest) {
   //Latency_Start(&waitingOnLocks);
-   if(params.mainThreadDispatching) dependentsMutex.lock(); //read lock
+   //if(params.mainThreadDispatching) dependentsMutex.lock(); //read lock
    if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
   //Latency_End(&waitingOnLocks);
 
-  std::cout << "ABORTING AT 2" << std::endl;
+  std::cerr << "ABORTING AT 2" << std::endl;
   dependentsMap::const_accessor e;
-  auto dependentsItr = dependents.find(e, txnDigest);
+  bool dependentsItr = dependents.find(e, txnDigest);
+  //auto dependentsItr = dependents.find(txnDigest);
   if(dependentsItr){
   //if (dependentsItr != dependents.end()) {
     for (const auto &dependent : e->second) {
@@ -2295,7 +2296,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
     }
   }
   e.release();
-   if(params.mainThreadDispatching) dependentsMutex.unlock();
+   //if(params.mainThreadDispatching) dependentsMutex.unlock();
    if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
 }
 
@@ -2448,33 +2449,36 @@ void Server::SendPhase1Reply(uint64_t reqId,
 }
 
 void Server::CleanDependencies(const std::string &txnDigest) {
-   if(params.mainThreadDispatching) dependentsMutex.lock();
+   //if(params.mainThreadDispatching) dependentsMutex.lock();
    if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
 
   auto dependenciesItr = waitingDependencies.find(txnDigest);
   if (dependenciesItr != waitingDependencies.end()) {
     for (const auto &dependency : dependenciesItr->second.deps) {
-      std::cout << "ABORTING AT 3" << std::endl;
+      //std::cerr << "ABORTING AT 3" << std::endl;
       dependentsMap::accessor e;
       auto dependentItr = dependents.find(e, dependency);
-      // if (dependentItr != dependents.end()) {
-      //   dependentItr->second.erase(txnDigest);
-      // }
       if (dependentItr) {
         e->second.erase(txnDigest);
       }
       e.release();
+      // auto dependentItr = dependents.find(dependency);
+      // if (dependentItr != dependents.end()) {
+      //   dependentItr->second.erase(txnDigest);
+      // }
+
     }
     waitingDependencies.erase(dependenciesItr);
   }
-  std::cout << "ABORTING AT 4" << std::endl;
+
   dependentsMap::accessor e;
-  dependents.find(e, txnDigest);
-  dependents.erase(e);
+  if(dependents.find(e, txnDigest)){
+    dependents.erase(e);
+  }
   e.release();
   //dependents.erase(txnDigest);
 
-   if(params.mainThreadDispatching) dependentsMutex.unlock();
+   //if(params.mainThreadDispatching) dependentsMutex.unlock();
    if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
 }
 
