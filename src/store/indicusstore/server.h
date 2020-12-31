@@ -425,7 +425,8 @@ struct WaitingDependency_new {
   std::mutex deps_mutex;
   std::unordered_set<std::string> deps; //acquire mutex before erasing (or use hashmap)
 };
-tbb::concurrent_hash_map<std::string, WaitingDependency_new> waitingDependencies_new;
+typedef tbb::concurrent_hash_map<std::string, WaitingDependency_new> waitingDependenciesMap;
+waitingDependenciesMap waitingDependencies_new;
 //
 
   Stats stats;

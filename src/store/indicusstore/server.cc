@@ -274,7 +274,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       if(params.multiThreading){
           proto::Phase2* p2 = GetUnusedPhase2message();
           p2->ParseFromString(data);
-          if(!params.mainThreadDispatching){
+          if(!params.mainThreadDispatching || params.dispatchMessageReceive){
             HandlePhase2(remote, *p2);
           }
           else{
@@ -308,7 +308,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       if(params.multiThreading){
           proto::Writeback *wb = GetUnusedWBmessage();
           wb->ParseFromString(data);
-          if(!params.mainThreadDispatching){
+          if(!params.mainThreadDispatching || params.dispatchMessageReceive){
             HandleWriteback(remote, *wb);
           }
           else{
@@ -701,7 +701,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
     Timestamp retryTs;
 
-    if(true){
+    if(false){
       result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
           committedProof);
     }
@@ -780,7 +780,7 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
     Debug("VALIDATE P1Replies for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
     //delete (bool*) valid;
     cleanCB(); //deletes SendCB resources should it not be called.
-    if(params.multiThreading || params.mainThreadDispatching){
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
       FreePhase2message(msg); //const_cast<proto::Phase2&>(msg));
     }
     return (void*) true;
@@ -1053,7 +1053,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
   if(! valid){
     Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
     //delete (bool*) valid;
-    if(params.multiThreading || params.mainThreadDispatching){
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
       FreeWBmessage(msg);
     }
     //return; //XXX comment back
@@ -1904,7 +1904,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
   if(params.maxDepDepth > -2){
     //Latency_Start(&waitingOnLocks);
      //if(params.mainThreadDispatching) dependentsMutex.lock();
-     if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
+     //if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
      //if(params.mainThreadDispatching) ongoingMutex.lock_shared();
      //if(params.mainThreadDispatching) committedMutex.lock_shared();
      //if(params.mainThreadDispatching) abortedMutex.lock_shared();
@@ -1931,6 +1931,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //   transport->Timer((CLIENTTIMEOUT), [this, &remote, txnDig, reqId](){this->RelayP1(remote, txnDig, reqId);});
         //   //RelayP1(remote, *tx, reqId);
         // }
+
         allFinished = false;
         std::cerr << "ABORTING AT 1" << std::endl;
         dependentsMap::accessor e;
@@ -1938,21 +1939,33 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         dependents.insert(e, dep.write().prepared_txn_digest());
         e->second.insert(txnDigest);
         e.release();
-        auto dependenciesItr = waitingDependencies.find(txnDigest);
-        if (dependenciesItr == waitingDependencies.end()) {
-          auto inserted = waitingDependencies.insert(std::make_pair(txnDigest,
-                WaitingDependency()));
-          UW_ASSERT(inserted.second);
-          dependenciesItr = inserted.first;
+        // auto dependenciesItr = waitingDependencies.find(txnDigest);
+        // if (dependenciesItr == waitingDependencies.end()) {
+        //   auto inserted = waitingDependencies.insert(std::make_pair(txnDigest,
+        //         WaitingDependency()));
+        //   UW_ASSERT(inserted.second);
+        //   dependenciesItr = inserted.first;
+        // }
+        // dependenciesItr->second.reqId = reqId;
+        // dependenciesItr->second.remote = remote.clone();  //&remote;
+        // dependenciesItr->second.deps.insert(dep.write().prepared_txn_digest());
+
+        waitingDependenciesMap::accessor f;
+        bool dependenciesItr = waitingDependencies_new.find(f, txnDigest);
+        if (!dependenciesItr) {
+          waitingDependencies_new.insert(f, txnDigest);
+          //f->second = WaitingDependency();
         }
-        dependenciesItr->second.reqId = reqId;
-        dependenciesItr->second.remote = remote.clone();  //&remote;
-        dependenciesItr->second.deps.insert(dep.write().prepared_txn_digest());
+        f->second.reqId = reqId;
+        f->second.remote = remote.clone();  //&remote;
+        //std::unique_lock lk(f->second.deps_mutex);
+        f->second.deps.insert(dep.write().prepared_txn_digest());
+        f.release();
       }
     }
 
      //if(params.mainThreadDispatching) dependentsMutex.unlock();
-     if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
+     //if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
      //if(params.mainThreadDispatching) ongoingMutex.unlock_shared();
      //if(params.mainThreadDispatching) committedMutex.unlock_shared();
      //if(params.mainThreadDispatching) abortedMutex.unlock_shared();
@@ -2264,7 +2277,7 @@ void Server::Clean(const std::string &txnDigest) {
 void Server::CheckDependents(const std::string &txnDigest) {
   //Latency_Start(&waitingOnLocks);
    //if(params.mainThreadDispatching) dependentsMutex.lock(); //read lock
-   if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
+   //if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
   //Latency_End(&waitingOnLocks);
 
   std::cerr << "ABORTING AT 2" << std::endl;
@@ -2275,29 +2288,55 @@ void Server::CheckDependents(const std::string &txnDigest) {
   //if (dependentsItr != dependents.end()) {
     for (const auto &dependent : e->second) {
     //for (const auto &dependent : dependentsItr->second) {
-      auto dependenciesItr = waitingDependencies.find(dependent);
-      UW_ASSERT(dependenciesItr != waitingDependencies.end());
 
-      dependenciesItr->second.deps.erase(txnDigest);
-      if (dependenciesItr->second.deps.size() == 0) {
+      waitingDependenciesMap::accessor f;
+      bool dependenciesItr = waitingDependencies_new.find(f, dependent);
+      if(!dependenciesItr) return;
+      UW_ASSERT(dependenciesItr);  //technically this should never fail, since if it were not
+      // in the waitingDep struct anymore, it wouldve also removed itself from the
+      //dependents set of txnDigest. XXX Need to reason carefully whether this is still true
+      // with parallel OCC --> or rather parallel Commit (this is only affected by parallel commit)
+
+      f->second.deps.erase(txnDigest);
+      if (f->second.deps.size() == 0) {
         Debug("Dependencies of %s have all committed or aborted.",
             BytesToHex(dependent, 16).c_str());
         proto::ConcurrencyControl::Result result = CheckDependencies(
             dependent);
         UW_ASSERT(result != proto::ConcurrencyControl::ABORT);
-        Debug("print remote: %p", dependenciesItr->second.remote);
+        Debug("print remote: %p", f->second.remote);
         //waitingDependencies.erase(dependent);
         const proto::CommittedProof *conflict = nullptr;
-        SendPhase1Reply(dependenciesItr->second.reqId, result, conflict, dependent,
-            dependenciesItr->second.remote);
-        delete dependenciesItr->second.remote;
-        waitingDependencies.erase(dependent);
+        SendPhase1Reply(f->second.reqId, result, conflict, dependent,
+            f->second.remote);
+        delete f->second.remote;
+        waitingDependencies_new.erase(f);
       }
+      f.release();
+
+      // auto dependenciesItr = waitingDependencies.find(dependent);
+      // UW_ASSERT(dependenciesItr != waitingDependencies.end());
+      //
+      // dependenciesItr->second.deps.erase(txnDigest);
+      // if (dependenciesItr->second.deps.size() == 0) {
+      //   Debug("Dependencies of %s have all committed or aborted.",
+      //       BytesToHex(dependent, 16).c_str());
+      //   proto::ConcurrencyControl::Result result = CheckDependencies(
+      //       dependent);
+      //   UW_ASSERT(result != proto::ConcurrencyControl::ABORT);
+      //   Debug("print remote: %p", dependenciesItr->second.remote);
+      //   //waitingDependencies.erase(dependent);
+      //   const proto::CommittedProof *conflict = nullptr;
+      //   SendPhase1Reply(dependenciesItr->second.reqId, result, conflict, dependent,
+      //       dependenciesItr->second.remote);
+      //   delete dependenciesItr->second.remote;
+      //   waitingDependencies.erase(dependent);
+      // }
     }
   }
   e.release();
    //if(params.mainThreadDispatching) dependentsMutex.unlock();
-   if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
+   //if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
 }
 
 proto::ConcurrencyControl::Result Server::CheckDependencies(
@@ -2450,11 +2489,15 @@ void Server::SendPhase1Reply(uint64_t reqId,
 
 void Server::CleanDependencies(const std::string &txnDigest) {
    //if(params.mainThreadDispatching) dependentsMutex.lock();
-   if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
+   //if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
 
-  auto dependenciesItr = waitingDependencies.find(txnDigest);
-  if (dependenciesItr != waitingDependencies.end()) {
-    for (const auto &dependency : dependenciesItr->second.deps) {
+  waitingDependenciesMap::accessor f;
+  bool dependenciesItr = waitingDependencies_new.find(f, txnDigest);
+  if (dependenciesItr ) {
+  //auto dependenciesItr = waitingDependencies.find(txnDigest);
+  //if (dependenciesItr != waitingDependencies.end()) {
+    //for (const auto &dependency : dependenciesItr->second.deps) {
+    for (const auto &dependency : f->second.deps) {
       //std::cerr << "ABORTING AT 3" << std::endl;
       dependentsMap::accessor e;
       auto dependentItr = dependents.find(e, dependency);
@@ -2468,8 +2511,10 @@ void Server::CleanDependencies(const std::string &txnDigest) {
       // }
 
     }
-    waitingDependencies.erase(dependenciesItr);
+    waitingDependencies_new.erase(f);
+    //waitingDependencies.erase(dependenciesItr);
   }
+  f.release();
 
   dependentsMap::accessor e;
   if(dependents.find(e, txnDigest)){
@@ -2479,7 +2524,7 @@ void Server::CleanDependencies(const std::string &txnDigest) {
   //dependents.erase(txnDigest);
 
    //if(params.mainThreadDispatching) dependentsMutex.unlock();
-   if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
+   //if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
 }
 
 void Server::LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId,
