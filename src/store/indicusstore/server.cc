@@ -1422,8 +1422,40 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
   }
 }
 
+
+locks_t Server::LockTxnKeys_scoped(proto::Transaction &txn) {
+
+    locks_t locks;
+    auto itr_r = txn.read_set().begin();
+    auto itr_w = txn.write_set().begin();
+    for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
+      if(itr_r == txn.read_set().end()){
+        locks.emplace_back(*mutex_map[itr_w->key()]);
+        itr_w++;
+      }
+      else if(itr_w == txn.write_set().end()){
+        locks.emplace_back(*mutex_map[itr_r->key()]);
+        itr_r++;
+      }
+      else{
+        if(itr_r->key() <= itr_w->key()){
+          locks.emplace_back(*mutex_map[itr_r->key()]);
+          itr_r++;
+          //If read set and write set share keys, must not acquire lock twice.
+          if(itr_r->key() == itr_w->key()) { itr_w++;}
+        }
+        else{
+          locks.emplace_back(*mutex_map[itr_w->key()]);
+          itr_w++;
+        }
+      }
+    }
+    return locks;
+}
+
 void Server::LockTxnKeys(proto::Transaction &txn){
   // Lock all (read/write) keys in order for atomicity if using parallel OCC
+
     auto itr_r = txn.read_set().begin();
     auto itr_w = txn.write_set().begin();
     for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
@@ -1436,9 +1468,11 @@ void Server::LockTxnKeys(proto::Transaction &txn){
         itr_r++;
       }
       else{
-        if(itr_r->key() < itr_w->key()){
+        if(itr_r->key() <= itr_w->key()){
           lock_keys[itr_r->key()].lock();
           itr_r++;
+          //If read set and write set share keys, must not acquire lock twice.
+          if(itr_r->key() == itr_w->key()) { itr_w++;}
         }
         else{
           lock_keys[itr_w->key()].lock();
@@ -1461,13 +1495,14 @@ void Server::UnlockTxnKeys(proto::Transaction &txn){
         itr_r++;
       }
       else{
-        if(itr_r->key() >= itr_w->key()){
+        if(itr_r->key() > itr_w->key()){
           lock_keys[itr_r->key()].unlock();
           itr_r++;
         }
         else{
           lock_keys[itr_w->key()].unlock();
           itr_w++;
+          if(itr_r->key() == itr_w->key()) { itr_r++;}
         }
       }
     }

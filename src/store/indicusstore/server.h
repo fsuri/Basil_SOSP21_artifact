@@ -71,6 +71,7 @@ enum OCCType {
   TAPIR = 1
 };
 
+typedef std::vector<std::unique_lock<std::mutex>> locks_t;
 static int rcv_count = 0;
 static int send_count = 0;
 static int commitGet_count = 0;
@@ -367,6 +368,11 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   tbb::concurrent_unordered_map<std::string, std::mutex> lock_keys;
   void LockTxnKeys(proto::Transaction &txn);
   void UnlockTxnKeys(proto::Transaction &txn);
+
+///XXX Sagars lock implementation.
+  tbb::concurrent_unordered_map<std::string, std::unique_ptr<std::mutex>> mutex_map;
+  //typedef std::vector<std::unique_lock<std::mutex>> locks_t;
+  locks_t LockTxnKeys_scoped(proto::Transaction &txn);
 
   //std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
   //std::unordered_map<std::string, const proto::CommittedProof *> p1Conflicts;
