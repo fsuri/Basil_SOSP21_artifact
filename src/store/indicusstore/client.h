@@ -59,7 +59,7 @@
 
 namespace indicusstore {
 
-static bool sortKeySets = false; //only use if using parallel OCC //TODO: Turn into flag.
+static bool sortKeySets = true; //only use if using parallel OCC //TODO: Turn into flag.
 
 class Client : public ::Client {
  public:

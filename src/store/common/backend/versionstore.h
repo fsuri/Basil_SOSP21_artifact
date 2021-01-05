@@ -16,6 +16,7 @@
 #include <shared_mutex>
 #include <sys/time.h>
 #include "tbb/concurrent_unordered_map.h"
+#include "tbb/concurrent_hash_map.h"
 #include "tbb/concurrent_set.h"
 
 template<class T, class V>

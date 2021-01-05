@@ -80,8 +80,7 @@ void PrintSendCount();
 void PrintRcvCount();
 void ParseProto(::google::protobuf::Message *msg, std::string &data);
 
-// static bool mainThreadDispatching = true;
-// static bool dispatchMessageReceive = false;
+static bool param_parallelOCC = true;
 
 class Server : public TransportReceiver, public ::Server, public PingServer {
  public:
@@ -372,7 +371,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 ///XXX Sagars lock implementation.
   tbb::concurrent_unordered_map<std::string, std::unique_ptr<std::mutex>> mutex_map;
   //typedef std::vector<std::unique_lock<std::mutex>> locks_t;
-  locks_t LockTxnKeys_scoped(proto::Transaction &txn);
+  locks_t LockTxnKeys_scoped(const proto::Transaction &txn);
 
   //std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
   //std::unordered_map<std::string, const proto::CommittedProof *> p1Conflicts;

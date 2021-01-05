@@ -627,9 +627,23 @@ void Server::HandlePhase1(const TransportAddress &remote,
    //if(params.mainThreadDispatching) interestedClientsMutex.lock();
   //Latency_End(&waitingOnLocks);
 
+  //Ignore duplicate requests that are already committed, aborted, or ongoing
+  ongoingMap::accessor b;
+  if(ongoing.find(b, txnDigest)){
+    b.release();
+    return;
+  }
+  if(committed.find(txnDigest) != committed.end() || aborted.find(txnDigest) != aborted.end()) return;
+
+  proto::Transaction *txn = msg.release_txn();
+  ongoing.insert(b, std::make_pair(txnDigest, txn));
+  b.release();
+
+
+
   p1DecisionsMap::const_accessor c;
   bool p1DecItr = p1Decisions.find(c, txnDigest);
-  if(p1DecItr){  //TODO: only do Phase1 if one has not committed/aborted already.
+  if(p1DecItr){
   //if(p1Decisions.find(txnDigest) != p1Decisions.end()){
     //result = p1Decisions[txnDigest];
     result = c->second;
@@ -680,28 +694,26 @@ void Server::HandlePhase1(const TransportAddress &remote,
      if(params.mainThreadDispatching) current_viewsMutex.lock();
     //Latency_End(&waitingOnLocks);
     current_views[txnDigest] = 0;
-      std::cout << "ABORTING Before clients" << std::endl;
       interestedClientsMap::accessor i;
       bool interestedClientsItr = interestedClients.insert(i, txnDigest);
       i->second.insert(remote.clone());
       i.release();
       //interestedClients[txnDigest].insert(remote.clone());
-      std::cout << "ABORTING AFTEr clients" << std::endl;
      //if(params.mainThreadDispatching) interestedClientsMutex.unlock();
      if(params.mainThreadDispatching) current_viewsMutex.unlock();
 
     proto::Transaction *txn = msg.release_txn();
 
-     //if(params.mainThreadDispatching) ongoingMutex.lock();
-     ongoingMap::accessor b;
-     ongoing.insert(b, std::make_pair(txnDigest, txn));
-     b.release();
-     //ongoing[txnDigest] = txn;
-     //if(params.mainThreadDispatching) ongoingMutex.unlock();
+     // //if(params.mainThreadDispatching) ongoingMutex.lock();
+     // ongoingMap::accessor b;
+     // ongoing.insert(b, std::make_pair(txnDigest, txn));
+     // b.release();
+     // //ongoing[txnDigest] = txn;
+     // //if(params.mainThreadDispatching) ongoingMutex.unlock();
 
     Timestamp retryTs;
 
-    if(false){
+    if(!param_parallelOCC){
       result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
           committedProof);
     }
@@ -715,10 +727,9 @@ void Server::HandlePhase1(const TransportAddress &remote,
         Timestamp retryTs;
 
         {
-          std::shared_lock<std::shared_mutex> lock(ongoingMutex);
+          //std::shared_lock<std::shared_mutex> lock(ongoingMutex);
           ongoingMap::const_accessor b;
           if(!ongoing.find(b, txnDigest)){
-          //if(ongoing.find(txnDigest) == ongoing.end()){
             Debug("Already concurrently Committed/Aborted txn[%s]", BytesToHex(txnDigest, 16).c_str());
             return (void*) false;
           }
@@ -1411,6 +1422,11 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
     Timestamp &retryTs, const proto::CommittedProof* &conflict) {
+
+  if(false && param_parallelOCC){
+    locks_t locks = LockTxnKeys_scoped(txn);
+  }
+
   switch (occType) {
     case TAPIR:
       return DoTAPIROCCCheck(txnDigest, txn, retryTs);
@@ -1423,29 +1439,29 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
 }
 
 
-locks_t Server::LockTxnKeys_scoped(proto::Transaction &txn) {
+locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
 
     locks_t locks;
     auto itr_r = txn.read_set().begin();
     auto itr_w = txn.write_set().begin();
     for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
       if(itr_r == txn.read_set().end()){
-        locks.emplace_back(*mutex_map[itr_w->key()]);
+        //locks.emplace_back(*mutex_map[itr_w->key()]);
         itr_w++;
       }
       else if(itr_w == txn.write_set().end()){
-        locks.emplace_back(*mutex_map[itr_r->key()]);
+        //locks.emplace_back(*mutex_map[itr_r->key()]);
         itr_r++;
       }
       else{
         if(itr_r->key() <= itr_w->key()){
-          locks.emplace_back(*mutex_map[itr_r->key()]);
+          //locks.emplace_back(*mutex_map[itr_r->key()]);
           itr_r++;
           //If read set and write set share keys, must not acquire lock twice.
           if(itr_r->key() == itr_w->key()) { itr_w++;}
         }
         else{
-          locks.emplace_back(*mutex_map[itr_w->key()]);
+          //locks.emplace_back(*mutex_map[itr_w->key()]);
           itr_w++;
         }
       }
@@ -1968,12 +1984,8 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         // }
 
         allFinished = false;
-        std::cerr << "ABORTING AT 1" << std::endl;
-        dependentsMap::accessor e;
         //dependents[dep.write().prepared_txn_digest()].insert(txnDigest);
-        dependents.insert(e, dep.write().prepared_txn_digest());
-        e->second.insert(txnDigest);
-        e.release();
+
         // auto dependenciesItr = waitingDependencies.find(txnDigest);
         // if (dependenciesItr == waitingDependencies.end()) {
         //   auto inserted = waitingDependencies.insert(std::make_pair(txnDigest,
@@ -1985,6 +1997,13 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         // dependenciesItr->second.remote = remote.clone();  //&remote;
         // dependenciesItr->second.deps.insert(dep.write().prepared_txn_digest());
 
+        std::cerr << "halting due to acessor e." << std::endl;
+        dependentsMap::accessor e;
+        dependents.insert(e, dep.write().prepared_txn_digest());
+        e->second.insert(txnDigest);
+        e.release();
+
+        std::cerr << "halting due to acessor f." << std::endl;
         waitingDependenciesMap::accessor f;
         bool dependenciesItr = waitingDependencies_new.find(f, txnDigest);
         if (!dependenciesItr) {
@@ -1996,6 +2015,8 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //std::unique_lock lk(f->second.deps_mutex);
         f->second.deps.insert(dep.write().prepared_txn_digest());
         f.release();
+
+        std::cerr << "halting due to neither accessor." << std::endl;
       }
     }
 
@@ -2063,11 +2084,9 @@ void Server::Prepare(const std::string &txnDigest,
   const proto::Transaction *ongoingTxn = b->second;
   //const proto::Transaction *ongoingTxn = ongoing.at(txnDigest);
 
-
   preparedMap::accessor a;
   auto p = prepared.insert(a, std::make_pair(txnDigest, std::make_pair(
           Timestamp(txn.timestamp()), ongoingTxn)));
-  b.release();
 
   for (const auto &read : txn.read_set()) {
     if (IsKeyOwned(read.key())) {
@@ -2077,7 +2096,6 @@ void Server::Prepare(const std::string &txnDigest,
       std::pair<std::shared_mutex, std::set<const proto::Transaction *>> &y = preparedReads[read.key()];
       std::unique_lock lock(y.first);
       y.second.insert(a->second.second);
-
     }
   }
 
@@ -2094,7 +2112,7 @@ void Server::Prepare(const std::string &txnDigest,
       // preparedWrites[write.key()].second.insert(pWrite);
     }
   }
-
+  b.release(); //Relase only at the end, so that Prepare and Clean in parallel for the same TX are atomic.
 }
 
 void Server::GetCommittedWrites(const std::string &key, const Timestamp &ts,
@@ -2233,9 +2251,13 @@ void Server::Clean(const std::string &txnDigest) {
   auto ElectQuorumMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(ElectQuorumMutex) : std::unique_lock<std::mutex>();
   //Latency_End(&waitingOnLocks);
 
+  ongoingMap::accessor b;
+  if(ongoing.find(b, txnDigest)){
+      ongoing.erase(b);
+  }
+  //ongoing.erase(txnDigest);
 
   preparedMap::accessor a;
-
   auto preparedItr = prepared.find(a, txnDigest);
   if(preparedItr){
   //if (itr != prepared.end()) {
@@ -2247,7 +2269,6 @@ void Server::Clean(const std::string &txnDigest) {
         std::pair<std::shared_mutex, std::set<const proto::Transaction *>> &y = preparedReads[read.key()];
         std::unique_lock lock(y.first);
         y.second.erase(a->second.second);
-
       }
     }
     for (const auto &write : a->second.second->write_set()) {
@@ -2263,13 +2284,10 @@ void Server::Clean(const std::string &txnDigest) {
     prepared.erase(a);
   }
   a.release();
-  ongoingMap::accessor b;
-  ongoing.find(b, txnDigest);
-  ongoing.erase(b);
-  //ongoing.erase(txnDigest);
-  b.release();
+  b.release(); //Release only at the end, so that Prepare and Clean in parallel for the same TX are atomic.
+  //TODO: might want to move it all the way to the end.
 
-  //Fallback related cleans
+  //XXX: Fallback related cleans
 
   //interestedClients[txnDigest].insert(remote.clone());
   interestedClientsMap::accessor i;
@@ -2306,7 +2324,7 @@ void Server::Clean(const std::string &txnDigest) {
   d.release();
 
   p2Decisions.erase(txnDigest);
-  //TODO: erase all timers if we use them again
+  //TODO: erase all timers if we end up using them again
 }
 
 void Server::CheckDependents(const std::string &txnDigest) {
@@ -2315,7 +2333,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
    //if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
   //Latency_End(&waitingOnLocks);
 
-  std::cerr << "ABORTING AT 2" << std::endl;
+  std::cerr << "getting stuck due to accessor e." << std::endl;
   dependentsMap::const_accessor e;
   bool dependentsItr = dependents.find(e, txnDigest);
   //auto dependentsItr = dependents.find(txnDigest);
@@ -2324,9 +2342,10 @@ void Server::CheckDependents(const std::string &txnDigest) {
     for (const auto &dependent : e->second) {
     //for (const auto &dependent : dependentsItr->second) {
 
+      std::cerr << "getting stuck due to accessor f." << std::endl;
       waitingDependenciesMap::accessor f;
       bool dependenciesItr = waitingDependencies_new.find(f, dependent);
-      if(!dependenciesItr) return;
+      //if(!dependenciesItr){   std::cerr << "waitingdeps empty" << std::endl; e.release(); return;}
       UW_ASSERT(dependenciesItr);  //technically this should never fail, since if it were not
       // in the waitingDep struct anymore, it wouldve also removed itself from the
       //dependents set of txnDigest. XXX Need to reason carefully whether this is still true
@@ -2370,6 +2389,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
     }
   }
   e.release();
+  std::cerr << "getting stuck due to neither accessor." << std::endl;
    //if(params.mainThreadDispatching) dependentsMutex.unlock();
    //if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
 }
@@ -2526,6 +2546,7 @@ void Server::CleanDependencies(const std::string &txnDigest) {
    //if(params.mainThreadDispatching) dependentsMutex.lock();
    //if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
 
+  std::cerr << "CleanDeps blocking on f" << std::endl;
   waitingDependenciesMap::accessor f;
   bool dependenciesItr = waitingDependencies_new.find(f, txnDigest);
   if (dependenciesItr ) {
@@ -2534,6 +2555,7 @@ void Server::CleanDependencies(const std::string &txnDigest) {
     //for (const auto &dependency : dependenciesItr->second.deps) {
     for (const auto &dependency : f->second.deps) {
       //std::cerr << "ABORTING AT 3" << std::endl;
+      std::cerr << "CleanDeps blocking on e1" << std::endl;
       dependentsMap::accessor e;
       auto dependentItr = dependents.find(e, dependency);
       if (dependentItr) {
@@ -2550,14 +2572,14 @@ void Server::CleanDependencies(const std::string &txnDigest) {
     //waitingDependencies.erase(dependenciesItr);
   }
   f.release();
-
+  std::cerr << "CleanDeps blocking on e2" << std::endl;
   dependentsMap::accessor e;
   if(dependents.find(e, txnDigest)){
     dependents.erase(e);
   }
   e.release();
   //dependents.erase(txnDigest);
-
+  std::cerr << "CleanDeps not blocking" << std::endl;
    //if(params.mainThreadDispatching) dependentsMutex.unlock();
    //if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
 }
