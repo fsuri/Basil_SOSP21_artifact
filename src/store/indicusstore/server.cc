@@ -673,7 +673,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
      //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
      //if(params.mainThreadDispatching) interestedClientsMutex.unlock();
     if (params.validateProofs && params.signedMessages && params.verifyDeps) {
-      for (const auto &dep : msg.txn().deps()) {
+      //for (const auto &dep : msg.txn().deps()) {
+      for (const auto &dep : txn->deps()) {
         if (!dep.has_write_sigs()) {
           Debug("Dep for txn %s missing signatures.",
               BytesToHex(txnDigest, 16).c_str());
@@ -702,7 +703,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
      //if(params.mainThreadDispatching) interestedClientsMutex.unlock();
      if(params.mainThreadDispatching) current_viewsMutex.unlock();
 
-    proto::Transaction *txn = msg.release_txn();
+    //proto::Transaction *txn = msg.release_txn();
 
      // //if(params.mainThreadDispatching) ongoingMutex.lock();
      // ongoingMap::accessor b;
@@ -1073,6 +1074,10 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
   //delete (bool*) valid;
 
   ///////////////////////////// Below: Only executed by MainThread
+  // tbb::concurrent_hash_map<std::string, std::mutex>::accessor z;
+  // completing.insert(z, *txnDigest);
+  // //z->second.lock();
+  // z.release();
 
   if (msg->decision() == proto::COMMIT) {
     Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
@@ -1423,8 +1428,9 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
     const std::string &txnDigest, const proto::Transaction &txn,
     Timestamp &retryTs, const proto::CommittedProof* &conflict) {
 
+  locks_t locks;
   if(false && param_parallelOCC){
-    locks_t locks = LockTxnKeys_scoped(txn);
+    locks = LockTxnKeys_scoped(txn);
   }
 
   switch (occType) {
@@ -1444,28 +1450,34 @@ locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
     locks_t locks;
     auto itr_r = txn.read_set().begin();
     auto itr_w = txn.write_set().begin();
-    for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
+    //for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
+    while(itr_r != txn.read_set().end() || itr_w != txn.write_set().end()){
       if(itr_r == txn.read_set().end()){
-        //locks.emplace_back(*mutex_map[itr_w->key()]);
+        //std::cerr << "locking case1" << std::endl;
+        locks.emplace_back(mutex_map[itr_w->key()]);
         itr_w++;
       }
       else if(itr_w == txn.write_set().end()){
-        //locks.emplace_back(*mutex_map[itr_r->key()]);
+        //std::cerr << "locking case2" << std::endl;
+        locks.emplace_back(mutex_map[itr_r->key()]);
         itr_r++;
       }
       else{
         if(itr_r->key() <= itr_w->key()){
-          //locks.emplace_back(*mutex_map[itr_r->key()]);
-          itr_r++;
+          //std::cerr << "locking case3" << std::endl;
+          locks.emplace_back(mutex_map[itr_r->key()]);
           //If read set and write set share keys, must not acquire lock twice.
           if(itr_r->key() == itr_w->key()) { itr_w++;}
+          itr_r++;
         }
         else{
-          //locks.emplace_back(*mutex_map[itr_w->key()]);
+          //std::cerr << "locking case4" << std::endl;
+          locks.emplace_back(mutex_map[itr_w->key()]);
           itr_w++;
         }
       }
     }
+    //std::cerr << "Completed locking" << std::endl;
     return locks;
 }
 
@@ -1474,7 +1486,8 @@ void Server::LockTxnKeys(proto::Transaction &txn){
 
     auto itr_r = txn.read_set().begin();
     auto itr_w = txn.write_set().begin();
-    for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
+    //for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
+    while(itr_r != txn.read_set().end() || itr_w != txn.write_set().end()){
       if(itr_r == txn.read_set().end()){
         lock_keys[itr_w->key()].lock();
         itr_w++;
@@ -1486,9 +1499,9 @@ void Server::LockTxnKeys(proto::Transaction &txn){
       else{
         if(itr_r->key() <= itr_w->key()){
           lock_keys[itr_r->key()].lock();
-          itr_r++;
           //If read set and write set share keys, must not acquire lock twice.
           if(itr_r->key() == itr_w->key()) { itr_w++;}
+          itr_r++;
         }
         else{
           lock_keys[itr_w->key()].lock();
@@ -1501,7 +1514,8 @@ void Server::UnlockTxnKeys(proto::Transaction &txn){
   // Lock all (read/write) keys in order for atomicity if using parallel OCC
     auto itr_r = txn.read_set().rbegin();
     auto itr_w = txn.write_set().rbegin();
-    for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
+    //for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
+    while(itr_r != txn.read_set().rend() || itr_w != txn.write_set().rend()){
       if(itr_r == txn.read_set().rend()){
         lock_keys[itr_w->key()].unlock();
         itr_w++;
@@ -1517,8 +1531,8 @@ void Server::UnlockTxnKeys(proto::Transaction &txn){
         }
         else{
           lock_keys[itr_w->key()].unlock();
-          itr_w++;
           if(itr_r->key() == itr_w->key()) { itr_r++;}
+          itr_w++;
         }
       }
     }
@@ -1955,7 +1969,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
   if(params.maxDepDepth > -2){
     //Latency_Start(&waitingOnLocks);
      //if(params.mainThreadDispatching) dependentsMutex.lock();
-     //if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
+     if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
      //if(params.mainThreadDispatching) ongoingMutex.lock_shared();
      //if(params.mainThreadDispatching) committedMutex.lock_shared();
      //if(params.mainThreadDispatching) abortedMutex.lock_shared();
@@ -1966,6 +1980,11 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       if (dep.involved_group() != groupIdx) {
         continue;
       }
+
+      // tbb::concurrent_hash_map<std::string, std::mutex>::const_accessor z;
+      // bool currently_completing = completing.find(z, dep.write().prepared_txn_digest());
+      // if(currently_completing) //z->second.lock();
+
       if (committed.find(dep.write().prepared_txn_digest()) == committed.end() &&
           aborted.find(dep.write().prepared_txn_digest()) == aborted.end()) {
         Debug("[%lu:%lu][%s] WAIT for dependency %s to finish.",
@@ -2018,10 +2037,12 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
 
         std::cerr << "halting due to neither accessor." << std::endl;
       }
+     // if(currently_completing) //z->second.unlock();
+     // z.release();
     }
 
      //if(params.mainThreadDispatching) dependentsMutex.unlock();
-     //if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
+     if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
      //if(params.mainThreadDispatching) ongoingMutex.unlock_shared();
      //if(params.mainThreadDispatching) committedMutex.unlock_shared();
      //if(params.mainThreadDispatching) abortedMutex.unlock_shared();
@@ -2325,12 +2346,19 @@ void Server::Clean(const std::string &txnDigest) {
 
   p2Decisions.erase(txnDigest);
   //TODO: erase all timers if we end up using them again
+
+  // tbb::concurrent_hash_map<std::string, std::mutex>::accessor z;
+  // if(completing.find(z, txnDigest)){
+  //   //z->second.unlock();
+  //   completing.erase(z);
+  // }
+  // z.release();
 }
 
 void Server::CheckDependents(const std::string &txnDigest) {
   //Latency_Start(&waitingOnLocks);
    //if(params.mainThreadDispatching) dependentsMutex.lock(); //read lock
-   //if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
+   if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
   //Latency_End(&waitingOnLocks);
 
   std::cerr << "getting stuck due to accessor e." << std::endl;
@@ -2391,7 +2419,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
   e.release();
   std::cerr << "getting stuck due to neither accessor." << std::endl;
    //if(params.mainThreadDispatching) dependentsMutex.unlock();
-   //if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
+   if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
 }
 
 proto::ConcurrencyControl::Result Server::CheckDependencies(
@@ -2544,7 +2572,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
 
 void Server::CleanDependencies(const std::string &txnDigest) {
    //if(params.mainThreadDispatching) dependentsMutex.lock();
-   //if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
+   if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
 
   std::cerr << "CleanDeps blocking on f" << std::endl;
   waitingDependenciesMap::accessor f;
@@ -2581,7 +2609,7 @@ void Server::CleanDependencies(const std::string &txnDigest) {
   //dependents.erase(txnDigest);
   std::cerr << "CleanDeps not blocking" << std::endl;
    //if(params.mainThreadDispatching) dependentsMutex.unlock();
-   //if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
+   if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
 }
 
 void Server::LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId,

@@ -369,9 +369,12 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   void UnlockTxnKeys(proto::Transaction &txn);
 
 ///XXX Sagars lock implementation.
-  tbb::concurrent_unordered_map<std::string, std::unique_ptr<std::mutex>> mutex_map;
+  tbb::concurrent_unordered_map<std::string, std::mutex> mutex_map;
   //typedef std::vector<std::unique_lock<std::mutex>> locks_t;
   locks_t LockTxnKeys_scoped(const proto::Transaction &txn);
+
+  //lock to make dependency handling atomic (per tx)
+  tbb::concurrent_hash_map<std::string, std::mutex> completing;
 
   //std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
   //std::unordered_map<std::string, const proto::CommittedProof *> p1Conflicts;
