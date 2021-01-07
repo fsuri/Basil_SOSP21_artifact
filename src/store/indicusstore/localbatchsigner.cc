@@ -254,7 +254,8 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
           batchTimerRunning = true;
           Debug("Starting batch timer");
 
-          batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this]() {
+          //batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this]() { //XXX: only need ID if we cancel them.
+          transport->TimerMicro(batchTimeoutMicro, [this]() {
             //std::unique_lock<std::mutex> lock(this->batchMutex);
             Debug("Batch timer expired with %lu items, sending",
                 this->Batch.size_approx());

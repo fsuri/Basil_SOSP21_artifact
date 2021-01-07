@@ -475,9 +475,9 @@ void Server::HandleRead(const TransportAddress &remote,
     if (params.maxDepDepth > -2) {
       const proto::Transaction *mostRecent = nullptr;
 
-
       //auto preparedWritesMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedWritesMutex) : std::shared_lock<std::shared_mutex>();
-
+      //TODO:: make threadsafe.
+      //std::pair<std::shared_mutex,std::map<Timestamp, const proto::Transaction *>> &x = preparedWrites[write.key()];
       auto itr = preparedWrites.find(msg.key());
       if (itr != preparedWrites.end()){
 
@@ -2016,13 +2016,11 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         // dependenciesItr->second.remote = remote.clone();  //&remote;
         // dependenciesItr->second.deps.insert(dep.write().prepared_txn_digest());
 
-        std::cerr << "halting due to acessor e." << std::endl;
         dependentsMap::accessor e;
         dependents.insert(e, dep.write().prepared_txn_digest());
         e->second.insert(txnDigest);
         e.release();
 
-        std::cerr << "halting due to acessor f." << std::endl;
         waitingDependenciesMap::accessor f;
         bool dependenciesItr = waitingDependencies_new.find(f, txnDigest);
         if (!dependenciesItr) {
@@ -2034,8 +2032,6 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //std::unique_lock lk(f->second.deps_mutex);
         f->second.deps.insert(dep.write().prepared_txn_digest());
         f.release();
-
-        std::cerr << "halting due to neither accessor." << std::endl;
       }
      // if(currently_completing) //z->second.unlock();
      // z.release();
@@ -2361,7 +2357,6 @@ void Server::CheckDependents(const std::string &txnDigest) {
    if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
   //Latency_End(&waitingOnLocks);
 
-  std::cerr << "getting stuck due to accessor e." << std::endl;
   dependentsMap::const_accessor e;
   bool dependentsItr = dependents.find(e, txnDigest);
   //auto dependentsItr = dependents.find(txnDigest);
@@ -2370,7 +2365,6 @@ void Server::CheckDependents(const std::string &txnDigest) {
     for (const auto &dependent : e->second) {
     //for (const auto &dependent : dependentsItr->second) {
 
-      std::cerr << "getting stuck due to accessor f." << std::endl;
       waitingDependenciesMap::accessor f;
       bool dependenciesItr = waitingDependencies_new.find(f, dependent);
       //if(!dependenciesItr){   std::cerr << "waitingdeps empty" << std::endl; e.release(); return;}
@@ -2417,7 +2411,6 @@ void Server::CheckDependents(const std::string &txnDigest) {
     }
   }
   e.release();
-  std::cerr << "getting stuck due to neither accessor." << std::endl;
    //if(params.mainThreadDispatching) dependentsMutex.unlock();
    if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
 }
@@ -2574,7 +2567,6 @@ void Server::CleanDependencies(const std::string &txnDigest) {
    //if(params.mainThreadDispatching) dependentsMutex.lock();
    if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
 
-  std::cerr << "CleanDeps blocking on f" << std::endl;
   waitingDependenciesMap::accessor f;
   bool dependenciesItr = waitingDependencies_new.find(f, txnDigest);
   if (dependenciesItr ) {
@@ -2583,7 +2575,6 @@ void Server::CleanDependencies(const std::string &txnDigest) {
     //for (const auto &dependency : dependenciesItr->second.deps) {
     for (const auto &dependency : f->second.deps) {
       //std::cerr << "ABORTING AT 3" << std::endl;
-      std::cerr << "CleanDeps blocking on e1" << std::endl;
       dependentsMap::accessor e;
       auto dependentItr = dependents.find(e, dependency);
       if (dependentItr) {
@@ -2600,14 +2591,12 @@ void Server::CleanDependencies(const std::string &txnDigest) {
     //waitingDependencies.erase(dependenciesItr);
   }
   f.release();
-  std::cerr << "CleanDeps blocking on e2" << std::endl;
   dependentsMap::accessor e;
   if(dependents.find(e, txnDigest)){
     dependents.erase(e);
   }
   e.release();
   //dependents.erase(txnDigest);
-  std::cerr << "CleanDeps not blocking" << std::endl;
    //if(params.mainThreadDispatching) dependentsMutex.unlock();
    if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
 }
