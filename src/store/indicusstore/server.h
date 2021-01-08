@@ -372,6 +372,8 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   tbb::concurrent_unordered_map<std::string, std::mutex> mutex_map;
   //typedef std::vector<std::unique_lock<std::mutex>> locks_t;
   locks_t LockTxnKeys_scoped(const proto::Transaction &txn);
+  inline static bool sortReadByKey(const ReadMessage &lhs, const ReadMessage &rhs) { return lhs.key() <= rhs.key(); }
+  inline static bool sortWriteByKey(const WriteMessage &lhs, const WriteMessage &rhs) { return lhs.key() <= rhs.key(); }
 
   //lock to make dependency handling atomic (per tx)
   tbb::concurrent_hash_map<std::string, std::mutex> completing;
