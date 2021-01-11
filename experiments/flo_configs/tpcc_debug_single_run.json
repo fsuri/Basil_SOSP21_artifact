@@ -42,7 +42,7 @@
   "benchmark_name": "tpcc-sync",
   "partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
-  "server_load_time":  10,
+  "server_load_time":  20,
   "tpcc_stock_level_ratio": 4,
   "tpcc_delivery_ratio": 4,
   "tpcc_order_status_ratio": 4,

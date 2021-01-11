@@ -1449,12 +1449,12 @@ locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
     //std::sort(txn.mutable_read_set()->begin(), txn.mutable_read_set()->end(), sortReadByKey);
     //std::sort(txn.mutable_write_set()->begin(), txn.mutable_write_set()->end(), sortWriteByKey);
 
-    for(auto& read : txn.read_set()){
-      std::cerr<< "Read [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << read.key() << "]" << std::endl;
-    }
-    for(auto& write : txn.write_set()){
-      std::cerr<< "Write [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << write.key() << "]" << std::endl;
-    }
+    // for(auto& read : txn.read_set()){
+    //   std::cerr<< "Read [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << read.key() << "]" << std::endl;
+    // }
+    // for(auto& write : txn.write_set()){
+    //   std::cerr<< "Write [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << write.key() << "]" << std::endl;
+    // }
 
     locks_t locks;
     auto itr_r = txn.read_set().begin();
@@ -1465,14 +1465,15 @@ locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
       if(std::next(itr_r) != txn.read_set().end()){
         if(itr_r->key() == std::next(itr_r)->key()){
           itr_r++;
+          continue;
         }
       }
       if(std::next(itr_w) != txn.write_set().end()){
         if(itr_w->key() == std::next(itr_w)->key()){
           itr_w++;
+          continue;
         }
       }
-
       //lock and advance read/write respectively if the other set is done
       if(itr_r == txn.read_set().end()){
         std::cerr<< "Locking Write [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << itr_w->key() << "]" << std::endl;
@@ -1487,7 +1488,7 @@ locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
       //lock and advance read/write iterators in order
       else{
         if(itr_r->key() <= itr_w->key()){
-          std::cerr<< "Locking Read [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << itr_r->key() << "]" << std::endl;
+          std::cerr<< "Locking Read/Write [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << itr_r->key() << "]" << std::endl;
           locks.emplace_back(mutex_map[itr_r->key()]);
           //If read set and write set share keys, must not acquire lock twice.
           if(itr_r->key() == itr_w->key()) {
