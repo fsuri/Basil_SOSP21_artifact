@@ -80,7 +80,7 @@ void PrintSendCount();
 void PrintRcvCount();
 void ParseProto(::google::protobuf::Message *msg, std::string &data);
 
-static bool param_parallelOCC = false;
+static bool param_parallelOCC = true;
 
 class Server : public TransportReceiver, public ::Server, public PingServer {
  public:
@@ -101,11 +101,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   virtual inline Stats &GetStats() override { return stats; }
 
  private:
-   //bool test_bool = false;
-   // bool mainThreadDispatching;
-   // bool dispatchMessageReceive;
-   // bool parallel_reads;
-   // bool dispatchCallbacks;
+
+   uint64_t total_lock_time_ms =0 ;
 
    std::string dummyString;
 

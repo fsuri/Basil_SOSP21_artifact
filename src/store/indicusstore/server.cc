@@ -134,6 +134,7 @@ Server::~Server() {
   std::cerr << "Total count: " << BatchedSigs::hashCount + BatchedSigs::hashCatCount << std::endl;
 
   std::cerr << "Store wait latency (ms): " << store.lock_time << std::endl;
+  std::cerr << "parallel OCC lock wait latency (ms): " << total_lock_time_ms << std::endl;
   Latency_Dump(&waitingOnLocks);
   //Latency_Dump(&waitOnProtoLock);
   //Latency_Dump(&batchSigner->waitOnBatchLock);
@@ -1445,16 +1446,8 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
 }
 
 locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
-    proto::Transaction txn2 = txn;
-    //std::sort(txn.mutable_read_set()->begin(), txn.mutable_read_set()->end(), sortReadByKey);
-    //std::sort(txn.mutable_write_set()->begin(), txn.mutable_write_set()->end(), sortWriteByKey);
-
-    // for(auto& read : txn.read_set()){
-    //   std::cerr<< "Read [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << read.key() << "]" << std::endl;
-    // }
-    // for(auto& write : txn.write_set()){
-    //   std::cerr<< "Write [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << write.key() << "]" << std::endl;
-    // }
+    // timeval tv1;
+    // gettimeofday(&tv1, 0);
 
     locks_t locks;
     auto itr_r = txn.read_set().begin();
@@ -1476,19 +1469,19 @@ locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
       }
       //lock and advance read/write respectively if the other set is done
       if(itr_r == txn.read_set().end()){
-        std::cerr<< "Locking Write [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << BytesToHex(itr_w->key(), 16).c_str() << "]" << std::endl;
+        //std::cerr<< "Locking Write [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << BytesToHex(itr_w->key(), 16).c_str() << "]" << std::endl;
         locks.emplace_back(mutex_map[itr_w->key()]);
         itr_w++;
       }
       else if(itr_w == txn.write_set().end()){
-        std::cerr<< "Locking Read [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << BytesToHex(itr_r->key(), 16).c_str() << "]" << std::endl;
+        //std::cerr<< "Locking Read [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << BytesToHex(itr_r->key(), 16).c_str() << "]" << std::endl;
         locks.emplace_back(mutex_map[itr_r->key()]);
         itr_r++;
       }
       //lock and advance read/write iterators in order
       else{
         if(itr_r->key() <= itr_w->key()){
-          std::cerr<< "Locking Read/Write [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << BytesToHex(itr_r->key(), 16).c_str() << "]" << std::endl;
+          //std::cerr<< "Locking Read/Write [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << BytesToHex(itr_r->key(), 16).c_str() << "]" << std::endl;
           locks.emplace_back(mutex_map[itr_r->key()]);
           //If read set and write set share keys, must not acquire lock twice.
           if(itr_r->key() == itr_w->key()) {
@@ -1497,12 +1490,15 @@ locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
           itr_r++;
         }
         else{
-          std::cerr<< "Locking Write [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << BytesToHex(itr_w->key(), 16).c_str() << "]" << std::endl;
+          //std::cerr<< "Locking Write [" << txn.client_id() << "," << txn.client_seq_num()  << " : " << BytesToHex(itr_w->key(), 16).c_str() << "]" << std::endl;
           locks.emplace_back(mutex_map[itr_w->key()]);
           itr_w++;
         }
       }
     }
+    // timeval tv2;
+    // gettimeofday(&tv2, 0);
+    // total_lock_time_ms += (tv2.tv_sec * 1000  + tv2.tv_usec / 1000) - (tv1.tv_sec * 1000  + tv1.tv_usec / 1000);
     return locks;
 }
 
