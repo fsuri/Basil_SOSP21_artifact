@@ -57,7 +57,7 @@
   "client_max_attempts": -1,
   "client_max_backoff": 250,
   "client_rand_sleep": 2,
-  "__CLIENT RAND SLEEP NEEDS TO BE HIGH FOR NON CRYPTO contention workloads; backoff too (or fewer clients)": true,
+  "__CLIENT RAND SLEEP NEEDS TO BE HIGH (100) FOR NON CRYPTO contention workloads; backoff too (or fewer clients)": true,
   "client_message_timeout": 10000,
   "run_locally": false,
   "stats_merge_lists": ["txn_groups", "sig_batch"],

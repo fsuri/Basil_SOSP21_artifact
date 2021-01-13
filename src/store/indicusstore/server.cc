@@ -110,8 +110,6 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
         params.signatureBatchSize > 1 && params.adjustBatchSize, params.verificationBatchSize);
     }
   }
-  //start up threadpool (common threadpool, not split into different roles yet)
-  //tp = new ThreadPool();
 
   // this is needed purely from loading data without executing transactions
   proto::CommittedProof *proof = new proto::CommittedProof();
@@ -119,9 +117,8 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
   proof->mutable_txn()->set_client_seq_num(0);
   proof->mutable_txn()->mutable_timestamp()->set_timestamp(0);
   proof->mutable_txn()->mutable_timestamp()->set_id(0);
-   //if(params.mainThreadDispatching) committedMutex.lock();
+
   committed.insert(std::make_pair("", proof));
-   //if(params.mainThreadDispatching) committedMutex.unlock();
 }
 
 Server::~Server() {
@@ -142,12 +139,12 @@ Server::~Server() {
   Notice("Freeing verifier.");
   delete verifier;
    //if(params.mainThreadDispatching) committedMutex.lock();
-  for (const auto &c : committed) {
+  for (const auto &c : committed) {   ///XXX technically not threadsafe
     delete c.second;
   }
    //if(params.mainThreadDispatching) committedMutex.unlock();
    ////if(params.mainThreadDispatching) ongoingMutex.lock();
-  for (const auto &o : ongoing) {
+  for (const auto &o : ongoing) {     ///XXX technically not threadsafe
     delete o.second;
   }
    ////if(params.mainThreadDispatching) ongoingMutex.unlock();
@@ -191,8 +188,8 @@ Server::~Server() {
 // use like this: main dispatches lambda
 // auto f = [this, msg, type, data](){
 //   ParseProto;
-//   [this, msg, type](){
-//     this->HandleType(msg, type);
+//   auto g = [this, msg, type](){
+//     this->HandleType(msg, type);  //HandleType checks which handler to use...
 //   };
 //   this->transport->DispatchTP_main(g);
 //   return (void*) true;
@@ -204,12 +201,9 @@ Server::~Server() {
  void Server::ReceiveMessage(const TransportAddress &remote,
        const std::string &type, const std::string &data, void *meta_data) {
 
-  // debug_counters[remote]++;
-  // //fprintf(stderr, "All message receptions go through CPU %d \n", sched_getcpu());
-  // fprintf(stderr, "Message received [%d][]%d]", debug_counters[remote]); //print transport address.
   if(params.dispatchMessageReceive){
     Debug("Dispatching message handling to Support Main Thread");
-   transport->DispatchTP_main([this, &remote, type, data, meta_data]() { //ends up with more copies here..
+   transport->DispatchTP_main([this, &remote, type, data, meta_data]() { //using this path results in an extra copy
      this->ReceiveMessageInternal(remote, type, data, meta_data);
      return (void*) true;
    });
@@ -218,13 +212,9 @@ Server::~Server() {
     ReceiveMessageInternal(remote, type, data, meta_data);
   }
  }
-//Full CPU utilization parallelism: Assign all these functions to different threads. Add mutexes to every shared data structure function
+//TODO: Full CPU utilization parallelism: Assign all handler functions to different threads.
 void Server::ReceiveMessageInternal(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
-
-
-  //std::unique_lock<std::mutex> main_lock(mainThreadMutex);
-  ////auto lockScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
 
   if (type == read.GetTypeName()) {
 
@@ -236,9 +226,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       proto::Read* readCopy = GetUnusedReadmessage();
       readCopy->ParseFromString(data);
       auto f = [this, &remote, readCopy](){
-        //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
         this->HandleRead(remote, *readCopy);
-        //FreeReadmessage(readCopy); //TODO: can do in callback of reply?
         return (void*) true;
       };
       if(params.parallel_reads){
@@ -247,8 +235,6 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       else{
         transport->DispatchTP_main(f);
       }
-
-
     }
   } else if (type == phase1.GetTypeName()) {
 
@@ -259,19 +245,16 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     else{
       proto::Phase1 *phase1Copy = GetUnusedPhase1message();
       phase1Copy->ParseFromString(data);
-      auto f = [this, &remote, phase1Copy]() {  //mutable keyword to change const into none
-        //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
+      auto f = [this, &remote, phase1Copy]() {
         this->HandlePhase1(remote, *phase1Copy);
-        //FreePhase1message(phase1Copy); //TODO: Can do before sendphase1reply?
         return (void*) true;
       };
       Debug("Dispatching HandlePhase1");
       transport->DispatchTP_main(f);
-      //transport->DispatchTP_noCB(f);
+      //transport->DispatchTP_noCB(f); //user if want to dispatch to all workers
     }
 
   } else if (type == phase2.GetTypeName()) {
-
       if(params.multiThreading){
           proto::Phase2* p2 = GetUnusedPhase2message();
           p2->ParseFromString(data);
@@ -280,7 +263,6 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           }
           else{
             auto f = [this, &remote, p2](){
-              //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
               this->HandlePhase2(remote, *p2);
               return (void*) true;
             };
@@ -288,7 +270,6 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           }
       }
       else{
-
         if(!params.mainThreadDispatching || params.dispatchMessageReceive){
           phase2.ParseFromString(data);
           HandlePhase2(remote, phase2);
@@ -297,7 +278,6 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           proto::Phase2* p2 = GetUnusedPhase2message();
           p2->ParseFromString(data);
           auto f = [this, &remote, p2](){
-            //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
             this->HandlePhase2(remote, *p2);
             return (void*) true;
           };
@@ -314,7 +294,6 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           }
           else{
             auto f = [this, &remote, wb](){
-              //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
               this->HandleWriteback(remote, *wb);
               return (void*) true;
             };
@@ -322,8 +301,6 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           }
       }
       else{
-
-        //HandleWriteback(remote, writeback);
         if(!params.mainThreadDispatching || params.dispatchMessageReceive){
           writeback.ParseFromString(data);
           HandleWriteback(remote, writeback);
@@ -332,7 +309,6 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           proto::Writeback *wb = GetUnusedWBmessage();
           wb->ParseFromString(data);
           auto f = [this, &remote, wb](){
-            //std::unique_lock<std::mutex> main_lock(this->mainThreadMutex);
             this->HandleWriteback(remote, *wb);
             return (void*) true;
           };
@@ -377,14 +353,10 @@ void Server::Load(const std::string &key, const std::string &value,
     const Timestamp timestamp) {
   Value val;
   val.val = value;
-   //if(params.mainThreadDispatching) committedMutex.lock_shared();
   auto committedItr = committed.find("");
   UW_ASSERT(committedItr != committed.end());
   val.proof = committedItr->second;
-   //if(params.mainThreadDispatching) committedMutex.unlock_shared();
-   //if(params.mainThreadDispatching) storeMutex.lock();
   store.put(key, val, timestamp);
-   //if(params.mainThreadDispatching) storeMutex.unlock();
   if (key.length() == 5 && key[0] == 0) {
     std::cerr << std::bitset<8>(key[0]) << ' '
               << std::bitset<8>(key[1]) << ' '
@@ -398,7 +370,6 @@ void Server::Load(const std::string &key, const std::string &value,
 void Server::HandleRead(const TransportAddress &remote,
      proto::Read &msg) {
 
-  //auto lockScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
   Debug("READ[%lu:%lu] for key %s with ts %lu.%lu.", msg.timestamp().id(),
       msg.req_id(), BytesToHex(msg.key(), 16).c_str(),
       msg.timestamp().timestamp(), msg.timestamp().id());
@@ -410,9 +381,7 @@ void Server::HandleRead(const TransportAddress &remote,
   }
 
   std::pair<Timestamp, Server::Value> tsVal;
-   //if(params.mainThreadDispatching) storeMutex.lock();
   bool exists = store.get(msg.key(), ts, tsVal);
-   //if(params.mainThreadDispatching) storeMutex.unlock();
 
   proto::ReadReply* readReply = GetUnusedReadReply();
   readReply->set_req_id(msg.req_id());
@@ -431,36 +400,20 @@ void Server::HandleRead(const TransportAddress &remote,
   TransportAddress *remoteCopy = remote.clone();
 
   auto sendCB = [this, remoteCopy, readReply]() {
-    //std::unique_lock<std::mutex> lock(transportMutex);
-
     this->transport->SendMessage(this, *remoteCopy, *readReply);
     delete remoteCopy;
     FreeReadReply(readReply);
   };
-  //TESTING:
-  // auto sendCB_wrapped = [this, remoteCopy, readReply](void* arg) {
-  //   //std::unique_lock<std::mutex> lock(transportMutex);
-  //
-  //   this->transport->SendMessage(this, *remoteCopy, *readReply);
-  //   delete remoteCopy;
-  //   FreeReadReply(readReply);
-  // };
-  //
-  // auto sendCB = [this, scb = std::move(sendCB_wrapped)]() {
-  //   //std::unique_lock<std::mutex> lock(transportMutex);
-  //   this->transport->IssueCB(scb, (void*) true);
-  // };
 
   if (occType == MVTSO) {
     /* update rts */
-    // TODO: how to track RTS by transaction without knowing transaction digest?
+    // TODO: For "proper Aborts": how to track RTS by transaction without knowing transaction digest?
 
-
-    //RECOMMENT
+    //XXX multiple RTS as set:
     //  if(params.mainThreadDispatching) rtsMutex.lock();
     // rts[msg.key()].insert(ts);
     //  if(params.mainThreadDispatching) rtsMutex.unlock();
-     //Testing:
+    //XXX single RTS that updates:
      auto itr = rts.find(msg.key());
      if(itr != rts.end()){
        if(ts.getTimestamp() > itr->second ) {
@@ -476,7 +429,6 @@ void Server::HandleRead(const TransportAddress &remote,
     if (params.maxDepDepth > -2) {
       const proto::Transaction *mostRecent = nullptr;
 
-      //auto preparedWritesMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedWritesMutex) : std::shared_lock<std::shared_mutex>();
       //TODO:: make threadsafe.
       //std::pair<std::shared_mutex,std::map<Timestamp, const proto::Transaction *>> &x = preparedWrites[write.key()];
       auto itr = preparedWrites.find(msg.key());
@@ -484,36 +436,34 @@ void Server::HandleRead(const TransportAddress &remote,
 
         //std::pair &x = preparedWrites[write.key()];
         std::shared_lock lock(itr->second.first);
-        //if(itr->second.second.size() > 0) {
+        if(itr->second.second.size() > 0) {
 
-        // there is a prepared write for the key being read
-
-        for (const auto &t : itr->second.second) {
-          if (mostRecent == nullptr || t.first > Timestamp(mostRecent->timestamp())) { //TODO: only use it if its bigger than the committed write..
-            mostRecent = t.second;
-          }
-        }
-
-        if (mostRecent != nullptr) {
-          std::string preparedValue;
-          for (const auto &w : mostRecent->write_set()) {
-            if (w.key() == msg.key()) {
-              preparedValue = w.value();
-              break;
+          // there is a prepared write for the key being read
+          for (const auto &t : itr->second.second) {
+            if (mostRecent == nullptr || t.first > Timestamp(mostRecent->timestamp())) { //TODO: for efficiency only use it if its bigger than the committed write..
+              mostRecent = t.second;
             }
           }
 
-          Debug("Prepared write with most recent ts %lu.%lu.",
-              mostRecent->timestamp().timestamp(), mostRecent->timestamp().id());
+          if (mostRecent != nullptr) {
+            std::string preparedValue;
+            for (const auto &w : mostRecent->write_set()) {
+              if (w.key() == msg.key()) {
+                preparedValue = w.value();
+                break;
+              }
+            }
 
-          if (params.maxDepDepth == -1 || DependencyDepth(mostRecent) <= params.maxDepDepth) {
-            readReply->mutable_write()->set_prepared_value(preparedValue);
-            *readReply->mutable_write()->mutable_prepared_timestamp() = mostRecent->timestamp();
-            *readReply->mutable_write()->mutable_prepared_txn_digest() = TransactionDigest(*mostRecent, params.hashDigest);
+            Debug("Prepared write with most recent ts %lu.%lu.",
+                mostRecent->timestamp().timestamp(), mostRecent->timestamp().id());
+
+            if (params.maxDepDepth == -1 || DependencyDepth(mostRecent) <= params.maxDepDepth) {
+              readReply->mutable_write()->set_prepared_value(preparedValue);
+              *readReply->mutable_write()->mutable_prepared_timestamp() = mostRecent->timestamp();
+              *readReply->mutable_write()->mutable_prepared_txn_digest() = TransactionDigest(*mostRecent, params.hashDigest);
+            }
           }
-
         }
-      // }
       }
     }
   }
@@ -535,10 +485,6 @@ void Server::HandleRead(const TransportAddress &remote,
 
       if(params.multiThreading){
         proto::Write* write = new proto::Write(readReply->write());
-        // std::function<void*()> f(std::bind(asyncSignMessage, write,
-        //   keyManager->GetPrivateKey(id), id, readReply->mutable_signed_write()));
-        // transport->DispatchTP(std::move(f), [sendCB, write](void * ret){ sendCB(); delete write;});
-
         auto f = [this, readReply, sendCB = std::move(sendCB), write]()
         {
           SignMessage(write, keyManager->GetPrivateKey(id), id, readReply->mutable_signed_write());
@@ -547,8 +493,6 @@ void Server::HandleRead(const TransportAddress &remote,
           return (void*) true;
         };
         transport->DispatchTP_noCB(std::move(f));
-
-
       }
       else{
         proto::Write write(readReply->write());
@@ -575,23 +519,6 @@ void Server::HandleRead(const TransportAddress &remote,
           return (void*) true;
         };
         transport->DispatchTP_noCB(std::move(f));
-
-
-        //TESTING
-        // auto g = [this, msgs, smsgs, sendCB = std::move(sendCB), write](void* arg)
-        // {
-        //   SignMessages(msgs, keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor);
-        //   sendCB();
-        //   delete write;
-        //   return (void*) true;
-        // };
-        // transport->IssueCB(std::move(g), (void*) true);
-
-        ////
-
-        // std::function<void*()> f(std::bind(asyncSignMessages, msgs,
-        //   keyManager->GetPrivateKey(id), id, smsgs, params.merkleBranchFactor));
-        // transport->DispatchTP(std::move(f) ,[sendCB, write](void * ret){ sendCB(); delete write;});
       }
       else{
         proto::Write write(readReply->write());
@@ -613,7 +540,6 @@ void Server::HandleRead(const TransportAddress &remote,
 
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
-//auto lockScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
 
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
@@ -621,13 +547,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
       msg.txn().timestamp().timestamp());
   proto::ConcurrencyControl::Result result;
   const proto::CommittedProof *committedProof;
-  // no-replays property, i.e. recover existing decision/result from storage
-  //Latency_Start(&waitingOnLocks);
-   //if(params.mainThreadDispatching) p1ConflictsMutex.lock();
-   //if(params.mainThreadDispatching) p1DecisionsMutex.lock();
-   //if(params.mainThreadDispatching) interestedClientsMutex.lock();
-  //Latency_End(&waitingOnLocks);
 
+  // no-replays property, i.e. recover existing decision/result from storage
   //Ignore duplicate requests that are already committed, aborted, or ongoing
   ongoingMap::accessor b;
   if(ongoing.find(b, txnDigest)){
@@ -640,17 +561,13 @@ void Server::HandlePhase1(const TransportAddress &remote,
   ongoing.insert(b, std::make_pair(txnDigest, txn));
   b.release();
 
-
-
   p1DecisionsMap::const_accessor c;
   bool p1DecItr = p1Decisions.find(c, txnDigest);
   if(p1DecItr){
-  //if(p1Decisions.find(txnDigest) != p1Decisions.end()){
-    //result = p1Decisions[txnDigest];
     result = c->second;
     c.release();
-    //KEEP track of interested client
 
+    //KEEP track of interested client
     interestedClientsMap::accessor i;
     bool interestedClientsItr = interestedClients.insert(i, txnDigest);
     i->second.insert(remote.clone());
@@ -663,16 +580,9 @@ void Server::HandlePhase1(const TransportAddress &remote,
       //committedProof = p1Conflicts[txnDigest];
       committedProof = d->second;
       d.release();
-
     }
-     //if(params.mainThreadDispatching) p1ConflictsMutex.unlock();
-     //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
-     //if(params.mainThreadDispatching) interestedClientsMutex.unlock();
   } else{
     c.release();
-     //if(params.mainThreadDispatching) p1ConflictsMutex.unlock();
-     //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
-     //if(params.mainThreadDispatching) interestedClientsMutex.unlock();
     if (params.validateProofs && params.signedMessages && params.verifyDeps) {
       //for (const auto &dep : msg.txn().deps()) {
       for (const auto &dep : txn->deps()) {
@@ -691,17 +601,15 @@ void Server::HandlePhase1(const TransportAddress &remote,
       }
     }
     //KEEP track of interested client
-    //Latency_Start(&waitingOnLocks);
-     //if(params.mainThreadDispatching) interestedClientsMutex.lock();
+
      if(params.mainThreadDispatching) current_viewsMutex.lock();
-    //Latency_End(&waitingOnLocks);
+
     current_views[txnDigest] = 0;
       interestedClientsMap::accessor i;
       bool interestedClientsItr = interestedClients.insert(i, txnDigest);
       i->second.insert(remote.clone());
       i.release();
       //interestedClients[txnDigest].insert(remote.clone());
-     //if(params.mainThreadDispatching) interestedClientsMutex.unlock();
      if(params.mainThreadDispatching) current_viewsMutex.unlock();
 
     //proto::Transaction *txn = msg.release_txn();
@@ -720,23 +628,15 @@ void Server::HandlePhase1(const TransportAddress &remote,
           committedProof);
     }
     else{
-      // auto cb = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn,  committedProof](void* result) mutable{
-      //   this->HandlePhase1CB(msg_ptr, *((proto::ConcurrencyControl::Result *) result), committedProof, txnDigest, *remote_ptr);
-      // };
-
-      //std::cerr << "TxnDigest: " << BytesToHex(txnDigest, 16) << std::endl;
       auto f = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn, committedProof]() mutable {
         Timestamp retryTs;
-
-        {
-          //std::shared_lock<std::shared_mutex> lock(ongoingMutex);
+          //check if concurrently committed/aborted already, and if so return
           ongoingMap::const_accessor b;
           if(!ongoing.find(b, txnDigest)){
             Debug("Already concurrently Committed/Aborted txn[%s]", BytesToHex(txnDigest, 16).c_str());
             return (void*) false;
           }
           b.release();
-        }
 
         proto::ConcurrencyControl::Result *result = new proto::ConcurrencyControl::Result(this->DoOCCCheck(msg_ptr->req_id(),
         *remote_ptr, txnDigest, *txn, retryTs, committedProof));
@@ -746,30 +646,18 @@ void Server::HandlePhase1(const TransportAddress &remote,
         return (void*) true;
       };
       transport->DispatchTP_noCB(std::move(f));
-      //transport->DispatchTP(std::move(f), std::move(cb));
       return;
     }
   }
 
   HandlePhase1CB(&msg, result, committedProof, txnDigest, remote);
-
-  // if (result != proto::ConcurrencyControl::WAIT) {
-  //   // if(client_starttime.find(txnDigest) == client_starttime.end()){
-  //   //   struct timeval tv;
-  //   //   gettimeofday(&tv, NULL);
-  //   //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
-  //   //   client_starttime[txnDigest] = start_time;
-  //   // }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
-  //   SendPhase1Reply(msg.req_id(), result, committedProof, txnDigest, &remote);
-  // }
-  // if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreePhase1message(&msg);
-
 }
 
 //TODO: move p1Decision into this function (not sendp1: Then, can unlock here.)
 void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
   const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote){
   if (result != proto::ConcurrencyControl::WAIT) {
+    //XXX setting client time outs for Fallback
     // if(client_starttime.find(txnDigest) == client_starttime.end()){
     //   struct timeval tv;
     //   gettimeofday(&tv, NULL);
@@ -781,92 +669,87 @@ void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Resul
   if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreePhase1message(msg);
 }
 
-   //TODO: Needs to always delete/free. But does not need the bool arg to be allocated.
-void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
-  signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid){ //bool valid) { //
 
-  //auto lockScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
+void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
+  signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid){
+
   Debug("HandlePhase2CB invoked");
 
   auto f = [this, msg, txnDigest, sendCB = std::move(sendCB), phase2Reply, cleanCB = std::move(cleanCB), valid ](){
-  if(!valid){
-    Debug("VALIDATE P1Replies for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
-    //delete (bool*) valid;
-    cleanCB(); //deletes SendCB resources should it not be called.
-    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
-      FreePhase2message(msg); //const_cast<proto::Phase2&>(msg));
+    if(!valid){
+      Debug("VALIDATE P1Replies for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
+      cleanCB(); //deletes SendCB resources should SendCB not be called.
+      if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+        FreePhase2message(msg); //const_cast<proto::Phase2&>(msg));
+      }
+      return (void*) true;
     }
+
+     if(params.mainThreadDispatching) p2DecisionsMutex.lock();
+     if(params.mainThreadDispatching) current_viewsMutex.lock();
+     if(params.mainThreadDispatching) decision_viewsMutex.lock();
+
+    if(p2Decisions.find(*txnDigest) != p2Decisions.end()){
+      proto::CommitDecision &decision = p2Decisions[*txnDigest];
+      phase2Reply->mutable_p2_decision()->set_decision(decision);
+    }
+    else{
+      p2Decisions[*txnDigest] = msg->decision();
+      current_views[*txnDigest] = 0;
+      decision_views[*txnDigest] = 0;
+      phase2Reply->mutable_p2_decision()->set_decision(msg->decision());
+    }
+
+   if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
+   if(params.mainThreadDispatching) current_viewsMutex.unlock();
+
+    //XXX start client timeout for Fallback relay
+    // if(client_starttime.find(*txnDigest) == client_starttime.end()){
+    //   struct timeval tv;
+    //   gettimeofday(&tv, NULL);
+    //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+    //   client_starttime[*txnDigest] = start_time;
+    // }
+
+    if (params.validateProofs) {
+      // TODO: need a way for a process to know the decision view when verifying the signed p2_decision
+      phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
+    }
+
+   if(params.mainThreadDispatching) decision_viewsMutex.unlock();
+
+  //Free allocated memory
+  if(params.multiThreading || params.mainThreadDispatching){
+    FreePhase2message(msg); // const_cast<proto::Phase2&>(msg));
+  }
+
+  if (params.validateProofs && params.signedMessages) {
+    proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
+
+    MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
+        [sendCB, p2Decision]() {
+        sendCB();
+        delete p2Decision;
+        });
     return (void*) true;
   }
-
-   if(params.mainThreadDispatching) p2DecisionsMutex.lock();
-   if(params.mainThreadDispatching) current_viewsMutex.lock();
-   if(params.mainThreadDispatching) decision_viewsMutex.lock();
-
-  if(p2Decisions.find(msg->txn_digest()) != p2Decisions.end()){
-    proto::CommitDecision &decision =p2Decisions[msg->txn_digest()];
-    phase2Reply->mutable_p2_decision()->set_decision(decision);
-  }
-  else{
-    p2Decisions[*txnDigest] = msg->decision();
-    current_views[*txnDigest] = 0;
-    decision_views[*txnDigest] = 0;
-    phase2Reply->mutable_p2_decision()->set_decision(msg->decision());
-  }
-
- if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
- if(params.mainThreadDispatching) current_viewsMutex.unlock();
-
-  // if(client_starttime.find(*txnDigest) == client_starttime.end()){
-  //   struct timeval tv;
-  //   gettimeofday(&tv, NULL);
-  //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
-  //   client_starttime[*txnDigest] = start_time;
-  // }
-
-
-  if (params.validateProofs) {
-    // TODO: need a way for a process to know the decision view when verifying the signed p2_decision
-    phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
-  }
-
- if(params.mainThreadDispatching) decision_viewsMutex.unlock();
-
-//Free allocated memory
-//delete (bool*) valid;
-if(params.multiThreading || params.mainThreadDispatching){
-  FreePhase2message(msg); // const_cast<proto::Phase2&>(msg));
-}
-
-if (params.validateProofs && params.signedMessages) {
-  proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
-  //Latency_Start(&signLat);
-  // if(params.mainThreadDispatching) lockScope.unlock();
-  MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
-      [sendCB, p2Decision]() {
-      sendCB();
-      delete p2Decision;
-      });
-  //Latency_End(&signLat);
+  sendCB();
   return (void*) true;
-}
-sendCB();
+ };
 
-return (void*) true;
-};
-if(params.multiThreading && params.mainThreadDispatching && params.dispatchCallbacks){
-  transport->DispatchTP_main(std::move(f));
-}
-else{
-  f();
-}
-
+ if(params.multiThreading && params.mainThreadDispatching && params.dispatchCallbacks){
+   transport->DispatchTP_main(std::move(f));
+ }
+ else{
+   f();
+ }
 }
 
 
-//TODO: ADD AUTHENTICATION IN ORDER TO ENFORCE TIMEOUTS. ANYBODY THAT IS NOT THE ORIGINAL CLIENT SHOULD ONLY BE ABLE TO SEND P2FB messages and NOT normal P2!!!!!!
-// //TODO: client signatures need to be implemented. keymanager would need to associate with client ids.
-// Perhaps client ids can just start after all replica ids, then one can use the keys.
+//TODO: ADD AUTHENTICATION IN ORDER TO ENFORCE FB TIMEOUTS. ANYBODY THAT IS NOT THE ORIGINAL CLIENT SHOULD ONLY BE ABLE TO SEND P2FB messages and NOT normal P2!!!!!!
+// //TODO: client signatures need to be implemented. keymanager needs to associate with client ids.
+// client ids can just start after all replica ids
+
 //     if(params.clientAuthenticated){ //TODO: this branch needs to go around the validate Proofs.
 //       if(!msg.has_auth_p2dec()){
 //         Debug("PHASE2 message not authenticated");
@@ -894,7 +777,6 @@ else{
 
 void Server::HandlePhase2(const TransportAddress &remote,
        proto::Phase2 &msg) {
-  //auto lockScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
 
   const proto::Transaction *txn;
   std::string computedTxnDigest;
@@ -905,8 +787,11 @@ void Server::HandlePhase2(const TransportAddress &remote,
       return;
     }
 
-    if (msg.has_txn_digest()) {
-      //auto ongoingMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(ongoingMutex) : std::shared_lock<std::shared_mutex>();
+    if (msg.has_txn_digest() && msg.has_txn()){
+      txnDigest = &msg.txn_digest();
+      txn = &msg.txn();
+    }
+    else if (msg.has_txn_digest() ) {
       ongoingMap::const_accessor b;
       auto txnItr = ongoing.find(b, msg.txn_digest());
       if(!txnItr){
@@ -915,7 +800,6 @@ void Server::HandlePhase2(const TransportAddress &remote,
             " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
         return;
       }
-
       //txn = txnItr->second;
       txn = b->second;
       b.release();
@@ -934,7 +818,6 @@ void Server::HandlePhase2(const TransportAddress &remote,
   TransportAddress *remoteCopy = remote.clone();
 
   auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
-    //std::unique_lock<std::mutex> lock(transportMutex);
     this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
     FreePhase2Reply(phase2Reply);
@@ -945,43 +828,20 @@ void Server::HandlePhase2(const TransportAddress &remote,
     delete remoteCopy;
   };
 
-  // auto sendCB_wrapped = [this, remoteCopy, phase2Reply, txnDigest](void* arg) {
-  //   //std::unique_lock<std::mutex> lock(transportMutex);
-  //
-  //   this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
-  //   Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
-  //   FreePhase2Reply(phase2Reply);
-  //   delete remoteCopy;
-  // };
-  //
-  //
-  // auto sendCB = [this, scb = std::move(sendCB_wrapped)]() {
-  //   //std::unique_lock<std::mutex> lock(transportMutex);
-  //   this->transport->IssueCB(scb, (void*) true);
-  // };
-
   phase2Reply->set_req_id(msg.req_id());
   *phase2Reply->mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
   phase2Reply->mutable_p2_decision()->set_involved_group(groupIdx);
 
   // no-replays property, i.e. recover existing decision/result from storage (do this for HandlePhase1 as well.)
-   if(params.mainThreadDispatching) p2DecisionsMutex.lock();
-  if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
-     if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-   //Logic moved to Callback:
-            // proto::CommitDecision &decision =p2Decisions[msg.txn_digest()];
-            // phase2Reply->mutable_p2_decision()->set_decision(decision);
-            //  ADD VIEW. Is this the right notation?
-            // if(decision_views.find(*txnDigest) == decision_views.end()) {
-            //   decision_views[*txnDigest] = 0;
-            // }
-            //auto dec_view = decision_views[*txnDigest];
-            //
-            //phase2Reply->mutable_p2_decision()->set_view(dec_view);
+  if(params.mainThreadDispatching) p2DecisionsMutex.lock();
 
-  //first time message:
-  } else{
-     if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
+  if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
+    if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
+     //XXX Handler logic was moved to HandlePhase2CB
+  }
+  //first time receiving p2 message:
+  else{
+      if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
     Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
 
     int64_t myProcessId;
@@ -992,18 +852,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
     if (params.validateProofs && params.signedMessages) {
         if(params.multiThreading){
 
-          //Alternatively: parse into a new Phase2 directly in the ReceiveMessage function
-          //proto::Phase2 * msg_copy = msg.New();
-          //msg_copy->CopyFrom(msg);
-          //copy shouldnt be needed due to bind
-
           mainThreadCallback mcb(std::bind(&Server::HandlePhase2CB, this,
              &msg, txnDigest, sendCB, phase2Reply, cleanCB, std::placeholders::_1));
 
-          //OPTION 1: Validation itself is synchronous   Would need to be extended with thread safety.
+          //OPTION 1: Validation itself is synchronous, i.e. is one job (Would need to be extended with thread safety)
               //std::function<void*()> f (std::bind(&ValidateP1RepliesWrapper, msg_copy.decision(), false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId, myResult, verifier));
               //transport->DispatchTP(f, mcb);
-              //tp->dispatch(f, cb, transport->libeventBase);
 
           //OPTION2: Validation itself is asynchronous (each verification = 1 job)
           if(params.batchVerification){
@@ -1022,10 +876,6 @@ void Server::HandlePhase2(const TransportAddress &remote,
         }
         else{
           if(params.batchVerification){
-            //proto::Phase2 * msg_copy = msg.New();
-            //msg_copy->CopyFrom(msg);
-
-            //copy shouldnt be needed due to bind? or is it because msg is passed as reference?
             mainThreadCallback mcb(std::bind(&Server::HandlePhase2CB, this,
               &msg, txnDigest, sendCB, phase2Reply, cleanCB, std::placeholders::_1));
 
@@ -1048,10 +898,6 @@ void Server::HandlePhase2(const TransportAddress &remote,
       }
 
   }
-  // bool* valid = new bool(true);
-  // HandlePhase2CB(msg, txnDigest, sendCB, phase2Reply, (void*) valid);
-
-  // if(params.mainThreadDispatching) lockScope.unlock();
   HandlePhase2CB(&msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
 
 }
@@ -1059,60 +905,52 @@ void Server::HandlePhase2(const TransportAddress &remote,
 void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDigest,
   proto::Transaction* txn, void* valid){
 
-  //auto lockScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
-
   auto f = [this, msg, txnDigest, txn, valid]() mutable {
-  Debug("WRITEBACK Callback[%s] being called", BytesToHex(*txnDigest, 16).c_str());
-  if(! valid){
-    Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
-    //delete (bool*) valid;
-    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
-      FreeWBmessage(msg);
-    }
-    //return; //XXX comment back
-    return (void*) false;
-  }
-  //delete (bool*) valid;
-
-  ///////////////////////////// Below: Only executed by MainThread
-  // tbb::concurrent_hash_map<std::string, std::mutex>::accessor z;
-  // completing.insert(z, *txnDigest);
-  // //z->second.lock();
-  // z.release();
-
-  if (msg->decision() == proto::COMMIT) {
-    Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
-    bool p1Sigs = msg->has_p1_sigs();
-    uint64_t view = -1;
-    if(!p1Sigs){
-      if(msg->has_p2_sigs() && msg->has_p2_view()){
-        view = msg->p2_view();
+      Debug("WRITEBACK Callback[%s] being called", BytesToHex(*txnDigest, 16).c_str());
+      if(! valid){
+        Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
+        if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+          FreeWBmessage(msg);
+        }
+        return (void*) false;
       }
-      else{
-        Debug("Writeback for P2 does not have view or sigs");
-        //return; //XXX comment back
-        view = 0;
-        //return (void*) false;
-      }
-    }
-    Debug("COMMIT ONLY RUN BY MAINTHREAD: %d", sched_getcpu());
-    Commit(*txnDigest, txn, p1Sigs ? msg->release_p1_sigs() : msg->release_p2_sigs(), p1Sigs, view);
-  } else {
-    Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
-    writebackMessages[*txnDigest] = *msg;
-    ///TODO: msg might no longer hold txn; could have been released in HanldeWriteback
-    Abort(*txnDigest);
-  }
 
-  if(params.multiThreading || params.mainThreadDispatching){
-    // proto::GroupedSignatures* test = new proto::GroupedSignatures();
-    // msg.set_allocated_p1_sigs(test);
-    //delete msg;
-    //proto::Writeback* msg2 = new proto::Writeback;
-    FreeWBmessage(msg);
-  }
-   return (void*) true;
- };
+      ///////////////////////////// Below: Only executed by MainThread
+      // tbb::concurrent_hash_map<std::string, std::mutex>::accessor z;
+      // completing.insert(z, *txnDigest);
+      // //z->second.lock();
+      // z.release();
+
+      if (msg->decision() == proto::COMMIT) {
+        Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
+        bool p1Sigs = msg->has_p1_sigs();
+        uint64_t view = -1;
+        if(!p1Sigs){
+          if(msg->has_p2_sigs() && msg->has_p2_view()){
+            view = msg->p2_view();
+          }
+          else{
+            Debug("Writeback for P2 does not have view or sigs");
+            //return; //XXX comment back
+            view = 0;
+            //return (void*) false;
+          }
+        }
+        Debug("COMMIT ONLY RUN BY MAINTHREAD: %d", sched_getcpu());
+        Commit(*txnDigest, txn, p1Sigs ? msg->release_p1_sigs() : msg->release_p2_sigs(), p1Sigs, view);
+      } else {
+        Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
+        writebackMessages[*txnDigest] = *msg;
+        ///TODO: msg might no longer hold txn; could have been released in HanldeWriteback
+        Abort(*txnDigest);
+      }
+
+      if(params.multiThreading || params.mainThreadDispatching){
+        FreeWBmessage(msg);
+      }
+      return (void*) true;
+  };
+
  if(params.multiThreading && params.mainThreadDispatching && params.dispatchCallbacks){
    transport->DispatchTP_main(std::move(f));
  }
@@ -1127,28 +965,26 @@ void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
   stats.Increment("total_transactions", 1);
 
-  //auto lockScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(mainThreadMutex) : std::unique_lock<std::mutex>();
   proto::Transaction *txn;
   const std::string *txnDigest;
   std::string computedTxnDigest;
-  if (!msg.has_txn_digest()) {
+  if (!msg.has_txn() && !msg.has_txn_digest()) {
     Debug("WRITEBACK message contains neither txn nor txn_digest.");
     return;
   }
 
-  UW_ASSERT(!msg.has_txn());
-
-  if (msg.has_txn_digest()) {
-    //auto ongoingMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(ongoingMutex) : std::shared_lock<std::shared_mutex>();
+  if (msg.has_txn_digest() && msg.has_txn()){
+    txnDigest = &msg.txn_digest();
+    txn = msg.release_txn();
+  }
+  else if (msg.has_txn_digest()) {
     ongoingMap::const_accessor b;
     auto txnItr = ongoing.find(b, msg.txn_digest());
     if(!txnItr){
-    //if (txnItr == ongoing.end()) {
       Debug("WRITEBACK[%s] message does not contain txn, but have not seen"
           " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
       return;
     }
-
     //txn = txnItr->second;
     txn = b->second;
     b.release();
@@ -1162,16 +998,10 @@ void Server::HandleWriteback(const TransportAddress &remote,
   Debug("WRITEBACK[%s] with decision %d.",
       BytesToHex(*txnDigest, 16).c_str(), msg.decision());
 
-//could delegate this whole block to the threads, but then would need to make it threadsafe?
-
-//TODO: declare mcb = bind(HandleWBCallback)
-
+  //Verifying signatures
+  //XXX batchVerification branches are currently deprecated
   if (params.validateProofs ) {
       if(params.multiThreading){
-          //Alternatively: parse into a new Phase2 directly in the ReceiveMessage function
-          //proto::Writeback * msg_copy = msg.New();
-          //msg_copy->CopyFrom(msg);
-          //copy shouldnt be needed due to bind?
 
           Debug("1: TAKING MULTITHREADING BRANCH, generating MCB");
           mainThreadCallback mcb(std::bind(&Server::WritebackCallback, this, &msg,
@@ -1222,7 +1052,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
           else if (params.signedMessages && msg.has_p2_sigs()) {
              stats.Increment("total_transactions_slow", 1);
-              //TODO: Make async validate P2 replies func
+              // require clients to include view for easier matching
               if(!msg.has_p2_view()) return;
               int64_t myProcessId;
               proto::CommitDecision myDecision;
@@ -1243,10 +1073,9 @@ void Server::HandleWriteback(const TransportAddress &remote,
               return;
           }
 
-
           else if (msg.decision() == proto::ABORT && msg.has_conflict()) {
              stats.Increment("total_transactions_fast_Abort_conflict", 1);
-              //TODO:Make Async ValidateCommittedConflict
+
               std::string committedTxnDigest = TransactionDigest(msg.conflict().txn(),
                   params.hashDigest);
               asyncValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
@@ -1265,7 +1094,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
       }
       //If I make the else case use the async function too, then I can collapse the duplicate code here
       //and just pass params.multiThreading as argument...
-      //Currently NOT doing that because the async version does additional copies (binds) that could be avoided?
+      //Currently NOT doing that because the async version does additional copies (binds) that are avoided in the single threaded code.
       else{
 
           if (params.signedMessages && msg.decision() == proto::COMMIT && msg.has_p1_sigs()) {
@@ -1274,9 +1103,6 @@ void Server::HandleWriteback(const TransportAddress &remote,
             LookupP1Decision(*txnDigest, myProcessId, myResult);
 
             if(params.batchVerification){
-              //proto::Writeback * msg_copy = msg.New();
-              //msg_copy->CopyFrom(msg);
-              //copy shouldnt be needed due to bind?
               mainThreadCallback mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP1Replies(proto::COMMIT,
                     true, txn, txnDigest,msg.p1_sigs(), keyManager, &config, myProcessId,
@@ -1292,17 +1118,12 @@ void Server::HandleWriteback(const TransportAddress &remote,
               }
             }
           }
-          //inerted previously MISSING CASE FOR FAST ABORT WITH 3f+1 ABSTAIN
-          //TODO: need to check whether clients even ever generate this (they should) (+ server mvtso replies)
           else if (params.signedMessages && msg.decision() == proto::ABORT && msg.has_p1_sigs()) {
             int64_t myProcessId;
             proto::ConcurrencyControl::Result myResult;
             LookupP1Decision(*txnDigest, myProcessId, myResult);
 
             if(params.batchVerification){
-              //proto::Writeback * msg_copy = msg.New();
-              //msg_copy->CopyFrom(msg);
-              //copy shouldnt be needed due to bind?
               mainThreadCallback mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP1Replies(proto::ABORT,
                     true, txn, txnDigest,msg.p1_sigs(), keyManager, &config, myProcessId,
@@ -1319,7 +1140,6 @@ void Server::HandleWriteback(const TransportAddress &remote,
             }
           }
 
-
           else if (params.signedMessages && msg.has_p2_sigs()) {
             if(!msg.has_p2_view()) return;
             int64_t myProcessId;
@@ -1328,9 +1148,6 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
 
             if(params.batchVerification){
-              //proto::Writeback * msg_copy = msg.New();
-              //msg_copy->CopyFrom(msg);
-              //copy shouldnt be needed due to bind?
               mainThreadCallback mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
               asyncBatchValidateP2Replies(msg.decision(), msg.p2_view(),
                     txn, txnDigest, msg.p2_sigs(), keyManager, &config, myProcessId,
@@ -1351,9 +1168,6 @@ void Server::HandleWriteback(const TransportAddress &remote,
                 params.hashDigest);
 
                 if(params.batchVerification){
-                  //proto::Writeback * msg_copy = msg.New();
-                  //msg_copy->CopyFrom(msg);
-                  //copy shouldnt be needed due to bind?
                   mainThreadCallback mcb(std::bind(&Server::WritebackCallback, this, &msg, txnDigest, txn, std::placeholders::_1));
                   asyncValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
                         txnDigest, params.signedMessages, keyManager, &config, verifier,
@@ -1378,9 +1192,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
         }
 
   }
-  // bool* valid = new bool(true);
-  // WritebackCallback(msg, txnDigest, txn, (void*) valid);
-  // if(params.mainThreadDispatching) lockScope.unlock();
+
   WritebackCallback(&msg, txnDigest, txn, (void*) true);
 }
 
@@ -1416,7 +1228,7 @@ void Server::HandleAbort(const TransportAddress &remote,
     abort = &msg.internal();
   }
 
-  //RECOMMENT
+  //RECOMMENT XXX currently displaced by RTS version with no set, but only a single replacing RTS
   //  if(params.mainThreadDispatching) rtsMutex.lock();
   // for (const auto &read : abort->read_set()) {
   //   rts[read].erase(abort->ts());
@@ -1430,6 +1242,7 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
     Timestamp &retryTs, const proto::CommittedProof* &conflict) {
 
   locks_t locks;
+  //lock keys to perform an atomic OCC check when parallelizing OCC checks.
   if(param_parallelOCC){
     locks = LockTxnKeys_scoped(txn);
   }
@@ -1452,6 +1265,7 @@ locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
     locks_t locks;
     auto itr_r = txn.read_set().begin();
     auto itr_w = txn.write_set().begin();
+
     //for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
     while(itr_r != txn.read_set().end() || itr_w != txn.write_set().end()){
       //skip duplicate keys (since the list is sorted they should be next)
@@ -1502,37 +1316,7 @@ locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
     return locks;
 }
 
-// locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
-//
-//     locks_t locks;
-//     auto itr_r = txn.read_set().begin();
-//     auto itr_w = txn.write_set().begin();
-//     //for(int i = 0; i < txn.read_set().size() + txn.write_set().size(); ++i){
-//     while(itr_r != txn.read_set().end() || itr_w != txn.write_set().end()){
-//       if(itr_r == txn.read_set().end()){
-//         locks.emplace_back(mutex_map[itr_w->key()]);
-//         itr_w++;
-//       }
-//       else if(itr_w == txn.write_set().end()){
-//         locks.emplace_back(mutex_map[itr_r->key()]);
-//         itr_r++;
-//       }
-//       else{
-//         if(itr_r->key() <= itr_w->key()){
-//           locks.emplace_back(mutex_map[itr_r->key()]);
-//           //If read set and write set share keys, must not acquire lock twice.
-//           if(itr_r->key() == itr_w->key()) { itr_w++;}
-//           itr_r++;
-//         }
-//         else{
-//           locks.emplace_back(mutex_map[itr_w->key()]);
-//           itr_w++;
-//         }
-//       }
-//     }
-//     return locks;
-// }
-
+//XXX DEPRECATED
 void Server::LockTxnKeys(proto::Transaction &txn){
   // Lock all (read/write) keys in order for atomicity if using parallel OCC
 
@@ -1562,6 +1346,7 @@ void Server::LockTxnKeys(proto::Transaction &txn){
       }
     }
 }
+//XXX DEPRECATED
 void Server::UnlockTxnKeys(proto::Transaction &txn){
   // Lock all (read/write) keys in order for atomicity if using parallel OCC
     auto itr_r = txn.read_set().rbegin();
@@ -1759,14 +1544,10 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
       txn.timestamp().timestamp(), txn.timestamp().id());
   Timestamp ts(txn.timestamp());
 
-  //Latency_Start(&waitingOnLocks);
-   //if(params.mainThreadDispatching) preparedMutex.lock_shared();
-  //Latency_End(&waitingOnLocks);
 
   preparedMap::const_accessor a;
   bool preparedItr = prepared.find(a, txnDigest);
   //if (preparedItr == prepared.end()) {
-  //TODO need to lock before, so 2 parallel OCC dont accidentally set a decision twice.
   if(!preparedItr){
     a.release();
     if (CheckHighWatermark(ts)) {
@@ -1776,11 +1557,8 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
           ts.getTimestamp());
       stats.Increment("cc_abstains", 1);
       stats.Increment("cc_abstains_watermark", 1);
-       //if(params.mainThreadDispatching) preparedMutex.unlock_shared();
       return proto::ConcurrencyControl::ABSTAIN;
     }
-     //if(params.mainThreadDispatching) preparedMutex.unlock_shared();
-
     for (const auto &read : txn.read_set()) {
       // TODO: remove this check when txns only contain read set/write set for the
       //   shards stored at this replica
@@ -1811,9 +1589,6 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
           return proto::ConcurrencyControl::ABORT;
         }
       }
-      //Latency_Start(&waitingOnLocks);
-       //if(params.mainThreadDispatching) preparedWritesMutex.lock_shared();
-      //Latency_End(&waitingOnLocks);
 
       const auto preparedWritesItr = preparedWrites.find(read.key());
       if (preparedWritesItr != preparedWrites.end()) {
@@ -1832,21 +1607,17 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
                 preparedTs.first.getID(), ts.getTimestamp(), ts.getID());
             stats.Increment("cc_abstains", 1);
             stats.Increment("cc_abstains_wr_conflict", 1);
-             //if(params.mainThreadDispatching) preparedWritesMutex.unlock_shared();
             return proto::ConcurrencyControl::ABSTAIN;
           }
         }
       }
-       //if(params.mainThreadDispatching) preparedWritesMutex.unlock_shared();
     }
 
     for (const auto &write : txn.write_set()) {
       if (!IsKeyOwned(write.key())) {
         continue;
       }
-      //Latency_Start(&waitingOnLocks);
-       //if(params.mainThreadDispatching) committedReadsMutex.lock_shared();
-      //Latency_End(&waitingOnLocks);
+
       auto committedReadsItr = committedReads.find(write.key());
 
       if (committedReadsItr != committedReads.end()){
@@ -1874,17 +1645,12 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
                   std::get<0>(*ritr).getID());
               stats.Increment("cc_aborts", 1);
               stats.Increment("cc_aborts_rw_conflict", 1);
-               //if(params.mainThreadDispatching) committedReadsMutex.unlock_shared();
               return proto::ConcurrencyControl::ABORT;
             }
           }
         }
       }
-       //if(params.mainThreadDispatching) committedReadsMutex.unlock_shared();
 
-       //Latency_Start(&waitingOnLocks);
-       //if(params.mainThreadDispatching) preparedReadsMutex.lock_shared();
-       //Latency_End(&waitingOnLocks);
       const auto preparedReadsItr = preparedReads.find(write.key());
       if (preparedReadsItr != preparedReads.end()) {
 
@@ -1922,14 +1688,12 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
                 preparedReadTxn->timestamp().id());
             stats.Increment("cc_abstains", 1);
             stats.Increment("cc_abstains_rw_conflict", 1);
-             //if(params.mainThreadDispatching) preparedReadsMutex.unlock_shared();
             return proto::ConcurrencyControl::ABSTAIN;
           }
         }
       }
-       //if(params.mainThreadDispatching) preparedReadsMutex.unlock_shared();
 
-       //RECOMMENT
+       //RECOMMENT XXX Set version of RTS implementation; currently using single replacing RTS
       //  //Latency_Start(&waitingOnLocks);
       //  if(params.mainThreadDispatching) rtsMutex.lock_shared();
       //  //Latency_End(&waitingOnLocks);
@@ -1979,16 +1743,11 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         }
       }
 
-      // TODO: add additional rts dep check to shrink abort window
-      //    Is this still a thing?
+      // TODO: add additional rts dep check to shrink abort window  (aka Exceptions)
+      //    Is this still a thing?  -->> No currently not
     }
 
     if (params.validateProofs && params.signedMessages && !params.verifyDeps) {
-      //Latency_Start(&waitingOnLocks);
-      //auto committedMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(committedMutex) : std::shared_lock<std::shared_mutex>();
-      //auto abortedMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(abortedMutex) : std::shared_lock<std::shared_mutex>();
-      //auto preparedMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(preparedMutex) : std::shared_lock<std::shared_mutex>();
-      //Latency_End(&waitingOnLocks);
 
       Debug("Exec MessageToSign by CPU: %d", sched_getcpu());
       for (const auto &dep : txn.deps()) {
@@ -1997,7 +1756,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         }
         if (committed.find(dep.write().prepared_txn_digest()) == committed.end() &&
             aborted.find(dep.write().prepared_txn_digest()) == aborted.end()) {
-          //check whether we have prepared it ourselves: This alleviates having to verify dep proofs
+          //check whether we (i.e. the server) have prepared it ourselves: This alleviates having to verify dep proofs
 
           preparedMap::const_accessor a2;
           auto preparedItr = prepared.find(a2, dep.write().prepared_txn_digest());
@@ -2013,20 +1772,14 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
   }
   else{
      a.release();
-     //if(params.mainThreadDispatching) preparedMutex.unlock_shared();
   }
 
   bool allFinished = true;
 
   if(params.maxDepDepth > -2){
-    //Latency_Start(&waitingOnLocks);
+
      //if(params.mainThreadDispatching) dependentsMutex.lock();
      if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
-     //if(params.mainThreadDispatching) ongoingMutex.lock_shared();
-     //if(params.mainThreadDispatching) committedMutex.lock_shared();
-     //if(params.mainThreadDispatching) abortedMutex.lock_shared();
-    //Latency_End(&waitingOnLocks);
-
 
     for (const auto &dep : txn.deps()) {
       if (dep.involved_group() != groupIdx) {
@@ -2045,8 +1798,8 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
             BytesToHex(dep.write().prepared_txn_digest(), 16).c_str());
 
         //start RelayP1 to initiate Fallback handling
-        //TODO: Currently disabled.
-        // if (false && ongoing.find(dep.write().prepared_txn_digest()) != ongoing.end()) {
+        //TODO: Currently disabled. Re-enable
+        // if (ongoing.find(dep.write().prepared_txn_digest()) != ongoing.end()) {
         //   std::string txnDig = dep.write().prepared_txn_digest();
         //   //schedule Relay for client timeout only..
         //   //proto::Transaction *tx = ongoing[txnDig];
@@ -2091,9 +1844,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
 
      //if(params.mainThreadDispatching) dependentsMutex.unlock();
      if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
-     //if(params.mainThreadDispatching) ongoingMutex.unlock_shared();
-     //if(params.mainThreadDispatching) committedMutex.unlock_shared();
-     //if(params.mainThreadDispatching) abortedMutex.unlock_shared();
+
  }
 
   if (!allFinished) {
@@ -2138,11 +1889,6 @@ void Server::Prepare(const std::string &txnDigest,
       BytesToHex(txnDigest, 16).c_str(), txn.timestamp().timestamp(), txn.timestamp().id());
 
 
-  //auto ongoingMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(ongoingMutex) : std::shared_lock<std::shared_mutex>();
-  //auto preparedMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedMutex) : std::unique_lock<std::shared_mutex>();
-  //auto preparedReadsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedReadsMutex) : std::unique_lock<std::shared_mutex>();
-  //auto preparedWritesMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
-
   ongoingMap::const_accessor b;
   auto ongoingItr = ongoing.find(b, txnDigest);
   if(!ongoingItr){
@@ -2186,14 +1932,13 @@ void Server::Prepare(const std::string &txnDigest,
 
 void Server::GetCommittedWrites(const std::string &key, const Timestamp &ts,
     std::vector<std::pair<Timestamp, Server::Value>> &writes) {
+
   std::vector<std::pair<Timestamp, Server::Value>> values;
-   //if(params.mainThreadDispatching) storeMutex.lock();
   if (store.getCommittedAfter(key, ts, values)) {
     for (const auto &p : values) {
       writes.push_back(p);
     }
   }
-   //if(params.mainThreadDispatching) storeMutex.unlock();
 }
 
 void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
@@ -2210,12 +1955,9 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
     //testing_committed_proof.pop_back();
   }
   val.proof = proof;
-  //Latency_Start(&waitingOnLocks);
-   //if(params.mainThreadDispatching) committedMutex.lock();
-  //Latency_End(&waitingOnLocks);
+
   auto committedItr = committed.insert(std::make_pair(txnDigest, proof));
   //auto committedItr =committed.emplace(txnDigest, proof);
-   //if(params.mainThreadDispatching) committedMutex.unlock();
 
   if (params.validateProofs) {
     // CAUTION: we no longer own txn pointer (which we allocated during Phase1
@@ -2236,25 +1978,20 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
     if (!IsKeyOwned(read.key())) {
       continue;
     }
-     //if(params.mainThreadDispatching) storeMutex.lock(); //probably dont need? --> add locks to store.
+
 
     //store.commitGet(read.key(), read.readtime(), ts);   //SEEMINGLY NEVER USED XXX
     //commitGet_count++;
-     //if(params.mainThreadDispatching) storeMutex.unlock();
+
     //Latency_Start(&committedReadInsertLat);
-    //Latency_Start(&waitingOnLocks);
-     //if(params.mainThreadDispatching) committedReadsMutex.lock();
-     //Latency_End(&waitingOnLocks);
-     //this could be a readlock for dstruct + a lock per object. (need write lock the first time)
 
      std::pair<std::shared_mutex, std::set<committedRead>> &z = committedReads[read.key()];
      std::unique_lock lock(z.first);
      z.second.insert(std::make_tuple(ts, read.readtime(),
            committedItr.first->second));
-
     // committedReads[read.key()].insert(std::make_tuple(ts, read.readtime(),
     //       committedItr.first->second));
-     //if(params.mainThreadDispatching) committedReadsMutex.unlock();
+
     //uint64_t ns = Latency_End(&committedReadInsertLat);
     //stats.Add("committed_read_insert_lat_" + BytesToHex(read.key(), 18), ns);
   }
@@ -2269,12 +2006,12 @@ void Server::Commit(const std::string &txnDigest, proto::Transaction *txn,
         txn->client_id(), txn->client_seq_num(),
         BytesToHex(write.key(), 16).c_str());
     val.val = write.value();
-     //if(params.mainThreadDispatching) storeMutex.lock();
+
     store.put(write.key(), val, ts);
-     //if(params.mainThreadDispatching) storeMutex.unlock();
 
 
-     //RECOMMENT
+
+     //RECOMMENT XXX RTS version with set of timestamps
     //  //Latency_Start(&waitingOnLocks);
     //  if(params.mainThreadDispatching) rtsMutex.lock();
     //  //Latency_End(&waitingOnLocks);
@@ -2539,20 +2276,18 @@ void Server::SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
     const proto::CommittedProof *conflict, const std::string &txnDigest,
     const TransportAddress *remote) {
-   //if(params.mainThreadDispatching) p1DecisionsMutex.lock();
+
    p1DecisionsMap::accessor c;
    p1Decisions.insert(c, std::make_pair(txnDigest, result));
    c.release();
  //  p1Decisions[txnDigest] = result;
-   //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
+
   //add abort proof so we can use it for fallbacks easily.
   if(result == proto::ConcurrencyControl::ABORT){
-     //if(params.mainThreadDispatching) p1ConflictsMutex.lock();
      p1ConflictsMap::accessor d;
      p1Conflicts.insert(d, std::make_pair(txnDigest, conflict));
     //p1Conflicts[txnDigest] = conflict;  //does this work this way for CbR
     d.release();
-     //if(params.mainThreadDispatching) p1ConflictsMutex.unlock();
   }
 
   proto::Phase1Reply* phase1Reply = GetUnusedPhase1Reply();
@@ -2560,24 +2295,10 @@ void Server::SendPhase1Reply(uint64_t reqId,
   TransportAddress *remoteCopy = remote->clone();
 
   auto sendCB = [remoteCopy, this, phase1Reply]() {
-    //std::unique_lock<std::mutex> lock(transportMutex);
-
     this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
     FreePhase1Reply(phase1Reply);
     delete remoteCopy;
   };
-
-  // auto sendCB_wrapped = [remoteCopy, this, phase1Reply](void* arg) {
-  //   //std::unique_lock<std::mutex> lock(transportMutex);
-  //
-  //   this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
-  //   FreePhase1Reply(phase1Reply);
-  //   delete remoteCopy;
-  // };
-  // auto sendCB = [this, scb = std::move(sendCB_wrapped)]() {
-  //   //std::unique_lock<std::mutex> lock(transportMutex);
-  //   this->transport->IssueCB(scb, (void*) true);
-  // };
 
   phase1Reply->mutable_cc()->set_ccr(result);
   if (params.validateProofs) {
@@ -2597,12 +2318,6 @@ void Server::SendPhase1Reply(uint64_t reqId,
             BytesToHex(txnDigest, 16).c_str(),
             BytesToHex(phase1Reply->signed_cc().signature(), 100).c_str(),
             phase1Reply->signed_cc().process_id());
-          //sanity checks
-          // Debug("P1 SIGNATURE TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
-          //   BytesToHex(txnDigest, 16).c_str(),
-          //   BytesToHex(phase1Reply->signed_cc().signature(), 1024).c_str(),
-          //   phase1Reply->signed_cc().process_id(),
-          //   BytesToHex(phase1Reply->signed_cc().data(), 1024).c_str());
 
           sendCB();
           delete cc;
@@ -2611,7 +2326,6 @@ void Server::SendPhase1Reply(uint64_t reqId,
       return;
     }
   }
-
   sendCB();
 }
 
@@ -2717,41 +2431,25 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
 
   if(params.multiThreading){
       if (params.signatureBatchSize == 1) {
-          // ::google::protobuf::Message* msg_copy = msg.New();
-          // msg_copy->CopyFrom(msg);
-          // std::function<void*()> f(std::bind(asyncSignMessage, *msg_copy, keyManager->GetPrivateKey(id), id, signedMessage));
-          //Assuming bind creates a copy this suffices:
-          Debug("(multithreading) dispatching signing");
-      // std::function<void*()> f(std::bind(asyncSignMessage, msg, keyManager->GetPrivateKey(id),
-      //  id, signedMessage));
-      // transport->DispatchTP(std::move(f), [cb](void * ret){ cb();});
 
-      auto f = [this, msg, signedMessage, cb = std::move(cb)](){
-        SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMessage);
-        cb();
-        return (void*) true;
-      };
-      transport->DispatchTP_noCB(std::move(f));
+          Debug("(multithreading) dispatching signing");
+          auto f = [this, msg, signedMessage, cb = std::move(cb)](){
+            SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMessage);
+            cb();
+            return (void*) true;
+          };
+          transport->DispatchTP_noCB(std::move(f));
       }
 
       else {
         Debug("(multithreading) adding sig request to localbatchSigner");
-        // auto f = [this, msg, signedMessage, cb = std::move(cb)](){
-        //   //std::unique_lock<std::mutex> lock(this->batchSigner->batchMutex);
-        //   this->batchSigner->asyncMessageToSign(msg, signedMessage, std::move(cb));
-        //   return (void*) true;
-        // };
-        // transport->DispatchTP_noCB(std::move(f));
-        //batchSigner->MessageToSign(msg, signedMessage, std::move(cb));
 
         batchSigner->asyncMessageToSign(msg, signedMessage, std::move(cb));
       }
   }
   else{
     if (params.signatureBatchSize == 1) {
-      // std::string str;
-      // msg->SerializeToString(&str);
-      // Debug("message: %s", BytesToHex(str, 128).c_str());
+
       SignMessage(msg, keyManager->GetPrivateKey(id), id, signedMessage);
       cb();
       //if multithread: Dispatch f: SignMessage and cb.
@@ -2929,9 +2627,8 @@ void Server::FreeWBmessage(proto::Writeback *msg) {
   // WBmessages.push_back(msg);
 }
 
-////////////////////// Fallback realm beings here... enter at own risk
 
-//Simulated HMAC code
+//XXX Simulated HMAC code
 std::unordered_map<uint64_t, std::string> sessionKeys;
 void CreateSessionKeys();
 bool ValidateHMACedMessage(const proto::SignedMessage &signedMessage);
@@ -2971,8 +2668,8 @@ signedMessage.set_signature(hmacs.SerializeAsString());
 }
 
 
-/////////
 
+////////////////////// XXX Fallback realm beings here... enter at own risk
 
 
 //TODO: all requestID entries can be deleted..
