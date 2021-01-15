@@ -203,7 +203,9 @@ Server::~Server() {
 
   if(params.dispatchMessageReceive){
     Debug("Dispatching message handling to Support Main Thread");
-   transport->DispatchTP_main([this, &remote, type, data, meta_data]() { //using this path results in an extra copy
+    //using this path results in an extra copy
+    //Can I move the data or release the message to avoid duplicates?
+   transport->DispatchTP_main([this, &remote, type, data, meta_data]() {
      this->ReceiveMessageInternal(remote, type, data, meta_data);
      return (void*) true;
    });
@@ -218,10 +220,12 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
 
   if (type == read.GetTypeName()) {
 
-    if(!params.mainThreadDispatching || params.dispatchMessageReceive){
+    //if no dispatching OR if dispatching both deser and Handling to 2nd main thread (no workers)
+    if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_reads) ){
       read.ParseFromString(data);
       HandleRead(remote, read);
     }
+    //if dispatching to second main or other workers
     else{
       proto::Read* readCopy = GetUnusedReadmessage();
       readCopy->ParseFromString(data);
@@ -238,7 +242,8 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     }
   } else if (type == phase1.GetTypeName()) {
 
-    if(!params.mainThreadDispatching || params.dispatchMessageReceive){
+    
+    if(!params.mainThreadDispatching || params.dispatchMessageReceive){  //TODO add parallelOCC option
      phase1.ParseFromString(data);
      HandlePhase1(remote, phase1);
     }
@@ -251,7 +256,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       };
       Debug("Dispatching HandlePhase1");
       transport->DispatchTP_main(f);
-      //transport->DispatchTP_noCB(f); //user if want to dispatch to all workers
+      //transport->DispatchTP_noCB(f); //use if want to dispatch to all workers
     }
 
   } else if (type == phase2.GetTypeName()) {
