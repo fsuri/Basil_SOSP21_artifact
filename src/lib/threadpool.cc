@@ -130,7 +130,7 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
         t->detach();
     }
   }
-  else{
+  } else{
       fprintf(stderr, "starting client threadpool\n");
       int num_cpus = std::thread::hardware_concurrency(); ///(2-hyperthreading);
       fprintf(stderr, "Num_cpus: %d \n", num_cpus);
