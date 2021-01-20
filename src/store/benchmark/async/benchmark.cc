@@ -220,6 +220,7 @@ DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout
 DEFINE_bool(pbft_order_commit, false, "order commit writebacks as well");
 DEFINE_bool(pbft_validate_abort, false, "validate abort writebacks as well");
 
+DEFINE_bool(indicus_parallel_CCC, true, "sort read/write set for parallel CCC locking at server");
 
 DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
 
@@ -900,7 +901,8 @@ int main(int argc, char **argv) {
                                         FLAGS_indicus_max_dep_depth, readDepSize, false, false, false, false,
                                         FLAGS_indicus_merkle_branch_factor, failure,
                                         FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification,
-																				FLAGS_indicus_batch_verification_size, false, false, false, false);
+																				FLAGS_indicus_batch_verification_size, false, false, false,
+																				FLAGS_indicus_parallel_CCC, false);
 
         client = new indicusstore::Client(config, clientId,
                                           FLAGS_num_shards,

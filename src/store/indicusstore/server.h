@@ -80,7 +80,7 @@ void PrintSendCount();
 void PrintRcvCount();
 void ParseProto(::google::protobuf::Message *msg, std::string &data);
 
-static bool param_parallelOCC = true;
+//static bool param_parallelOCC = true;
 
 class Server : public TransportReceiver, public ::Server, public PingServer {
  public:

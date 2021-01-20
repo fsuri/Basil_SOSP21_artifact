@@ -314,6 +314,7 @@ typedef struct Parameters {
   const bool mainThreadDispatching;
   const bool dispatchMessageReceive;
   const bool parallel_reads;
+  const bool parallel_CCC;
   const bool dispatchCallbacks;
 
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
@@ -321,7 +322,10 @@ typedef struct Parameters {
     bool readReplyBatch, bool adjustBatchSize, bool sharedMemBatches,
     bool sharedMemVerify, uint64_t merkleBranchFactor, const InjectFailure &injectFailure,
     bool multiThreading, bool batchVerification, int verificationBatchSize,
-    bool mainThreadDispatching, bool dispatchMessageReceive, bool parallel_reads, bool dispatchCallbacks) :
+    bool mainThreadDispatching, bool dispatchMessageReceive,
+    bool parallel_reads,
+    bool parallel_CCC,
+    bool dispatchCallbacks) :
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
     maxDepDepth(maxDepDepth), readDepSize(readDepSize),
@@ -333,6 +337,7 @@ typedef struct Parameters {
     mainThreadDispatching(mainThreadDispatching),
     dispatchMessageReceive(dispatchMessageReceive),
     parallel_reads(parallel_reads),
+    parallel_CCC(parallel_CCC),
     dispatchCallbacks(dispatchCallbacks) { }
 } Parameters;
 

@@ -242,8 +242,8 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     }
   } else if (type == phase1.GetTypeName()) {
 
-    
-    if(!params.mainThreadDispatching || params.dispatchMessageReceive){  //TODO add parallelOCC option
+    //TODO:: FIX: even if just dispatching to 2nd main thred need to copy,
+    if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_CCC)){  //TODO add parallelOCC option
      phase1.ParseFromString(data);
      HandlePhase1(remote, phase1);
     }
@@ -254,9 +254,14 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
         this->HandlePhase1(remote, *phase1Copy);
         return (void*) true;
       };
-      Debug("Dispatching HandlePhase1");
-      transport->DispatchTP_main(f);
-      //transport->DispatchTP_noCB(f); //use if want to dispatch to all workers
+      if(params.dispatchMessageReceive){
+        f();
+      }
+      else{
+        Debug("Dispatching HandlePhase1");
+        transport->DispatchTP_main(f);
+        //transport->DispatchTP_noCB(f); //use if want to dispatch to all workers
+      }
     }
 
   } else if (type == phase2.GetTypeName()) {
@@ -628,7 +633,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
     Timestamp retryTs;
 
-    if(!param_parallelOCC){
+    if(!params.parallel_CCC || !params.mainThreadDispatching){
       result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
           committedProof);
     }
@@ -671,7 +676,7 @@ void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Resul
     // }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
     SendPhase1Reply(msg->req_id(), result, committedProof, txnDigest, &remote);
   }
-  if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreePhase1message(msg);
+  if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(msg);
 }
 
 
@@ -1248,7 +1253,7 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
 
   locks_t locks;
   //lock keys to perform an atomic OCC check when parallelizing OCC checks.
-  if(param_parallelOCC){
+  if(params.parallel_CCC){
     locks = LockTxnKeys_scoped(txn);
   }
 

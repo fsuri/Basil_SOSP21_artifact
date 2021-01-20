@@ -278,6 +278,7 @@ DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout
 DEFINE_bool(indicus_mainThreadDispatching, true, "dispatching main thread work to an additional thread");
 DEFINE_bool(indicus_dispatchMessageReceive, false, "delegating serialization to worker main thread");
 DEFINE_bool(indicus_parallel_reads, true, "dispatching reads to worker threads");
+DEFINE_bool(indicus_parallel_CCC, true, "dispatch concurrency control check to worker threads");
 DEFINE_bool(indicus_dispatchCallbacks, true, "dispatching P2 and WB callbacks to main worker thread");
 
 DEFINE_uint64(indicus_process_id, 0, "id used for Threadpool core affinity");
@@ -582,6 +583,7 @@ int main(int argc, char **argv) {
 																			FLAGS_indicus_mainThreadDispatching,
 																			FLAGS_indicus_dispatchMessageReceive,
 																			FLAGS_indicus_parallel_reads,
+																			FLAGS_indicus_parallel_CCC,
 																			FLAGS_indicus_dispatchCallbacks);
       Debug("Starting new server object");
       server = new indicusstore::Server(config, FLAGS_group_idx,
