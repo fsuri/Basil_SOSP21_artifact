@@ -304,11 +304,18 @@ hotstuff:
 	@echo '====== Start Building HotStuff ======'
 	cd ./store/hotstuffstore/libhotstuff/; ./build.sh
 	@echo '====== Finish Building HotStuff ======'
-	@echo '====== Start Building Indicus ======'
+
+
+.PHONY: indicus
+indicus: $(BINS)
+
 
 .PHONY: all
-all: hotstuff $(BINS)
+all: hotstuff
+	@echo '====== Start Building Indicus ======'
+	$(MAKE) indicus 
 	@echo '====== Finish Building Indicus ======'
+
 
 $(TEST_BINS:%=run-%): run-%: %
 	$(call trace,RUN,$<,$<)
