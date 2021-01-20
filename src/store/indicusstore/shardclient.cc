@@ -1117,6 +1117,8 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){ // update pe
   }
 
 //Update views, since those might become necessary.
+//TODO: move this after message verification? to save processing cost if not necessary to compute views?
+//TODO: Currently verifying signature for p1 reply and view seperately, that is wasteful -> integrate current view into all the responses!!!!
   UpdateViewStructure(txnDigest, p1fbr.attached_view());
   //If p2r :; Call HandlePhase2FB() --> this will invoke the Fallback. (this means that the view message must be passed also)
   if(p1fbr.has_p2r()){
@@ -1490,7 +1492,8 @@ void ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest
       itr->second->pendingP2s[view] = pendingP2;
     }
 
-//TODO: refactor the whole nition of Pending and Alt pending into a pair, thats part of the same map.
+    //TODO: refactor the whole notion of Pending and Alt pending into a pair, thats part of the same map.
+    //TODO: make sure that each replica is only counted once. (dont want byz providing full quorum)
 
     // check matching decision for matching view
 

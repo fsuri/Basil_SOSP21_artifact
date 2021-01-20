@@ -12,39 +12,13 @@ namespace crypto {
 using namespace CryptoPP;
 using namespace std;
 
-secp256k1_context *secpCTX;
+thread_local secp256k1_context *secpCTX;
 // hasher struct
-blake3_hasher hasher;
+thread_local blake3_hasher hasher;
 
 static_block {
   secpCTX = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
 }
-
-//Migrated to crypto.h
-
-// struct PubKey {
-//   KeyType t;
-//   union {
-//     RSA::PublicKey* rsaKey;
-//     CryptoPP::ECDSA<ECP, SHA256>::PublicKey* ecdsaKey;
-//     unsigned char* ed25Key;
-//     unsigned char* secpKey;
-//     ed25519_public_key* donnaKey;
-//   };
-// };
-//
-// struct PrivKey {
-//   KeyType t;
-//   union {
-//     RSA::PrivateKey* rsaKey;
-//     CryptoPP::ECDSA<ECP, SHA256>::PrivateKey* ecdsaKey;
-//     unsigned char* ed25Key;
-//     unsigned char* secpKey;
-//     std::pair<ed25519_secret_key*,ed25519_public_key *> donnaKey;
-//     // ed25519_secret_key* donnaKeyPriv;
-//     // ed25519_public_key* donnaKeyPub;//ed25519_public_key donnaKeyPub;
-//   };
-// };
 
 std::string HMAC(std::string message, std::string keystr) {
   SecByteBlock key((const CryptoPP::byte*)keystr.data(), keystr.size());
@@ -229,7 +203,7 @@ bool Verify(PubKey* publicKey, const char *message, size_t messageLen,
       //int len = static_cast<int>(messageLen);
       bool res = ed25519_sign_open(testMsg, messageLen, *publicKey->donnaKey, (unsigned char*) signature) == 0;
       //std::cout << "VERIFY TEST:" << res << std::endl;
-      
+
       return res;
     }
 
