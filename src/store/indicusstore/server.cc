@@ -1807,15 +1807,22 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
             BytesToHex(txnDigest, 16).c_str(),
             BytesToHex(dep.write().prepared_txn_digest(), 16).c_str());
 
-        //start RelayP1 to initiate Fallback handling
-        //TODO: Currently disabled. Re-enable
-        // if (ongoing.find(dep.write().prepared_txn_digest()) != ongoing.end()) {
-        //   std::string txnDig = dep.write().prepared_txn_digest();
-        //   //schedule Relay for client timeout only..
-        //   //proto::Transaction *tx = ongoing[txnDig];
-        //   transport->Timer((CLIENTTIMEOUT), [this, &remote, txnDig, reqId](){this->RelayP1(remote, txnDig, reqId);});
-        //   //RelayP1(remote, *tx, reqId);
-        // }
+        //XXX start RelayP1 to initiate Fallback handling
+        //TODO can remove this redundant lookup since it will be checked again...
+        ongoingMap::const_accessor b;
+        bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
+        if (inOngoing) {
+          std::string txnDig = dep.write().prepared_txn_digest();
+          //schedule Relay for client timeout only..
+          TransportAddress *remoteCopy = remote.clone();
+          transport->Timer((CLIENTTIMEOUT), [this, remoteCopy, txnDig, reqId](){
+            this->RelayP1(*remoteCopy, txnDig, reqId);
+            delete remoteCopy;
+          });
+          //proto::Transaction *tx = b->second; //ongoing[txnDig];
+          //RelayP1(remote, *tx, reqId);
+        }
+        b.release();
 
         allFinished = false;
         //dependents[dep.write().prepared_txn_digest()].insert(txnDigest);
@@ -3665,7 +3672,7 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
 //RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
 void Server::RelayP1(const TransportAddress &remote, std::string txnDigest, uint64_t conflict_id){
 
-  Debug("RelayP1[%s] timed out.", BytesToHex(txnDigest, 256).c_str());
+  Debug("RelayP1[%s] timed out. Sending now!", BytesToHex(txnDigest, 256).c_str());
   proto::Transaction *tx;
 
   ongoingMap::const_accessor b;

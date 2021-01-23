@@ -244,7 +244,7 @@ void Client::Phase1(PendingRequest *req) {
   struct timeval tv;
   gettimeofday(&tv, NULL);
   uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;
-  pendingReqs_starttime[req->id] = current_time;
+  pendingReqs_starttime[req->id] = current_time; //TODO: could just make this a field of req.
 
 
   for (auto group : txn.involved_groups()) {
@@ -559,19 +559,29 @@ bool Client::isDep(std::string &txnDigest, proto::Transaction &Req_txn){
 
 
 void Client::RelayP1callback(proto::RelayP1 &relayP1){ //schedules Phase1FB
-  //TODO: check if req.id referenced is still ongoing.
-  if(pendingReqs.find(relayP1.conflict_id()) == pendingReqs.end()){return; }
+  std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL" << std::endl;
+
+  // check if req.id referenced is still ongoing.
+  if(pendingReqs.find(relayP1.conflict_id()) == pendingReqs.end()){
+    std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - No longer ongoing" << std::endl;
+    return; }
 
   uint64_t reqID = relayP1.conflict_id();
   proto::Phase1 p1 = relayP1.p1();
-   //TODO: Check if the current pending request has this txn as dependency.
+   //Check if the current pending request has this txn as dependency.
   std::string txnDigest = TransactionDigest(p1.txn(), params.hashDigest);
   proto::Transaction Req_txn = pendingReqs[relayP1.conflict_id()]->txn;
-  if(!isDep(txnDigest, Req_txn)) return;
+  if(!isDep(txnDigest, Req_txn)){
+    std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Not a dep." << std::endl;
+    return;}
 
-// TODO: schedule again for end of timeout. If still valid, then start P1FB
+//schedule again for end of timeout. If still valid, then start P1FB
 
 //only relevant if our ongoing txn has not finished P1.
+
+std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - outstandingP1s: " << pendingReqs[reqID]->outstandingPhase1s << std::endl;
+
+
 if(pendingReqs[reqID]->outstandingPhase1s > 0){
   struct timeval tv;
   gettimeofday(&tv, NULL);
@@ -579,9 +589,13 @@ if(pendingReqs[reqID]->outstandingPhase1s > 0){
   uint64_t elapsed = current_time - pendingReqs_starttime[reqID];
 
   if(elapsed > CLIENTTIMEOUT){
+    std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - TIMEOUT EXPIRED" << std::endl;
+    return;
     Phase1FB(p1, reqID);
   }
   else{
+    std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - START TIMEOUT" << std::endl;
+    return;
     transport->Timer((CLIENTTIMEOUT-elapsed), [this, &relayP1](){RelayP1callback(relayP1);});
     return;
   }

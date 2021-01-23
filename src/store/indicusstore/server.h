@@ -32,7 +32,7 @@
 #ifndef _INDICUS_SERVER_H_
 #define _INDICUS_SERVER_H_
 
-#define CLIENTTIMEOUT  100    //currently miliseconds; adjust to whatever is a sensible time: dont know what is expected latency for 1 op
+#define CLIENTTIMEOUT  0  //100  //currently miliseconds; adjust to whatever is a sensible time: dont know what is expected latency for 1 op
 
 #include "lib/latency.h"
 #include "lib/transport.h"

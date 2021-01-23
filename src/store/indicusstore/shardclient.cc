@@ -84,11 +84,11 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
   } else if (type == ping.GetTypeName()) {
     ping.ParseFromString(data);
     HandlePingResponse(ping);
+
     //FALLBACK readMessages
   } else if(type == relayP1.GetTypeName()){ //receive full TX info for a dependency
     relayP1.ParseFromString(data);
     HandlePhase1Relay(relayP1); //Call into client to see if still waiting.
-
   }
   else if(type == phase1FBReply.GetTypeName()){
     //wait for quorum and relay to client
@@ -1056,7 +1056,10 @@ void ShardClient::FreePhase2Reply(proto::Phase2Reply *reply) {
 
 
 /////////////////////////////////////////FALLBACK CODE STARTS HERE ///////////////////////////////////////////
-
+//TODO: need to change this so that the timeout happens in here, and not upcalled to the client yet.
+// And: just add the id to the data struct in the Phase1 --> return it here in addition to the P1.
+//must distinguish between client_seq num = id and reqID (client vs shard client level)
+// Do I even have to issue the FB on the client level at all? Yes I do. The tx could be stalled on a different shard after all.
 void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
 
   Debug("RelayP1[%lu][%s].", relayP1.conflict_id(),
@@ -1066,7 +1069,9 @@ void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
   if (itr == this->pendingPhase1s.end()) {
     return; // this is a stale request and no upcall is necessary!
   }
+  std::cerr << "RECEIVED RELAY P1 AT SHARDCLIENT FOR TX: " << req_id << std::endl;
   itr->second->rcb(relayP1); //upcall to the registered relayP1 callback function.
+  std::cerr << "Issued Relay P1 CB to Client for TX: " << req_id << std::endl;
 }
 
 
