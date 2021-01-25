@@ -1069,9 +1069,8 @@ void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
   if (itr == this->pendingPhase1s.end()) {
     return; // this is a stale request and no upcall is necessary!
   }
-  std::cerr << "RECEIVED RELAY P1 AT SHARDCLIENT FOR TX: " << req_id << std::endl;
+  std::cerr << "RECEIVED RELAY P1 AT SHARDCLIENT FOR TX: " << itr->second->client_seq_num << std::endl;
   itr->second->rcb(relayP1); //upcall to the registered relayP1 callback function.
-  std::cerr << "Issued Relay P1 CB to Client for TX: " << req_id << std::endl;
 }
 
 
@@ -1262,6 +1261,8 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){ // update pe
     PendingPhase1 *pendingPhase1 = pendingFB->pendingP1;
     pendingFB->p1FBcbA(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict, pendingPhase1->p1ReplySigs);
     //this->pendingFallbacks.erase(itr);
+
+    //TODO:: write constructor of pendingPhase1 s.t. it deletes a p1 it stores. (might not be possible without modifying non FB code)
     delete pendingPhase1;  //p1 object in pendingFallback is obsolete.
   }
 
@@ -1603,6 +1604,7 @@ void ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest
       && itr->second->ALTpendingP2s[view]->matchingReplies >= config->f +1){
         itr->second->invFBcb();
       }
+    //TODO: Also need to call it after some timeout. I.e. if 4f+1 received are all honest but diverge.
 }
 
 void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::Transaction &txn, proto::CommitDecision decision, proto::P2Replies &p2Replies){

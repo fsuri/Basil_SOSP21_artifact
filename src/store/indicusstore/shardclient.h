@@ -200,6 +200,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     bool conflict_flag;
     proto::CommittedProof conflict;
     //relay Callbacks
+    uint64_t client_seq_num;
     relayP1_callback rcb;
   };
 

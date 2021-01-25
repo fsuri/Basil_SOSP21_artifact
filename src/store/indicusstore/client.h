@@ -31,7 +31,7 @@
 
 #ifndef _INDICUS_CLIENT_H_
 #define _INDICUS_CLIENT_H_
-#define CLIENTTIMEOUT  100
+#define CLIENTTIMEOUT  10 //100
 
 #include "lib/assert.h"
 #include "lib/keymanager.h"
@@ -101,7 +101,8 @@ class Client : public ::Client {
         outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
         decision(proto::COMMIT), fast(true), conflict_flag(false),
         startedPhase2(false), startedWriteback(false),
-        callbackInvoked(false), timeout(0UL), slowAbortGroup(-1) {
+        callbackInvoked(false), timeout(0UL), slowAbortGroup(-1),
+        startFB(false) {
     }
 
     ~PendingRequest() {
@@ -130,6 +131,8 @@ class Client : public ::Client {
     //added this for fallback handling
     proto::Transaction txn;
     proto::P2Replies p2Replies;
+    bool startFB;
+    std::vector<std::pair<proto::Phase1*, std::string>> RelayP1s;
 
   };
 
@@ -147,9 +150,11 @@ class Client : public ::Client {
   void Phase2TimeoutCallback(int group, uint64_t reqId, int status);
 
   // Fallback logic
-  bool isDep(std::string &txnDigest, proto::Transaction &Req_txn);
-  void RelayP1callback(proto::RelayP1 &relayP1);
-  void Phase1FB(proto::Phase1 &p1, uint64_t conflict_id);
+  bool isDep(const std::string &txnDigest, proto::Transaction &Req_txn);
+  bool StillActive(uint64_t conflict_id, std::string &txnDigest);
+  void RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1);
+  void RelayP1TimeoutCallback(uint64_t reqId);
+  void Phase1FB(proto::Phase1 &p1, uint64_t conflict_id, const std::string &txnDigest);
   void Phase2FB(PendingRequest *req);
   void WritebackFB(PendingRequest *req);
   void Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
