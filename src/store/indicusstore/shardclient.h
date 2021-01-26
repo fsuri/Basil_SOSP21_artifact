@@ -75,7 +75,7 @@ typedef std::function<void(int)> writeback_timeout_callback;
 //Fallback typedefs:
 typedef std::function<void(proto::RelayP1 &)> relayP1_callback;
 
-typedef std::function<void(proto::CommitDecision, bool, const proto::CommittedProof &,
+typedef std::function<void(proto::CommitDecision, bool, bool, const proto::CommittedProof &,
   const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1FB_callbackA;
 
 typedef std::function<void(proto::CommitDecision, const proto::P2Replies &)> phase1FB_callbackB;
@@ -238,8 +238,6 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   struct PendingFB {
     PendingFB() : max_decision_view(0UL), p1(true), last_view(0), max_view(0) {}
     ~PendingFB(){}
-
-
 
     PendingPhase1 *pendingP1;  //TODO:: the callback needs to differ: It needs to propose a P2Rec message.
     uint64_t max_decision_view;

@@ -1140,7 +1140,8 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){ // update pe
       /// CODE PASTE:
           PendingPhase1 *pendingPhase1 = itr->second->pendingP1;
 
-          bool hasSigned = (params.validateProofs && params.signedMessages) && (!reply.has_cc() || reply.cc().ccr() != proto::ConcurrencyControl::ABORT);
+          bool hasSigned = (params.validateProofs && params.signedMessages) &&
+           (!reply.has_cc() || reply.cc().ccr() != proto::ConcurrencyControl::ABORT);
 
           const proto::ConcurrencyControl *cc = nullptr;
           //Check all validity criteria
@@ -1259,7 +1260,8 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){ // update pe
     // PendingFB *pendingFB = itr->second;
     pendingFB->p1 = false;
     PendingPhase1 *pendingPhase1 = pendingFB->pendingP1;
-    pendingFB->p1FBcbA(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict, pendingPhase1->p1ReplySigs);
+    //TODO: replace false with conflict flag.
+    pendingFB->p1FBcbA(pendingPhase1->decision, pendingPhase1->fast, false, pendingPhase1->conflict, pendingPhase1->p1ReplySigs);
     //this->pendingFallbacks.erase(itr);
 
     //TODO:: write constructor of pendingPhase1 s.t. it deletes a p1 it stores. (might not be possible without modifying non FB code)

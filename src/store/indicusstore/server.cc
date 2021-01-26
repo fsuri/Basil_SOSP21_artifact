@@ -797,23 +797,28 @@ void Server::HandlePhase2(const TransportAddress &remote,
       return;
     }
 
-    if (msg.has_txn_digest() && msg.has_txn()){
+    if (msg.has_txn_digest() ) {
       txnDigest = &msg.txn_digest();
-      txn = &msg.txn();
-    }
-    else if (msg.has_txn_digest() ) {
       ongoingMap::const_accessor b;
       auto txnItr = ongoing.find(b, msg.txn_digest());
-      if(!txnItr){
-      //if (txnItr == ongoing.end()) {
-        Debug("PHASE2[%s] message does not contain txn, but have not seen"
-            " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
-        return;
+      if(txnItr){
+        txn = b->second;
+        b.release();
       }
-      //txn = txnItr->second;
-      txn = b->second;
-      b.release();
-      txnDigest = &msg.txn_digest();
+      else{
+        b.release();
+        if(msg.has_txn()){
+          txn = &msg.txn();
+          // check that digest and txn match..
+           if(*txnDigest !=TransactionDigest(*txn, params.hashDigest)) return;
+        }
+        else{
+          Debug("PHASE2[%s] message does not contain txn, but have not seen"
+              " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
+          return;
+        }
+      }
+
     } else {
       txn = &msg.txn();
       computedTxnDigest = TransactionDigest(msg.txn(), params.hashDigest);
@@ -983,26 +988,31 @@ void Server::HandleWriteback(const TransportAddress &remote,
     return;
   }
 
-  if (msg.has_txn_digest() && msg.has_txn()){
+  if (msg.has_txn_digest() ) {
     txnDigest = &msg.txn_digest();
-    txn = msg.release_txn();
-  }
-  else if (msg.has_txn_digest()) {
     ongoingMap::const_accessor b;
     auto txnItr = ongoing.find(b, msg.txn_digest());
-    if(!txnItr){
-      Debug("WRITEBACK[%s] message does not contain txn, but have not seen"
-          " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
-      return;
+    if(txnItr){
+      txn = b->second;
+      b.release();
     }
-    //txn = txnItr->second;
-    txn = b->second;
-    b.release();
-    txnDigest = &msg.txn_digest();
+    else{
+      b.release();
+      if(msg.has_txn()){
+        txn = msg.release_txn();
+        // check that digest and txn match..
+         if(*txnDigest !=TransactionDigest(*txn, params.hashDigest)) return;
+      }
+      else{
+        Debug("PHASE2[%s] message does not contain txn, but have not seen"
+            " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
+        return;
+      }
+    }
   } else {
-    computedTxnDigest = TransactionDigest(msg.txn(), params.hashDigest);
     txn = msg.release_txn();
-    txnDigest = &computedTxnDigest;  //Should make it async safe
+    computedTxnDigest = TransactionDigest(msg.txn(), params.hashDigest);
+    txnDigest = &computedTxnDigest;
   }
 
   Debug("WRITEBACK[%s] with decision %d.",
@@ -1811,7 +1821,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //TODO can remove this redundant lookup since it will be checked again...
         ongoingMap::const_accessor b;
         bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-        if (inOngoing) {
+        if (inOngoing && false) {
           std::string txnDig = dep.write().prepared_txn_digest();
           //schedule Relay for client timeout only..
           TransportAddress *remoteCopy = remote.clone();

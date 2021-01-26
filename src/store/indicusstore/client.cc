@@ -253,30 +253,10 @@ void Client::Phase1(PendingRequest *req) {
 
 }
 
-void Client::Phase1Callback(uint64_t txnId, int group,
+void Client::Phase1CallbackProcessing(PendingRequest *req, int group,
     proto::CommitDecision decision, bool fast, bool conflict_flag,
     const proto::CommittedProof &conflict,
-    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs) {
-  auto itr = this->pendingReqs.find(txnId);
-  if (itr == this->pendingReqs.end()) {
-    Debug("Phase1Callback for terminated request %lu (txn already committed"
-        " or aborted.", txnId);
-    return;
-  }
-  //total_counter++;
-  //if(fast) fast_path_counter++;
-  stats.Increment("total_prepares", 1);
-  if(fast) stats.Increment("total_prepares_fast", 1);
-
-  Debug("PHASE1[%lu:%lu] callback decision %d [Fast:%s][Conflict:%s] from group %d", client_id,
-      client_seq_num, decision, fast ? "yes" : "no", conflict_flag ? "yes" : "no", group);
-
-  PendingRequest *req = itr->second;
-  if (req->startedPhase2 || req->startedWriteback) {
-    Debug("Already started Phase2/Writeback for request id %lu. Ignoring Phase1"
-        " response from group %d.", txnId, group);
-    return;
-  }
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs){
 
   if (decision == proto::ABORT && fast && conflict_flag) {
       req->conflict = conflict;
@@ -325,6 +305,35 @@ void Client::Phase1Callback(uint64_t txnId, int group,
     default:
       break;
   }
+}
+
+void Client::Phase1Callback(uint64_t txnId, int group,
+    proto::CommitDecision decision, bool fast, bool conflict_flag,
+    const proto::CommittedProof &conflict,
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs) {
+  auto itr = this->pendingReqs.find(txnId);
+  if (itr == this->pendingReqs.end()) {
+    Debug("Phase1Callback for terminated request %lu (txn already committed"
+        " or aborted.", txnId);
+    return;
+  }
+  //total_counter++;
+  //if(fast) fast_path_counter++;
+  stats.Increment("total_prepares", 1);
+  if(fast) stats.Increment("total_prepares_fast", 1);
+
+  Debug("PHASE1[%lu:%lu] callback decision %d [Fast:%s][Conflict:%s] from group %d", client_id,
+      client_seq_num, decision, fast ? "yes" : "no", conflict_flag ? "yes" : "no", group);
+
+  PendingRequest *req = itr->second;
+
+  if (req->startedPhase2 || req->startedWriteback) {
+    Debug("Already started Phase2/Writeback for request id %lu. Ignoring Phase1"
+        " response from group %d.", txnId, group);
+    return;
+  }
+
+  Phase1CallbackProcessing(req, group, decision, fast, conflict_flag, conflict, sigs);
 
   if (req->outstandingPhase1s == 0) {
     HandleAllPhase1Received(req);
@@ -364,12 +373,7 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
   }
 }
 
-void Client::Phase2(PendingRequest *req) {
-  int64_t logGroup = GetLogGroup(txn, req->txnDigest);
-
-  Debug("PHASE2[%lu:%lu][%s] logging to group %ld", client_id, client_seq_num,
-      BytesToHex(req->txnDigest, 16).c_str(), logGroup);
-
+void Client::Phase2Processing(PendingRequest *req){
   if (params.validateProofs && params.signedMessages) {
     if (req->decision == proto::ABORT) {
       UW_ASSERT(req->slowAbortGroup >= 0);
@@ -377,7 +381,7 @@ void Client::Phase2(PendingRequest *req) {
       while (req->p1ReplySigsGrouped.grouped_sigs().size() > 1) {
         auto itr = req->p1ReplySigsGrouped.mutable_grouped_sigs()->begin();
         if (itr->first == req->slowAbortGroup) {
-          itr++;
+          itr++;  //skips this group, i.e. deletes all besides this one.
         }
         req->p1ReplySigsGrouped.mutable_grouped_sigs()->erase(itr);
       }
@@ -393,6 +397,16 @@ void Client::Phase2(PendingRequest *req) {
   }
 
   req->startedPhase2 = true;
+}
+
+void Client::Phase2(PendingRequest *req) {
+  int64_t logGroup = GetLogGroup(txn, req->txnDigest);
+
+  Debug("PHASE2[%lu:%lu][%s] logging to group %ld", client_id, client_seq_num,
+      BytesToHex(req->txnDigest, 16).c_str(), logGroup);
+
+  Phase2Processing(req);
+
   bclient[logGroup]->Phase2(client_seq_num, txn, req->txnDigest, req->decision,
       req->p1ReplySigsGrouped,
       std::bind(&Client::Phase2Callback, this, req->id, logGroup,
@@ -442,8 +456,33 @@ void Client::Phase2TimeoutCallback(int group, uint64_t txnId, int status) {
   Phase2(req);
 }
 
+void Client::WritebackProcessing(PendingRequest *req){
+
+  //////Block to handle Fast Abort case with no conflict: Reduce groups sent... and total replies sent
+  if (params.validateProofs && params.signedMessages) {
+    if (req->decision == proto::ABORT && req->fast && !req->conflict_flag) {
+      UW_ASSERT(req->fastAbortGroup >= 0);
+      UW_ASSERT(req->p1ReplySigsGrouped.grouped_sigs().find(req->fastAbortGroup) != req->p1ReplySigsGrouped.grouped_sigs().end());
+      while (req->p1ReplySigsGrouped.grouped_sigs().size() > 1) {
+        auto itr = req->p1ReplySigsGrouped.mutable_grouped_sigs()->begin();
+        if (itr->first == req->fastAbortGroup) {
+          itr++;
+        }
+        req->p1ReplySigsGrouped.mutable_grouped_sigs()->erase(itr);
+      }
+
+      uint64_t quorumSize = FastAbortQuorumSize(config);
+      for (auto &groupSigs : *req->p1ReplySigsGrouped.mutable_grouped_sigs()) {
+        while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > quorumSize) {
+          groupSigs.second.mutable_sigs()->RemoveLast();
+        }
+      }
+     }
+  }
+}
+
 void Client::Writeback(PendingRequest *req) {
-  Debug("WRITEBACK[%lu:%lu]", client_id, req->id);
+  Debug("WRITEBACK[%lu:%lu] result %s", client_id, req->id, req->decision ? "COMMIT" : "ABORT");
 
   req->startedWriteback = true;
 
@@ -471,31 +510,8 @@ void Client::Writeback(PendingRequest *req) {
       NOT_REACHABLE();
     }
   }
-
-
-  //////Block to handle Fast Abort case with no conflict: Reduce groups sent... and total replies sent
-  if (params.validateProofs && params.signedMessages) {
-    if (req->decision == proto::ABORT && req->fast && !req->conflict_flag) {
-      UW_ASSERT(req->fastAbortGroup >= 0);
-      UW_ASSERT(req->p1ReplySigsGrouped.grouped_sigs().find(req->fastAbortGroup) != req->p1ReplySigsGrouped.grouped_sigs().end());
-      while (req->p1ReplySigsGrouped.grouped_sigs().size() > 1) {
-        auto itr = req->p1ReplySigsGrouped.mutable_grouped_sigs()->begin();
-        if (itr->first == req->fastAbortGroup) {
-          itr++;
-        }
-        req->p1ReplySigsGrouped.mutable_grouped_sigs()->erase(itr);
-      }
-
-
-    uint64_t quorumSize = FastAbortQuorumSize(config);
-    for (auto &groupSigs : *req->p1ReplySigsGrouped.mutable_grouped_sigs()) {
-      while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > quorumSize) {
-        groupSigs.second.mutable_sigs()->RemoveLast();
-      }
-    }
-   }
-  }
-////////////////////
+  //this function truncates sigs for the Abort p1 fast case
+  WritebackProcessing(req);
 
   for (auto group : txn.involved_groups()) {
     bclient[group]->Writeback(client_seq_num, txn, req->txnDigest,
@@ -550,6 +566,23 @@ bool Client::isDep(const std::string &txnDigest, proto::Transaction &Req_txn){
   return false;
 }
 
+bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
+  //check if FB instance is (still) active.
+  auto itr = FB_instances.find(txnDigest);
+  if(itr == FB_instances.end()){
+    Debug("FB instances %s already committed or aborted.", txnDigest.c_str());
+    return false;
+  }
+  //TODO: Can be altruistic and finish FB instance even if not blocking.
+  if(pendingReqs.find(conflict_id) == pendingReqs.end() || pendingReqs[conflict_id]->outstandingPhase1s == 0){
+    Debug("Request id %lu already committed, aborted, or in the process of doing so.", conflict_id);
+    delete itr->second;
+    FB_instances.erase(txnDigest);
+    return false;
+  }
+  return true;
+}
+
 void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1){
 
   auto itr = pendingReqs.find(reqId);
@@ -593,7 +626,6 @@ void Client::RelayP1TimeoutCallback(uint64_t reqId){
 
 void Client::Phase1FB(proto::Phase1 &p1, uint64_t conflict_id, const std::string &txnDigest){  //passes callbacks
 
-  //TODO:: make sure this is erased properly!!! //TODO outsource to a function that checks "still active"
   PendingRequest* pendingFB = new PendingRequest(p1.req_id()); //Id doesnt really matter here
   pendingFB->txn = p1.txn();
   pendingFB->txnDigest = txnDigest;
@@ -603,7 +635,7 @@ void Client::Phase1FB(proto::Phase1 &p1, uint64_t conflict_id, const std::string
     //define all the callbacks here
       //bind conflict_id (i.e. the dependent) to all, so we can check if it is still waiting.
       auto p1fbA = std::bind(&Client::Phase1FBcallbackA, this, conflict_id, txnDigest, group, std::placeholders::_1,
-          std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
+          std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
       auto p1fbB = std::bind(&Client::Phase1FBcallbackB, this, conflict_id, txnDigest, group, std::placeholders::_1,
         std::placeholders::_2);
       auto p2fb = std::bind(&Client::Phase2FBcallback, this, conflict_id, txnDigest, group, std::placeholders::_1,
@@ -619,36 +651,20 @@ void Client::Phase1FB(proto::Phase1 &p1, uint64_t conflict_id, const std::string
 
 }
 
-bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
-  //check if instance still active.
-  auto itr = FB_instances.find(txnDigest);
-  if(itr == FB_instances.end()){
-    Debug("FB instances %s already committed or aborted.", txnDigest.c_str());
-    return false;
-  }
-  //TODO: Can be altruistic and finish FB instance even if not blocking.
-  if(pendingReqs.find(conflict_id) == pendingReqs.end() || pendingReqs[conflict_id]->outstandingPhase1s == 0){
-    Debug("Request id %lu already committed, aborted, or in the process of doing so.", conflict_id);
-    delete itr->second;
-    FB_instances.erase(txnDigest);
-    return false;
-  }
-  return true;
-}
+
 
 //If Receive a finished FB just forward it.
 void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Transaction &fbtxn, proto::Writeback &wb) {
   if(!StillActive(conflict_id, txnDigest)) return;
-  //Check if the current pending request has this txn as dependency. TODO: Seems kind of unecessary? Should be checked once at P1
-  proto::Transaction &Req_txn = pendingReqs[conflict_id]->txn;
-  if(!isDep(txnDigest, Req_txn)) return;
 
-
-  FB_instances[txnDigest]->startedWriteback = true;
-
+  //TODO: Need to validate WB message:
+  // 1) check that txnDigest matches txn content
+  // 2) check that sigs match decision and txnDigest
   //TODO:: CHECK THAT fbtxn matches digest? Not necessary if we just set the contents ourselves.
   // set txn field here.
-  *wb.mutable_txn() = fbtxn;
+  *wb.mutable_txn() = std::move(fbtxn);
+
+  FB_instances[txnDigest]->startedWriteback = true;
 
  for (auto group : fbtxn.involved_groups()) {
    bclient[group]->WritebackFB_fast(txnDigest, wb);
@@ -660,66 +676,24 @@ void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, pr
 
 }
 
+
+
 void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int64_t group,
-  proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
+  proto::CommitDecision decision, bool fast, bool conflict_flag,
+  const proto::CommittedProof &conflict,
   const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs)  {
 
   if(!StillActive(conflict_id, txnDigest)) return;
-  //Check if the current pending request has this txn as dependency.
-  proto::Transaction &Req_txn = pendingReqs[conflict_id]->txn;
-  if(!isDep(txnDigest, Req_txn)) return;
 
   PendingRequest* req = FB_instances[txnDigest];
 
-//TODO: modify so it includes new case.
-  // do pretty much normal Phase1Callback. Modify it so it calls Phase2FB or WritebackFB.
-  Debug("FBPHASE1[%lu:%s] callback decision %d from group %d", client_id, txnDigest.c_str(), decision, (int)group);
-
   if (req->startedPhase2 || req->startedWriteback) {
-    Debug("Already started Phase2FB/WritebackFB for FB instance %s. Ignoring Phase1"
-        " response from group %d.", txnDigest.c_str(), (int)group);
+    Debug("Already started Phase2FB/WritebackFB for tx [%s[]. Ignoring Phase1"
+        " response from group %d.", BytesToHex(txnDigest, 128).c_str(), group);
     return;
   }
 
-  if (decision == proto::ABORT && fast) {
-    if (params.validateProofs) {
-      req->conflict = conflict;
-    }
-  }
-
-  if (params.validateProofs && params.signedMessages) {
-    if (decision == proto::ABORT && !fast) {
-      auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
-      UW_ASSERT(itr != sigs.end());
-      Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
-          (int)group);
-      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
-      req->slowAbortGroup = group;
-    } else if (decision == proto::COMMIT) {
-      auto itr = sigs.find(proto::ConcurrencyControl::COMMIT);
-      UW_ASSERT(itr != sigs.end());
-      Debug("Have %d COMMIT replies from group %d.", itr->second.sigs_size(), (int)group);
-      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
-    }
-  }
-  if (fast && decision == proto::ABORT) {
-    req->fast = true;
-  } else {
-    req->fast = req->fast && fast;
-  }
-
-  --req->outstandingPhase1s;
-  switch(decision) {
-    case proto::COMMIT:
-      break;
-    case proto::ABORT:
-      // abort!
-      req->decision = proto::ABORT;
-      req->outstandingPhase1s = 0;
-      break;
-    default:
-      break;
-  }
+  Phase1CallbackProcessing(req, group, decision, fast, conflict_flag, conflict, sigs);
 
   if (req->outstandingPhase1s == 0) {
     FBHandleAllPhase1Received(req);
@@ -744,13 +718,8 @@ void Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
    proto::CommitDecision decision, proto::P2Replies p2replies){
      // check if conflict transaction still active
     if(!StillActive(conflict_id, txnDigest)) return;
-    //Check if the current pending request has this txn as dependency.
-    proto::Transaction &Req_txn = pendingReqs[conflict_id]->txn;
-    if(!isDep(txnDigest, Req_txn)) return;
 
     PendingRequest* req = FB_instances[txnDigest];
-
-
     req->decision = decision;
     req->p2Replies = p2replies;
        //Issue P2FB.
@@ -760,9 +729,8 @@ void Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
 
 }
 
-void Client::Phase2FB(PendingRequest *req){ //this is called from the Phase1FB callbacks.
-      //TODO: wrap nomal function, but send P2FB message
-      proto::Transaction fb_txn = req->txn;
+void Client::Phase2FB(PendingRequest *req){
+      const proto::Transaction &fb_txn = req->txn;
 
       uint8_t groupIdx = req->txnDigest[0];
       groupIdx = groupIdx % fb_txn.involved_groups_size();
@@ -771,53 +739,26 @@ void Client::Phase2FB(PendingRequest *req){ //this is called from the Phase1FB c
       Debug("PHASE2FB[%lu:%s][%s] logging to group %ld", client_id, req->txnDigest.c_str(),
           BytesToHex(req->txnDigest, 16).c_str(), logGroup);
 
-
-//TODO?: EXTEND THIS TO ALSO CHECK FOR P2 REPLIES AS VALID  PROOFS!!!!
-//other case:
-// check if p2Replies is of size f+1
+      //CASE THAT CHECKS FOR P2 REPLIES AS VALID  PROOFS
+      // check if p2Replies is of size f+1
       if(req->p2Replies.p2replies().size() >= config->f +1){
         req->startedPhase2 = true;
         bclient[logGroup]->Phase2FB(req->id, req->txn, req->txnDigest, req->decision, req->p2Replies);
         return;
       }
+      else{ //OTHERWISE:
+        Phase2Processing(req);
 
-//next lines just minimize signature components.
-          if (params.validateProofs && params.signedMessages) {
-            if (req->decision == proto::ABORT) {
-              UW_ASSERT(req->slowAbortGroup >= 0);
-              UW_ASSERT(req->p1ReplySigsGrouped.grouped_sigs().find(req->slowAbortGroup) != req->p1ReplySigsGrouped.grouped_sigs().end());
-              while (req->p1ReplySigsGrouped.grouped_sigs().size() > 1) {
-                auto itr = req->p1ReplySigsGrouped.mutable_grouped_sigs()->begin();
-                if (itr->first == req->slowAbortGroup) {
-                  itr++;   //skips this group, i.e. deletes all besides this one.
-                }
-                req->p1ReplySigsGrouped.mutable_grouped_sigs()->erase(itr);
-              }
-            }
-
-            uint64_t quorumSize = req->decision == proto::COMMIT ?
-                SlowCommitQuorumSize(config) : SlowAbortQuorumSize(config);
-            for (auto &groupSigs : *req->p1ReplySigsGrouped.mutable_grouped_sigs()) {
-              while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > quorumSize) {
-                groupSigs.second.mutable_sigs()->RemoveLast();
-              }
-            }
-          }
-
-          req->startedPhase2 = true;
-          bclient[logGroup]->Phase2FB(req->id, req->txn, req->txnDigest, req->decision, req->p1ReplySigsGrouped);
+        bclient[logGroup]->Phase2FB(req->id, req->txn, req->txnDigest, req->decision,
+          req->p1ReplySigsGrouped);
+      }
 }
 
 
 void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group,
    proto::CommitDecision decision, const proto::Signatures &p2ReplySigs ){
-  //TODO: map to normal Phase2Callback
   // check if conflict transaction still active
   if(!StillActive(conflict_id, txnDigest)) return;
-
-  //check that this is actually a dependent
-  proto::Transaction &Req_txn = pendingReqs[conflict_id]->txn;
-  if(!isDep(txnDigest, Req_txn)) return;
 
   Debug("PHASE2FB[%lu:%s] callback", client_id, txnDigest.c_str());
 
@@ -838,32 +779,10 @@ void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64
 }
 
 void Client::WritebackFB(PendingRequest *req){
-  //TODO: wrap normal function
-  Debug("WRITEBACKFB[%lu:%s]", client_id, req->txnDigest.c_str());
+  Debug("WRITEBACKFB[%lu:%s] result: %s", client_id, req->txnDigest.c_str(), req->decision ? "COMMIT" : "ABORT");
 
   req->startedWriteback = true;
-
-
-  transaction_status_t result;
-  switch (req->decision) {
-    case proto::COMMIT: {
-      Debug("WRITEBACKFB[%lu][%s] COMMIT.", client_id,
-          BytesToHex(req->txnDigest, 16).c_str());
-      result = COMMITTED;
-      break;
-    }
-    case proto::ABORT: {
-      result = ABORTED_SYSTEM;
-      Debug("WRITEBACK[%lu][%s] ABORT.", client_id,
-          BytesToHex(req->txnDigest, 16).c_str());
-      break;
-    }
-    default: {
-      NOT_REACHABLE();
-    }
-  }
-
-  //TODO: extend with extra case that I added to normal operation.
+  WritebackProcessing(req);
 
   for (auto group : req->txn.involved_groups()) {
     bclient[group]->WritebackFB(req->txn, req->txnDigest,
@@ -876,21 +795,25 @@ void Client::WritebackFB(PendingRequest *req){
 
 }
 
-
-
 void Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group){
   //Just send InvokeFB request to the logging shard. but only if the tx has not already finished. and only if we have already sent a P2
   //Otherwise, Include the P2 here!.
+
   // check if conflict transaction still active
   if(!StillActive(conflict_id, txnDigest)) return;
 
-  proto::Transaction &Req_txn = pendingReqs[conflict_id]->txn;
-  if(!isDep(txnDigest, Req_txn)) return;
-
+  //TODO: add flags for P2 sent: If not sent yet, need to wait for that.
   PendingRequest* req = FB_instances[txnDigest];
-  if(req->startedWriteback){Debug("No p2 decision included - invalid"); return;}
+  if(req->startedWriteback){Debug("Already sent WB - unecessary InvokeFB"); return;}
+  if(req->p2Replies.p2replies().size() < config->f +1){ Debug("No p2 decision included - invalid InvokeFB"); return;}
   //we know this group is the FB group, only that group would have invoked this callback.
   bclient[group]->InvokeFB(conflict_id, txnDigest, req->txn, req->decision, req->p2Replies);
+
+
+  //TODO: add logic to include a P2 based of P1's.
+  // else if (req->outstandingPhase1s == 0) {
+  //     req->p1ReplySigsGrouped
+  // else return;
 }
 
 //void Phase2FB: passes callbacks

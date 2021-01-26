@@ -141,13 +141,20 @@ class Client : public ::Client {
       bool fast, bool conflict_flag, const proto::CommittedProof &conflict,
       const std::map<proto::ConcurrencyControl::Result,
       proto::Signatures> &sigs);
+  void Phase1CallbackProcessing(PendingRequest *req, int group,
+      proto::CommitDecision decision, bool fast, bool conflict_flag,
+      const proto::CommittedProof &conflict,
+      const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs);
   void Phase1TimeoutCallback(int group, uint64_t reqId, int status);
   void HandleAllPhase1Received(PendingRequest *req);
 
   void Phase2(PendingRequest *req);
+  void Phase2Processing(PendingRequest *req);
   void Phase2Callback(uint64_t reqId, int group,
       const proto::Signatures &p2ReplySigs);
   void Phase2TimeoutCallback(int group, uint64_t reqId, int status);
+  void WritebackProcessing(PendingRequest *req);
+  void Writeback(PendingRequest *req);
 
   // Fallback logic
   bool isDep(const std::string &txnDigest, proto::Transaction &Req_txn);
@@ -158,7 +165,7 @@ class Client : public ::Client {
   void Phase2FB(PendingRequest *req);
   void WritebackFB(PendingRequest *req);
   void Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
-     bool fast, const proto::CommittedProof &conflict, const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs);
+     bool fast, bool conflict_flag, const proto::CommittedProof &conflict, const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs);
   void FBHandleAllPhase1Received(PendingRequest *req);
   void Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
     proto::P2Replies p2replies);
@@ -169,9 +176,6 @@ class Client : public ::Client {
   //keep track of pending Fallback instances. Maps from txnDigest, req Id is oblivious to us.
   std::unordered_map<std::string, PendingRequest*> FB_instances;
 
-
-
-  void Writeback(PendingRequest *req);
 
   bool IsParticipant(int g) const;
 
