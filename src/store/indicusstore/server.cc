@@ -2662,7 +2662,8 @@ bool ValidateHMACedMessage(const proto::SignedMessage &signedMessage);
 void CreateHMACedMessage(const ::google::protobuf::Message &msg, proto::SignedMessage& signedMessage);
 // assume these are somehow secretly shared before hand
 
-
+//TODO: If one wants to use Macs for Clients, need to add it to keymanager (in advance or dynamically based off id)
+//can use client id to replica id (group * n + idx)
 void Server::CreateSessionKeys(){
   for (uint64_t i = 0; i < config.n; i++) {
     if (i > idx) {
@@ -2732,6 +2733,8 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
        if(params.mainThreadDispatching) p2DecisionsMutex.lock();
        if(params.mainThreadDispatching) writebackMessagesMutex.lock();
 
+//writebackMessages only contains Abort copies. (when can one delete these?)
+//(A blockchain stores all request too, whether commit/abort)
     if(writebackMessages.find(txnDigest) != writebackMessages.end()){
       writeback = writebackMessages[txnDigest];
 
@@ -2782,7 +2785,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 
        proto::CommittedProof conflict;
        //recover stored commit proof.
-       if (result != proto::ConcurrencyControl::WAIT) {
+       if (result != proto::ConcurrencyControl::WAIT) { //if the result is WAIT, then the p1 is not necessary..
          const proto::CommittedProof *conflict;
          //recover stored commit proof.
          if(result == proto::ConcurrencyControl::ABORT){
@@ -2795,7 +2798,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
             //if(params.mainThreadDispatching) p1ConflictsMutex.unlock();
          }
          SetP1(msg.req_id(), txnDigest, result, conflict);
-         SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 4);
+         //SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 4);
        }
        SetP2(msg.req_id(), txnDigest, decision);
        SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,   txnDigest, 2);
@@ -2842,6 +2845,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
     }
     //Else Do p1 normally. copied logic from HandlePhase1(remote, msg)
     else{
+      //TODO: ENTIRE CASE NEEDS TO BE ADJUSTED TO NEW HANDLEPHASE1
        //if(params.mainThreadDispatching) committedMutex.unlock();
        //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
        if(params.mainThreadDispatching) p2DecisionsMutex.unlock();

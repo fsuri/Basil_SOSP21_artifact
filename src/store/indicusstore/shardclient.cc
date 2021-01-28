@@ -277,6 +277,7 @@ void ShardClient::WritebackFB(const proto::Transaction &transaction,
       *writeback.mutable_p2_sigs() = p2Sigs;
     }
   }
+  //TODO:: add view.
   writeback.set_txn_digest(txnDigest);
 
   transport->SendMessageToGroup(this, group, writeback);
@@ -1113,7 +1114,8 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){ // update pe
   if (itr == this->pendingFallbacks.end()) {
     return; // this is a stale request
   }
-  //TODO: check type:
+
+  //CASE 1: Received a fully formed WB message. TODO: verify it.
   if(p1fbr.has_wb()){
     proto::Writeback wb = p1fbr.wb();
     itr->second->wbFBcb(wb);
@@ -1129,7 +1131,7 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){ // update pe
     proto::Phase2Reply p2r = p1fbr.p2r();
 
     ProcessP2FBR(p2r, txnDigest);//, reply.attached_view());
-    return;
+    //return; //XXX do not return, so to also eval the p1 case.
   }
   if(p1fbr.has_p1r()){
       //If p1r :: //TODO: call existing HandlePingMessage
@@ -1317,6 +1319,7 @@ void ShardClient::UpdateViewStructure(std::string txnDigest, const proto::Attach
   bool update = false;
   uint64_t id;
   uint64_t set_view;
+  //TODO:: check whether txn_digest matches
 
   if (params.validateProofs && params.signedMessages) {
         if(!ac.has_signed_current_view()) return;
@@ -1329,7 +1332,7 @@ void ShardClient::UpdateViewStructure(std::string txnDigest, const proto::Attach
           current_view =  itr->second->current_views[signed_msg.process_id()]->view;
           if(new_view.current_view() <= current_view) return;
         }
-        // Check if replica ID in group.
+        // Check if replica ID in group. //TODO:: only need to do all this for the logging group.
         if(!IsReplicaInGroup(signed_msg.process_id(), group, config)) return;
 
         if(!crypto::Verify(keyManager->GetPublicKey(signed_msg.process_id()),
@@ -1367,9 +1370,6 @@ void ShardClient::UpdateViewStructure(std::string txnDigest, const proto::Attach
       itr->second->view_levels.erase(current_view);
     }
 
-    if(itr->second->view_levels.find(set_view) == itr->second->view_levels.end()){  //if(itr->existing_levels.find(nv) == itr->existing_levels.end()){
-      itr->second->view_levels[set_view] = std::set<uint64_t>();
-    }
     itr->second->view_levels[set_view].insert(id);
     //itr->existing_levels.insert(new_view.view());
 
@@ -1517,7 +1517,7 @@ void ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest
         if(itr->second->max_decision_view < view){
               itr->second->max_decision_view = view;
               delete_old_views = true;
-        }
+        } //TODO: can just add the check for 3f+1 also, in which case we go to v + 1? Maybe not quite as trivial due to vote subsumption
       }
     }
 //OTHERWISE ADD TO ALT SET.
@@ -1557,6 +1557,7 @@ void ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest
 
     if(delete_old_views){
               //delete all entries for views < max_view -1. They are pretty much obsolete.
+              //reasoning: if received f+1 for max view, then 2f+1 correct are in view >= max view -1 --> cant receive Quorum anymore. (still possible to receive a few outstanding ones)
                 std::map<uint64_t, PendingPhase2*>::iterator it;
                 for (it=itr->second->pendingP2s.begin(); it != itr->second->pendingP2s.end(); it++){
                    if(it->first >= itr->second->max_decision_view -1){
@@ -1655,7 +1656,7 @@ void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::T
       invokeFB.Clear();
       invokeFB.set_req_id(conflict_id);
       invokeFB.set_txn_digest(txnDigest);
-      *invokeFB.mutable_p2fb() = phase2FB;
+      *invokeFB.mutable_p2fb() = phase2FB; //XXX assuming FIFO channels, including the p2 is not necessary since it will already have been sent.
       invokeFB.set_proposed_view(itr->second->max_view);
       *invokeFB.mutable_view_signed() = view_signed;
 

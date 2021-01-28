@@ -566,6 +566,8 @@ bool Client::isDep(const std::string &txnDigest, proto::Transaction &Req_txn){
   return false;
 }
 
+
+//TODO: Must call into Shard clients to clean up state as well!
 bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
   //check if FB instance is (still) active.
   auto itr = FB_instances.find(txnDigest);
