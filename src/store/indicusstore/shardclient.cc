@@ -1562,17 +1562,15 @@ void ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest
       }
     }
 
-    //XXX If I used this case, then Signatures suffice since decision views are the same
-    //XXX But it might prove impossible to arrive at this case.
-    //Otherwise, check if we are still doing p1 simultaneously
-    // if(pendingFB->p1){
-    //   if(pendingP2.matchingReplies == config->f +1 ){
-    //     pendingFB->p1 = false;
-    //     pendingFB->p1FBcbB(pendingP2.decision, pendingP2.p2ReplySigs);
-    //   }
-    // }
-
-
+                          //XXX If I used this case, then Signatures suffice since decision views are the same
+                          //XXX But it might prove impossible to arrive at this case.
+                          //Otherwise, check if we are still doing p1 simultaneously
+                          // if(pendingFB->p1){
+                          //   if(pendingP2.matchingReplies == config->f +1 ){
+                          //     pendingFB->p1 = false;
+                          //     pendingFB->p1FBcbB(pendingP2.decision, pendingP2.p2ReplySigs);
+                          //   }
+                          // }
 
   ////FALLBACK INVOCATION
   //max decision view represents f+1 replicas. Implies that this is the current view.
@@ -1605,28 +1603,27 @@ void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::T
   ComputeMaxLevel(txnDigest);
   auto itr = this->pendingFallbacks.find(txnDigest);
   if(itr == this->pendingFallbacks.end()) return;
+  PendingFB *pendingFB = itr->second;
 
-  if(itr->second->max_view <= itr->second->last_view){
-    itr->second->call_invokeFB = true;
-    itr->second->view_invoker = std::bind(&ShardClient::InvokeFB, this, conflict_id, txnDigest, txn, decision, p2Replies);
+  if(pendingFB->max_view <= itr->second->last_view){
+    pendingFB->call_invokeFB = true;
+    pendingFB->view_invoker = std::move(std::bind(&ShardClient::InvokeFB, this, conflict_id, txnDigest, txn, decision, std::ref(p2Replies)));
   }
   else{
-    itr->second->call_invokeFB = false;
-    itr->second->last_view = itr->second->max_view;
+    pendingFB->call_invokeFB = false;
+    pendingFB->last_view = itr->second->max_view;
 
 
       proto::SignedMessages view_signed;
-      std::map<uint64_t, std::set<uint64_t>>::reverse_iterator rit;
       uint64_t count;
-
-      if(itr->second->catchup){
+      if(pendingFB->catchup){
         count = config->f+1;
       }
       else{
         count = 3*config->f +1;
       }
+      std::map<uint64_t, std::set<uint64_t>>::reverse_iterator rit;
       for (rit=itr->second->view_levels.rbegin(); rit != itr->second->view_levels.rend(); ++rit){
-
         for(auto id: rit->second){
           SignedView &sv = itr->second->current_views[id];
           proto::SignedMessage* sm = view_signed.add_sig_msgs();
@@ -1647,9 +1644,9 @@ void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::T
       invokeFB.Clear();
       invokeFB.set_req_id(conflict_id);
       invokeFB.set_txn_digest(txnDigest);
-      *invokeFB.mutable_p2fb() = phase2FB; //XXX assuming FIFO channels, including the p2 is not necessary since it will already have been sent.
+      *invokeFB.mutable_p2fb() = std::move(phase2FB); //XXX assuming FIFO channels, including the p2 is not necessary since it will already have been sent.
       invokeFB.set_proposed_view(itr->second->max_view);
-      *invokeFB.mutable_view_signed() = view_signed;
+      *invokeFB.mutable_view_signed() = std::move(view_signed);
 
       transport->SendMessageToGroup(this, group, invokeFB);
       Debug("[group %i] Sent InvokeFB[%lu]", group, client_id);
