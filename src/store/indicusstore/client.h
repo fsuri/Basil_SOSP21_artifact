@@ -159,6 +159,7 @@ class Client : public ::Client {
   // Fallback logic
   bool isDep(const std::string &txnDigest, proto::Transaction &Req_txn);
   bool StillActive(uint64_t conflict_id, std::string &txnDigest);
+  void CleanFB(PendingRequest *pendingFB, std::string &txnDigest);
   void RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1);
   void RelayP1TimeoutCallback(uint64_t reqId);
   void Phase1FB(proto::Phase1 &p1, uint64_t conflict_id, const std::string &txnDigest);
@@ -168,7 +169,7 @@ class Client : public ::Client {
      bool fast, bool conflict_flag, const proto::CommittedProof &conflict, const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs);
   void FBHandleAllPhase1Received(PendingRequest *req);
   void Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
-    proto::P2Replies p2replies);
+    const proto::P2Replies &p2replies);
   void Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
     const proto::Signatures &p2ReplySig);
   void WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Transaction &fbtxn, proto::Writeback &wb);

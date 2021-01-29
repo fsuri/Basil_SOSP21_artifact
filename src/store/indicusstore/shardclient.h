@@ -132,7 +132,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   virtual bool SendPing(size_t replica, const PingMessage &ping);
 
 //public fallback functions:
-  virtual void Phase1FB(proto::Phase1 &p1, const std::string &txnDigest, phase1FB_callbackA p1FBcbA,
+  virtual void CleanFB(std::string &txnDigest);
+  virtual void Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::string &txnDigest, phase1FB_callbackA p1FBcbA,
     phase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb);
   virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,
     const proto::GroupedSignatures &groupedSigs);
@@ -227,6 +228,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   };
 
   struct SignedView {
+    SignedView() {}
     SignedView(uint64_t v): view(v) {}
     SignedView(uint64_t v, proto::SignedMessage s_v): view(v), signed_view(s_v) {}
     ~SignedView(){}
@@ -234,20 +236,42 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     uint64_t view;
     proto::SignedMessage signed_view;
   };
+
+  struct PendingP2PerView{
+    PendingP2PerView() {}
+    ~PendingP2PerView() {}
+    PendingPhase2 commit;
+    PendingPhase2 abort;
+  };
+
   //Fallback request
   struct PendingFB {
     PendingFB() : max_decision_view(0UL), p1(true), last_view(0), max_view(0) {}
-    ~PendingFB(){}
+    ~PendingFB(){
+      delete pendingP1;
+      for(auto itr : pendingP2s){
+        delete itr.second;
+      }
+      for(auto itr : ALTpendingP2s){
+        delete itr.second;
+      }
+      for(auto itr : p2Replies){
+        delete itr.second;
+      }
+    }
 
-    PendingPhase1 *pendingP1;  //TODO:: the callback needs to differ: It needs to propose a P2Rec message.
+    //TODO: pendingP1, pendingP2, Signed View need not be a pointer?
+    PendingPhase1 *pendingP1;
     uint64_t max_decision_view;
+    std::map<uint64_t, std::map<proto::CommitDecision, PendingPhase2*>> pendingTest;
+    std::map<uint64_t, PendingP2PerView> pendingViewP2s;
     std::map<uint64_t, PendingPhase2* > pendingP2s;  //for each view: hold commit/abort votes.
     std::map<uint64_t, PendingPhase2* > ALTpendingP2s;
     std::map<proto::CommitDecision, proto::P2Replies*> p2Replies; //These must be from the same group, but can differ in view.
     std::unordered_set<uint64_t> process_ids;
-    bool p1; //TODO DISTINGUISH IN WHICH PHASE WE ARE:
+    bool p1; //DISTINGUISHES IN WHICH PHASE WE ARE WHEN HANDLING P2s
 
-    std::map<uint64_t, SignedView*> current_views;  //maps from replicaID to current view
+    std::map<uint64_t, SignedView> current_views;
     std::map<uint64_t, std::set<uint64_t>> view_levels; //maps from view to ids  in that view
     uint64_t last_view;
     uint64_t max_view;  //we will propose max_view, but only if its bigger than last_view; otherwise we need better votes.
@@ -332,6 +356,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   //private fallback functions
   void HandlePhase1Relay(proto::RelayP1 &relayP1);
   void HandlePhase1FBReply(proto::Phase1FBReply &p1fbr);
+  void ProcessP1FBR(proto::Phase1Reply &reply, PendingFB *pendingFB, std::string &txnDigest);
   void Phase1FBDecision(PendingFB *pendingFB);
   void ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest);
   void HandlePhase2FBReply(proto::Phase2FBReply &p2fbr);

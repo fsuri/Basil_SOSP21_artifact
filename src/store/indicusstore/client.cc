@@ -578,11 +578,18 @@ bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
   //TODO: Can be altruistic and finish FB instance even if not blocking.
   if(pendingReqs.find(conflict_id) == pendingReqs.end() || pendingReqs[conflict_id]->outstandingPhase1s == 0){
     Debug("Request id %lu already committed, aborted, or in the process of doing so.", conflict_id);
-    delete itr->second;
-    FB_instances.erase(txnDigest);
+    CleanFB(itr->second, txnDigest);
     return false;
   }
   return true;
+}
+
+void Client::CleanFB(PendingRequest *pendingFB, std::string &txnDigest){
+  for(auto group : pendingFB->txn.involved_groups()){
+    bclient[group]->CleanFB(txnDigest);
+  }
+  delete pendingFB;
+  FB_instances.erase(txnDigest);
 }
 
 void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1){
@@ -645,7 +652,7 @@ void Client::Phase1FB(proto::Phase1 &p1, uint64_t conflict_id, const std::string
       auto wb = std::bind(&Client::WritebackFBcallback, this, conflict_id, txnDigest, p1.txn(), std::placeholders::_1);
       auto invoke = std::bind(&Client::InvokeFBcallback, this, conflict_id, txnDigest, group); //technically only needed at logging shard
 
-      bclient[group]->Phase1FB(p1, txnDigest, p1fbA, p1fbB, p2fb, wb, invoke);
+      bclient[group]->Phase1FB(p1.req_id(), pendingFB->txn, txnDigest, p1fbA, p1fbB, p2fb, wb, invoke);
 
       pendingFB->outstandingPhase1s++;
     }
@@ -717,7 +724,7 @@ void Client::FBHandleAllPhase1Received(PendingRequest *req) {
 
 
 void Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group,
-   proto::CommitDecision decision, proto::P2Replies p2replies){
+   proto::CommitDecision decision, const proto::P2Replies &p2replies){
      // check if conflict transaction still active
     if(!StillActive(conflict_id, txnDigest)) return;
 
