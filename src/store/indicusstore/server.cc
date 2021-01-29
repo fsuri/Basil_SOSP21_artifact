@@ -3175,7 +3175,7 @@ if(p2fb.has_p2_replies()){
   }
 }
 //TODO: Case B
-else if(p2fb.has_grouped_sigs()){
+else if(p2fb.has_p1_sigs()){
     proto::Transaction txn;
      ////if(params.mainThreadDispatching) ongoingMutex.lock();
     ongoingMap::const_accessor b;
@@ -3198,7 +3198,7 @@ else if(p2fb.has_grouped_sigs()){
     }
      ////if(params.mainThreadDispatching) ongoingMutex.unlock();
 
-    proto::GroupedSignatures grpSigs = p2fb.grouped_sigs();
+    proto::GroupedSignatures grpSigs = p2fb.p1_sigs();
     int64_t myProcessId;
     proto::ConcurrencyControl::Result myResult;
     LookupP1Decision(txnDigest, myProcessId, myResult);

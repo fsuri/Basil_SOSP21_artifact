@@ -1332,7 +1332,7 @@ void ShardClient::ProcessP1FBR(proto::Phase1Reply &reply, PendingFB *pendingFB, 
     phase2FB.set_decision(decision);
     *phase2FB.mutable_txn_digest() = txnDigest;
     if (params.validateProofs && params.signedMessages) {
-      *phase2FB.mutable_grouped_sigs() = groupedSigs;
+      *phase2FB.mutable_p1_sigs() = groupedSigs;
     }
     transport->SendMessageToGroup(this, group, phase2FB);
 
@@ -1384,9 +1384,9 @@ void ShardClient::UpdateViewStructure(std::string txnDigest, const proto::Attach
         // Check if replica ID in group. //TODO:: only need to do all this for the logging group.
         if(!IsReplicaInGroup(signed_msg.process_id(), group, config)) return;
 
-        if(!crypto::Verify(keyManager->GetPublicKey(signed_msg.process_id()),
-              &signed_msg.data()[0], signed_msg.data().length(),
-              &signed_msg.signature()[0])) return;
+        if(!verifier->Verify(keyManager->GetPublicKey(signed_msg.process_id()),
+              signed_msg.data(), signed_msg.signature())) return;
+
         set_view = new_view.current_view();
         update = true;
         itr->second->current_views.emplace(new_view.replica_id(), SignedView(set_view, signed_msg));
@@ -1473,6 +1473,7 @@ void ShardClient::HandlePhase2FBReply(proto::Phase2FBReply &p2fbr){
 
 void ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest){ //, proto::AttachedView &view){
     auto itr = this->pendingFallbacks.find(txnDigest);
+    PendingFB *pendingFB = itr->second;
     const proto::Phase2Decision *p2Decision = nullptr;
     if (params.validateProofs && params.signedMessages) {
       if (!reply.has_signed_p2_decision()) {
@@ -1509,130 +1510,95 @@ void ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest
     Debug("[group %i] PHASE2FB reply with decision %d and view %lu", group,
         decision, view);
 
-//that message is from likely obsolete views.
-    if(itr->second->max_decision_view > view +1 ){
+    //that message is from likely obsolete views.
+    if(pendingFB->max_decision_view > view +1 ){
             return;
     }
 
-//TODO: refactor pendingP2
-  pendingTest[view][decision].p2ReplySigs.add_sigs();
-
     bool delete_old_views = false;
 
-//create new entry for this view.
-    if(itr->second->pendingP2s.find(view) == itr->second->pendingP2s.end()){
-      PendingPhase2* pendingP2 = new PendingPhase2(reqID, decision);
-      itr->second->pendingP2s[view] = pendingP2;
-    }
-
-    //TODO: refactor the whole notion of Pending and Alt pending into a pair, thats part of the same map.
+    //update respective view/decision pendingP2 item.
     //TODO: make sure that each replica is only counted once. (dont want byz providing full quorum)
-
-    // check matching decision for matching view
-
-    if (decision == itr->second->pendingP2s[view]->decision) {
-      if (params.validateProofs && params.signedMessages) {
-        proto::Signature *sig = itr->second->pendingP2s[view]->p2ReplySigs.add_sigs();
-        sig->set_process_id(reply.signed_p2_decision().process_id());
-        *sig->mutable_signature()= reply.signed_p2_decision().signature();
-      }
-      itr->second->pendingP2s[view]->matchingReplies++;
-      //check if we can update max_decision view and delete old ones. should only do this once f+1 received. Otherwise we let a byz delete our state.
-      if(itr->second->pendingP2s[view]->matchingReplies > config->f){
-        if(itr->second->max_decision_view < view){
-              itr->second->max_decision_view = view;
-              delete_old_views = true;
-        } //TODO: can just add the check for 3f+1 also, in which case we go to v + 1? Maybe not quite as trivial due to vote subsumption
-      }
+    auto &pendingP2 = pendingFB->pendingP2s[view][decision];
+    pendingP2.reqId = reqID;
+    pendingP2.decision = decision;
+    if (params.validateProofs && params.signedMessages) {
+      proto::Signature *sig = pendingP2.p2ReplySigs.add_sigs();
+      sig->set_process_id(reply.signed_p2_decision().process_id());
+      *sig->mutable_signature()= reply.signed_p2_decision().signature();
     }
-//OTHERWISE ADD TO ALT SET.
-    else{
-      if(itr->second->ALTpendingP2s.find(view) == itr->second->ALTpendingP2s.end()){
-        PendingPhase2* pendingP2 = new PendingPhase2(reqID, decision);
-        itr->second->ALTpendingP2s[view] = pendingP2;
-      }
-      if (params.validateProofs && params.signedMessages) {
-        proto::Signature *sig = itr->second->ALTpendingP2s[view]->p2ReplySigs.add_sigs();
-        sig->set_process_id(reply.signed_p2_decision().process_id());
-        *sig->mutable_signature()= reply.signed_p2_decision().signature();
-      }
-      itr->second->ALTpendingP2s[view]->matchingReplies++;
-      if(itr->second->ALTpendingP2s[view]->matchingReplies > config->f){
-        if(itr->second->max_decision_view < view){
-              itr->second->max_decision_view = view;
-              delete_old_views = true;
-        }
-      }
+    pendingP2.matchingReplies++;
+
+    if(pendingP2.matchingReplies > config->f){
+      if(pendingFB->max_decision_view < view){
+            pendingFB->max_decision_view = view;
+            delete_old_views = true;
+      } //TODO: can just add the check for 3f+1 also, in which case we go to v + 1? Maybe not quite as trivial due to vote subsumption
     }
-    //Can return directly to writeback
-    if (itr->second->pendingP2s[view]->matchingReplies >= QuorumSize(config)) {
-      PendingFB *pendingFB = itr->second;
-      pendingFB->p2FBcb(pendingFB->pendingP2s[view]->decision , pendingFB->pendingP2s[view]->p2ReplySigs);
+
+    //can return directly to writeback (p2 complete)
+    if (pendingP2.matchingReplies == QuorumSize(config)) { //make it >=? potentially duplicate cb then..
+      //TODO:Edit this callback so that it includes view too. Then modify both client and server code to check proofs for matching view as well.
+      pendingFB->p2FBcb(pendingP2.decision, pendingP2.p2ReplySigs);
+      //XXX could use CleanFB instead (but currently has a redundant search.)
       this->pendingFallbacks.erase(itr);
       delete pendingFB;
-    }
-    else if (itr->second->ALTpendingP2s[view]->matchingReplies >= QuorumSize(config)) {
-      PendingFB *pendingFB = itr->second;
-        pendingFB->p2FBcb(pendingFB->ALTpendingP2s[view]->decision , pendingFB->ALTpendingP2s[view]->p2ReplySigs);
-        //TODO:Edit this callback so that it includes view too. Then modify both client and server code to check proofs for matching view as well.
-      this->pendingFallbacks.erase(itr);
-      delete pendingFB;
+      return;
     }
 
-
-    if(delete_old_views){
-              //delete all entries for views < max_view -1. They are pretty much obsolete.
-              //reasoning: if received f+1 for max view, then 2f+1 correct are in view >= max view -1 --> cant receive Quorum anymore. (still possible to receive a few outstanding ones)
-                std::map<uint64_t, PendingPhase2*>::iterator it;
-                for (it=itr->second->pendingP2s.begin(); it != itr->second->pendingP2s.end(); it++){
-                   if(it->first >= itr->second->max_decision_view -1){
-                     break;
-                   }
-                   else{
-                        PendingPhase2 *deleteP2 = itr->second->pendingP2s[it->first];
-                        itr->second->pendingP2s.erase(it->first);
-                        delete deleteP2;
-                   }
-                }
-                for (it=itr->second->ALTpendingP2s.begin(); it != itr->second->ALTpendingP2s.end(); it++){
-                   if(it->first >= itr->second->max_decision_view -1){
-                     break;
-                   }
-                   else{
-                     PendingPhase2 *deleteP2 = itr->second->ALTpendingP2s[it->first];
-                     itr->second->ALTpendingP2s.erase(it->first);
-                     delete deleteP2;
-                   }
-                }
-      }
-
-    //Otherwise, check if we are still doing p1 simultaneously
-
-    if(itr->second->p1){
+    //XXX Fast case for completing p2 forwarding
+    //XXX have to story full reply here because the decision views might differ.
+   if(pendingFB->p1){
       uint64_t id = reply.signed_p2_decision().process_id();
-      if(itr->second->process_ids.find(id) == itr->second->process_ids.end()){
-        itr->second->process_ids.insert(id);
-        proto::Phase2Reply *new_item  = itr->second->p2Replies[decision]->add_p2replies();
+      if(pendingFB->process_ids.find(id) == pendingFB->process_ids.end()){
+        pendingFB->process_ids.insert(id);
+        proto::Phase2Reply *new_item  = pendingFB->p2Replies[decision].add_p2replies();
         *new_item = reply;
       }
-      proto::P2Replies* p2Replies = itr->second->p2Replies[decision];
-      if(p2Replies->p2replies().size() == config->f +1 ){
-        itr->second->p1 = false;
-        PendingFB *pendingFB = itr->second;
-        pendingFB->p1FBcbB(decision, *pendingFB->p2Replies[decision]);
+      proto::P2Replies &p2Replies = pendingFB->p2Replies[decision];
+      if(p2Replies.p2replies().size() == config->f +1 ){
+        pendingFB->p1 = false;
+        pendingFB->p1FBcbB(decision, p2Replies);
       }
     }
 
+    //XXX If I used this case, then Signatures suffice since decision views are the same
+    //XXX But it might prove impossible to arrive at this case.
+    //Otherwise, check if we are still doing p1 simultaneously
+    // if(pendingFB->p1){
+    //   if(pendingP2.matchingReplies == config->f +1 ){
+    //     pendingFB->p1 = false;
+    //     pendingFB->p1FBcbB(pendingP2.decision, pendingP2.p2ReplySigs);
+    //   }
+    // }
 
 
-//max decision view represents f+1 replicas. Implies that this is the current view.
-//CALL Fallback if detected divergence for newest accepted view. (calling it for older ones is useless)
-    if(itr->second->max_decision_view == view
-      && itr->second->pendingP2s[view]->matchingReplies >= config->f +1
-      && itr->second->ALTpendingP2s[view]->matchingReplies >= config->f +1){
-        itr->second->invFBcb();
+
+  ////FALLBACK INVOCATION
+  //max decision view represents f+1 replicas. Implies that this is the current view.
+  //CALL Fallback if detected divergence for newest accepted view. (calling it for older ones is useless)
+  if(pendingFB->max_decision_view == view
+      && pendingFB->pendingP2s[view][proto::COMMIT].matchingReplies >= config->f +1
+      && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies >= config->f +1){
+        pendingFB->invFBcb();
+  }
+      //TODO: Also need to call it after some timeout. I.e. if 4f+1 received are all honest but diverge.
+
+  ////////////Garbage collection
+  if(delete_old_views){
+                  //delete all entries for views < max_view -1. They are pretty much obsolete.
+                  //reasoning: if received f+1 for max view, then 2f+1 correct are in view >= max view -1 --> cant receive Quorum anymore. (still possible to receive a few outstanding ones)
+    std::map<uint64_t, std::map<proto::CommitDecision, PendingPhase2>>::iterator it;
+    for (it=pendingFB->pendingP2s.begin(); it != pendingFB->pendingP2s.end(); it++){
+      if(it->first >= pendingFB->max_decision_view -1){
+        break;
       }
-    //TODO: Also need to call it after some timeout. I.e. if 4f+1 received are all honest but diverge.
+      else{
+        pendingFB->pendingP2s.erase(it->first);
+      }
+    }
+  }
+  ///////////END
 }
 
 void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::Transaction &txn, proto::CommitDecision decision, proto::P2Replies &p2Replies){

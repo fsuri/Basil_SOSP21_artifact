@@ -258,7 +258,8 @@ message Phase2FB {
   required CommitDecision decision = 2;
   optional Transaction txn = 3;
   optional bytes txn_digest = 4;
-  optional GroupedSignatures grouped_sigs = 5; //this is for p1 proof
+  optional GroupedSignatures p1_sigs = 5; //this is for p1 proof
+  //optional GroupedSignatures p2_sigs = 6; //this is for p2 proof
   optional P2Replies p2_replies = 6; // this is for p2 proof
   //old: GroupedP1FBreplies grp_p1_fb = 5;
 }

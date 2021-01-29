@@ -723,6 +723,7 @@ void Client::FBHandleAllPhase1Received(PendingRequest *req) {
 }
 
 
+//XXX cannot just send decision, but need to send whole p2 replies because the decision views might differ
 void Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group,
    proto::CommitDecision decision, const proto::P2Replies &p2replies){
      // check if conflict transaction still active
@@ -730,7 +731,7 @@ void Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
 
     PendingRequest* req = FB_instances[txnDigest];
     req->decision = decision;
-    req->p2Replies = p2replies;
+    req->p2Replies = std::move(p2replies);
        //Issue P2FB.
     Phase2FB(req);
 

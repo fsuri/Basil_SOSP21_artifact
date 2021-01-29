@@ -207,6 +207,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
 
 
   struct PendingPhase2 {
+    PendingPhase2() : requestTimeout(nullptr), matchingReplies(0UL) {}
     PendingPhase2(uint64_t reqId, proto::CommitDecision decision) : reqId(reqId),
         decision(decision), requestTimeout(nullptr), matchingReplies(0UL) { }
     ~PendingPhase2() {
@@ -220,7 +221,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     uint64_t decision_view;  //can omit this for all requests that came from view = 0 because signature matches.
     //TODO: Need to add decision view checks eveywhere.
     Timeout *requestTimeout;
-
+    std::unordered_set<uint64_t> process_ids; //TODO: add check to avoid duplicates.
     proto::Signatures p2ReplySigs;
     uint64_t matchingReplies;
     phase2_callback pcb;
@@ -237,37 +238,19 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     proto::SignedMessage signed_view;
   };
 
-  struct PendingP2PerView{
-    PendingP2PerView() {}
-    ~PendingP2PerView() {}
-    PendingPhase2 commit;
-    PendingPhase2 abort;
-  };
-
   //Fallback request
   struct PendingFB {
     PendingFB() : max_decision_view(0UL), p1(true), last_view(0), max_view(0) {}
     ~PendingFB(){
       delete pendingP1;
-      for(auto itr : pendingP2s){
-        delete itr.second;
-      }
-      for(auto itr : ALTpendingP2s){
-        delete itr.second;
-      }
-      for(auto itr : p2Replies){
-        delete itr.second;
-      }
     }
 
     //TODO: pendingP1, pendingP2, Signed View need not be a pointer?
     PendingPhase1 *pendingP1;
     uint64_t max_decision_view;
-    std::map<uint64_t, std::map<proto::CommitDecision, PendingPhase2*>> pendingTest;
-    std::map<uint64_t, PendingP2PerView> pendingViewP2s;
-    std::map<uint64_t, PendingPhase2* > pendingP2s;  //for each view: hold commit/abort votes.
-    std::map<uint64_t, PendingPhase2* > ALTpendingP2s;
-    std::map<proto::CommitDecision, proto::P2Replies*> p2Replies; //These must be from the same group, but can differ in view.
+    std::map<uint64_t, std::map<proto::CommitDecision, PendingPhase2>> pendingP2s;
+    proto::Signatures p2ReplySigs;
+    std::map<proto::CommitDecision, proto::P2Replies> p2Replies; //These must be from the same group, but can differ in view.
     std::unordered_set<uint64_t> process_ids;
     bool p1; //DISTINGUISHES IN WHICH PHASE WE ARE WHEN HANDLING P2s
 
