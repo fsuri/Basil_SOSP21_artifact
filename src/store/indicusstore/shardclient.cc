@@ -240,7 +240,7 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
     else if (fast && conflict_flag && decision == proto::ABORT) {
       *writeback.mutable_conflict() = conflict;
       if(conflict.has_p2_view()){
-        writeback.set_p2_view(conflict.p2_view());
+        writeback.set_p2_view(conflict.p2_view()); //XXX not really necessary, we never check it
       }
       else{
         writeback.set_p2_view(0); //implies that this was a p1 proof for the conflict, attaching a view anyway..
@@ -579,7 +579,6 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   const proto::Write *write;
   if (params.validateProofs && params.signedMessages) {
     if (reply.has_signed_write()) {
-      //TODO: RECOMMENT, just testing
       if (!verifier->Verify(keyManager->GetPublicKey(reply.signed_write().process_id()),
               reply.signed_write().data(), reply.signed_write().signature())) {
         Debug("[group %i] Failed to validate signature for write.", group);
@@ -622,7 +621,6 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
 
       std::string committedTxnDigest = TransactionDigest(
           reply.proof().txn(), params.hashDigest);
-      //TODO: RECOMMENT, just testing
       if (!ValidateTransactionWrite(reply.proof(), &committedTxnDigest,
             req->key, write->committed_value(), write->committed_timestamp(),
             config, params.signedMessages, keyManager, verifier)) {
@@ -1485,13 +1483,9 @@ void ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest
             group, reply.signed_p2_decision().process_id());
         return;
       }
-      if (!crypto::Verify(keyManager->GetPublicKey(
-              reply.signed_p2_decision().process_id()),
-            &reply.signed_p2_decision().data()[0],
-            reply.signed_p2_decision().data().length(),
-            &reply.signed_p2_decision().signature()[0])) {
-        return;
-      }
+
+      if(!verifier->Verify(keyManager->GetPublicKey(reply.signed_p2_decision().process_id()),
+            reply.signed_p2_decision().data(), reply.signed_p2_decision().signature())) return;
 
       if (!validatedP2Decision.ParseFromString(reply.signed_p2_decision().data())) {
         return;
@@ -1576,9 +1570,9 @@ void ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest
   //max decision view represents f+1 replicas. Implies that this is the current view.
   //CALL Fallback if detected divergence for newest accepted view. (calling it for older ones is useless)
   if(pendingFB->max_decision_view == view
-      && pendingFB->pendingP2s[view][proto::COMMIT].matchingReplies >= config->f +1
-      && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies >= config->f +1){
-        pendingFB->invFBcb();
+    && pendingFB->pendingP2s[view][proto::COMMIT].matchingReplies >= config->f +1
+    && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies >= config->f +1){
+      pendingFB->invFBcb();
   }
       //TODO: Also need to call it after some timeout. I.e. if 4f+1 received are all honest but diverge.
 

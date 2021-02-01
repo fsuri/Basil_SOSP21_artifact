@@ -558,6 +558,13 @@ void Server::HandlePhase1(const TransportAddress &remote,
   proto::ConcurrencyControl::Result result;
   const proto::CommittedProof *committedProof;
 
+  //KEEP track of interested client
+  interestedClientsMap::accessor i;
+  bool interestedClientsItr = interestedClients.insert(i, txnDigest);
+  i->second.insert(remote.clone());
+  i.release();
+  //interestedClients[txnDigest].insert(remote.clone());
+
   // no-replays property, i.e. recover existing decision/result from storage
   //Ignore duplicate requests that are already committed, aborted, or ongoing
   ongoingMap::accessor b;
@@ -576,13 +583,6 @@ void Server::HandlePhase1(const TransportAddress &remote,
   if(p1DecItr){
     result = c->second;
     c.release();
-
-    //KEEP track of interested client
-    interestedClientsMap::accessor i;
-    bool interestedClientsItr = interestedClients.insert(i, txnDigest);
-    i->second.insert(remote.clone());
-    i.release();
-    //interestedClients[txnDigest].insert(remote.clone());
 
     if (result == proto::ConcurrencyControl::ABORT) {
       p1ConflictsMap::const_accessor d;
@@ -610,16 +610,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
         }
       }
     }
-    //KEEP track of interested client
-
      if(params.mainThreadDispatching) current_viewsMutex.lock();
-
     current_views[txnDigest] = 0;
-      interestedClientsMap::accessor i;
-      bool interestedClientsItr = interestedClients.insert(i, txnDigest);
-      i->second.insert(remote.clone());
-      i.release();
-      //interestedClients[txnDigest].insert(remote.clone());
      if(params.mainThreadDispatching) current_viewsMutex.unlock();
 
     //proto::Transaction *txn = msg.release_txn();
@@ -955,7 +947,9 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
         Commit(*txnDigest, txn, p1Sigs ? msg->release_p1_sigs() : msg->release_p2_sigs(), p1Sigs, view);
       } else {
         Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
-        writebackMessages[*txnDigest] = *msg;
+        msg->set_allocated_txn(txn);
+        writebackMessages[*txnDigest] = *msg;  //Only necessary for fallback... (could avoid storing these, if one just replied with a p2 vote instea - but that is not as responsive)
+
         ///TODO: msg might no longer hold txn; could have been released in HanldeWriteback
         Abort(*txnDigest);
       }
@@ -2697,10 +2691,40 @@ signedMessage.set_signature(hmacs.SerializeAsString());
 
 
 
-////////////////////// XXX Fallback realm beings here... enter at own risk
+////////////////////// XXX Fallback realm beings here...
+
+//RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
+//params: reqID: client tx identifier for blocked tx; txnDigest = tx that is stalling
+void Server::RelayP1(const TransportAddress &remote, std::string txnDigest, uint64_t conflict_id){
+
+  Debug("RelayP1[%s] timed out. Sending now!", BytesToHex(txnDigest, 256).c_str());
+  proto::Transaction *tx;
+
+  ongoingMap::const_accessor b;
+  bool ongoingItr = ongoing.find(b, txnDigest);
+  if(!ongoingItr) return;  //If txnDigest no longer ongoing, then no FB necessary as it has completed already
+
+  tx = b->second;
+  b.release();
+  proto::Phase1 p1;
+  p1.set_req_id(0); //doesnt matter, its not used for fallback requests really.
+  *p1.mutable_txn() = *tx;
+  proto::RelayP1 relayP1;
+  relayP1.set_conflict_id(conflict_id);
+  *relayP1.mutable_p1() = p1;
+
+  Debug("Sending RelayP1[%s].", BytesToHex(txnDigest, 256).c_str());
+
+  transport->SendMessage(this, remote, relayP1);
+}
+
 
 
 //TODO: all requestID entries can be deleted..
+//TODO: CAUTION: USING GLOBABL MESSAGE OBJECT CURRENTLY (must change)
+//TODO:: CURRENTLY IF CASES ARE NOT ATOMIC (only matters if one intends to parallelize):
+//For example, 1) case for committed could fail, but all consecutive fail too because it was committed inbetween.
+//Could just put abort cases last; but makes for redundant work if it should occur inbetween.
 void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg) {
 
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
@@ -2708,148 +2732,120 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
 
-//check if already committed. reply with whole proof so client can forward that.     committed aborted
-    //if(committed.end() != committed.find(txnDigest) )) {
-    //  proto::CommittedProof* proof = committed[txnDigest];
-    //}
-    //else if(aborted.end() != aborted.find(txnDigest) ){
-    //}
+  //KEEP track of interested client
+  interestedClientsMap::accessor i;
+  bool interestedClientsItr = interestedClients.insert(i, txnDigest);
+  i->second.insert(remote.clone());
+  i.release();
+  //interestedClients[txnDigest].insert(remote.clone());
 
-    //KEEP track of interested client
-    interestedClientsMap::accessor i;
-    bool interestedClientsItr = interestedClients.insert(i, txnDigest);
-    i->second.insert(remote.clone());
-    i.release();
-    //interestedClients[txnDigest].insert(remote.clone());
-
-
-//currently for simplicity just forward writeback message that we received and stored.
-    //ABORT CASE
-       //if(params.mainThreadDispatching) committedMutex.lock();
-       //if(params.mainThreadDispatching) p1DecisionsMutex.lock();
-
-       p1DecisionsMap::const_accessor c;
-       auto p1DecItr = p1Decisions.find(c, txnDigest);
-       if(params.mainThreadDispatching) p2DecisionsMutex.lock();
-       if(params.mainThreadDispatching) writebackMessagesMutex.lock();
-
-//writebackMessages only contains Abort copies. (when can one delete these?)
-//(A blockchain stores all request too, whether commit/abort)
-    if(writebackMessages.find(txnDigest) != writebackMessages.end()){
-      writeback = writebackMessages[txnDigest];
-
-         //if(params.mainThreadDispatching) committedMutex.unlock();
-         //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
-         if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-         if(params.mainThreadDispatching) writebackMessagesMutex.unlock();
-
-      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
-      return;
-    }
-    //COMMIT CASE
-    else if(committed.find(txnDigest) != committed.end()){
-      writeback.Clear();
+  //check if already committed. reply with whole proof so client can forward that.
+  //1) COMMIT CASE
+  if(committed.find(txnDigest) != committed.end()){
+      writeback.Clear();                               //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
       writeback.set_decision(proto::COMMIT);
       writeback.set_txn_digest(txnDigest);
+      proto::CommittedProof* proof = committed[txnDigest];
 
-      if(committed[txnDigest]->has_p1_sigs()){
-        *writeback.mutable_p1_sigs() = committed[txnDigest]->p1_sigs();
+      if(proof->has_p1_sigs()){
+        *writeback.mutable_p1_sigs() = proof->p1_sigs();
       }
-      else if(committed[txnDigest]->has_p2_sigs()){
-        *writeback.mutable_p2_sigs() = committed[txnDigest]->p2_sigs();
+      else if(proof->has_p2_sigs()){
+        *writeback.mutable_p2_sigs() = proof->p2_sigs();
+        writeback.set_p2_view(proof->p2_view());
       }
       else{
-         //if(params.mainThreadDispatching) committedMutex.unlock();
-         //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
-         if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-         if(params.mainThreadDispatching) writebackMessagesMutex.unlock();
-        return; //error
+        Panic("Commit proof has no signatures"); //error, should not happen
+        return;
       }
-       //if(params.mainThreadDispatching) committedMutex.unlock();
-       //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
-       if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-       if(params.mainThreadDispatching) writebackMessagesMutex.unlock();
       SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
       return;
-    }
-    //add case where there is both p2 and p1
-    else if(p2Decisions.end() != p2Decisions.find(txnDigest) && p1DecItr){
-    //else if(p2Decisions.end() != p2Decisions.find(txnDigest) && p1Decisions.end() != p1Decisions.find(txnDigest) ){
-       proto::CommitDecision decision = p2Decisions[txnDigest];    //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself. Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
-       //proto::ConcurrencyControl::Result result = p1Decisions[txnDigest];
-       proto::ConcurrencyControl::Result result = c->second;
-        //if(params.mainThreadDispatching) committedMutex.unlock();
-        //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
-        if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-        if(params.mainThreadDispatching) writebackMessagesMutex.unlock();
+  }
 
-       proto::CommittedProof conflict;
+  //2) ABORT CASE
+  //currently for simplicity just forward writeback message that we received and stored.
+  //writebackMessages only contains Abort copies. (when can one delete these?)
+  //(A blockchain stores all request too, whether commit/abort)
+  if(params.mainThreadDispatching) writebackMessagesMutex.lock();
+  if(writebackMessages.find(txnDigest) != writebackMessages.end()){
+      writeback = writebackMessages[txnDigest];
+         if(params.mainThreadDispatching) writebackMessagesMutex.unlock();
+
+      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
+      return;
+  }
+  if(params.mainThreadDispatching) writebackMessagesMutex.unlock();
+
+  //3) BOTH P2 AND P1 CASE
+  //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself.
+  //Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
+  //TODO: could store p2 and p1 signatures (until writeback) in order to avoid re-computation
+  p1DecisionsMap::const_accessor c;
+  auto p1DecItr = p1Decisions.find(c, txnDigest);
+  if(params.mainThreadDispatching) p2DecisionsMutex.lock();
+
+  if(p2Decisions.end() != p2Decisions.find(txnDigest) && p1DecItr){
+       proto::CommitDecision decision = p2Decisions[txnDigest];
+       if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
+
+       proto::ConcurrencyControl::Result result = c->second; //p1Decisions[txnDigest];
+       c.release();
        //recover stored commit proof.
        if (result != proto::ConcurrencyControl::WAIT) { //if the result is WAIT, then the p1 is not necessary..
          const proto::CommittedProof *conflict;
-         //recover stored commit proof.
          if(result == proto::ConcurrencyControl::ABORT){
-            //if(params.mainThreadDispatching) p1ConflictsMutex.lock();
             p1ConflictsMap::const_accessor d;
             auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
             conflict = d->second;
             d.release();
             //conflict = p1Conflicts[txnDigest];
-            //if(params.mainThreadDispatching) p1ConflictsMutex.unlock();
          }
-         SetP1(msg.req_id(), txnDigest, result, conflict);
+         SetP1(msg.req_id(), txnDigest, result, conflict); //XXX CAUTION: MODIFYING GLOBAL OBJECT
          //SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 4);
        }
        SetP2(msg.req_id(), txnDigest, decision);
        SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,   txnDigest, 2);
-    }
+  }
 
-//  Check whether already did p2, but was not part of p1
-    else if(p2Decisions.end() != p2Decisions.find(txnDigest)){
-       proto::CommitDecision decision = p2Decisions[txnDigest];
-
-        //if(params.mainThreadDispatching) committedMutex.unlock();
-        //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
+  //4) ONLY P1 CASE: (already did p1 but no p2)
+  else if(p1DecItr){
         if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-        if(params.mainThreadDispatching) writebackMessagesMutex.unlock();
-
-       SetP2(msg.req_id(), txnDigest, decision);
-       SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 3);
-    }
-    //Else if: Check whether already did p1 but no p2     p1Decisions
-    else if(p1DecItr){
-  //  else if(p1Decisions.end() != p1Decisions.find(txnDigest)){
-        //proto::ConcurrencyControl::Result result = p1Decisions[txnDigest];
-        proto::ConcurrencyControl::Result result = c->second;
-
-         //if(params.mainThreadDispatching) committedMutex.unlock();
-         //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
-         if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-         if(params.mainThreadDispatching) writebackMessagesMutex.unlock();
+        proto::ConcurrencyControl::Result result = c->second; //p1Decisions[txnDigest];
+        c.release();
 
         if (result != proto::ConcurrencyControl::WAIT) {
           const proto::CommittedProof *conflict;
           //recover stored commit proof.
           if(result == proto::ConcurrencyControl::ABORT){
-             //if(params.mainThreadDispatching) p1ConflictsMutex.lock();
              p1ConflictsMap::const_accessor d;
              auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
              //conflict = p1Conflicts[txnDigest];
              conflict = d->second;
              d.release();
-             //if(params.mainThreadDispatching) p1ConflictsMutex.unlock();
           }
           SetP1(msg.req_id(), txnDigest, result, conflict);
           SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 4);
         }
-    }
-    //Else Do p1 normally. copied logic from HandlePhase1(remote, msg)
-    else{
+        else{
+          //TODO:: ADD TO INTERESTED CLIENTS
+        }
+  }
+  //5) ONLY P2 CASE  (received p2, but was not part of p1)
+  //TODO: if you dont have a p1, then execute it yourself. (see case 3) discussion)
+  else if(p2Decisions.end() != p2Decisions.find(txnDigest)){
+      c.release();
+      proto::CommitDecision decision = p2Decisions[txnDigest];
+      if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
+
+      SetP2(msg.req_id(), txnDigest, decision);
+      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 3);
+  }
+
+  //6) NO STATE STORED: Do p1 normally. copied logic from HandlePhase1(remote, msg)
+  else{
       //TODO: ENTIRE CASE NEEDS TO BE ADJUSTED TO NEW HANDLEPHASE1
-       //if(params.mainThreadDispatching) committedMutex.unlock();
-       //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
+      c.release();
        if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-       if(params.mainThreadDispatching) writebackMessagesMutex.unlock();
 
       std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
       Debug("FB exec PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
@@ -2872,29 +2868,31 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
           }
         }
       }
-      c.release();
+
       //start new current view
+       if(params.mainThreadDispatching) current_viewsMutex.lock();
       current_views[txnDigest] = 0;
+      if(params.mainThreadDispatching) current_viewsMutex.unlock();
 
       proto::Transaction *txn = msg.release_txn();
-       ////if(params.mainThreadDispatching) ongoingMutex.lock();
       ongoingMap::accessor b;
       ongoing.insert(b, std::make_pair(txnDigest, txn));
-      //ongoing[txnDigest] = txn;
       b.release();
-       ////if(params.mainThreadDispatching) ongoingMutex.unlock();
 
       Timestamp retryTs;
       const proto::CommittedProof *committedProof;
+      //TODO: WHat happens in the FB case if the result is WAIT?
+      //Since we limit to depth 1, we expect this to not be possible.
+      //But if it were, how would the server process it when it wakes up.? (DoOCC check adds it to the Wait structures...)
+      // Once it is woken, who is notified? original client since its bound to "remote"? or interested client.
       proto::ConcurrencyControl::Result result = DoOCCCheck(msg.req_id(),
-          remote, txnDigest, *txn, retryTs, committedProof);
+          remote, txnDigest, *txn, retryTs, committedProof); //TODO: add extra flag here to change sth.
+          // Calls Relay with a txn digest.. Client receives Relay with no conflict arg --> start another FB?
 
-       //if(params.mainThreadDispatching) p1DecisionsMutex.lock();
+
       p1DecisionsMap::accessor c2;
       p1Decisions.insert(c, std::make_pair(txnDigest, result));
-      //p1Decisions[txnDigest] = result;
       c2.release();
-       //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
       if(result == proto::ConcurrencyControl::ABORT){
          //if(params.mainThreadDispatching) p1ConflictsMutex.lock();
          p1ConflictsMap::accessor d;
@@ -3675,41 +3673,6 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
   //TODO: 3) send current views to client (in case there was no consensus, so the client can start a new round.)
 }
 
-
-
-
-
-
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-//RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
-void Server::RelayP1(const TransportAddress &remote, std::string txnDigest, uint64_t conflict_id){
-
-  Debug("RelayP1[%s] timed out. Sending now!", BytesToHex(txnDigest, 256).c_str());
-  proto::Transaction *tx;
-
-  ongoingMap::const_accessor b;
-  ////auto ongoingMutexScope = params.mainThreadDispatching ? std::shared_lock<std::shared_mutex>(ongoingMutex) : std::shared_lock<std::shared_mutex>();
-  //if (ongoing.find(txnDigest) == ongoing.end()) return;
-  bool ongoingItr = ongoing.find(b, txnDigest);
-  if(!ongoingItr) return;
-
-  //tx = ongoing[txnDigest];
-  tx = b->second;
-  b.release();
-  proto::Phase1 p1;
-  p1.set_req_id(0); //doesnt matter, its not used for fallback requests really.
-  *p1.mutable_txn() = *tx;
-  proto::RelayP1 relayP1;
-  relayP1.set_conflict_id(conflict_id);
-  *relayP1.mutable_p1() = p1;
-
-  Debug("Sending RelayP1[%s].", BytesToHex(txnDigest, 256).c_str());
-
-  transport->SendMessage(this, remote, relayP1);
-}
-
-
 
 } // namespace indicusstore

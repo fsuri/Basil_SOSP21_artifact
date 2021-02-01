@@ -392,6 +392,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
   //keep list of all remote addresses == interested client_seq_num
   //std::unordered_map<std::string, std::unordered_set<const TransportAddress*>> interestedClients;
+  //TODO: store original client separately..
   typedef tbb::concurrent_hash_map<std::string, tbb::concurrent_unordered_set<const TransportAddress*>> interestedClientsMap;
   interestedClientsMap interestedClients;
 
