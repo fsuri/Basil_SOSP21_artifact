@@ -592,6 +592,10 @@ void Client::CleanFB(PendingRequest *pendingFB, std::string &txnDigest){
   FB_instances.erase(txnDigest);
 }
 
+//TODO: Create Additional Relay FB handler for Fallbacks for dependencies of dependencies.
+// void Client::RelayP1callbackDeeper(uint64_t reqId, proto::RelayP1 &relayP1){
+//
+// }
 void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1){
 
   auto itr = pendingReqs.find(reqId);
@@ -665,21 +669,26 @@ void Client::Phase1FB(proto::Phase1 &p1, uint64_t conflict_id, const std::string
 //If Receive a finished FB just forward it.
 void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Transaction &fbtxn, proto::Writeback &wb) {
   if(!StillActive(conflict_id, txnDigest)) return;
+  auto itr = FB_instances.find(txnDigest);
+  PendingRequest *pendingFB = itr->second;
+  if(pendingFB->startedWriteback) return;
+  pendingFB->startedWriteback = true;
 
   //TODO: Need to validate WB message:
   // 1) check that txnDigest matches txn content
   // 2) check that sigs match decision and txnDigest
   //TODO:: CHECK THAT fbtxn matches digest? Not necessary if we just set the contents ourselves.
   // set txn field here.
+  //Also: server side message might not include txn, hence include it ourselves just in case.
   *wb.mutable_txn() = std::move(fbtxn);
 
-  FB_instances[txnDigest]->startedWriteback = true;
+
 
  for (auto group : fbtxn.involved_groups()) {
    bclient[group]->WritebackFB_fast(txnDigest, wb);
  }
  //delete FB instance.
- auto itr = FB_instances.find(txnDigest);
+
  delete itr->second;
  FB_instances.erase(txnDigest);
 

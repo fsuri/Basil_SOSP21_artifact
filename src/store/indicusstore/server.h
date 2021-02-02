@@ -158,14 +158,14 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   proto::ConcurrencyControl::Result DoOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
-      Timestamp &retryTs, const proto::CommittedProof* &conflict);
+      Timestamp &retryTs, const proto::CommittedProof* &conflict, bool fallback_flow = false);
   proto::ConcurrencyControl::Result DoTAPIROCCCheck(
       const std::string &txnDigest, const proto::Transaction &txn,
       Timestamp &retryTs);
   proto::ConcurrencyControl::Result DoMVTSOOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
-      const proto::CommittedProof* &conflict);
+      const proto::CommittedProof* &conflict, bool fallback_flow = false);
 
   void GetWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
@@ -328,13 +328,15 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   void CreateHMACedMessage(const ::google::protobuf::Message &msg, proto::SignedMessage& signedMessage);
 
 //TODO: make strings call by ref.
-  void SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
-  void SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision &decision);
-  void SendPhase1FBReply(uint64_t reqId, proto::Phase1Reply &p1r, proto::Phase2Reply &p2r, proto::Writeback &wb, const TransportAddress &remote,  std::string txnDigest, uint32_t response_case );
+  void RelayP1(const TransportAddress &remote, const std::string &txnDigest, uint64_t conflict_id);
+  void SetP1(uint64_t reqId, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
+  void SetP2(uint64_t reqId, const std::string &txnDigest, proto::CommitDecision &decision);
+  void SendPhase1FBReply(uint64_t reqId, proto::Phase1Reply &p1r, proto::Phase2Reply &p2r, proto::Writeback &wb, const TransportAddress &remote, const std::string &txnDigest, uint32_t response_case );
 
   void VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, proto::Phase2FB &p2fb);
   bool VerifyViews(proto::InvokeFB &msg, uint32_t lG);
-  void RelayP1(const TransportAddress &remote, std::string txnDigest, uint64_t conflict_id);
+  bool ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest);
+  bool ForwardWritebackMulti(const std::string &txnDigest);
 
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
@@ -395,6 +397,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   //TODO: store original client separately..
   typedef tbb::concurrent_hash_map<std::string, tbb::concurrent_unordered_set<const TransportAddress*>> interestedClientsMap;
   interestedClientsMap interestedClients;
+  tbb::concurrent_hash_map<std::string, const TransportAddress*> originalClient;
 
   //keep list of timeouts
   //std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> FBclient_timeouts;
@@ -412,7 +415,7 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::unordered_map<std::string, std::unordered_set<const proto::SignedMessage*>> ElectQuorum;  //tuple contains view entry, set for that view and count of Commit vs Abort.
   std::unordered_map<std::string, std::pair<uint64_t, uint64_t>> ElectQuorum_meta;
 
-  std::unordered_map<std::string, proto::Writeback> writebackMessages;
+  tbb::concurrent_unordered_map<std::string, proto::Writeback> writebackMessages;
 
   //std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
   //tbb hashmap<string,
@@ -428,6 +431,8 @@ typedef tbb::concurrent_hash_map<std::string, std::unordered_set<std::string> > 
 dependentsMap dependents;
 
 struct WaitingDependency_new {
+  bool original_client;
+  std::string txnDigest;
   uint64_t reqId;
   const TransportAddress *remote;
   std::mutex deps_mutex;

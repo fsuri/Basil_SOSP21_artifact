@@ -558,12 +558,12 @@ void Server::HandlePhase1(const TransportAddress &remote,
   proto::ConcurrencyControl::Result result;
   const proto::CommittedProof *committedProof;
 
-  //KEEP track of interested client
-  interestedClientsMap::accessor i;
-  bool interestedClientsItr = interestedClients.insert(i, txnDigest);
-  i->second.insert(remote.clone());
-  i.release();
-  //interestedClients[txnDigest].insert(remote.clone());
+  //KEEP track of interested client //TODO: keep track of original client
+  // interestedClientsMap::accessor i;
+  // bool interestedClientsItr = interestedClients.insert(i, txnDigest);
+  // i->second.insert(remote.clone());
+  // i.release();
+  // //interestedClients[txnDigest].insert(remote.clone());
 
   // no-replays property, i.e. recover existing decision/result from storage
   //Ignore duplicate requests that are already committed, aborted, or ongoing
@@ -583,7 +583,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
   if(p1DecItr){
     result = c->second;
     c.release();
-
+    //TODO: need to check if result is WAIT: if so, need to add to waitingDeps original client..
+    // use original client list and store pairs <txnDigest, <reqID, remote>>
     if (result == proto::ConcurrencyControl::ABORT) {
       p1ConflictsMap::const_accessor d;
       auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
@@ -1253,7 +1254,8 @@ void Server::HandleAbort(const TransportAddress &remote,
 proto::ConcurrencyControl::Result Server::DoOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
-    Timestamp &retryTs, const proto::CommittedProof* &conflict) {
+    Timestamp &retryTs, const proto::CommittedProof* &conflict,
+    bool fallback_flow) {
 
   locks_t locks;
   //lock keys to perform an atomic OCC check when parallelizing OCC checks.
@@ -1265,7 +1267,7 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
     case TAPIR:
       return DoTAPIROCCCheck(txnDigest, txn, retryTs);
     case MVTSO:
-      return DoMVTSOOCCCheck(reqId, remote, txnDigest, txn, conflict);
+      return DoMVTSOOCCCheck(reqId, remote, txnDigest, txn, conflict, fallback_flow);
     default:
       Panic("Unknown OCC type: %d.", occType);
       return proto::ConcurrencyControl::ABORT;
@@ -1551,7 +1553,7 @@ proto::ConcurrencyControl::Result Server::DoTAPIROCCCheck(
 proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
-    const proto::CommittedProof* &conflict) {
+    const proto::CommittedProof* &conflict, bool fallback_flow) {
   Debug("PREPARE[%lu:%lu][%s] with ts %lu.%lu.",
       txn.client_id(), txn.client_seq_num(),
       BytesToHex(txnDigest, 16).c_str(),
@@ -1815,7 +1817,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //TODO can remove this redundant lookup since it will be checked again...
         ongoingMap::const_accessor b;
         bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-        if (inOngoing && false) {
+        if (inOngoing && !fallback_flow && false) {
           std::string txnDig = dep.write().prepared_txn_digest();
           //schedule Relay for client timeout only..
           TransportAddress *remoteCopy = remote.clone();
@@ -1853,9 +1855,11 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
           waitingDependencies_new.insert(f, txnDigest);
           //f->second = WaitingDependency();
         }
-        f->second.reqId = reqId;
-        f->second.remote = remote.clone();  //&remote;
-        //std::unique_lock lk(f->second.deps_mutex);
+        if(!fallback_flow){
+          f->second.original_client = true;
+          f->second.reqId = reqId;
+          f->second.remote = remote.clone();  //&remote;
+        }
         f->second.deps.insert(dep.write().prepared_txn_digest());
         f.release();
       }
@@ -2193,9 +2197,28 @@ void Server::CheckDependents(const std::string &txnDigest) {
         Debug("print remote: %p", f->second.remote);
         //waitingDependencies.erase(dependent);
         const proto::CommittedProof *conflict = nullptr;
-        SendPhase1Reply(f->second.reqId, result, conflict, dependent,
-            f->second.remote);
-        delete f->second.remote;
+        if(f->second.original_client){
+          SendPhase1Reply(f->second.reqId, result, conflict, dependent,
+              f->second.remote);
+          delete f->second.remote;
+        }
+        //Send it to all interested FB clients too:
+        if(!ForwardWritebackMulti(txnDigest)){
+          interestedClientsMap::const_accessor i;
+          auto jtr = interestedClients.find(i, txnDigest);
+          if(jtr){
+            //TODO: use unused phase1Reply as arg to SetP1. FREE AFTER.
+            //proto::Phase1Reply* phase1Reply = GetUnusedPhase1Reply();
+            SetP1(0, txnDigest, result, conflict);
+            //TODO: If need reqId, can store it as pairs with the interested client.
+            for (const auto addr : i->second) {
+              SendPhase1FBReply(0, phase1Reply, phase2Reply, writeback, *addr, txnDigest, 4);
+            }
+          }
+          i.release();
+        }
+        /////
+
         waitingDependencies_new.erase(f);
       }
       f.release();
@@ -2695,7 +2718,7 @@ signedMessage.set_signature(hmacs.SerializeAsString());
 
 //RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
 //params: reqID: client tx identifier for blocked tx; txnDigest = tx that is stalling
-void Server::RelayP1(const TransportAddress &remote, std::string txnDigest, uint64_t conflict_id){
+void Server::RelayP1(const TransportAddress &remote, const std::string &txnDigest, uint64_t conflict_id){
 
   Debug("RelayP1[%s] timed out. Sending now!", BytesToHex(txnDigest, 256).c_str());
   proto::Transaction *tx;
@@ -2718,28 +2741,7 @@ void Server::RelayP1(const TransportAddress &remote, std::string txnDigest, uint
   transport->SendMessage(this, remote, relayP1);
 }
 
-
-
-//TODO: all requestID entries can be deleted..
-//TODO: CAUTION: USING GLOBABL MESSAGE OBJECT CURRENTLY (must change)
-//TODO:: CURRENTLY IF CASES ARE NOT ATOMIC (only matters if one intends to parallelize):
-//For example, 1) case for committed could fail, but all consecutive fail too because it was committed inbetween.
-//Could just put abort cases last; but makes for redundant work if it should occur inbetween.
-void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg) {
-
-  std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
-  Debug("PHASE1FB[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
-      msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
-      msg.txn().timestamp().timestamp());
-
-  //KEEP track of interested client
-  interestedClientsMap::accessor i;
-  bool interestedClientsItr = interestedClients.insert(i, txnDigest);
-  i->second.insert(remote.clone());
-  i.release();
-  //interestedClients[txnDigest].insert(remote.clone());
-
-  //check if already committed. reply with whole proof so client can forward that.
+bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest){
   //1) COMMIT CASE
   if(committed.find(txnDigest) != committed.end()){
       writeback.Clear();                               //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
@@ -2756,25 +2758,88 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       }
       else{
         Panic("Commit proof has no signatures"); //error, should not happen
-        return;
+        // A Commit proof
+        return false;
       }
-      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
-      return;
+      SendPhase1FBReply(ReqId, phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
+      return true;
   }
 
   //2) ABORT CASE
   //currently for simplicity just forward writeback message that we received and stored.
   //writebackMessages only contains Abort copies. (when can one delete these?)
   //(A blockchain stores all request too, whether commit/abort)
-  if(params.mainThreadDispatching) writebackMessagesMutex.lock();
   if(writebackMessages.find(txnDigest) != writebackMessages.end()){
       writeback = writebackMessages[txnDigest];
-         if(params.mainThreadDispatching) writebackMessagesMutex.unlock();
-
-      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
-      return;
+      SendPhase1FBReply(ReqId, phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
+      return true;
   }
-  if(params.mainThreadDispatching) writebackMessagesMutex.unlock();
+}
+
+bool Server::ForwardWritebackMulti(const std::string &txnDigest){
+
+  interestedClientsMap::accessor i;
+  auto jtr = interestedClients.find(i, txnDigest);
+  if(!jtr) return true; //no interested clients, return
+
+  if(committed.find(txnDigest) != committed.end()){
+      writeback.Clear();                               //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
+      writeback.set_decision(proto::COMMIT);
+      writeback.set_txn_digest(txnDigest);
+      proto::CommittedProof* proof = committed[txnDigest];
+
+      if(proof->has_p1_sigs()){
+        *writeback.mutable_p1_sigs() = proof->p1_sigs();
+      }
+      else if(proof->has_p2_sigs()){
+        *writeback.mutable_p2_sigs() = proof->p2_sigs();
+        writeback.set_p2_view(proof->p2_view());
+      }
+      else{
+        Panic("Commit proof has no signatures"); //error, should not happen
+        // A Commit proof
+        return false;
+      }
+  }
+  //2) ABORT CASE
+  else if(writebackMessages.find(txnDigest) != writebackMessages.end()){
+      writeback = writebackMessages[txnDigest];
+  }
+  else{
+    return false;
+  }
+
+  for (const auto addr : i->second) {
+    SendPhase1FBReply(0, phase1Reply, phase2Reply, writeback, *addr,  txnDigest, 1);
+    delete addr;
+  }
+  interestedClients.erase(i);
+  i.release();
+  return true;
+}
+
+//TODO: all requestID entries can be deleted.. currently unused for FB
+//TODO: CAUTION: USING GLOBABL MESSAGE OBJECT CURRENTLY (must change)
+//TODO:: CURRENTLY IF CASES ARE NOT ATOMIC (only matters if one intends to parallelize):
+//For example, 1) case for committed could fail, but all consecutive fail too because it was committed inbetween.
+//Could just put abort cases last; but makes for redundant work if it should occur inbetween.
+void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg) {
+
+  std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
+  Debug("PHASE1FB[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
+      msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
+      msg.txn().timestamp().timestamp());
+
+  //check if already committed. reply with whole proof so client can forward that.
+  //1) COMMIT CASE, 2) ABORT CASE
+  if(ForwardWriteback(remote, msg.req_id(), txnDigest)) return;
+
+  //Otherwise, keep track of interested clients to message in the future
+  interestedClientsMap::accessor i;
+  bool interestedClientsItr = interestedClients.insert(i, txnDigest);
+  i->second.insert(remote.clone());
+  i.release();
+  //interestedClients[txnDigest].insert(remote.clone());
 
   //3) BOTH P2 AND P1 CASE
   //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself.
@@ -2804,7 +2869,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
          //SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 4);
        }
        SetP2(msg.req_id(), txnDigest, decision);
-       SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,   txnDigest, 2);
+       SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote, txnDigest, 2);
   }
 
   //4) ONLY P1 CASE: (already did p1 but no p2)
@@ -2881,12 +2946,10 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 
       Timestamp retryTs;
       const proto::CommittedProof *committedProof;
-      //TODO: WHat happens in the FB case if the result is WAIT?
-      //Since we limit to depth 1, we expect this to not be possible.
-      //But if it were, how would the server process it when it wakes up.? (DoOCC check adds it to the Wait structures...)
-      // Once it is woken, who is notified? original client since its bound to "remote"? or interested client.
+
+      //TODO: add parallel OCC check logic here:
       proto::ConcurrencyControl::Result result = DoOCCCheck(msg.req_id(),
-          remote, txnDigest, *txn, retryTs, committedProof); //TODO: add extra flag here to change sth.
+          remote, txnDigest, *txn, retryTs, committedProof, true); //TODO: add extra flag here to change sth.
           // Calls Relay with a txn digest.. Client receives Relay with no conflict arg --> start another FB?
 
 
@@ -2894,15 +2957,14 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       p1Decisions.insert(c, std::make_pair(txnDigest, result));
       c2.release();
       if(result == proto::ConcurrencyControl::ABORT){
-         //if(params.mainThreadDispatching) p1ConflictsMutex.lock();
          p1ConflictsMap::accessor d;
          p1Conflicts.insert(d, std::make_pair(txnDigest, committedProof));
-         //p1Conflicts[txnDigest] = committedProof;  //does this work this way for CbR
          d.release();
-         //if(params.mainThreadDispatching) p1ConflictsMutex.unlock();
       }
 
-    //TODO: WHen will it be sent if its WAIT?  --> will be in some notify function. NEED TO EDIT THAT TO SEND TO ALL INTERESTED CLIENTS!!!
+      //What happens in the FB case if the result is WAIT?
+      //Since we limit to depth 1, we expect this to not be possible.
+      //But if it happens, the CheckDependents call will send a P1FB reply to all interested clients.
       if (result != proto::ConcurrencyControl::WAIT) {
             SetP1(msg.req_id(), txnDigest, result, committedProof);
             if(client_starttime.find(txnDigest) == client_starttime.end()){
@@ -2917,7 +2979,9 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   }
 }
 
-void Server::SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict){
+//TODO: Use MessageToSign --> multithreading will require this to be used in conjunction with callbacks.
+void Server::SetP1(uint64_t reqId, const std::string &txnDigest, proto::ConcurrencyControl::Result &result,
+  const proto::CommittedProof *conflict){
   phase1Reply.Clear();
   phase1Reply.set_req_id(reqId);
   phase1Reply.mutable_cc()->set_ccr(result);
@@ -2937,8 +3001,8 @@ void Server::SetP1(uint64_t reqId, std::string txnDigest, proto::ConcurrencyCont
     }
   }
 }
-
-void Server::SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision &decision){
+//TODO: Use MessageToSign --> multithreading will require this to be used in conjunction with callbacks.
+void Server::SetP2(uint64_t reqId, const std::string &txnDigest, proto::CommitDecision &decision){
   phase2Reply.Clear();
   phase2Reply.set_req_id(reqId);
 
@@ -2962,7 +3026,7 @@ void Server::SetP2(uint64_t reqId, std::string txnDigest, proto::CommitDecision 
 
 void Server::SendPhase1FBReply(uint64_t reqId,
     proto::Phase1Reply &p1r, proto::Phase2Reply &p2r, proto::Writeback &wb,
-    const TransportAddress &remote, std::string txnDigest, uint32_t response_case ) {
+    const TransportAddress &remote, const std::string &txnDigest, uint32_t response_case ) {
 
     //TODO? update fb response set to reply quickly for repetitions?
 
@@ -3017,8 +3081,7 @@ void Server::SendPhase1FBReply(uint64_t reqId,
     transport->SendMessage(this, remote, phase1FBReply);
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//TODO: refactor this into the function below...
+
 void Server::HandlePhase2FB(const TransportAddress &remote,
     proto::Phase2FB &msg) {
   //std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
@@ -3027,14 +3090,11 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
   //    msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
   //    msg.txn().timestamp().timestamp());
 
-      //currently for simplicity just forward writeback message that we received and stored.
-    if(writebackMessages.find(txnDigest) != writebackMessages.end()){
-      proto::Writeback wb = writebackMessages[txnDigest];
-      SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, wb,  remote, txnDigest, 1); //TODO: Create a seperate message explicitly for writeback: This suffices to finish all fallback procedures
-    }
+
+  if(ForwardWriteback(remote, msg.req_id(), txnDigest)) return;
 
   // HandePhase2 just returns an existing decision.
-else if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
+  if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
       proto::CommitDecision decision =p2Decisions[txnDigest];
 
       SetP2(msg.req_id(), txnDigest, decision);
@@ -3059,15 +3119,19 @@ else if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
 
       transport->SendMessage(this, remote, phase2FBReply);
       Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
-}
-//just do normal handle p2 otherwise after timeout
-else{
+  }
+  //just do normal handle p2 otherwise after timeout
+  else{
+      //TODO: start a timer after mvtso check returns with != WAIT. That timer sets a bool,
+      //When the bool is set then Handle all P2 requests. (assuming relay only starts after the timeout anyways
+      // then this is not necessary to run a simulation - but it would not be robust to byz clients)
 
       //The timer should start running AFTER the Mvtso check returns.
       // I could make the timeout window 0 if I dont expect byz clients. An honest client will likely only ever start this on conflict.
       //std::chrono::high_resolution_clock::time_point current_time = high_resolution_clock::now();
 
-      //VerifyP2FB(remote, txnDigest, msg)
+      //TODO: call HandleP2FB again instead
+
       transport->Timer((CLIENTTIMEOUT), [this, &remote, &txnDigest, &msg](){VerifyP2FB(remote, txnDigest, msg);});
 
 //TODO: for time being dont do this smarter scheduling.
@@ -3234,94 +3298,10 @@ transport->SendMessage(this, remote, phase2FBReply);
 Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
 
 }
-///OLD CODE:
-
-// //  if (params.validateProofs) {
-//   //check if there are p2 decisions.
-//    proto::GroupedP1FBreplies groupedReplies = p2fb.grp_p1_fb();
-//    //proto::P1FBreplies loggedReplies = groupedReplies.grouped_fbreplies()[logGroup];
-//     //TRY THIS:  (*groupedReplies.mutable_grouped_fbreplies())[logGroup]
-//
-// //construct decision object. serialize it. compare.
-//    uint32_t counter = config.f + 1; //or config.QuorumSize()
-//
-//    for(auto & loggedReplies : groupedReplies.grouped_fbreplies()){
-//      if(loggedReplies.first != logGroup) continue;
-//
-//      for(const auto &p1fbr : loggedReplies.second.fbreplies()){
-//           if(p1fbr.has_p2r()){
-//             proto::Phase2Reply p2r = p1fbr.p2r();
-//
-//               if (params.signedMessages) {
-//                 if(p2r.has_signed_p2_decision()){
-//                   proto::SignedMessage sig_msg = p2r.signed_p2_decision();
-//                   proto::Phase2Decision p2Dec;
-//                   p2Dec.ParseFromString(sig_msg.data());
-//                   if(p2Dec.decision() == p2fb.decision() && p2Dec.txn_digest() == p2fb.txn_digest()){
-//                     if(crypto::Verify(keyManager->GetPublicKey(sig_msg.process_id()), sig_msg.data(), sig_msg.signature())){ counter--;} else{return;}
-//                   }
-//                 }
-//               }
-//               else{
-//                 if(p2r.has_p2_decision()){
-//                   if(p2r.p2_decision().decision() == p2fb.decision() && p2r.p2_decision().txn_digest() == p2fb.txn_digest()) counter--;
-//                 }
-//               }
-//           }
-//           if(counter == 0){
-//             p2Decisions[txnDigest] = p2fb.decision();
-//             decision_views[txnDigest] = 0;
-//             break;
-//           }
-//         }
-//     }
-//     //still no decision --> check all p1s.
-//     proto::GroupedSignatures grpSigs;
-//     //std::unordered_map<uint64_t, proto::Signatures> grp_sigs;
-//     if(p2Decisions.find(txnDigest) == p2Decisions.end()){
-//           //TODO: extract all p1s as proof and call HandleP2
-//           for(auto & group_replies: groupedReplies.grouped_fbreplies()){
-//           //for(auto & [ key, group_replies ]: p2fb.grp_p1_f()->grouped_fbreplies()){
-//             proto::Signatures sig_collection;
-//             for (auto &p1fbr: group_replies.second.fbreplies()){
-//             //for(auto p1fbr: group_replies.second()){
-//               proto::Signature *new_sig = sig_collection.add_sigs();
-//               //new_sig.mutable_signature(p1fbr.p1r()->signed_cc()->signature()); //Is this correct.
-//               *new_sig->mutable_signature() = p1fbr.p1r().signed_cc().signature();
-//
-//             }
-//             //grp_sigs[key] = sig_collection;
-//             //grp_sigs[group_replies.first] = sig_collection;
-//             (*grpSigs.mutable_grouped_sigs())[group_replies.first] = sig_collection;
-//           }
-//         //grpSigs.mutable_grouped_sigs(grp_sigs);
-//       //  *grpSigs.mutable_grouped_sigs() = grp_sigs;
-//
-//         proto::Transaction txn;
-//         if(ongoing.find(txnDigest) != ongoing.end()){
-//           proto::Transaction txn = *ongoing[txnDigest];
-//         }
-//         else if(p2fb.has_txn()){
-//               proto::Transaction txn = p2fb.txn();
-//         }
-//         else{
-//           return; //TXN unseen.
-//         }
-//
-//         int64_t myProcessId;
-//         proto::ConcurrencyControl::Result myResult;
-//         LookupP1Decision(txnDigest, myProcessId, myResult);
-//
-//         if(!ValidateP1Replies(p2fb.decision(), false, &txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult)){
-//           return; //INVALID SIGS
-//         }
-//         p2Decisions[txnDigest] = p2fb.decision();
-//         decision_views[txnDigest] = 0;
-//     }
 
 
 //TODO: Views are now signed messages. Split verify P2fb function.
-bool Server::VerifyViews(proto::InvokeFB &msg, uint32_t lG){
+bool Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp){
 
   auto txnDigest = msg.txn_digest();
 
@@ -3334,7 +3314,7 @@ bool Server::VerifyViews(proto::InvokeFB &msg, uint32_t lG){
           proto::CurrentView view_s;
           view_s.ParseFromString(signed_m.data());
 
-          if(IsReplicaInGroup(signed_m.process_id(), lG, &config)){
+          if(IsReplicaInGroup(signed_m.process_id(), logGrp, &config)){
               if(view_s.current_view() < msg.proposed_view()){ return false;}
               if(view_s.txn_digest() != txnDigest) { return false;}
               if(crypto::Verify(keyManager->GetPublicKey(signed_m.process_id()),
@@ -3350,7 +3330,7 @@ bool Server::VerifyViews(proto::InvokeFB &msg, uint32_t lG){
           proto::CurrentView view_s;
           view_s.ParseFromString(signed_m.data());
 
-          if(IsReplicaInGroup(signed_m.process_id(), lG, &config)){
+          if(IsReplicaInGroup(signed_m.process_id(), logGrp, &config)){
               if(view_s.current_view() < msg.proposed_view()-1){ return false;}
               if(view_s.txn_digest() != txnDigest) { return false;}
               if(crypto::Verify(keyManager->GetPublicKey(signed_m.process_id()),

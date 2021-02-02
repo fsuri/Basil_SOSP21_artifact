@@ -1653,7 +1653,7 @@ void ShardClient::WritebackFB_fast(std::string txnDigest, proto::Writeback &wb) 
   transport->SendMessageToGroup(this, group, wb);
   Debug("[group %i] Sent FB-WRITEBACK[%lu]", group, client_id);
 
-  // Delete PendingFB instance.
+  // Delete PendingFB instance.  //TODO: delete dependents of instance as well (if we support more than depth 1)
   auto itr = pendingFallbacks.find(txnDigest);
   if(itr != pendingFallbacks.end()){
     PendingFB *pendFB = itr->second;

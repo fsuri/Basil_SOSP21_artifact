@@ -176,7 +176,10 @@ class Client : public ::Client {
   void InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group);
   //keep track of pending Fallback instances. Maps from txnDigest, req Id is oblivious to us.
   std::unordered_map<std::string, PendingRequest*> FB_instances;
+
+  //TODO: add a map from <reqID, set of digests>? delete all digest FB instances when req Id finsihes.?
   //TODO:: create another map from  <reqIds, string> and treat FB instances as normal reqID too.
+
        //TODO: should the FB_instances be part of a pendingRequest?
           // I.e. every pendingRequest has its nested pendingRequests? (That makes it too hard to find). Need flat hierarchy.
   //Question: How can client have multiple pendingReqs?
@@ -187,6 +190,9 @@ class Client : public ::Client {
   //Change all structures to -> original client + interested client. This makes it so that an original client
   //will not receive a fallback message. XXX however, do need to make it so that an original client can start
   //InvokeFB and consequently also receive P2FB messages...
+
+  //TODO:!!!XXX Add conflict id to PendingRequest field, so you know which id is the conflict always?
+  //Or not necessary since it is bound to callbacks anyways...
 
   //1) sigs, 2) parallelism is sketch, 3) Wait handling
 
