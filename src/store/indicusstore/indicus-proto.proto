@@ -227,9 +227,9 @@ message AttachedView{
 message Phase1FBReply {
   required uint64 req_id = 1;
   required bytes txn_digest = 2;
-  optional Phase1Reply p1r =3;
-  optional Phase2Reply p2r =4;
-  optional Writeback wb =5;
+  optional Writeback wb =3;
+  optional Phase1Reply p1r =4;
+  optional Phase2Reply p2r =5;
   optional AttachedView attached_view = 6;
   //oneof current_view_oneof {
   //   CurrentView current_view = 6;

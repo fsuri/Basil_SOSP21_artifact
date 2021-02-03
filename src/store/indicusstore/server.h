@@ -329,14 +329,14 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
 //TODO: make strings call by ref.
   void RelayP1(const TransportAddress &remote, const std::string &txnDigest, uint64_t conflict_id);
-  void SetP1(uint64_t reqId, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
-  void SetP2(uint64_t reqId, const std::string &txnDigest, proto::CommitDecision &decision);
-  void SendPhase1FBReply(uint64_t reqId, proto::Phase1Reply &p1r, proto::Phase2Reply &p2r, proto::Writeback &wb, const TransportAddress &remote, const std::string &txnDigest, uint32_t response_case );
+  void SetP1(uint64_t reqId, P1FBorganizer *p1fb_organizer, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
+  void SetP2(uint64_t reqId, P1FBorganizer *p1fb_organizer, const std::string &txnDigest, proto::CommitDecision &decision);
+  void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, std::string &txnDigest, bool multi = false);
 
   void VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, proto::Phase2FB &p2fb);
   bool VerifyViews(proto::InvokeFB &msg, uint32_t lG);
   bool ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest);
-  bool ForwardWritebackMulti(const std::string &txnDigest);
+  bool ForwardWritebackMulti(const std::string &txnDigest, interestedClientsMap::accessor i);
 
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
@@ -440,7 +440,46 @@ struct WaitingDependency_new {
 };
 typedef tbb::concurrent_hash_map<std::string, WaitingDependency_new> waitingDependenciesMap;
 waitingDependenciesMap waitingDependencies_new;
-//
+
+
+struct P1FBorganizer {
+  P1FBorganizer(uint64_t ReqId, std::string &txnDigest, const TransportAddress &remote) :
+    remote(remote.clone()) {
+      p1fbr = GetUnusedP1FBReply();
+      p1fbr->set_req_id(ReqId);
+      p1fbr->set_txn_digest(txnDigest);
+  }
+  P1FBorganizer(uint64_t ReqId, std::string &txnDigest) : {
+      p1fbr = GetUnusedP1FBReply();
+      p1fbr->set_req_id(ReqId);
+      p1fbr->set_txn_digest(txnDigest);
+  }
+  ~P1FBorganizer() {
+    delete remote;
+    FreeUnusedP1FBReply();
+  }
+  uint64_t req_id;
+  std::string txnDigest;
+  const TransportAddress *remote;
+  //manage which case:
+  bool includeWB;
+  bool includeP1;
+  bool includeP2;
+  bool includeView;
+  //potential message fields: TODO: just replace with phase1FBReply (the mutable_p1r etc are the pointers.)
+  //TODO: modify the HandleP1Reply function so that it modifies the phase1FBreply message directly.
+  //TODO:: Add new ReceiveFB_WB function at shard client, and remove it from F1FB reply..? Nah.. needs same info.
+  proto::Writeback *wb;
+  proto::Phase1Reply *p1r;
+  proto::Phase2Reply *p2r;
+  proto::AttachedView *av;
+
+  proto::Phase1FBReply *p1fbr;
+  //manage outstanding Sigs
+  bool p1_sig_outstanding;
+  bool p2_sig_outstanding;
+  bool c_view_sig_outstanding;
+}
 
   Stats stats;
   std::unordered_set<std::string> active;

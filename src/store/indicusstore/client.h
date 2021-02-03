@@ -177,6 +177,9 @@ class Client : public ::Client {
   //keep track of pending Fallback instances. Maps from txnDigest, req Id is oblivious to us.
   std::unordered_map<std::string, PendingRequest*> FB_instances;
 
+  //DO THIS: TODO: XXX: Keep map from (txnDigest to reqId): When receiving a RelayP1 with 2 txnDigest and no reqId,
+  //check this map to find the reqId and make that the conflict ID!!!
+
   //TODO: add a map from <reqID, set of digests>? delete all digest FB instances when req Id finsihes.?
   //TODO:: create another map from  <reqIds, string> and treat FB instances as normal reqID too.
 
