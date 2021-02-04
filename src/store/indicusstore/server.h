@@ -132,27 +132,27 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
-//Fallback protocol components
-// Edit MVTSO-check: When we suspend a transaction waiting for a dependency, then after some timeout, we should send the full TX to the client (IF we have it - 1 correct replica is guaranteed to have it.)
-// void HandleP1_Rec -> exec p1 if unreceived, reply with p1r, or p2r + dec_view  (Need to modify normal P2R message to contain view=0), current view
-void HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg);
-// void HandleP2_Rec -> Reply with p2 decision
-// void HandleFB_Invoke -> send Elect message to FB based on views received. OR: Send all to all to other replicas (can use MACs to all replicas BESIDES the To-be-fallback) for next replica to elect.
-// void HandleFB_Dec -> receive FB decision, verify whether majority was indeed confirmed and sends signed P2R to all interested clients (this must include the view from the decision)
+  //Fallback protocol components
+  // Edit MVTSO-check: When we suspend a transaction waiting for a dependency, then after some timeout, we should send the full TX to the client (IF we have it - 1 correct replica is guaranteed to have it.)
+  // void HandleP1_Rec -> exec p1 if unreceived, reply with p1r, or p2r + dec_view  (Need to modify normal P2R message to contain view=0), current view
+  void HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg);
+  // void HandleP2_Rec -> Reply with p2 decision
+  // void HandleFB_Invoke -> send Elect message to FB based on views received. OR: Send all to all to other replicas (can use MACs to all replicas BESIDES the To-be-fallback) for next replica to elect.
+  // void HandleFB_Dec -> receive FB decision, verify whether majority was indeed confirmed and sends signed P2R to all interested clients (this must include the view from the decision)
 
-//Fallback responsibilities
-//void HandleFB_Elect: If 4f+1 Elect messages received -> form Decision based on majority, and forward the elect set (send FB_Dec) to all replicas in logging shard. (This includes the FB replica itself - Just skip ahead to HandleFB_Dec automatically: send P2R to clients)
+  //Fallback responsibilities
+  //void HandleFB_Elect: If 4f+1 Elect messages received -> form Decision based on majority, and forward the elect set (send FB_Dec) to all replicas in logging shard. (This includes the FB replica itself - Just skip ahead to HandleFB_Dec automatically: send P2R to clients)
 
 
-void HandlePhase2FB(const TransportAddress &remote,proto::Phase2FB &msg);
+  void HandlePhase2FB(const TransportAddress &remote,proto::Phase2FB &msg);
 
-void HandleInvokeFB(const TransportAddress &remote,proto::InvokeFB &msg); //DONT send back to remote, but instead to FB, calculate based on view. (need to include this in TX state thats kept locally.)
+  void HandleInvokeFB(const TransportAddress &remote,proto::InvokeFB &msg); //DONT send back to remote, but instead to FB, calculate based on view. (need to include this in TX state thats kept locally.)
 
-void HandleElectFB(const TransportAddress &remote,proto::ElectFB &msg);
+  void HandleElectFB(const TransportAddress &remote,proto::ElectFB &msg);
 
-void HandleDecisionFB(const TransportAddress &remote,proto::DecisionFB &msg); //DONT send back to remote, but instead to interested clients. (need to include list of interested clients as part of local tx state)
+  void HandleDecisionFB(const TransportAddress &remote,proto::DecisionFB &msg); //DONT send back to remote, but instead to interested clients. (need to include list of interested clients as part of local tx state)
 
-void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
+  void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
 
   proto::ConcurrencyControl::Result DoOCCCheck(
@@ -203,7 +203,6 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   proto::ReadReply *GetUnusedReadReply();
   proto::Phase1Reply *GetUnusedPhase1Reply();
   proto::Phase2Reply *GetUnusedPhase2Reply();
-
   proto::Read *GetUnusedReadmessage();
   proto::Phase1 *GetUnusedPhase1message();
   proto::Phase2 *GetUnusedPhase2message();
@@ -215,7 +214,11 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   void FreePhase1message(proto::Phase1 *msg);
   void FreePhase2message(proto::Phase2 *msg);
   void FreeWBmessage(proto::Writeback *msg);
-
+  //Fallback messages:
+  proto::Phase1FBReply *GetUnusedP1FBReply();
+  void FreeUnusedP1FBReply(proto::Phase1FBReply *msg);
+  proto::Phase2FBReply *GetUnusedP2FBReply();
+  void FreeUnusedP2FBReply(proto::Phase2FBReply *msg);
 
   inline bool IsKeyOwned(const std::string &key) const {
     return static_cast<int>((*part)(key, numShards, groupIdx, dummyTxnGroups) % numGroups) == groupIdx;
@@ -319,7 +322,70 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
   PingMessage ping;
 
-//FALLBACK helper functions
+  //FALLBACK helper functions
+  struct P1FBorganizer {
+    P1FBorganizer(uint64_t ReqId, std::string &txnDigest, const TransportAddress &remote, Server *server) :
+      remote(remote.clone()), server(server) {
+        p1fbr = server->GetUnusedP1FBReply();
+        p1fbr->set_req_id(ReqId);
+        p1fbr->set_txn_digest(txnDigest);
+    }
+    P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server) {
+        p1fbr = server->GetUnusedP1FBReply();
+        p1fbr->set_req_id(ReqId);
+        p1fbr->set_txn_digest(txnDigest);
+    }
+    ~P1FBorganizer() {
+      delete remote;
+      server->FreeUnusedP1FBReply(p1fbr);
+    }
+    Server *server;
+
+    uint64_t req_id;
+    std::string txnDigest;
+    const TransportAddress *remote;
+
+    proto::Phase1FBReply *p1fbr;
+    //manage outstanding Sigs
+    bool p1_sig_outstanding;
+    bool p2_sig_outstanding;
+    bool c_view_sig_outstanding;
+  };
+
+  struct P2FBorganizer {
+    P2FBorganizer(uint64_t ReqId, std::string &txnDigest, const TransportAddress &remote, Server *server) :
+      remote(remote.clone()), server(server) {
+        p2fbr = server->GetUnusedP2FBReply();
+        p2fbr->set_req_id(ReqId);
+        p2fbr->set_txn_digest(txnDigest);
+    }
+    P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server) {
+        p2fbr = server->GetUnusedP2FBReply();
+        p2fbr->set_req_id(ReqId);
+        p2fbr->set_txn_digest(txnDigest);
+    }
+    ~P2FBorganizer() {
+      delete remote;
+      server->FreeUnusedP2FBReply(p2fbr);
+    }
+    Server *server;
+
+    uint64_t req_id;
+    std::string txnDigest;
+    const TransportAddress *remote;
+
+    proto::Phase2FBReply *p2fbr;
+    //manage outstanding Sigs
+    bool p2_sig_outstanding;
+    bool c_view_sig_outstanding;
+  };
+
+  //keep list of all remote addresses == interested client_seq_num
+  //std::unordered_map<std::string, std::unordered_set<const TransportAddress*>> interestedClients;
+  //TODO: store original client separately..
+  typedef tbb::concurrent_hash_map<std::string, tbb::concurrent_unordered_set<const TransportAddress*>> interestedClientsMap;
+  interestedClientsMap interestedClients;
+  tbb::concurrent_hash_map<std::string, const TransportAddress*> originalClient;
 
 //Simulated HMAC code
   std::unordered_map<uint64_t, std::string> sessionKeys;
@@ -329,14 +395,15 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
 //TODO: make strings call by ref.
   void RelayP1(const TransportAddress &remote, const std::string &txnDigest, uint64_t conflict_id);
-  void SetP1(uint64_t reqId, P1FBorganizer *p1fb_organizer, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
-  void SetP2(uint64_t reqId, P1FBorganizer *p1fb_organizer, const std::string &txnDigest, proto::CommitDecision &decision);
-  void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, std::string &txnDigest, bool multi = false);
+  void SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
+  void SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision);
+  void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string &txnDigest, bool multi = false);
+  void SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi = false);
 
-  void VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, proto::Phase2FB &p2fb);
+  void ProcessP2FB(const TransportAddress &remote, std::string &txnDigest, proto::Phase2FB &p2fb);
   bool VerifyViews(proto::InvokeFB &msg, uint32_t lG);
   bool ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest);
-  bool ForwardWritebackMulti(const std::string &txnDigest, interestedClientsMap::accessor i);
+  bool ForwardWritebackMulti(const std::string &txnDigest, interestedClientsMap::accessor &i);
 
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
@@ -392,13 +459,6 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   //ADD Aborted proof to it.(in order to reply to Fallback)
   //creating new map to store writeback messages..  Need to find a better way, but suffices as placeholder
 
-  //keep list of all remote addresses == interested client_seq_num
-  //std::unordered_map<std::string, std::unordered_set<const TransportAddress*>> interestedClients;
-  //TODO: store original client separately..
-  typedef tbb::concurrent_hash_map<std::string, tbb::concurrent_unordered_set<const TransportAddress*>> interestedClientsMap;
-  interestedClientsMap interestedClients;
-  tbb::concurrent_hash_map<std::string, const TransportAddress*> originalClient;
-
   //keep list of timeouts
   //std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> FBclient_timeouts;
   std::unordered_map<std::string, uint64_t> client_starttime;
@@ -416,6 +476,9 @@ void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
   std::unordered_map<std::string, std::pair<uint64_t, uint64_t>> ElectQuorum_meta;
 
   tbb::concurrent_unordered_map<std::string, proto::Writeback> writebackMessages;
+
+  tbb::concurrent_hash_map<std::string, P1FBorganizer*> fallbackStates;
+  //TODO: put all other info such as current views, Quorums etc in this?
 
   //std::unordered_map<std::string, std::unordered_set<std::string>> dependents; // Each V depends on K
   //tbb hashmap<string,
@@ -441,45 +504,6 @@ struct WaitingDependency_new {
 typedef tbb::concurrent_hash_map<std::string, WaitingDependency_new> waitingDependenciesMap;
 waitingDependenciesMap waitingDependencies_new;
 
-
-struct P1FBorganizer {
-  P1FBorganizer(uint64_t ReqId, std::string &txnDigest, const TransportAddress &remote) :
-    remote(remote.clone()) {
-      p1fbr = GetUnusedP1FBReply();
-      p1fbr->set_req_id(ReqId);
-      p1fbr->set_txn_digest(txnDigest);
-  }
-  P1FBorganizer(uint64_t ReqId, std::string &txnDigest) : {
-      p1fbr = GetUnusedP1FBReply();
-      p1fbr->set_req_id(ReqId);
-      p1fbr->set_txn_digest(txnDigest);
-  }
-  ~P1FBorganizer() {
-    delete remote;
-    FreeUnusedP1FBReply();
-  }
-  uint64_t req_id;
-  std::string txnDigest;
-  const TransportAddress *remote;
-  //manage which case:
-  bool includeWB;
-  bool includeP1;
-  bool includeP2;
-  bool includeView;
-  //potential message fields: TODO: just replace with phase1FBReply (the mutable_p1r etc are the pointers.)
-  //TODO: modify the HandleP1Reply function so that it modifies the phase1FBreply message directly.
-  //TODO:: Add new ReceiveFB_WB function at shard client, and remove it from F1FB reply..? Nah.. needs same info.
-  proto::Writeback *wb;
-  proto::Phase1Reply *p1r;
-  proto::Phase2Reply *p2r;
-  proto::AttachedView *av;
-
-  proto::Phase1FBReply *p1fbr;
-  //manage outstanding Sigs
-  bool p1_sig_outstanding;
-  bool p2_sig_outstanding;
-  bool c_view_sig_outstanding;
-}
 
   Stats stats;
   std::unordered_set<std::string> active;

@@ -1010,6 +1010,11 @@ void Server::HandleWriteback(const TransportAddress &remote,
     txnDigest = &computedTxnDigest;
   }
 
+
+  if(committed.find(*txnDigest) != committed.end() || aborted.find(*txnDigest) != aborted.end()){
+    return; //duplicate TODO: Forward to all interested clients and empty it?
+  }
+
   Debug("WRITEBACK[%s] with decision %d.",
       BytesToHex(*txnDigest, 16).c_str(), msg.decision());
 
@@ -2209,8 +2214,8 @@ void Server::CheckDependents(const std::string &txnDigest) {
           if(jtr){
             if(ForwardWritebackMulti(txnDigest, i)){i.release(); return;}
             i.release();
-            P1FBorganizer *p1fb_organizer = new P1FBorganizer(0, txnDigest);
-            SetP1(0, p1fb_organizer, result, conflict);
+            P1FBorganizer *p1fb_organizer = new P1FBorganizer(0, txnDigest, this);
+            SetP1(0, p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
             //TODO: If need reqId, can store it as pairs with the interested client.
             SendPhase1FBReply(p1fb_organizer, txnDigest, true);
 
@@ -2487,7 +2492,7 @@ void Server::MessageToSign(::google::protobuf::Message* msg,
   }
 }
 
-
+//TODO: replace all of these with moodycamel queue (just check that try_dequeue is successful)
 proto::ReadReply *Server::GetUnusedReadReply() {
   return new proto::ReadReply();
 
@@ -2655,6 +2660,56 @@ void Server::FreeWBmessage(proto::Writeback *msg) {
   // WBmessages.push_back(msg);
 }
 
+proto::Phase1FBReply *Server::GetUnusedP1FBReply(){
+  return new proto::Phase1FBReply();
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(P1FBRProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // proto::Phase1FBReply *msg;
+  // if (P1FBReplies.size() > 0) {
+  //   msg = P1FBReplies.back();
+  //   msg->Clear();
+  //   P1FBReplies.pop_back();
+  // } else {
+  //   msg = new proto::proto::Phase1FBReply();
+  // }
+  // return msg;
+}
+
+void Server::FreeUnusedP1FBReply(proto::Phase1FBReply *msg){
+  delete msg;
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(P1FBRProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // P1FBReplies.push_back(msg);
+}
+
+proto::Phase2FBReply *Server::GetUnusedP2FBReply(){
+  return new proto::Phase2FBReply();
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(P2FBRProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // proto::Phase2FBReply *msg;
+  // if (P2FBReplies.size() > 0) {
+  //   msg = P2FBReplies.back();
+  //   msg->Clear();
+  //   P2FBReplies.pop_back();
+  // } else {
+  //   msg = new proto::proto::Phase2FBReply();
+  // }
+  // return msg;
+}
+
+void Server::FreeUnusedP2FBReply(proto::Phase2FBReply *msg){
+  delete msg;
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(P2FBRProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // P2FBReplies.push_back(msg);
+}
+
+
+
 
 //XXX Simulated HMAC code
 std::unordered_map<uint64_t, std::string> sessionKeys;
@@ -2728,24 +2783,39 @@ void Server::RelayP1(const TransportAddress &remote, const std::string &txnDiges
 bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest){
   //1) COMMIT CASE
   if(committed.find(txnDigest) != committed.end()){
-      writeback.Clear();                               //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
-      writeback.set_decision(proto::COMMIT);
-      writeback.set_txn_digest(txnDigest);
+      phase1FBReply.Clear();   //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
+      phase1FBReply.set_req_id(ReqId);
+      phase1FBReply.set_txn_digest(txnDigest);
+
+      proto::Writeback *wb = phase1FBReply.mutable_wb();
+      wb->Clear();
+      wb->set_decision(proto::COMMIT);
+      wb->set_txn_digest(txnDigest);
       proto::CommittedProof* proof = committed[txnDigest];
 
       if(proof->has_p1_sigs()){
-        *writeback.mutable_p1_sigs() = proof->p1_sigs();
+        *wb->mutable_p1_sigs() = proof->p1_sigs();
       }
       else if(proof->has_p2_sigs()){
-        *writeback.mutable_p2_sigs() = proof->p2_sigs();
-        writeback.set_p2_view(proof->p2_view());
+        *wb->mutable_p2_sigs() = proof->p2_sigs();
+        wb->set_p2_view(proof->p2_view());
       }
       else{
         Panic("Commit proof has no signatures"); //error, should not happen
         // A Commit proof
         return false;
       }
-      SendPhase1FBReply(ReqId, phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
+
+      transport->SendMessage(this, remote, phase1FBReply);
+
+      //TODO: delete interested client addres too, should there be an interested one. (or always use ForwardMulti.)
+      // interestedClientsMap::accessor i;
+      // bool interestedClientsItr = interestedClients.find(i, txnDigest);
+      // i->second.erase(remote.clone());
+      // i.release();
+      // delete addr;
+      // interestedClients.erase(i);
+      // i.release();
       return true;
   }
 
@@ -2754,30 +2824,38 @@ bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, co
   //writebackMessages only contains Abort copies. (when can one delete these?)
   //(A blockchain stores all request too, whether commit/abort)
   if(writebackMessages.find(txnDigest) != writebackMessages.end()){
-      writeback = writebackMessages[txnDigest];
-      SendPhase1FBReply(ReqId, phase1Reply, phase2Reply, writeback, remote,  txnDigest, 1);
+      phase1FBReply.Clear();   //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
+      phase1FBReply.set_req_id(ReqId);
+      phase1FBReply.set_txn_digest(txnDigest);
+      *phase1FBReply.mutable_wb() = writebackMessages[txnDigest];
+      transport->SendMessage(this, remote, phase1FBReply);
       return true;
   }
 }
 
-bool Server::ForwardWritebackMulti(const std::string &txnDigest, interestedClientsMap::accessor i){
+bool Server::ForwardWritebackMulti(const std::string &txnDigest, interestedClientsMap::accessor &i){
 
   //interestedClientsMap::accessor i;
   //auto jtr = interestedClients.find(i, txnDigest);
   //if(!jtr) return true; //no interested clients, return
 
   if(committed.find(txnDigest) != committed.end()){
-      writeback.Clear();                               //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
-      writeback.set_decision(proto::COMMIT);
-      writeback.set_txn_digest(txnDigest);
+      phase1FBReply.Clear();   //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
+      phase1FBReply.set_req_id(0);
+      phase1FBReply.set_txn_digest(txnDigest);
+
+      proto::Writeback *wb = phase1FBReply.mutable_wb();
+      wb->Clear();
+      wb->set_decision(proto::COMMIT);
+      wb->set_txn_digest(txnDigest);
       proto::CommittedProof* proof = committed[txnDigest];
 
       if(proof->has_p1_sigs()){
-        *writeback.mutable_p1_sigs() = proof->p1_sigs();
+        *wb->mutable_p1_sigs() = proof->p1_sigs();
       }
       else if(proof->has_p2_sigs()){
-        *writeback.mutable_p2_sigs() = proof->p2_sigs();
-        writeback.set_p2_view(proof->p2_view());
+        *wb->mutable_p2_sigs() = proof->p2_sigs();
+        wb->set_p2_view(proof->p2_view());
       }
       else{
         Panic("Commit proof has no signatures"); //error, should not happen
@@ -2787,14 +2865,17 @@ bool Server::ForwardWritebackMulti(const std::string &txnDigest, interestedClien
   }
   //2) ABORT CASE
   else if(writebackMessages.find(txnDigest) != writebackMessages.end()){
-      writeback = writebackMessages[txnDigest];
+      phase1FBReply.Clear();   //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
+      phase1FBReply.set_req_id(0);
+      phase1FBReply.set_txn_digest(txnDigest);
+      *phase1FBReply.mutable_wb() = writebackMessages[txnDigest];
   }
   else{
     return false;
   }
 
   for (const auto addr : i->second) {
-    SendPhase1FBReply(0, phase1Reply, phase2Reply, writeback, *addr,  txnDigest, 1);
+    transport->SendMessage(this, *addr, phase1FBReply);
     delete addr;
   }
   interestedClients.erase(i);
@@ -2840,7 +2921,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
        proto::ConcurrencyControl::Result result = c->second; //p1Decisions[txnDigest];
        c.release();
 
-       P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote);
+       P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
        //recover stored commit proof.
        if (result != proto::ConcurrencyControl::WAIT) { //if the result is WAIT, then the p1 is not necessary..
          const proto::CommittedProof *conflict;
@@ -2851,10 +2932,10 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
             d.release();
             //conflict = p1Conflicts[txnDigest];
          }
-         SetP1(msg.req_id(), p1fb_organizer, txnDigest, result, conflict);
+         SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
          //SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 4);
        }
-       SetP2(msg.req_id(), p1fb_organizer, txnDigest, decision);
+       SetP2(msg.req_id(), p1fb_organizer->p1fbr->mutable_p2r(), txnDigest, decision);
        SendPhase1FBReply(p1fb_organizer, txnDigest);
   }
 
@@ -2874,8 +2955,8 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
              conflict = d->second;
              d.release();
           }
-          P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote);
-          SetP1(msg.req_id(), p1fb_organizer, txnDigest, result, conflict);
+          P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
+          SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
           SendPhase1FBReply(p1fb_organizer, txnDigest);
         }
 
@@ -2887,8 +2968,8 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       proto::CommitDecision decision = p2Decisions[txnDigest];
       if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
 
-      P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote);
-      SetP2(msg.req_id(), p1fb_organizer, txnDigest, decision);
+      P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
+      SetP2(msg.req_id(), p1fb_organizer->p1fbr->mutable_p2r(), txnDigest, decision);
       SendPhase1FBReply(p1fb_organizer, txnDigest);
   }
 
@@ -2959,17 +3040,17 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
           //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
           //   client_starttime[txnDigest] = start_time;
           // }
-          P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote);
-          SetP1(msg.req_id(), p1fb_organizer, txnDigest, result, committedProof);
+          P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
+          SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
           SendPhase1FBReply(p1fb_organizer, txnDigest);
       }
   }
 }
 
 
-void Server::SetP1(uint64_t reqId, P1FBorganizer *p1fb_organizer, std::string &txnDigest, proto::ConcurrencyControl::Result &result,
+void Server::SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest, proto::ConcurrencyControl::Result &result,
   const proto::CommittedProof *conflict){
-  proto::Phase1Reply *p1Reply = p1fb_organizer->p1fbr->mutable_p1r();
+  //proto::Phase1Reply *p1Reply = p1fb_organizer->p1fbr->mutable_p1r();
 
   p1Reply->set_req_id(reqId);
   p1Reply->mutable_cc()->set_ccr(result);
@@ -2981,8 +3062,8 @@ void Server::SetP1(uint64_t reqId, P1FBorganizer *p1fb_organizer, std::string &t
   }
 }
 
-void Server::SetP2(uint64_t reqId, P1FBorganizer *p1fb_organizer, std::string &txnDigest, proto::CommitDecision &decision){
-  proto::Phase1Reply *p2Reply = p1fb_organizer->p1fbr->mutable_p2r();
+void Server::SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision){
+  //proto::Phase2Reply *p2Reply = p1fb_organizer->p1fbr->mutable_p2r();
   p2Reply->set_req_id(reqId);
   p2Reply->mutable_p2_decision()->set_decision(decision);
 
@@ -2991,12 +3072,14 @@ void Server::SetP2(uint64_t reqId, P1FBorganizer *p1fb_organizer, std::string &t
   p2Reply->mutable_p2_decision()->set_view(decision_views[txnDigest]);
 
   if (params.validateProofs) {
-    *phase2Reply.mutable_p2_decision()->mutable_txn_digest() = txnDigest;
+    *p2Reply->mutable_p2_decision()->mutable_txn_digest() = txnDigest;
   }
 }
 
-
-void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, std::string &txnDigest, bool multi) {
+//TODO: add a way to buffer this message/organizer until commit/abort
+//So that only the first interested client ever creates the object.
+//XXX need to keep changing p2 and current views though...
+void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string &txnDigest, bool multi) {
 
     proto::Phase1FBReply *p1FBReply = p1fb_organizer->p1fbr;
     if(p1FBReply->has_wb()){
@@ -3013,7 +3096,7 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, std::string &txnDi
 //SIGN IT:  //TODO: Want to add this to p2 also, in case fallback is faulty - for simplicity assume only correct fallbacks for now.
 
 
-    auto sendCB = [p1fb_organizer, multi](){
+    auto sendCB = [this, p1fb_organizer, multi](){
       if(p1fb_organizer->c_view_sig_outstanding || p1fb_organizer->p1_sig_outstanding || p1fb_organizer->p2_sig_outstanding) return;
       if(!multi){
           transport->SendMessage(this, *p1fb_organizer->remote, *p1fb_organizer->p1fbr);
@@ -3027,7 +3110,7 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, std::string &txnDi
       }
 
       delete p1fb_organizer;
-    }
+    };
 
     if (params.signedMessages) {
       p1fb_organizer->c_view_sig_outstanding = true;
@@ -3041,16 +3124,16 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, std::string &txnDi
           delete cView;
         });
       //2) sign p1
-      if(p1FBReply->has_p1r && if (p1FBReply->p1r().cc().ccr() != proto::ConcurrencyControl::ABORT) {){
+      if(p1FBReply->has_p1r() && p1FBReply->p1r().cc().ccr() != proto::ConcurrencyControl::ABORT){
         proto::ConcurrencyControl* cc = new proto::ConcurrencyControl(p1FBReply->p1r().cc());
-        MessageToSign(cc, p1FBReply->mutable_p1r()->mutable_signed_cc(), [sendCB, p1fb_organizer](){
+        MessageToSign(cc, p1FBReply->mutable_p1r()->mutable_signed_cc(), [sendCB, p1fb_organizer, cc](){
             p1fb_organizer->c_view_sig_outstanding = false;
             sendCB();
             delete cc;
           });
       }
       //3) sign p2
-      if(p1FBReply->has_p2r){
+      if(p1FBReply->has_p2r()){
         proto::Phase2Decision* p2Decision = new proto::Phase2Decision(p1FBReply->p2r().p2_decision());
         MessageToSign(p2Decision, p1FBReply->mutable_p2r()->mutable_signed_p2_decision(),
         [sendCB, p1fb_organizer, p2Decision](){
@@ -3059,15 +3142,14 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, std::string &txnDi
             delete p2Decision;
           });
       }
-
     }
+
     else{
       sendCB();
     }
-
 }
 
-
+/////////////////////////TODO: clean up from below here.
 
 void Server::HandlePhase2FB(const TransportAddress &remote,
     proto::Phase2FB &msg) {
@@ -3077,34 +3159,16 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
   //    msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
   //    msg.txn().timestamp().timestamp());
 
-
+  //TODO: change to multi and delete all interested clients?
   if(ForwardWriteback(remote, msg.req_id(), txnDigest)) return;
 
   // HandePhase2 just returns an existing decision.
   if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
       proto::CommitDecision decision =p2Decisions[txnDigest];
 
-      SetP2(msg.req_id(), txnDigest, decision);
-      phase2FBReply.Clear();
-      phase2FBReply.set_txn_digest(txnDigest);
-      *phase2FBReply.mutable_p2r() = phase2Reply;
-      proto::AttachedView attachedView;
-      attachedView.mutable_current_view()->set_current_view(current_views[txnDigest]);
-      attachedView.mutable_current_view()->set_replica_id(id);
-
-      //SIGN IT: .
-        *attachedView.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
-
-        if (params.signedMessages) {
-          proto::CurrentView cView(attachedView.current_view());
-          //Latency_Start(&signLat);
-          SignMessage(&cView, keyManager->GetPrivateKey(id), id, attachedView.mutable_signed_current_view());
-          //Latency_End(&signLat);
-        }
-      *phase2FBReply.mutable_attached_view() = attachedView;
-
-
-      transport->SendMessage(this, remote, phase2FBReply);
+      P2FBorganizer *p2fb_organizer = new P2FBorganizer(msg.req_id(), txnDigest, remote, this);
+      SetP2(msg.req_id(), p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, decision);
+      SendPhase2FBReply(p2fb_organizer, txnDigest);
       Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
   }
   //just do normal handle p2 otherwise after timeout
@@ -3118,8 +3182,8 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
       //std::chrono::high_resolution_clock::time_point current_time = high_resolution_clock::now();
 
       //TODO: call HandleP2FB again instead
-
-      transport->Timer((CLIENTTIMEOUT), [this, &remote, &txnDigest, &msg](){VerifyP2FB(remote, txnDigest, msg);});
+      ProcessP2FB(remote, txnDigest, msg);
+      //transport->Timer((CLIENTTIMEOUT), [this, &remote, &txnDigest, &msg](){ProcessP2FB(remote, txnDigest, msg);});
 
 //TODO: for time being dont do this smarter scheduling.
 // if(false){
@@ -3157,133 +3221,158 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+//TODO: Refactor both P1Reply and P2Reply into a single message and remove all redundant functions.
+void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi) {
+
+    proto::Phase2FBReply *p2FBReply = p2fb_organizer->p2fbr;
+
+    proto::AttachedView *attachedView = p2FBReply->mutable_attached_view();
+
+    attachedView->mutable_current_view()->set_current_view(current_views[txnDigest]);
+    attachedView->mutable_current_view()->set_txn_digest(txnDigest);
+    attachedView->mutable_current_view()->set_replica_id(id);
+
+//SIGN IT:  //TODO: Want to add this to p2 also, in case fallback is faulty - for simplicity assume only correct fallbacks for now.
 
 
-void Server::VerifyP2FB(const TransportAddress &remote, std::string &txnDigest, proto::Phase2FB &p2fb){
+    auto sendCB = [this, p2fb_organizer, multi](){
+      if(p2fb_organizer->c_view_sig_outstanding || p2fb_organizer->p2_sig_outstanding) return;
+      if(!multi){
+          transport->SendMessage(this, *p2fb_organizer->remote, *p2fb_organizer->p2fbr);
+      }
+      else{
+        interestedClientsMap::accessor i;
+        auto jtr = interestedClients.find(i, p2fb_organizer->p2fbr->txn_digest());
+        for (const auto addr : i->second) {
+          transport->SendMessage(this, *addr, *p2fb_organizer->p2fbr);
+        }
+      }
+
+      delete p2fb_organizer;
+    };
+
+    if (params.signedMessages) {
+      p2fb_organizer->c_view_sig_outstanding = true;
+
+      //1) sign current view
+      proto::CurrentView *cView = new proto::CurrentView(attachedView->current_view());
+      MessageToSign(cView, attachedView->mutable_signed_current_view(),
+      [sendCB, p2fb_organizer, cView](){
+          p2fb_organizer->c_view_sig_outstanding = false;
+          sendCB();
+          delete cView;
+        });
+      //2) sign p2
+      if(p2FBReply->has_p2r()){
+        proto::Phase2Decision* p2Decision = new proto::Phase2Decision(p2FBReply->p2r().p2_decision());
+        MessageToSign(p2Decision, p2FBReply->mutable_p2r()->mutable_signed_p2_decision(),
+        [sendCB, p2fb_organizer, p2Decision](){
+            p2fb_organizer->c_view_sig_outstanding = false;
+            sendCB();
+            delete p2Decision;
+          });
+      }
+    }
+
+    else{
+      sendCB();
+    }
+}
+
+//TODO: create Callback and asyncVerification 
+void Server::ProcessP2FB(const TransportAddress &remote, std::string &txnDigest, proto::Phase2FB &p2fb){
+  //Shotcircuit if request already processed once.
+  if(ForwardWriteback(remote, 0, txnDigest)) return;
+  // returns an existing decision.
+  if(p2Decisions.find(txnDigest) != p2Decisions.end()){
+      proto::CommitDecision decision =p2Decisions[txnDigest];
+      P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, remote, this);
+      SetP2(0, p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, decision);
+      SendPhase2FBReply(p2fb_organizer, txnDigest);
+      Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
+      return;
+  }
+
   uint8_t groupIndex = txnDigest[0];
   int64_t logGroup;
+  const proto::Transaction *txn;
   // find txn. that maps to txnDigest. if not stored locally, and not part of the msg, reject msg.
-  //TODO: refactor this into common function
-   ////if(params.mainThreadDispatching) ongoingMutex.lock();
   ongoingMap::const_accessor b;
-  auto ongoingItr = ongoing.find(b, txnDigest);
-  if(ongoingItr){
-  //if(ongoing.find(txnDigest) != ongoing.end()){
-    //proto::Transaction txn = *ongoing[txnDigest];
-    proto::Transaction txn = *(b->second);
+  bool isOngoing = ongoing.find(b, txnDigest);
+  if(isOngoing){
+    txn = b->second;
     b.release();
-    groupIndex = groupIndex % txn.involved_groups_size();
-    UW_ASSERT(groupIndex < txn.involved_groups_size());
-    logGroup = txn.involved_groups(groupIndex);
+    groupIndex = groupIndex % txn->involved_groups_size();
+    UW_ASSERT(groupIndex < txn->involved_groups_size());
+    logGroup = txn->involved_groups(groupIndex);
   }
   else{
     b.release();
     if(p2fb.has_txn()){
-        proto::Transaction txn = p2fb.txn();
-        groupIndex = groupIndex % txn.involved_groups_size();
-        UW_ASSERT(groupIndex < txn.involved_groups_size());
-        logGroup = txn.involved_groups(groupIndex);
+        txn = &p2fb.txn();
+        groupIndex = groupIndex % txn->involved_groups_size();
+        UW_ASSERT(groupIndex < txn->involved_groups_size());
+        logGroup = txn->involved_groups(groupIndex);
       }
       else{
-         ////if(params.mainThreadDispatching) ongoingMutex.unlock();
-        return; // TXN unseen..
+         Debug("Txn[%s] neither in ongoing nor in FallbackP2 message.", BytesToHex(txnDigest, 64).c_str());
+        return;
       }
   }
-   ////if(params.mainThreadDispatching) ongoingMutex.unlock();
-//CHANGE CODE TO CLEARLY ACCOUNT FOR THE NEW CASES:
-//P2FB either contains GroupedSignatures directly, OR it just contains P2Replies.
 
-//TODO: Case A
-if(p2fb.has_p2_replies()){
-  proto::P2Replies p2Reps = p2fb.p2_replies();
-  uint32_t counter = config.f + 1;
-  for(auto & p2_reply : p2Reps.p2replies()){
-      proto::Phase2Decision p2dec;
-      if (params.signedMessages) {
-        if(!p2_reply.has_signed_p2_decision()){ return;}
-        proto::SignedMessage sig_msg = p2_reply.signed_p2_decision();
-        if(!IsReplicaInGroup(sig_msg.process_id(), logGroup, &config)){ return;}
-        p2dec.ParseFromString(sig_msg.data());
-        if(p2dec.decision() == p2fb.decision() && p2dec.txn_digest() == p2fb.txn_digest()){
-          if(crypto::Verify(keyManager->GetPublicKey(sig_msg.process_id()),
-                &sig_msg.data()[0], sig_msg.data().length(), &sig_msg.signature()[0])){ counter--;} else{return;}
+  //P2FB either contains P1 GroupedSignatures, OR it just contains forwarded P2Replies.
+  //TODO: Case A: The FbP2 message has f+1 matching P2replies from logShard replicas
+  if(p2fb.has_p2_replies()){
+    proto::P2Replies p2Reps = p2fb.p2_replies();
+    uint32_t counter = config.f + 1;
+    for(auto & p2_reply : p2Reps.p2replies()){
+        proto::Phase2Decision p2dec;
+        if (params.signedMessages) {
+          if(!p2_reply.has_signed_p2_decision()){ return;}
+          proto::SignedMessage sig_msg = p2_reply.signed_p2_decision();
+          if(!IsReplicaInGroup(sig_msg.process_id(), logGroup, &config)){ return;}
+          p2dec.ParseFromString(sig_msg.data());
+          if(p2dec.decision() == p2fb.decision() && p2dec.txn_digest() == p2fb.txn_digest()){
+            if(crypto::Verify(keyManager->GetPublicKey(sig_msg.process_id()),
+                  &sig_msg.data()[0], sig_msg.data().length(), &sig_msg.signature()[0])){ counter--;} else{return;}
+          }
         }
-
-      }
-      //no sig case:
-      else{
-        if(p2_reply.has_p2_decision()){
-          if(p2_reply.p2_decision().decision() == p2fb.decision() && p2_reply.p2_decision().txn_digest() == p2fb.txn_digest()) counter--;
+        //no sig case:
+        else{
+          if(p2_reply.has_p2_decision()){
+            if(p2_reply.p2_decision().decision() == p2fb.decision() && p2_reply.p2_decision().txn_digest() == p2fb.txn_digest()) counter--;
+          }
         }
-      }
-      if(counter == 0){
-        p2Decisions[txnDigest] = p2fb.decision();
-        decision_views[txnDigest] = 0;
-        break;
-      }
+        if(counter == 0){
+          p2Decisions[txnDigest] = p2fb.decision();
+          decision_views[txnDigest] = 0;
+          break;
+        }
+    }
   }
-}
-//TODO: Case B
-else if(p2fb.has_p1_sigs()){
-    proto::Transaction txn;
-     ////if(params.mainThreadDispatching) ongoingMutex.lock();
-    ongoingMap::const_accessor b;
-    bool ongoingItr = ongoing.find(b, txnDigest);
-    b.release();
-    if(ongoingItr){
-    //if(ongoing.find(txnDigest) != ongoing.end()){
-      //proto::Transaction txn = *ongoing[txnDigest];
-      proto::Transaction txn = *(b->second);
-      b.release();
-    }
-    else if(p2fb.has_txn()){
-        b.release();
-          proto::Transaction txn = p2fb.txn();
-    }
-    else{
-      b.release();
-       ////if(params.mainThreadDispatching) ongoingMutex.unlock();
-      return; //TXN unseen.
-    }
-     ////if(params.mainThreadDispatching) ongoingMutex.unlock();
+  //TODO: Case B: The FbP2 message has standard P1 Quorums that match the decision
+  else if(p2fb.has_p1_sigs()){
 
-    proto::GroupedSignatures grpSigs = p2fb.p1_sigs();
-    int64_t myProcessId;
-    proto::ConcurrencyControl::Result myResult;
-    LookupP1Decision(txnDigest, myProcessId, myResult);
+      proto::GroupedSignatures grpSigs = p2fb.p1_sigs();
+      int64_t myProcessId;
+      proto::ConcurrencyControl::Result myResult;
+      LookupP1Decision(txnDigest, myProcessId, myResult);
 
-    if(!ValidateP1Replies(p2fb.decision(), false, &txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult, verifier)){
-      return; //INVALID SIGS
-    }
-    p2Decisions[txnDigest] = p2fb.decision();
-    decision_views[txnDigest] = 0;
-}
-
-if(p2Decisions.find(txnDigest) == p2Decisions.end()) return; //Still no decision. Failure.
-// form p2r and send it
-SetP2(p2fb.req_id(), txnDigest, p2Decisions[txnDigest]);
-phase2FBReply.Clear();
-phase2FBReply.set_txn_digest(txnDigest);
-*phase2FBReply.mutable_p2r() = phase2Reply;
-proto::AttachedView attachedView;
-attachedView.mutable_current_view()->set_current_view(current_views[txnDigest]);
-attachedView.mutable_current_view()->set_replica_id(id);
-
-//SIGN IT:  //TODO: Want to add this to p2 also, in case fallback is faulty - for simplicity assume only correct fallbacks for now.
-  *attachedView.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
-
-  if (params.signedMessages) {
-    proto::CurrentView cView(attachedView.current_view());
-    //Latency_Start(&signLat);
-    SignMessage(&cView, keyManager->GetPrivateKey(id), id, attachedView.mutable_signed_current_view());
-    //Latency_End(&signLat);
+      if(!ValidateP1Replies(p2fb.decision(), false, txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult, verifier)){
+        return; //INVALID SIGS
+      }
+      p2Decisions[txnDigest] = p2fb.decision();
+      decision_views[txnDigest] = 0;
   }
-*phase2FBReply.mutable_attached_view() = attachedView;
-
-
-transport->SendMessage(this, remote, phase2FBReply);
-Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
-
+  else{
+    Debug("FallbackP2 message for Txn[%s] has no proofs.", BytesToHex(txnDigest, 64).c_str());
+    return;
+  }
+  // form p2r and send it
+  P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, remote, this);
+  SetP2(0, p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, p2Decisions[txnDigest]);
+  SendPhase2FBReply(p2fb_organizer, txnDigest);
+  Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
 }
 
 
@@ -3609,8 +3698,8 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
     if(current_views[txnDigest] < msg.view()){
       current_views[txnDigest] = msg.view();
     }
-
-    SetP2(msg.req_id(), txnDigest, p2Decisions[txnDigest]);  //TODO: problematic that client cannot distinguish? Wrap it inside a P2FBreply?
+    //TODO: XXX XXX XXX Make compatible with new code
+    //SetP2(msg.req_id(), txnDigest, p2Decisions[txnDigest]);  //TODO: problematic that client cannot distinguish? Wrap it inside a P2FBreply?
     phase2FBReply.Clear();
     phase2FBReply.set_txn_digest(txnDigest);
     *phase2FBReply.mutable_p2r() = phase2Reply;

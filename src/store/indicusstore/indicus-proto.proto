@@ -266,12 +266,13 @@ message Phase2FB {
 //fallback phase2R: Can be the same Phase2R as normal.
 
 message Phase2FBReply {
-  required bytes txn_digest = 1;
-  required Phase2Reply p2r = 2;
-  optional AttachedView attached_view = 3;
+  required uint64 req_id = 1;
+  required bytes txn_digest = 2;
+  required Phase2Reply p2r = 3;
+  optional AttachedView attached_view = 4;
 //  oneof current_view_oneof {
-//    CurrentView current_view = 3;
-//   SignedMessage signed_current_view = 4;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
+//    CurrentView current_view = 4;
+//   SignedMessage signed_current_view = 5;   //TODO: PACKAGE VIEW INTO WHATEVER THE SIGNED MESSAGE WE ALREADY RETURN SO THERE IS JUST A SINGLE SIGNED MESSAGE TO VERIFY. requires changing the verification logic for those functions but that is ok.
 //  }
 
 }
@@ -294,9 +295,10 @@ message InvokeFB {
 // all to all move to new views; upon reception of a InvokeFB request and timeout on FB result message reception, this message is sent to all replicas, and forwarded if f+1 are received. Only forward once per view.
 // Just assume for simplicty that only honest clients start invocations and therefore this message is never necessary. (Its fine if we always send it, but it might be unecessary and requires us to implement MACs too; or pay heavy signature price.)
 message MoveView {
-  required uint64 req_id = 1;
+  required uint64 req_id = 1; //not really needed.
   required bytes txn_digest = 2;
   required uint64 view = 3;
+  optional bytes mac = 4;
 }
 
 

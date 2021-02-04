@@ -560,6 +560,24 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
 
       }
 
+      //IS THIS SAFE?
+      bool skip = false;
+      if (sig.process_id() == myProcessId && myProcessId >= 0) {
+        if (concurrencyControl.ccr() == myResult) {
+          skip = true;
+        } else {
+          Debug("Signature purportedly from replica %lu"
+              " (= my id %ld) doesn't match my response %u.",
+              sig.process_id(), myProcessId, concurrencyControl.ccr());
+          delete verifyObj;
+          mcb((void*) false);
+          return;
+        }
+      }
+      if(skip) continue;
+
+
+
       Debug("Verifying %lu byte signature from replica %lu in group %lu.",
           sig.signature().size(), sig.process_id(), sigs.first);
 
@@ -673,9 +691,7 @@ bool ValidateP1Replies(proto::CommitDecision decision,
       }
 
       bool skip = false;
-      /* TODO: remove logic for avoiding verifying our own result for now.
-       *   It's more complicated with shards on the same machine signing each other's
-       *   messages.
+
       if (sig.process_id() == myProcessId && myProcessId >= 0) {
         if (concurrencyControl.ccr() == myResult) {
           skip = true;
@@ -685,7 +701,7 @@ bool ValidateP1Replies(proto::CommitDecision decision,
               sig.process_id(), myProcessId, concurrencyControl.ccr());
           return false;
         }
-      }*/
+      }
 
       Debug("Verifying %lu byte signature from replica %lu in group %lu.",
           sig.signature().size(), sig.process_id(), sigs.first);
@@ -949,6 +965,18 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
         mcb((void*) false);
         return;
       }
+      //TODO: does this work as expected?
+      bool skip = false;
+      if (sig.process_id() == myProcessId && myProcessId >= 0) {
+        if (p2Decision.decision() == myDecision) {
+          skip = true;
+        } else {
+          delete verifyObj;
+          mcb((void*) false);
+          return;
+        }
+      }
+      if(skip) continue;
 
       //sanity checks
       // Debug("P2 VERIFICATION TX:[%s] with Sig:[%s] from replica %lu with Msg:[%s].",
