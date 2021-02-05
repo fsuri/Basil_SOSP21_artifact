@@ -215,10 +215,12 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void FreePhase2message(proto::Phase2 *msg);
   void FreeWBmessage(proto::Writeback *msg);
   //Fallback messages:
-  proto::Phase1FBReply *GetUnusedP1FBReply();
-  void FreeUnusedP1FBReply(proto::Phase1FBReply *msg);
-  proto::Phase2FBReply *GetUnusedP2FBReply();
-  void FreeUnusedP2FBReply(proto::Phase2FBReply *msg);
+  proto::Phase1FBReply *GetUnusedPhase1FBReply();
+  void FreePhase1FBReply(proto::Phase1FBReply *msg);
+  proto::Phase2FBReply *GetUnusedPhase2FBReply();
+  void FreePhase2FBReply(proto::Phase2FBReply *msg);
+  proto::Phase2FB *GetUnusedPhase2FBmessage();
+  void FreePhase2FBmessage(proto::Phase2FB *msg);
 
   inline bool IsKeyOwned(const std::string &key) const {
     return static_cast<int>((*part)(key, numShards, groupIdx, dummyTxnGroups) % numGroups) == groupIdx;
@@ -324,20 +326,20 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
   //FALLBACK helper functions
   struct P1FBorganizer {
-    P1FBorganizer(uint64_t ReqId, std::string &txnDigest, const TransportAddress &remote, Server *server) :
+    P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
       remote(remote.clone()), server(server) {
-        p1fbr = server->GetUnusedP1FBReply();
+        p1fbr = server->GetUnusedPhase1FBReply();
         p1fbr->set_req_id(ReqId);
         p1fbr->set_txn_digest(txnDigest);
     }
     P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server) {
-        p1fbr = server->GetUnusedP1FBReply();
+        p1fbr = server->GetUnusedPhase1FBReply();
         p1fbr->set_req_id(ReqId);
         p1fbr->set_txn_digest(txnDigest);
     }
     ~P1FBorganizer() {
       delete remote;
-      server->FreeUnusedP1FBReply(p1fbr);
+      server->FreePhase1FBReply(p1fbr);
     }
     Server *server;
 
@@ -353,20 +355,20 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   };
 
   struct P2FBorganizer {
-    P2FBorganizer(uint64_t ReqId, std::string &txnDigest, const TransportAddress &remote, Server *server) :
+    P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
       remote(remote.clone()), server(server) {
-        p2fbr = server->GetUnusedP2FBReply();
+        p2fbr = server->GetUnusedPhase2FBReply();
         p2fbr->set_req_id(ReqId);
         p2fbr->set_txn_digest(txnDigest);
     }
     P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server) {
-        p2fbr = server->GetUnusedP2FBReply();
+        p2fbr = server->GetUnusedPhase2FBReply();
         p2fbr->set_req_id(ReqId);
         p2fbr->set_txn_digest(txnDigest);
     }
     ~P2FBorganizer() {
       delete remote;
-      server->FreeUnusedP2FBReply(p2fbr);
+      server->FreePhase2FBReply(p2fbr);
     }
     Server *server;
 
@@ -400,7 +402,9 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string &txnDigest, bool multi = false);
   void SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi = false);
 
-  void ProcessP2FB(const TransportAddress &remote, std::string &txnDigest, proto::Phase2FB &p2fb);
+  void ProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, proto::Phase2FB &p2fb);
+  void ProcessP2FBCallback(proto::Phase2FB *p2fb, const std::string &txnDigest,
+    const TransportAddress *remote, void* valid);
   bool VerifyViews(proto::InvokeFB &msg, uint32_t lG);
   bool ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest);
   bool ForwardWritebackMulti(const std::string &txnDigest, interestedClientsMap::accessor &i);

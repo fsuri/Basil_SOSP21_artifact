@@ -194,6 +194,12 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
 
 void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
 //void ThreadLocalAsyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
+void asyncValidateFBP2Replies(proto::CommitDecision decision,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::P2Replies &p2Replies,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier,
+    mainThreadCallback mcb, Transport* transport, bool multithread = false);
 
 bool ValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     const proto::Transaction *txn,

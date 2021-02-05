@@ -677,16 +677,16 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
   signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid){
 
   Debug("HandlePhase2CB invoked");
+  if(!valid){
+    Debug("VALIDATE P1Replies for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
+    cleanCB(); //deletes SendCB resources should SendCB not be called.
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+      FreePhase2message(msg); //const_cast<proto::Phase2&>(msg));
+    }
+    return;
+  }
 
   auto f = [this, msg, txnDigest, sendCB = std::move(sendCB), phase2Reply, cleanCB = std::move(cleanCB), valid ](){
-    if(!valid){
-      Debug("VALIDATE P1Replies for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
-      cleanCB(); //deletes SendCB resources should SendCB not be called.
-      if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
-        FreePhase2message(msg); //const_cast<proto::Phase2&>(msg));
-      }
-      return (void*) true;
-    }
 
      if(params.mainThreadDispatching) p2DecisionsMutex.lock();
      if(params.mainThreadDispatching) current_viewsMutex.lock();
@@ -913,15 +913,16 @@ void Server::HandlePhase2(const TransportAddress &remote,
 void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDigest,
   proto::Transaction* txn, void* valid){
 
+  if(! valid){
+    Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+      FreeWBmessage(msg);
+    }
+    return;
+  }
+
   auto f = [this, msg, txnDigest, txn, valid]() mutable {
       Debug("WRITEBACK Callback[%s] being called", BytesToHex(*txnDigest, 16).c_str());
-      if(! valid){
-        Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
-        if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
-          FreeWBmessage(msg);
-        }
-        return (void*) false;
-      }
 
       ///////////////////////////// Below: Only executed by MainThread
       // tbb::concurrent_hash_map<std::string, std::mutex>::accessor z;
@@ -948,7 +949,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
         Commit(*txnDigest, txn, p1Sigs ? msg->release_p1_sigs() : msg->release_p2_sigs(), p1Sigs, view);
       } else {
         Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
-        msg->set_allocated_txn(txn);
+        //msg->set_allocated_txn(txn); //dont need to set since client will?
         writebackMessages[*txnDigest] = *msg;  //Only necessary for fallback... (could avoid storing these, if one just replied with a p2 vote instea - but that is not as responsive)
 
         ///TODO: msg might no longer hold txn; could have been released in HanldeWriteback
@@ -2660,7 +2661,7 @@ void Server::FreeWBmessage(proto::Writeback *msg) {
   // WBmessages.push_back(msg);
 }
 
-proto::Phase1FBReply *Server::GetUnusedP1FBReply(){
+proto::Phase1FBReply *Server::GetUnusedPhase1FBReply(){
   return new proto::Phase1FBReply();
   // //Latency_Start(&waitOnProtoLock);
   // std::unique_lock<std::mutex> lock(P1FBRProtoMutex);
@@ -2676,7 +2677,7 @@ proto::Phase1FBReply *Server::GetUnusedP1FBReply(){
   // return msg;
 }
 
-void Server::FreeUnusedP1FBReply(proto::Phase1FBReply *msg){
+void Server::FreePhase1FBReply(proto::Phase1FBReply *msg){
   delete msg;
   // //Latency_Start(&waitOnProtoLock);
   // std::unique_lock<std::mutex> lock(P1FBRProtoMutex);
@@ -2684,7 +2685,7 @@ void Server::FreeUnusedP1FBReply(proto::Phase1FBReply *msg){
   // P1FBReplies.push_back(msg);
 }
 
-proto::Phase2FBReply *Server::GetUnusedP2FBReply(){
+proto::Phase2FBReply *Server::GetUnusedPhase2FBReply(){
   return new proto::Phase2FBReply();
   // //Latency_Start(&waitOnProtoLock);
   // std::unique_lock<std::mutex> lock(P2FBRProtoMutex);
@@ -2700,12 +2701,36 @@ proto::Phase2FBReply *Server::GetUnusedP2FBReply(){
   // return msg;
 }
 
-void Server::FreeUnusedP2FBReply(proto::Phase2FBReply *msg){
+void Server::FreePhase2FBReply(proto::Phase2FBReply *msg){
   delete msg;
   // //Latency_Start(&waitOnProtoLock);
   // std::unique_lock<std::mutex> lock(P2FBRProtoMutex);
   // //Latency_End(&waitOnProtoLock);
   // P2FBReplies.push_back(msg);
+}
+
+proto::Phase2FB *Server::GetUnusedPhase2FBmessage(){
+  return new proto::Phase2FB();
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(P2FBProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // proto::Phase2FB *msg;
+  // if (P2FBmessages.size() > 0) {
+  //   msg = P2FBmessages.back();
+  //   msg->Clear();
+  //   P2FBmessages.pop_back();
+  // } else {
+  //   msg = new proto::proto::Phase2FB();
+  // }
+  // return msg;
+}
+
+void Server::FreePhase2FBmessage(proto::Phase2FB *msg){
+  delete msg;
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(P2FBProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // P2FBmessages.push_back(msg);
 }
 
 
@@ -3154,7 +3179,7 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
 void Server::HandlePhase2FB(const TransportAddress &remote,
     proto::Phase2FB &msg) {
   //std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
-  std::string txnDigest = msg.txn_digest();
+  const std::string &txnDigest = msg.txn_digest();
   //Debug("PHASE2FB[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
   //    msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
   //    msg.txn().timestamp().timestamp());
@@ -3279,8 +3304,9 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
     }
 }
 
-//TODO: create Callback and asyncVerification 
-void Server::ProcessP2FB(const TransportAddress &remote, std::string &txnDigest, proto::Phase2FB &p2fb){
+//TODO: p2fb needs to be on the Heap if using multithreading!!!!
+//TODO: create Callback and asyncVerification
+void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, proto::Phase2FB &p2fb){
   //Shotcircuit if request already processed once.
   if(ForwardWriteback(remote, 0, txnDigest)) return;
   // returns an existing decision.
@@ -3294,7 +3320,7 @@ void Server::ProcessP2FB(const TransportAddress &remote, std::string &txnDigest,
   }
 
   uint8_t groupIndex = txnDigest[0];
-  int64_t logGroup;
+  //int64_t logGroup; //probably do not need it
   const proto::Transaction *txn;
   // find txn. that maps to txnDigest. if not stored locally, and not part of the msg, reject msg.
   ongoingMap::const_accessor b;
@@ -3302,17 +3328,17 @@ void Server::ProcessP2FB(const TransportAddress &remote, std::string &txnDigest,
   if(isOngoing){
     txn = b->second;
     b.release();
-    groupIndex = groupIndex % txn->involved_groups_size();
-    UW_ASSERT(groupIndex < txn->involved_groups_size());
-    logGroup = txn->involved_groups(groupIndex);
+    // groupIndex = groupIndex % txn->involved_groups_size();
+    // UW_ASSERT(groupIndex < txn->involved_groups_size());
+    // logGroup = txn->involved_groups(groupIndex);
   }
   else{
     b.release();
     if(p2fb.has_txn()){
         txn = &p2fb.txn();
-        groupIndex = groupIndex % txn->involved_groups_size();
-        UW_ASSERT(groupIndex < txn->involved_groups_size());
-        logGroup = txn->involved_groups(groupIndex);
+        // groupIndex = groupIndex % txn->involved_groups_size();
+        // UW_ASSERT(groupIndex < txn->involved_groups_size());
+        // logGroup = txn->involved_groups(groupIndex);
       }
       else{
          Debug("Txn[%s] neither in ongoing nor in FallbackP2 message.", BytesToHex(txnDigest, 64).c_str());
@@ -3323,58 +3349,116 @@ void Server::ProcessP2FB(const TransportAddress &remote, std::string &txnDigest,
   //P2FB either contains P1 GroupedSignatures, OR it just contains forwarded P2Replies.
   //TODO: Case A: The FbP2 message has f+1 matching P2replies from logShard replicas
   if(p2fb.has_p2_replies()){
-    proto::P2Replies p2Reps = p2fb.p2_replies();
-    uint32_t counter = config.f + 1;
-    for(auto & p2_reply : p2Reps.p2replies()){
-        proto::Phase2Decision p2dec;
-        if (params.signedMessages) {
-          if(!p2_reply.has_signed_p2_decision()){ return;}
-          proto::SignedMessage sig_msg = p2_reply.signed_p2_decision();
-          if(!IsReplicaInGroup(sig_msg.process_id(), logGroup, &config)){ return;}
-          p2dec.ParseFromString(sig_msg.data());
-          if(p2dec.decision() == p2fb.decision() && p2dec.txn_digest() == p2fb.txn_digest()){
-            if(crypto::Verify(keyManager->GetPublicKey(sig_msg.process_id()),
-                  &sig_msg.data()[0], sig_msg.data().length(), &sig_msg.signature()[0])){ counter--;} else{return;}
-          }
-        }
-        //no sig case:
-        else{
-          if(p2_reply.has_p2_decision()){
-            if(p2_reply.p2_decision().decision() == p2fb.decision() && p2_reply.p2_decision().txn_digest() == p2fb.txn_digest()) counter--;
+    if(params.signedMessages){
+      mainThreadCallback mcb(std::bind(&Server::ProcessP2FBCallback, this,
+         &p2fb, txnDigest, remote.clone(), std::placeholders::_1));
+      int64_t myProcessId;
+      proto::CommitDecision myDecision;
+      LookupP2Decision(txnDigest, myProcessId, myDecision);
+      asyncValidateFBP2Replies(p2fb.decision(), txn, &txnDigest, p2fb.p2_replies(),
+         keyManager, &config, myProcessId, myDecision, verifier, std::move(mcb), transport, params.multiThreading);
+    }
+    else{
+      proto::P2Replies p2Reps = p2fb.p2_replies();
+      uint32_t counter = config.f + 1;
+      for(auto & p2_reply : p2Reps.p2replies()){
+        if(p2_reply.has_p2_decision()){
+          if(p2_reply.p2_decision().decision() == p2fb.decision() && p2_reply.p2_decision().txn_digest() == p2fb.txn_digest()){
+            counter--;
           }
         }
         if(counter == 0){
-          p2Decisions[txnDigest] = p2fb.decision();
-          decision_views[txnDigest] = 0;
-          break;
+          ProcessP2FBCallback(&p2fb, txnDigest, &remote, (void*) true);
+          return;
         }
+      }
+      ProcessP2FBCallback(&p2fb, txnDigest, &remote, (void*) false);
     }
+
+    // proto::P2Replies p2Reps = p2fb.p2_replies();
+    // uint32_t counter = config.f + 1;
+    // for(auto & p2_reply : p2Reps.p2replies()){
+    //     proto::Phase2Decision p2dec;
+    //
+    //       if(!p2_reply.has_signed_p2_decision()){ return;}
+    //       proto::SignedMessage sig_msg = p2_reply.signed_p2_decision();
+    //
+    //       if(!IsReplicaInGroup(sig_msg.process_id(), logGroup, &config)){ return;}
+    //
+    //       p2dec.ParseFromString(sig_msg.data());
+    //       if(p2dec.decision() == p2fb.decision() && p2dec.txn_digest() == p2fb.txn_digest()){
+    //         if(crypto::Verify(keyManager->GetPublicKey(sig_msg.process_id()),
+    //               &sig_msg.data()[0], sig_msg.data().length(), &sig_msg.signature()[0])){ counter--;} else{return;}
+    //       }
+    //
+    // }
   }
   //TODO: Case B: The FbP2 message has standard P1 Quorums that match the decision
   else if(p2fb.has_p1_sigs()){
 
-      proto::GroupedSignatures grpSigs = p2fb.p1_sigs();
+      const proto::GroupedSignatures &grpSigs = p2fb.p1_sigs();
       int64_t myProcessId;
       proto::ConcurrencyControl::Result myResult;
       LookupP1Decision(txnDigest, myProcessId, myResult);
 
-      if(!ValidateP1Replies(p2fb.decision(), false, txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult, verifier)){
-        return; //INVALID SIGS
+      if(params.multiThreading){
+        mainThreadCallback mcb(std::bind(&Server::ProcessP2FBCallback, this,
+           &p2fb, txnDigest, remote.clone(), std::placeholders::_1));
+           asyncValidateP1Replies(p2fb.decision(),
+                 false, txn, &txnDigest, grpSigs, keyManager, &config, myProcessId,
+                 myResult, verifier, std::move(mcb), transport, true);
+           return;
+
       }
-      p2Decisions[txnDigest] = p2fb.decision();
-      decision_views[txnDigest] = 0;
+      else{
+        if(!ValidateP1Replies(p2fb.decision(), false, txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult, verifier)){
+          return; //INVALID SIGS
+        }
+        ProcessP2FBCallback(&p2fb, txnDigest, &remote, (void*) true);
+        return;
+      }
   }
   else{
     Debug("FallbackP2 message for Txn[%s] has no proofs.", BytesToHex(txnDigest, 64).c_str());
     return;
   }
-  // form p2r and send it
-  P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, remote, this);
-  SetP2(0, p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, p2Decisions[txnDigest]);
-  SendPhase2FBReply(p2fb_organizer, txnDigest);
-  Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
+
+  ProcessP2FBCallback(&p2fb, txnDigest, &remote, (void*) true);
 }
 
+void Server::ProcessP2FBCallback(proto::Phase2FB *p2fb, const std::string &txnDigest,
+  const TransportAddress *remote, void* valid){
+
+    if(!valid){
+      return;
+    }
+    proto::CommitDecision decision;
+    if(params.mainThreadDispatching) p2DecisionsMutex.lock();
+    if(params.mainThreadDispatching) decision_viewsMutex.lock();
+    if(p2Decisions.find(txnDigest) != p2Decisions.end()){
+      decision = p2Decisions[txnDigest];
+    }
+    else{
+      p2Decisions[txnDigest] = p2fb->decision();
+      decision_views[txnDigest] = 0;
+      decision = p2fb->decision();
+    }
+    if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
+    if(params.mainThreadDispatching) decision_viewsMutex.unlock();
+
+
+    P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, *remote, this);
+    SetP2(0, p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, decision);
+    SendPhase2FBReply(p2fb_organizer, txnDigest);
+
+    //TODO: FreeOriginal p2fb message + delete remote. (could also instantiate the p2fb_org object earlier, and delete if false)
+    if(params.multiThreading || params.mainThreadDispatching){
+      FreePhase2FBmessage(p2fb);
+    }
+    delete remote;
+    Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
+
+}
 
 //TODO: Views are now signed messages. Split verify P2fb function.
 bool Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp){
