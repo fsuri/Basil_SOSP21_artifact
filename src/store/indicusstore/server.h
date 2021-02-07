@@ -197,6 +197,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       proto::ConcurrencyControl::Result &myResult) const;
   void LookupP2Decision(const std::string &txnDigest,
       int64_t &myProcessId, proto::CommitDecision &myDecision) const;
+  void Server::LookupCurrentView(const std::string &txnDigest, int64_t &myProcessId,
+      uint64_t &myCurrentView) const;
   uint64_t DependencyDepth(const proto::Transaction *txn) const;
   void MessageToSign(::google::protobuf::Message* msg,
       proto::SignedMessage *signedMessage, signedCallback cb);

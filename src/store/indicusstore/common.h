@@ -54,9 +54,9 @@ void FreeMessageString(std::string *str);
 
 //TODO: re-use objects?
 struct asyncVerification{
-  asyncVerification(uint32_t _quorumSize, mainThreadCallback mcb, int no_groups,
+  asyncVerification(uint32_t _quorumSize, mainThreadCallback mcb, int groupTotals,
     proto::CommitDecision _decision, Transport* tp) :  quorumSize(_quorumSize),
-    mcb(mcb), groupTotals(no_groups), decision(_decision),
+    mcb(mcb), groupTotals(groupTotals), decision(_decision),
     terminate(false), tp(tp) { }
   ~asyncVerification() { deleteMessages();}
 
@@ -194,12 +194,6 @@ void asyncValidateP2Replies(proto::CommitDecision decision, uint64_t view,
 
 void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
 //void ThreadLocalAsyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t groupId, void* result);
-void asyncValidateFBP2Replies(proto::CommitDecision decision,
-    const proto::Transaction *txn,
-    const std::string *txnDigest, const proto::P2Replies &p2Replies,
-    KeyManager *keyManager, const transport::Configuration *config,
-    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier,
-    mainThreadCallback mcb, Transport* transport, bool multithread = false);
 
 bool ValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     const proto::Transaction *txn,
@@ -213,6 +207,28 @@ bool ValidateP2Replies(proto::CommitDecision decision, uint64_t view,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, proto::CommitDecision myDecision,
     Latency_t &lat, Verifier *verifier);
+
+//Fallback verifications:
+
+void asyncValidateFBP2Replies(proto::CommitDecision decision,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::P2Replies &p2Replies,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier,
+    mainThreadCallback mcb, Transport* transport, bool multithread = false);
+
+bool VerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
+    const std::string *txnDigest, const proto::SignedMessages &signed_messages,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, uint64_t myCurrentView, Verifier *verifier);
+
+void asyncVerifyFBViews(uint64_t view, uint64_t logGrp,
+    const std::string *txnDigest, const proto::SignedMessages &signed_messages,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, uint64_t myView, Verifier *verifier,
+    mainThreadCallback mcb, Transport* transport, bool multithread);
+
+//END Fallback verifications
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,
     const std::string *txnDigest, const std::string &key, const std::string &val, const Timestamp &timestamp,

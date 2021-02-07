@@ -2431,6 +2431,19 @@ void Server::LookupP2Decision(const std::string &txnDigest, int64_t &myProcessId
    if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
 }
 
+void Server::LookupCurrentView(const std::string &txnDigest, int64_t &myProcessId,
+    uint64_t &myCurrentView) const {
+  myProcessId = -1;
+  // see if we participated in this decision
+   if(params.mainThreadDispatching) current_viewsMutex.lock();
+  auto current_viewsItr = current_views.find(txnDigest);
+  if (current_viewsItr != current_views.end()) {
+    myProcessId = id;
+    myDecision = current_viewsItr->second;
+  }
+   if(params.mainThreadDispatching) current_viewsMutex.unlock();
+}
+
 uint64_t Server::DependencyDepth(const proto::Transaction *txn) const {
   uint64_t maxDepth = 0;
   std::queue<std::pair<const proto::Transaction *, uint64_t>> q;
@@ -3460,7 +3473,8 @@ void Server::ProcessP2FBCallback(proto::Phase2FB *p2fb, const std::string &txnDi
 
 }
 
-//TODO: Views are now signed messages. Split verify P2fb function.
+//TODO replace with common functions.
+//TODO: create callback, check in callback whether higher view exists too (if so ignore this one) - only necessary for async version
 bool Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp){
 
   auto txnDigest = msg.txn_digest();
@@ -3624,7 +3638,7 @@ if(msg.proposed_view() <= current_views[txnDigest]) return; //Obsolete Invoke Me
           return;  //This replica is not part of the shard responsible for Fallback.
       }
 
-
+      //int64_t logGrp = GetLogGroup(*txn, *txnDigest);
 
 //process decision if one does not have any yet.
 //This is safe even if current_view > 0 because this replica could not have taken part in any elections yet (can only elect once you have decision), nor has yet received a dec from a larger view which it would adopt.
