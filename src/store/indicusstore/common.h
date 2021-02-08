@@ -222,7 +222,7 @@ bool VerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, uint64_t myCurrentView, Verifier *verifier);
 
-void asyncVerifyFBViews(uint64_t view, uint64_t logGrp,
+void asyncVerifyFBViews(uint64_t view, bool catch_up, uint64_t logGrp,
     const std::string *txnDigest, const proto::SignedMessages &signed_messages,
     KeyManager *keyManager, const transport::Configuration *config,
     int64_t myProcessId, uint64_t myView, Verifier *verifier,

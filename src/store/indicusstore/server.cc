@@ -2439,7 +2439,7 @@ void Server::LookupCurrentView(const std::string &txnDigest, int64_t &myProcessI
   auto current_viewsItr = current_views.find(txnDigest);
   if (current_viewsItr != current_views.end()) {
     myProcessId = id;
-    myDecision = current_viewsItr->second;
+    myCurrentView = current_viewsItr->second;
   }
    if(params.mainThreadDispatching) current_viewsMutex.unlock();
 }
@@ -2738,12 +2738,36 @@ proto::Phase2FB *Server::GetUnusedPhase2FBmessage(){
   // return msg;
 }
 
-void Server::FreePhase2FBmessage(proto::Phase2FB *msg){
+void Server::FreePhase2FBmessage(const proto::Phase2FB *msg){
   delete msg;
   // //Latency_Start(&waitOnProtoLock);
   // std::unique_lock<std::mutex> lock(P2FBProtoMutex);
   // //Latency_End(&waitOnProtoLock);
   // P2FBmessages.push_back(msg);
+}
+
+proto::SendView *Server::GetUnusedSendViewMessage(){
+  return new proto::SendView();
+}
+
+void Server::FreeSendViewMessage(proto::SendView *msg){
+  delete msg;
+}
+
+proto::ElectMessage *Server::GetUnusedElectMessage(){
+  return new proto::ElectMessage();
+}
+
+void Server::FreeElectMessage(proto::ElectMessage *msg){
+  delete msg;
+}
+
+proto::ElectFB *Server::GetUnusedElectFBMessage(){
+  return new proto::ElectFB();
+}
+
+void Server::FreeElectFBMessage(proto::ElectFB *msg){
+  delete msg;
 }
 
 
@@ -3190,7 +3214,7 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
 /////////////////////////TODO: clean up from below here.
 
 void Server::HandlePhase2FB(const TransportAddress &remote,
-    proto::Phase2FB &msg) {
+    const proto::Phase2FB &msg) {
   //std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   const std::string &txnDigest = msg.txn_digest();
   //Debug("PHASE2FB[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
@@ -3319,7 +3343,7 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
 
 //TODO: p2fb needs to be on the Heap if using multithreading!!!!
 //TODO: create Callback and asyncVerification
-void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, proto::Phase2FB &p2fb){
+void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, const proto::Phase2FB &p2fb){
   //Shotcircuit if request already processed once.
   if(ForwardWriteback(remote, 0, txnDigest)) return;
   // returns an existing decision.
@@ -3439,7 +3463,7 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
   ProcessP2FBCallback(&p2fb, txnDigest, &remote, (void*) true);
 }
 
-void Server::ProcessP2FBCallback(proto::Phase2FB *p2fb, const std::string &txnDigest,
+void Server::ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string &txnDigest,
   const TransportAddress *remote, void* valid){
 
     if(!valid){
@@ -3473,225 +3497,243 @@ void Server::ProcessP2FBCallback(proto::Phase2FB *p2fb, const std::string &txnDi
 
 }
 
-//TODO replace with common functions.
-//TODO: create callback, check in callback whether higher view exists too (if so ignore this one) - only necessary for async version
-bool Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp){
+void Server::SendView(const TransportAddress &remote, const std::string &txnDigest){
+  proto::SendView *sendView = GetUnusedSendViewMessage();
+  sendView->set_req_id(0);
+  sendView->set_txn_digest(txnDigest);
 
-  auto txnDigest = msg.txn_digest();
+  proto::AttachedView *attachedView = sendView->mutable_attached_view();
 
-  //Assuming Invoke Message contains SignedMessages for view instead of Signatures.
-      proto::SignedMessages signed_messages = msg.view_signed();
-      if(msg.catchup()){
-        uint64_t counter = config.f +1;
-        for(const auto &signed_m : signed_messages.sig_msgs()){
+  attachedView->mutable_current_view()->set_current_view(current_views[txnDigest]);
+  attachedView->mutable_current_view()->set_txn_digest(txnDigest);
+  attachedView->mutable_current_view()->set_replica_id(id);
 
-          proto::CurrentView view_s;
-          view_s.ParseFromString(signed_m.data());
-
-          if(IsReplicaInGroup(signed_m.process_id(), logGrp, &config)){
-              if(view_s.current_view() < msg.proposed_view()){ return false;}
-              if(view_s.txn_digest() != txnDigest) { return false;}
-              if(crypto::Verify(keyManager->GetPublicKey(signed_m.process_id()),
-                    &signed_m.data()[0], signed_m.data().length(), &signed_m.signature()[0])) { counter--;} else{return false;}
-          }
-          if(counter == 0) return true;
-        }
-      }
-      else{
-        uint64_t counter = 3* config.f +1;
-        for(const auto &signed_m : signed_messages.sig_msgs()){
-
-          proto::CurrentView view_s;
-          view_s.ParseFromString(signed_m.data());
-
-          if(IsReplicaInGroup(signed_m.process_id(), logGrp, &config)){
-              if(view_s.current_view() < msg.proposed_view()-1){ return false;}
-              if(view_s.txn_digest() != txnDigest) { return false;}
-              if(crypto::Verify(keyManager->GetPublicKey(signed_m.process_id()),
-                    &signed_m.data()[0], signed_m.data().length(),
-                    &signed_m.signature()[0])) { counter--;} else{return false;}
-          }
-          if(counter == 0) return true;
-        }
-
-      }
-      return false;
-
-
-  // //USE THIS CODE IF ASSUMING VIEWS ARE JUST SIGNATURES - NEED TO DISTINGUISH THOUGH IN CASE VIEWS WHERE >= proposed view, not just =
-  // std::string viewMsg;
-  // proto::CurrentView curr_view;
-  //curr_view.mutable_txn_digest(msg.txn_digest());
-
-  //*curr_view.mutable_txn_digest() = txnDigest;
-
-  //   proto::Signatures sigs = msg.view_sigs();
-  //   if(msg.catchup()){
-  //     curr_view.set_current_view(msg.proposed_view());
-  //     curr_view.SerializeToString(&viewMsg);
-  //     uint64_t counter = config.f +1;
-  //     for(const auto &sig : sigs.sigs()){
-  //       //TODO: check that this id was from the loggin shard. sig.process_id() in lG
-  //       if(IsReplicaInGroup(sig.process_id(), lG, &config)){
-  //           if(crypto::Verify(keyManager->GetPublicKey(sig.process_id()), viewMsg, sig.signature())) { counter--;} else{return false;}
-  //       }
-  //       if(counter == 0) return true;
-  //     }
-  //   }
-  //   else{
-  //     curr_view.set_current_view(msg.proposed_view()-1);
-  //     curr_view.SerializeToString(&viewMsg);
-  //     uint64_t counter = 3* config.f +1;
-  //     for(const auto &sig : sigs.sigs()){
-  //       if(IsReplicaInGroup(sig.process_id(), lG, &config)){
-  //           if(crypto::Verify(keyManager->GetPublicKey(sig.process_id()), viewMsg, sig.signature() )) { counter--;} else{return false;}
-  //       }
-  //       if(counter == 0) return true;
-  //     }
-  //
-  //   }
-  //   return false;
-
+  proto::CurrentView *cView = new proto::CurrentView(attachedView->current_view());
+  const TransportAddress *remoteCopy = remote.clone();
+  MessageToSign(cView, attachedView->mutable_signed_current_view(),
+  [this, sendView, remoteCopy, cView](){
+      transport->SendMessage(this, *remoteCopy, *sendView);
+      delete cView;
+      delete remoteCopy;
+      FreeSendViewMessage(sendView);
+    });
+  return;
 }
+
 
 
 //TODO remove remote argument, it is useless here. Instead add and keep track of INTERESTED CLIENTS REMOTE MAP
 void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg) {
-//Expect the invokeFB message to contain a P2 message if not seen a decision ourselves.
-//If that is not the case: CALL HAndle Phase2B. This in turn should check if there are f+1 matching p2, and otherwise call HandlePhase2 by passing the args.
-
-proto::Phase2FB p2fb;
-// CHECK if part of logging shard. (this needs to be done at all p2s, reject if its not ourselves)
-auto txnDigest = msg.txn_digest();
-
-if(msg.proposed_view() <= current_views[txnDigest]) return; //Obsolete Invoke Message. //TODO: return new view.
-
-  //TODO  Schedule request for when current leader timeout is complete --> check exp timeouts; then set new one.
-//   struct timeval tv;
-//   gettimeofday(&tv, NULL);
-//   uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
-//
-//   uint64_t elapsed;
-//   if(client_starttime.find(txnDigest) != client_starttime.end())
-//       elapsed = current_time - client_starttime[txnDigest];
-//   else{
-//     //PANIC, have never seen the tx that is mentioned. Start timer ourselves.
-//     client_starttime[txnDigest] = current_time;
-//     transport->Timer((CLIENTTIMEOUT), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
-//     return;
-//   }
-//   if (elapsed < CLIENTTIMEOUT ){
-//     transport->Timer((CLIENTTIMEOUT-elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
-//     return;
-//   }
-// //check for current FB reign
-//   uint64_t FB_elapsed;
-//   if(exp_timeouts.find(txnDigest) != exp_timeouts.end()){
-//       FB_elapsed = current_time - FBtimeouts_start[txnDigest];
-//       if(FB_elapsed < exp_timeouts[txnDigest]){
-//           transport->Timer((exp_timeouts[txnDigest]-FB_elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
-//           return;
-//       }
-//
-//   }
-  //otherwise pass and invoke for the first time!
+    //Expect the invokeFB message to contain a P2 message if not seen a decision ourselves.
+    //If that is not the case: CALL HAndle Phase2B. This in turn should check if there are f+1 matching p2, and otherwise call HandlePhase2 by passing the args.
 
 
-      uint8_t groupIndex = txnDigest[0];
-      int64_t logGroup;
-      // find txn. that maps to txnDigest. if not stored locally, and not part of the msg, reject msg.
-      //TODO: refactor this into common function
+    // CHECK if part of logging shard. (this needs to be done at all p2s, reject if its not ourselves)
+    const std::string &txnDigest = msg.txn_digest();
 
-       ////if(params.mainThreadDispatching) ongoingMutex.lock();
+    if(ForwardWriteback(remote, msg.req_id(), txnDigest)) return;
 
-      ongoingMap::const_accessor b;
-      bool ongoingItr = ongoing.find(b, txnDigest);
-      if(ongoingItr){
-      //if(ongoing.find(txnDigest) != ongoing.end()){
-      //  proto::Transaction txn = *ongoing[txnDigest];
-      proto::Transaction txn = *b->second;
-        groupIndex = groupIndex % txn.involved_groups_size();
-        UW_ASSERT(groupIndex < txn.involved_groups_size());
-        logGroup = txn.involved_groups(groupIndex);
-      }
-      else if(msg.has_p2fb()){
-        p2fb = msg.p2fb();
-        if(p2fb.has_txn()){
-            proto::Transaction txn = p2fb.txn();
-            groupIndex = groupIndex % txn.involved_groups_size();
-            UW_ASSERT(groupIndex < txn.involved_groups_size());
-            logGroup = txn.involved_groups(groupIndex);
-          }
-        else{
-           ////if(params.mainThreadDispatching) ongoingMutex.unlock();
-          return; //REPLICA HAS NEVER SEEN THIS TXN
-        }
-      }
-      else{
-         ////if(params.mainThreadDispatching) ongoingMutex.unlock();
-        return; //REPLICA HAS NEVER SEEN THIS TXN
-      }
-      b.release();
-       ////if(params.mainThreadDispatching) ongoingMutex.unlock();
+    if(msg.proposed_view() <= current_views[txnDigest]){
+      SendView(remote, txnDigest);
+      return; //Obsolete Invoke Message, send newer view
+    }
 
-      if(groupIdx != logGroup){
-          return;  //This replica is not part of the shard responsible for Fallback.
-      }
-
-      //int64_t logGrp = GetLogGroup(*txn, *txnDigest);
-
-//process decision if one does not have any yet.
-//This is safe even if current_view > 0 because this replica could not have taken part in any elections yet (can only elect once you have decision), nor has yet received a dec from a larger view which it would adopt.
-      if(p2Decisions.find(txnDigest) == p2Decisions.end()){
-        p2fb = msg.p2fb();
+    //process decision if one does not have any yet.
+    //This is safe even if current_view > 0 because this replica could not have taken part in any elections yet (can only elect once you have decision), nor has yet received a dec from a larger view which it would adopt.
+    if(p2Decisions.find(txnDigest) == p2Decisions.end()){
+        if(!msg.has_p2fb()) return;
+        const proto::Phase2FB &p2fb = msg.p2fb();
         HandlePhase2FB(remote, p2fb);
         //either no need for fallback, or still no decision learned so one cannot contribute to election.
         if(writebackMessages.find(txnDigest) != writebackMessages.end() || p2Decisions.find(txnDigest) == p2Decisions.end()){
           return;
         }
-      }
-
-    if(msg.proposed_view() <= current_views[txnDigest]) return; //already voted or passed this view. //TODO: reply with signed current current_view..
+    }
 
 
 
-//verify views
-    if(!VerifyViews(msg, logGroup)) return; //invalid view signatures.
-    //TODO: Adopt view if it is bigger than our current.
-    if(current_views[txnDigest] >= msg.proposed_view()) return; //
-    current_views[txnDigest] = msg.proposed_view();
-    size_t replicaID = (msg.proposed_view() + txnDigest[0]) % config.n;
+      //TODO  Schedule request for when current leader timeout is complete --> check exp timeouts; then set new one.
+    //   struct timeval tv;
+    //   gettimeofday(&tv, NULL);
+    //   uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+    //
+    //   uint64_t elapsed;
+    //   if(client_starttime.find(txnDigest) != client_starttime.end())
+    //       elapsed = current_time - client_starttime[txnDigest];
+    //   else{
+    //     //PANIC, have never seen the tx that is mentioned. Start timer ourselves.
+    //     client_starttime[txnDigest] = current_time;
+    //     transport->Timer((CLIENTTIMEOUT), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+    //     return;
+    //   }
+    //   if (elapsed < CLIENTTIMEOUT ){
+    //     transport->Timer((CLIENTTIMEOUT-elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+    //     return;
+    //   }
+    // //check for current FB reign
+    //   uint64_t FB_elapsed;
+    //   if(exp_timeouts.find(txnDigest) != exp_timeouts.end()){
+    //       FB_elapsed = current_time - FBtimeouts_start[txnDigest];
+    //       if(FB_elapsed < exp_timeouts[txnDigest]){
+    //           transport->Timer((exp_timeouts[txnDigest]-FB_elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+    //           return;
+    //       }
+    //
+    //   }
+      //otherwise pass and invoke for the first time!
 
-    //TODO 3) Form and send ElectFB message to all replicas within logging shard.
-    proto::ElectMessage electMessage;
-    electMessage.set_req_id(msg.req_id());
-    electMessage.set_txn_digest(txnDigest);
-    electMessage.set_decision(p2Decisions[txnDigest]);
-    electMessage.set_view(msg.proposed_view());
-
-    proto::ElectFB electFB;
-    *electFB.mutable_elect_fb() = electMessage;
-
-    if (params.signedMessages) {
-      SignMessage(&electMessage, keyManager->GetPrivateKey(id), id, electFB.mutable_signed_elect_fb());
-      transport->SendMessageToReplica(this, logGroup, replicaID, electFB);
+    // find txn. that maps to txnDigest. if not stored locally, and not part of the msg, reject msg.
+    const proto::Transaction *txn;
+    ongoingMap::const_accessor b;
+    bool isOngoing = ongoing.find(b, txnDigest);
+    if(isOngoing){
+        txn = b->second;
+    }
+    else if(msg.has_p2fb()){
+        const proto::Phase2FB &p2fb = msg.p2fb();
+        if(p2fb.has_txn()){
+            txn = &p2fb.txn();
+          }
+        else{
+          return; //REPLICA HAS NEVER SEEN THIS TXN
+        }
     }
     else{
-      transport->SendMessageToReplica(this, logGroup, replicaID, electFB);
+        return; //REPLICA HAS NEVER SEEN THIS TXN
     }
+    b.release();
 
-    //Set timeouts new.
-    // gettimeofday(&tv, NULL);
-    // current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;
-    // if(exp_timeouts.find(txnDigest) == exp_timeouts.end()){
-    //    exp_timeouts[txnDigest] = CLIENTTIMEOUT; //start first timeout. //TODO: Make this a config parameter.
-    //    FBtimeouts_start[txnDigest] = current_time;
-    // }
-    // else{
-    //    exp_timeouts[txnDigest] = exp_timeouts[txnDigest] * 2; //TODO: increase timeouts exponentially. SET INCREASE RATIO IN CONFIG
-    //    FBtimeouts_start[txnDigest] = current_time;
-    // }
-    //(TODO 4) Send MoveView message for new view to all other replicas)
+    int64_t logGrp = GetLogGroup(*txn, txnDigest);
+    if(groupIdx != logGrp){
+          return;  //This replica is not part of the shard responsible for Fallback.
+    }
+    //verify views
+    VerifyViews(msg, logGrp, remote);
+}
+
+void Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportAddress &remote){
+
+  const std::string &txnDigest = msg.txn_digest();
+  int64_t myProcessId;
+  uint64_t myCurrentView;
+  LookupCurrentView(txnDigest, myProcessId, myCurrentView);
+  //Assuming Invoke Message contains SignedMessages for view instead of Signatures.
+  const proto::SignedMessages &signed_messages = msg.view_signed();
+
+  const TransportAddress *remoteCopy = remote.clone();
+  if(params.multiThreading){
+    mainThreadCallback mcb(std::bind(&Server::InvokeFBcallback, this, txnDigest, msg.proposed_view(), logGrp, remoteCopy, std::placeholders::_1));
+    asyncVerifyFBViews(msg.proposed_view(), msg.catchup(), logGrp, &txnDigest, signed_messages,
+    keyManager, &config, myProcessId, myCurrentView, verifier, std::move(mcb), transport, params.multiThreading);
+  }
+  else{
+    bool valid = VerifyFBViews(msg.proposed_view(), msg.catchup(), logGrp, &txnDigest, signed_messages,
+    keyManager, &config, myProcessId, myCurrentView, verifier);
+    InvokeFBcallback(txnDigest, msg.proposed_view(), logGrp, remoteCopy, (void*) valid);
+  }
+
+}
+
+void Server::InvokeFBcallback(const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid){
+
+  if(!valid){
+    return; //View verification failed.
+  }
+  if(ForwardWriteback(*remoteCopy, 0, txnDigest)){
+    delete remoteCopy;
+    return;
+  }
+
+  if(current_views[txnDigest] >= proposed_view){
+    SendView(*remoteCopy, txnDigest);
+    delete remoteCopy;
+    return; //Obsolete Invoke Message, send newer view
+  }
+  current_views[txnDigest] = proposed_view;
+  size_t replicaID = (proposed_view + txnDigest[0]) % config.n;
+
+  //Form and send ElectFB message to all replicas within logging shard.
+  proto::ElectFB* electFB = GetUnusedElectFBMessage();
+  proto::ElectMessage* electMessage = GetUnusedElectMessage();
+  electMessage->set_req_id(0);  //What req id to put here. (should i carry along message?)
+  electMessage->set_txn_digest(txnDigest);
+  electMessage->set_decision(p2Decisions[txnDigest]);
+  electMessage->set_elect_view(proposed_view);
+
+  if (params.signedMessages) {
+    MessageToSign(electMessage, electFB->mutable_signed_elect_fb(),
+      [this, electMessage, electFB, logGrp, replicaID](){
+        this->transport->SendMessageToReplica(this, logGrp, replicaID, *electFB);
+        FreeElectMessage(electMessage);
+        FreeElectFBMessage(electFB);
+      }
+    );
+  }
+  else{
+    *electFB->mutable_elect_fb() = std::move(*electMessage);
+    transport->SendMessageToReplica(this, logGrp, replicaID, *electFB);
+    FreeElectMessage(electMessage);
+    FreeElectFBMessage(electFB); //must free in this order.
+  }
+
+  //XXX Set Fallback timeouts new.
+  // gettimeofday(&tv, NULL);
+  // current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;
+  // if(exp_timeouts.find(txnDigest) == exp_timeouts.end()){
+  //    exp_timeouts[txnDigest] = CLIENTTIMEOUT; //start first timeout. //TODO: Make this a config parameter.
+  //    FBtimeouts_start[txnDigest] = current_time;
+  // }
+  // else{
+  //    exp_timeouts[txnDigest] = exp_timeouts[txnDigest] * 2; //TODO: increase timeouts exponentially. SET INCREASE RATIO IN CONFIG
+  //    FBtimeouts_start[txnDigest] = current_time;
+  // }
+  //(TODO 4) Send MoveView message for new view to all other replicas)
+}
+
+void Server::HandleElectFB(proto::ElectFB &msg){
+  if (!params.signedMessages) {Debug("ERROR HANDLE ELECT FB: NON SIGNED VERSION NOT IMPLEMENTED");}
+  if(!msg.has_signed_elect_fb()) return;
+
+  proto::SignedMessage &signed_msg = msg.signed_elect_fb();
+  proto::ElectMessage electMessage;
+
+  electMessage.ParseFromString(signed_msg.data());
+  std::string Msg;
+  electMessage.SerializeToString(&Msg);
+  std::string txnDigest = electMessage.txn_digest();
+
+  ElectQuorumMap::accessor q;
+  ElectQuorum.insert(q, txnDigest);
+  ElectFBorganizer &electFBorganizer = q->second;
+  pair  &view_decision_quorum = electFBorganizer.view_quorums[view][decision];
+  if(replica.id in view_decision_quorum.first) return
+  view_decision_quorum.insert(signed_msg.release_signature())
+
+
+  if(view_decision_quorum.second.size() == 2*config.f +1){
+    for(auto sig : view_decision_quorum.second){
+      msg.add_sigs
+      set_allocated
+    }
+  }
+
+  //problem: requires me to delete all unused messages. Whereas if I made copies, I would not have to.
+  //for all view <= current view 
+  //    for all decision
+  //        for all sigs; delete
+  q.release();
+
+  map[view][decision].insert(signed_msg.release_signature());
+
+
+  *sig DecisionFB.add_sigs();
+  for(sig in map[view][decision])
+  *sig = std::move( ) (either the set or the sig individually, delete after; delete also for other decision)
+//Store as signatures object..
+  proto::Signature *sig = map[view][decision].add_sigs();
+   set_allocated_field(release_fied())
+  sig->set_process_id(reply.signed_cc().process_id());
+  *sig->mutable_signature() = reply.signed_cc().signature();
 }
 
 //TODO remove remote argument
@@ -3701,7 +3743,7 @@ void Server::HandleElectFB(const TransportAddress &remote, proto::ElectFB &msg){
   if (!params.signedMessages) {Debug("ERROR HANDLE ELECT FB: NON SIGNED VERSION NOT IMPLEMENTED");}
   if(!msg.has_signed_elect_fb()) return;
 
-  proto::SignedMessage signed_msg = msg.signed_elect_fb();
+  proto::SignedMessage &signed_msg = msg.signed_elect_fb();
   proto::ElectMessage electMessage;
   electMessage.ParseFromString(signed_msg.data());
   std::string Msg;
@@ -3713,20 +3755,20 @@ void Server::HandleElectFB(const TransportAddress &remote, proto::ElectFB &msg){
     ElectQuorum_meta[txnDigest] = std::make_pair(0, 0);
   }
 
-  if(uint64_t(idx) != (electMessage.view() + txnDigest[0]) % config.n) return;
+  if(uint64_t(idx) != (electMessage.elect_view() + txnDigest[0]) % config.n) return;
   if(IsReplicaInGroup(signed_msg.process_id(), groupIdx, &config)){
-    if(ElectQuorum_meta[txnDigest].first > electMessage.view()) return;
+    if(ElectQuorum_meta[txnDigest].first > electMessage.elect_view()) return;
 
     if(!crypto::Verify(keyManager->GetPublicKey(signed_msg.process_id()),
           &Msg[0], Msg.length(), &signed_msg.signature()[0])) return;
     // check whether all views in the elect messages match (the replica)
-    if(ElectQuorum_meta[txnDigest].first == electMessage.view() && ElectQuorum[txnDigest].find(&signed_msg) == ElectQuorum[txnDigest].end()){
+    if(ElectQuorum_meta[txnDigest].first == electMessage.elect_view() && ElectQuorum[txnDigest].find(&signed_msg) == ElectQuorum[txnDigest].end()){
         // update state, keep counter of received ElectFbs  --> last one executes the function
       ElectQuorum[txnDigest].insert(&signed_msg); //no clone?
       if(electMessage.decision() == proto::COMMIT) ElectQuorum_meta[txnDigest].second++;
     }
-    else if(ElectQuorum_meta[txnDigest].first < electMessage.view()){
-      ElectQuorum_meta[txnDigest].first = electMessage.view();
+    else if(ElectQuorum_meta[txnDigest].first < electMessage.elect_view()){
+      ElectQuorum_meta[txnDigest].first = electMessage.elect_view();
       ElectQuorum[txnDigest].clear(); //TODO:free all.
       ElectQuorum[txnDigest].insert(&signed_msg); //no clone?
     }
@@ -3745,7 +3787,7 @@ void Server::HandleElectFB(const TransportAddress &remote, proto::ElectFB &msg){
     decisionFB.set_req_id(electMessage.req_id());
     decisionFB.set_txn_digest(txnDigest);
     decisionFB.set_dec(decision);
-    decisionFB.set_view(electMessage.view());
+    decisionFB.set_view(electMessage.elect_view());
     for (const proto::SignedMessage *iter : ElectQuorum[txnDigest] ) {
       //response->add_elect_sigs(iter);
       proto::SignedMessage* sm = decisionFB.add_elect_sigs();
@@ -3781,7 +3823,7 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
             &iter.data()[0], iter.data().length(), &iter.signature()[0])){
         //check that replicas were electing this FB and voting for this decision
         //if(electfb.elect_fb().decision() == msg.dec() && electfb.elect_fb().view() == msg.view()){
-        if(elect_msg.decision() == msg.dec() && elect_msg.view() == msg.view()){
+        if(elect_msg.decision() == msg.dec() && elect_msg.elect_view() == msg.view()){
           counter--;
         }
       }

@@ -1249,126 +1249,159 @@ bool VerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
           }
           //check for catchup that replica view is not smaller than proposed view
           //check for non-catchup that replica view is not smaller than proposed view - 1
-          if(view_s.txn_digest() != txnDigest || view_s.current_view() < proposed_view - (1-catch_up) ){
+          if(view_s.txn_digest() != *txnDigest || view_s.current_view() < proposed_view - (1-catch_up) ){
             return false;
           }
 
           bool skip = false;
           if (signed_view.process_id() == myProcessId && myProcessId >= 0) {
-            if (myCurrentView < proposed_view - (1-catchup)) {
+            if (myCurrentView < proposed_view - (1-catch_up)) {
               skip = true;
             }
           }
 
-          // add to job list
-          std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(signed_view.process_id()),
-          std::ref(signed_view.data()), std::ref(signed_view.signature())));
-          //turn into void* function in order to dispatch
-          std::function<void*()> f(std::bind(BoolPointerWrapper, std::move(func)));
+          if(!skip && !verifier->Verify(keyManager->GetPublicKey(signed_view.process_id()),
+                    signed_view.data(), signed_view.signature())) {
+              return false;
+          }
+          verified++;
 
-          //TODO: need a different callback? probably not, the p2 one is generic (rename it?)
-          std::function<void(void*)> cb(std::bind(asyncValidateP2RepliesCallback, verifyObj, logGrp, std::placeholders::_1));
-          verificationJobs.emplace_back(std::make_pair(std::move(f), std::move(cb)));
-
+          if(verified == quorumSize) return true;
         }
 
-      verifyObj->deletable = verificationJobs.size();
-      for (auto &verification : verificationJobs){
+        // //USE THIS CODE IF ASSUMING VIEWS ARE JUST SIGNATURES - HOWEREVER, DUE TO VOTE SUBSUMPTION NEED TO DISTINGUISH IN CASE VIEWS ARE >= proposed view, not just =
+        // std::string viewMsg;
+        // proto::CurrentView curr_view;
+        //curr_view.mutable_txn_digest(msg.txn_digest());
 
-          //a)) Multithreading: Dispatched f: verify , cb: async Callback
-          if(multithread && LocalDispatch){
-            // Debug("P2 Validation is dispatched and parallel");
-            auto comb = [f = std::move(verification.first), cb = std::move(verification.second)](){
-              cb(f());
-              return (void*) true;
-            };
-            transport->DispatchTP_noCB(std::move(comb));
-            //transport->DispatchTP_local(std::move(verification.first), std::move(verification.second));
-          }
-          else if(multithread){
+        //*curr_view.mutable_txn_digest() = txnDigest;
 
-              transport->DispatchTP(std::move(verification.first), std::move(verification.second));
-
-          }
-          //b) No multithreading: Calls verify + async Callback.
-          else{
-            Debug("View Validation is local and serial");
-            verification.second(verification.first());
-          }
-      }
-
+        //   proto::Signatures sigs = msg.view_sigs();
+        //   if(msg.catchup()){
+        //     curr_view.set_current_view(msg.proposed_view());
+        //     curr_view.SerializeToString(&viewMsg);
+        //     uint64_t counter = config.f +1;
+        //     for(const auto &sig : sigs.sigs()){
+        //       //TODO: check that this id was from the loggin shard. sig.process_id() in lG
+        //       if(IsReplicaInGroup(sig.process_id(), lG, &config)){
+        //           if(crypto::Verify(keyManager->GetPublicKey(sig.process_id()), viewMsg, sig.signature())) { counter--;} else{return false;}
+        //       }
+        //       if(counter == 0) return true;
+        //     }
+        //   }
+        //   else{
+        //     curr_view.set_current_view(msg.proposed_view()-1);
+        //     curr_view.SerializeToString(&viewMsg);
+        //     uint64_t counter = 3* config.f +1;
+        //     for(const auto &sig : sigs.sigs()){
+        //       if(IsReplicaInGroup(sig.process_id(), lG, &config)){
+        //           if(crypto::Verify(keyManager->GetPublicKey(sig.process_id()), viewMsg, sig.signature() )) { counter--;} else{return false;}
+        //       }
+        //       if(counter == 0) return true;
+        //     }
+        //
+        //   }
+        //   return false;
 }
 
-void asyncVerifyFBViews(uint64_t view, uint64_t logGrp,
+void asyncVerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
     const std::string *txnDigest, const proto::SignedMessages &signed_messages,
     KeyManager *keyManager, const transport::Configuration *config,
-    int64_t myProcessId, uint64_t myView, Verifier *verifier,
+    int64_t myProcessId, uint64_t myCurrentView, Verifier *verifier,
     mainThreadCallback mcb, Transport* transport, bool multithread){
 
-      uint64_t quorumSize;
-      if(catch_up){
-        quorumSize = config->f+1;
-      }
-      else{
-        quorumSize = 3*config->f+1;
-      }
+    uint64_t quorumSize;
+    if(catch_up){
+      quorumSize = config->f+1;
+    }
+    else{
+      quorumSize = 3*config->f+1;
+    }
 
-      uint64_t verified = 0;
-      proto::CurrentView view_s;
-      std::unordered_set<uint64_t> replicasVerified;
+    uint64_t verified = 0;
+    proto::CurrentView view_s;
+    std::unordered_set<uint64_t> replicasVerified;
 
-      //TODO: does not need a decision arg
-      asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), 1, proto::COMMIT, transport);
-      std::vector<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
+    //TODO: does not need a decision arg
+    asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), 1, proto::COMMIT, transport);
+    std::vector<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
 
-      for(const auto &signed_view : signed_messages.sig_msgs()){
+    for(const auto &signed_view : signed_messages.sig_msgs()){
 
-            view_s.ParseFromString(signed_view.data());
+        view_s.ParseFromString(signed_view.data());
 
-            if(IsReplicaInGroup(signed_view.process_id(), logGrp, config)){
-              Debug("Signature for group %lu from replica %lu who is not in group.", logGrp, signed_view.process_id());
-              verifyObj->mcb((void*) false);
-              delete verifyObj;
-              return;
+        if(IsReplicaInGroup(signed_view.process_id(), logGrp, config)){
+            Debug("Signature for group %lu from replica %lu who is not in group.", logGrp, signed_view.process_id());
+            verifyObj->mcb((void*) false);
+            delete verifyObj;
+            return;
+        }
+        if (!replicasVerified.insert(signed_view.process_id()).second) {
+            Debug("Already verified signature from %lu.", signed_view.process_id());
+            verifyObj->mcb((void*) false);
+            delete verifyObj;
+            return;
+        }
+        //check for catchup that replica view is not smaller than proposed view
+        //check for non-catchup that replica view is not smaller than proposed view - 1
+        if(view_s.txn_digest() != *txnDigest || view_s.current_view() < proposed_view - (1-catch_up) ){
+            verifyObj->mcb((void*) false);
+            delete verifyObj;
+            return;
+        }
 
-            }
-            if (!replicasVerified.insert(signed_view.process_id()).second) {
-              Debug("Already verified signature from %lu.", signed_view.process_id());
-              verifyObj->mcb((void*) false);
-              delete verifyObj;
-              return;
-            }
-            //check for catchup that replica view is not smaller than proposed view
-            //check for non-catchup that replica view is not smaller than proposed view - 1
-            if(view_s.txn_digest() != txnDigest || view_s.current_view() < proposed_view - (1-catch_up) ){
-              verifyObj->mcb((void*) false);
-              delete verifyObj;
-              return;
-            }
-
-            bool skip = false;
-            if (signed_view.process_id() == myProcessId && myProcessId >= 0) {
-              if (myCurrentView < proposed_view - (1-catchup)) {
-                skip = true;
-                verifyObj->groupCounts[logGrp]++;
-                if (verifyObj->groupCounts[logGrp] == verifyObj->quorumSize) {
+        bool skip = false;
+        if (signed_view.process_id() == myProcessId && myProcessId >= 0) {
+          if (myCurrentView < proposed_view - (1-catch_up)) {
+              skip = true;
+              verifyObj->groupCounts[logGrp]++;
+              if (verifyObj->groupCounts[logGrp] == verifyObj->quorumSize) {
                   verifyObj->mcb((void*) true);
                   delete verifyObj;
                   return;
-                }
               }
-            }
-            if(skip) continue;
+          }
+        }
+        if(skip) continue;
 
-            if(!verifier->Verify(keyManager->GetPublicKey(signed_view.process_id()),
-                      signed_view.data(), signed_view.signature())) {
-                return false;
-            }
-            verified++;
+        // add to job list
+        std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(signed_view.process_id()),
+        std::ref(signed_view.data()), std::ref(signed_view.signature())));
+        //turn into void* function in order to dispatch
+        std::function<void*()> f(std::bind(BoolPointerWrapper, std::move(func)));
 
-            if(verified == quorumSize) return true;
-      }
+        //TODO: need a different callback? probably not, the p2 one is generic (rename it?)
+        std::function<void(void*)> cb(std::bind(asyncValidateP2RepliesCallback, verifyObj, logGrp, std::placeholders::_1));
+        verificationJobs.emplace_back(std::make_pair(std::move(f), std::move(cb)));
+
+    }
+
+    verifyObj->deletable = verificationJobs.size();
+    for (auto &verification : verificationJobs){
+
+        //a)) Multithreading: Dispatched f: verify , cb: async Callback
+        if(multithread && LocalDispatch){
+          // Debug("P2 Validation is dispatched and parallel");
+          auto comb = [f = std::move(verification.first), cb = std::move(verification.second)](){
+            cb(f());
+            return (void*) true;
+          };
+          transport->DispatchTP_noCB(std::move(comb));
+          //transport->DispatchTP_local(std::move(verification.first), std::move(verification.second));
+        }
+        else if(multithread){
+
+            transport->DispatchTP(std::move(verification.first), std::move(verification.second));
+
+        }
+        //b) No multithreading: Calls verify + async Callback.
+        else{
+          Debug("View Validation is local and serial");
+          verification.second(verification.first());
+        }
+    }
 }
+
 
 
 
