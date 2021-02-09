@@ -120,6 +120,9 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
       const std::string &txnDigest, proto::CommitDecision decision,
       const proto::GroupedSignatures &groupedSigs, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout);
+  virtual void Phase2Equivocate(uint64_t id, const proto::Transaction &txn, const std::string &txnDigest,
+      const proto::GroupedSignatures &groupedCommitSigs, const proto::GroupedSignatures &groupedAbortSigs,
+      phase2_callback pcb, phase2_timeout_callback ptcb, uint32_t timeout);
   virtual void Writeback(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
     proto::CommitDecision decision, bool fast, bool conflict_flag, const proto::CommittedProof &conflict,
     const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs);
@@ -295,11 +298,14 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   /* Callbacks for hearing back from a shard for an operation. */
   void HandleReadReply(const proto::ReadReply &readReply);
   void HandlePhase1Reply(const proto::Phase1Reply &phase1Reply);
+  void HandleP1REquivocate(const proto::Phase1Reply &phase1Reply);
   void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply);
 
   void Phase1Decision(uint64_t reqId);
   void Phase1Decision(
       std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
+  void Phase1DecisionEquivocation(
+      std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready)
 
   //multithreaded options:
   void HandleReadReplyMulti(proto::ReadReply* reply);

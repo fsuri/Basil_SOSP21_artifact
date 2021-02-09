@@ -80,6 +80,8 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
   if (params.injectFailure.enabled) {
     transport->Timer(params.injectFailure.timeMs, [this](){
         failureActive = true;
+        // TODO: set a failure flag in all bclients
+        // TODO: restore the client after it stalls from phase2_callback from previous txn
       });
   }
 }
@@ -248,11 +250,20 @@ void Client::Phase1(PendingRequest *req) {
 
 
   for (auto group : txn.involved_groups()) {
-    bclient[group]->Phase1(client_seq_num, txn, req->txnDigest, std::bind(
-          &Client::Phase1Callback, this, req->id, group, std::placeholders::_1,
-          std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5),
-        std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
-          std::placeholders::_1), std::bind(&Client::RelayP1callback, this, std::placeholders::_1), req->timeout);
+    if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_EQUIVOCATE) {
+      bclient[group]->Phase1(client_seq_num, txn, req->txnDigest, std::bind(
+            &Client::Phase1CallbackEquivocate, this, req->id, group, std::placeholders::_1,
+            std::placeholders::_2, std::placeholders::_3,
+            std::placeholders::_4, std::placeholders::_5, std::placeholders::_6),
+          std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
+            std::placeholders::_1), std::bind(&Client::RelayP1callback, this, std::placeholders::_1), req->timeout);
+    } else {
+      bclient[group]->Phase1(client_seq_num, txn, req->txnDigest, std::bind(
+            &Client::Phase1Callback, this, req->id, group, std::placeholders::_1,
+            std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5),
+          std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
+            std::placeholders::_1), std::bind(&Client::RelayP1callback, this, std::placeholders::_1), req->timeout);
+    }
     req->outstandingPhase1s++;
   }
 
@@ -338,6 +349,115 @@ void Client::Phase1Callback(uint64_t txnId, int group,
   }
 }
 
+void Client::Phase1CallbackEquivocate(uint64_t txnId, int group,
+    proto::CommitDecision decision, bool fast, bool conflict_flag,
+    const proto::CommittedProof &conflict,
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
+    bool eqv_ready) {
+  auto itr = this->pendingReqs.find(txnId);
+  if (itr == this->pendingReqs.end()) {
+    Debug("Phase1CallbackEquivocate for terminated request %lu (txn already committed"
+        " or aborted.", txnId);
+    return;
+  }
+  //total_counter++;
+  //if(fast) fast_path_counter++;
+  stats.Increment("total_prepares", 1);
+  if(fast) stats.Increment("total_prepares_fast", 1);
+  if(eqv_ready) stats.Increment("eqv_ready", 1);
+
+  Debug("PHASE1[%lu:%lu] callback equivocation from group %d", client_id,
+      client_seq_num, group);
+
+  PendingRequest *req = itr->second;
+  if (req->startedPhase2 || req->startedWriteback) {
+    Debug("Already started Phase2/Writeback for request id %lu. Ignoring Phase1"
+        " response from group %d.", txnId, group);
+    return;
+  }
+
+  if (decision == proto::ABORT && fast && conflict_flag) {
+      req->conflict = conflict;
+      req->conflict_flag = true;
+  }
+
+  if (params.validateProofs && params.signedMessages) {
+    if (eqv_ready) {
+      // saving abort sigs in req->eqvAbortSigsGrouped
+      auto itr_abort = sigs.find(proto::ConcurrencyControl::ABSTAIN);
+      UW_ASSERT(itr_abort != sigs.end());
+      Debug("Have %d ABSTAIN replies from group %d. Saving in eqvAbortSigsGrouped",
+          itr_abort->second.sigs_size(), group);
+      (*req->eqvAbortSigsGrouped.mutable_grouped_sigs())[group] = itr_abort->second;
+
+      // saving commit sigs in req->p1ReplySigsGrouped
+      auto itr_commit = sigs.find(proto::ConcurrencyControl::COMMIT);
+      UW_ASSERT(itr_commit != sigs.end());
+      Debug("Have %d COMMIT replies from group %d.", itr_commit->second.sigs_size(),
+          group);
+      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr_commit->second;
+
+    } else if(decision == proto::ABORT && fast && !conflict_flag){
+      auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
+      UW_ASSERT(itr != sigs.end());
+      Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
+          group);
+      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
+      req->fastAbortGroup = group;
+    } else if (decision == proto::ABORT && !fast) {
+      auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
+      UW_ASSERT(itr != sigs.end());
+      Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
+          group);
+      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
+      req->slowAbortGroup = group;
+    } else if (decision == proto::COMMIT) {
+      auto itr = sigs.find(proto::ConcurrencyControl::COMMIT);
+      UW_ASSERT(itr != sigs.end());
+      Debug("Have %d COMMIT replies from group %d.", itr->second.sigs_size(),
+          group);
+      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
+    }
+  }
+
+  if (fast && decision == proto::ABORT) {
+    req->fast = true;
+  } else {
+    req->fast = req->fast && fast;
+  }
+
+  if (eqv_ready) req->eqv_ready = true;
+
+  --req->outstandingPhase1s;
+  switch(decision) {
+    case proto::COMMIT:
+      break;
+    case proto::ABORT:
+      // abort!
+      req->decision = proto::ABORT;
+      req->eqv_ready = false;
+      req->outstandingPhase1s = 0;
+      break;
+    default:
+      break;
+  }
+
+  if (req->outstandingPhase1s == 0) {
+    Debug("All PHASE1's [%lu] received", client_seq_num);
+    if (req->fast) {
+      Writeback(req);
+    } else {
+      // slow path, must log final result to 1 group
+      if (req->eqv_ready) {
+        Phase2Equivocate(req);
+      } else {
+        Phase2(req);
+      }
+    }
+    pendingReqs_starttime.erase(txnId);
+  }
+}
+
 void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
@@ -402,6 +522,37 @@ void Client::Phase2(PendingRequest *req) {
   req->startedPhase2 = true;
   bclient[logGroup]->Phase2(client_seq_num, txn, req->txnDigest, req->decision,
       req->p1ReplySigsGrouped,
+      std::bind(&Client::Phase2Callback, this, req->id, logGroup,
+        std::placeholders::_1),
+      std::bind(&Client::Phase2TimeoutCallback, this, logGroup, req->id,
+        std::placeholders::_1), req->timeout);
+}
+
+void Client::Phase2Equivocate(PendingRequest *req) {
+  int64_t logGroup = GetLogGroup(txn, req->txnDigest);
+
+  Debug("PHASE2[%lu:%lu][%s] logging to group %ld with equivocation", client_id, client_seq_num,
+      BytesToHex(req->txnDigest, 16).c_str(), logGroup);
+
+  if (params.validateProofs && params.signedMessages) {
+    // build grouped commits sigs with size of commitQuorum
+    for (auto &groupSigs : *req->p1ReplySigsGrouped.mutable_grouped_sigs()) {
+      while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > SlowCommitQuorumSize(config)) {
+        groupSigs.second.mutable_sigs()->RemoveLast();
+      }
+    }
+
+    // build grouped abort sigs with size of abortQuorum
+    for (auto &groupSigs : *req->eqvAbortSigsGrouped.mutable_grouped_sigs()) {
+      while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > SlowAbortQuorumSize(config)) {
+        groupSigs.second.mutable_sigs()->RemoveLast();
+      }
+    }
+  }
+
+  req->startedPhase2 = true;
+  bclient[logGroup]->Phase2Equivocate(client_seq_num, txn, req->txnDigest,
+      req->p1ReplySigsGrouped, req->eqvAbortSigsGrouped,
       std::bind(&Client::Phase2Callback, this, req->id, logGroup,
         std::placeholders::_1),
       std::bind(&Client::Phase2TimeoutCallback, this, logGroup, req->id,

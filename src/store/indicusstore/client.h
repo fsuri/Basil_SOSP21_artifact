@@ -101,7 +101,8 @@ class Client : public ::Client {
         outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
         decision(proto::COMMIT), fast(true), conflict_flag(false),
         startedPhase2(false), startedWriteback(false),
-        callbackInvoked(false), timeout(0UL), slowAbortGroup(-1) {
+        callbackInvoked(false), timeout(0UL), slowAbortGroup(-1),
+        eqv_ready(false) {
     }
 
     ~PendingRequest() {
@@ -130,7 +131,9 @@ class Client : public ::Client {
     //added this for fallback handling
     proto::Transaction txn;
     proto::P2Replies p2Replies;
-
+    // equivocation utility
+    proto::GroupedSignatures eqvAbortSigsGrouped;
+    bool eqv_ready;
   };
 
   void Phase1(PendingRequest *req);
@@ -138,10 +141,16 @@ class Client : public ::Client {
       bool fast, bool conflict_flag, const proto::CommittedProof &conflict,
       const std::map<proto::ConcurrencyControl::Result,
       proto::Signatures> &sigs);
+  void Phase1CallbackEquivocate(uint64_t txnId, int group,
+      proto::CommitDecision decision, bool fast, bool conflict_flag,
+      const proto::CommittedProof &conflict,
+      const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
+      bool eqv_ready)
   void Phase1TimeoutCallback(int group, uint64_t reqId, int status);
   void HandleAllPhase1Received(PendingRequest *req);
 
   void Phase2(PendingRequest *req);
+  void Phase2Equivocate(PendingRequest *req)
   void Phase2Callback(uint64_t reqId, int group,
       const proto::Signatures &p2ReplySigs);
   void Phase2TimeoutCallback(int group, uint64_t reqId, int status);
