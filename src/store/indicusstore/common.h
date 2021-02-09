@@ -228,6 +228,19 @@ void asyncVerifyFBViews(uint64_t view, bool catch_up, uint64_t logGrp,
     int64_t myProcessId, uint64_t myView, Verifier *verifier,
     mainThreadCallback mcb, Transport* transport, bool multithread);
 
+bool ValidateFBDecision(proto::CommitDecision decision, uint64_t view,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::Signatures &sigs,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier);
+
+void asyncValidateFBDecision(proto::CommitDecision decision, uint64_t view,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::Signatures &sigs,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier,
+    mainThreadCallback mcb, Transport* transport, bool multithread);
+
 //END Fallback verifications
 
 bool ValidateTransactionWrite(const proto::CommittedProof &proof,

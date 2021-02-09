@@ -133,24 +133,15 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
   //Fallback protocol components
-  // Edit MVTSO-check: When we suspend a transaction waiting for a dependency, then after some timeout, we should send the full TX to the client (IF we have it - 1 correct replica is guaranteed to have it.)
-  // void HandleP1_Rec -> exec p1 if unreceived, reply with p1r, or p2r + dec_view  (Need to modify normal P2R message to contain view=0), current view
   void HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg);
-  // void HandleP2_Rec -> Reply with p2 decision
-  // void HandleFB_Invoke -> send Elect message to FB based on views received. OR: Send all to all to other replicas (can use MACs to all replicas BESIDES the To-be-fallback) for next replica to elect.
-  // void HandleFB_Dec -> receive FB decision, verify whether majority was indeed confirmed and sends signed P2R to all interested clients (this must include the view from the decision)
-
-  //Fallback responsibilities
-  //void HandleFB_Elect: If 4f+1 Elect messages received -> form Decision based on majority, and forward the elect set (send FB_Dec) to all replicas in logging shard. (This includes the FB replica itself - Just skip ahead to HandleFB_Dec automatically: send P2R to clients)
-
 
   void HandlePhase2FB(const TransportAddress &remote, const proto::Phase2FB &msg);
 
-  void HandleInvokeFB(const TransportAddress &remote,proto::InvokeFB &msg); //DONT send back to remote, but instead to FB, calculate based on view. (need to include this in TX state thats kept locally.)
-
+  void HandleInvokeFB(const TransportAddress &remote,proto::InvokeFB &msg);
+  //void HandleFB_Elect: If 4f+1 Elect messages received -> form Decision based on majority, and forward the elect set (send FB_Dec) to all replicas in logging shard. (This includes the FB replica itself - Just skip ahead to HandleFB_Dec automatically: send P2R to clients)
   void HandleElectFB(const TransportAddress &remote,proto::ElectFB &msg);
 
-  void HandleDecisionFB(const TransportAddress &remote,proto::DecisionFB &msg); //DONT send back to remote, but instead to interested clients. (need to include list of interested clients as part of local tx state)
+  void HandleDecisionFB(const TransportAddress &remote,proto::DecisionFB &msg); 
 
   void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
 
@@ -418,6 +409,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void SendView(const TransportAddress &remote, const std::string &txnDigest);
   void VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportAddress &remote);
   void InvokeFBcallback(const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid);
+  void HandleElectFBcallback(std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, proto::Signature *sig, void* valid);
+
   bool ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest);
   bool ForwardWritebackMulti(const std::string &txnDigest, interestedClientsMap::accessor &i);
 
@@ -490,10 +483,10 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
   std::unordered_map<std::string, std::unordered_set<const proto::SignedMessage*>> ElectQuorum;  //tuple contains view entry, set for that view and count of Commit vs Abort.
   std::unordered_map<std::string, std::pair<uint64_t, uint64_t>> ElectQuorum_meta;
+
+  typedef std::pair< std::unordered_set<uint64_t>, std::unordered_set<const proto::Signature*>>replica_sig_sets_pair;
   struct ElectFBorganizer {
-  
-    std::unordered_map<uint64_t, std::unordered_map<proto::CommitDecision,
-      std::pair< std::unordered_set<uint64_t>  ,std::unordered_set<const proto::Signature*>>>> view_quorums;
+    std::map<uint64_t, std::unordered_map<proto::CommitDecision, replica_sig_sets_pair>> view_quorums;
   };
   tbb::concurrent_hash_map<std::string, ElectFBorganizer> ElectQuorums;
 

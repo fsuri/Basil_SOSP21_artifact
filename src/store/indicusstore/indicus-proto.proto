@@ -319,10 +319,10 @@ message ElectFB{
 message DecisionFB {
   required uint64 req_id = 1;
   required bytes txn_digest = 2;
-  required CommitDecision dec = 3;
+  required CommitDecision decision = 3;
   required uint64 view = 4;
   //repeated SignedMessage elect_sigs =5; // want to send the Quorum of ElectFB messages. not sure if this is the correct way
-  repeated Signatured elect_sigs = 5;
+  optional Signatures elect_sigs = 5;
 }
 
 message SendView {

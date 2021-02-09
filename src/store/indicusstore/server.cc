@@ -2213,8 +2213,8 @@ void Server::CheckDependents(const std::string &txnDigest) {
           interestedClientsMap::accessor i;
           auto jtr = interestedClients.find(i, txnDigest);
           if(jtr){
-            if(ForwardWritebackMulti(txnDigest, i)){i.release(); return;}
-            i.release();
+            if(ForwardWritebackMulti(txnDigest, i)){return;}
+
             P1FBorganizer *p1fb_organizer = new P1FBorganizer(0, txnDigest, this);
             SetP1(0, p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
             //TODO: If need reqId, can store it as pairs with the interested client.
@@ -3656,6 +3656,7 @@ void Server::InvokeFBcallback(const std::string &txnDigest, uint64_t proposed_vi
   proto::ElectFB* electFB = GetUnusedElectFBMessage();
   proto::ElectMessage* electMessage = GetUnusedElectMessage();
   electMessage->set_req_id(0);  //What req id to put here. (should i carry along message?)
+  //Answer:: Should not have any. It must be consistent (0 is easiest) across all messages so that verifiation will succeed
   electMessage->set_txn_digest(txnDigest);
   electMessage->set_decision(p2Decisions[txnDigest]);
   electMessage->set_elect_view(proposed_view);
@@ -3690,185 +3691,214 @@ void Server::InvokeFBcallback(const std::string &txnDigest, uint64_t proposed_vi
   //(TODO 4) Send MoveView message for new view to all other replicas)
 }
 
+
+//TODO: Check for writebackMulti in both HandleElect and in Callback...
 void Server::HandleElectFB(proto::ElectFB &msg){
+
+  interestedClientsMap::accessor i;
+  auto jtr = interestedClients.find(i, txnDigest);
+  if(jtr){
+    if(ForwardWritebackMulti(txnDigest, i)) return;
+  } else{
+    i.release();
+  }
+
   if (!params.signedMessages) {Debug("ERROR HANDLE ELECT FB: NON SIGNED VERSION NOT IMPLEMENTED");}
   if(!msg.has_signed_elect_fb()) return;
 
   proto::SignedMessage &signed_msg = msg.signed_elect_fb();
+  if(!IsReplicaInGroup(signed_msg.process_id(), groupIdx, &config)) return;
+
   proto::ElectMessage electMessage;
-
   electMessage.ParseFromString(signed_msg.data());
-  std::string Msg;
-  electMessage.SerializeToString(&Msg);
-  std::string txnDigest = electMessage.txn_digest();
+  const std::string &txnDigest = electMessage.txn_digest();
+  size_t leaderID = (electMessage.elect_view() + txnDigest[0]) % config.n;
+  if(leaderID != idx) return; //Not the right leader
 
+  //create management object (if necessary) and insert appropriate replica id.
   ElectQuorumMap::accessor q;
   ElectQuorum.insert(q, txnDigest);
   ElectFBorganizer &electFBorganizer = q->second;
-  pair  &view_decision_quorum = electFBorganizer.view_quorums[view][decision];
-  if(replica.id in view_decision_quorum.first) return
-  view_decision_quorum.insert(signed_msg.release_signature())
-
-
-  if(view_decision_quorum.second.size() == 2*config.f +1){
-    for(auto sig : view_decision_quorum.second){
-      msg.add_sigs
-      set_allocated
-    }
-  }
-
-  //problem: requires me to delete all unused messages. Whereas if I made copies, I would not have to.
-  //for all view <= current view 
-  //    for all decision
-  //        for all sigs; delete
+  replica_sig_sets_pair &view_decision_quorum = electFBorganizer.view_quorums[electMessage.elect_view()][electMessage.decision()];
+  if(!view_decision_quorum.first.insert(signed_msg.process_id()).second) return;
   q.release();
 
-  map[view][decision].insert(signed_msg.release_signature());
+  //verify signature before adding it.
+  proto::Signature *sig = signed_msg.release_signature();
+  if(params.multiThreading){
+      //TODO: verify this async. Dispatch verification with a callback to the callback.
 
 
-  *sig DecisionFB.add_sigs();
-  for(sig in map[view][decision])
-  *sig = std::move( ) (either the set or the sig individually, delete after; delete also for other decision)
-//Store as signatures object..
-  proto::Signature *sig = map[view][decision].add_sigs();
-   set_allocated_field(release_fied())
-  sig->set_process_id(reply.signed_cc().process_id());
-  *sig->mutable_signature() = reply.signed_cc().signature();
+        std::string *msg = signed_msg.release_data();
+      auto comb = [this, process_id = signed_msg.processs_id(), msg, sig, txnDigest,
+                      elect_view = electMessage.elect_view(), decision = electMessage.decision()]()
+        {
+        bool valid = verifier->Verify2(keyManager->GetPublicKey(process_id), msg, sig);
+        HandleElectFBcallback(txnDigest, elect_view, decision, sig, (void*) valid);
+        delete msg;
+        };
+
+      transport->DispatchTP_noCB(std::move(comb));
+  }
+  else{
+    if(!verifier->Verify(keyManager->GetPublicKey(signed_msg.process_id()),
+          signed_msg.data(), signed_msg.signature())) return;
+    HandleElectFBcallback(txnDigest, electMessage.elect_view(), electMessage.decision(), sig, (void*) true);
+  }
+
 }
+  //Callback (might need to do lookup again.)
+void Server::HandleElectFBcallback(std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, proto::Signature *sig, void* valid){
 
-//TODO remove remote argument
-void Server::HandleElectFB(const TransportAddress &remote, proto::ElectFB &msg){
-
-  //assume all is signed for now. TODO: make that general so no exceptions.
-  if (!params.signedMessages) {Debug("ERROR HANDLE ELECT FB: NON SIGNED VERSION NOT IMPLEMENTED");}
-  if(!msg.has_signed_elect_fb()) return;
-
-  proto::SignedMessage &signed_msg = msg.signed_elect_fb();
-  proto::ElectMessage electMessage;
-  electMessage.ParseFromString(signed_msg.data());
-  std::string Msg;
-  electMessage.SerializeToString(&Msg);
-  std::string txnDigest = electMessage.txn_digest();
-
-  if(ElectQuorum.find(txnDigest) == ElectQuorum.end()){
-    //ElectQuorum[txnDigest] = std::unordered_set<proto::SignedMessage*>();
-    ElectQuorum_meta[txnDigest] = std::make_pair(0, 0);
+  if(!valid){
+    delete sig;
+    return;
   }
 
-  if(uint64_t(idx) != (electMessage.elect_view() + txnDigest[0]) % config.n) return;
-  if(IsReplicaInGroup(signed_msg.process_id(), groupIdx, &config)){
-    if(ElectQuorum_meta[txnDigest].first > electMessage.elect_view()) return;
-
-    if(!crypto::Verify(keyManager->GetPublicKey(signed_msg.process_id()),
-          &Msg[0], Msg.length(), &signed_msg.signature()[0])) return;
-    // check whether all views in the elect messages match (the replica)
-    if(ElectQuorum_meta[txnDigest].first == electMessage.elect_view() && ElectQuorum[txnDigest].find(&signed_msg) == ElectQuorum[txnDigest].end()){
-        // update state, keep counter of received ElectFbs  --> last one executes the function
-      ElectQuorum[txnDigest].insert(&signed_msg); //no clone?
-      if(electMessage.decision() == proto::COMMIT) ElectQuorum_meta[txnDigest].second++;
-    }
-    else if(ElectQuorum_meta[txnDigest].first < electMessage.elect_view()){
-      ElectQuorum_meta[txnDigest].first = electMessage.elect_view();
-      ElectQuorum[txnDigest].clear(); //TODO:free all.
-      ElectQuorum[txnDigest].insert(&signed_msg); //no clone?
-    }
+  interestedClientsMap::accessor i;
+  auto jtr = interestedClients.find(i, txnDigest);
+  if(jtr){
+    if(ForwardWritebackMulti(txnDigest, i)) return;
+  } else{
+    i.release();
   }
 
-//form new decision, and send DecisionFB message to all replicas
-  if(ElectQuorum[txnDigest].size() == uint64_t(config.n - config.f)){
-    proto::CommitDecision decision;
-    if(ElectQuorum_meta[txnDigest].second > uint64_t(2* config.f +1)){
-      decision = proto::COMMIT;
-    }
-    else{
-      decision = proto::ABORT;
-    }
+  //Add signature
+  ElectQuorumMap::accessor q;
+  if(!ElectQuorum.find(q, txnDigest)) return;
+  ElectFBorganizer &electFBorganizer = q->second;
+  replica_sig_sets_pair &view_decision_quorum = electFBorganizer.view_quorums[view][decision];
+  view_decision_quorum.second.insert(sig);
+
+  if(view_decision_quorum.second.size() == 2*config.f +1){
+    //Set message
     proto::DecisionFB decisionFB;
-    decisionFB.set_req_id(electMessage.req_id());
+    decisionFB.set_req_id(0);
     decisionFB.set_txn_digest(txnDigest);
     decisionFB.set_dec(decision);
     decisionFB.set_view(electMessage.elect_view());
-    for (const proto::SignedMessage *iter : ElectQuorum[txnDigest] ) {
-      //response->add_elect_sigs(iter);
-      proto::SignedMessage* sm = decisionFB.add_elect_sigs();
-      *sm = *iter;
-    }
-    transport->SendMessageToGroup(this, groupIdx, decisionFB);
 
+    auto itr = view_decision_quorum.second.begin();
+    while(itr != view_decision_quorum.second.end()){
+      decisionFB->mutable_elect_sigs()->mutable_sigs()->AddAllocated(*itr);
+      itr = view_decision_quorum.second.erase(itr);
+    }
   }
+
+  //delete all released signatures that we dont need/use - If i copied instead would not need this.
+  auto it=electFBorganizer.view_quorums.begin();
+  while(it != electFBorganizer.view_quorums.end()){
+    if(it->first > elect_view){
+      // for(auto sig : electFBorganizer.view_quorums[elect_view][1-decision].second){
+      break;
+    }
+    else{
+      for(auto decision_sigs : it->second){
+        for(auto sig : decision_sigs.second){
+          delete sig;
+        }
+      }
+      it = electFBorganizer.view_quorums.erase(it);
+    }
+  }
+  q.release();
+
+  //Send decision to all replicas.
+  transport->SendMessageToGroup(this, groupIdx, decisionFB);
+
 }
+
 
 void Server::HandleDecisionFB(const TransportAddress &remote,
      proto::DecisionFB &msg){
 
-    std::string txnDigest = msg.txn_digest();
+    interestedClientsMap::accessor i;
+    auto jtr = interestedClients.find(i, txnDigest);
+    if(jtr){
+      if(ForwardWritebackMulti(txnDigest, i)) return;
+    } else{
+      i.release();
+    }
+
+    const std::string &txnDigest = msg.txn_digest();
     //outdated request
     if(current_views[txnDigest] > msg.view()) return;
+    //Note: dont need to explicitly verify leader Id. view number suffices. This is because
+    //correct replicas would only send their ElectFB message (which includes a view) to the
+    //according replica. So this Quorum could only come from that replica
+    //(Knowing that is not required for safety anyways, only for liveness)
 
-
-    std::string Msg;
-  //  proto::ElectFB electfb;
-
-    proto::ElectMessage elect_msg;
-
-//TODO: verify signatures, Ignore if from view < current
-    uint64_t counter = 2* config.f +1;
-    for(auto & iter :msg.elect_sigs()){  //iter of type SignedMessage
-    //  electfb.ParseFromString(iter.data());
-    //  electfb.SerializeToString(&Msg);
-      elect_msg.ParseFromString(iter.data());
-      //TODO: need to add that these signatures come from different replicas..
-      //TODO: check that there are 4f+1 elect messages in total? is this necessary?
-      if(crypto::Verify(keyManager->GetPublicKey(iter.process_id()),
-            &iter.data()[0], iter.data().length(), &iter.signature()[0])){
-        //check that replicas were electing this FB and voting for this decision
-        //if(electfb.elect_fb().decision() == msg.dec() && electfb.elect_fb().view() == msg.view()){
-        if(elect_msg.decision() == msg.dec() && elect_msg.elect_view() == msg.view()){
-          counter--;
-        }
-      }
-      if(counter==0) break;
+    const proto::Transaction *txn;
+    ongoingMap::const_accessor b;
+    bool isOngoing = ongoing.find(b, txnDigest);
+    if(isOngoing){
+        txn = b->second;
     }
-    if(counter !=0) return; //sigs dont match decision
+    else{
+        return; //REPLICA HAS NEVER SEEN THIS TXN OR TXN NO LONGER ONGOING
+    }
+    b.release();
 
+    //verify signatures
+    int64_t myProcessId;
+    proto::CommitDecision myDecision;
+    LookupP2Decision(txnDigest, myProcessId, myDecision);
+    if(params.multiThreading){
+      mainThreadCallback mcb(std::bind(&Server::FBDecisionCallback, this, txnDigest, msg.view(), msg.decision(), std::placeholders::_1));
+      asyncValidateFBDecision(msg.decision(), msg.view(), txn, &txnDigest, msg.elect_sigs(), keManager,
+                        &config, myProcessId, myDecision, verifier, std::move(mcb), transport, params.multiThreading);
+    }
+    else{
+      ValidateFBDecision(msg.decision(), msg.view(), txn, &txnDigest, msg.elect_sigs(), keManager,
+                        &config, myProcessId, myDecision, verifier);
+      FBDecisionCallback(txnDigest, msg.view(), msg.decision(), (void*) true);
+    }
+
+
+}
+
+void Server::FBDecisionCallback(const std::string &txnDigest, uint64_t view, proto::CommitDecision decision, void* valid){
+
+    if(!valid){
+      return;
+    }
+
+    interestedClientsMap::accessor i;
+    auto jtr = interestedClients.find(i, txnDigest);
+    if(jtr){
+      if(ForwardWritebackMulti(txnDigest, i)) return;
+    } else{
+      i.release();
+    }
+
+    //TODO: add locks.
+    //outdated request
+    if(current_views[txnDigest] > msg.view()){
+      return;
+    }
+    else if(current_views[txnDigest] < msg.view()){
+      current_views[txnDigest] = msg.view();
+    }
     if(decision_views[txnDigest] < msg.view()){
       decision_views[txnDigest] = msg.view();
       p2Decisions[txnDigest] = msg.dec();
     }
-    if(current_views[txnDigest] < msg.view()){
-      current_views[txnDigest] = msg.view();
-    }
-    //TODO: XXX XXX XXX Make compatible with new code
-    //SetP2(msg.req_id(), txnDigest, p2Decisions[txnDigest]);  //TODO: problematic that client cannot distinguish? Wrap it inside a P2FBreply?
-    phase2FBReply.Clear();
-    phase2FBReply.set_txn_digest(txnDigest);
-    *phase2FBReply.mutable_p2r() = phase2Reply;
-    proto::AttachedView attachedView;
-    attachedView.mutable_current_view()->set_current_view(current_views[txnDigest]);
-    attachedView.mutable_current_view()->set_replica_id(id);
 
-//SIGN IT:  //TODO: Want to add this to p2 also, in case fallback is faulty - for simplicity assume only correct fallbacks for now.
-      *attachedView.mutable_current_view()->mutable_txn_digest() = txnDigest; //redundant line if I always include txn digest
+    P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, this);
+    SetP2(0, p2fb_organizer->p2fbr->mutable_p2r(), txnDigest, decision);
+    SendPhase2FBReply(p2fb_organizer, txnDigest, true);
 
-      if (params.signedMessages) {
-        proto::CurrentView cView(attachedView.current_view());
-        //Latency_Start(&signLat);
-        SignMessage(&cView, keyManager->GetPrivateKey(id), id, attachedView.mutable_signed_current_view());
-        //Latency_End(&signLat);
-      }
-    *phase2FBReply.mutable_attached_view() = attachedView;
-
-    interestedClientsMap::const_accessor i;
-    bool interestedClientsItr = interestedClients.find(i, txnDigest);
-
-    for(const TransportAddress * target :   i->second ){
-      transport->SendMessage(this, *target, phase2FBReply);
-    }
-    i.release();
-  //TODO: 2) Send Phase2Reply message to all interested clients (check list interestedClients for all remote addresses)
-  //TODO: 3) send current views to client (in case there was no consensus, so the client can start a new round.)
 }
 
+
+void Server::HandleMoveView(const TransportAddress &remote,proto::MoveView &msg){
+  //TODO: SendMoveView in InvokeFBHandler: (under alternate code path flag where attachedViews are off!)
+  //TODO make the attachedView flag everywhere
+  //HandleMoveView:
+      //1) If rcv == f+1 --> forward (i.e. SendMoveView)
+      //2) If rcv == 2f+1 adopt new view.
+      //TODO: add Mac and mac verification.
+}
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 } // namespace indicusstore

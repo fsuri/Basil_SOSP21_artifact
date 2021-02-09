@@ -1267,7 +1267,9 @@ bool VerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
           verified++;
 
           if(verified == quorumSize) return true;
-        }
+    }
+
+    return false;
 
         // //USE THIS CODE IF ASSUMING VIEWS ARE JUST SIGNATURES - HOWEREVER, DUE TO VOTE SUBSUMPTION NEED TO DISTINGUISH IN CASE VIEWS ARE >= proposed view, not just =
         // std::string viewMsg;
@@ -1402,8 +1404,158 @@ void asyncVerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
     }
 }
 
+bool ValidateFBDecision(proto::CommitDecision decision, uint64_t view,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::Signatures &sigs,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier) {
+
+  proto::ElectMessage electMessage;
+  electMessage.Clear();
+  electMessage.set_req_id(0);
+  electMessage.set_decision(decision);
+  electMessage.set_view(view);
+  electMessage.set_txn_digest(txnDigest);
+
+  std::string electMsg;
+  electMessage.SerializeToString(&electMsg);
+
+  uint64_t quorumSize = 2*config->f +1;
+
+  uint32_t verified = 0;
+  std::unordered_set<uint64_t> replicasVerified;
+  int64_t logGrp = GetLogGroup(*txn, *txnDigest);
+
+  for (const auto &sig : sigs.sigs()) {
+    //Latency_Start(&lat);
+
+    if(IsReplicaInGroup(sig.process_id(), logGrp, config)){
+      Debug("Signature for group %lu from replica %lu who is not in group.", logGrp, sig.process_id());
+      return false;
+    }
+    if (!replicasVerified.insert(sig.process_id()).second) {
+      Debug("Already verified signature from %lu.", sig.process_id());
+      return false;
+    }
+
+    bool skip = false;
+    if (sig.process_id() == myProcessId && myProcessId >= 0) {
+      if (decision == myDecision) {
+        skip = true;
+      }
+    }
+    //Debug("NON MULTITHREAD p2 verification expected_result %s", verifier->Verify(keyManager->GetPublicKey(sig.process_id()),
+    //      p2DecisionMsg, sig.signature())? "true" : "false");
+    if (!skip && !verifier->Verify(keyManager->GetPublicKey(sig.process_id()),
+          electMsg, sig.signature())) {
+      //Latency_End(&lat);
+      Debug("Signature from %lu is not valid.", sig.process_id());
+      return false;
+    }
+    //Latency_End(&lat);
+    verified++;
+
+    if(verified == quorumSize) return true;
+  }
 
 
+  Debug("Expected exactly %lu sigs but processed %u.", quorumSize,
+        verified);
+  return false;
+}
+
+void asyncValidateFBDecision(proto::CommitDecision decision, uint64_t view,
+    const proto::Transaction *txn,
+    const std::string *txnDigest, const proto::Signatures &sigs,
+    KeyManager *keyManager, const transport::Configuration *config,
+    int64_t myProcessId, proto::CommitDecision myDecision, Verifier *verifier,
+    mainThreadCallback mcb, Transport* transport, bool multithread){
+
+    proto::ElectMessage electMessage;
+    electMessage.Clear();
+    electMessage.set_req_id(0);
+    electMessage.set_decision(decision);
+    electMessage.set_view(view);
+    electMessage.set_txn_digest(txnDigest);
+
+    std::string* electMsg = GetUnusedMessageString();
+    electMessage.SerializeToString(electMsg);
+
+    uint64_t quorumSize = 2*config->f +1;
+
+    std::unordered_set<uint64_t> replicasVerified;
+    int64_t logGrp = GetLogGroup(*txn, *txnDigest);
+
+
+    asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), 1, decision, transport);
+    verifyObj->ccMsgs.push_back(p2DecisionMsg);
+    std::vector<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
+
+    for (const auto &sig : sigs.sigs()) {
+
+      if (!IsReplicaInGroup(sig.process_id(), logGrp, config)) {
+        Debug("Signature for group %lu from replica %lu who is not in group.", logGrp, sig.process_id());
+        verifyObj->mcb((void*) false);
+        delete verifyObj;
+        return;
+      }
+      if (!replicasVerified.insert(sig.process_id()).second) {
+        Debug("Already verified signature from %lu.", sig.process_id());
+        verifyObj->mcb((void*) false);
+        delete verifyObj;
+        return;
+      }
+      //TODO: does this work as expected?
+      bool skip = false;
+      if (sig.process_id() == myProcessId && myProcessId >= 0) {
+        if (decision == myDecision) {
+          skip = true;
+          verifyObj->groupCounts[logGrp]++;
+          if (verifyObj->groupCounts[logGrp] == verifyObj->quorumSize) {
+            verifyObj->mcb((void*) true);
+            delete verifyObj;
+            return;
+          }
+        }
+      }
+      if(skip) continue;
+
+      //TODO: add to job list
+      std::function<bool()> func(std::bind(&Verifier::Verify, verifier, keyManager->GetPublicKey(sig.process_id()),
+      std::ref(*electMsg), std::ref(sig.signature())));
+        //turn into void* function in order to dispatch
+      std::function<void*()> f(std::bind(BoolPointerWrapper, std::move(func)));
+
+      std::function<void(void*)> cb(std::bind(asyncValidateP2RepliesCallback, verifyObj, logGrp, std::placeholders::_1));
+      verificationJobs.emplace_back(std::make_pair(std::move(f), std::move(cb)));
+
+    }
+
+    verifyObj->deletable = verificationJobs.size();
+    for (auto &verification : verificationJobs){
+
+      //a)) Multithreading: Dispatched f: verify , cb: async Callback
+      if(multithread && LocalDispatch){
+        // Debug("P2 Validation is dispatched and parallel");
+        auto comb = [f = std::move(verification.first), cb = std::move(verification.second)](){
+          cb(f());
+          return (void*) true;
+        };
+        transport->DispatchTP_noCB(std::move(comb));
+        //transport->DispatchTP_local(std::move(verification.first), std::move(verification.second));
+      }
+      else if(multithread){
+
+          transport->DispatchTP(std::move(verification.first), std::move(verification.second));
+
+      }
+      //b) No multithreading: Calls verify + async Callback.
+      else{
+        Debug("P2 Validation is local and serial");
+        verification.second(verification.first());
+      }
+    }
+}
 
 
 void asyncValidateTransactionWrite(const proto::CommittedProof &proof,
