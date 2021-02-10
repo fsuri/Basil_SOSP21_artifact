@@ -293,11 +293,17 @@ message InvokeFB {
 
 // all to all move to new views; upon reception of a InvokeFB request and timeout on FB result message reception, this message is sent to all replicas, and forwarded if f+1 are received. Only forward once per view.
 // Just assume for simplicty that only honest clients start invocations and therefore this message is never necessary. (Its fine if we always send it, but it might be unecessary and requires us to implement MACs too; or pay heavy signature price.)
-message MoveView {
+message MoveViewMessage {
   required uint64 req_id = 1; //not really needed.
   required bytes txn_digest = 2;
   required uint64 view = 3;
-  optional bytes mac = 4;
+}
+
+message MoveView {
+  oneof move_view_oneof{
+    MoveViewMessage msg = 1;
+    SignedMessage signed_msg =2;
+  }
 }
 
 

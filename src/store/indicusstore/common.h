@@ -352,6 +352,8 @@ typedef struct Parameters {
   const bool parallel_CCC;
   const bool dispatchCallbacks;
 
+  const bool all_to_all_fb;
+
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     int signatureBatchSize, int64_t maxDepDepth, uint64_t readDepSize,
     bool readReplyBatch, bool adjustBatchSize, bool sharedMemBatches,
@@ -360,7 +362,8 @@ typedef struct Parameters {
     bool mainThreadDispatching, bool dispatchMessageReceive,
     bool parallel_reads,
     bool parallel_CCC,
-    bool dispatchCallbacks) :
+    bool dispatchCallbacks,
+    bool all_to_all_fb) :
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
     maxDepDepth(maxDepDepth), readDepSize(readDepSize),
@@ -373,7 +376,8 @@ typedef struct Parameters {
     dispatchMessageReceive(dispatchMessageReceive),
     parallel_reads(parallel_reads),
     parallel_CCC(parallel_CCC),
-    dispatchCallbacks(dispatchCallbacks) { }
+    dispatchCallbacks(dispatchCallbacks),
+    all_to_all_fb(all_to_all_fb) { }
 } Parameters;
 
 } // namespace indicusstore

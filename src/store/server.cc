@@ -285,6 +285,8 @@ DEFINE_uint64(indicus_process_id, 0, "id used for Threadpool core affinity");
 DEFINE_uint64(indicus_total_processes, 1, "number of server processes per machine");
 DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
 
+DEFINE_bool(indicus_all_to_all_fb, false, "use the all to all view change method");
+
 DEFINE_uint64(pbft_esig_batch, 1, "signature batch size"
 		" sig batch size (for PBFT decision phase)");
 DEFINE_uint64(pbft_esig_batch_timeout, 10, "signature batch timeout ms"
@@ -584,7 +586,8 @@ int main(int argc, char **argv) {
 																			FLAGS_indicus_dispatchMessageReceive,
 																			FLAGS_indicus_parallel_reads,
 																			FLAGS_indicus_parallel_CCC,
-																			FLAGS_indicus_dispatchCallbacks);
+																			FLAGS_indicus_dispatchCallbacks,
+																			FLAGS_indicus_all_to_all_fb);
       Debug("Starting new server object");
       server = new indicusstore::Server(config, FLAGS_group_idx,
                                         FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups, tport,

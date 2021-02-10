@@ -224,6 +224,8 @@ DEFINE_bool(indicus_parallel_CCC, true, "sort read/write set for parallel CCC lo
 
 DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
 
+DEFINE_bool(indicus_all_to_all_fb, false, "use the all to all view change method");
+
 const std::string if_args[] = {
   "client-crash",
 	"client-equivocate"
@@ -902,7 +904,7 @@ int main(int argc, char **argv) {
                                         FLAGS_indicus_merkle_branch_factor, failure,
                                         FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification,
 																				FLAGS_indicus_batch_verification_size, false, false, false,
-																				FLAGS_indicus_parallel_CCC, false);
+																				FLAGS_indicus_parallel_CCC, false, FLAGS_indicus_all_to_all_fb);
 
         client = new indicusstore::Client(config, clientId,
                                           FLAGS_num_shards,

@@ -339,12 +339,13 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   //private fallback functions
   void HandlePhase1Relay(proto::RelayP1 &relayP1);
   void HandlePhase1FBReply(proto::Phase1FBReply &p1fbr);
-  void ProcessP1FBR(proto::Phase1Reply &reply, PendingFB *pendingFB, std::string &txnDigest);
+  void ProcessP1FBR(proto::Phase1Reply &reply, PendingFB *pendingFB, const std::string &txnDigest);
   void Phase1FBDecision(PendingFB *pendingFB);
-  void ProcessP2FBR(proto::Phase2Reply &reply, std::string &txnDigest);
+  void ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, const std::string &txnDigest);
   void HandlePhase2FBReply(proto::Phase2FBReply &p2fbr);
-  void ComputeMaxLevel(std::string txnDigest);
-  void UpdateViewStructure(std::string txnDigest, const proto::AttachedView &ac);
+  void HandleSendViewMessage(proto::SendView &sendView);
+  void ComputeMaxLevel(PendingFB *pendingFB);
+  void UpdateViewStructure(PendingFB *pendingFB, const proto::AttachedView &ac);
 
   inline size_t GetNthClosestReplica(size_t idx) const {
     if (pingReplicas && GetOrderedReplicas().size() > 0) {
@@ -395,6 +396,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   proto::Phase2FB phase2FB;
   proto::Phase2FBReply phase2FBReply;
   proto::InvokeFB invokeFB;
+  proto::SendView sendView;
 
 
   proto::Write validatedPrepared;

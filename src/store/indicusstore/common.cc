@@ -1414,8 +1414,8 @@ bool ValidateFBDecision(proto::CommitDecision decision, uint64_t view,
   electMessage.Clear();
   electMessage.set_req_id(0);
   electMessage.set_decision(decision);
-  electMessage.set_view(view);
-  electMessage.set_txn_digest(txnDigest);
+  electMessage.set_elect_view(view);
+  electMessage.set_txn_digest(*txnDigest);
 
   std::string electMsg;
   electMessage.SerializeToString(&electMsg);
@@ -1475,8 +1475,8 @@ void asyncValidateFBDecision(proto::CommitDecision decision, uint64_t view,
     electMessage.Clear();
     electMessage.set_req_id(0);
     electMessage.set_decision(decision);
-    electMessage.set_view(view);
-    electMessage.set_txn_digest(txnDigest);
+    electMessage.set_elect_view(view);
+    electMessage.set_txn_digest(*txnDigest);
 
     std::string* electMsg = GetUnusedMessageString();
     electMessage.SerializeToString(electMsg);
@@ -1488,7 +1488,7 @@ void asyncValidateFBDecision(proto::CommitDecision decision, uint64_t view,
 
 
     asyncVerification *verifyObj = new asyncVerification(quorumSize, std::move(mcb), 1, decision, transport);
-    verifyObj->ccMsgs.push_back(p2DecisionMsg);
+    verifyObj->ccMsgs.push_back(electMsg);
     std::vector<std::pair<std::function<void*()>,std::function<void(void*)>>> verificationJobs;
 
     for (const auto &sig : sigs.sigs()) {

@@ -139,11 +139,11 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
   void HandleInvokeFB(const TransportAddress &remote,proto::InvokeFB &msg);
   //void HandleFB_Elect: If 4f+1 Elect messages received -> form Decision based on majority, and forward the elect set (send FB_Dec) to all replicas in logging shard. (This includes the FB replica itself - Just skip ahead to HandleFB_Dec automatically: send P2R to clients)
-  void HandleElectFB(const TransportAddress &remote,proto::ElectFB &msg);
+  void HandleElectFB(proto::ElectFB &msg);
 
-  void HandleDecisionFB(const TransportAddress &remote,proto::DecisionFB &msg); 
+  void HandleDecisionFB(const TransportAddress &remote,proto::DecisionFB &msg);
 
-  void HandleMoveView(const TransportAddress &remote,proto::MoveView &msg);
+  void HandleMoveView(proto::MoveView &msg);
 
 
   proto::ConcurrencyControl::Result DoOCCCheck(
@@ -399,7 +399,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 //TODO: make strings call by ref.
   void RelayP1(const TransportAddress &remote, const std::string &txnDigest, uint64_t conflict_id);
   void SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
-  void SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision);
+  void SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision, uint64_t decision_view);
   void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string &txnDigest, bool multi = false);
   void SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi = false);
 
@@ -409,7 +409,10 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void SendView(const TransportAddress &remote, const std::string &txnDigest);
   void VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportAddress &remote);
   void InvokeFBcallback(const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid);
-  void HandleElectFBcallback(std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, proto::Signature *sig, void* valid);
+  void SendElectFB(const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp);
+  void HandleElectFBcallback(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, std::string *signature, uint64_t process_id, void* valid);
+  void FBDecisionCallback(const std::string &txnDigest, uint64_t view, proto::CommitDecision decision, void* valid);
+  void BroadcastMoveView(const std::string &txnDigest, uint64_t proposed_view);
 
   bool ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest);
   bool ForwardWritebackMulti(const std::string &txnDigest, interestedClientsMap::accessor &i);
@@ -481,14 +484,14 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   //keep list of the views in which the p2Decision is from: //TODO: add this to p2Decisions directly - doing this here so I do not touch any existing code.
   std::unordered_map<std::string, uint64_t> decision_views;
 
-  std::unordered_map<std::string, std::unordered_set<const proto::SignedMessage*>> ElectQuorum;  //tuple contains view entry, set for that view and count of Commit vs Abort.
-  std::unordered_map<std::string, std::pair<uint64_t, uint64_t>> ElectQuorum_meta;
-
-  typedef std::pair< std::unordered_set<uint64_t>, std::unordered_set<const proto::Signature*>>replica_sig_sets_pair;
+  //typedef std::pair< std::unordered_set<uint64_t>, std::unordered_set<proto::Signature*>>replica_sig_sets_pair;
+  typedef std::pair< std::unordered_set<uint64_t>, std::pair<proto::Signatures, uint64_t>> replica_sig_sets_pair;
   struct ElectFBorganizer {
     std::map<uint64_t, std::unordered_map<proto::CommitDecision, replica_sig_sets_pair>> view_quorums;
+    std::map<uint64_t, std::pair<uint64_t, bool >> move_view_counts;
   };
-  tbb::concurrent_hash_map<std::string, ElectFBorganizer> ElectQuorums;
+  typedef tbb::concurrent_hash_map<std::string, ElectFBorganizer> ElectQuorumMap;
+  ElectQuorumMap ElectQuorums;
 
   tbb::concurrent_unordered_map<std::string, proto::Writeback> writebackMessages;
 
