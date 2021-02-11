@@ -132,7 +132,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       proto::Writeback &msg);
   void HandleAbort(const TransportAddress &remote, const proto::Abort &msg);
 
-  //Fallback protocol components
+  //Fallback handler functions
   void HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg);
 
   void HandlePhase2FB(const TransportAddress &remote, const proto::Phase2FB &msg);
@@ -141,11 +141,96 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   //void HandleFB_Elect: If 4f+1 Elect messages received -> form Decision based on majority, and forward the elect set (send FB_Dec) to all replicas in logging shard. (This includes the FB replica itself - Just skip ahead to HandleFB_Dec automatically: send P2R to clients)
   void HandleElectFB(proto::ElectFB &msg);
 
-  void HandleDecisionFB(const TransportAddress &remote,proto::DecisionFB &msg);
+  void HandleDecisionFB(proto::DecisionFB &msg);
 
   void HandleMoveView(proto::MoveView &msg);
 
+  // Fallback helper functions
+  //FALLBACK helper datastructures
+  struct P1FBorganizer {
+    P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
+      remote(remote.clone()), server(server) {
+        p1fbr = server->GetUnusedPhase1FBReply();
+        p1fbr->set_req_id(ReqId);
+        p1fbr->set_txn_digest(txnDigest);
+    }
+    P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server) {
+        p1fbr = server->GetUnusedPhase1FBReply();
+        p1fbr->set_req_id(ReqId);
+        p1fbr->set_txn_digest(txnDigest);
+    }
+    ~P1FBorganizer() {
+      delete remote;
+      server->FreePhase1FBReply(p1fbr);
+    }
+    Server *server;
 
+    uint64_t req_id;
+    std::string txnDigest;
+    const TransportAddress *remote;
+
+    proto::Phase1FBReply *p1fbr;
+    //manage outstanding Sigs
+    bool p1_sig_outstanding;
+    bool p2_sig_outstanding;
+    bool c_view_sig_outstanding;
+  };
+
+  struct P2FBorganizer {
+    P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
+      remote(remote.clone()), server(server) {
+        p2fbr = server->GetUnusedPhase2FBReply();
+        p2fbr->set_req_id(ReqId);
+        p2fbr->set_txn_digest(txnDigest);
+    }
+    P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server) {
+        p2fbr = server->GetUnusedPhase2FBReply();
+        p2fbr->set_req_id(ReqId);
+        p2fbr->set_txn_digest(txnDigest);
+    }
+    ~P2FBorganizer() {
+      delete remote;
+      server->FreePhase2FBReply(p2fbr);
+    }
+    Server *server;
+
+    uint64_t req_id;
+    std::string txnDigest;
+    const TransportAddress *remote;
+
+    proto::Phase2FBReply *p2fbr;
+    //manage outstanding Sigs
+    bool p2_sig_outstanding;
+    bool c_view_sig_outstanding;
+  };
+
+    void RelayP1(const TransportAddress &remote, const std::string &txnDigest, uint64_t conflict_id);
+    void SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
+    void SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision, uint64_t decision_view);
+    void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string &txnDigest, bool multi = false);
+    void SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi = false);
+
+    void ProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, const proto::Phase2FB &p2fb);
+    void ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string &txnDigest,
+      const TransportAddress *remote, void* valid);
+    void SendView(const TransportAddress &remote, const std::string &txnDigest);
+    void VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportAddress &remote);
+    void InvokeFBcallback(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid);
+    void SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp);
+    void ElectFBcallback(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, std::string *signature, uint64_t process_id, void* valid);
+    void FBDecisionCallback(proto::DecisionFB *msg, const std::string &txnDigest, uint64_t view, proto::CommitDecision decision, void* valid);
+    void BroadcastMoveView(const std::string &txnDigest, uint64_t proposed_view);
+
+    //keep list of all remote addresses == interested client_seq_num
+    //TODO: store original client separately..
+    typedef tbb::concurrent_hash_map<std::string, tbb::concurrent_unordered_set<const TransportAddress*>> interestedClientsMap;
+    interestedClientsMap interestedClients;
+    tbb::concurrent_hash_map<std::string, const TransportAddress*> originalClient;
+
+    bool ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest);
+    bool ForwardWritebackMulti(const std::string &txnDigest, interestedClientsMap::accessor &i);
+
+  //general helper functions
   proto::ConcurrencyControl::Result DoOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
@@ -208,18 +293,26 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void FreePhase2message(proto::Phase2 *msg);
   void FreeWBmessage(proto::Writeback *msg);
   //Fallback messages:
+  proto::Phase1FB *GetUnusedPhase1FBmessage();
+  proto::Phase2FB *GetUnusedPhase2FBmessage();
   proto::Phase1FBReply *GetUnusedPhase1FBReply();
   proto::Phase2FBReply *GetUnusedPhase2FBReply();
-  proto::Phase2FB *GetUnusedPhase2FBmessage();
+  proto::InvokeFB *GetUnusedInvokeFBmessage();
   proto::SendView *GetUnusedSendViewMessage();
   proto::ElectMessage *GetUnusedElectMessage();
-  proto::ElectFB *GetUnusedElectFBMessage();
+  proto::ElectFB *GetUnusedElectFBmessage();
+  proto::DecisionFB *GetUnusedDecisionFBmessage();
+  proto::MoveView *GetUnusedMoveView();
+  void FreePhase1FBmessage(proto::Phase1FB *msg);
+  void FreePhase2FBmessage(const proto::Phase2FB *msg);
   void FreePhase1FBReply(proto::Phase1FBReply *msg);
   void FreePhase2FBReply(proto::Phase2FBReply *msg);
-  void FreePhase2FBmessage(const proto::Phase2FB *msg);
+  void FreeInvokeFBmessage(proto::InvokeFB *msg);
   void FreeSendViewMessage(proto::SendView *msg);
   void FreeElectMessage(proto::ElectMessage *msg);
-  void FreeElectFBMessage(proto::ElectFB *msg);
+  void FreeElectFBmessage(proto::ElectFB *msg);
+  void FreeDecisionFBmessage(proto::DecisionFB *msg);
+  void FreeMoveView(proto::MoveView *msg);
 
 
   inline bool IsKeyOwned(const std::string &key) const {
@@ -324,71 +417,6 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
   PingMessage ping;
 
-  //FALLBACK helper functions
-  struct P1FBorganizer {
-    P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
-      remote(remote.clone()), server(server) {
-        p1fbr = server->GetUnusedPhase1FBReply();
-        p1fbr->set_req_id(ReqId);
-        p1fbr->set_txn_digest(txnDigest);
-    }
-    P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server) {
-        p1fbr = server->GetUnusedPhase1FBReply();
-        p1fbr->set_req_id(ReqId);
-        p1fbr->set_txn_digest(txnDigest);
-    }
-    ~P1FBorganizer() {
-      delete remote;
-      server->FreePhase1FBReply(p1fbr);
-    }
-    Server *server;
-
-    uint64_t req_id;
-    std::string txnDigest;
-    const TransportAddress *remote;
-
-    proto::Phase1FBReply *p1fbr;
-    //manage outstanding Sigs
-    bool p1_sig_outstanding;
-    bool p2_sig_outstanding;
-    bool c_view_sig_outstanding;
-  };
-
-  struct P2FBorganizer {
-    P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
-      remote(remote.clone()), server(server) {
-        p2fbr = server->GetUnusedPhase2FBReply();
-        p2fbr->set_req_id(ReqId);
-        p2fbr->set_txn_digest(txnDigest);
-    }
-    P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server) {
-        p2fbr = server->GetUnusedPhase2FBReply();
-        p2fbr->set_req_id(ReqId);
-        p2fbr->set_txn_digest(txnDigest);
-    }
-    ~P2FBorganizer() {
-      delete remote;
-      server->FreePhase2FBReply(p2fbr);
-    }
-    Server *server;
-
-    uint64_t req_id;
-    std::string txnDigest;
-    const TransportAddress *remote;
-
-    proto::Phase2FBReply *p2fbr;
-    //manage outstanding Sigs
-    bool p2_sig_outstanding;
-    bool c_view_sig_outstanding;
-  };
-
-
-  //keep list of all remote addresses == interested client_seq_num
-  //std::unordered_map<std::string, std::unordered_set<const TransportAddress*>> interestedClients;
-  //TODO: store original client separately..
-  typedef tbb::concurrent_hash_map<std::string, tbb::concurrent_unordered_set<const TransportAddress*>> interestedClientsMap;
-  interestedClientsMap interestedClients;
-  tbb::concurrent_hash_map<std::string, const TransportAddress*> originalClient;
 
 //Simulated HMAC code
   std::unordered_map<uint64_t, std::string> sessionKeys;
@@ -396,26 +424,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   bool ValidateHMACedMessage(const proto::SignedMessage &signedMessage);
   void CreateHMACedMessage(const ::google::protobuf::Message &msg, proto::SignedMessage& signedMessage);
 
-//TODO: make strings call by ref.
-  void RelayP1(const TransportAddress &remote, const std::string &txnDigest, uint64_t conflict_id);
-  void SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
-  void SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision, uint64_t decision_view);
-  void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string &txnDigest, bool multi = false);
-  void SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi = false);
-
-  void ProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, const proto::Phase2FB &p2fb);
-  void ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string &txnDigest,
-    const TransportAddress *remote, void* valid);
-  void SendView(const TransportAddress &remote, const std::string &txnDigest);
-  void VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportAddress &remote);
-  void InvokeFBcallback(const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid);
-  void SendElectFB(const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp);
-  void HandleElectFBcallback(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, std::string *signature, uint64_t process_id, void* valid);
-  void FBDecisionCallback(const std::string &txnDigest, uint64_t view, proto::CommitDecision decision, void* valid);
-  void BroadcastMoveView(const std::string &txnDigest, uint64_t proposed_view);
-
-  bool ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest);
-  bool ForwardWritebackMulti(const std::string &txnDigest, interestedClientsMap::accessor &i);
+// DATA STRUCTURES
 
   VersionedKVStore<Timestamp, Value> store;
   // Key -> V
@@ -471,6 +480,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   //ADD Aborted proof to it.(in order to reply to Fallback)
   //creating new map to store writeback messages..  Need to find a better way, but suffices as placeholder
 
+
+  //FB HELPER DATA STRUCTURES
   //keep list of timeouts
   //std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> FBclient_timeouts;
   std::unordered_map<std::string, uint64_t> client_starttime;

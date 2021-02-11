@@ -242,8 +242,8 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     }
   } else if (type == phase1.GetTypeName()) {
 
-    //TODO:: FIX: even if just dispatching to 2nd main thred need to copy,
-    if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_CCC)){  //TODO add parallelOCC option
+
+    if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_CCC)){
      phase1.ParseFromString(data);
      HandlePhase1(remote, phase1);
     }
@@ -265,28 +265,18 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     }
 
   } else if (type == phase2.GetTypeName()) {
-      if(params.multiThreading){
-          proto::Phase2* p2 = GetUnusedPhase2message();
-          p2->ParseFromString(data);
-          if(!params.mainThreadDispatching || params.dispatchMessageReceive){
-            HandlePhase2(remote, *p2);
-          }
-          else{
-            auto f = [this, &remote, p2](){
-              this->HandlePhase2(remote, *p2);
-              return (void*) true;
-            };
-            transport->DispatchTP_main(f);
-          }
+
+      if(!params.multiThreading && (!params.mainThreadDispatching || params.dispatchMessageReceive)){
+        phase2.ParseFromString(data);
+        HandlePhase2(remote, phase2);
       }
       else{
+        proto::Phase2* p2 = GetUnusedPhase2message();
+        p2->ParseFromString(data);
         if(!params.mainThreadDispatching || params.dispatchMessageReceive){
-          phase2.ParseFromString(data);
-          HandlePhase2(remote, phase2);
+          HandlePhase2(remote, *p2);
         }
         else{
-          proto::Phase2* p2 = GetUnusedPhase2message();
-          p2->ParseFromString(data);
           auto f = [this, &remote, p2](){
             this->HandlePhase2(remote, *p2);
             return (void*) true;
@@ -296,36 +286,26 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       }
 
   } else if (type == writeback.GetTypeName()) {
-      if(params.multiThreading){
-          proto::Writeback *wb = GetUnusedWBmessage();
-          wb->ParseFromString(data);
-          if(!params.mainThreadDispatching || params.dispatchMessageReceive){
-            HandleWriteback(remote, *wb);
-          }
-          else{
-            auto f = [this, &remote, wb](){
-              this->HandleWriteback(remote, *wb);
-              return (void*) true;
-            };
-            transport->DispatchTP_main(f);
-          }
+
+      if(!params.multiThreading && (!params.mainThreadDispatching || params.dispatchMessageReceive)){
+        writeback.ParseFromString(data);
+        HandleWriteback(remote, writeback);
       }
       else{
+        proto::Writeback *wb = GetUnusedWBmessage();
+        wb->ParseFromString(data);
         if(!params.mainThreadDispatching || params.dispatchMessageReceive){
-          writeback.ParseFromString(data);
-          HandleWriteback(remote, writeback);
+          HandleWriteback(remote, *wb);
         }
         else{
-          proto::Writeback *wb = GetUnusedWBmessage();
-          wb->ParseFromString(data);
           auto f = [this, &remote, wb](){
             this->HandleWriteback(remote, *wb);
             return (void*) true;
           };
           transport->DispatchTP_main(f);
         }
-
       }
+
   } else if (type == abort.GetTypeName()) {
     abort.ParseFromString(data);
     HandleAbort(remote, abort);
@@ -336,23 +316,123 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
 
 // Add all Fallback signedMessages
   } else if (type == phase1FB.GetTypeName()) {
-    phase1FB.ParseFromString(data);
-    HandlePhase1FB(remote, phase1FB);
+
+    if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_CCC)){
+      phase1FB.ParseFromString(data);
+      HandlePhase1FB(remote, phase1FB);
+    }
+    else{
+      proto::Phase1FB *phase1FBCopy = GetUnusedPhase1FBmessage();
+      phase1FBCopy->ParseFromString(data);
+      auto f = [this, &remote, phase1FBCopy]() {
+        this->HandlePhase1FB(remote, *phase1FBCopy);
+        return (void*) true;
+      };
+      if(params.dispatchMessageReceive){
+        f();
+      }
+      else{
+        Debug("Dispatching HandlePhase1");
+        transport->DispatchTP_main(f);
+        //transport->DispatchTP_noCB(f); //use if want to dispatch to all workers
+      }
+    }
+
   } else if (type == phase2FB.GetTypeName()) {
-    phase2FB.ParseFromString(data);
-    HandlePhase2FB(remote, phase2FB);
+
+      if(!params.multiThreading && (!params.mainThreadDispatching || params.dispatchMessageReceive)){
+        phase2FB.ParseFromString(data);
+        HandlePhase2FB(remote, phase2FB);
+      }
+      else{
+        proto::Phase2FB* p2FB = GetUnusedPhase2FBmessage();
+        p2FB->ParseFromString(data);
+        if(!params.mainThreadDispatching || params.dispatchMessageReceive){
+          HandlePhase2FB(remote, *p2FB);
+        }
+        else{
+          auto f = [this, &remote, p2FB](){
+            this->HandlePhase2FB(remote, *p2FB);
+            return (void*) true;
+          };
+          transport->DispatchTP_main(f);
+        }
+      }
+
   } else if (type == invokeFB.GetTypeName()) {
-    invokeFB.ParseFromString(data);
-    HandleInvokeFB(remote, invokeFB); //DONT send back to remote, but instead to FB, calculate based on view. (need to include this in TX state thats kept locally.)
+
+    if((params.all_to_all_fb || !params.multiThreading) && (!params.mainThreadDispatching || params.dispatchMessageReceive)){
+      invokeFB.ParseFromString(data);
+      HandleInvokeFB(remote, invokeFB);
+    }
+    else{
+      proto::InvokeFB* invFB = GetUnusedInvokeFBmessage();
+      invFB->ParseFromString(data);
+      if(!params.mainThreadDispatching || params.dispatchMessageReceive){
+        HandleInvokeFB(remote, *invFB);
+      }
+      else{
+        auto f = [this, &remote, invFB](){
+          this->HandleInvokeFB(remote, *invFB);
+          return (void*) true;
+        };
+        transport->DispatchTP_main(f);
+      }
+    }
+
   } else if (type == electFB.GetTypeName()) {
-    electFB.ParseFromString(data);
-    HandleElectFB(electFB);
+
+    if(!params.mainThreadDispatching || params.dispatchMessageReceive){
+      electFB.ParseFromString(data);
+      HandleElectFB(electFB);
+    }
+    else{
+      proto::ElectFB* elFB = GetUnusedElectFBmessage();
+      elFB->ParseFromString(data);
+      auto f = [this, elFB](){
+          this->HandleElectFB(*elFB);
+          return (void*) true;
+      };
+      transport->DispatchTP_main(f);
+    }
+
   } else if (type == decisionFB.GetTypeName()) {
-    decisionFB.ParseFromString(data);
-    HandleDecisionFB(remote, decisionFB); //DONT send back to remote, but instead to interested clients. (need to include list of interested clients as part of local tx state)
+
+    if(!params.multiThreading && (!params.mainThreadDispatching || params.dispatchMessageReceive)){
+      decisionFB.ParseFromString(data);
+      HandleDecisionFB(decisionFB);
+    }
+    else{
+      proto::DecisionFB* decFB = GetUnusedDecisionFBmessage();
+      decFB->ParseFromString(data);
+      if(!params.mainThreadDispatching || params.dispatchMessageReceive){
+        HandleDecisionFB(*decFB);
+      }
+      else{
+        auto f = [this, decFB](){
+          this->HandleDecisionFB( *decFB);
+          return (void*) true;
+        };
+        transport->DispatchTP_main(f);
+      }
+    }
+
   } else if (type == moveView.GetTypeName()) {
-    moveView.ParseFromString(data);
-    HandleMoveView(moveView); //Send only to other replicas
+
+    if(!params.mainThreadDispatching || params.dispatchMessageReceive){
+      moveView.ParseFromString(data);
+      HandleMoveView(moveView); //Send only to other replicas
+    }
+    else{
+      proto::MoveView* mvView = GetUnusedMoveView();
+      mvView->ParseFromString(data);
+      auto f = [this, mvView](){
+          this->HandleMoveView( *mvView);
+          return (void*) true;
+      };
+      transport->DispatchTP_main(f);
+    }
+
   } else {
     Panic("Received unexpected message type: %s", type.c_str());
   }
@@ -387,6 +467,7 @@ void Server::HandleRead(const TransportAddress &remote,
   if (CheckHighWatermark(ts)) {
     // ignore request if beyond high watermark
     Debug("Read timestamp beyond high watermark.");
+    if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_reads)) FreeReadmessage(&msg);
     return;
   }
 
@@ -543,7 +624,7 @@ void Server::HandleRead(const TransportAddress &remote,
   } else {
     sendCB();
   }
-  if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeReadmessage(&msg);
+  if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_reads)) FreeReadmessage(&msg);
 }
 
 //////////////////////
@@ -570,6 +651,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
   ongoingMap::accessor b;
   if(ongoing.find(b, txnDigest)){
     b.release();
+    if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(&msg);
     return;
   }
   if(committed.find(txnDigest) != committed.end() || aborted.find(txnDigest) != aborted.end()) return;
@@ -600,6 +682,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
         if (!dep.has_write_sigs()) {
           Debug("Dep for txn %s missing signatures.",
               BytesToHex(txnDigest, 16).c_str());
+          if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(&msg);
           return;
         }
         if (!ValidateDependency(dep, &config, params.readDepSize, keyManager,
@@ -607,6 +690,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
           Debug("VALIDATE Dependency failed for txn %s.",
               BytesToHex(txnDigest, 16).c_str());
           // safe to ignore Byzantine client
+          if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(&msg);
           return;
         }
       }
@@ -637,6 +721,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
           ongoingMap::const_accessor b;
           if(!ongoing.find(b, txnDigest)){
             Debug("Already concurrently Committed/Aborted txn[%s]", BytesToHex(txnDigest, 16).c_str());
+            if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(msg_ptr);
             return (void*) false;
           }
           b.release();
@@ -703,8 +788,14 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
       phase2Reply->mutable_p2_decision()->set_decision(msg->decision());
     }
 
+    if (params.validateProofs) {
+      // TODO: need a way for a process to know the decision view when verifying the signed p2_decision
+      phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
+    }
+
    if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
    if(params.mainThreadDispatching) current_viewsMutex.unlock();
+   if(params.mainThreadDispatching) decision_viewsMutex.unlock();
 
     //XXX start client timeout for Fallback relay
     // if(client_starttime.find(*txnDigest) == client_starttime.end()){
@@ -714,12 +805,6 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
     //   client_starttime[*txnDigest] = start_time;
     // }
 
-    if (params.validateProofs) {
-      // TODO: need a way for a process to know the decision view when verifying the signed p2_decision
-      phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
-    }
-
-   if(params.mainThreadDispatching) decision_viewsMutex.unlock();
 
   //Free allocated memory
   if(params.multiThreading || params.mainThreadDispatching){
@@ -808,6 +893,9 @@ void Server::HandlePhase2(const TransportAddress &remote,
         else{
           Debug("PHASE2[%s] message does not contain txn, but have not seen"
               " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
+          if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+              FreePhase2message(&msg); //const_cast<proto::Phase2&>(msg));
+          }
           return;
         }
       }
@@ -897,9 +985,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier)) {
               Debug("VALIDATE P1Replies failed.");
-              FreePhase2Reply(phase2Reply);
-              delete remoteCopy;
-              return;
+              return HandlePhase2CB(&msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) false);
             }
           }
         }
@@ -929,8 +1015,10 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
       // completing.insert(z, *txnDigest);
       // //z->second.lock();
       // z.release();
-
-      if (msg->decision() == proto::COMMIT) {
+      if(committed.find(*txnDigest) != committed.end() || aborted.find(*txnDigest) != aborted.end()){
+        //duplicate, do nothing. TODO: Forward to all interested clients and empty it?
+      }
+      else if (msg->decision() == proto::COMMIT) {
         Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
         bool p1Sigs = msg->has_p1_sigs();
         uint64_t view = -1;
@@ -981,7 +1069,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
   std::string computedTxnDigest;
   if (!msg.has_txn() && !msg.has_txn_digest()) {
     Debug("WRITEBACK message contains neither txn nor txn_digest.");
-    return;
+    return WritebackCallback(&msg, txnDigest, txn, (void*) false);
   }
 
   if (msg.has_txn_digest() ) {
@@ -1002,7 +1090,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
       else{
         Debug("PHASE2[%s] message does not contain txn, but have not seen"
             " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
-        return;
+        return WritebackCallback(&msg, txnDigest, txn, (void*) false);
       }
     }
   } else {
@@ -1013,7 +1101,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
 
   if(committed.find(*txnDigest) != committed.end() || aborted.find(*txnDigest) != aborted.end()){
-    return; //duplicate TODO: Forward to all interested clients and empty it?
+    return WritebackCallback(&msg, txnDigest, txn, (void*) false); //duplicate TODO: Forward to all interested clients and empty it?
   }
 
   Debug("WRITEBACK[%s] with decision %d.",
@@ -1041,8 +1129,8 @@ void Server::HandleWriteback(const TransportAddress &remote,
                     myResult, verifier, std::move(mcb), transport, true);
             }
             else{
-                  Debug("2: Taking non-batch branch p1 commit");
-            asyncValidateP1Replies(msg.decision(),
+              Debug("2: Taking non-batch branch p1 commit");
+              asyncValidateP1Replies(msg.decision(),
                   true, txn, txnDigest, msg.p1_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier, std::move(mcb), transport, true);
             }
@@ -1101,7 +1189,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
                   params.hashDigest);
               asyncValidateCommittedConflict(msg.conflict(), &committedTxnDigest, txn,
                     txnDigest, params.signedMessages, keyManager, &config, verifier,
-                    mcb, transport, true, params.batchVerification);
+                    std::move(mcb), transport, true, params.batchVerification);
               return;
           }
           else if (params.signedMessages) {
@@ -1109,7 +1197,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
              Debug("WRITEBACK[%s] decision %d, has_p1_sigs %d, has_p2_sigs %d, and"
                  " has_conflict %d.", BytesToHex(*txnDigest, 16).c_str(),
                  msg.decision(), msg.has_p1_sigs(), msg.has_p2_sigs(), msg.has_conflict());
-             return;
+             return WritebackCallback(&msg, txnDigest, txn, (void*) false);;
           }
 
       }
@@ -1135,7 +1223,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
                     keyManager, &config, myProcessId, myResult, verifyLat, verifier)) {
                 Debug("WRITEBACK[%s] Failed to validate P1 replies for fast commit.",
                     BytesToHex(*txnDigest, 16).c_str());
-                return;
+                return WritebackCallback(&msg, txnDigest, txn, (void*) false);
               }
             }
           }
@@ -1156,7 +1244,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
                     keyManager, &config, myProcessId, myResult, verifyLat, verifier)) {
                 Debug("WRITEBACK[%s] Failed to validate P1 replies for fast abort.",
                     BytesToHex(*txnDigest, 16).c_str());
-                return;
+                return WritebackCallback(&msg, txnDigest, txn, (void*) false);
               }
             }
           }
@@ -1180,7 +1268,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
                     keyManager, &config, myProcessId, myDecision, verifyLat, verifier)) {
                 Debug("WRITEBACK[%s] Failed to validate P2 replies for decision %d.",
                     BytesToHex(*txnDigest, 16).c_str(), msg.decision());
-                return;
+                return WritebackCallback(&msg, txnDigest, txn, (void*) false);
               }
             }
 
@@ -1200,7 +1288,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
                         txnDigest, params.signedMessages, keyManager, &config, verifier)) {
                     Debug("WRITEBACK[%s] Failed to validate committed conflict for fast abort.",
                         BytesToHex(*txnDigest, 16).c_str());
-                    return;
+                    return WritebackCallback(&msg, txnDigest, txn, (void*) false);
                 }
 
             }
@@ -1208,7 +1296,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
             Debug("WRITEBACK[%s] decision %d, has_p1_sigs %d, has_p2_sigs %d, and"
                 " has_conflict %d.", BytesToHex(*txnDigest, 16).c_str(),
                 msg.decision(), msg.has_p1_sigs(), msg.has_p2_sigs(), msg.has_conflict());
-            return;
+            return WritebackCallback(&msg, txnDigest, txn, (void*) false);
           }
         }
 
@@ -2693,6 +2781,34 @@ void Server::FreeWBmessage(proto::Writeback *msg) {
   // WBmessages.push_back(msg);
 }
 
+
+//Fallback message re-use allocators
+
+proto::Phase1FB *Server::GetUnusedPhase1FBmessage() {
+  return new proto::Phase1FB();
+
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(p1ProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // proto::Phase1FB *msg;
+  // if (p1FBmessages.size() > 0) {
+  //   msg = p1FBmessages.back();
+  //   msg->Clear();
+  //   p1FBmessages.pop_back();
+  // } else {
+  //   msg = new proto::Phase1FB();
+  // }
+  // return msg;
+}
+
+void Server::FreePhase1FBmessage(proto::Phase1FB *msg) {
+  delete msg;
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(p1FBProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // p1FBmessages.push_back(msg);
+}
+
 proto::Phase1FBReply *Server::GetUnusedPhase1FBReply(){
   return new proto::Phase1FBReply();
   // //Latency_Start(&waitOnProtoLock);
@@ -2715,6 +2831,31 @@ void Server::FreePhase1FBReply(proto::Phase1FBReply *msg){
   // std::unique_lock<std::mutex> lock(P1FBRProtoMutex);
   // //Latency_End(&waitOnProtoLock);
   // P1FBReplies.push_back(msg);
+}
+
+proto::Phase2FB *Server::GetUnusedPhase2FBmessage() {
+  return new proto::Phase2FB();
+
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(p2FBProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // proto::Phase2FB *msg;
+  // if (p2FBmessages.size() > 0) {
+  //   msg = p2FBmessages.back();
+  //   msg->Clear();
+  //   p2FBmessages.pop_back();
+  // } else {
+  //   msg = new proto::Phase2FB();
+  // }
+  // return msg;
+}
+
+void Server::FreePhase2FBmessage(const proto::Phase2FB *msg) {
+  delete msg;
+  // //Latency_Start(&waitOnProtoLock);
+  // std::unique_lock<std::mutex> lock(p2FBProtoMutex);
+  // //Latency_End(&waitOnProtoLock);
+  // p2FBmessages.push_back(msg);
 }
 
 proto::Phase2FBReply *Server::GetUnusedPhase2FBReply(){
@@ -2741,28 +2882,13 @@ void Server::FreePhase2FBReply(proto::Phase2FBReply *msg){
   // P2FBReplies.push_back(msg);
 }
 
-proto::Phase2FB *Server::GetUnusedPhase2FBmessage(){
-  return new proto::Phase2FB();
-  // //Latency_Start(&waitOnProtoLock);
-  // std::unique_lock<std::mutex> lock(P2FBProtoMutex);
-  // //Latency_End(&waitOnProtoLock);
-  // proto::Phase2FB *msg;
-  // if (P2FBmessages.size() > 0) {
-  //   msg = P2FBmessages.back();
-  //   msg->Clear();
-  //   P2FBmessages.pop_back();
-  // } else {
-  //   msg = new proto::proto::Phase2FB();
-  // }
-  // return msg;
+
+proto::InvokeFB *Server::GetUnusedInvokeFBmessage(){
+  return new proto::InvokeFB();
 }
 
-void Server::FreePhase2FBmessage(const proto::Phase2FB *msg){
+void Server::FreeInvokeFBmessage(proto::InvokeFB *msg){
   delete msg;
-  // //Latency_Start(&waitOnProtoLock);
-  // std::unique_lock<std::mutex> lock(P2FBProtoMutex);
-  // //Latency_End(&waitOnProtoLock);
-  // P2FBmessages.push_back(msg);
 }
 
 proto::SendView *Server::GetUnusedSendViewMessage(){
@@ -2781,11 +2907,27 @@ void Server::FreeElectMessage(proto::ElectMessage *msg){
   delete msg;
 }
 
-proto::ElectFB *Server::GetUnusedElectFBMessage(){
+proto::ElectFB *Server::GetUnusedElectFBmessage(){
   return new proto::ElectFB();
 }
 
-void Server::FreeElectFBMessage(proto::ElectFB *msg){
+void Server::FreeElectFBmessage(proto::ElectFB *msg){
+  delete msg;
+}
+
+proto::DecisionFB *Server::GetUnusedDecisionFBmessage(){
+  return new proto::DecisionFB();
+}
+
+void Server::FreeDecisionFBmessage(proto::DecisionFB *msg){
+  delete msg;
+}
+
+proto::MoveView *Server::GetUnusedMoveView(){
+  return new proto::MoveView();
+}
+
+void Server::FreeMoveView(proto::MoveView *msg){
   delete msg;
 }
 
@@ -2978,7 +3120,10 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 
   //check if already committed. reply with whole proof so client can forward that.
   //1) COMMIT CASE, 2) ABORT CASE
-  if(ForwardWriteback(remote, msg.req_id(), txnDigest)) return;
+  if(ForwardWriteback(remote, msg.req_id(), txnDigest)){
+    if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1FBmessage(&msg);
+    return;
+  }
 
   //Otherwise, keep track of interested clients to message in the future
   interestedClientsMap::accessor i;
@@ -3079,6 +3224,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
           if (!dep.has_write_sigs()) {
             Debug("Dep for txn %s missing signatures.",
               BytesToHex(txnDigest, 16).c_str());
+            if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1FBmessage(&msg);
             return;
           }
           if (!ValidateDependency(dep, &config, params.readDepSize, keyManager,
@@ -3086,6 +3232,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
             Debug("VALIDATE Dependency failed for txn %s.",
                 BytesToHex(txnDigest, 16).c_str());
             // safe to ignore Byzantine client
+            if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1FBmessage(&msg);
             return;
           }
         }
@@ -3134,6 +3281,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
           SendPhase1FBReply(p1fb_organizer, txnDigest);
       }
   }
+  if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1FBmessage(&msg);
 }
 
 
@@ -3249,7 +3397,12 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
   //    msg.txn().timestamp().timestamp());
 
   //TODO: change to multi and delete all interested clients?
-  if(ForwardWriteback(remote, msg.req_id(), txnDigest)) return;
+  if(ForwardWriteback(remote, msg.req_id(), txnDigest)){
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+      FreePhase2FBmessage(&msg); //const_cast<proto::Phase2&>(msg));
+    }
+    return;
+  }
 
   // HandePhase2 just returns an existing decision.
   if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
@@ -3260,6 +3413,11 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
       SetP2(msg.req_id(), p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, decision, decision_view);
       SendPhase2FBReply(p2fb_organizer, txnDigest);
       Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
+
+      if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+        FreePhase2FBmessage(&msg); //const_cast<proto::Phase2&>(msg));
+      }
+      return;
   }
   //just do normal handle p2 otherwise after timeout
   else{
@@ -3372,7 +3530,12 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
 //TODO: create Callback and asyncVerification
 void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, const proto::Phase2FB &p2fb){
   //Shotcircuit if request already processed once.
-  if(ForwardWriteback(remote, 0, txnDigest)) return;
+  if(ForwardWriteback(remote, 0, txnDigest)){
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+      FreePhase2FBmessage(&p2fb); //const_cast<proto::Phase2&>(msg));
+    }
+    return;
+  }
   // returns an existing decision.
   if(p2Decisions.find(txnDigest) != p2Decisions.end()){
       proto::CommitDecision decision =p2Decisions[txnDigest];
@@ -3381,6 +3544,9 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
       SetP2(0, p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, decision, decision_view);
       SendPhase2FBReply(p2fb_organizer, txnDigest);
       Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
+      if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+        FreePhase2FBmessage(&p2fb); //const_cast<proto::Phase2&>(msg));
+      }
       return;
   }
 
@@ -3407,6 +3573,9 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
       }
       else{
          Debug("Txn[%s] neither in ongoing nor in FallbackP2 message.", BytesToHex(txnDigest, 64).c_str());
+         if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+           FreePhase2FBmessage(&p2fb); //const_cast<proto::Phase2&>(msg));
+         }
         return;
       }
   }
@@ -3476,15 +3645,16 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
 
       }
       else{
-        if(!ValidateP1Replies(p2fb.decision(), false, txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult, verifier)){
-          return; //INVALID SIGS
-        }
-        ProcessP2FBCallback(&p2fb, txnDigest, &remote, (void*) true);
+        bool valid = ValidateP1Replies(p2fb.decision(), false, txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult, verifier);
+        ProcessP2FBCallback(&p2fb, txnDigest, &remote, (void*) valid);
         return;
       }
   }
   else{
     Debug("FallbackP2 message for Txn[%s] has no proofs.", BytesToHex(txnDigest, 64).c_str());
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+      FreePhase2FBmessage(&p2fb); //const_cast<proto::Phase2&>(msg));
+    }
     return;
   }
 
@@ -3495,6 +3665,9 @@ void Server::ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string 
   const TransportAddress *remote, void* valid){
 
     if(!valid){
+      if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+        FreePhase2FBmessage(p2fb);
+      }
       return;
     }
     proto::CommitDecision decision;
@@ -3520,7 +3693,7 @@ void Server::ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string 
     SendPhase2FBReply(p2fb_organizer, txnDigest);
 
     //TODO: FreeOriginal p2fb message + delete remote. (could also instantiate the p2fb_org object earlier, and delete if false)
-    if(params.multiThreading || params.mainThreadDispatching){
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
       FreePhase2FBmessage(p2fb);
     }
     delete remote;
@@ -3562,25 +3735,34 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
     // CHECK if part of logging shard. (this needs to be done at all p2s, reject if its not ourselves)
     const std::string &txnDigest = msg.txn_digest();
 
-    if(ForwardWriteback(remote, msg.req_id(), txnDigest)) return;
+    if(ForwardWriteback(remote, msg.req_id(), txnDigest)){
+      if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
+      return;
+    }
 
     if(!params.all_to_all_fb && msg.proposed_view() <= current_views[txnDigest]){
       SendView(remote, txnDigest);
+      if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
       return; //Obsolete Invoke Message, send newer view
     }
 
     //process decision if one does not have any yet.
     //This is safe even if current_view > 0 because this replica could not have taken part in any elections yet (can only elect once you have decision), nor has yet received a dec from a larger view which it would adopt.
     if(p2Decisions.find(txnDigest) == p2Decisions.end()){
-        if(!msg.has_p2fb()) return;
+        if(!msg.has_p2fb()){
+          if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
+          return;
+        }
         const proto::Phase2FB &p2fb = msg.p2fb();
         HandlePhase2FB(remote, p2fb);
+
+        //TODO: schedule InvokeFB after the phase2... (since HandlePhase2 is async the following makes no sense.)
         //either no need for fallback, or still no decision learned so one cannot contribute to election.
-        if(writebackMessages.find(txnDigest) != writebackMessages.end() || p2Decisions.find(txnDigest) == p2Decisions.end()){
+        if(committed.find(txnDigest) != committed.end() || writebackMessages.find(txnDigest) != writebackMessages.end() || p2Decisions.find(txnDigest) == p2Decisions.end()){
+          if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
           return;
         }
     }
-
 
 
       //TODO  Schedule request for when current leader timeout is complete --> check exp timeouts; then set new one.
@@ -3613,10 +3795,6 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
     //   }
       //otherwise pass and invoke for the first time!
 
-
-    //TODO: ADD Code path for no attached view business
-    //TODO: refactor ElectMessage sending into 1 function.
-
     // find txn. that maps to txnDigest. if not stored locally, and not part of the msg, reject msg.
     const proto::Transaction *txn;
     ongoingMap::const_accessor b;
@@ -3630,23 +3808,26 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
             txn = &p2fb.txn();
           }
         else{
+          if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
           return; //REPLICA HAS NEVER SEEN THIS TXN
         }
     }
     else{
+        if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
         return; //REPLICA HAS NEVER SEEN THIS TXN
     }
     b.release();
 
     int64_t logGrp = GetLogGroup(*txn, txnDigest);
     if(groupIdx != logGrp){
+          if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
           return;  //This replica is not part of the shard responsible for Fallback.
     }
 
     if(params.all_to_all_fb){
       uint64_t proposed_view = current_views[txnDigest] + 1; //client does not propose view.
       BroadcastMoveView(txnDigest, proposed_view);
-      SendElectFB(txnDigest, proposed_view, logGrp); //can already send before moving to view since we do not skip views during synchrony (even when no correct clients interested)
+      SendElectFB(&msg, txnDigest, proposed_view, logGrp); //can already send before moving to view since we do not skip views during synchrony (even when no correct clients interested)
     }
     else{
       //verify views & Send ElectFB
@@ -3657,7 +3838,10 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
 
 void Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportAddress &remote){
   //Assuming Invoke Message contains SignedMessages for view instead of Signatures.
-  if(!msg.has_view_signed()) return;
+  if(!msg.has_view_signed()){
+    if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
+    return;
+  }
   const proto::SignedMessages &signed_messages = msg.view_signed();
 
 
@@ -3668,41 +3852,45 @@ void Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportA
 
   const TransportAddress *remoteCopy = remote.clone();
   if(params.multiThreading){
-    mainThreadCallback mcb(std::bind(&Server::InvokeFBcallback, this, txnDigest, msg.proposed_view(), logGrp, remoteCopy, std::placeholders::_1));
+    mainThreadCallback mcb(std::bind(&Server::InvokeFBcallback, this, &msg, txnDigest, msg.proposed_view(), logGrp, remoteCopy, std::placeholders::_1));
     asyncVerifyFBViews(msg.proposed_view(), msg.catchup(), logGrp, &txnDigest, signed_messages,
     keyManager, &config, myProcessId, myCurrentView, verifier, std::move(mcb), transport, params.multiThreading);
   }
   else{
     bool valid = VerifyFBViews(msg.proposed_view(), msg.catchup(), logGrp, &txnDigest, signed_messages,
     keyManager, &config, myProcessId, myCurrentView, verifier);
-    InvokeFBcallback(txnDigest, msg.proposed_view(), logGrp, remoteCopy, (void*) valid);
+    InvokeFBcallback(&msg, txnDigest, msg.proposed_view(), logGrp, remoteCopy, (void*) valid);
   }
 
 }
 
-void Server::InvokeFBcallback(const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid){
+void Server::InvokeFBcallback(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid){
 
   if(!valid){
+    delete remoteCopy;
+    if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
     return; //View verification failed.
   }
   if(ForwardWriteback(*remoteCopy, 0, txnDigest)){
     delete remoteCopy;
+    if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
     return;
   }
 
   if(!params.all_to_all_fb && current_views[txnDigest] >= proposed_view){
     SendView(*remoteCopy, txnDigest);
     delete remoteCopy;
+    if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
     return; //Obsolete Invoke Message, send newer view
   }
   current_views[txnDigest] = proposed_view;
-  SendElectFB(txnDigest, proposed_view, logGrp);
+  SendElectFB(msg, txnDigest, proposed_view, logGrp);
 }
 
-void Server::SendElectFB(const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp){
+void Server::SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp){
   size_t replicaID = (proposed_view + txnDigest[0]) % config.n;
   //Form and send ElectFB message to all replicas within logging shard.
-  proto::ElectFB* electFB = GetUnusedElectFBMessage();
+  proto::ElectFB* electFB = GetUnusedElectFBmessage();
   proto::ElectMessage* electMessage = GetUnusedElectMessage();
   electMessage->set_req_id(0);  //What req id to put here. (should i carry along message?)
   //Answer:: Should not have any. It must be consistent (0 is easiest) across all messages so that verifiation will succeed
@@ -3715,7 +3903,7 @@ void Server::SendElectFB(const std::string &txnDigest, uint64_t proposed_view, u
       [this, electMessage, electFB, logGrp, replicaID](){
         this->transport->SendMessageToReplica(this, logGrp, replicaID, *electFB);
         FreeElectMessage(electMessage);
-        FreeElectFBMessage(electFB);
+        FreeElectFBmessage(electFB);
       }
     );
   }
@@ -3723,8 +3911,10 @@ void Server::SendElectFB(const std::string &txnDigest, uint64_t proposed_view, u
     *electFB->mutable_elect_fb() = std::move(*electMessage);
     transport->SendMessageToReplica(this, logGrp, replicaID, *electFB);
     FreeElectMessage(electMessage);
-    FreeElectFBMessage(electFB); //must free in this order.
+    FreeElectFBmessage(electFB); //must free in this order.
   }
+
+  if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
 
   //XXX Set Fallback timeouts new.
   // gettimeofday(&tv, NULL);
@@ -3744,22 +3934,33 @@ void Server::SendElectFB(const std::string &txnDigest, uint64_t proposed_view, u
 void Server::HandleElectFB(proto::ElectFB &msg){
 
   if (!params.signedMessages) {Debug("ERROR HANDLE ELECT FB: NON SIGNED VERSION NOT IMPLEMENTED");}
-  if(!msg.has_signed_elect_fb()) return;
-
+  if(!msg.has_signed_elect_fb()){
+    if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeElectFBmessage(&msg);
+    return;
+  }
   proto::SignedMessage *signed_msg = msg.mutable_signed_elect_fb();
-  if(!IsReplicaInGroup(signed_msg->process_id(), groupIdx, &config)) return;
+  if(!IsReplicaInGroup(signed_msg->process_id(), groupIdx, &config)){
+    if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeElectFBmessage(&msg);
+    return;
+  }
 
   proto::ElectMessage electMessage;
   electMessage.ParseFromString(signed_msg->data());
   const std::string &txnDigest = electMessage.txn_digest();
   size_t leaderID = (electMessage.elect_view() + txnDigest[0]) % config.n;
-  if(leaderID != idx) return; //Not the right leader
+  if(leaderID != idx){ //Not the right leader
+    if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeElectFBmessage(&msg);
+    return;
+  }
 
   //return if this txnDigest already committed/aborted
   interestedClientsMap::accessor i;
   auto jtr = interestedClients.find(i, txnDigest);
   if(jtr){
-    if(ForwardWritebackMulti(txnDigest, i)) return;
+    if(ForwardWritebackMulti(txnDigest, i)){
+      if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeElectFBmessage(&msg);
+       return;
+    }
   } else{
     i.release();
   }
@@ -3769,7 +3970,10 @@ void Server::HandleElectFB(proto::ElectFB &msg){
   ElectQuorums.insert(q, txnDigest);
   ElectFBorganizer &electFBorganizer = q->second;
   replica_sig_sets_pair &view_decision_quorum = electFBorganizer.view_quorums[electMessage.elect_view()][electMessage.decision()];
-  if(!view_decision_quorum.first.insert(signed_msg->process_id()).second) return;
+  if(!view_decision_quorum.first.insert(signed_msg->process_id()).second){
+    if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeElectFBmessage(&msg);
+    return;
+  }
   q.release();
 
   //verify signature before adding it.
@@ -3781,7 +3985,7 @@ void Server::HandleElectFB(proto::ElectFB &msg){
                       elect_view = electMessage.elect_view(), decision = electMessage.decision()]() mutable
         {
         bool valid = verifier->Verify2(keyManager->GetPublicKey(process_id), msg, signature);
-        HandleElectFBcallback(txnDigest, elect_view, decision, signature, process_id, (void*) valid);
+        ElectFBcallback(txnDigest, elect_view, decision, signature, process_id, (void*) valid);
         delete msg;
         return (void*) true;
         };
@@ -3791,12 +3995,12 @@ void Server::HandleElectFB(proto::ElectFB &msg){
   else{
     if(!verifier->Verify(keyManager->GetPublicKey(signed_msg->process_id()),
           signed_msg->data(), signed_msg->signature())) return;
-    HandleElectFBcallback(txnDigest, electMessage.elect_view(), electMessage.decision(), signature, signed_msg->process_id(), (void*) true);
+    ElectFBcallback(txnDigest, electMessage.elect_view(), electMessage.decision(), signature, signed_msg->process_id(), (void*) true);
   }
-
+  if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeElectFBmessage(&msg);
 }
   //Callback (might need to do lookup again.)
-void Server::HandleElectFBcallback(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, std::string *signature, uint64_t process_id, void* valid){
+void Server::ElectFBcallback(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, std::string *signature, uint64_t process_id, void* valid){
 
   if(!valid){
     delete signature;
@@ -3865,21 +4069,26 @@ void Server::HandleElectFBcallback(const std::string &txnDigest, uint64_t elect_
 }
 
 
-void Server::HandleDecisionFB(const TransportAddress &remote,
-     proto::DecisionFB &msg){
+void Server::HandleDecisionFB(proto::DecisionFB &msg){
 
     const std::string &txnDigest = msg.txn_digest();
 
     interestedClientsMap::accessor i;
     auto jtr = interestedClients.find(i, txnDigest);
     if(jtr){
-      if(ForwardWritebackMulti(txnDigest, i)) return;
+      if(ForwardWritebackMulti(txnDigest, i)){
+        if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeDecisionFBmessage(&msg);
+        return;
+      }
     } else{
       i.release();
     }
 
     //outdated request
-    if(current_views[txnDigest] > msg.view()) return;
+    if(current_views[txnDigest] > msg.view()){
+      if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeDecisionFBmessage(&msg);
+      return;
+    }
     //Note: dont need to explicitly verify leader Id. view number suffices. This is because
     //correct replicas would only send their ElectFB message (which includes a view) to the
     //according replica. So this Quorum could only come from that replica
@@ -3892,7 +4101,8 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
         txn = b->second;
     }
     else{
-        return; //REPLICA HAS NEVER SEEN THIS TXN OR TXN NO LONGER ONGOING
+      if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeDecisionFBmessage(&msg);
+      return; //REPLICA HAS NEVER SEEN THIS TXN OR TXN NO LONGER ONGOING
     }
     b.release();
 
@@ -3901,22 +4111,23 @@ void Server::HandleDecisionFB(const TransportAddress &remote,
     proto::CommitDecision myDecision;
     LookupP2Decision(txnDigest, myProcessId, myDecision);
     if(params.multiThreading){
-      mainThreadCallback mcb(std::bind(&Server::FBDecisionCallback, this, txnDigest, msg.view(), msg.decision(), std::placeholders::_1));
+      mainThreadCallback mcb(std::bind(&Server::FBDecisionCallback, this, &msg, txnDigest, msg.view(), msg.decision(), std::placeholders::_1));
       asyncValidateFBDecision(msg.decision(), msg.view(), txn, &txnDigest, msg.elect_sigs(), keyManager,
                         &config, myProcessId, myDecision, verifier, std::move(mcb), transport, params.multiThreading);
     }
     else{
       ValidateFBDecision(msg.decision(), msg.view(), txn, &txnDigest, msg.elect_sigs(), keyManager,
                         &config, myProcessId, myDecision, verifier);
-      FBDecisionCallback(txnDigest, msg.view(), msg.decision(), (void*) true);
+      FBDecisionCallback(&msg, txnDigest, msg.view(), msg.decision(), (void*) true);
     }
 
 
 }
 
-void Server::FBDecisionCallback(const std::string &txnDigest, uint64_t view, proto::CommitDecision decision, void* valid){
+void Server::FBDecisionCallback(proto::DecisionFB *msg, const std::string &txnDigest, uint64_t view, proto::CommitDecision decision, void* valid){
 
     if(!valid){
+      if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeDecisionFBmessage(msg);
       return;
     }
 
@@ -3932,6 +4143,7 @@ void Server::FBDecisionCallback(const std::string &txnDigest, uint64_t view, pro
     //outdated request
     if(params.mainThreadDispatching) current_viewsMutex.lock();
     if(current_views[txnDigest] > view){
+      if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeDecisionFBmessage(msg);
       return;
     }
     else if(current_views[txnDigest] < view){
@@ -3951,6 +4163,8 @@ void Server::FBDecisionCallback(const std::string &txnDigest, uint64_t view, pro
     P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, this);
     SetP2(0, p2fb_organizer->p2fbr->mutable_p2r(), txnDigest, decision, view);
     SendPhase2FBReply(p2fb_organizer, txnDigest, true);
+
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeDecisionFBmessage(msg);
 
 }
 
@@ -3981,7 +4195,10 @@ void Server::HandleMoveView(proto::MoveView &msg){
   uint64_t proposed_view;
 
   if(params.signedMessages){
-    if(!ValidateHMACedMessage(msg.signed_msg())) return;
+    if(!ValidateHMACedMessage(msg.signed_msg())){
+      if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeMoveView(&msg);
+      return;
+    }
     proto::MoveViewMessage move_msg;
     move_msg.ParseFromString(msg.signed_msg().data());
     txnDigest = move_msg.txn_digest();
@@ -3997,7 +4214,10 @@ void Server::HandleMoveView(proto::MoveView &msg){
   interestedClientsMap::accessor i;
   auto jtr = interestedClients.find(i, txnDigest);
   if(jtr){
-    if(ForwardWritebackMulti(txnDigest, i)) return;
+    if(ForwardWritebackMulti(txnDigest, i)){
+      if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeMoveView(&msg);
+      return;
+    }
   } else{
     i.release();
   }
@@ -4022,6 +4242,8 @@ void Server::HandleMoveView(proto::MoveView &msg){
     }
   }
   q.release();
+
+  if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeMoveView(&msg);
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
