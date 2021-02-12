@@ -197,8 +197,9 @@ message Abort {
 /////////////////////////////////////////////////////// FB:
 
 message RelayP1 {  //datatype that replicas send clients to inform them that they can start a FB etc.
-  required uint64 conflict_id = 1; //this is the ID of the txn that has the p1 as a dependency
+  required uint64 dependent_id = 1; //this is the ID of the txn that has the p1 as a dependency
   required Phase1 p1 = 2;  //this is the dependency.
+  optional bytes dependent_txn = 3; //this is the txnDigest of the txn that has the p1 as a dependency
 }
 
 

@@ -1914,12 +1914,14 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //TODO can remove this redundant lookup since it will be checked again...
         ongoingMap::const_accessor b;
         bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-        if (inOngoing && !fallback_flow && false) {
-          std::string txnDig = dep.write().prepared_txn_digest();
+        if (inOngoing && false) {
+          std::string dependency_txnDig = dep.write().prepared_txn_digest();
           //schedule Relay for client timeout only..
+          uint64_t conflict_id = !fallback_flow ? reqId : -1;
+          std::string &dependent_txnDig = !fallback_flow ? std::string() : txnDigest;
           TransportAddress *remoteCopy = remote.clone();
-          transport->Timer((CLIENTTIMEOUT), [this, remoteCopy, txnDig, reqId](){
-            this->RelayP1(*remoteCopy, txnDig, reqId);
+          transport->Timer((CLIENTTIMEOUT), [this, remoteCopy, dependency_txnDig, reqId, dependent_txnDig](){
+            this->RelayP1(*remoteCopy, dependency_txnDig, reqId, dependent_txnDig);
             delete remoteCopy;
           });
           //proto::Transaction *tx = b->second; //ongoing[txnDig];
@@ -2979,14 +2981,14 @@ signedMessage.set_signature(hmacs.SerializeAsString());
 ////////////////////// XXX Fallback realm beings here...
 
 //RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
-//params: reqID: client tx identifier for blocked tx; txnDigest = tx that is stalling
-void Server::RelayP1(const TransportAddress &remote, const std::string &txnDigest, uint64_t conflict_id){
+//params: reqID: client tx identifier for blocked tx; dependency_txnDigest = tx that is stalling
+void Server::RelayP1(const TransportAddress &remote, const std::string &dependency_txnDig, uint64_t conflict_id, const std::string &dependent_txnDig){
 
   Debug("RelayP1[%s] timed out. Sending now!", BytesToHex(txnDigest, 256).c_str());
   proto::Transaction *tx;
 
   ongoingMap::const_accessor b;
-  bool ongoingItr = ongoing.find(b, txnDigest);
+  bool ongoingItr = ongoing.find(b, dependency_txnDigest);
   if(!ongoingItr) return;  //If txnDigest no longer ongoing, then no FB necessary as it has completed already
 
   tx = b->second;
@@ -2995,8 +2997,9 @@ void Server::RelayP1(const TransportAddress &remote, const std::string &txnDiges
   p1.set_req_id(0); //doesnt matter, its not used for fallback requests really.
   *p1.mutable_txn() = *tx;
   proto::RelayP1 relayP1;
-  relayP1.set_conflict_id(conflict_id);
+  relayP1.set_dependent_id(conflict_id);
   *relayP1.mutable_p1() = p1;
+  if(conflict_id == -1) relayP1.set_dependent_txn(dependent_txnDig);
 
   Debug("Sending RelayP1[%s].", BytesToHex(txnDigest, 256).c_str());
 

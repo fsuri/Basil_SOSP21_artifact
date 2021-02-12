@@ -575,12 +575,16 @@ bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
     Debug("FB instances %s already committed or aborted.", txnDigest.c_str());
     return false;
   }
+
   //TODO: Can be altruistic and finish FB instance even if not blocking.
   if(pendingReqs.find(conflict_id) == pendingReqs.end() || pendingReqs[conflict_id]->outstandingPhase1s == 0){
     Debug("Request id %lu already committed, aborted, or in the process of doing so.", conflict_id);
     CleanFB(itr->second, txnDigest);
     return false;
   }
+
+  //TODO: check if we have a dependent (has_dependent), and whether it is done? If so, call cleanCB()
+
   return true;
 }
 
@@ -593,9 +597,33 @@ void Client::CleanFB(PendingRequest *pendingFB, std::string &txnDigest){
 }
 
 //TODO: Create Additional Relay FB handler for Fallbacks for dependencies of dependencies.
-// void Client::RelayP1callbackDeeper(uint64_t reqId, proto::RelayP1 &relayP1){
-//
-// }
+//TODO: dont need the txnDigest in the message if I already bind it here..
+void Client::RelayP1callbackFB(uint64_t reqId, std::string txnDigest, proto::RelayP1 &relayP1){
+  //dont need to respect a time out here?
+  auto itr = FB_instances.find(txnDigest);
+  if(itr == FB_instances.end()){
+    Debug("ReqId[%d] has already completed", reqId);
+    return;
+  }
+  //TODO: check reqId also... the Phase1FB call needs to direct to the FB entry too...
+  //overload Phase1FB with optional string param?
+  //perhaps if I add a mapping from <req Id to txnDigest> where reqId is a newly invented one for the FB request I can handle this.
+
+
+  proto::Phase1 *p1 = relayP1.release_p1();
+   //Check if the current pending request has this txn as dependency.
+  const std::string &txnDigest = TransactionDigest(p1->txn(), params.hashDigest);
+  if(!isDep(txnDigest, itr->second->txn)){
+    Debug("Tx[%s] is not a dependency of ReqId: %d", BytesToHex(txnDigest, 128).c_str(), reqId);
+    return;
+  }
+
+  if(itr->second->startFB){
+    std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec one P1FB" << std::endl;
+    return;
+     Phase1FB(*p1, reqId, txnDigest);
+  }
+}
 void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1){
 
   auto itr = pendingReqs.find(reqId);

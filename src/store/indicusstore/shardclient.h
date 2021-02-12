@@ -262,6 +262,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     //std::set<uint64_t> existing_levels;
 
     //TODO: add different callbacks
+    relayP1_callback rcb;
     writebackFB_callback wbFBcb;
     phase1FB_callbackA p1FBcbA; // can use a lot from phase1_callback (edited to include the f+1 p2 case + sends a P2FB message instead)
     phase1FB_callbackB p1FBcbB;

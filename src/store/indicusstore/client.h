@@ -134,6 +134,9 @@ class Client : public ::Client {
     bool startFB;
     std::vector<std::pair<proto::Phase1*, std::string>> RelayP1s;
 
+    uint64_t conflict_id; //id of request that is dependent (directly or through intermediaries) on this tx.
+    bool has_dependent;
+    std::string dependent; //txnDigest of txn that depends on this tx directly.
   };
 
   void Phase1(PendingRequest *req);
@@ -177,6 +180,7 @@ class Client : public ::Client {
   //keep track of pending Fallback instances. Maps from txnDigest, req Id is oblivious to us.
   std::unordered_map<std::string, PendingRequest*> FB_instances;
 
+  
   //also: keep map <txnDigest -> normal case pending requests, i.e. reqId as well>
 
   //DO THIS: TODO: XXX: Keep map from (txnDigest to reqId): When receiving a RelayP1 with 2 txnDigest and no reqId,
@@ -191,15 +195,6 @@ class Client : public ::Client {
   //TODO: would this simplify having a deeper depth?
   // --> would allow normal OCC handling on Wait results at the server?
 
-  //flag for OCC check: put into separate original client and interested client list: SendWait Reply to both.
-  //Change all structures to -> original client + interested client. This makes it so that an original client
-  //will not receive a fallback message. XXX however, do need to make it so that an original client can start
-  //InvokeFB and consequently also receive P2FB messages...
-
-  //TODO:!!!XXX Add conflict id to PendingRequest field, so you know which id is the conflict always?
-  //Or not necessary since it is bound to callbacks anyways...
-
-  //1) sigs, 2) parallelism is sketch, 3) Wait handling
 
   bool IsParticipant(int g) const;
 
