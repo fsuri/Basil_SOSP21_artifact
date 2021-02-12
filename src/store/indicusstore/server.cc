@@ -695,9 +695,12 @@ void Server::HandlePhase1(const TransportAddress &remote,
         }
       }
     }
-     if(params.mainThreadDispatching) current_viewsMutex.lock();
-    current_views[txnDigest] = 0;
-     if(params.mainThreadDispatching) current_viewsMutex.unlock();
+
+    //current_views[txnDigest] = 0;
+    p2MetaDataMap::accessor p;
+    p2MetaDatas.insert(p, txnDigest);
+    p.release();
+
 
     //proto::Transaction *txn = msg.release_txn();
 
@@ -773,29 +776,26 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
 
   auto f = [this, msg, txnDigest, sendCB = std::move(sendCB), phase2Reply, cleanCB = std::move(cleanCB), valid ](){
 
-     if(params.mainThreadDispatching) p2DecisionsMutex.lock();
-     if(params.mainThreadDispatching) current_viewsMutex.lock();
-     if(params.mainThreadDispatching) decision_viewsMutex.lock();
-
-    if(p2Decisions.find(*txnDigest) != p2Decisions.end()){
-      proto::CommitDecision &decision = p2Decisions[*txnDigest];
+    p2MetaDataMap::accessor p;
+    p2MetaDatas.insert(p, *txnDigest);
+    bool hasP2 = p->second.hasP2;
+    if(hasP2){
+      proto::CommitDecision &decision = p->second.p2Decision;
       phase2Reply->mutable_p2_decision()->set_decision(decision);
     }
     else{
-      p2Decisions[*txnDigest] = msg->decision();
-      current_views[*txnDigest] = 0;
-      decision_views[*txnDigest] = 0;
+      p->second.p2Decision = msg->decision();
+      p->second.hasP2 = true;
       phase2Reply->mutable_p2_decision()->set_decision(msg->decision());
     }
 
     if (params.validateProofs) {
       // TODO: need a way for a process to know the decision view when verifying the signed p2_decision
-      phase2Reply->mutable_p2_decision()->set_view(decision_views[*txnDigest]);
+      phase2Reply->mutable_p2_decision()->set_view(p->second.decision_view);
     }
+    p.release();
 
-   if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-   if(params.mainThreadDispatching) current_viewsMutex.unlock();
-   if(params.mainThreadDispatching) decision_viewsMutex.unlock();
+
 
     //XXX start client timeout for Fallback relay
     // if(client_starttime.find(*txnDigest) == client_starttime.end()){
@@ -931,13 +931,16 @@ void Server::HandlePhase2(const TransportAddress &remote,
   // no-replays property, i.e. recover existing decision/result from storage (do this for HandlePhase1 as well.)
   if(params.mainThreadDispatching) p2DecisionsMutex.lock();
 
-  if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
-    if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
+  p2MetaDataMap::const_accessor p;
+  p2MetaDatas.insert(p, *txnDigest);
+  bool hasP2 = p->second.hasP2;
+  p.release();
+  if(hasP2){
+      //Do nothing
      //XXX Handler logic was moved to HandlePhase2CB
   }
   //first time receiving p2 message:
   else{
-      if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
     Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
 
     int64_t myProcessId;
@@ -2167,13 +2170,13 @@ void Server::Clean(const std::string &txnDigest) {
   //auto preparedReadsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedReadsMutex) : std::unique_lock<std::shared_mutex>();
   //auto preparedWritesMutexScope = params.mainThreadDispatching ? std::unique_lock<std::shared_mutex>(preparedWritesMutex) : std::unique_lock<std::shared_mutex>();
 
+  //auto interestedClientsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(interestedClientsMutex) : std::unique_lock<std::mutex>();
   //auto p1ConflictsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(p1ConflictsMutex) : std::unique_lock<std::mutex>();
   //p1Decisions..
-  auto p2DecisionsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(p2DecisionsMutex) : std::unique_lock<std::mutex>();
-  //auto interestedClientsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(interestedClientsMutex) : std::unique_lock<std::mutex>();
-  auto current_viewsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(current_viewsMutex) : std::unique_lock<std::mutex>();
-  auto decision_viewsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(decision_viewsMutex) : std::unique_lock<std::mutex>();
-  auto ElectQuorumMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(ElectQuorumMutex) : std::unique_lock<std::mutex>();
+  // auto p2DecisionsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(p2DecisionsMutex) : std::unique_lock<std::mutex>();
+  // auto current_viewsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(current_viewsMutex) : std::unique_lock<std::mutex>();
+  // auto decision_viewsMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(decision_viewsMutex) : std::unique_lock<std::mutex>();
+  //auto ElectQuorumMutexScope = params.mainThreadDispatching ? std::unique_lock<std::mutex>(ElectQuorumMutex) : std::unique_lock<std::mutex>();
   //Latency_End(&waitingOnLocks);
 
   ongoingMap::accessor b;
@@ -2258,10 +2261,11 @@ void Server::Clean(const std::string &txnDigest) {
   if(p1ConfItr) p1Conflicts.erase(d);
   d.release();
 
-  current_views.erase(txnDigest);
-  p2Decisions.erase(txnDigest);
-  decision_views.erase(txnDigest);
-
+  p2MetaDataMap::accessor p;
+  if(p2MetaDatas.find(p, txnDigest)){
+    p2MetaDatas.erase(p);
+  }
+  p.release();
 
   //TODO: erase all timers if we end up using them again
 
@@ -2519,26 +2523,32 @@ void Server::LookupP2Decision(const std::string &txnDigest, int64_t &myProcessId
     proto::CommitDecision &myDecision) const {
   myProcessId = -1;
   // see if we participated in this decision
-   if(params.mainThreadDispatching) p2DecisionsMutex.lock();
-  auto p2DecisionItr = p2Decisions.find(txnDigest);
-  if (p2DecisionItr != p2Decisions.end()) {
-    myProcessId = id;
-    myDecision = p2DecisionItr->second;
+
+  p2MetaDataMap::const_accessor p;
+  bool hasP2Meta = p2MetaDatas.find(p, txnDigest);
+  if(hasP2Meta){
+    bool hasP2 = p->second.hasP2;
+    if (hasP2) {
+      myProcessId = id;
+      myDecision = p->second.p2Decision;
+    }
   }
-   if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
+  p.release();
 }
 
-void Server::LookupCurrentView(const std::string &txnDigest, int64_t &myProcessId,
+void Server::LookupCurrentView(const std::string &txnDigest,
     uint64_t &myCurrentView) const {
-  myProcessId = -1;
-  // see if we participated in this decision
-   if(params.mainThreadDispatching) current_viewsMutex.lock();
-  auto current_viewsItr = current_views.find(txnDigest);
-  if (current_viewsItr != current_views.end()) {
-    myProcessId = id;
-    myCurrentView = current_viewsItr->second;
+
+  // get our current view for a txn, by default = 0
+  p2MetaDataMap::const_accessor p;
+  bool hasP2Meta = p2MetaDatas.find(p, txnDigest);
+  if(hasP2Meta){
+    myCurrentView = p->second.current_view;
   }
-   if(params.mainThreadDispatching) current_viewsMutex.unlock();
+  else{
+    myCurrentView = 0;
+  }
+  p.release();
 }
 
 uint64_t Server::DependencyDepth(const proto::Transaction *txn) const {
@@ -3127,19 +3137,19 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   //Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
   //TODO: could store p2 and p1 signatures (until writeback) in order to avoid re-computation
   p1DecisionsMap::const_accessor c;
-  auto p1DecItr = p1Decisions.find(c, txnDigest);
-  if(params.mainThreadDispatching) p2DecisionsMutex.lock();
-  if(params.mainThreadDispatching) decision_viewsMutex.lock();
-  //TODO add view lock.
+  bool hasP1 = p1Decisions.find(c, txnDigest);
+  p2MetaDataMap::const_accessor p;
+  p2MetaDatas.insert(p, txnDigest);
+  bool hasP2 = p->second.hasP2;
 
-  if(p2Decisions.end() != p2Decisions.find(txnDigest) && p1DecItr){
-       proto::CommitDecision decision = p2Decisions[txnDigest];
-       uint64_t decision_view = decision_views[txnDigest];
-       if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-       if(params.mainThreadDispatching) decision_viewsMutex.unlock();
-
+  if(hasP2 && hasP1){
        proto::ConcurrencyControl::Result result = c->second; //p1Decisions[txnDigest];
        c.release();
+       proto::CommitDecision decision = p->second.p2Decision;
+       uint64_t decision_view = p->second.decision_view;
+       p.release();
+
+
 
        P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
        //recover stored commit proof.
@@ -3160,11 +3170,10 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   }
 
   //4) ONLY P1 CASE: (already did p1 but no p2)
-  else if(p1DecItr){
-        if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-        if(params.mainThreadDispatching) decision_viewsMutex.unlock();
+  else if(hasP1){
         proto::ConcurrencyControl::Result result = c->second; //p1Decisions[txnDigest];
         c.release();
+        p.release();
 
         if (result != proto::ConcurrencyControl::WAIT) {
           const proto::CommittedProof *conflict;
@@ -3184,12 +3193,12 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   }
   //5) ONLY P2 CASE  (received p2, but was not part of p1)
   //TODO: if you dont have a p1, then execute it yourself. (see case 3) discussion)
-  else if(p2Decisions.end() != p2Decisions.find(txnDigest)){
+  else if(hasP2){
       c.release();
-      proto::CommitDecision decision = p2Decisions[txnDigest];
-      uint64_t decision_view = decision_views[txnDigest];
-      if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-      if(params.mainThreadDispatching) decision_viewsMutex.unlock();
+      proto::CommitDecision decision = p->second.p2Decision;
+      uint64_t decision_view = p->second.decision_view;
+      p.release();
+
 
       P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
       SetP2(msg.req_id(), p1fb_organizer->p1fbr->mutable_p2r(), txnDigest, decision, decision_view);
@@ -3201,8 +3210,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       //TODO: ENTIRE CASE NEEDS TO BE ADJUSTED TO NEW HANDLEPHASE1
       //TODO: refactor into function to be called from case 5)
       c.release();
-       if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-       if(params.mainThreadDispatching) decision_viewsMutex.unlock();
+      p.release();
 
       std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
       Debug("FB exec PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
@@ -3229,9 +3237,10 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       }
 
       //start new current view
-       if(params.mainThreadDispatching) current_viewsMutex.lock();
-      current_views[txnDigest] = 0;
-      if(params.mainThreadDispatching) current_viewsMutex.unlock();
+      // current_views[txnDigest] = 0;
+      // p2MetaDataMap::accessor p;
+      // p2MetaDatas.insert(p, txnDigest);
+      // p.release();
 
       proto::Transaction *txn = msg.release_txn();
       ongoingMap::accessor b;
@@ -3316,7 +3325,9 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
 
     proto::AttachedView *attachedView = p1FBReply->mutable_attached_view();
     if(!params.all_to_all_fb){
-      attachedView->mutable_current_view()->set_current_view(current_views[txnDigest]);
+      uint64_t current_view;
+      LookupCurrentView(txnDigest, current_view);
+      attachedView->mutable_current_view()->set_current_view(current_view);
       attachedView->mutable_current_view()->set_txn_digest(txnDigest);
       attachedView->mutable_current_view()->set_replica_id(id);
     }
@@ -3376,8 +3387,6 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
     }
 }
 
-/////////////////////////TODO: clean up from below here.
-
 void Server::HandlePhase2FB(const TransportAddress &remote,
     const proto::Phase2FB &msg) {
   //std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
@@ -3394,10 +3403,14 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
     return;
   }
 
+  p2MetaDataMap::const_accessor p;
+  p2MetaDatas.insert(p, txnDigest);
+  bool hasP2 = p->second.hasP2;
   // HandePhase2 just returns an existing decision.
-  if(p2Decisions.find(msg.txn_digest()) != p2Decisions.end()){
-      proto::CommitDecision decision =p2Decisions[txnDigest];
-      uint64_t decision_view = decision_views[txnDigest];
+  if(hasP2){
+      proto::CommitDecision decision = p->second.p2Decision;
+      uint64_t decision_view = p->second.decision_view;
+      p.release();
 
       P2FBorganizer *p2fb_organizer = new P2FBorganizer(msg.req_id(), txnDigest, remote, this);
       SetP2(msg.req_id(), p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, decision, decision_view);
@@ -3411,6 +3424,7 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
   }
   //just do normal handle p2 otherwise after timeout
   else{
+      p.release();
       //TODO: start a timer after mvtso check returns with != WAIT. That timer sets a bool,
       //When the bool is set then Handle all P2 requests. (assuming relay only starts after the timeout anyways
       // then this is not necessary to run a simulation - but it would not be robust to byz clients)
@@ -3466,7 +3480,9 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
 
     proto::AttachedView *attachedView = p2FBReply->mutable_attached_view();
     if(!params.all_to_all_fb){
-      attachedView->mutable_current_view()->set_current_view(current_views[txnDigest]);
+      uint64_t current_view;
+      LookupCurrentView(txnDigest, current_view);
+      attachedView->mutable_current_view()->set_current_view(current_view);
       attachedView->mutable_current_view()->set_txn_digest(txnDigest);
       attachedView->mutable_current_view()->set_replica_id(id);
     }
@@ -3527,9 +3543,16 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
     return;
   }
   // returns an existing decision.
-  if(p2Decisions.find(txnDigest) != p2Decisions.end()){
-      proto::CommitDecision decision =p2Decisions[txnDigest];
-      uint64_t decision_view = decision_views[txnDigest];
+
+  p2MetaDataMap::const_accessor p;
+  p2MetaDatas.insert(p, txnDigest);
+  bool hasP2 = p->second.hasP2;
+  // HandePhase2 just returns an existing decision.
+  if(hasP2){
+      proto::CommitDecision decision = p->second.p2Decision;
+      uint64_t decision_view = p->second.decision_view;
+      p.release();
+
       P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, remote, this);
       SetP2(0, p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, decision, decision_view);
       SendPhase2FBReply(p2fb_organizer, txnDigest);
@@ -3539,6 +3562,7 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
       }
       return;
   }
+  p.release();
 
   uint8_t groupIndex = txnDigest[0];
   //int64_t logGroup; //probably do not need it
@@ -3660,22 +3684,25 @@ void Server::ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string 
       }
       return;
     }
+
     proto::CommitDecision decision;
     uint64_t decision_view;
-    if(params.mainThreadDispatching) p2DecisionsMutex.lock();
-    if(params.mainThreadDispatching) decision_viewsMutex.lock();
-    if(p2Decisions.find(txnDigest) != p2Decisions.end()){
-      decision = p2Decisions[txnDigest];
-      decision_view = decision_views[txnDigest];
+
+    p2MetaDataMap::accessor p;
+    p2MetaDatas.insert(p, txnDigest);
+    bool hasP2 = p->second.hasP2;
+    if(hasP2){
+      decision = p->second.p2Decision;
+      decision_view = p->second.decision_view;
     }
     else{
-      p2Decisions[txnDigest] = p2fb->decision();
-      decision_views[txnDigest] = 0;
+      p->second.p2Decision = p2fb->decision();
+      p->second.hasP2 = true;
+      p->second.decision_view = 0;
       decision = p2fb->decision();
       decision_view = 0;
     }
-    if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-    if(params.mainThreadDispatching) decision_viewsMutex.unlock();
+    p.release();
 
 
     P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, *remote, this);
@@ -3698,7 +3725,9 @@ void Server::SendView(const TransportAddress &remote, const std::string &txnDige
 
   proto::AttachedView *attachedView = sendView->mutable_attached_view();
 
-  attachedView->mutable_current_view()->set_current_view(current_views[txnDigest]);
+  uint64_t current_view;
+  LookupCurrentView(txnDigest, current_view);
+  attachedView->mutable_current_view()->set_current_view(current_view);
   attachedView->mutable_current_view()->set_txn_digest(txnDigest);
   attachedView->mutable_current_view()->set_replica_id(id);
 
@@ -3730,7 +3759,11 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
       return;
     }
 
-    if(!params.all_to_all_fb && msg.proposed_view() <= current_views[txnDigest]){
+    p2MetaDataMap::const_accessor p;
+    p2MetaDatas.insert(p, txnDigest);
+    uint64_t current_view = p->second.current_view;
+
+    if(!params.all_to_all_fb && msg.proposed_view() <= current_view){
       SendView(remote, txnDigest);
       if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
       return; //Obsolete Invoke Message, send newer view
@@ -3738,9 +3771,15 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
 
     //process decision if one does not have any yet.
     //This is safe even if current_view > 0 because this replica could not have taken part in any elections yet (can only elect once you have decision), nor has yet received a dec from a larger view which it would adopt.
-    if(p2Decisions.find(txnDigest) == p2Decisions.end()){
+    if(!p->second.hasP2){
+        if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
+        Debug("Transaction[%s] has no phase2 decision yet needs to SendElectFB", BytesToHex(txnDigest, 64).c_str());
+        return;
+
+        //TODO: handle this case. Problem: HandlePhase2FB is async.
         if(!msg.has_p2fb()){
           if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
+          Debug("Transaction[%s] has no phase2 decision yet needs to SendElectFB", BytesToHex(txnDigest, 64).c_str());
           return;
         }
         const proto::Phase2FB &p2fb = msg.p2fb();
@@ -3748,11 +3787,14 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
 
         //TODO: schedule InvokeFB after the phase2... (since HandlePhase2 is async the following makes no sense.)
         //either no need for fallback, or still no decision learned so one cannot contribute to election.
-        if(committed.find(txnDigest) != committed.end() || writebackMessages.find(txnDigest) != writebackMessages.end() || p2Decisions.find(txnDigest) == p2Decisions.end()){
-          if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
-          return;
-        }
+        // if(committed.find(txnDigest) != committed.end() || writebackMessages.find(txnDigest) != writebackMessages.end() || p2Decisions.find(txnDigest) == p2Decisions.end()){
+        //   if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
+        //   return;
+        // }
     }
+
+    proto::CommitDecision decision = p->second.p2Decision;
+    p.release();
 
 
       //TODO  Schedule request for when current leader timeout is complete --> check exp timeouts; then set new one.
@@ -3815,9 +3857,9 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
     }
 
     if(params.all_to_all_fb){
-      uint64_t proposed_view = current_views[txnDigest] + 1; //client does not propose view.
+      uint64_t proposed_view = current_view + 1; //client does not propose view.
       BroadcastMoveView(txnDigest, proposed_view);
-      SendElectFB(&msg, txnDigest, proposed_view, logGrp); //can already send before moving to view since we do not skip views during synchrony (even when no correct clients interested)
+      SendElectFB(&msg, txnDigest, proposed_view, decision, logGrp); //can already send before moving to view since we do not skip views during synchrony (even when no correct clients interested)
     }
     else{
       //verify views & Send ElectFB
@@ -3836,19 +3878,18 @@ void Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportA
 
 
   const std::string &txnDigest = msg.txn_digest();
-  int64_t myProcessId;
   uint64_t myCurrentView;
-  LookupCurrentView(txnDigest, myProcessId, myCurrentView);
+  LookupCurrentView(txnDigest, myCurrentView);
 
   const TransportAddress *remoteCopy = remote.clone();
   if(params.multiThreading){
     mainThreadCallback mcb(std::bind(&Server::InvokeFBcallback, this, &msg, txnDigest, msg.proposed_view(), logGrp, remoteCopy, std::placeholders::_1));
     asyncVerifyFBViews(msg.proposed_view(), msg.catchup(), logGrp, &txnDigest, signed_messages,
-    keyManager, &config, myProcessId, myCurrentView, verifier, std::move(mcb), transport, params.multiThreading);
+    keyManager, &config, id, myCurrentView, verifier, std::move(mcb), transport, params.multiThreading);
   }
   else{
     bool valid = VerifyFBViews(msg.proposed_view(), msg.catchup(), logGrp, &txnDigest, signed_messages,
-    keyManager, &config, myProcessId, myCurrentView, verifier);
+    keyManager, &config, id, myCurrentView, verifier);
     InvokeFBcallback(&msg, txnDigest, msg.proposed_view(), logGrp, remoteCopy, (void*) valid);
   }
 
@@ -3867,17 +3908,28 @@ void Server::InvokeFBcallback(proto::InvokeFB *msg, const std::string &txnDigest
     return;
   }
 
-  if(!params.all_to_all_fb && current_views[txnDigest] >= proposed_view){
+  p2MetaDataMap::accessor p;
+  p2MetaDatas.insert(p, txnDigest);
+  uint64_t current_view = p->second.current_view;
+  if(!p->second.hasP2){
+    Debug("Transaction[%s] has no phase2 decision yet needs to SendElectFB", BytesToHex(txnDigest, 64).c_str());
+    return;
+  }
+
+  if(!params.all_to_all_fb && current_view >= proposed_view){
     SendView(*remoteCopy, txnDigest);
     delete remoteCopy;
     if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
     return; //Obsolete Invoke Message, send newer view
   }
-  current_views[txnDigest] = proposed_view;
-  SendElectFB(msg, txnDigest, proposed_view, logGrp);
+  p->second.current_view = proposed_view;
+  proto::CommitDecision decision = p->second.p2Decision;
+  p.release();
+  SendElectFB(msg, txnDigest, proposed_view, decision, logGrp);
+
 }
 
-void Server::SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp){
+void Server::SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, proto::CommitDecision decision, uint64_t logGrp){
   size_t replicaID = (proposed_view + txnDigest[0]) % config.n;
   //Form and send ElectFB message to all replicas within logging shard.
   proto::ElectFB* electFB = GetUnusedElectFBmessage();
@@ -3885,7 +3937,7 @@ void Server::SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uin
   electMessage->set_req_id(0);  //What req id to put here. (should i carry along message?)
   //Answer:: Should not have any. It must be consistent (0 is easiest) across all messages so that verifiation will succeed
   electMessage->set_txn_digest(txnDigest);
-  electMessage->set_decision(p2Decisions[txnDigest]);
+  electMessage->set_decision(decision);
   electMessage->set_elect_view(proposed_view);
 
   if (params.signedMessages) {
@@ -4075,7 +4127,11 @@ void Server::HandleDecisionFB(proto::DecisionFB &msg){
     }
 
     //outdated request
-    if(current_views[txnDigest] > msg.view()){
+    p2MetaDataMap::const_accessor p;
+    p2MetaDatas.insert(p, txnDigest);
+    uint64_t current_view = p->second.current_view;
+    p.release();
+    if(current_view > msg.view() || msg.view() <= 0){
       if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeDecisionFBmessage(&msg);
       return;
     }
@@ -4131,25 +4187,25 @@ void Server::FBDecisionCallback(proto::DecisionFB *msg, const std::string &txnDi
 
 
     //outdated request
-    if(params.mainThreadDispatching) current_viewsMutex.lock();
-    if(current_views[txnDigest] > view){
+    p2MetaDataMap::accessor p;
+    p2MetaDatas.find(p, txnDigest);
+    uint64_t current_view = p->second.current_view;
+    uint64_t decision_view = p->second.decision_view;
+    if(current_view > view){
       if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeDecisionFBmessage(msg);
       return;
     }
-    else if(current_views[txnDigest] < view){
-      current_views[txnDigest] = view;
+    else if(current_view < view){
+      p->second.current_view = view;
     }
-    if(params.mainThreadDispatching) current_viewsMutex.unlock();
-
-    if(params.mainThreadDispatching) p2DecisionsMutex.lock();
-    if(params.mainThreadDispatching) decision_viewsMutex.lock();
-    if(decision_views[txnDigest] < view){
-      decision_views[txnDigest] = view;
-      p2Decisions[txnDigest] = decision;
+    if(decision_view < view){
+      p->second.decision_view = view;
+      p->second.p2Decision = decision;
+      p->second.hasP2 = true;
     }
-    if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-    if(params.mainThreadDispatching) decision_viewsMutex.unlock();
+    p.release();
 
+    //send a p2 message anyways, even if we have a newer one, just so clients can still form quorums on past views.
     P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, this);
     SetP2(0, p2fb_organizer->p2fbr->mutable_p2r(), txnDigest, decision, view);
     SendPhase2FBReply(p2fb_organizer, txnDigest, true);
@@ -4221,9 +4277,11 @@ void Server::HandleMoveView(proto::MoveView &msg){
   uint64_t count = ++(electFBorganizer.move_view_counts[proposed_view].first); //TODO: dont count duplicate replicas.
 
   //TODO: add locks for current_views.
-  if(proposed_view > current_views[txnDigest]){
+  p2MetaDataMap::accessor p;
+  p2MetaDatas.insert(p, txnDigest);
+  if(proposed_view > p->second.current_view){
     if(count == 2*config.f + 1){
-        current_views[txnDigest] = proposed_view;
+        p->second.current_view = proposed_view;
     }
     else if(count == config.f + 1){
       if(electFBorganizer.move_view_counts[proposed_view].second) return;
@@ -4231,6 +4289,7 @@ void Server::HandleMoveView(proto::MoveView &msg){
       electFBorganizer.move_view_counts[proposed_view].second = true;
     }
   }
+  p.release();
   q.release();
 
   if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeMoveView(&msg);

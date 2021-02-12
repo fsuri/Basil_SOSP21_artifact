@@ -216,7 +216,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
     void SendView(const TransportAddress &remote, const std::string &txnDigest);
     void VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportAddress &remote);
     void InvokeFBcallback(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid);
-    void SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp);
+    void SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, proto::CommitDecision decision, uint64_t logGrp);
     void ElectFBcallback(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, std::string *signature, uint64_t process_id, void* valid);
     void FBDecisionCallback(proto::DecisionFB *msg, const std::string &txnDigest, uint64_t view, proto::CommitDecision decision, void* valid);
     void BroadcastMoveView(const std::string &txnDigest, uint64_t proposed_view);
@@ -273,8 +273,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       proto::ConcurrencyControl::Result &myResult) const;
   void LookupP2Decision(const std::string &txnDigest,
       int64_t &myProcessId, proto::CommitDecision &myDecision) const;
-  void LookupCurrentView(const std::string &txnDigest, int64_t &myProcessId,
-      uint64_t &myCurrentView) const;
+  void LookupCurrentView(const std::string &txnDigest, uint64_t &myCurrentView) const;
   uint64_t DependencyDepth(const proto::Transaction *txn) const;
   void MessageToSign(::google::protobuf::Message* msg,
       proto::SignedMessage *signedMessage, signedCallback cb);
@@ -467,7 +466,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
   //std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;
   //std::unordered_map<std::string, const proto::CommittedProof *> p1Conflicts;
-  std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
+  //std::unordered_map<std::string, proto::CommitDecision> p2Decisions;
   //std::unordered_map<std::string, proto::CommittedProof *> committed;
   //std::unordered_set<std::string> aborted;
   //XXX TODO: p1Decisions and p1Conflicts erase only threadsafe if Clean called by a single thread.
@@ -491,9 +490,22 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   std::unordered_map<std::string, uint64_t> exp_timeouts; //current exp timeout size.
 
   //keep list for current view.
-  std::unordered_map<std::string, uint64_t> current_views;
-  //keep list of the views in which the p2Decision is from: //TODO: add this to p2Decisions directly - doing this here so I do not touch any existing code.
-  std::unordered_map<std::string, uint64_t> decision_views;
+  //std::unordered_map<std::string, uint64_t> current_views;
+  //keep list of the views in which the p2Decision is from
+  //std::unordered_map<std::string, uint64_t> decision_views;
+
+  struct P2MetaData {
+    P2MetaData() : current_view(0UL), decision_view(0UL), hasP2(false){}
+    P2MetaData(proto::CommitDecision decision) : current_view(0UL), decision_view(0UL), p2Decision(decision), hasP2(true){}
+    ~P2MetaData(){}
+    uint64_t current_view;
+    uint64_t decision_view;
+    bool hasP2;
+    proto::CommitDecision p2Decision;
+  };
+  //tbb::concurrent_hash_map<std::string, uint64_t> current_views;
+  typedef tbb::concurrent_hash_map<std::string, P2MetaData> p2MetaDataMap;
+  p2MetaDataMap p2MetaDatas;
 
   //typedef std::pair< std::unordered_set<uint64_t>, std::unordered_set<proto::Signature*>>replica_sig_sets_pair;
   typedef std::pair< std::unordered_set<uint64_t>, std::pair<proto::Signatures, uint64_t>> replica_sig_sets_pair;
