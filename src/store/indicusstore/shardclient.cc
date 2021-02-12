@@ -77,11 +77,12 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
     }
   } else if (type == phase1Reply.GetTypeName()) {
     phase1Reply.ParseFromString(data);
-    if (params.injectFailure.enabled && params.injectFailure.type == InjectFailureType::CLIENT_EQUIVOCATE) {
-      HandleP1REquivocate(phase1Reply);
-    } else {
-      HandlePhase1Reply(phase1Reply);
-    }
+    HandlePhase1Reply(phase1Reply);
+    // if (params.injectFailure.enabled && params.injectFailure.type == InjectFailureType::CLIENT_EQUIVOCATE) {
+    //   HandleP1REquivocate(phase1Reply);
+    // } else {
+    //   HandlePhase1Reply(phase1Reply);
+    // }
   } else if (type == phase2Reply.GetTypeName()) {
     phase2Reply.ParseFromString(data);
     HandlePhase2Reply(phase2Reply);
@@ -240,8 +241,8 @@ void ShardClient::Phase2Equivocate(uint64_t id,
   pendingP2Commit->pcb = pcb;
   pendingP2Commit->ptcb = ptcb;
   pendingP2Commit->requestTimeout = new Timeout(transport, timeout, [this, pendingP2Commit]() {
-      phase2_timeout_callback ptcb = pendingPhase2->ptcb;
-      auto itr = this->pendingPhase2s.find(pendingPhase2->reqId);
+      phase2_timeout_callback ptcb = pendingP2Commit->ptcb;
+      auto itr = this->pendingPhase2s.find(pendingP2Commit->reqId);
       if (itr != this->pendingPhase2s.end()) {
         PendingPhase2 *pendingPhase2 = itr->second;
         this->pendingPhase2s.erase(itr);
@@ -276,8 +277,8 @@ void ShardClient::Phase2Equivocate(uint64_t id,
   pendingP2Abort->pcb = pcb;
   pendingP2Abort->ptcb = ptcb;
   pendingP2Abort->requestTimeout = new Timeout(transport, timeout, [this, pendingP2Abort]() {
-      phase2_timeout_callback ptcb = pendingPhase2->ptcb;
-      auto itr = this->pendingPhase2s.find(pendingPhase2->reqId);
+      phase2_timeout_callback ptcb = pendingP2Abort->ptcb;
+      auto itr = this->pendingPhase2s.find(pendingP2Abort->reqId);
       if (itr != this->pendingPhase2s.end()) {
         PendingPhase2 *pendingPhase2 = itr->second;
         this->pendingPhase2s.erase(itr);
@@ -303,7 +304,7 @@ void ShardClient::Phase2Equivocate(uint64_t id,
     }
   }
 
-  pendingP2Commit->requestTimeout->Reset();
+  pendingP2Abort->requestTimeout->Reset();
 }
 
 void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
@@ -847,6 +848,12 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
 
   Phase1ValidationState state = pendingPhase1->p1Validator.GetState();
   switch (state) {
+    case EQUIVOCATE:
+      Debug("equivocation path is taken");
+      pendingPhase1->decision = proto::COMMIT;
+      pendingPhase1->fast = false;
+      Phase1DecisionEquivocation(itr, true);
+      break;
     case FAST_COMMIT:
       pendingPhase1->decision = proto::COMMIT;
       pendingPhase1->fast = true;
@@ -960,188 +967,6 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
   }
 }
 
-void ShardClient::HandleP1REquivocate(const proto::Phase1Reply &reply) {
-  auto itr = this->pendingPhase1s.find(reply.req_id());
-  if (itr == this->pendingPhase1s.end()) {
-    return; // this is a stale request
-  }
-
-  PendingPhase1 *pendingPhase1 = itr->second;
-
-  bool hasSigned = (params.validateProofs && params.signedMessages) &&
-   (!reply.has_cc() || reply.cc().ccr() != proto::ConcurrencyControl::ABORT);
-
-  const proto::ConcurrencyControl *cc = nullptr;
-  if (hasSigned) {
-    Debug("[group %i] Verifying signed_cc from %lu with signatures bytes %lu"
-        " because has_cc %d and ccr %d.",
-        group, reply.signed_cc().process_id(), reply.signed_cc().signature().length(),
-        reply.has_cc(),
-        reply.cc().ccr());
-    if (!reply.has_signed_cc()) {
-      return;
-    }
-
-    if (!IsReplicaInGroup(reply.signed_cc().process_id(), group, config)) {
-      Debug("[group %d] Phase1Reply from replica %lu who is not in group.",
-          group, reply.signed_cc().process_id());
-      return;
-    }
-    //TODO: RECOMMENT, just testing
-    if (!verifier->Verify(keyManager->GetPublicKey(reply.signed_cc().process_id()),
-          reply.signed_cc().data(), reply.signed_cc().signature())) {
-      Debug("[group %i] Signature %s %s from replica %lu is not valid.", group,
-            BytesToHex(reply.signed_cc().data(), 100).c_str(),
-            BytesToHex(reply.signed_cc().signature(), 100).c_str(),
-            reply.signed_cc().process_id());
-
-      return;
-    }
-    if (!validatedCC.ParseFromString(reply.signed_cc().data())) {
-      return;
-    }
-
-    cc = &validatedCC;
-  } else {
-    UW_ASSERT(reply.has_cc());
-
-    cc = &reply.cc();
-
-  }
-
-  Debug("[group %i] PHASE1 callback equivocate ccr=%d", group, cc->ccr());
-
-  if (!pendingPhase1->p1Validator.ProcessMessage(*cc)) {
-    return;
-  }
-
-  if (hasSigned) {
-    proto::Signature *sig = pendingPhase1->p1ReplySigs[cc->ccr()].add_sigs();
-    sig->set_process_id(reply.signed_cc().process_id());
-    *sig->mutable_signature() = reply.signed_cc().signature();
-  }
-
-  Phase1ValidationState state = pendingPhase1->p1Validator.GetState();
-  switch (state) {
-    case EQUIVOCATE:
-      Debug("equivocation path is taken");
-      pendingPhase1->decision = proto::COMMIT;
-      pendingPhase1->fast = false;
-      Phase1DecisionEquivocation(itr, true);
-      break;
-    case FAST_COMMIT:
-      pendingPhase1->decision = proto::COMMIT;
-      pendingPhase1->fast = true;
-      Phase1DecisionEquivocation(itr, false);
-      break;
-    case FAST_ABORT:
-      pendingPhase1->decision = proto::ABORT;
-      pendingPhase1->fast = true;
-      pendingPhase1->conflict_flag = true;
-      if (params.validateProofs) {
-        pendingPhase1->conflict = cc->committed_conflict();
-      }
-      Phase1DecisionEquivocation(itr, false);
-      break;
-    case FAST_ABSTAIN:  //INSERTED THIS NEW
-      Debug("Fast_abstain path is taken");
-      pendingPhase1->decision = proto::ABORT;
-      pendingPhase1->fast = true;
-      Phase1DecisionEquivocation(itr, false);
-      break;
-    case SLOW_COMMIT_FINAL:
-      pendingPhase1->decision = proto::COMMIT;
-      pendingPhase1->fast = false;
-      Phase1DecisionEquivocation(itr, false);
-      break;
-    case SLOW_ABORT_FINAL:
-      pendingPhase1->decision = proto::ABORT;
-      pendingPhase1->fast = false;
-      Phase1DecisionEquivocation(itr, false);
-      break;
-    case SLOW_COMMIT_TENTATIVE:
-      if(phase1DecisionTimeout == 0){
-        itr->second->decision = proto::COMMIT;
-        itr->second->fast = false;
-        Phase1DecisionEquivocation(itr, false);
-      }
-      else{
-        if (!pendingPhase1->decisionTimeoutStarted) {
-          uint64_t reqId = reply.req_id();
-          pendingPhase1->decisionTimeout = new Timeout(transport,
-              phase1DecisionTimeout, [this, reqId]() {
-                auto itr = pendingPhase1s.find(reqId);
-                if (itr == pendingPhase1s.end()) {
-                  return;
-                }
-                itr->second->decision = proto::COMMIT;
-                itr->second->fast = false;
-                Phase1DecisionEquivocation(itr, false);
-              }
-            );
-          pendingPhase1->decisionTimeout->Reset();
-          pendingPhase1->decisionTimeoutStarted = true;
-        }
-      }
-      break;
-
-    case SLOW_ABORT_TENTATIVE:
-      if(phase1DecisionTimeout == 0){
-        itr->second->decision = proto::ABORT;
-        itr->second->fast = false;
-        Phase1DecisionEquivocation(itr, false);
-      }
-      else{
-        if (!pendingPhase1->decisionTimeoutStarted) {
-          uint64_t reqId = reply.req_id();
-          pendingPhase1->decisionTimeout = new Timeout(transport,
-              phase1DecisionTimeout, [this, reqId]() {
-                auto itr = pendingPhase1s.find(reqId);
-                if (itr == pendingPhase1s.end()) {
-                  return;
-                }
-                itr->second->decision = proto::ABORT;
-                itr->second->fast = false;
-                Phase1DecisionEquivocation(itr, false);
-              }
-            );
-          pendingPhase1->decisionTimeout->Reset();
-          pendingPhase1->decisionTimeoutStarted = true;
-        }
-      }
-      break;
-    case SLOW_ABORT_TENTATIVE2:
-        if(phase1DecisionTimeout == 0){
-          itr->second->decision = proto::ABORT;
-          itr->second->fast = false;
-          Phase1DecisionEquivocation(itr, false);
-        }
-        else{
-          if (!pendingPhase1->decisionTimeoutStarted) {
-            uint64_t reqId = reply.req_id();
-            pendingPhase1->decisionTimeout = new Timeout(transport,
-                phase1DecisionTimeout, [this, reqId]() {
-                  auto itr = pendingPhase1s.find(reqId);
-                  if (itr == pendingPhase1s.end()) {
-                    return;
-                  }
-                  itr->second->decision = proto::ABORT;
-                  itr->second->fast = false;
-                  Phase1DecisionEquivocation(itr, false);
-                }
-              );
-            pendingPhase1->decisionTimeout->Reset();
-            pendingPhase1->decisionTimeoutStarted = true;
-          }
-        }
-        break;
-    case NOT_ENOUGH:
-      break;
-    default:
-      break;
-  }
-}
-
 void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
   auto itr = this->pendingPhase2s.find(reply.req_id());
   if (itr == this->pendingPhase2s.end()) {
@@ -1225,12 +1050,13 @@ void ShardClient::Phase1Decision(
     std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr) {
   PendingPhase1 *pendingPhase1 = itr->second;
   pendingPhase1->pcb(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict_flag,
-      pendingPhase1->conflict, pendingPhase1->p1ReplySigs);
+      pendingPhase1->conflict, pendingPhase1->p1ReplySigs, false);
   this->pendingPhase1s.erase(itr);
   delete pendingPhase1;
 }
 
 // TODO: make an intermediate callback func
+// DONE
 void ShardClient::Phase1DecisionEquivocation(
     std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready) {
   PendingPhase1 *pendingPhase1 = itr->second;

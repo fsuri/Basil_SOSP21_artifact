@@ -62,7 +62,7 @@ typedef std::function<void(int, const std::string &)> read_timeout_callback;
 
 typedef std::function<void(proto::CommitDecision, bool, bool,
     const proto::CommittedProof &,
-    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1_callback;
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &, bool)> phase1_callback;
 typedef std::function<void(int)> phase1_timeout_callback;
 
 typedef std::function<void(const proto::Signatures &)> phase2_callback;
@@ -305,7 +305,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   void Phase1Decision(
       std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
   void Phase1DecisionEquivocation(
-      std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready)
+      std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready);
 
   //multithreaded options:
   void HandleReadReplyMulti(proto::ReadReply* reply);

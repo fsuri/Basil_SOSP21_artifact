@@ -137,6 +137,11 @@ class Client : public ::Client {
   };
 
   void Phase1(PendingRequest *req);
+  void P1IntermediateCallback(uint64_t txnId, int group,
+      proto::CommitDecision decision, bool fast, bool conflict_flag,
+      const proto::CommittedProof &conflict,
+      const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
+      bool eqv_ready);
   void Phase1Callback(uint64_t reqId, int group, proto::CommitDecision decision,
       bool fast, bool conflict_flag, const proto::CommittedProof &conflict,
       const std::map<proto::ConcurrencyControl::Result,
@@ -145,12 +150,12 @@ class Client : public ::Client {
       proto::CommitDecision decision, bool fast, bool conflict_flag,
       const proto::CommittedProof &conflict,
       const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
-      bool eqv_ready)
+      bool eqv_ready);
   void Phase1TimeoutCallback(int group, uint64_t reqId, int status);
   void HandleAllPhase1Received(PendingRequest *req);
 
   void Phase2(PendingRequest *req);
-  void Phase2Equivocate(PendingRequest *req)
+  void Phase2Equivocate(PendingRequest *req);
   void Phase2Callback(uint64_t reqId, int group,
       const proto::Signatures &p2ReplySigs);
   void Phase2TimeoutCallback(int group, uint64_t reqId, int status);

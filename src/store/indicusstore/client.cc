@@ -250,24 +250,27 @@ void Client::Phase1(PendingRequest *req) {
 
 
   for (auto group : txn.involved_groups()) {
-    if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_EQUIVOCATE) {
-      bclient[group]->Phase1(client_seq_num, txn, req->txnDigest, std::bind(
-            &Client::Phase1CallbackEquivocate, this, req->id, group, std::placeholders::_1,
-            std::placeholders::_2, std::placeholders::_3,
-            std::placeholders::_4, std::placeholders::_5, std::placeholders::_6),
-          std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
-            std::placeholders::_1), std::bind(&Client::RelayP1callback, this, std::placeholders::_1), req->timeout);
-    } else {
-      bclient[group]->Phase1(client_seq_num, txn, req->txnDigest, std::bind(
-            &Client::Phase1Callback, this, req->id, group, std::placeholders::_1,
-            std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5),
-          std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
-            std::placeholders::_1), std::bind(&Client::RelayP1callback, this, std::placeholders::_1), req->timeout);
-    }
+    bclient[group]->Phase1(client_seq_num, txn, req->txnDigest, std::bind(
+          &Client::P1IntermediateCallback, this, req->id, group, std::placeholders::_1,
+          std::placeholders::_2, std::placeholders::_3,
+          std::placeholders::_4, std::placeholders::_5, std::placeholders::_6),
+        std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
+          std::placeholders::_1), std::bind(&Client::RelayP1callback, this, std::placeholders::_1), req->timeout);
     req->outstandingPhase1s++;
   }
 
   //TODO: Add the RelayP1 callback here.  shard client should then make it part of PendingP1, and use it after mvtso.
+}
+
+void Client::P1IntermediateCallback(uint64_t txnId, int group,
+    proto::CommitDecision decision, bool fast, bool conflict_flag,
+    const proto::CommittedProof &conflict,
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
+    bool eqv_ready) {
+      if (eqv_ready)
+        this->Phase1CallbackEquivocate(txnId, group, decision, fast, conflict_flag, conflict, sigs, true);
+      else
+        this->Phase1Callback(txnId, group, decision, fast, conflict_flag, conflict, sigs);
 }
 
 void Client::Phase1Callback(uint64_t txnId, int group,
