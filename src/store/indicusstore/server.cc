@@ -2258,15 +2258,10 @@ void Server::Clean(const std::string &txnDigest) {
   if(p1ConfItr) p1Conflicts.erase(d);
   d.release();
 
-  if(params.mainThreadDispatching) current_viewsMutex.lock();
   current_views.erase(txnDigest);
-  if(params.mainThreadDispatching) current_viewsMutex.unlock();
-  if(params.mainThreadDispatching) p2DecisionsMutex.lock();
-  if(params.mainThreadDispatching) decision_viewsMutex.lock();
   p2Decisions.erase(txnDigest);
   decision_views.erase(txnDigest);
-  if(params.mainThreadDispatching) p2DecisionsMutex.unlock();
-  if(params.mainThreadDispatching) decision_viewsMutex.unlock();
+
 
   //TODO: erase all timers if we end up using them again
 
@@ -2315,24 +2310,19 @@ void Server::CheckDependents(const std::string &txnDigest) {
               f->second.remote);
           delete f->second.remote;
         }
-        //Send it to all interested FB clients too:
 
+        //Send it to all interested FB clients too:
           interestedClientsMap::accessor i;
           auto jtr = interestedClients.find(i, txnDigest);
           if(jtr){
-            if(ForwardWritebackMulti(txnDigest, i)){return;}
-
-            P1FBorganizer *p1fb_organizer = new P1FBorganizer(0, txnDigest, this);
-            SetP1(0, p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
-            //TODO: If need reqId, can store it as pairs with the interested client.
-            SendPhase1FBReply(p1fb_organizer, txnDigest, true);
-
+            if(!ForwardWritebackMulti(txnDigest, i)){
+              P1FBorganizer *p1fb_organizer = new P1FBorganizer(0, txnDigest, this);
+              SetP1(0, p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
+              //TODO: If need reqId, can store it as pairs with the interested client.
+              SendPhase1FBReply(p1fb_organizer, txnDigest, true);
+            }
           }
-          else{
-            i.release();
-          }
-
-
+          i.release();
         /////
 
         waitingDependencies_new.erase(f);

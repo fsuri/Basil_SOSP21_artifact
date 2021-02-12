@@ -565,6 +565,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
       if (sig.process_id() == myProcessId && myProcessId >= 0) {
         if (concurrencyControl.ccr() == myResult) {
           skip = true;
+
           verifyObj->groupCounts[sigs.first]++;
           if (verifyObj->groupCounts[sigs.first] == verifyObj->quorumSize) {
                   //verifyObj->groupsVerified.insert(sigs.first);
@@ -572,13 +573,25 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
               verifyObj->groupsVerified++;
               if (verifyObj->decision == proto::COMMIT) {
                 if(verifyObj->groupsVerified == verifyObj->groupTotals){
-                  verifyObj->mcb((void*) true);
+                  if(!LocalDispatch){
+                    verifyObj->mcb((void*) true);
+                  }
+                  else{
+                    Debug("Issuing MCB to be scheduled as mainthread event ");
+                    verifyObj->tp->IssueCB(std::move(verifyObj->mcb), (void*) true);
+                  }
                   delete verifyObj;
                   return;
                 }
               }
               else{ //Abort only needs 1 group.
-                verifyObj->mcb((void*) true);
+                if(!LocalDispatch){
+                  verifyObj->mcb((void*) true);
+                }
+                else{
+                  Debug("Issuing MCB to be scheduled as mainthread event ");
+                  verifyObj->tp->IssueCB(std::move(verifyObj->mcb), (void*) true);
+                }
                 delete verifyObj;
                 return;
               }
