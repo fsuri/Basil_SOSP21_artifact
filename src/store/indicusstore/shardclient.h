@@ -134,6 +134,10 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   virtual void Abort(uint64_t id, const TimestampMessage &ts);
   virtual bool SendPing(size_t replica, const PingMessage &ping);
 
+  void SetFailureFlag(bool f) {
+    failureActive = f;
+  }
+
 //public fallback functions:
   virtual void Phase1FB(proto::Phase1 &p1, const std::string &txnDigest, phase1FB_callbackA p1FBcbA,
     phase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb);
@@ -364,6 +368,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   Verifier *verifier;
   const uint64_t phase1DecisionTimeout;
   std::vector<int> closestReplicas;
+  bool failureActive;
 
   uint64_t lastReqId;
   proto::Transaction txn;

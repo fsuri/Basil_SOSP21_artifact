@@ -46,7 +46,7 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     client_id(client_id), transport(transport), config(config), group(group),
     timeServer(timeServer), pingReplicas(pingReplicas), params(params),
     keyManager(keyManager), verifier(verifier), phase1DecisionTimeout(phase1DecisionTimeout),
-    lastReqId(0UL) {
+    lastReqId(0UL), failureActive(false) {
   transport->Register(this, *config, -1, -1); //phase1DecisionTimeout(1000UL)
 
   if (closestReplicas_.size() == 0) {
@@ -836,7 +836,7 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
 
   Debug("[group %i] PHASE1 callback ccr=%d", group, cc->ccr());
 
-  if (!pendingPhase1->p1Validator.ProcessMessage(*cc)) {
+  if (!pendingPhase1->p1Validator.ProcessMessage(*cc, failureActive)) {
     return;
   }
 
@@ -1267,7 +1267,7 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){ // update pe
             cc = &reply.cc();
           }
           Debug("[group %i] PHASE1FB callback ccr=%d", group, cc->ccr());
-          if (!pendingPhase1->p1Validator.ProcessMessage(*cc)) {
+          if (!pendingPhase1->p1Validator.ProcessMessage(*cc, failureActive)) {
             return;
           }
 

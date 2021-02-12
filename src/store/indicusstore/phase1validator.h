@@ -33,7 +33,7 @@ class Phase1Validator {
       KeyManager *keyManager, Parameters params, Verifier *verifier);
   virtual ~Phase1Validator();
 
-  bool ProcessMessage(const proto::ConcurrencyControl &cc);
+  bool ProcessMessage(const proto::ConcurrencyControl &cc, bool failureActive);
   bool EquivocateVotes(const proto::ConcurrencyControl &cc);
 
   inline Phase1ValidationState GetState() const { return state; }

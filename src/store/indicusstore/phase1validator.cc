@@ -20,7 +20,7 @@ Phase1Validator::~Phase1Validator() {
 // }
 
 //extend this function to account for p2 replies --> f+1 can serve as proof.
-bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
+bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc, bool failureActive) {
   if (params.validateProofs && cc.txn_digest() != *txnDigest) {
     Debug("[group %d] Phase1Reply digest %s does not match computed digest %s.",
         group, BytesToHex(cc.txn_digest(), 16).c_str(),
@@ -34,7 +34,7 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc) {
     return false;
   }
 
-  if (params.injectFailure.enabled && params.injectFailure.type == InjectFailureType::CLIENT_EQUIVOCATE) {
+  if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_EQUIVOCATE) {
     return EquivocateVotes(cc);
   }
 

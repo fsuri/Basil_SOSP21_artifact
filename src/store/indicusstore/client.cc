@@ -81,6 +81,10 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     transport->Timer(params.injectFailure.timeMs, [this](){
         failureActive = true;
         // TODO: set a failure flag in all bclients
+        // DONE
+        for (auto b : bclient) {
+          b->SetFailureFlag(true);
+        }
         // TODO: restore the client after it stalls from phase2_callback from previous txn
       });
   }
@@ -270,7 +274,9 @@ void Client::P1IntermediateCallback(uint64_t txnId, int group,
       if (eqv_ready)
         this->Phase1CallbackEquivocate(txnId, group, decision, fast, conflict_flag, conflict, sigs, true);
       else
+        //std::cerr << "p1callback normal started" << std::endl;
         this->Phase1Callback(txnId, group, decision, fast, conflict_flag, conflict, sigs);
+        //std::cerr << "p1callback normal ended" << std::endl;
 }
 
 void Client::Phase1Callback(uint64_t txnId, int group,
@@ -664,6 +670,8 @@ void Client::Writeback(PendingRequest *req) {
         req->p2ReplySigsGrouped);
   }
 
+  // for crash, report the result of p1
+  // for equivocation, always report ABORT, always delete
   if (!req->callbackInvoked) {
     uint64_t ns = Latency_End(&commitLatency);
     req->ccb(result);
