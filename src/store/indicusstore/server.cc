@@ -1918,9 +1918,9 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
           std::string dependency_txnDig = dep.write().prepared_txn_digest();
           //schedule Relay for client timeout only..
           uint64_t conflict_id = !fallback_flow ? reqId : -1;
-          std::string &dependent_txnDig = !fallback_flow ? std::string() : txnDigest;
+          const std::string &dependent_txnDig = !fallback_flow ? std::string() : txnDigest;
           TransportAddress *remoteCopy = remote.clone();
-          transport->Timer((CLIENTTIMEOUT), [this, remoteCopy, dependency_txnDig, reqId, dependent_txnDig](){
+          transport->Timer((CLIENTTIMEOUT), [this, remoteCopy, dependency_txnDig, reqId, dependent_txnDig]() mutable {
             this->RelayP1(*remoteCopy, dependency_txnDig, reqId, dependent_txnDig);
             delete remoteCopy;
           });
@@ -2981,14 +2981,14 @@ signedMessage.set_signature(hmacs.SerializeAsString());
 ////////////////////// XXX Fallback realm beings here...
 
 //RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
-//params: reqID: client tx identifier for blocked tx; dependency_txnDigest = tx that is stalling
-void Server::RelayP1(const TransportAddress &remote, const std::string &dependency_txnDig, uint64_t conflict_id, const std::string &dependent_txnDig){
+//params: dependent_it = client tx identifier for blocked tx; dependency_txnDigest = tx that is stalling
+void Server::RelayP1(const TransportAddress &remote, const std::string &dependency_txnDig, uint64_t dependent_id, const std::string &dependent_txnDig){
 
-  Debug("RelayP1[%s] timed out. Sending now!", BytesToHex(txnDigest, 256).c_str());
+  Debug("RelayP1[%s] timed out. Sending now!", BytesToHex(dependent_txnDig, 256).c_str());
   proto::Transaction *tx;
 
   ongoingMap::const_accessor b;
-  bool ongoingItr = ongoing.find(b, dependency_txnDigest);
+  bool ongoingItr = ongoing.find(b, dependency_txnDig);
   if(!ongoingItr) return;  //If txnDigest no longer ongoing, then no FB necessary as it has completed already
 
   tx = b->second;
@@ -2997,13 +2997,12 @@ void Server::RelayP1(const TransportAddress &remote, const std::string &dependen
   p1.set_req_id(0); //doesnt matter, its not used for fallback requests really.
   *p1.mutable_txn() = *tx;
   proto::RelayP1 relayP1;
-  relayP1.set_dependent_id(conflict_id);
+  relayP1.set_dependent_id(dependent_id);
   *relayP1.mutable_p1() = p1;
-  if(conflict_id == -1) relayP1.set_dependent_txn(dependent_txnDig);
-
-  Debug("Sending RelayP1[%s].", BytesToHex(txnDigest, 256).c_str());
+  if(dependent_id == -1) relayP1.set_dependent_txn(dependent_txnDig);
 
   transport->SendMessage(this, remote, relayP1);
+  Debug("Sent RelayP1[%s].", BytesToHex(dependent_txnDig, 256).c_str());
 }
 
 bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest){

@@ -567,7 +567,7 @@ bool Client::isDep(const std::string &txnDigest, proto::Transaction &Req_txn){
 }
 
 
-//TODO: Must call into Shard clients to clean up state as well!
+
 bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
   //check if FB instance is (still) active.
   auto itr = FB_instances.find(txnDigest);
@@ -579,11 +579,16 @@ bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
   //TODO: Can be altruistic and finish FB instance even if not blocking.
   if(pendingReqs.find(conflict_id) == pendingReqs.end() || pendingReqs[conflict_id]->outstandingPhase1s == 0){
     Debug("Request id %lu already committed, aborted, or in the process of doing so.", conflict_id);
-    CleanFB(itr->second, txnDigest);
+    CleanFB(itr->second, txnDigest); //call into Shard clients to clean up state as well!
     return false;
   }
 
-  //TODO: check if we have a dependent (has_dependent), and whether it is done? If so, call cleanCB()
+  //check if we have a dependent (has_dependent), and whether it is done? If so, call cleanCB()
+  if(itr->second->has_dependent && FB_instances.find(itr->second->dependent) == FB_instances.end()){
+    Debug("Dependent of txn[%s] already committed, aborted, or in the process of doing so.", BytesToHex(txnDigest, 64).c_str());
+    CleanFB(itr->second, txnDigest); //call into Shard clients to clean up state as well!
+    return false;
+  }
 
   return true;
 }
@@ -596,34 +601,7 @@ void Client::CleanFB(PendingRequest *pendingFB, std::string &txnDigest){
   FB_instances.erase(txnDigest);
 }
 
-//TODO: Create Additional Relay FB handler for Fallbacks for dependencies of dependencies.
-//TODO: dont need the txnDigest in the message if I already bind it here..
-void Client::RelayP1callbackFB(uint64_t reqId, std::string txnDigest, proto::RelayP1 &relayP1){
-  //dont need to respect a time out here?
-  auto itr = FB_instances.find(txnDigest);
-  if(itr == FB_instances.end()){
-    Debug("ReqId[%d] has already completed", reqId);
-    return;
-  }
-  //TODO: check reqId also... the Phase1FB call needs to direct to the FB entry too...
-  //overload Phase1FB with optional string param?
-  //perhaps if I add a mapping from <req Id to txnDigest> where reqId is a newly invented one for the FB request I can handle this.
 
-
-  proto::Phase1 *p1 = relayP1.release_p1();
-   //Check if the current pending request has this txn as dependency.
-  const std::string &txnDigest = TransactionDigest(p1->txn(), params.hashDigest);
-  if(!isDep(txnDigest, itr->second->txn)){
-    Debug("Tx[%s] is not a dependency of ReqId: %d", BytesToHex(txnDigest, 128).c_str(), reqId);
-    return;
-  }
-
-  if(itr->second->startFB){
-    std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec one P1FB" << std::endl;
-    return;
-     Phase1FB(*p1, reqId, txnDigest);
-  }
-}
 void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1){
 
   auto itr = pendingReqs.find(reqId);
@@ -643,7 +621,7 @@ void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1){
   if(itr->second->startFB){
     std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec one P1FB" << std::endl;
     return;
-     Phase1FB(*p1, reqId, txnDigest);
+     Phase1FB(p1, reqId, txnDigest);
   }
   else{
     std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - ADD to list" << std::endl;
@@ -660,42 +638,89 @@ void Client::RelayP1TimeoutCallback(uint64_t reqId){
 
   itr->second->startFB = true;
   for(auto p1_pair : itr->second->RelayP1s){
-    Phase1FB(*p1_pair.first, reqId, p1_pair.second);
+    Phase1FB(p1_pair.first, reqId, p1_pair.second);
   }
 }
 
+// Additional Relay FB handler for Fallbacks for dependencies of dependencies.
+void Client::RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest, proto::RelayP1 &relayP1){
+  //dont need to respect a time out here?
 
-void Client::Phase1FB(proto::Phase1 &p1, uint64_t conflict_id, const std::string &txnDigest){  //passes callbacks
+  auto itr = pendingReqs.find(reqId);
+  if(itr == pendingReqs.end()){
+    Debug("ReqId[%d] has already completed", reqId);
+    return;
+  }
 
-  PendingRequest* pendingFB = new PendingRequest(p1.req_id()); //Id doesnt really matter here
-  pendingFB->txn = p1.txn();
+  auto itrFB = FB_instances.find(dependent_txnDigest);
+  if(itrFB == FB_instances.end()){
+    Debug("FB txn[%s] has already completed", BytesToHex(dependent_txnDigest, 64).c_str());
+    return;
+  }
+
+  proto::Phase1 *p1 = relayP1.release_p1();
+   //Check if the current pending request has this txn as dependency.
+  const std::string &txnDigest = TransactionDigest(p1->txn(), params.hashDigest);
+  if(!isDep(txnDigest, itrFB->second->txn)){
+    Debug("Tx[%s] is not a dependency of ReqId: %d", BytesToHex(txnDigest, 128).c_str(), reqId);
+    return;
+  }
+
+  std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec P1FB for deeper depth" << std::endl;
+  Phase1FB_deeper(p1, reqId, txnDigest, dependent_txnDigest);
+}
+
+
+void Client::Phase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest){  //passes callbacks
+
+  PendingRequest* pendingFB = new PendingRequest(p1->req_id()); //Id doesnt really matter here
+  pendingFB->txn = p1->txn();
   pendingFB->txnDigest = txnDigest;
+  pendingFB->has_dependent = false;
   FB_instances[txnDigest] = pendingFB;
 
-  for (auto group : p1.txn().involved_groups()) {
+  SendPhase1FB(p1, conflict_id, txnDigest, pendingFB);
+
+}
+
+void Client::Phase1FB_deeper(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, const std::string &dependent_txnDigest){
+
+  PendingRequest* pendingFB = new PendingRequest(p1->req_id()); //Id doesnt really matter here
+  pendingFB->txn = p1->txn();
+  pendingFB->txnDigest = txnDigest;
+  pendingFB->has_dependent = true;
+  pendingFB->dependent = dependent_txnDigest;
+  FB_instances[txnDigest] = pendingFB;
+  SendPhase1FB(p1, conflict_id, txnDigest, pendingFB);
+}
+
+void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, PendingRequest *pendingFB){
+  for (auto group : p1->txn().involved_groups()) {
     //define all the callbacks here
-      //bind conflict_id (i.e. the dependent) to all, so we can check if it is still waiting.
+      //bind conflict_id (i.e. the top level dependent) to all, so we can check if it is still waiting.
+      //TODO: dont bind it but make it a field of the PendingRequest..
+      auto p1Relay = std::bind(&Client::RelayP1callbackFB, this, conflict_id, std::placeholders::_1, std::placeholders::_2);
+
       auto p1fbA = std::bind(&Client::Phase1FBcallbackA, this, conflict_id, txnDigest, group, std::placeholders::_1,
           std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
       auto p1fbB = std::bind(&Client::Phase1FBcallbackB, this, conflict_id, txnDigest, group, std::placeholders::_1,
         std::placeholders::_2);
       auto p2fb = std::bind(&Client::Phase2FBcallback, this, conflict_id, txnDigest, group, std::placeholders::_1,
         std::placeholders::_2);
-      auto wb = std::bind(&Client::WritebackFBcallback, this, conflict_id, txnDigest, p1.txn(), std::placeholders::_1);
+      auto wb = std::bind(&Client::WritebackFBcallback, this, conflict_id, txnDigest, std::placeholders::_1);
       auto invoke = std::bind(&Client::InvokeFBcallback, this, conflict_id, txnDigest, group); //technically only needed at logging shard
 
-      bclient[group]->Phase1FB(p1.req_id(), pendingFB->txn, txnDigest, p1fbA, p1fbB, p2fb, wb, invoke);
+      bclient[group]->Phase1FB(p1->req_id(), pendingFB->txn, txnDigest, p1fbA, p1fbB, p2fb, wb, invoke);
 
       pendingFB->outstandingPhase1s++;
     }
-  delete &p1;
-
+  delete p1;
 }
 
 
 
 //If Receive a finished FB just forward it.
-void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Transaction &fbtxn, proto::Writeback &wb) {
+void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Writeback &wb) {
   if(!StillActive(conflict_id, txnDigest)) return;
   auto itr = FB_instances.find(txnDigest);
   PendingRequest *pendingFB = itr->second;
@@ -708,11 +733,11 @@ void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, pr
   //TODO:: CHECK THAT fbtxn matches digest? Not necessary if we just set the contents ourselves.
   // set txn field here.
   //Also: server side message might not include txn, hence include it ourselves just in case.
-  *wb.mutable_txn() = std::move(fbtxn);
+  *wb.mutable_txn() = std::move(pendingFB->txn);
 
 
 
- for (auto group : fbtxn.involved_groups()) {
+ for (auto group : wb.txn().involved_groups()) {
    bclient[group]->WritebackFB_fast(txnDigest, wb);
  }
  //delete FB instance.

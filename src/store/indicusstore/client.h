@@ -165,7 +165,10 @@ class Client : public ::Client {
   void CleanFB(PendingRequest *pendingFB, std::string &txnDigest);
   void RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1);
   void RelayP1TimeoutCallback(uint64_t reqId);
-  void Phase1FB(proto::Phase1 &p1, uint64_t conflict_id, const std::string &txnDigest);
+  void RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest, proto::RelayP1 &relayP1);
+  void Phase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest);
+  void Phase1FB_deeper(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, const std::string &dependent_txnDigest);
+  void SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, PendingRequest *pendingFB);
   void Phase2FB(PendingRequest *req);
   void WritebackFB(PendingRequest *req);
   void Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
@@ -175,12 +178,12 @@ class Client : public ::Client {
     const proto::P2Replies &p2replies);
   void Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
     const proto::Signatures &p2ReplySig);
-  void WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Transaction &fbtxn, proto::Writeback &wb);
+  void WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Writeback &wb);
   void InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group);
   //keep track of pending Fallback instances. Maps from txnDigest, req Id is oblivious to us.
   std::unordered_map<std::string, PendingRequest*> FB_instances;
 
-  
+
   //also: keep map <txnDigest -> normal case pending requests, i.e. reqId as well>
 
   //DO THIS: TODO: XXX: Keep map from (txnDigest to reqId): When receiving a RelayP1 with 2 txnDigest and no reqId,

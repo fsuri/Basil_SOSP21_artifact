@@ -74,6 +74,7 @@ typedef std::function<void(int)> writeback_timeout_callback;
 
 //Fallback typedefs:
 typedef std::function<void(proto::RelayP1 &)> relayP1_callback;
+typedef std::function<void(const std::string &, proto::RelayP1 &)> relayP1FB_callback;
 
 typedef std::function<void(proto::CommitDecision, bool, bool, const proto::CommittedProof &,
   const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1FB_callbackA;
@@ -262,7 +263,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     //std::set<uint64_t> existing_levels;
 
     //TODO: add different callbacks
-    relayP1_callback rcb;
+    relayP1FB_callback rcb;
     writebackFB_callback wbFBcb;
     phase1FB_callbackA p1FBcbA; // can use a lot from phase1_callback (edited to include the f+1 p2 case + sends a P2FB message instead)
     phase1FB_callbackB p1FBcbB;

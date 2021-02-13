@@ -1069,25 +1069,25 @@ void ShardClient::CleanFB(std::string &txnDigest){
 }
 
 void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
-  Debug("RelayP1[%lu][%s].", relayP1.conflict_id(),
+  Debug("RelayP1[%lu][%s].", relayP1.dependent_id(),
       TransactionDigest(relayP1.p1().txn(), params.hashDigest).c_str());
   uint64_t req_id = relayP1.dependent_id();
 
-  if(req_id == -1){ //this is a dep for a fallback request (i.e. a deeper depth)
-    auto itr = this->pendingFallbacks.find(req_id);
-    if (itr == this->pendingFallbacks.end()) {
-      return; // this is a stale request and no upcall is necessary!
-    }
-    std::cerr << "RECEIVED RELAY P1 AT SHARDCLIENT FOR FB TX: " << itr->first << std::endl;
-    itr->second->rcb(relayP1); //upcall to the registered relayP1 callback function.
-  }
-  else{ //this is a dep of an ongoing p1 request.
-    auto itr = this->pendingPhase1s.find(req_id);
-    if (itr == this->pendingPhase1s.end()) {
-      return; // this is a stale request and no upcall is necessary!
-    }
-    std::cerr << "RECEIVED RELAY P1 AT SHARDCLIENT FOR TX: " << itr->second->client_seq_num << std::endl;
-    itr->second->rcb(relayP1); //upcall to the registered relayP1 callback function.
+  if(req_id != -1){ //this is a dep of an ongoing p1 request.
+      auto itr = this->pendingPhase1s.find(req_id);
+      if (itr == this->pendingPhase1s.end()) {
+        return; // this is a stale request and no upcall is necessary!
+      }
+      std::cerr << "RECEIVED RELAY P1 AT SHARDCLIENT FOR TX: " << itr->second->client_seq_num << std::endl;
+      itr->second->rcb(relayP1); //upcall to the registered relayP1 callback function.
+
+  } else{ //this is a dep for a fallback request (i.e. a deeper depth)
+      auto itr = this->pendingFallbacks.find(relayP1.dependent_txn());
+      if (itr == this->pendingFallbacks.end()) {
+        return; // this is a stale request and no upcall is necessary!
+      }
+      std::cerr << "RECEIVED RELAY P1 AT SHARDCLIENT FOR FB TX: " << itr->first << std::endl;
+      itr->second->rcb(relayP1.dependent_txn(), relayP1); //upcall to the registered relayP1 callback function.
   }
 }
 
