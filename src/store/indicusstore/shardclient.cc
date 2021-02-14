@@ -305,6 +305,23 @@ void ShardClient::Phase2Equivocate(uint64_t id,
   }
 
   pendingP2Abort->requestTimeout->Reset();
+
+  // equivocation cleanup code for ShardClient
+  // equivocation sent. since shardclient attempting to equivocate wont
+  // handle p2 replies anyways, delete the dangling PendingPhase2 objects from pendingPhase2s
+  auto itrc = this->pendingPhase2s.find(pendingP2Commit->reqId);
+  if (itrc != this->pendingPhase2s.end()) {
+    PendingPhase2 *pendingP2 = itrc->second;
+    this->pendingPhase2s.erase(itrc);
+    delete pendingP2;
+  }
+
+  auto itra = this->pendingPhase2s.find(pendingP2Abort->reqId);
+  if (itra != this->pendingPhase2s.end()) {
+    PendingPhase2 *pendingP2 = itra->second;
+    this->pendingPhase2s.erase(itra);
+    delete pendingP2;
+  }
 }
 
 void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
@@ -849,7 +866,7 @@ void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
   Phase1ValidationState state = pendingPhase1->p1Validator.GetState();
   switch (state) {
     case EQUIVOCATE:
-      Debug("equivocation path is taken");
+      Debug("[group %i] Equivocation path taken [%lu]", group, reply.req_id());
       pendingPhase1->decision = proto::COMMIT;
       pendingPhase1->fast = false;
       Phase1DecisionEquivocation(itr, true);
