@@ -181,6 +181,7 @@ class Client : public ::Client {
 
 
   void Writeback(PendingRequest *req);
+  void FailureCleanUp(PendingRequest *req);
 
   bool IsParticipant(int g) const;
 
@@ -207,6 +208,10 @@ class Client : public ::Client {
   Stats dummyStats;
   // TrueTime server.
   TrueTime timeServer;
+
+  // true after client waits params.injectFailure.timeMs
+  bool failureEnabled;
+  // true when client attempts to fail the CURRENT txn
   bool failureActive;
 
   bool first;

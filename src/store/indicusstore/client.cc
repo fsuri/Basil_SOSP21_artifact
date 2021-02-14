@@ -52,8 +52,9 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     readMessages(readMessages), readQuorumSize(readQuorumSize),
     params(params),
     keyManager(keyManager),
-    timeServer(timeServer), failureActive(false), first(true), startedPings(false),
-    client_seq_num(0UL), lastReqId(0UL), getIdx(0UL) {
+    timeServer(timeServer), first(true), startedPings(false),
+    client_seq_num(0UL), lastReqId(0UL), getIdx(0UL),
+    failureEnabled(false), failureActive(false) {
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
   std::cerr<< "P1 Decision Timeout: " <<phase1DecisionTimeout<< std::endl;
@@ -79,12 +80,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
 
   if (params.injectFailure.enabled) {
     transport->Timer(params.injectFailure.timeMs, [this](){
-        failureActive = true;
-        // TODO: set a failure flag in all bclients
-        // DONE
-        for (auto b : bclient) {
-          b->SetFailureFlag(true);
-        }
+        failureEnabled = true;
         // TODO: restore the client after it stalls from phase2_callback from previous txn
       });
   }
@@ -108,6 +104,15 @@ Client::~Client()
  */
 void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
       uint32_t timeout) {
+  // fail the current txn iff failuer timer is up and
+  // the number of txn is a multiple of frequency
+  bool txnFailureActive = failureEnabled &&
+    (client_seq_num % params.injectFailure.frequency == 0);
+  failureActive = txnFailureActive;
+  for (auto b : bclient) {
+    b->SetFailureFlag(txnFailureActive);
+  }
+
   transport->Timer(0, [this, bcb, btcb, timeout]() {
     if (pingReplicas) {
       if (!first && !startedPings) {
@@ -271,12 +276,17 @@ void Client::P1IntermediateCallback(uint64_t txnId, int group,
     const proto::CommittedProof &conflict,
     const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
     bool eqv_ready) {
-      if (eqv_ready)
+      Debug("PHASE1[%lu:%lu] INTERMEDIATE callback group %d [eqv:%s]", client_id,
+          client_seq_num, group, eqv_ready ? "yes" : "no");
+      if (eqv_ready) {
+        //std::cerr << "p1callback equivocate started" << std::endl;
         this->Phase1CallbackEquivocate(txnId, group, decision, fast, conflict_flag, conflict, sigs, true);
-      else
+        //std::cerr << "p1callback equivocate ended" << std::endl;
+      } else {
         //std::cerr << "p1callback normal started" << std::endl;
         this->Phase1Callback(txnId, group, decision, fast, conflict_flag, conflict, sigs);
         //std::cerr << "p1callback normal ended" << std::endl;
+      }
 }
 
 void Client::Phase1Callback(uint64_t txnId, int group,
@@ -566,6 +576,8 @@ void Client::Phase2Equivocate(PendingRequest *req) {
         std::placeholders::_1),
       std::bind(&Client::Phase2TimeoutCallback, this, logGroup, req->id,
         std::placeholders::_1), req->timeout);
+
+  FailureCleanUp(req);
 }
 
 void Client::Phase2Callback(uint64_t txnId, int group,
@@ -615,8 +627,9 @@ void Client::Writeback(PendingRequest *req) {
   req->startedWriteback = true;
 
   if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
-    Debug("INJECT FAILURE");
+    Debug("INJECT CRASH FAILURE[%lu:%lu]", client_id, req->id);
     stats.Increment("inject_failure_crash");
+    FailureCleanUp(req);
     return;
   }
 
@@ -670,8 +683,6 @@ void Client::Writeback(PendingRequest *req) {
         req->p2ReplySigsGrouped);
   }
 
-  // for crash, report the result of p1
-  // for equivocation, always report ABORT, always delete
   if (!req->callbackInvoked) {
     uint64_t ns = Latency_End(&commitLatency);
     req->ccb(result);
@@ -709,6 +720,33 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
     acb();
   });
 }
+
+// for crash, report the result of p1
+// for equivocation, always report ABORT, always delete
+void Client::FailureCleanUp(PendingRequest *req) {
+  UW_ASSERT(failureActive);
+  transaction_status_t result;
+  Debug("FailureCleanUp[%lu:%lu] for type[%s]", client_id, req->id,
+    params.injectFailure.type == InjectFailureType::CLIENT_CRASH ? "CRASH" : "EQUIVOCATE");
+  if (params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
+    if (req->decision == proto::COMMIT) {
+      result = COMMITTED;
+    } else {
+      result = ABORTED_SYSTEM;
+    }
+  } else {
+    // alaways report ABORT for equivocation
+    result = ABORTED_SYSTEM;
+  }
+  if (!req->callbackInvoked) {
+    uint64_t ns = Latency_End(&commitLatency);
+    req->ccb(result);
+    req->callbackInvoked = true;
+  }
+  this->pendingReqs.erase(req->id);
+  delete req;
+}
+
 ///////////////////////// Fallback logic starts here ///////////////////////////////////////////////////////////////
 
 bool Client::isDep(std::string &txnDigest, proto::Transaction &Req_txn){
