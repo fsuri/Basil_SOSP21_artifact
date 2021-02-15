@@ -252,12 +252,13 @@ void Client::Phase1(PendingRequest *req) {
   UW_ASSERT(txn.involved_groups().size() > 0);
 
   for (auto group : txn.involved_groups()) {
-    bclient[group]->Phase1(client_seq_num, txn, req->txnDigest, std::bind(
-          &Client::P1IntermediateCallback, this, req->id, group, std::placeholders::_1,
+    bclient[group]->Phase1(client_seq_num, txn, req->txnDigest,
+        std::bind( &Client::P1IntermediateCallback, this, req->id, group, std::placeholders::_1,
           std::placeholders::_2, std::placeholders::_3,
           std::placeholders::_4, std::placeholders::_5, std::placeholders::_6),
         std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
-          std::placeholders::_1), std::bind(&Client::RelayP1callback, this, req->id, std::placeholders::_1), req->timeout);
+          std::placeholders::_1),
+        std::bind(&Client::RelayP1callback, this, req->id, std::placeholders::_1), req->timeout);
     req->outstandingPhase1s++;
   }
   //schedule timeout for when we allow starting FB P1.
@@ -501,6 +502,13 @@ void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
     req->decision = proto::COMMIT;
   }
   Phase1(req);
+
+  //TODO:: alternatively upon timeout: just start Phase1FB for ones own TX:
+  //Todo so: shard client needs to upcall with the respective reqId from shard client.. re-create the p1 message.
+  // proto::Phase1 *p1 = new proto::Phase1();
+  // p1->set_req_id(reqId); //TODO: probably can remove this reqId again.
+  // *p1->mutable_txn()= req->txn;
+  // Phase1FB(p1, txnId, req->txnDigest);
 }
 
 void Client::HandleAllPhase1Received(PendingRequest *req) {

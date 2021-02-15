@@ -928,7 +928,6 @@ void Server::HandlePhase2(const TransportAddress &remote,
   phase2Reply->mutable_p2_decision()->set_involved_group(groupIdx);
 
   // no-replays property, i.e. recover existing decision/result from storage (do this for HandlePhase1 as well.)
-  if(params.mainThreadDispatching) p2DecisionsMutex.lock();
 
   p2MetaDataMap::const_accessor p;
   p2MetaDatas.insert(p, *txnDigest);
@@ -3635,23 +3634,6 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
       ProcessP2FBCallback(&p2fb, txnDigest, &remote, (void*) false);
     }
 
-    // proto::P2Replies p2Reps = p2fb.p2_replies();
-    // uint32_t counter = config.f + 1;
-    // for(auto & p2_reply : p2Reps.p2replies()){
-    //     proto::Phase2Decision p2dec;
-    //
-    //       if(!p2_reply.has_signed_p2_decision()){ return;}
-    //       proto::SignedMessage sig_msg = p2_reply.signed_p2_decision();
-    //
-    //       if(!IsReplicaInGroup(sig_msg.process_id(), logGroup, &config)){ return;}
-    //
-    //       p2dec.ParseFromString(sig_msg.data());
-    //       if(p2dec.decision() == p2fb.decision() && p2dec.txn_digest() == p2fb.txn_digest()){
-    //         if(crypto::Verify(keyManager->GetPublicKey(sig_msg.process_id()),
-    //               &sig_msg.data()[0], sig_msg.data().length(), &sig_msg.signature()[0])){ counter--;} else{return;}
-    //       }
-    //
-    // }
   }
   // Case B: The FbP2 message has standard P1 Quorums that match the decision
   else if(p2fb.has_p1_sigs()){
@@ -3796,7 +3778,7 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
         }
         const proto::Phase2FB &p2fb = msg.p2fb();
         HandlePhase2FB(remote, p2fb); //pass an extra param that has Invoke: if it has this param, just add HandleInvoke to the MCB. and instead dont send back P2 reply.
-        //call ProcessP2FB instead. and set CB. skip redundant checks. 
+        //call ProcessP2FB instead. and set CB. skip redundant checks.
         //TODO: schedule InvokeFB after the phase2... (since HandlePhase2 is async the following makes no sense.)
         //either no need for fallback, or still no decision learned so one cannot contribute to election.
         // if(committed.find(txnDigest) != committed.end() || writebackMessages.find(txnDigest) != writebackMessages.end() || p2Decisions.find(txnDigest) == p2Decisions.end()){
