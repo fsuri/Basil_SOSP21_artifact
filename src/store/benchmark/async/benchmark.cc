@@ -210,6 +210,8 @@ DEFINE_uint64(indicus_inject_failure_ms, 0, "number of milliseconds to wait"
     " before injecting a failure (for Indicus)");
 DEFINE_uint64(indicus_inject_failure_proportion, 0, "proportion of clients that"
     " will inject a failure (for Indicus)");
+DEFINE_uint64(indicus_inject_failure_freq, 1, "number of transactions per ONE failure"
+		    " in a Byz client (for Indicus)");
 
 DEFINE_uint64(indicus_phase1DecisionTimeout, 1000UL, "p1 timeout before going slowpath");
 DEFINE_bool(indicus_multi_threading, false, "dispatch crypto to parallel threads");
@@ -896,6 +898,7 @@ int main(int argc, char **argv) {
         failure.type = injectFailureType;
         failure.timeMs = FLAGS_indicus_inject_failure_ms;
         failure.enabled = rand() % 100 < FLAGS_indicus_inject_failure_proportion;
+				failure.frequency = FLAGS_indicus_inject_failure_freq;
 
         indicusstore::Parameters params(FLAGS_indicus_sign_messages,
                                         FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,

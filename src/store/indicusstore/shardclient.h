@@ -62,7 +62,7 @@ typedef std::function<void(int, const std::string &)> read_timeout_callback;
 
 typedef std::function<void(proto::CommitDecision, bool, bool,
     const proto::CommittedProof &,
-    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1_callback;
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &, bool)> phase1_callback;
 typedef std::function<void(int)> phase1_timeout_callback;
 
 typedef std::function<void(const proto::Signatures &)> phase2_callback;
@@ -121,6 +121,9 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
       const std::string &txnDigest, proto::CommitDecision decision,
       const proto::GroupedSignatures &groupedSigs, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout);
+  virtual void Phase2Equivocate(uint64_t id, const proto::Transaction &txn, const std::string &txnDigest,
+      const proto::GroupedSignatures &groupedCommitSigs, const proto::GroupedSignatures &groupedAbortSigs,
+      phase2_callback pcb, phase2_timeout_callback ptcb, uint32_t timeout);
   virtual void Writeback(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
     proto::CommitDecision decision, bool fast, bool conflict_flag, const proto::CommittedProof &conflict,
     const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs);
@@ -131,6 +134,10 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
 
   virtual void Abort(uint64_t id, const TimestampMessage &ts);
   virtual bool SendPing(size_t replica, const PingMessage &ping);
+
+  void SetFailureFlag(bool f) {
+    failureActive = f;
+  }
 
 //public fallback functions:
   virtual void CleanFB(std::string &txnDigest);
@@ -303,11 +310,15 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   /* Callbacks for hearing back from a shard for an operation. */
   void HandleReadReply(const proto::ReadReply &readReply);
   void HandlePhase1Reply(const proto::Phase1Reply &phase1Reply);
+  void ProcessP1R(const proto::Phase1Reply &reply, bool FB_path = false, PendingFB *pendingFB = nullptr, const std::string *txnDigest = nullptr);
+  void HandleP1REquivocate(const proto::Phase1Reply &phase1Reply);
   void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply);
 
   void Phase1Decision(uint64_t reqId);
   void Phase1Decision(
       std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
+  void Phase1DecisionEquivocation(
+      std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready);
 
   //multithreaded options:
   void HandleReadReplyMulti(proto::ReadReply* reply);
@@ -368,6 +379,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   Verifier *verifier;
   const uint64_t phase1DecisionTimeout;
   std::vector<int> closestReplicas;
+  bool failureActive;
 
   uint64_t lastReqId;
   proto::Transaction txn;

@@ -205,6 +205,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   };
 
     void RelayP1(const TransportAddress &remote, const std::string &dependency_txnDig, uint64_t dependent_id, const std::string &dependent_txnDig);
+    bool ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *committedProof);
     void SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
     void SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision, uint64_t decision_view);
     void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string &txnDigest, bool multi = false);

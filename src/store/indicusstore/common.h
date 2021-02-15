@@ -320,11 +320,12 @@ enum InjectFailureType {
 struct InjectFailure {
   InjectFailure() { }
   InjectFailure(const InjectFailure &failure) : type(failure.type),
-      timeMs(failure.timeMs), enabled(failure.enabled) { }
+      timeMs(failure.timeMs), enabled(failure.enabled), frequency(failure.frequency) { }
 
   InjectFailureType type;
   uint32_t timeMs;
   bool enabled;
+  uint32_t frequency;
 };
 
 typedef struct Parameters {

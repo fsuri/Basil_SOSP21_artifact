@@ -22,6 +22,7 @@ enum Phase1ValidationState {
   SLOW_ABORT_TENTATIVE,
   SLOW_ABORT_TENTATIVE2,
   SLOW_ABORT_FINAL,
+  EQUIVOCATE,
   NOT_ENOUGH
 };
 
@@ -32,9 +33,19 @@ class Phase1Validator {
       KeyManager *keyManager, Parameters params, Verifier *verifier);
   virtual ~Phase1Validator();
 
-  bool ProcessMessage(const proto::ConcurrencyControl &cc);
+  bool ProcessMessage(const proto::ConcurrencyControl &cc, bool failureActive = false);
+  bool EquivocateVotes(const proto::ConcurrencyControl &cc);
 
   inline Phase1ValidationState GetState() const { return state; }
+  inline bool EquivocationReady() {
+    return commits >= SlowCommitQuorumSize(config) && abstains >= SlowAbortQuorumSize(config);
+  }
+  bool EquivocationPossible() {
+    uint32_t remaining = config->n - commits - abstains;
+    uint32_t commits_needed = SlowCommitQuorumSize(config) > commits ? SlowCommitQuorumSize(config) - commits : 0;
+    uint32_t abstains_needed = SlowAbortQuorumSize(config) > abstains ? SlowAbortQuorumSize(config) - abstains : 0;
+    return remaining >= (commits_needed + abstains_needed);
+  }
 
  private:
   const int group;

@@ -52,8 +52,9 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     readMessages(readMessages), readQuorumSize(readQuorumSize),
     params(params),
     keyManager(keyManager),
-    timeServer(timeServer), failureActive(false), first(true), startedPings(false),
-    client_seq_num(0UL), lastReqId(0UL), getIdx(0UL) {
+    timeServer(timeServer), first(true), startedPings(false),
+    client_seq_num(0UL), lastReqId(0UL), getIdx(0UL),
+    failureEnabled(false), failureActive(false) {
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
   std::cerr<< "P1 Decision Timeout: " <<phase1DecisionTimeout<< std::endl;
@@ -79,7 +80,8 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
 
   if (params.injectFailure.enabled) {
     transport->Timer(params.injectFailure.timeMs, [this](){
-        failureActive = true;
+        failureEnabled = true;
+        // TODO: restore the client after it stalls from phase2_callback from previous txn
       });
   }
 }
@@ -102,6 +104,15 @@ Client::~Client()
  */
 void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
       uint32_t timeout) {
+  // fail the current txn iff failuer timer is up and
+  // the number of txn is a multiple of frequency
+  bool txnFailureActive = failureEnabled &&
+    (client_seq_num % params.injectFailure.frequency == 0);
+  failureActive = txnFailureActive;
+  for (auto b : bclient) {
+    b->SetFailureFlag(txnFailureActive);
+  }
+
   transport->Timer(0, [this, bcb, btcb, timeout]() {
     if (pingReplicas) {
       if (!first && !startedPings) {
@@ -242,8 +253,9 @@ void Client::Phase1(PendingRequest *req) {
 
   for (auto group : txn.involved_groups()) {
     bclient[group]->Phase1(client_seq_num, txn, req->txnDigest, std::bind(
-          &Client::Phase1Callback, this, req->id, group, std::placeholders::_1,
-          std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5),
+          &Client::P1IntermediateCallback, this, req->id, group, std::placeholders::_1,
+          std::placeholders::_2, std::placeholders::_3,
+          std::placeholders::_4, std::placeholders::_5, std::placeholders::_6),
         std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
           std::placeholders::_1), std::bind(&Client::RelayP1callback, this, req->id, std::placeholders::_1), req->timeout);
     req->outstandingPhase1s++;
@@ -252,6 +264,25 @@ void Client::Phase1(PendingRequest *req) {
   transport->Timer(CLIENTTIMEOUT, [this, reqId = req->id](){RelayP1TimeoutCallback(reqId);});
 
 }
+
+void Client::P1IntermediateCallback(uint64_t txnId, int group,
+    proto::CommitDecision decision, bool fast, bool conflict_flag,
+    const proto::CommittedProof &conflict,
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
+    bool eqv_ready) {
+      Debug("PHASE1[%lu:%lu] INTERMEDIATE callback group %d [eqv:%s]", client_id,
+          client_seq_num, group, eqv_ready ? "yes" : "no");
+      if (eqv_ready) {
+        //std::cerr << "p1callback equivocate started" << std::endl;
+        this->Phase1CallbackEquivocate(txnId, group, decision, fast, conflict_flag, conflict, sigs, true);
+        //std::cerr << "p1callback equivocate ended" << std::endl;
+      } else {
+        //std::cerr << "p1callback normal started" << std::endl;
+        this->Phase1Callback(txnId, group, decision, fast, conflict_flag, conflict, sigs);
+        //std::cerr << "p1callback normal ended" << std::endl;
+      }
+}
+
 
 void Client::Phase1CallbackProcessing(PendingRequest *req, int group,
     proto::CommitDecision decision, bool fast, bool conflict_flag,
@@ -340,6 +371,115 @@ void Client::Phase1Callback(uint64_t txnId, int group,
   }
 }
 
+void Client::Phase1CallbackEquivocate(uint64_t txnId, int group,
+    proto::CommitDecision decision, bool fast, bool conflict_flag,
+    const proto::CommittedProof &conflict,
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
+    bool eqv_ready) {
+  auto itr = this->pendingReqs.find(txnId);
+  if (itr == this->pendingReqs.end()) {
+    Debug("Phase1CallbackEquivocate for terminated request %lu (txn already committed"
+        " or aborted.", txnId);
+    return;
+  }
+  //total_counter++;
+  //if(fast) fast_path_counter++;
+  stats.Increment("total_prepares", 1);
+  if(fast) stats.Increment("total_prepares_fast", 1);
+  if(eqv_ready) stats.Increment("eqv_ready", 1);
+
+  Debug("PHASE1[%lu:%lu] callback equivocation from group %d", client_id,
+      client_seq_num, group);
+
+  PendingRequest *req = itr->second;
+  if (req->startedPhase2 || req->startedWriteback) {
+    Debug("Already started Phase2/Writeback for request id %lu. Ignoring Phase1"
+        " response from group %d.", txnId, group);
+    return;
+  }
+
+  if (decision == proto::ABORT && fast && conflict_flag) {
+      req->conflict = conflict;
+      req->conflict_flag = true;
+  }
+
+  if (params.validateProofs && params.signedMessages) {
+    if (eqv_ready) {
+      // saving abort sigs in req->eqvAbortSigsGrouped
+      auto itr_abort = sigs.find(proto::ConcurrencyControl::ABSTAIN);
+      UW_ASSERT(itr_abort != sigs.end());
+      Debug("Have %d ABSTAIN replies from group %d. Saving in eqvAbortSigsGrouped",
+          itr_abort->second.sigs_size(), group);
+      (*req->eqvAbortSigsGrouped.mutable_grouped_sigs())[group] = itr_abort->second;
+
+      // saving commit sigs in req->p1ReplySigsGrouped
+      auto itr_commit = sigs.find(proto::ConcurrencyControl::COMMIT);
+      UW_ASSERT(itr_commit != sigs.end());
+      Debug("Have %d COMMIT replies from group %d.", itr_commit->second.sigs_size(),
+          group);
+      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr_commit->second;
+
+    } else if(decision == proto::ABORT && fast && !conflict_flag){
+      auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
+      UW_ASSERT(itr != sigs.end());
+      Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
+          group);
+      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
+      req->fastAbortGroup = group;
+    } else if (decision == proto::ABORT && !fast) {
+      auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
+      UW_ASSERT(itr != sigs.end());
+      Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
+          group);
+      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
+      req->slowAbortGroup = group;
+    } else if (decision == proto::COMMIT) {
+      auto itr = sigs.find(proto::ConcurrencyControl::COMMIT);
+      UW_ASSERT(itr != sigs.end());
+      Debug("Have %d COMMIT replies from group %d.", itr->second.sigs_size(),
+          group);
+      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
+    }
+  }
+
+  if (fast && decision == proto::ABORT) {
+    req->fast = true;
+  } else {
+    req->fast = req->fast && fast;
+  }
+
+  if (eqv_ready) req->eqv_ready = true;
+
+  --req->outstandingPhase1s;
+  switch(decision) {
+    case proto::COMMIT:
+      break;
+    case proto::ABORT:
+      // abort!
+      req->decision = proto::ABORT;
+      req->eqv_ready = false;  //HEAD XXX look into this.
+      req->outstandingPhase1s = 0;
+      break;
+    default:
+      break;
+  }
+
+  if (req->outstandingPhase1s == 0) {
+    Debug("All PHASE1's [%lu] received", client_seq_num);
+    if (req->fast) {
+      Writeback(req);
+    } else {
+      // slow path, must log final result to 1 group
+      if (req->eqv_ready) {
+        Phase2Equivocate(req);
+      } else {
+        Phase2(req);
+      }
+    }
+    pendingReqs_starttime.erase(txnId);
+  }
+}
+
 void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
@@ -415,6 +555,39 @@ void Client::Phase2(PendingRequest *req) {
         std::placeholders::_1), req->timeout);
 }
 
+void Client::Phase2Equivocate(PendingRequest *req) {
+  int64_t logGroup = GetLogGroup(txn, req->txnDigest);
+
+  Debug("PHASE2[%lu:%lu][%s] logging to group %ld with equivocation", client_id, client_seq_num,
+      BytesToHex(req->txnDigest, 16).c_str(), logGroup);
+
+  if (params.validateProofs && params.signedMessages) {
+    // build grouped commits sigs with size of commitQuorum
+    for (auto &groupSigs : *req->p1ReplySigsGrouped.mutable_grouped_sigs()) {
+      while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > SlowCommitQuorumSize(config)) {
+        groupSigs.second.mutable_sigs()->RemoveLast();
+      }
+    }
+
+    // build grouped abort sigs with size of abortQuorum
+    for (auto &groupSigs : *req->eqvAbortSigsGrouped.mutable_grouped_sigs()) {
+      while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > SlowAbortQuorumSize(config)) {
+        groupSigs.second.mutable_sigs()->RemoveLast();
+      }
+    }
+  }
+
+  req->startedPhase2 = true;
+  bclient[logGroup]->Phase2Equivocate(client_seq_num, txn, req->txnDigest,
+      req->p1ReplySigsGrouped, req->eqvAbortSigsGrouped,
+      std::bind(&Client::Phase2Callback, this, req->id, logGroup,
+        std::placeholders::_1),
+      std::bind(&Client::Phase2TimeoutCallback, this, logGroup, req->id,
+        std::placeholders::_1), req->timeout);
+
+  FailureCleanUp(req);
+}
+
 void Client::Phase2Callback(uint64_t txnId, int group,
     const proto::Signatures &p2ReplySigs) {
   auto itr = this->pendingReqs.find(txnId);
@@ -487,8 +660,9 @@ void Client::Writeback(PendingRequest *req) {
   req->startedWriteback = true;
 
   if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
-    Debug("INJECT FAILURE");
+    Debug("INJECT CRASH FAILURE[%lu:%lu]", client_id, req->id);
     stats.Increment("inject_failure_crash");
+    FailureCleanUp(req);
     return;
   }
 
@@ -556,6 +730,33 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
     acb();
   });
 }
+
+// for crash, report the result of p1
+// for equivocation, always report ABORT, always delete
+void Client::FailureCleanUp(PendingRequest *req) {
+  UW_ASSERT(failureActive);
+  transaction_status_t result;
+  Debug("FailureCleanUp[%lu:%lu] for type[%s]", client_id, req->id,
+    params.injectFailure.type == InjectFailureType::CLIENT_CRASH ? "CRASH" : "EQUIVOCATE");
+  if (params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
+    if (req->decision == proto::COMMIT) {
+      result = COMMITTED;
+    } else {
+      result = ABORTED_SYSTEM;
+    }
+  } else {
+    // alaways report ABORT for equivocation
+    result = ABORTED_SYSTEM;
+  }
+  if (!req->callbackInvoked) {
+    uint64_t ns = Latency_End(&commitLatency);
+    req->ccb(result);
+    req->callbackInvoked = true;
+  }
+  this->pendingReqs.erase(req->id);
+  delete req;
+}
+
 ///////////////////////// Fallback logic starts here ///////////////////////////////////////////////////////////////
 
 bool Client::isDep(const std::string &txnDigest, proto::Transaction &Req_txn){
