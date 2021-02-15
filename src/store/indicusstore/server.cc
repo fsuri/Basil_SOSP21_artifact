@@ -3795,8 +3795,8 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
           return;
         }
         const proto::Phase2FB &p2fb = msg.p2fb();
-        HandlePhase2FB(remote, p2fb);
-
+        HandlePhase2FB(remote, p2fb); //pass an extra param that has Invoke: if it has this param, just add HandleInvoke to the MCB. and instead dont send back P2 reply.
+        //call ProcessP2FB instead. and set CB. skip redundant checks. 
         //TODO: schedule InvokeFB after the phase2... (since HandlePhase2 is async the following makes no sense.)
         //either no need for fallback, or still no decision learned so one cannot contribute to election.
         // if(committed.find(txnDigest) != committed.end() || writebackMessages.find(txnDigest) != writebackMessages.end() || p2Decisions.find(txnDigest) == p2Decisions.end()){
