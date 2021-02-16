@@ -316,7 +316,8 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
 
 // Add all Fallback signedMessages
   } else if (type == phase1FB.GetTypeName()) {
-
+    std::cerr << "received phase1FB" << std::endl;
+    return;
     if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_CCC)){
       phase1FB.ParseFromString(data);
       HandlePhase1FB(remote, phase1FB);
@@ -1062,6 +1063,8 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
 
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
+  std::cerr << "short circuiting HandleWriteback to simulate relay" << std::endl;
+  return;
   stats.Increment("total_transactions", 1);
 
   proto::Transaction *txn;
@@ -1912,13 +1915,13 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //TODO can remove this redundant lookup since it will be checked again...
         ongoingMap::const_accessor b;
         bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-        if (inOngoing && false) {
+        if (inOngoing) {
           std::string dependency_txnDig = dep.write().prepared_txn_digest();
           //schedule Relay for client timeout only..
           uint64_t conflict_id = !fallback_flow ? reqId : -1;
           const std::string &dependent_txnDig = !fallback_flow ? std::string() : txnDigest;
           TransportAddress *remoteCopy = remote.clone();
-          transport->Timer((CLIENTTIMEOUT), [this, remoteCopy, dependency_txnDig, reqId, dependent_txnDig]() mutable {
+          transport->Timer(params.relayP1_timeout, [this, remoteCopy, dependency_txnDig, reqId, dependent_txnDig]() mutable {
             this->RelayP1(*remoteCopy, dependency_txnDig, reqId, dependent_txnDig);
             delete remoteCopy;
           });

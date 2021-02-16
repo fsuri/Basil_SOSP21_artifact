@@ -227,6 +227,7 @@ DEFINE_bool(indicus_parallel_CCC, true, "sort read/write set for parallel CCC lo
 DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
 
 DEFINE_bool(indicus_all_to_all_fb, false, "use the all to all view change method");
+DEFINE_uint64(indicus_relayP1_timeout, 1, "time (ms) after which to send RelayP1");
 
 const std::string if_args[] = {
   "client-crash",
@@ -903,11 +904,19 @@ int main(int argc, char **argv) {
         indicusstore::Parameters params(FLAGS_indicus_sign_messages,
                                         FLAGS_indicus_validate_proofs, FLAGS_indicus_hash_digest,
                                         FLAGS_indicus_verify_deps, FLAGS_indicus_sig_batch,
-                                        FLAGS_indicus_max_dep_depth, readDepSize, false, false, false, false,
+                                        FLAGS_indicus_max_dep_depth, readDepSize,
+																				false, false,
+																				false, false,
                                         FLAGS_indicus_merkle_branch_factor, failure,
                                         FLAGS_indicus_multi_threading, FLAGS_indicus_batch_verification,
-																				FLAGS_indicus_batch_verification_size, false, false, false,
-																				FLAGS_indicus_parallel_CCC, false, FLAGS_indicus_all_to_all_fb);
+																				FLAGS_indicus_batch_verification_size,
+																				false,
+																				false,
+																				false,
+																				FLAGS_indicus_parallel_CCC,
+																				false,
+																				FLAGS_indicus_all_to_all_fb,
+																			  FLAGS_indicus_relayP1_timeout);
 
         client = new indicusstore::Client(config, clientId,
                                           FLAGS_num_shards,

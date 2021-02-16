@@ -262,7 +262,7 @@ void Client::Phase1(PendingRequest *req) {
     req->outstandingPhase1s++;
   }
   //schedule timeout for when we allow starting FB P1.
-  transport->Timer(CLIENTTIMEOUT, [this, reqId = req->id](){RelayP1TimeoutCallback(reqId);});
+  transport->Timer(params.relayP1_timeout, [this, reqId = req->id](){RelayP1TimeoutCallback(reqId);});
 
 }
 
@@ -563,6 +563,7 @@ void Client::WritebackProcessing(PendingRequest *req){
 }
 
 void Client::Writeback(PendingRequest *req) {
+
   Debug("WRITEBACK[%lu:%lu] result %s", client_id, req->id, req->decision ? "COMMIT" : "ABORT");
 
   req->startedWriteback = true;
@@ -729,8 +730,7 @@ void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1){
 
   if(itr->second->startFB){
     std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec one P1FB" << std::endl;
-    return;
-     Phase1FB(p1, reqId, txnDigest);
+    Phase1FB(p1, reqId, txnDigest);
   }
   else{
     std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - ADD to list" << std::endl;
@@ -824,6 +824,8 @@ void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::st
       pendingFB->outstandingPhase1s++;
     }
   delete p1;
+  std::cerr<< "Sent Phase1FB" << std::endl;
+  return;
 }
 
 

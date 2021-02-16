@@ -1471,10 +1471,13 @@ void ShardClient::Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::s
 // update pendingFB state -- if complete, upcall to client
 void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){
 
+  std::cerr<< "Received Phase1FBReply" << std::endl;
+  return;
   const std::string &txnDigest = p1fbr.txn_digest();
   Debug("Handling P1FBReply [%s]", BytesToHex(txnDigest, 128).c_str());
   auto itr = this->pendingFallbacks.find(txnDigest);
   if (itr == this->pendingFallbacks.end()) {
+    std::cerr<< "Received stale Phase1FBReply" << std::endl;
     return; // this is a stale request
   }
   PendingFB *pendingFB = itr->second;
