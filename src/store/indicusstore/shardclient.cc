@@ -1065,7 +1065,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
       Debug("[group %i] Equivocation path taken [%lu]", group, reply.req_id());
       pendingPhase1->decision = proto::COMMIT;
       pendingPhase1->fast = false;
-      Phase1DecisionEquivocation(itr, true);
+      Phase1Decision(itr, true); //use non-default flag to elicit equivcocation path
       break;
     case FAST_COMMIT:
       pendingPhase1->decision = proto::COMMIT;
@@ -1306,17 +1306,6 @@ void ShardClient::Phase1Decision(uint64_t reqId) {
 }
 
 void ShardClient::Phase1Decision(
-    std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr) {
-  PendingPhase1 *pendingPhase1 = itr->second;
-  pendingPhase1->pcb(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict_flag,
-      pendingPhase1->conflict, pendingPhase1->p1ReplySigs, false);
-  this->pendingPhase1s.erase(itr);
-  delete pendingPhase1;
-}
-
-// TODO: make an intermediate callback func
-// DONE
-void ShardClient::Phase1DecisionEquivocation(
     std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready) {
   PendingPhase1 *pendingPhase1 = itr->second;
   pendingPhase1->pcb(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict_flag,

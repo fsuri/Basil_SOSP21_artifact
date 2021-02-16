@@ -316,10 +316,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
 
   void Phase1Decision(uint64_t reqId);
   void Phase1Decision(
-      std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr);
-  void Phase1DecisionEquivocation(
-      std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready);
-
+      std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready = false);
+  
   //multithreaded options:
   void HandleReadReplyMulti(proto::ReadReply* reply);
   void HandleReadReplyCB1(proto::ReadReply*reply);

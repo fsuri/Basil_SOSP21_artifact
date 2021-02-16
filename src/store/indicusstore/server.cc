@@ -3553,8 +3553,8 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
     }
     return;
   }
-  // returns an existing decision.
 
+  // returns an existing decision.
   p2MetaDataMap::const_accessor p;
   p2MetaDatas.insert(p, txnDigest);
   bool hasP2 = p->second.hasP2;
@@ -3576,7 +3576,6 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
   p.release();
 
   uint8_t groupIndex = txnDigest[0];
-  //int64_t logGroup; //probably do not need it
   const proto::Transaction *txn;
   // find txn. that maps to txnDigest. if not stored locally, and not part of the msg, reject msg.
   ongoingMap::const_accessor b;
@@ -3584,17 +3583,11 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
   if(isOngoing){
     txn = b->second;
     b.release();
-    // groupIndex = groupIndex % txn->involved_groups_size();
-    // UW_ASSERT(groupIndex < txn->involved_groups_size());
-    // logGroup = txn->involved_groups(groupIndex);
   }
   else{
     b.release();
     if(p2fb.has_txn()){
         txn = &p2fb.txn();
-        // groupIndex = groupIndex % txn->involved_groups_size();
-        // UW_ASSERT(groupIndex < txn->involved_groups_size());
-        // logGroup = txn->involved_groups(groupIndex);
       }
       else{
          Debug("Txn[%s] neither in ongoing nor in FallbackP2 message.", BytesToHex(txnDigest, 64).c_str());
@@ -3616,6 +3609,7 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
       LookupP2Decision(txnDigest, myProcessId, myDecision);
       asyncValidateFBP2Replies(p2fb.decision(), txn, &txnDigest, p2fb.p2_replies(),
          keyManager, &config, myProcessId, myDecision, verifier, std::move(mcb), transport, params.multiThreading);
+      return;
     }
     else{
       proto::P2Replies p2Reps = p2fb.p2_replies();
@@ -3637,7 +3631,6 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
   }
   // Case B: The FbP2 message has standard P1 Quorums that match the decision
   else if(p2fb.has_p1_sigs()){
-
       const proto::GroupedSignatures &grpSigs = p2fb.p1_sigs();
       int64_t myProcessId;
       proto::ConcurrencyControl::Result myResult;
@@ -3650,7 +3643,6 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
                  false, txn, &txnDigest, grpSigs, keyManager, &config, myProcessId,
                  myResult, verifier, std::move(mcb), transport, true);
            return;
-
       }
       else{
         bool valid = ValidateP1Replies(p2fb.decision(), false, txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult, verifier);
@@ -3665,17 +3657,17 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
     }
     return;
   }
-
-  ProcessP2FBCallback(&p2fb, txnDigest, &remote, (void*) true);
+  ProcessP2FBCallback(&p2fb, txnDigest, &remote, (void*) true); //should never be called
 }
 
 void Server::ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string &txnDigest,
   const TransportAddress *remote, void* valid){
 
-    if(!valid){
+    if(!valid || ForwardWriteback(*remote, 0, txnDigest)){
       if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
         FreePhase2FBmessage(p2fb);
       }
+      if(params.multiThreading) delete remote;
       return;
     }
 
@@ -3707,7 +3699,7 @@ void Server::ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string 
     if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
       FreePhase2FBmessage(p2fb);
     }
-    delete remote;
+    if(params.multiThreading) delete remote;
     Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
 
 }
@@ -3738,12 +3730,37 @@ void Server::SendView(const TransportAddress &remote, const std::string &txnDige
 }
 
 
-
 //TODO remove remote argument, it is useless here. Instead add and keep track of INTERESTED CLIENTS REMOTE MAP
+//TODO  Schedule request for when current leader timeout is complete --> check exp timeouts; then set new one.
+//   struct timeval tv;
+//   gettimeofday(&tv, NULL);
+//   uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+//
+//   uint64_t elapsed;
+//   if(client_starttime.find(txnDigest) != client_starttime.end())
+//       elapsed = current_time - client_starttime[txnDigest];
+//   else{
+//     //PANIC, have never seen the tx that is mentioned. Start timer ourselves.
+//     client_starttime[txnDigest] = current_time;
+//     transport->Timer((CLIENTTIMEOUT), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+//     return;
+//   }
+//   if (elapsed < CLIENTTIMEOUT ){
+//     transport->Timer((CLIENTTIMEOUT-elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+//     return;
+//   }
+// //check for current FB reign
+//   uint64_t FB_elapsed;
+//   if(exp_timeouts.find(txnDigest) != exp_timeouts.end()){
+//       FB_elapsed = current_time - FBtimeouts_start[txnDigest];
+//       if(FB_elapsed < exp_timeouts[txnDigest]){
+//           transport->Timer((exp_timeouts[txnDigest]-FB_elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
+//           return;
+//       }
+//
+//   }
+//otherwise pass and invoke for the first time!
 void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg) {
-    //Expect the invokeFB message to contain a P2 message if not seen a decision ourselves.
-    //If that is not the case: CALL HAndle Phase2B. This in turn should check if there are f+1 matching p2, and otherwise call HandlePhase2 by passing the args.
-
 
     // CHECK if part of logging shard. (this needs to be done at all p2s, reject if its not ourselves)
     const std::string &txnDigest = msg.txn_digest();
@@ -3766,60 +3783,20 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
     //process decision if one does not have any yet.
     //This is safe even if current_view > 0 because this replica could not have taken part in any elections yet (can only elect once you have decision), nor has yet received a dec from a larger view which it would adopt.
     if(!p->second.hasP2){
-        if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
-        Debug("Transaction[%s] has no phase2 decision yet needs to SendElectFB", BytesToHex(txnDigest, 64).c_str());
-        return;
-
-        //TODO: handle this case. Problem: HandlePhase2FB is async.
+        p.release();
         if(!msg.has_p2fb()){
           if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
           Debug("Transaction[%s] has no phase2 decision yet needs to SendElectFB", BytesToHex(txnDigest, 64).c_str());
           return;
         }
-        const proto::Phase2FB &p2fb = msg.p2fb();
-        HandlePhase2FB(remote, p2fb); //pass an extra param that has Invoke: if it has this param, just add HandleInvoke to the MCB. and instead dont send back P2 reply.
-        //call ProcessP2FB instead. and set CB. skip redundant checks.
-        //TODO: schedule InvokeFB after the phase2... (since HandlePhase2 is async the following makes no sense.)
-        //either no need for fallback, or still no decision learned so one cannot contribute to election.
-        // if(committed.find(txnDigest) != committed.end() || writebackMessages.find(txnDigest) != writebackMessages.end() || p2Decisions.find(txnDigest) == p2Decisions.end()){
-        //   if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
-        //   return;
-        // }
+        const proto::Phase2FB *p2fb = msg.release_p2fb();
+        InvokeFBProcessP2FB(remote, txnDigest, *p2fb, &msg);
+        return;
     }
 
     proto::CommitDecision decision = p->second.p2Decision;
     p.release();
 
-
-      //TODO  Schedule request for when current leader timeout is complete --> check exp timeouts; then set new one.
-    //   struct timeval tv;
-    //   gettimeofday(&tv, NULL);
-    //   uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
-    //
-    //   uint64_t elapsed;
-    //   if(client_starttime.find(txnDigest) != client_starttime.end())
-    //       elapsed = current_time - client_starttime[txnDigest];
-    //   else{
-    //     //PANIC, have never seen the tx that is mentioned. Start timer ourselves.
-    //     client_starttime[txnDigest] = current_time;
-    //     transport->Timer((CLIENTTIMEOUT), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
-    //     return;
-    //   }
-    //   if (elapsed < CLIENTTIMEOUT ){
-    //     transport->Timer((CLIENTTIMEOUT-elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
-    //     return;
-    //   }
-    // //check for current FB reign
-    //   uint64_t FB_elapsed;
-    //   if(exp_timeouts.find(txnDigest) != exp_timeouts.end()){
-    //       FB_elapsed = current_time - FBtimeouts_start[txnDigest];
-    //       if(FB_elapsed < exp_timeouts[txnDigest]){
-    //           transport->Timer((exp_timeouts[txnDigest]-FB_elapsed), [this, &remote, &msg](){HandleInvokeFB(remote, msg);});
-    //           return;
-    //       }
-    //
-    //   }
-      //otherwise pass and invoke for the first time!
 
     // find txn. that maps to txnDigest. if not stored locally, and not part of the msg, reject msg.
     const proto::Transaction *txn;
@@ -3859,7 +3836,153 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
       //verify views & Send ElectFB
       VerifyViews(msg, logGrp, remote);
     }
+}
 
+//TODO: merge with normal ProcessP2FB
+void Server::InvokeFBProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, const proto::Phase2FB &p2fb, proto::InvokeFB *msg){
+  // find txn. that maps to txnDigest. if not stored locally, and not part of the msg, reject msg.
+  const proto::Transaction *txn;
+  ongoingMap::const_accessor b;
+  bool isOngoing = ongoing.find(b, txnDigest);
+  if(isOngoing){
+    txn = b->second;
+    b.release();
+  }
+  else{
+    b.release();
+    if(p2fb.has_txn()){
+        txn = &p2fb.txn();
+      }
+      else{
+         Debug("Txn[%s] neither in ongoing nor in FallbackP2 message.", BytesToHex(txnDigest, 64).c_str());
+         if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
+         if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+           FreePhase2FBmessage(&p2fb); //const_cast<proto::Phase2&>(msg));
+         }
+        return;
+      }
+  }
+  int64_t logGrp = GetLogGroup(*txn, txnDigest);
+  if(groupIdx != logGrp){
+        if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
+        if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+          FreePhase2FBmessage(&p2fb); //const_cast<proto::Phase2&>(msg));
+        }
+        return;  //This replica is not part of the shard responsible for Fallback.
+  }
+  //P2FB either contains P1 GroupedSignatures, OR it just contains forwarded P2Replies.
+  // Case A: The FbP2 message has f+1 matching P2replies from logShard replicas
+  if(p2fb.has_p2_replies()){
+    if(params.signedMessages){
+      mainThreadCallback mcb(std::bind(&Server::InvokeFBProcessP2FBCallback, this,
+         msg, &p2fb, txnDigest, remote.clone(), std::placeholders::_1));
+      int64_t myProcessId;
+      proto::CommitDecision myDecision;
+      LookupP2Decision(txnDigest, myProcessId, myDecision);
+      asyncValidateFBP2Replies(p2fb.decision(), txn, &txnDigest, p2fb.p2_replies(),
+         keyManager, &config, myProcessId, myDecision, verifier, std::move(mcb), transport, params.multiThreading);
+    }
+    else{
+      proto::P2Replies p2Reps = p2fb.p2_replies();
+      uint32_t counter = config.f + 1;
+      for(auto & p2_reply : p2Reps.p2replies()){
+        if(p2_reply.has_p2_decision()){
+          if(p2_reply.p2_decision().decision() == p2fb.decision() && p2_reply.p2_decision().txn_digest() == p2fb.txn_digest()){
+            counter--;
+          }
+        }
+        if(counter == 0){
+          InvokeFBProcessP2FBCallback(msg, &p2fb, txnDigest, &remote, (void*) true);
+          return;
+        }
+      }
+      InvokeFBProcessP2FBCallback(msg, &p2fb, txnDigest, &remote, (void*) false);
+    }
+  }
+  // Case B: The FbP2 message has standard P1 Quorums that match the decision
+  else if(p2fb.has_p1_sigs()){
+      const proto::GroupedSignatures &grpSigs = p2fb.p1_sigs();
+      int64_t myProcessId;
+      proto::ConcurrencyControl::Result myResult;
+      LookupP1Decision(txnDigest, myProcessId, myResult);
+
+      if(params.multiThreading){
+        mainThreadCallback mcb(std::bind(&Server::ProcessP2FBCallback, this,
+           &p2fb, txnDigest, remote.clone(), std::placeholders::_1));
+           asyncValidateP1Replies(p2fb.decision(),
+                 false, txn, &txnDigest, grpSigs, keyManager, &config, myProcessId,
+                 myResult, verifier, std::move(mcb), transport, true);
+         return;
+      }
+      else{
+        bool valid = ValidateP1Replies(p2fb.decision(), false, txn, &txnDigest, grpSigs, keyManager, &config, myProcessId, myResult, verifier);
+        InvokeFBProcessP2FBCallback(msg, &p2fb, txnDigest, &remote, (void*) valid);
+        return;
+      }
+  }
+  else{
+    Debug("FallbackP2 message for Txn[%s] has no proofs.", BytesToHex(txnDigest, 64).c_str());
+    if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+      FreePhase2FBmessage(&p2fb); //const_cast<proto::Phase2&>(msg));
+    }
+    return;
+  }
+  InvokeFBProcessP2FBCallback(msg, &p2fb, txnDigest, &remote, (void*) true);
+}
+
+void Server::InvokeFBProcessP2FBCallback(proto::InvokeFB *msg, const proto::Phase2FB *p2fb, const std::string &txnDigest,
+  const TransportAddress *remote, void* valid){
+
+    if(!valid || ForwardWriteback(*remote, 0, txnDigest)){
+      if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
+      if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+        FreePhase2FBmessage(p2fb);
+      }
+      if(params.multiThreading) delete remote;
+      return;
+    }
+
+    p2MetaDataMap::accessor p;
+    p2MetaDatas.insert(p, txnDigest);
+    proto::CommitDecision decision;
+    uint64_t decision_view = p->second.decision_view;
+    uint64_t current_view = p->second.current_view;
+    bool hasP2 = p->second.hasP2;
+    if(hasP2){
+      decision = p->second.p2Decision;
+      //decision_view = p->second.decision_view;
+    }
+    else{
+      p->second.p2Decision = p2fb->decision();
+      p->second.hasP2 = true;
+      //p->second.decision_view = 0;
+      decision = p2fb->decision();
+      //decision_view = 0;
+    }
+    p.release();
+
+    //XXX send P2 message to client too?
+    // P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, *remote, this);
+    // SetP2(0, p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, decision, decision_view);
+    // SendPhase2FBReply(p2fb_organizer, txnDigest);
+    // Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
+
+    //Call InvokeFB handling
+    if(params.all_to_all_fb){
+      uint64_t proposed_view = current_view + 1; //client does not propose view.
+      BroadcastMoveView(txnDigest, proposed_view);
+      SendElectFB(msg, txnDigest, proposed_view, decision, groupIdx); //can already send before moving to view since we do not skip views during synchrony (even when no correct clients interested)
+    }
+    else{ //verify views & Send ElectFB
+      VerifyViews(*msg, groupIdx, *remote);
+    }
+
+    //clean up
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+      FreePhase2FBmessage(p2fb);
+    }
+    if(params.multiThreading) delete remote;
 }
 
 void Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportAddress &remote){
@@ -3891,15 +4014,10 @@ void Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportA
 
 void Server::InvokeFBcallback(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid){
 
-  if(!valid){
+  if(!valid || ForwardWriteback(*remoteCopy, 0, txnDigest)){
     delete remoteCopy;
     if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
     return; //View verification failed.
-  }
-  if(ForwardWriteback(*remoteCopy, 0, txnDigest)){
-    delete remoteCopy;
-    if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
-    return;
   }
 
   p2MetaDataMap::accessor p;

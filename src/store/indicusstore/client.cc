@@ -253,7 +253,7 @@ void Client::Phase1(PendingRequest *req) {
 
   for (auto group : txn.involved_groups()) {
     bclient[group]->Phase1(client_seq_num, txn, req->txnDigest,
-        std::bind( &Client::P1IntermediateCallback, this, req->id, group, std::placeholders::_1,
+        std::bind( &Client::Phase1Callback, this, req->id, group, std::placeholders::_1,
           std::placeholders::_2, std::placeholders::_3,
           std::placeholders::_4, std::placeholders::_5, std::placeholders::_6),
         std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
@@ -266,138 +266,13 @@ void Client::Phase1(PendingRequest *req) {
 
 }
 
-void Client::P1IntermediateCallback(uint64_t txnId, int group,
-    proto::CommitDecision decision, bool fast, bool conflict_flag,
-    const proto::CommittedProof &conflict,
-    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
-    bool eqv_ready) {
-      Debug("PHASE1[%lu:%lu] INTERMEDIATE callback group %d [eqv:%s]", client_id,
-          client_seq_num, group, eqv_ready ? "yes" : "no");
-      if (eqv_ready) {
-        //std::cerr << "p1callback equivocate started" << std::endl;
-        this->Phase1CallbackEquivocate(txnId, group, decision, fast, conflict_flag, conflict, sigs, true);
-        //std::cerr << "p1callback equivocate ended" << std::endl;
-      } else {
-        //std::cerr << "p1callback normal started" << std::endl;
-        this->Phase1Callback(txnId, group, decision, fast, conflict_flag, conflict, sigs);
-        //std::cerr << "p1callback normal ended" << std::endl;
-      }
-}
 
 
 void Client::Phase1CallbackProcessing(PendingRequest *req, int group,
     proto::CommitDecision decision, bool fast, bool conflict_flag,
     const proto::CommittedProof &conflict,
-    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs){
-
-  if (decision == proto::ABORT && fast && conflict_flag) {
-      req->conflict = conflict;
-      req->conflict_flag = true;
-  }
-
-  if (params.validateProofs && params.signedMessages) {
-    if(decision == proto::ABORT && fast && !conflict_flag){
-      auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
-      UW_ASSERT(itr != sigs.end());
-      Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
-          group);
-      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
-      req->fastAbortGroup = group;
-    } else if (decision == proto::ABORT && !fast) {
-      auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
-      UW_ASSERT(itr != sigs.end());
-      Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
-          group);
-      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
-      req->slowAbortGroup = group;
-    } else if (decision == proto::COMMIT) {
-      auto itr = sigs.find(proto::ConcurrencyControl::COMMIT);
-      UW_ASSERT(itr != sigs.end());
-      Debug("Have %d COMMIT replies from group %d.", itr->second.sigs_size(),
-          group);
-      (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr->second;
-    }
-  }
-
-  if (fast && decision == proto::ABORT) {
-    req->fast = true;
-  } else {
-    req->fast = req->fast && fast;
-  }
-
-  --req->outstandingPhase1s;
-  switch(decision) {
-    case proto::COMMIT:
-      break;
-    case proto::ABORT:
-      // abort!
-      req->decision = proto::ABORT;
-      req->outstandingPhase1s = 0;
-      break;
-    default:
-      break;
-  }
-}
-
-void Client::Phase1Callback(uint64_t txnId, int group,
-    proto::CommitDecision decision, bool fast, bool conflict_flag,
-    const proto::CommittedProof &conflict,
-    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs) {
-  auto itr = this->pendingReqs.find(txnId);
-  if (itr == this->pendingReqs.end()) {
-    Debug("Phase1Callback for terminated request %lu (txn already committed"
-        " or aborted.", txnId);
-    return;
-  }
-  //total_counter++;
-  //if(fast) fast_path_counter++;
-  stats.Increment("total_prepares", 1);
-  if(fast) stats.Increment("total_prepares_fast", 1);
-
-  Debug("PHASE1[%lu:%lu] callback decision %d [Fast:%s][Conflict:%s] from group %d", client_id,
-      client_seq_num, decision, fast ? "yes" : "no", conflict_flag ? "yes" : "no", group);
-
-  PendingRequest *req = itr->second;
-
-  if (req->startedPhase2 || req->startedWriteback) {
-    Debug("Already started Phase2/Writeback for request id %lu. Ignoring Phase1"
-        " response from group %d.", txnId, group);
-    return;
-  }
-
-  Phase1CallbackProcessing(req, group, decision, fast, conflict_flag, conflict, sigs);
-
-  if (req->outstandingPhase1s == 0) {
-    HandleAllPhase1Received(req);
-  }
-}
-
-void Client::Phase1CallbackEquivocate(uint64_t txnId, int group,
-    proto::CommitDecision decision, bool fast, bool conflict_flag,
-    const proto::CommittedProof &conflict,
     const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
-    bool eqv_ready) {
-  auto itr = this->pendingReqs.find(txnId);
-  if (itr == this->pendingReqs.end()) {
-    Debug("Phase1CallbackEquivocate for terminated request %lu (txn already committed"
-        " or aborted.", txnId);
-    return;
-  }
-  //total_counter++;
-  //if(fast) fast_path_counter++;
-  stats.Increment("total_prepares", 1);
-  if(fast) stats.Increment("total_prepares_fast", 1);
-  if(eqv_ready) stats.Increment("eqv_ready", 1);
-
-  Debug("PHASE1[%lu:%lu] callback equivocation from group %d", client_id,
-      client_seq_num, group);
-
-  PendingRequest *req = itr->second;
-  if (req->startedPhase2 || req->startedWriteback) {
-    Debug("Already started Phase2/Writeback for request id %lu. Ignoring Phase1"
-        " response from group %d.", txnId, group);
-    return;
-  }
+    bool eqv_ready){
 
   if (decision == proto::ABORT && fast && conflict_flag) {
       req->conflict = conflict;
@@ -420,7 +295,9 @@ void Client::Phase1CallbackEquivocate(uint64_t txnId, int group,
           group);
       (*req->p1ReplySigsGrouped.mutable_grouped_sigs())[group] = itr_commit->second;
 
-    } else if(decision == proto::ABORT && fast && !conflict_flag){
+    }
+    //non-equivocation processing
+    else if(decision == proto::ABORT && fast && !conflict_flag){
       auto itr = sigs.find(proto::ConcurrencyControl::ABSTAIN);
       UW_ASSERT(itr != sigs.end());
       Debug("Have %d ABSTAIN replies from group %d.", itr->second.sigs_size(),
@@ -448,7 +325,6 @@ void Client::Phase1CallbackEquivocate(uint64_t txnId, int group,
   } else {
     req->fast = req->fast && fast;
   }
-
   if (eqv_ready) req->eqv_ready = true;
 
   --req->outstandingPhase1s;
@@ -458,28 +334,48 @@ void Client::Phase1CallbackEquivocate(uint64_t txnId, int group,
     case proto::ABORT:
       // abort!
       req->decision = proto::ABORT;
-      req->eqv_ready = false;  //HEAD XXX look into this.
+      req->eqv_ready = false; //if there is a single shard that is only abort, then equiv not possible
       req->outstandingPhase1s = 0;
       break;
     default:
       break;
   }
+}
+
+void Client::Phase1Callback(uint64_t txnId, int group,
+    proto::CommitDecision decision, bool fast, bool conflict_flag,
+    const proto::CommittedProof &conflict,
+    const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
+    bool eqv_ready) {
+  auto itr = this->pendingReqs.find(txnId);
+  if (itr == this->pendingReqs.end()) {
+    Debug("Phase1Callback for terminated request %lu (txn already committed"
+        " or aborted.", txnId);
+    return;
+  }
+  //total_counter++;
+  //if(fast) fast_path_counter++;
+  stats.Increment("total_prepares", 1);
+  if(fast) stats.Increment("total_prepares_fast", 1);
+
+  Debug("PHASE1[%lu:%lu] callback decision %d [Fast:%s][Conflict:%s] from group %d", client_id,
+      client_seq_num, decision, fast ? "yes" : "no", conflict_flag ? "yes" : "no", group);
+
+  PendingRequest *req = itr->second;
+
+  if (req->startedPhase2 || req->startedWriteback) {
+    Debug("Already started Phase2/Writeback for request id %lu. Ignoring Phase1"
+        " response from group %d.", txnId, group);
+    return;
+  }
+
+  Phase1CallbackProcessing(req, group, decision, fast, conflict_flag, conflict, sigs, eqv_ready);
 
   if (req->outstandingPhase1s == 0) {
-    Debug("All PHASE1's [%lu] received", client_seq_num);
-    if (req->fast) {
-      Writeback(req);
-    } else {
-      // slow path, must log final result to 1 group
-      if (req->eqv_ready) {
-        Phase2Equivocate(req);
-      } else {
-        Phase2(req);
-      }
-    }
-    pendingReqs_starttime.erase(txnId);
+    HandleAllPhase1Received(req);
   }
 }
+
 
 void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
   auto itr = this->pendingReqs.find(txnId);
@@ -517,7 +413,11 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
     Writeback(req);
   } else {
     // slow path, must log final result to 1 group
-    Phase2(req);
+    if (req->eqv_ready) {
+      Phase2Equivocate(req);
+    } else {
+      Phase2(req);
+    }
   }
 }
 

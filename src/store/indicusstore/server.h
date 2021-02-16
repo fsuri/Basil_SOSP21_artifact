@@ -215,6 +215,9 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
     void ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string &txnDigest,
       const TransportAddress *remote, void* valid);
     void SendView(const TransportAddress &remote, const std::string &txnDigest);
+    void InvokeFBProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, const proto::Phase2FB &p2fb, proto::InvokeFB *msg);
+    void InvokeFBProcessP2FBCallback(proto::InvokeFB *msg, const proto::Phase2FB *p2fb, const std::string &txnDigest,
+      const TransportAddress *remote, void* valid);
     void VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportAddress &remote);
     void InvokeFBcallback(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid);
     void SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, proto::CommitDecision decision, uint64_t logGrp);
