@@ -316,8 +316,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
 
 // Add all Fallback signedMessages
   } else if (type == phase1FB.GetTypeName()) {
-    std::cerr << "received phase1FB" << std::endl;
-    return;
+
     if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_CCC)){
       phase1FB.ParseFromString(data);
       HandlePhase1FB(remote, phase1FB);
@@ -1008,6 +1007,11 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
     }
     return;
   }
+  if(first){
+   std::cerr << "short circuiting HandleWriteback to simulate relay" << std::endl;
+   //first = false;
+  return;
+  }
 
   auto f = [this, msg, txnDigest, txn, valid]() mutable {
       Debug("WRITEBACK Callback[%s] being called", BytesToHex(*txnDigest, 16).c_str());
@@ -1063,8 +1067,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
 
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
-  std::cerr << "short circuiting HandleWriteback to simulate relay" << std::endl;
-  return;
+
   stats.Increment("total_transactions", 1);
 
   proto::Transaction *txn;
@@ -1139,8 +1142,6 @@ void Server::HandleWriteback(const TransportAddress &remote,
                   myResult, verifier, std::move(mcb), transport, true);
             }
             return;
-
-
           }
           else if(params.signedMessages && msg.decision() == proto::ABORT && msg.has_p1_sigs()){
             stats.Increment("total_transactions_fast_Abort_sigs", 1);
@@ -3134,6 +3135,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   i.release();
   //interestedClients[txnDigest].insert(remote.clone());
 
+
   //3) BOTH P2 AND P1 CASE
   //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself.
   //Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
@@ -3150,8 +3152,6 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
        proto::CommitDecision decision = p->second.p2Decision;
        uint64_t decision_view = p->second.decision_view;
        p.release();
-
-
 
        P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
        //recover stored commit proof.
@@ -3348,7 +3348,12 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
     }
 
     auto sendCB = [this, p1fb_organizer, multi](){
-      if(p1fb_organizer->c_view_sig_outstanding || p1fb_organizer->p1_sig_outstanding || p1fb_organizer->p2_sig_outstanding) return;
+      if(p1fb_organizer->c_view_sig_outstanding || p1fb_organizer->p1_sig_outstanding || p1fb_organizer->p2_sig_outstanding){
+        p1fb_organizer->sendCBmutex.unlock();
+        return;
+      }
+      Debug("All message components of Phase1FBreply signed. Sending.");
+      p1fb_organizer->sendCBmutex.unlock();
       if(!multi){
           transport->SendMessage(this, *p1fb_organizer->remote, *p1fb_organizer->p1fbr);
       }
@@ -3359,20 +3364,30 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
           transport->SendMessage(this, *addr, *p1fb_organizer->p1fbr);
         }
       }
-
       delete p1fb_organizer;
     };
 
 
     if (params.signedMessages) {
+      //First, "atomically" set the outstanding flags. (Need to do this before dispatching anything)
+      if(p1FBReply->has_p1r() && p1FBReply->p1r().cc().ccr() != proto::ConcurrencyControl::ABORT){
+        p1fb_organizer->p1_sig_outstanding = true;
+      }
+      if(p1FBReply->has_p2r()){
+        p1fb_organizer->p2_sig_outstanding = true;
+      }
+      //Next, dispatch respective signature functions
+
       //1) sign current view
       if(!params.all_to_all_fb){
         p1fb_organizer->c_view_sig_outstanding = true;
         proto::CurrentView *cView = new proto::CurrentView(attachedView->current_view());
         MessageToSign(cView, attachedView->mutable_signed_current_view(),
         [sendCB, p1fb_organizer, cView](){
+            Debug("Finished signing CurrentView for Phase1FBreply.");
+            p1fb_organizer->sendCBmutex.lock();
             p1fb_organizer->c_view_sig_outstanding = false;
-            sendCB();
+            sendCB(); //lock is unlocked in here...
             delete cView;
           });
       }
@@ -3380,8 +3395,10 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
       if(p1FBReply->has_p1r() && p1FBReply->p1r().cc().ccr() != proto::ConcurrencyControl::ABORT){
         proto::ConcurrencyControl* cc = new proto::ConcurrencyControl(p1FBReply->p1r().cc());
         MessageToSign(cc, p1FBReply->mutable_p1r()->mutable_signed_cc(), [sendCB, p1fb_organizer, cc](){
-            p1fb_organizer->c_view_sig_outstanding = false;
-            sendCB();
+            Debug("Finished signing P1R for Phase1FBreply.");
+            p1fb_organizer->sendCBmutex.lock();
+            p1fb_organizer->p1_sig_outstanding = false;
+            sendCB(); //lock is unlocked in here...
             delete cc;
           });
       }
@@ -3390,15 +3407,18 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
         proto::Phase2Decision* p2Decision = new proto::Phase2Decision(p1FBReply->p2r().p2_decision());
         MessageToSign(p2Decision, p1FBReply->mutable_p2r()->mutable_signed_p2_decision(),
         [sendCB, p1fb_organizer, p2Decision](){
-            p1fb_organizer->c_view_sig_outstanding = false;
-            sendCB();
+            Debug("Finished signing P2R for Phase1FBreply.");
+            p1fb_organizer->sendCBmutex.lock();
+            p1fb_organizer->p2_sig_outstanding = false;
+            sendCB(); //lock is unlocked in here...
             delete p2Decision;
           });
       }
     }
 
     else{
-      sendCB();
+      p1fb_organizer->sendCBmutex.unlock(); //just locking in order to support the unlock in sendCB
+      sendCB(); //lock is unlocked in here...
     }
 }
 
@@ -3503,7 +3523,11 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
     }
 
     auto sendCB = [this, p2fb_organizer, multi](){
-      if(p2fb_organizer->c_view_sig_outstanding || p2fb_organizer->p2_sig_outstanding) return;
+      if(p2fb_organizer->c_view_sig_outstanding || p2fb_organizer->p2_sig_outstanding){
+        p2fb_organizer->sendCBmutex.unlock();
+        return;
+      }
+      p2fb_organizer->sendCBmutex.unlock();
       if(!multi){
           transport->SendMessage(this, *p2fb_organizer->remote, *p2fb_organizer->p2fbr);
       }
@@ -3514,17 +3538,23 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
           transport->SendMessage(this, *addr, *p2fb_organizer->p2fbr);
         }
       }
-
       delete p2fb_organizer;
     };
 
     if (params.signedMessages) {
+      //First, "atomically" set the outstanding flags. (Need to do this before dispatching anything)
+      if(p2FBReply->has_p2r()){
+        p2fb_organizer->p2_sig_outstanding = true;
+      }
+      //Next, dispatch respective signature functions
+
       //1) sign current view
       if(!params.all_to_all_fb){
         p2fb_organizer->c_view_sig_outstanding = true;
         proto::CurrentView *cView = new proto::CurrentView(attachedView->current_view());
         MessageToSign(cView, attachedView->mutable_signed_current_view(),
         [sendCB, p2fb_organizer, cView](){
+            p2fb_organizer->sendCBmutex.lock();
             p2fb_organizer->c_view_sig_outstanding = false;
             sendCB();
             delete cView;
@@ -3535,7 +3565,8 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
         proto::Phase2Decision* p2Decision = new proto::Phase2Decision(p2FBReply->p2r().p2_decision());
         MessageToSign(p2Decision, p2FBReply->mutable_p2r()->mutable_signed_p2_decision(),
         [sendCB, p2fb_organizer, p2Decision](){
-            p2fb_organizer->c_view_sig_outstanding = false;
+            p2fb_organizer->sendCBmutex.lock();
+            p2fb_organizer->p2_sig_outstanding = false;
             sendCB();
             delete p2Decision;
           });
@@ -3543,6 +3574,7 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
     }
 
     else{
+      p2fb_organizer->sendCBmutex.lock();
       sendCB();
     }
 }

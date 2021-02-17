@@ -69,6 +69,7 @@ enum OCCType {
   TAPIR = 1
 };
 
+static bool first = true;
 typedef std::vector<std::unique_lock<std::mutex>> locks_t;
 static int rcv_count = 0;
 static int send_count = 0;
@@ -169,6 +170,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
     proto::Phase1FBReply *p1fbr;
     //manage outstanding Sigs
+    std::mutex sendCBmutex;
     bool p1_sig_outstanding;
     bool p2_sig_outstanding;
     bool c_view_sig_outstanding;
@@ -198,6 +200,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
     proto::Phase2FBReply *p2fbr;
     //manage outstanding Sigs
+    std::mutex sendCBmutex;
     bool p2_sig_outstanding;
     bool c_view_sig_outstanding;
   };

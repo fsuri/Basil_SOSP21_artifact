@@ -101,7 +101,7 @@ class Client : public ::Client {
         decision(proto::COMMIT), fast(true), conflict_flag(false),
         startedPhase2(false), startedWriteback(false),
         callbackInvoked(false), timeout(0UL), slowAbortGroup(-1),
-        startFB(false), eqv_ready(false) {
+        decision_view(0UL), startFB(false), eqv_ready(false) {
     }
 
     ~PendingRequest() {
@@ -115,6 +115,7 @@ class Client : public ::Client {
     int commitTries;
     uint64_t maxRepliedTs;
     proto::CommitDecision decision;
+    uint64_t decision_view;
     bool fast;
     bool conflict_flag;
     bool startedPhase2;
@@ -190,7 +191,7 @@ class Client : public ::Client {
   void Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
     const proto::P2Replies &p2replies);
   void Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
-    const proto::Signatures &p2ReplySig);
+    const proto::Signatures &p2ReplySig, uint64_t view);
   void WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Writeback &wb);
   void InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group);
   //keep track of pending Fallback instances. Maps from txnDigest, req Id is oblivious to us.

@@ -81,7 +81,7 @@ typedef std::function<void(proto::CommitDecision, bool, bool, const proto::Commi
 
 typedef std::function<void(proto::CommitDecision, const proto::P2Replies &)> phase1FB_callbackB;
 
-typedef std::function<void(proto::CommitDecision, const proto::Signatures &)> phase2FB_callback;
+typedef std::function<void(proto::CommitDecision, const proto::Signatures &, uint64_t)> phase2FB_callback;
 
 typedef std::function<void(proto::Writeback &)> writebackFB_callback;
 
@@ -126,7 +126,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
       phase2_callback pcb, phase2_timeout_callback ptcb, uint32_t timeout);
   virtual void Writeback(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
     proto::CommitDecision decision, bool fast, bool conflict_flag, const proto::CommittedProof &conflict,
-    const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs);
+    const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs, uint64_t decision_view = 0UL);
   //overloaded function for fallback
   virtual void WritebackFB(const proto::Transaction &transaction, const std::string &txnDigest,
       proto::CommitDecision decision, bool fast, const proto::CommittedProof &conflict,
@@ -248,7 +248,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
 
   //Fallback request
   struct PendingFB {
-    PendingFB() : max_decision_view(0UL), p1(true), last_view(0), max_view(0) {}
+    PendingFB() : max_decision_view(0UL), p1(true), last_view(0), max_view(0), call_invokeFB(false) {}
     ~PendingFB(){
       delete pendingP1;
     }
@@ -317,7 +317,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   void Phase1Decision(uint64_t reqId);
   void Phase1Decision(
       std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready = false);
-  
+
   //multithreaded options:
   void HandleReadReplyMulti(proto::ReadReply* reply);
   void HandleReadReplyCB1(proto::ReadReply*reply);
@@ -352,7 +352,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   void HandlePhase1FBReply(proto::Phase1FBReply &p1fbr);
   void ProcessP1FBR(proto::Phase1Reply &reply, PendingFB *pendingFB, const std::string &txnDigest);
   void Phase1FBDecision(PendingFB *pendingFB);
-  void ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, const std::string &txnDigest);
+  bool ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, const std::string &txnDigest);
   void HandlePhase2FBReply(proto::Phase2FBReply &p2fbr);
   void HandleSendViewMessage(proto::SendView &sendView);
   void ComputeMaxLevel(PendingFB *pendingFB);
@@ -404,8 +404,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   //FALLBACK
   proto::RelayP1 relayP1;
   proto::Phase1FB phase1FB;
-  proto::Phase1FBReply phase1FBReply;
   proto::Phase2FB phase2FB;
+  proto::Phase1FBReply phase1FBReply;
   proto::Phase2FBReply phase2FBReply;
   proto::InvokeFB invokeFB;
   proto::SendView sendView;

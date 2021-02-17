@@ -378,6 +378,7 @@ void Client::Phase1Callback(uint64_t txnId, int group,
 
 
 void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
+  return;
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
     return;
@@ -815,7 +816,7 @@ void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::st
       auto p1fbB = std::bind(&Client::Phase1FBcallbackB, this, conflict_id, txnDigest, group, std::placeholders::_1,
         std::placeholders::_2);
       auto p2fb = std::bind(&Client::Phase2FBcallback, this, conflict_id, txnDigest, group, std::placeholders::_1,
-        std::placeholders::_2);
+        std::placeholders::_2, std::placeholders::_3);
       auto wb = std::bind(&Client::WritebackFBcallback, this, conflict_id, txnDigest, std::placeholders::_1);
       auto invoke = std::bind(&Client::InvokeFBcallback, this, conflict_id, txnDigest, group); //technically only needed at logging shard
 
@@ -870,7 +871,7 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
   PendingRequest* req = FB_instances[txnDigest];
 
   if (req->startedPhase2 || req->startedWriteback) {
-    Debug("Already started Phase2FB/WritebackFB for tx [%s[]. Ignoring Phase1"
+    Debug("Already started Phase2FB/WritebackFB for tx [%s[]. Ignoring Phase1 callback"
         " response from group %d.", BytesToHex(txnDigest, 128).c_str(), group);
     return;
   }
@@ -888,6 +889,7 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
 void Client::FBHandleAllPhase1Received(PendingRequest *req) {
   Debug("FB instance [%s]: All PHASE1's received", req->txnDigest.c_str());
   if (req->fast) {
+    std::cerr << "Phase1FBcallbackA used" << std::endl;
     WritebackFB(req);
   } else {
     // slow path, must log final result to 1 group
@@ -903,13 +905,19 @@ void Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
     if(!StillActive(conflict_id, txnDigest)) return;
 
     PendingRequest* req = FB_instances[txnDigest];
+
+    if (req->startedPhase2 || req->startedWriteback) {
+      Debug("Already started Phase2FB/WritebackFB for tx [%s[]. Ignoring Phase1 callback"
+          " response from group %d.", BytesToHex(txnDigest, 128).c_str(), group);
+      return;
+    }
+
     req->decision = decision;
     req->p2Replies = std::move(p2replies);
        //Issue P2FB.
     Phase2FB(req);
 
         //TODO: find a mechanism to include this work in InvokeFB too.
-
 }
 
 void Client::Phase2FB(PendingRequest *req){
@@ -937,9 +945,11 @@ void Client::Phase2FB(PendingRequest *req){
       }
 }
 
-
+//TODO: extend with view.
 void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group,
-   proto::CommitDecision decision, const proto::Signatures &p2ReplySigs ){
+   proto::CommitDecision decision, const proto::Signatures &p2ReplySigs, uint64_t view){
+
+  std::cerr << "Phase2FB callback" << std::endl;
   // check if conflict transaction still active
   if(!StillActive(conflict_id, txnDigest)) return;
 
@@ -953,6 +963,8 @@ void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64
           return;
   }
   req->decision = decision;
+  req->decision_view = view;
+  req->fast = false;
 
   if (params.validateProofs && params.signedMessages) {
     (*req->p2ReplySigsGrouped.mutable_grouped_sigs())[group] = p2ReplySigs;
@@ -964,13 +976,14 @@ void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64
 void Client::WritebackFB(PendingRequest *req){
   Debug("WRITEBACKFB[%lu:%s] result: %s", client_id, req->txnDigest.c_str(), req->decision ? "COMMIT" : "ABORT");
 
+  std::cerr << "WritebackFB callback" << std::endl;
   req->startedWriteback = true;
   WritebackProcessing(req);
 
   for (auto group : req->txn.involved_groups()) {
-    bclient[group]->WritebackFB(req->txn, req->txnDigest,
-        req->decision, req->fast, req->conflict, req->p1ReplySigsGrouped,
-        req->p2ReplySigsGrouped);
+    bclient[group]->Writeback(0, req->txn, req->txnDigest,
+        req->decision, req->fast, req->conflict_flag, req->conflict, req->p1ReplySigsGrouped,
+        req->p2ReplySigsGrouped, req->decision_view);
   }
 //delete FB instance.
   this->FB_instances.erase(req->txnDigest);
