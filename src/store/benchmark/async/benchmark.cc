@@ -210,7 +210,7 @@ DEFINE_uint64(indicus_inject_failure_ms, 0, "number of milliseconds to wait"
     " before injecting a failure (for Indicus)");
 DEFINE_uint64(indicus_inject_failure_proportion, 0, "proportion of clients that"
     " will inject a failure (for Indicus)");
-DEFINE_uint64(indicus_inject_failure_freq, 1, "number of transactions per ONE failure"
+DEFINE_uint64(indicus_inject_failure_freq, 100, "number of transactions per ONE failure"
 		    " in a Byz client (for Indicus)");
 
 DEFINE_uint64(indicus_phase1DecisionTimeout, 1000UL, "p1 timeout before going slowpath");

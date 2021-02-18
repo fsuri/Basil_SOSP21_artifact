@@ -1000,17 +1000,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
 void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDigest,
   proto::Transaction* txn, void* valid){
 
-  if(! valid){
+  if(!valid){
     Debug("VALIDATE Writeback for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
     if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
       FreeWBmessage(msg);
     }
     return;
-  }
-  if(first){
-   std::cerr << "short circuiting HandleWriteback to simulate relay" << std::endl;
-   //first = false;
-  return;
   }
 
   auto f = [this, msg, txnDigest, txn, valid]() mutable {
@@ -1916,7 +1911,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //TODO can remove this redundant lookup since it will be checked again...
         ongoingMap::const_accessor b;
         bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-        if (inOngoing) {
+        if (false && inOngoing) {
           std::string dependency_txnDig = dep.write().prepared_txn_digest();
           //schedule Relay for client timeout only..
           uint64_t conflict_id = !fallback_flow ? reqId : -1;
@@ -3147,6 +3142,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   bool hasP2 = p->second.hasP2;
 
   if(hasP2 && hasP1){
+    Debug("Txn[%s] has both P1 and P2", BytesToHex(txnDigest, 64).c_str());
        proto::ConcurrencyControl::Result result = c->second; //p1Decisions[txnDigest];
        c.release();
        proto::CommitDecision decision = p->second.p2Decision;
@@ -3173,6 +3169,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 
   //4) ONLY P1 CASE: (already did p1 but no p2)
   else if(hasP1){
+    Debug("Txn[%s] has only P1", BytesToHex(txnDigest, 64).c_str());
         proto::ConcurrencyControl::Result result = c->second; //p1Decisions[txnDigest];
         c.release();
         p.release();
@@ -3196,6 +3193,8 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   //5) ONLY P2 CASE  (received p2, but was not part of p1)
   // if you dont have a p1, then execute it yourself. (see case 3) discussion)
   else if(hasP2){
+      Debug("Txn[%s] has only P2, execute P1 as well", BytesToHex(txnDigest, 64).c_str());
+
       c.release();
       proto::CommitDecision decision = p->second.p2Decision;
       uint64_t decision_view = p->second.decision_view;
@@ -3218,6 +3217,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 
   //6) NO STATE STORED: Do p1 normally. copied logic from HandlePhase1(remote, msg)
   else{
+      Debug("Txn[%s] has no P1 or P2, execute P1", BytesToHex(txnDigest, 64).c_str());
       c.release();
       p.release();
 
@@ -3307,6 +3307,7 @@ void Server::SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::strin
   p1Reply->mutable_cc()->set_ccr(result);
   if (params.validateProofs) {
     *p1Reply->mutable_cc()->mutable_txn_digest() = txnDigest;
+    p1Reply->mutable_cc()->set_involved_group(groupIdx);
     if (result == proto::ConcurrencyControl::ABORT) {
       *phase1Reply.mutable_cc()->mutable_committed_conflict() = *conflict;
     }
@@ -3324,6 +3325,7 @@ void Server::SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::strin
 
   if (params.validateProofs) {
     *p2Reply->mutable_p2_decision()->mutable_txn_digest() = txnDigest;
+    p2Reply->mutable_p2_decision()->set_involved_group(groupIdx);
   }
 }
 
@@ -3350,6 +3352,10 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
     auto sendCB = [this, p1fb_organizer, multi](){
       if(p1fb_organizer->c_view_sig_outstanding || p1fb_organizer->p1_sig_outstanding || p1fb_organizer->p2_sig_outstanding){
         p1fb_organizer->sendCBmutex.unlock();
+        Debug("Not all message components of Phase1FBreply are signed: CurrentView: %s, P1R: %s, P2R: %s.",
+        p1fb_organizer->c_view_sig_outstanding ? "outstanding" : "complete",
+        p1fb_organizer->p1_sig_outstanding ? "outstanding" : "complete",
+        p1fb_organizer->p2_sig_outstanding ? "outstanding" : "complete");
         return;
       }
       Debug("All message components of Phase1FBreply signed. Sending.");
@@ -3424,6 +3430,7 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
 
 void Server::HandlePhase2FB(const TransportAddress &remote,
     const proto::Phase2FB &msg) {
+
   //std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   const std::string &txnDigest = msg.txn_digest();
   //Debug("PHASE2FB[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
@@ -3450,7 +3457,7 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
       P2FBorganizer *p2fb_organizer = new P2FBorganizer(msg.req_id(), txnDigest, remote, this);
       SetP2(msg.req_id(), p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, decision, decision_view);
       SendPhase2FBReply(p2fb_organizer, txnDigest);
-      Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
+      Debug("PHASE2FB[%s] Sent Phase2Reply with stored decision.", BytesToHex(txnDigest, 16).c_str());
 
       if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
         FreePhase2FBmessage(&msg); //const_cast<proto::Phase2&>(msg));
@@ -3602,7 +3609,7 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
       P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, remote, this);
       SetP2(0, p2fb_organizer->p2fbr->mutable_p2r() ,txnDigest, decision, decision_view);
       SendPhase2FBReply(p2fb_organizer, txnDigest);
-      Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
+      Debug("PHASE2FB[%s] Sent Phase2Reply with stored decision.", BytesToHex(txnDigest, 16).c_str());
       if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
         FreePhase2FBmessage(&p2fb); //const_cast<proto::Phase2&>(msg));
       }
@@ -3636,6 +3643,7 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
   //P2FB either contains P1 GroupedSignatures, OR it just contains forwarded P2Replies.
   // Case A: The FbP2 message has f+1 matching P2replies from logShard replicas
   if(p2fb.has_p2_replies()){
+    Debug("ProcessP2FB verifying p2 replies for txn[%s]", BytesToHex(txnDigest, 64).c_str());
     if(params.signedMessages){
       mainThreadCallback mcb(std::bind(&Server::ProcessP2FBCallback, this,
          &p2fb, txnDigest, remote.clone(), std::placeholders::_1));
@@ -3666,6 +3674,8 @@ void Server::ProcessP2FB(const TransportAddress &remote, const std::string &txnD
   }
   // Case B: The FbP2 message has standard P1 Quorums that match the decision
   else if(p2fb.has_p1_sigs()){
+    Debug("ProcessP2FB verify p1 sigs for txn[%s]", BytesToHex(txnDigest, 64).c_str());
+
       const proto::GroupedSignatures &grpSigs = p2fb.p1_sigs();
       int64_t myProcessId;
       proto::ConcurrencyControl::Result myResult;
@@ -3736,7 +3746,6 @@ void Server::ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string 
     }
     if(params.multiThreading) delete remote;
     Debug("PHASE2FB[%s] Sent Phase2Reply.", BytesToHex(txnDigest, 16).c_str());
-
 }
 
 void Server::SendView(const TransportAddress &remote, const std::string &txnDigest){

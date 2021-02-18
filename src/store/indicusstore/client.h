@@ -58,6 +58,8 @@
 
 namespace indicusstore {
 
+static uint64_t start_time = 0;
+
 class Client : public ::Client {
  public:
   Client(transport::Configuration *config, uint64_t id, int nShards,

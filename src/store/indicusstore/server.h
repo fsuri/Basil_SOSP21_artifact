@@ -69,7 +69,7 @@ enum OCCType {
   TAPIR = 1
 };
 
-static bool first = true;
+static int fail_writeback = 0;
 typedef std::vector<std::unique_lock<std::mutex>> locks_t;
 static int rcv_count = 0;
 static int send_count = 0;
@@ -148,13 +148,17 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   //FALLBACK helper datastructures
   struct P1FBorganizer {
     P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
-      remote(remote.clone()), server(server) {
+      remote(remote.clone()), server(server),
+      p1_sig_outstanding(false), p2_sig_outstanding(false), c_view_sig_outstanding(false) {
         p1fbr = server->GetUnusedPhase1FBReply();
+        p1fbr->Clear();
         p1fbr->set_req_id(ReqId);
         p1fbr->set_txn_digest(txnDigest);
     }
-    P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server) {
+    P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server),
+      p1_sig_outstanding(false), p2_sig_outstanding(false), c_view_sig_outstanding(false){
         p1fbr = server->GetUnusedPhase1FBReply();
+        p1fbr->Clear();
         p1fbr->set_req_id(ReqId);
         p1fbr->set_txn_digest(txnDigest);
     }
@@ -178,13 +182,17 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
   struct P2FBorganizer {
     P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
-      remote(remote.clone()), server(server) {
+      remote(remote.clone()), server(server),
+      p2_sig_outstanding(false), c_view_sig_outstanding(false) {
         p2fbr = server->GetUnusedPhase2FBReply();
+        p2fbr->Clear();
         p2fbr->set_req_id(ReqId);
         p2fbr->set_txn_digest(txnDigest);
     }
-    P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server) {
+    P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server),
+      p2_sig_outstanding(false), c_view_sig_outstanding(false){
         p2fbr = server->GetUnusedPhase2FBReply();
+        p2fbr->Clear();
         p2fbr->set_req_id(ReqId);
         p2fbr->set_txn_digest(txnDigest);
     }

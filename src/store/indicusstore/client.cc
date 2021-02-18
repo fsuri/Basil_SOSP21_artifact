@@ -84,6 +84,14 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
         // TODO: restore the client after it stalls from phase2_callback from previous txn
       });
   }
+
+  // struct timeval tv;
+  // gettimeofday(&tv, NULL);
+  // start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+  //
+  // transport->Timer(9500, [this](){
+  //   std::cerr<< "experiment about to elapse 10 seconds";
+  // });
 }
 
 Client::~Client()
@@ -140,8 +148,8 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
 
 void Client::Get(const std::string &key, get_callback gcb,
     get_timeout_callback gtcb, uint32_t timeout) {
-  transport->Timer(0, [this, key, gcb, gtcb, timeout]() {
 
+  transport->Timer(0, [this, key, gcb, gtcb, timeout]() {
     // Latency_Start(&getLatency);
 
     Debug("GET[%lu:%lu] for key %s", client_id, client_seq_num,
@@ -160,6 +168,7 @@ void Client::Get(const std::string &key, get_callback gcb,
     read_callback rcb = [gcb, this](int status, const std::string &key,
         const std::string &val, const Timestamp &ts, const proto::Dependency &dep,
         bool hasDep, bool addReadSet) {
+
       uint64_t ns = 0; //Latency_End(&getLatency);
       if (Message_DebugEnabled(__FILE__)) {
         Debug("GET[%lu:%lu] Callback for key %s with %lu bytes and ts %lu.%lu after %luus.",
@@ -565,6 +574,13 @@ void Client::WritebackProcessing(PendingRequest *req){
 
 void Client::Writeback(PendingRequest *req) {
 
+  // struct timeval tv;
+  // gettimeofday(&tv, NULL);
+  // uint64_t elapsed_time = (tv.tv_sec*1000000+tv.tv_usec)/1000  - start_time;  //in miliseconds
+  // if(elapsed_time > 9000){
+  //     std::cerr<< "Finished tx["  << req->id << "] after " << elapsed_time << " ms" << std::endl;
+  // }
+
   Debug("WRITEBACK[%lu:%lu] result %s", client_id, req->id, req->decision ? "COMMIT" : "ABORT");
 
   req->startedWriteback = true;
@@ -715,6 +731,13 @@ void Client::CleanFB(PendingRequest *pendingFB, std::string &txnDigest){
 
 void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1){
 
+  // struct timeval tv;
+  // gettimeofday(&tv, NULL);
+  // uint64_t elapsed_time = (tv.tv_sec*1000000+tv.tv_usec)/1000  - start_time;  //in miliseconds
+  // if(elapsed_time > 9000){
+  //     std::cerr<< "Received RelayP1 tx["  << reqId << "] after " << elapsed_time << " ms" << std::endl;
+  // }
+
   auto itr = pendingReqs.find(reqId);
   if(itr == pendingReqs.end()){
     Debug("ReqId[%d] has already completed", reqId);
@@ -730,11 +753,11 @@ void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1){
   }
 
   if(itr->second->startFB){
-    std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec one P1FB" << std::endl;
+    //std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec one P1FB" << std::endl;
     Phase1FB(p1, reqId, txnDigest);
   }
   else{
-    std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - ADD to list" << std::endl;
+    //std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - ADD to list" << std::endl;
     itr->second->RelayP1s.emplace_back(p1, txnDigest);
   }
 }
@@ -825,7 +848,7 @@ void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::st
       pendingFB->outstandingPhase1s++;
     }
   delete p1;
-  std::cerr<< "Sent Phase1FB" << std::endl;
+  Debug("SentPhase1FB for txn[%s]", BytesToHex(txnDigest, 64).c_str());
   return;
 }
 
@@ -865,6 +888,7 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
   proto::CommitDecision decision, bool fast, bool conflict_flag,
   const proto::CommittedProof &conflict,
   const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs)  {
+  Debug("Phase1FBcallbackA called for txn[%s]", BytesToHex(txnDigest, 64).c_str());
 
   if(!StillActive(conflict_id, txnDigest)) return;
 
@@ -889,7 +913,6 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
 void Client::FBHandleAllPhase1Received(PendingRequest *req) {
   Debug("FB instance [%s]: All PHASE1's received", req->txnDigest.c_str());
   if (req->fast) {
-    std::cerr << "Phase1FBcallbackA used" << std::endl;
     WritebackFB(req);
   } else {
     // slow path, must log final result to 1 group
@@ -901,6 +924,8 @@ void Client::FBHandleAllPhase1Received(PendingRequest *req) {
 //XXX cannot just send decision, but need to send whole p2 replies because the decision views might differ
 void Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group,
    proto::CommitDecision decision, const proto::P2Replies &p2replies){
+     Debug("Phase1FBcallbackB called for txn[%s]", BytesToHex(txnDigest, 64).c_str());
+
      // check if conflict transaction still active
     if(!StillActive(conflict_id, txnDigest)) return;
 
@@ -921,6 +946,8 @@ void Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
 }
 
 void Client::Phase2FB(PendingRequest *req){
+
+      Debug("sending Phase2FB for txn[%s]", BytesToHex(req->txnDigest, 64).c_str());
       const proto::Transaction &fb_txn = req->txn;
 
       uint8_t groupIdx = req->txnDigest[0];
@@ -937,7 +964,7 @@ void Client::Phase2FB(PendingRequest *req){
         bclient[logGroup]->Phase2FB(req->id, req->txn, req->txnDigest, req->decision, req->p2Replies);
         return;
       }
-      else{ //OTHERWISE:
+      else{ //OTHERWISE: Use p1 sigs just like in normal case.
         Phase2Processing(req);
 
         bclient[logGroup]->Phase2FB(req->id, req->txn, req->txnDigest, req->decision,
@@ -949,7 +976,7 @@ void Client::Phase2FB(PendingRequest *req){
 void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group,
    proto::CommitDecision decision, const proto::Signatures &p2ReplySigs, uint64_t view){
 
-  std::cerr << "Phase2FB callback" << std::endl;
+  Debug("Phase2FBcallback called for txn[%s]", BytesToHex(txnDigest, 64).c_str());
   // check if conflict transaction still active
   if(!StillActive(conflict_id, txnDigest)) return;
 
@@ -976,7 +1003,6 @@ void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64
 void Client::WritebackFB(PendingRequest *req){
   Debug("WRITEBACKFB[%lu:%s] result: %s", client_id, req->txnDigest.c_str(), req->decision ? "COMMIT" : "ABORT");
 
-  std::cerr << "WritebackFB callback" << std::endl;
   req->startedWriteback = true;
   WritebackProcessing(req);
 

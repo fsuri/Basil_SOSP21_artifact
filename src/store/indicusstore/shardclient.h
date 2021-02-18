@@ -180,12 +180,13 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   struct PendingPhase1 {
     PendingPhase1(uint64_t reqId, int group, const proto::Transaction &txn,
         const std::string &txnDigest, const transport::Configuration *config,
-        KeyManager *keyManager, Parameters params, Verifier *verifier) :
+        KeyManager *keyManager, Parameters params, Verifier *verifier, uint64_t client_seq_num) :
         reqId(reqId), requestTimeout(nullptr), decisionTimeout(nullptr),
         decisionTimeoutStarted(false), txn_(txn), txnDigest_(txnDigest),
         p1Validator(group, &txn_, &txnDigest_, config, keyManager, params,
             verifier),
-        decision(proto::ABORT), fast(false), conflict_flag(false) { }
+        decision(proto::ABORT), fast(false), conflict_flag(false),
+        client_seq_num(client_seq_num) { }
     ~PendingPhase1() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;

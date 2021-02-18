@@ -239,10 +239,7 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
       std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch2, this,
         std::move(results))); //can I move results?
 
-
       //Batch.clear();
-
-
 
       Debug("Batch request bound, dispatching");
       //transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
@@ -257,8 +254,7 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
           //batchTimerId = transport->TimerMicro(batchTimeoutMicro, [this]() { //XXX: only need ID if we cancel them.
           transport->TimerMicro(batchTimeoutMicro, [this]() {
             //std::unique_lock<std::mutex> lock(this->batchMutex);
-            Debug("Batch timer expired with %lu items, sending",
-                this->Batch.size_approx());
+
             this->batchTimerRunning = false;
             if(this->Batch.size_approx() == 0) return;
 
@@ -275,6 +271,7 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
             std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch2, this,
               std::move(results)));
 
+            Debug("Batch timer expired with %lu items; Dispatching Batch to sign.", count);
             //this->Batch.clear();
             //this->transport->DispatchTP(std::move(f), [](void* ret){delete (bool*) ret;});
             this->transport->DispatchTP_noCB(std::move(f));

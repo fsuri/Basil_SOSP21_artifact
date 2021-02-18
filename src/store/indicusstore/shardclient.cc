@@ -169,7 +169,7 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction, con
   Debug("[group %i] Sending PHASE1 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
   PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId, group, transaction,
-      txnDigest, config, keyManager, params, verifier);
+      txnDigest, config, keyManager, params, verifier, id);
   pendingPhase1s[reqId] = pendingPhase1;
   pendingPhase1->pcb = pcb;
   pendingPhase1->ptcb = ptcb;
@@ -338,7 +338,6 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
   writeback.set_decision(decision);
   if (params.validateProofs && params.signedMessages) {
     if (fast && decision == proto::COMMIT) {
-      std::cerr<< "taking p1 sigs commit fast path"  << std::endl;
       *writeback.mutable_p1_sigs() = p1Sigs;
     }
     else if (fast && !conflict_flag && decision == proto::ABORT) {
@@ -354,7 +353,6 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
       }
 
     } else {
-      std::cerr<< "taking p2 sigs path"  << std::endl;
       *writeback.mutable_p2_sigs() = p2Sigs;
       writeback.set_p2_view(decision_view); //TODO: extend this to process other views too? Bookkeeping should only be needed
       // for fallback though. Either combine the logic, or change it so that the orignial client issues FB function too
@@ -1275,7 +1273,7 @@ void ShardClient::Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::s
   pendingFallbacks[txnDigest] = pendingFB;
 
   PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId, group, txn,
-      txnDigest, config, keyManager, params, verifier);
+      txnDigest, config, keyManager, params, verifier, 0);
   pendingFB->pendingP1 = pendingPhase1;
 
   //set all callbacks
@@ -1379,7 +1377,6 @@ void ShardClient::ProcessP1FBR(proto::Phase1Reply &reply, PendingFB *pendingFB, 
       proto::CommitDecision decision,
       const proto::P2Replies &p2Replies) {
 
-        return;
     Debug("[group %i] Sending PHASE2FB [%lu]", group, id);
 
     phase2FB.Clear();
