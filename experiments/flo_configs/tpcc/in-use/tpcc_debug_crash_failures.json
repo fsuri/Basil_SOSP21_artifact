@@ -105,7 +105,7 @@
 	  "inject_failure_ms": 1000,
 	  "inject_failure freq": 10,
       "all_to_all_fb" : false,
-	  "relayP1_timeout" : 100
+	  "relayP1_timeout" : 10
     }
   ],
   "experiment_name": "indicus",

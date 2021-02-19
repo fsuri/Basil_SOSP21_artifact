@@ -759,11 +759,12 @@ void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::strin
 
   if(itr->second->startFB){
     //std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec one P1FB" << std::endl;
-    Phase1FB(p1, reqId, txnDigest);
+    Phase1FB(txnDigest, reqId, p1);
   }
   else{
     //std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - ADD to list" << std::endl;
-    itr->second->RelayP1s.emplace_back(p1, txnDigest);
+    //itr->second->RelayP1s.emplace_back(p1, txnDigest);
+    itr->second->RelayP1s[txnDigest] = p1;
   }
 }
 
@@ -778,6 +779,7 @@ void Client::RelayP1TimeoutCallback(uint64_t reqId){
   for(auto p1_pair : itr->second->RelayP1s){
     Phase1FB(p1_pair.first, reqId, p1_pair.second);
   }
+  //
 }
 
 // Additional Relay FB handler for Fallbacks for dependencies of dependencies.
@@ -809,11 +811,11 @@ void Client::RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest,
   }
 
   std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec P1FB for deeper depth" << std::endl;
-  Phase1FB_deeper(p1, reqId, txnDigest, dependent_txnDigest);
+  Phase1FB_deeper(reqId, txnDigest, dependent_txnDigest, p1);
 }
 
 
-void Client::Phase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest){  //passes callbacks
+void Client::Phase1FB(const std::string &txnDigest, uint64_t conflict_id, proto::Phase1 *p1){  //passes callbacks
 
   PendingRequest* pendingFB = new PendingRequest(p1->req_id()); //Id doesnt really matter here
   pendingFB->txn = p1->txn();
@@ -825,7 +827,7 @@ void Client::Phase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string
 
 }
 
-void Client::Phase1FB_deeper(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, const std::string &dependent_txnDigest){
+void Client::Phase1FB_deeper(uint64_t conflict_id, const std::string &txnDigest, const std::string &dependent_txnDigest, proto::Phase1 *p1){
 
   PendingRequest* pendingFB = new PendingRequest(p1->req_id()); //Id doesnt really matter here
   pendingFB->txn = p1->txn();

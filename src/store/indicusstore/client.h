@@ -135,7 +135,8 @@ class Client : public ::Client {
     proto::P2Replies p2Replies;
 
     bool startFB;
-    std::vector<std::pair<proto::Phase1*, std::string>> RelayP1s;
+    std::unordered_map<std::string, proto::Phase1*> RelayP1s;
+    //std::vector<std::pair<proto::Phase1*, std::string>> RelayP1s;
 
     uint64_t conflict_id; //id of request that is dependent (directly or through intermediaries) on this tx.
     bool has_dependent;
@@ -182,8 +183,8 @@ class Client : public ::Client {
   void RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::string& txnDigest);
   void RelayP1TimeoutCallback(uint64_t reqId);
   void RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest, proto::RelayP1 &relayP1, std::string& txnDigest);
-  void Phase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest);
-  void Phase1FB_deeper(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, const std::string &dependent_txnDigest);
+  void Phase1FB(const std::string &txnDigest, uint64_t conflict_id, proto::Phase1 *p1);
+  void Phase1FB_deeper(uint64_t conflict_id, const std::string &txnDigest, const std::string &dependent_txnDigest, proto::Phase1 *p1);
   void SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, PendingRequest *pendingFB);
   void Phase2FB(PendingRequest *req);
   void WritebackFB(PendingRequest *req);

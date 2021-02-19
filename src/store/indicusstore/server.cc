@@ -716,7 +716,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
     if(!params.parallel_CCC || !params.mainThreadDispatching){
       result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
           committedProof);
-      BufferP1Result(result, committedProof, txnDigest);
+      //BufferP1Result(result, committedProof, txnDigest);
     }
     else{
       auto f = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn, committedProof]() mutable {
@@ -732,7 +732,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
         proto::ConcurrencyControl::Result *result = new proto::ConcurrencyControl::Result(this->DoOCCCheck(msg_ptr->req_id(),
         *remote_ptr, txnDigest, *txn, retryTs, committedProof));
-        BufferP1Result(*result, committedProof, txnDigest);
+        //BufferP1Result(*result, committedProof, txnDigest);
         HandlePhase1CB(msg_ptr, *result, committedProof, txnDigest, *remote_ptr);
         delete result;
         return (void*) true;
@@ -1913,7 +1913,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //TODO can remove this redundant lookup since it will be checked again...
         ongoingMap::const_accessor b;
         bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-        if (false && inOngoing) {
+        if (inOngoing) {
           std::string dependency_txnDig = dep.write().prepared_txn_digest();
           //schedule Relay for client timeout only..
           uint64_t conflict_id = !fallback_flow ? reqId : -1;
@@ -2310,7 +2310,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
         Debug("print remote: %p", f->second.remote);
         //waitingDependencies.erase(dependent);
         const proto::CommittedProof *conflict = nullptr;
-        BufferP1Result(result, conflict, dependent);
+        //BufferP1Result(result, conflict, dependent);
         if(f->second.original_client){
           SendPhase1Reply(f->second.reqId, result, conflict, dependent,
               f->second.remote);
@@ -2431,6 +2431,8 @@ void Server::SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
     const proto::CommittedProof *conflict, const std::string &txnDigest,
     const TransportAddress *remote) {
+
+  BufferP1Result(result, conflict, txnDigest);
 
   proto::Phase1Reply* phase1Reply = GetUnusedPhase1Reply();
   phase1Reply->set_req_id(reqId);
@@ -3286,13 +3288,14 @@ bool Server::ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const 
   result = DoOCCCheck(msg.req_id(),
       remote, txnDigest, *txn, retryTs, committedProof, true);
 
-  BufferP1Result(result, committedProof, txnDigest);
+
 
   //What happens in the FB case if the result is WAIT?
   //Since we limit to depth 1, we expect this to not be possible.
   //But if it happens, the CheckDependents call will send a P1FB reply to all interested clients.
   if (result == proto::ConcurrencyControl::WAIT) return false; //Dont use p1 result if its Wait.
 
+  BufferP1Result(result, committedProof, txnDigest);
   // if(client_starttime.find(txnDigest) == client_starttime.end()){
   //   struct timeval tv;
   //   gettimeofday(&tv, NULL);
