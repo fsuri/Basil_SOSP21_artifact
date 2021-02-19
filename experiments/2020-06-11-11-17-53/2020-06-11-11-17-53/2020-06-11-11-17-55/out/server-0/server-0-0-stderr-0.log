@@ -1,3 +1,0 @@
-20200511-111801-9697 02094 * main            (server.cc:334):    Starting server.
-20200511-111801-9699 02094   Server          (server.cc:63):     Starting Indicus replica 0.
-Could not read data from: /usr/local/etc/tpcc-1-warehouse

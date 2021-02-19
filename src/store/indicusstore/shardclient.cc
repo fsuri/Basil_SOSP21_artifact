@@ -1241,8 +1241,13 @@ void ShardClient::CleanFB(std::string &txnDigest){
 }
 
 void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
+
+  std::string txnDigest(TransactionDigest(relayP1.p1().txn(), params.hashDigest));
+  //only process the first relay for a txn.
+  if(this->pendingFallbacks.find(txnDigest) != this->pendingFallbacks.end()) return;
+
   Debug("RelayP1[%lu][%s].", relayP1.dependent_id(),
-      TransactionDigest(relayP1.p1().txn(), params.hashDigest).c_str());
+      BytesToHex(txnDigest, 64).c_str());
   uint64_t req_id = relayP1.dependent_id();
 
   if(req_id != -1){ //this is a dep of an ongoing p1 request.
@@ -1250,8 +1255,9 @@ void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
       if (itr == this->pendingPhase1s.end()) {
         return; // this is a stale request and no upcall is necessary!
       }
+
       std::cerr << "RECEIVED RELAY P1 AT SHARDCLIENT FOR TX: " << itr->second->client_seq_num << std::endl;
-      itr->second->rcb(relayP1); //upcall to the registered relayP1 callback function.
+      itr->second->rcb(relayP1, txnDigest); //upcall to the registered relayP1 callback function.
 
   } else{ //this is a dep for a fallback request (i.e. a deeper depth)
       auto itr = this->pendingFallbacks.find(relayP1.dependent_txn());
@@ -1259,7 +1265,7 @@ void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
         return; // this is a stale request and no upcall is necessary!
       }
       std::cerr << "RECEIVED RELAY P1 AT SHARDCLIENT FOR FB TX: " << itr->first << std::endl;
-      itr->second->rcb(relayP1.dependent_txn(), relayP1); //upcall to the registered relayP1 callback function.
+      itr->second->rcb(relayP1.dependent_txn(), relayP1, txnDigest); //upcall to the registered relayP1 callback function.
   }
 }
 

@@ -1,7 +1,7 @@
 {
-  "base_local_exp_directory": "/home/floriansuri/Indicus/BFT-DB/experiments/2020-06-11-11-17-53",
+  "base_local_exp_directory": "/media/floriansuri/experiments/2020-11-10-18-28-15/2020-11-09-18-28-15",
   "base_mounted_fs_path": "/mnt/extra",
-  "base_remote_bin_directory_nfs": "/users/matthelb/indicus",
+  "base_remote_bin_directory_nfs": "/users/fs435/indicus",
   "base_remote_exp_directory": "/mnt/extra/experiments",
   "benchmark_name": "tpcc-sync",
   "bin_directory_name": "bin",
@@ -12,32 +12,28 @@
     "x_label": "Latency (ms)",
     "y_label": "Cumulative ratio of operations"
   },
-  "client_abort_backoff": 10,
+  "client_abort_backoff": 2,
   "client_bin_name": "benchmark",
   "client_cdf_plot_blacklist": [],
   "client_combine_stats_blacklist": [],
   "client_conflict_percentage": 2,
   "client_cpuprofile": false,
-  "client_debug_output": "store/indicusstore/*.*",
+  "client_debug_output": false,
   "client_debug_stats": false,
   "client_disable_gc": true,
-  "client_experiment_length": 30,
+  "client_experiment_length": 60,
   "client_gc_debug_trace": false,
   "client_host_format_str": "client-%d-%d.%s.%s.utah.cloudlab.us",
   "client_max_attempts": -1,
+  "client_max_backoff": 2500,
   "client_max_processors": 2,
   "client_message_timeout": 30000,
   "client_name_format_str": "client-%d-%d",
-  "client_nodes_per_server": [
-    1
-  ],
-  "client_num_keys": 10000000,
-  "client_processes_per_client_node": [
-    1
-  ],
-  "client_protocol_mode": "indicus",
+  "client_nodes_per_server": 1,
+  "client_processes_per_client_node": 7,
+  "client_protocol_mode": ["indicus"],
   "client_ramp_down": 5,
-  "client_ramp_up": 5,
+  "client_ramp_up": 30,
   "client_rand_sleep": 100,
   "client_random_coordinator": false,
   "client_read_percentage": 0,
@@ -45,41 +41,33 @@
   "client_rmw_percentage": 0,
   "client_stats_blacklist": [],
   "client_threads_per_process": 1,
-  "client_total": [
-    1
-  ],
+  "client_total": 126,
   "client_write_percentage": 1000,
   "client_zipfian_s": 2,
   "client_zipfian_v": 1,
   "codebase_name": "indicus",
   "default_remote_shell": "bash",
-  "emulab_user": "matthelb",
+  "emulab_user": "fs435",
   "experiment_independent_vars": [
     [
       "replication_protocol",
       "client_protocol_mode",
       "server_names",
       "replication_protocol_settings",
+      "server_regions",
       "client_total",
-      "client_processes_per_client_node",
-      "client_nodes_per_server",
-      "server_regions"
+      "client_threads_per_process",
+      "client_processes_per_client_node"
     ],
     [
       "client_total",
       "client_processes_per_client_node",
-      "client_nodes_per_server"
+      "client_threads_per_process"
     ]
   ],
-  "experiment_independent_vars_unused": [
-    [
-      "client_total",
-      "client_processes_per_client_node",
-      "client_nodes_per_server"
-    ]
-  ],
+  "experiment_independent_vars_unused": [],
   "experiment_name": "indicus",
-  "fault_tolerance": 0,
+  "fault_tolerance": 1,
   "input_latency_scale": 1000000000,
   "lot_plots": {
     "font": "DejaVu Sans,12",
@@ -102,8 +90,8 @@
   "max_retries": 1,
   "network_config_file_name": "shard.config",
   "num_experiment_runs": 1,
-  "num_groups": 1,
-  "num_shards": 1,
+  "num_groups": 24,
+  "num_shards": 24,
   "out_directory_name": "out",
   "output_latency_scale": 1000,
   "partitioner": "warehouse",
@@ -148,24 +136,28 @@
       "series_indep_vars_idx": 0,
       "series_titles": [
         "TAPIR",
-        "Indicus-NoProofsNoSigs",
-        "Indicus-NoSigs"
+        "Indicus-NoSigsNoProofs",
+        "Indicus-NoSigs",
+        "Indicus",
+        "Indicus-SharedMem",
+        "PBFT-NoSigs",
+        "PBFT"
       ],
       "width": 800,
       "x_indep_vars_idx": 1,
       "x_label": "Throughput (txn/s)",
       "x_var": [
         "run_stats",
-        "new_order",
+        "combined",
         "tput",
         "p50"
       ],
       "x_var_is_config": false,
-      "y_label": "p50 Latency (ms)",
+      "y_label": "p90 Latency (ms)",
       "y_var": [
         "aggregate",
-        "new_order",
-        "p50"
+        "combined",
+        "p90"
       ]
     },
     {
@@ -175,8 +167,12 @@
       "series_indep_vars_idx": 0,
       "series_titles": [
         "TAPIR",
-        "Indicus-NoProofsNoSigs",
-        "Indicus-NoSigs"
+        "Indicus-NoSigsNoProofs",
+        "Indicus-NoSigs",
+        "Indicus",
+        "Indicus-SharedMem",
+        "PBFT-NoSigs",
+        "PBFT"
       ],
       "width": 800,
       "x_indep_vars_idx": 1,
@@ -188,7 +184,7 @@
       "y_label": "Throughput (txn/s)",
       "y_var": [
         "run_stats",
-        "new_order",
+        "combined",
         "tput",
         "p50"
       ]
@@ -246,22 +242,36 @@
     }
   },
   "remote_bin_directory_nfs_enabled": false,
-  "replication_protocol": "indicus",
-  "replication_protocol_settings": {
+  "replication_protocol": ["indicus"],
+  "replication_protocol_settings": [{
+    "adjust_batch_size": false,
     "hash_digest": true,
-    "key_path": "/usr/local/etc/indicus-keys/sodium",
+    "key_path": "/usr/local/etc/indicus-keys/secp256k1",
+    "max_dep_depth": -1,
     "message_transport_type": "tcp",
     "read_dep": "one-honest",
+    "read_messages": "read-quorum",
     "read_quorum": "one-honest",
-    "sign_messages": true,
-    "validate_proofs": true,
-    "watermark_time_delta": 30000
-  },
-  "run_locally": true,
+    "read_reply_batch": false,
+    "shared_mem_batch": false,
+    "shared_mem_verify": false,
+    "sig_batch": 128,
+    "sig_batch_timeout": 20000,
+    "sign_messages": false,
+    "signature_type": 3,
+    "validate_proofs": false,
+    "verify_deps": false,
+    "watermark_time_delta": 30000,
+    "multi_threading": false,
+    "mainThreadDispatching": false
+    
+  }
+],
+  "run_locally": false,
   "rxe_cfg_path": "/media/matthelb/DATA/projects/msr-rdma/rdma-replication-meta/rdma-core/build/providers/rxe/rxe_cfg.in",
   "server_bin_name": "server",
   "server_cpuprofile": false,
-  "server_debug_output": "store/indicusstore/*.*",
+  "server_debug_output": false,
   "server_debug_stats": false,
   "server_disable_gc": true,
   "server_durable": false,
@@ -323,15 +333,19 @@
     ]
   },
   "server_rpc_port": 8087,
-  "src_commit_hash": "client",
+  "_src_commit_hash": "client",
   "src_directory": "/home/floriansuri/Indicus/BFT-DB/src",
   "stats_file_name": "stats.json",
+  "stats_merge_lists": [
+    "txn_groups",
+    "sig_batch"
+  ],
   "tpcc_c_c_id": 0,
   "tpcc_c_c_last": 0,
-  "tpcc_data_file_path": "/usr/local/etc/tpcc-1-warehouse",
+  "tpcc_data_file_path": "/usr/local/etc/tpcc-20-warehouse",
   "tpcc_delivery_ratio": 4,
   "tpcc_new_order_ratio": 44,
-  "tpcc_num_warehouses": 1,
+  "tpcc_num_warehouses": 20,
   "tpcc_order_status_ratio": 4,
   "tpcc_payment_ratio": 44,
   "tpcc_stock_level_ratio": 4,

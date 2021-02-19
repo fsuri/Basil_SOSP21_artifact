@@ -1,90 +1,151 @@
 {
   "experiment_independent_vars": [
     ["replication_protocol", "client_protocol_mode", "server_names",
-      "replication_protocol_settings", "server_regions"]
+      "replication_protocol_settings", "server_regions", "num_shards", "num_groups",
+		"client_total",
+      "client_threads_per_process",
+      "client_processes_per_client_node"],
+    ["client_total", "client_processes_per_client_node",
+      "client_threads_per_process"]
   ],
-  "client_message_timeout": 30000,
-  "replication_protocol":  ["indicus"],
+  "replication_protocol": ["indicus"],
   "client_protocol_mode": ["indicus"],
-  "num_shards": 3,
-  "num_groups": 3,
-  "benchmark_name": "tpcc-sync",
-  "_benchmark_name": "rw",
-  "tpcc_num_warehouses": 20,
-  "server_load_time":  50,
-  "tpcc_stock_level_ratio": 4,
-  "tpcc_delivery_ratio": 4,
-  "tpcc_order_status_ratio": 4,
-  "tpcc_payment_ratio": 44,
-  "tpcc_new_order_ratio": 44,
-  "tpcc_c_c_id": 0,
-  "tpcc_c_c_last": 0,
-  "tpcc_data_file_path": "/usr/local/etc/tpcc-20-warehouse",
+  "num_shards": [3],
+  "num_groups": [3],
+
   "client_num_keys": 10000000,
-  "client_zipf_coefficient": 0.75,
-  "client_key_selector": "uniform",
-  "rw_num_ops_txn": 2,
-  "client_abort_backoff": 5,
+  "benchmark_name": "rw",
+  
+  "client_zipf_coefficient": 0.9,
+  "client_key_selector": "zipf",
+  "rw_num_ops_txn": 4,
+
+  "server_load_time":  5,
+  
+  "client_abort_backoff": 2,
   "client_retry_aborted": true,
   "client_max_attempts": -1,
-  "_client_abort_backoff": 0,
-  "_client_retry_aborted": false,
-  "_client_max_attempts": 1,
+  "client_max_backoff": 250,
+  "client_rand_sleep": 2,
+  "__CLIENT RAND SLEEP NEEDS TO BE HIGH FOR NON CRYPTO; backoff too": true,
+  "client_message_timeout": 10000,
   "run_locally": false,
+  "stats_merge_lists": ["txn_groups", "sig_batch"],
+
+
   "replication_protocol_settings": [
+    
+
     {
+	  "_read_dep": "one-honest",
+	  "_read_messages": "read-quorum",
+      "_read_reply_batch": false,
+      "_adjust_batch_size": false,
+      "_shared_mem_batch": false,
+      "_shared_mem_verify": false,
+	
       "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
-	  "p1DecisionTimeout":10,
       "read_quorum": "one-honest",
+	  "p1DecisionTimeout":10,
+
+      "_max_dep_depth": 1,
+      "_max_dep_depth": -2, 
+	  "hash_digest": true,
+      "verify_deps": false,
+	
       "validate_proofs": true,
       "sign_messages": true,
-	  "sig_batch": 2,
-      "multi_threading": true,
-      "mainThreadDispatching": true,
-	  "batch_verification": false,
-	  "batch_verification_size": 6,
+      "signature_type": 4,
+      "sig_batch": 4,
+      "_sig_batch_timeout": 5000,
+     
+	  "multi_threading": true,
+	  "mainThreadDispatching": true,
+      "parallel_reads": true,
+      "dispatchCallbacks": true,
+      "client_multi_threading": false,
+      "hyper_threading": false,
+	  "dispatchMessageReceive": false,
+      "batch_verification": false,
+      "_key_path": "/usr/local/etc/indicus-keys/secp256k1",
       "key_path": "/usr/local/etc/indicus-keys/donna"
     }
   ],
   "experiment_name": "indicus",
   "codebase_name": "indicus",
-  "client_total": 100,
-  "client_processes_per_client_node": 8,
+	
+	"_client_total": [
+    
+    [144]
+  ],
+  "_client_processes_per_client_node": [
+    [8]
+  ],
+  "_client_threads_per_process": [
+    [1]
+  ],
+
+
+  "client_total": [
+    
+    [54, 72, 90, 108, 126, 144, 105, 115, 125]
+  ],
+  "client_processes_per_client_node": [
+    [3, 4, 5, 6, 7, 8, 6, 7, 7]
+  ],
+  "client_threads_per_process": [
+    [1, 1, 1, 1, 1, 1, 2, 2, 2]
+  ],
   "client_nodes_per_server": 1,
-  "client_threads_per_process": 1,
   "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7],
-  "pin_client_processes": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "pin_client_processes": [0, 1, 2, 3, 4, 5, 6, 7],
   "client_debug_output": false,
   "server_debug_output": false,
   "server_debug_stats": false,
   "client_debug_stats": false,
-  "client_experiment_length": 60,
-  "client_ramp_down": 10,
-  "client_ramp_up": 10,
+  "client_experiment_length": 90,
+  "client_ramp_down": 30,
+  "client_ramp_up": 30,
   "default_remote_shell": "bash",
   "server_host_format_str": "%s.%s.%s.utah.cloudlab.us",
   "client_host_format_str": "client-%d-%d.%s.%s.utah.cloudlab.us",
   "project_name": "morty-pg0",
   "fault_tolerance": 1,
   "server_names": [
+   
     ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
     "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
-    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2",
-    "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
-    "ap-southeast-2-1", "ap-southeast-2-2"]
+    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2", "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
+    "ap-southeast-2-1", "ap-southeast-2-2"] 
+	
   ],
+"__server_names" : [
+    "eu-central-1-0", "eu-central-1-1", "eu-central-1-2", "ap-southeast-2-0",
+    "ap-southeast-2-1", "ap-southeast-2-2"],
+
+
   "server_regions": [
+   
     {
       "us-east-1": ["us-east-1-0", "us-east-1-1", "us-east-1-2"],
       "eu-west-1": ["eu-west-1-0", "eu-west-1-1", "eu-west-1-2"],
       "ap-northeast-1": ["ap-northeast-1-0", "ap-northeast-1-1",
         "ap-northeast-1-2"],
       "us-west-1": ["us-west-1-0", "us-west-1-1", "us-west-1-2"],
-      "eu-central-1": ["eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
+"eu-central-1": ["eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
       "ap-southeast-2": ["ap-southeast-2-0", "ap-southeast-2-1", "ap-southeast-2-2"]
     }
   ],
+
+  "__server_regions" : [
+	{
+		
+      "eu-central-1": ["eu-central-1-0", "eu-central-1-1", "eu-central-1-2"],
+      "ap-southeast-2": ["ap-southeast-2-0", "ap-southeast-2-1", "ap-southeast-2-2"]
+	}
+	],
+
   "region_rtt_latencies": {
     "us-east-1": {
       "us-east-1": 0,
@@ -136,7 +197,36 @@
     }
   },
   "server_emulate_wan": false,
-  "plots": [],
+  "plots": [
+    {
+      "name": "lat-tput",
+      "font": "DejaVu Sans,12",
+      "height": 600,
+      "width": 800,
+      "series_indep_vars_idx": 0,
+      "series_titles": ["Indicus-Multi"],
+      "x_var_is_config": false,
+      "x_var": ["run_stats", "combined", "tput", "p50"],
+      "x_label": "Throughput (txn/s)",
+      "y_label": "p50 Latency (ms)",
+      "x_indep_vars_idx": 1,
+      "y_var": ["aggregate", "combined", "mean"]
+    },
+    {
+      "name": "tput-clients",
+      "font": "DejaVu Sans,12",
+      "height": 600,
+      "width": 800,
+      "series_indep_vars_idx": 0,
+      "series_titles": ["Indicus-Multi"],
+      "x_var_is_config": true,
+      "x_var": ["client_total"],
+      "x_label": "Number of Clients",
+      "y_label": "Throughput (txn/s)",
+      "x_indep_vars_idx": 1,
+      "y_var": ["run_stats", "combined", "tput", "p50"]
+    }
+  ],
   "cdf_plots": {
     "font": "DejaVu Sans,12",
     "height": 600,
@@ -168,7 +258,7 @@
   "output_latency_scale": 1000,
   "_src_commit_hash": "threadpool_test",
   "stats_file_name": "stats.json",
-  "base_local_exp_directory": "/media/floriansuri/experiments",
+  "base_local_exp_directory":  "/media/floriansuri/experiments",
   "base_mounted_fs_path": "/mnt/extra",
   "base_remote_bin_directory_nfs": "/users/fs435/indicus",
   "base_remote_exp_directory": "/mnt/extra/experiments",
@@ -198,6 +288,7 @@
   "make_env": {
   },
   "server_rdma_port": 9087,
+  "rxe_cfg_path": "/media/matthelb/DATA/projects/msr-rdma/rdma-replication-meta/rdma-core/build/providers/rxe/rxe_cfg.in",
   "client_read_percentage": 0,
   "client_write_percentage": 1000,
   "client_conflict_percentage": 2,
@@ -212,14 +303,12 @@
   "master_server_name": "california",
   "client_disable_gc": true,
   "server_disable_gc": true,
-  "_client_rand_sleep": 100,
   "server_cpuprofile": false,
   "server_durable": false,
   "server_rpc_port": 8087,
   "client_gc_debug_trace": false,
   "client_cpuprofile": false,
   "server_gc_debug_trace": false,
-  "_client_wrap_command": "valgrind --tool=none %s", 
   "_server_wrap_command": "valgrind --tool=none %s"
 
 }

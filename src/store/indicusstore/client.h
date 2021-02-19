@@ -179,9 +179,9 @@ class Client : public ::Client {
   bool isDep(const std::string &txnDigest, proto::Transaction &Req_txn);
   bool StillActive(uint64_t conflict_id, std::string &txnDigest);
   void CleanFB(PendingRequest *pendingFB, std::string &txnDigest);
-  void RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1);
+  void RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::string& txnDigest);
   void RelayP1TimeoutCallback(uint64_t reqId);
-  void RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest, proto::RelayP1 &relayP1);
+  void RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest, proto::RelayP1 &relayP1, std::string& txnDigest);
   void Phase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest);
   void Phase1FB_deeper(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, const std::string &dependent_txnDigest);
   void SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, PendingRequest *pendingFB);

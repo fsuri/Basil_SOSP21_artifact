@@ -286,7 +286,7 @@ DEFINE_uint64(indicus_total_processes, 1, "number of server processes per machin
 DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
 
 DEFINE_bool(indicus_all_to_all_fb, false, "use the all to all view change method");
-DEFINE_uint64(indicus_relayP1_timeout, 5, "time (ms) after which to send RelayP1");
+DEFINE_uint64(indicus_relayP1_timeout, 100, "time (ms) after which to send RelayP1");
 
 DEFINE_uint64(pbft_esig_batch, 1, "signature batch size"
 		" sig batch size (for PBFT decision phase)");

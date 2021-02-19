@@ -73,8 +73,8 @@ typedef std::function<void(int)> writeback_timeout_callback;
 
 
 //Fallback typedefs:
-typedef std::function<void(proto::RelayP1 &)> relayP1_callback;
-typedef std::function<void(const std::string &, proto::RelayP1 &)> relayP1FB_callback;
+typedef std::function<void(proto::RelayP1 &, std::string &)> relayP1_callback;
+typedef std::function<void(const std::string &, proto::RelayP1 &, std::string &)> relayP1FB_callback;
 
 typedef std::function<void(proto::CommitDecision, bool, bool, const proto::CommittedProof &,
   const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1FB_callbackA;

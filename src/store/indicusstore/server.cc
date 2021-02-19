@@ -716,6 +716,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
     if(!params.parallel_CCC || !params.mainThreadDispatching){
       result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
           committedProof);
+      BufferP1Result(result, committedProof, txnDigest);
     }
     else{
       auto f = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn, committedProof]() mutable {
@@ -731,7 +732,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
         proto::ConcurrencyControl::Result *result = new proto::ConcurrencyControl::Result(this->DoOCCCheck(msg_ptr->req_id(),
         *remote_ptr, txnDigest, *txn, retryTs, committedProof));
-
+        BufferP1Result(*result, committedProof, txnDigest);
         HandlePhase1CB(msg_ptr, *result, committedProof, txnDigest, *remote_ptr);
         delete result;
         return (void*) true;
@@ -747,6 +748,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 //TODO: move p1Decision into this function (not sendp1: Then, can unlock here.)
 void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
   const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote){
+
   if (result != proto::ConcurrencyControl::WAIT) {
     //XXX setting client time outs for Fallback
     // if(client_starttime.find(txnDigest) == client_starttime.end()){
@@ -2308,6 +2310,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
         Debug("print remote: %p", f->second.remote);
         //waitingDependencies.erase(dependent);
         const proto::CommittedProof *conflict = nullptr;
+        BufferP1Result(result, conflict, dependent);
         if(f->second.original_client){
           SendPhase1Reply(f->second.reqId, result, conflict, dependent,
               f->second.remote);
@@ -2406,23 +2409,28 @@ bool Server::CheckHighWatermark(const Timestamp &ts) {
   return ts > highWatermark;
 }
 
+//XXX if you *DONT* want to buffer Wait results then call BufferP1Result only inside SendPhase1Reply
+void Server::BufferP1Result(proto::ConcurrencyControl::Result result,
+  const proto::CommittedProof *conflict, const std::string &txnDigest){
+
+    p1DecisionsMap::accessor c;
+    p1Decisions.insert(c, std::make_pair(txnDigest, result));
+    c.release();
+  //  p1Decisions[txnDigest] = result;
+
+   //add abort proof so we can use it for fallbacks easily.
+   if(result == proto::ConcurrencyControl::ABORT){
+      p1ConflictsMap::accessor d;
+      p1Conflicts.insert(d, std::make_pair(txnDigest, conflict));
+     //p1Conflicts[txnDigest] = conflict;  //does this work this way for CbR
+     d.release();
+   }
+}
+
 void Server::SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
     const proto::CommittedProof *conflict, const std::string &txnDigest,
     const TransportAddress *remote) {
-
-   p1DecisionsMap::accessor c;
-   p1Decisions.insert(c, std::make_pair(txnDigest, result));
-   c.release();
- //  p1Decisions[txnDigest] = result;
-
-  //add abort proof so we can use it for fallbacks easily.
-  if(result == proto::ConcurrencyControl::ABORT){
-     p1ConflictsMap::accessor d;
-     p1Conflicts.insert(d, std::make_pair(txnDigest, conflict));
-    //p1Conflicts[txnDigest] = conflict;  //does this work this way for CbR
-    d.release();
-  }
 
   proto::Phase1Reply* phase1Reply = GetUnusedPhase1Reply();
   phase1Reply->set_req_id(reqId);
@@ -3209,6 +3217,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       proto::ConcurrencyControl::Result result;
 
       if (ExecP1(msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
+        if(result == proto::ConcurrencyControl::WAIT){ std::cerr << "FALSELY SEND WAIT 1" << std::endl ;return;}
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
       }
 
@@ -3225,6 +3234,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       proto::ConcurrencyControl::Result result;
 
       if (ExecP1(msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
+        if(result == proto::ConcurrencyControl::WAIT){ std::cerr << "FALSELY SEND WAIT 1" << std::endl ;return;}
           P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
           SendPhase1FBReply(p1fb_organizer, txnDigest);
@@ -3276,14 +3286,7 @@ bool Server::ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const 
   result = DoOCCCheck(msg.req_id(),
       remote, txnDigest, *txn, retryTs, committedProof, true);
 
-  p1DecisionsMap::accessor c;
-  p1Decisions.insert(c, std::make_pair(txnDigest, result));
-  c.release();
-  if(result == proto::ConcurrencyControl::ABORT){
-     p1ConflictsMap::accessor d;
-     p1Conflicts.insert(d, std::make_pair(txnDigest, committedProof));
-     d.release();
-  }
+  BufferP1Result(result, committedProof, txnDigest);
 
   //What happens in the FB case if the result is WAIT?
   //Since we limit to depth 1, we expect this to not be possible.

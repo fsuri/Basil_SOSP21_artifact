@@ -600,6 +600,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
           Debug("Signature purportedly from replica %lu"
               " (= my id %ld) doesn't match my response %u.",
               sig.process_id(), myProcessId, concurrencyControl.ccr());
+          std::cerr << "stored CCR[" <<  concurrencyControl.ccr() << "] does not match signed CCR[ " << myResult << "]" << std::endl;
           verifyObj->mcb((void*) false);
           delete verifyObj;
           return;

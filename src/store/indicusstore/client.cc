@@ -267,7 +267,8 @@ void Client::Phase1(PendingRequest *req) {
           std::placeholders::_4, std::placeholders::_5, std::placeholders::_6),
         std::bind(&Client::Phase1TimeoutCallback, this, group, req->id,
           std::placeholders::_1),
-        std::bind(&Client::RelayP1callback, this, req->id, std::placeholders::_1), req->timeout);
+        std::bind(&Client::RelayP1callback, this, req->id, std::placeholders::_1, std::placeholders::_2),
+        req->timeout);
     req->outstandingPhase1s++;
   }
   //schedule timeout for when we allow starting FB P1.
@@ -729,7 +730,7 @@ void Client::CleanFB(PendingRequest *pendingFB, std::string &txnDigest){
 }
 
 
-void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1){
+void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::string& txnDigest){
 
   // struct timeval tv;
   // gettimeofday(&tv, NULL);
@@ -745,8 +746,12 @@ void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1){
   }
 
   proto::Phase1 *p1 = relayP1.release_p1();
-   //Check if the current pending request has this txn as dependency.
-  const std::string &txnDigest = TransactionDigest(p1->txn(), params.hashDigest);
+
+  //const std::string &txnDigest = TransactionDigest(p1->txn(), params.hashDigest);
+
+  //do not start multiple FB instances for the same TX
+  if(FB_instances.find(txnDigest) != FB_instances.end()) return;
+  //Check if the current pending request has this txn as dependency.
   if(!isDep(txnDigest, itr->second->txn)){
     Debug("Tx[%s] is not a dependency of ReqId: %d", BytesToHex(txnDigest, 128).c_str(), reqId);
     return;
@@ -776,7 +781,7 @@ void Client::RelayP1TimeoutCallback(uint64_t reqId){
 }
 
 // Additional Relay FB handler for Fallbacks for dependencies of dependencies.
-void Client::RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest, proto::RelayP1 &relayP1){
+void Client::RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest, proto::RelayP1 &relayP1, std::string& txnDigest){
   //dont need to respect a time out here?
 
   auto itr = pendingReqs.find(reqId);
@@ -792,8 +797,12 @@ void Client::RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest,
   }
 
   proto::Phase1 *p1 = relayP1.release_p1();
+
+  //const std::string &txnDigest = TransactionDigest(p1->txn(), params.hashDigest);
+
+  //do not start multiple FB instances for the same TX
+  if(FB_instances.find(txnDigest) != FB_instances.end()) return;
    //Check if the current pending request has this txn as dependency.
-  const std::string &txnDigest = TransactionDigest(p1->txn(), params.hashDigest);
   if(!isDep(txnDigest, itrFB->second->txn)){
     Debug("Tx[%s] is not a dependency of ReqId: %d", BytesToHex(txnDigest, 128).c_str(), reqId);
     return;
@@ -832,7 +841,7 @@ void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::st
     //define all the callbacks here
       //bind conflict_id (i.e. the top level dependent) to all, so we can check if it is still waiting.
       //TODO: dont bind it but make it a field of the PendingRequest..
-      auto p1Relay = std::bind(&Client::RelayP1callbackFB, this, conflict_id, std::placeholders::_1, std::placeholders::_2);
+      auto p1Relay = std::bind(&Client::RelayP1callbackFB, this, conflict_id, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
       auto p1fbA = std::bind(&Client::Phase1FBcallbackA, this, conflict_id, txnDigest, group, std::placeholders::_1,
           std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
