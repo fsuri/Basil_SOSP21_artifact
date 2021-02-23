@@ -505,6 +505,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
     quorumSize = SlowAbortQuorumSize(config);
   } else {
     // NOT_REACHABLE();
+    Panic("decision neither Commit nor Abort, should not be reachable");
     mcb((void*) false);
     return; //false; //dont need to return anything
   }
@@ -535,7 +536,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
 
       if (!IsReplicaInGroup(sig.process_id(), sigs.first, config)) {
         Debug("Signature for group %lu from replica %lu who is not in group.", sigs.first, sig.process_id());
-
+        Panic("Received sig from replica[%lu] not in group", sig.process_id());
         //{
         //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
         //verifyObj->terminate = true;
@@ -550,6 +551,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
       if (!insertItr.second) {
         Debug("Already verified sig from replica %lu in group %lu.",
             sig.process_id(), sigs.first);
+        Panic("Received duplicate signature from server %u", sig.process_id());
         //{
         //std::lock_guard<std::mutex> lock(verifyObj->objMutex);
         //verifyObj->terminate = true;
@@ -565,6 +567,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
       if (sig.process_id() == myProcessId && myProcessId >= 0) {
         if (concurrencyControl.ccr() == myResult) {
           skip = true;
+          if(myResult == proto::ConcurrencyControl::WAIT) Panic("Aborting due to Wait Sent");
 
           verifyObj->groupCounts[sigs.first]++;
           if (verifyObj->groupCounts[sigs.first] == verifyObj->quorumSize) {
@@ -597,11 +600,11 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
               }
           }
         } else {
-          Debug("Signature purportedly from replica %lu"
+          Debug("Signature with result %u, purportedly from replica %lu"
               " (= my id %ld) doesn't match my response %u.",
-              sig.process_id(), myProcessId, concurrencyControl.ccr());
+              concurrencyControl.ccr(), sig.process_id(), myProcessId, myResult);
           // std::cerr << "stored CCR[" <<  myResult << "] does not match signed CCR[ " << concurrencyControl.ccr() << "] for txn " << BytesToHex(*txnDigest, 64) << std::endl;
-          // Panic("Aborting due to mismatch");
+          Panic("Aborting due to mismatch");
           verifyObj->mcb((void*) false);
           delete verifyObj;
           return;
@@ -636,17 +639,17 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
 
       //verificationJobs.emplace_back(std::make_pair(std::move(f), std::move(cb)));
       //verificationJobs2.emplace_back(std::move(f));
-      //verificationJobs3.push_back(f);
-      transport->DispatchTP_noCB_ptr(f);
+      verificationJobs3.push_back(f);
+      //transport->DispatchTP_noCB_ptr(f);
       }
     }
 
   verifyObj->deletable = verificationJobs.size();
 
 //does ref & make a difference here?
-// for (std::function<void*()>* f : verificationJobs3){
-//   transport->DispatchTP_noCB_ptr(f);
-// }
+for (std::function<void*()>* f : verificationJobs3){
+  transport->DispatchTP_noCB_ptr(f);
+}
 
   // for (auto &verification : verificationJobs2){
   //   transport->DispatchTP_noCB(std::move(verification));

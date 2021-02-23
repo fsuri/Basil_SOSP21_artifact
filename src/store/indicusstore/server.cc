@@ -2558,11 +2558,13 @@ void Server::LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId
   auto p1DecisionItr = p1Decisions.find(c, txnDigest);
   if(p1DecisionItr){
   //if (p1DecisionItr != p1Decisions.end()) {
-    myProcessId = id;
-    myResult = c->second;
-    if(myResult == proto::ConcurrencyControl::WAIT){
-      std::cerr << "LookupP1Decision returned WAIT for txn: " <<  BytesToHex(txnDigest, 64) << std::endl;
-    } // TODO: dont return this. But first figure out why it happens at all.
+    if(c->second != proto::ConcurrencyControl::WAIT){
+      myProcessId = id;
+      myResult = c->second;
+    }
+    // else{
+    //   std::cerr << "LookupP1Decision returned WAIT for txn: " <<  BytesToHex(txnDigest, 64) << std::endl;
+    // }
   }
   c.release();
    //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
@@ -3330,7 +3332,6 @@ bool Server::ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const 
       remote, txnDigest, *txn, retryTs, committedProof, true);
   BufferP1Result(result, committedProof, txnDigest);
 
-
   //What happens in the FB case if the result is WAIT?
   //Since we limit to depth 1, we expect this to not be possible.
   //But if it happens, the CheckDependents call will send a P1FB reply to all interested clients.
@@ -3420,11 +3421,11 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
       delete p1fb_organizer;
     };
 
-
     if (params.signedMessages) {
       //First, "atomically" set the outstanding flags. (Need to do this before dispatching anything)
       if(p1FBReply->has_p1r() && p1FBReply->p1r().cc().ccr() != proto::ConcurrencyControl::ABORT){
         p1fb_organizer->p1_sig_outstanding = true;
+        // std::cerr << "FBorganizer pointer: " << p1fb_organizer << "   p1FBReply pointer: " << p1FBReply << std::endl;
         // std::cerr << "Sending On FB path. Txn: " << BytesToHex(txnDigest,64) << " with result: " << p1FBReply->p1r().cc().ccr() << std::endl;
         // int64_t myProcessId;
         // proto::ConcurrencyControl::Result myResult;

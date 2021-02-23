@@ -284,10 +284,6 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
 
   };
 
-  std::unordered_map<std::string, PendingFB*> pendingFallbacks; //map from txnDigests to their fallback instances.
-
-
-
   struct PendingAbort {
     PendingAbort(uint64_t reqId) : reqId(reqId),
         requestTimeout(nullptr) { }
@@ -388,6 +384,16 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   std::unordered_map<uint64_t, PendingPhase1 *> pendingPhase1s;
   std::unordered_map<uint64_t, PendingPhase2 *> pendingPhase2s;
   std::unordered_map<uint64_t, PendingAbort *> pendingAborts;
+  struct PendingReqIds {
+    PendingReqIds() : pendingP1_id(0), pendingP2_id(0){ }
+    ~PendingReqIds() { }
+    std::unordered_set<uint64_t> pendingGet_ids;
+    uint64_t pendingP1_id;
+    uint64_t pendingP2_id;
+  };
+  std::unordered_map<uint64_t, PendingReqIds> client_seq_num_mapping;
+  std::unordered_map<std::string, PendingFB*> pendingFallbacks; //map from txnDigests to their fallback instances.
+
 
   //keep additional maps for this from txnDigest ->Pending For Fallback instances?
 

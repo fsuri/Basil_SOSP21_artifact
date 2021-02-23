@@ -168,6 +168,7 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction, con
   phase1_callback pcb, phase1_timeout_callback ptcb, relayP1_callback rcb, uint32_t timeout) {
   Debug("[group %i] Sending PHASE1 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
+  client_seq_num_mapping[id].pendingP1_id = reqId;
   PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId, group, transaction,
       txnDigest, config, keyManager, params, verifier, id);
   pendingPhase1s[reqId] = pendingPhase1;
@@ -203,6 +204,7 @@ void ShardClient::Phase2(uint64_t id,
     phase2_timeout_callback ptcb, uint32_t timeout) {
   Debug("[group %i] Sending PHASE2 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
+  client_seq_num_mapping[id].pendingP1_id = reqId;
   PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);  //TODO: add view that this decision is from (default = 0).
   //TODO: When sending an InvokeFB message, this view = the view you propose ; but unclear what decision you are waiting for?
   //Create many mappings for potential views/decisions instead.
@@ -233,6 +235,7 @@ void ShardClient::Phase2(uint64_t id,
   pendingPhase2->requestTimeout->Reset();
 }
 
+//TODO: remove the PendingPhase2 creation here..
 void ShardClient::Phase2Equivocate(uint64_t id,
     const proto::Transaction &txn, const std::string &txnDigest,
     const proto::GroupedSignatures &groupedCommitSigs,
@@ -364,9 +367,27 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
   transport->SendMessageToGroup(this, group, writeback);
   if(id > 0) {
     Debug("[group %i] Sent WRITEBACK[%lu]", group, id);
+    auto itr = client_seq_num_mapping.find(id);
+    if(itr != client_seq_num_mapping.end()){
+        // PendingReqIds &pRids = itr->second;
+        // auto itrP1 = pendingPhase1s.find(pRids.pendingP1_id);
+        // if(itrP1 != pendingPhase1s.end()){
+        //   pendingPhase1s.erase(itrP1);
+        //   delete itrP1->second;
+        // }
+        // auto itrP2 = pendingPhase2s.find(pRids.pendingP2_id);
+        // if(itrP2 != pendingPhase2s.end()){
+        //   pendingPhase2s.erase(itrP2);
+        //   delete itrP2->second;
+        // }
+        // pendingPhase1s.erase(pRids.pendingP1_id);
+        // pendingPhase2s.erase(pRids.pendingP2_id);
+        client_seq_num_mapping.erase(itr);
+     }
   }
   else{
     Debug("[group %i] Sent Fallback WRITEBACK[%s]", group, txnDigest.c_str());
+    //pendingFallbacks.erase(txnDigest);
   }
 }
 
@@ -1724,12 +1745,12 @@ void ShardClient::WritebackFB_fast(std::string txnDigest, proto::Writeback &wb) 
   Debug("[group %i] Sent FB-WRITEBACK[%lu]", group, client_id);
 
   // Delete PendingFB instance.  //TODO: delete dependents of instance as well (if we support more than depth 1)
-  auto itr = pendingFallbacks.find(txnDigest);
-  if(itr != pendingFallbacks.end()){
-    PendingFB *pendFB = itr->second;
-    pendingFallbacks.erase(txnDigest);
-    delete pendFB;
-  }
+  // auto itr = pendingFallbacks.find(txnDigest);
+  // if(itr != pendingFallbacks.end()){
+  //   PendingFB *pendFB = itr->second;
+  //   pendingFallbacks.erase(txnDigest);
+  //   delete pendFB;
+  // }
 
 }
 

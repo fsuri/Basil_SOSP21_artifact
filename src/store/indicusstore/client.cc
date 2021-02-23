@@ -340,7 +340,7 @@ void Client::Phase1CallbackProcessing(PendingRequest *req, int group,
   --req->outstandingPhase1s;
   switch(decision) {
     case proto::COMMIT:
-      break; //decision is proto::COMMIT by default 
+      break; //decision is proto::COMMIT by default
     case proto::ABORT:
       // abort!
       req->decision = proto::ABORT;
@@ -582,7 +582,7 @@ void Client::Writeback(PendingRequest *req) {
   //     std::cerr<< "Finished tx["  << req->id << "] after " << elapsed_time << " ms" << std::endl;
   // }
 
-  Debug("WRITEBACK[%lu:%lu] result %s", client_id, req->id, req->decision ? "COMMIT" : "ABORT");
+  Debug("WRITEBACK[%lu:%lu] result %s", client_id, req->id, req->decision ?  "ABORT" : "COMMIT");
 
   req->startedWriteback = true;
 
@@ -771,7 +771,7 @@ void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::strin
 void Client::RelayP1TimeoutCallback(uint64_t reqId){
   auto itr = pendingReqs.find(reqId);
   if(itr == pendingReqs.end()){
-    Debug("ReqId[%d] has already completed", reqId);
+    Debug("ClientSeqNum[%d] has already completed", reqId);
     return;
   }
 
