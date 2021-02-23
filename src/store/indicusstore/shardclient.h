@@ -79,13 +79,13 @@ typedef std::function<void(const std::string &, proto::RelayP1 &, std::string &)
 typedef std::function<void(proto::CommitDecision, bool, bool, const proto::CommittedProof &,
   const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1FB_callbackA;
 
-typedef std::function<void(proto::CommitDecision, const proto::P2Replies &)> phase1FB_callbackB;
+typedef std::function<bool(proto::CommitDecision, const proto::P2Replies &)> phase1FB_callbackB;
 
 typedef std::function<void(proto::CommitDecision, const proto::Signatures &, uint64_t)> phase2FB_callback;
 
 typedef std::function<void(proto::Writeback &)> writebackFB_callback;
 
-typedef std::function<void()> invokeFB_callback;
+typedef std::function<bool()> invokeFB_callback;
 
 typedef std::function<void()> viewQuorum_callback;
 

@@ -1236,7 +1236,6 @@ void ShardClient::CleanFB(std::string &txnDigest){
   if(itr != pendingFallbacks.end()){
     delete itr->second;
     pendingFallbacks.erase(itr);
-    //TODO: delete substructures of PendingFB
   }
 }
 
@@ -1568,11 +1567,8 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
 
     //can return directly to writeback (p2 complete)
     if (pendingP2.matchingReplies == QuorumSize(config)) { //make it >=? potentially duplicate cb then..
-      //TODO:Edit this callback so that it includes view too. Then modify both client and server code to check proofs for matching view as well.
       pendingFB->p2FBcb(pendingP2.decision, pendingP2.p2ReplySigs, view);
-      //XXX could use CleanFB instead (but currently has a redundant search.)
-      this->pendingFallbacks.erase(txnDigest);
-      delete pendingFB;
+      //dont need to clean, will be cleaned by callback.
       return true;
     }
 
@@ -1588,7 +1584,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
       proto::P2Replies &p2Replies = pendingFB->p2Replies[decision];
       if(p2Replies.p2replies().size() == config->f +1 ){
         pendingFB->p1 = false;
-        pendingFB->p1FBcbB(decision, p2Replies);
+        if(!pendingFB->p1FBcbB(decision, p2Replies)) return true;
       }
     }
 
@@ -1608,7 +1604,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
   if(pendingFB->max_decision_view == view
     && pendingFB->pendingP2s[view][proto::COMMIT].matchingReplies == config->f +1
     && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies == config->f +1){ //== so we only call it once per view.
-      pendingFB->invFBcb();
+      if(!pendingFB->invFBcb()) return true;
   }
       //TODO: Also need to call it after some timeout. I.e. if 4f+1 received are all honest but diverge.
 

@@ -340,7 +340,7 @@ void Client::Phase1CallbackProcessing(PendingRequest *req, int group,
   --req->outstandingPhase1s;
   switch(decision) {
     case proto::COMMIT:
-      break;
+      break; //decision is proto::COMMIT by default 
     case proto::ABORT:
       // abort!
       req->decision = proto::ABORT;
@@ -725,8 +725,8 @@ void Client::CleanFB(PendingRequest *pendingFB, std::string &txnDigest){
   for(auto group : pendingFB->txn.involved_groups()){
     bclient[group]->CleanFB(txnDigest);
   }
-  delete pendingFB;
   FB_instances.erase(txnDigest);
+  delete pendingFB;
 }
 
 
@@ -887,10 +887,7 @@ void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, pr
    bclient[group]->WritebackFB_fast(txnDigest, wb);
  }
  //delete FB instance.
-
- delete itr->second;
- FB_instances.erase(txnDigest);
-
+ CleanFB(pendingFB, txnDigest);
 }
 
 
@@ -933,19 +930,20 @@ void Client::FBHandleAllPhase1Received(PendingRequest *req) {
 
 
 //XXX cannot just send decision, but need to send whole p2 replies because the decision views might differ
-void Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group,
+//making it of type bool so that shard client does not require req Id dependency
+bool Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group,
    proto::CommitDecision decision, const proto::P2Replies &p2replies){
      Debug("Phase1FBcallbackB called for txn[%s]", BytesToHex(txnDigest, 64).c_str());
 
      // check if conflict transaction still active
-    if(!StillActive(conflict_id, txnDigest)) return;
+    if(!StillActive(conflict_id, txnDigest)) return false;
 
     PendingRequest* req = FB_instances[txnDigest];
 
     if (req->startedPhase2 || req->startedWriteback) {
       Debug("Already started Phase2FB/WritebackFB for tx [%s[]. Ignoring Phase1 callback"
           " response from group %d.", BytesToHex(txnDigest, 128).c_str(), group);
-      return;
+      return true;
     }
 
     req->decision = decision;
@@ -953,6 +951,7 @@ void Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
        //Issue P2FB.
     Phase2FB(req);
 
+    return true;
         //TODO: find a mechanism to include this work in InvokeFB too.
 }
 
@@ -1023,26 +1022,30 @@ void Client::WritebackFB(PendingRequest *req){
         req->p2ReplySigsGrouped, req->decision_view);
   }
 //delete FB instance.
-  this->FB_instances.erase(req->txnDigest);
-  delete req;
-
+  CleanFB(req, req->txnDigest);
 }
 
-void Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group){
+bool Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group){
   //Just send InvokeFB request to the logging shard. but only if the tx has not already finished. and only if we have already sent a P2
   //Otherwise, Include the P2 here!.
 
   // check if conflict transaction still active
-  if(!StillActive(conflict_id, txnDigest)) return;
+  if(!StillActive(conflict_id, txnDigest)) return false;
 
   //TODO: add flags for P2 sent: If not sent yet, need to wait for that.
   PendingRequest* req = FB_instances[txnDigest];
-  if(req->startedWriteback){Debug("Already sent WB - unecessary InvokeFB"); return;}
-  if(req->p2Replies.p2replies().size() < config->f +1){ Debug("No p2 decision included - invalid InvokeFB"); return;}
+  if(req->startedWriteback){
+    Debug("Already sent WB - unecessary InvokeFB");
+    return true;
+  }
+  if(req->p2Replies.p2replies().size() < config->f +1){
+    Debug("No p2 decision included - invalid InvokeFB");
+    return true;
+  }
   //we know this group is the FB group, only that group would have invoked this callback.
   bclient[group]->InvokeFB(conflict_id, txnDigest, req->txn, req->decision, req->p2Replies);
 
-
+return true;
   //TODO: add logic to include a P2 based of P1's.
   // else if (req->outstandingPhase1s == 0) {
   //     req->p1ReplySigsGrouped

@@ -191,12 +191,12 @@ class Client : public ::Client {
   void Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
      bool fast, bool conflict_flag, const proto::CommittedProof &conflict, const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs);
   void FBHandleAllPhase1Received(PendingRequest *req);
-  void Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
+  bool Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
     const proto::P2Replies &p2replies);
   void Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,
     const proto::Signatures &p2ReplySig, uint64_t view);
   void WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Writeback &wb);
-  void InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group);
+  bool InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group);
   //keep track of pending Fallback instances. Maps from txnDigest, req Id is oblivious to us.
   std::unordered_map<std::string, PendingRequest*> FB_instances;
 

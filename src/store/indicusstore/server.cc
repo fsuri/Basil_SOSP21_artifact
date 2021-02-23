@@ -716,7 +716,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
     if(!params.parallel_CCC || !params.mainThreadDispatching){
       result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
           committedProof);
-      //BufferP1Result(result, committedProof, txnDigest);
+      BufferP1Result(result, committedProof, txnDigest);
     }
     else{
       auto f = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn, committedProof]() mutable {
@@ -732,7 +732,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
         proto::ConcurrencyControl::Result *result = new proto::ConcurrencyControl::Result(this->DoOCCCheck(msg_ptr->req_id(),
         *remote_ptr, txnDigest, *txn, retryTs, committedProof));
-        //BufferP1Result(*result, committedProof, txnDigest);
+        BufferP1Result(*result, committedProof, txnDigest);
         HandlePhase1CB(msg_ptr, *result, committedProof, txnDigest, *remote_ptr);
         delete result;
         return (void*) true;
@@ -750,6 +750,11 @@ void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Resul
   const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote){
 
   if (result != proto::ConcurrencyControl::WAIT) {
+    // std::cerr << "Sending On normal path. Txn: " << BytesToHex(txnDigest,64) << " with result: " << result << std::endl;
+    // int64_t myProcessId;
+    // proto::ConcurrencyControl::Result myResult;
+    // LookupP1Decision(txnDigest, myProcessId, myResult);
+    // std::cerr<< "Looking up immediately before signing and sending txn: " << BytesToHex(txnDigest,64) << " result: " << myResult << std::endl;
     //XXX setting client time outs for Fallback
     // if(client_starttime.find(txnDigest) == client_starttime.end()){
     //   struct timeval tv;
@@ -2310,7 +2315,12 @@ void Server::CheckDependents(const std::string &txnDigest) {
         Debug("print remote: %p", f->second.remote);
         //waitingDependencies.erase(dependent);
         const proto::CommittedProof *conflict = nullptr;
-        //BufferP1Result(result, conflict, dependent);
+        BufferP1Result(result, conflict, dependent);
+        // std::cerr << "Sending On dependent path. Txn: " << BytesToHex(dependent,64) << " with result: " << result << std::endl;
+        // int64_t myProcessId;
+        // proto::ConcurrencyControl::Result myResult;
+        // LookupP1Decision(dependent, myProcessId, myResult);
+        // std::cerr<< "Looking up immediately before signing and sending txn: " << BytesToHex(dependent,64) << " result: " << myResult << std::endl;
         if(f->second.original_client){
           SendPhase1Reply(f->second.reqId, result, conflict, dependent,
               f->second.remote);
@@ -2414,7 +2424,29 @@ void Server::BufferP1Result(proto::ConcurrencyControl::Result result,
   const proto::CommittedProof *conflict, const std::string &txnDigest){
 
     p1DecisionsMap::accessor c;
-    p1Decisions.insert(c, std::make_pair(txnDigest, result));
+    if(p1Decisions.insert(c, txnDigest)){
+      c->second = result;
+    }
+    else{
+      if(result != proto::ConcurrencyControl::WAIT){
+        c->second = result;
+      }
+    }
+
+    // //p1Decisions.insert(c, std::make_pair(txnDigest, result));
+    // if(!p1Decisions.find(c, txnDigest)){
+    //   // if(result == proto::ConcurrencyControl::WAIT){
+    //   //   std::cerr<< "Buffering Wait first time for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+    //   // }
+    //   p1Decisions.insert(c, std::make_pair(txnDigest, result));
+    // }
+    // else{
+    //   //std::cerr<< "Displacing buffered result: " << c->second << "with new result: " << result << "for txn: " << BytesToHex(txnDigest,64) << std::endl;
+    //
+    //   if(result != proto::ConcurrencyControl::WAIT){
+    //     c->second = result;
+    //   }
+    // }
     c.release();
   //  p1Decisions[txnDigest] = result;
 
@@ -2432,7 +2464,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
     const proto::CommittedProof *conflict, const std::string &txnDigest,
     const TransportAddress *remote) {
 
-  BufferP1Result(result, conflict, txnDigest);
+  //BufferP1Result(result, conflict, txnDigest);
 
   proto::Phase1Reply* phase1Reply = GetUnusedPhase1Reply();
   phase1Reply->set_req_id(reqId);
@@ -2455,6 +2487,11 @@ void Server::SendPhase1Reply(uint64_t reqId,
       //Latency_Start(&signLat);
       Debug("PHASE1[%s] Batching Phase1Reply.",
             BytesToHex(txnDigest, 16).c_str());
+
+      if(cc->ccr() == proto::ConcurrencyControl::WAIT){
+        std::cerr<< "Result was Wait" << std::endl;
+        Backtrace();
+      }
 
       MessageToSign(cc, phase1Reply->mutable_signed_cc(),
         [sendCB, cc, txnDigest, this, phase1Reply]() {
@@ -2523,6 +2560,9 @@ void Server::LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId
   //if (p1DecisionItr != p1Decisions.end()) {
     myProcessId = id;
     myResult = c->second;
+    if(myResult == proto::ConcurrencyControl::WAIT){
+      std::cerr << "LookupP1Decision returned WAIT for txn: " <<  BytesToHex(txnDigest, 64) << std::endl;
+    } // TODO: dont return this. But first figure out why it happens at all.
   }
   c.release();
    //if(params.mainThreadDispatching) p1DecisionsMutex.unlock();
@@ -3015,6 +3055,7 @@ void Server::RelayP1(const TransportAddress &remote, const std::string &dependen
 bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest){
   //1) COMMIT CASE
   if(committed.find(txnDigest) != committed.end()){
+      proto::Phase1FBReply phase1FBReply;
       phase1FBReply.Clear();   //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
       phase1FBReply.set_req_id(ReqId);
       phase1FBReply.set_txn_digest(txnDigest);
@@ -3056,6 +3097,7 @@ bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, co
   //writebackMessages only contains Abort copies. (when can one delete these?)
   //(A blockchain stores all request too, whether commit/abort)
   if(writebackMessages.find(txnDigest) != writebackMessages.end()){
+      proto::Phase1FBReply phase1FBReply;
       phase1FBReply.Clear();   //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
       phase1FBReply.set_req_id(ReqId);
       phase1FBReply.set_txn_digest(txnDigest);
@@ -3070,6 +3112,7 @@ bool Server::ForwardWritebackMulti(const std::string &txnDigest, interestedClien
   //interestedClientsMap::accessor i;
   //auto jtr = interestedClients.find(i, txnDigest);
   //if(!jtr) return true; //no interested clients, return
+  proto::Phase1FBReply phase1FBReply;
 
   if(committed.find(txnDigest) != committed.end()){
       phase1FBReply.Clear();   //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
@@ -3219,7 +3262,6 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       proto::ConcurrencyControl::Result result;
 
       if (ExecP1(msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
-        if(result == proto::ConcurrencyControl::WAIT){ std::cerr << "FALSELY SEND WAIT 1" << std::endl ;return;}
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
       }
 
@@ -3236,7 +3278,6 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       proto::ConcurrencyControl::Result result;
 
       if (ExecP1(msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
-        if(result == proto::ConcurrencyControl::WAIT){ std::cerr << "FALSELY SEND WAIT 1" << std::endl ;return;}
           P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
           SendPhase1FBReply(p1fb_organizer, txnDigest);
@@ -3247,7 +3288,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 }
 
 //TODO: merge this code with the normal case operation.
-bool Server::ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *committedProof){
+bool Server::ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof* &committedProof){
   Debug("FB exec PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
@@ -3287,7 +3328,7 @@ bool Server::ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const 
   //TODO: add parallel OCC check logic here:
   result = DoOCCCheck(msg.req_id(),
       remote, txnDigest, *txn, retryTs, committedProof, true);
-
+  BufferP1Result(result, committedProof, txnDigest);
 
 
   //What happens in the FB case if the result is WAIT?
@@ -3295,7 +3336,7 @@ bool Server::ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const 
   //But if it happens, the CheckDependents call will send a P1FB reply to all interested clients.
   if (result == proto::ConcurrencyControl::WAIT) return false; //Dont use p1 result if its Wait.
 
-  BufferP1Result(result, committedProof, txnDigest);
+  //BufferP1Result(result, committedProof, txnDigest);
   // if(client_starttime.find(txnDigest) == client_starttime.end()){
   //   struct timeval tv;
   //   gettimeofday(&tv, NULL);
@@ -3359,9 +3400,9 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
       if(p1fb_organizer->c_view_sig_outstanding || p1fb_organizer->p1_sig_outstanding || p1fb_organizer->p2_sig_outstanding){
         p1fb_organizer->sendCBmutex.unlock();
         Debug("Not all message components of Phase1FBreply are signed: CurrentView: %s, P1R: %s, P2R: %s.",
-        p1fb_organizer->c_view_sig_outstanding ? "outstanding" : "complete",
-        p1fb_organizer->p1_sig_outstanding ? "outstanding" : "complete",
-        p1fb_organizer->p2_sig_outstanding ? "outstanding" : "complete");
+          p1fb_organizer->c_view_sig_outstanding ? "outstanding" : "complete",
+          p1fb_organizer->p1_sig_outstanding ? "outstanding" : "complete",
+          p1fb_organizer->p2_sig_outstanding ? "outstanding" : "complete");
         return;
       }
       Debug("All message components of Phase1FBreply signed. Sending.");
@@ -3384,6 +3425,11 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
       //First, "atomically" set the outstanding flags. (Need to do this before dispatching anything)
       if(p1FBReply->has_p1r() && p1FBReply->p1r().cc().ccr() != proto::ConcurrencyControl::ABORT){
         p1fb_organizer->p1_sig_outstanding = true;
+        // std::cerr << "Sending On FB path. Txn: " << BytesToHex(txnDigest,64) << " with result: " << p1FBReply->p1r().cc().ccr() << std::endl;
+        // int64_t myProcessId;
+        // proto::ConcurrencyControl::Result myResult;
+        // LookupP1Decision(txnDigest, myProcessId, myResult);
+        //std::cerr<< "Looking up immediately before signing and sending txn: " << BytesToHex(txnDigest,64) << " result: " << myResult << std::endl;
       }
       if(p1FBReply->has_p2r()){
         p1fb_organizer->p2_sig_outstanding = true;
