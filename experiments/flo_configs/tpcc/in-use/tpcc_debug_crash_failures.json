@@ -102,7 +102,7 @@
 
       "inject_failure_type" : "client-crash",
 	  "inject_failure_proportion" : 0,
-	  "inject_failure_ms": 1000,
+	  "inject_failure_ms": 10,
 	  "inject_failure freq": 10,
       "all_to_all_fb" : false,
 	  "relayP1_timeout" : 10

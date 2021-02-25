@@ -1043,8 +1043,8 @@ void Client::WritebackFB(PendingRequest *req){
         req->decision, req->fast, req->conflict_flag, req->conflict, req->p1ReplySigsGrouped,
         req->p2ReplySigsGrouped, req->decision_view);
   }
-//delete FB instance. (doing so early will make sure other ShardClients dont waste work.)
-  //CleanFB(req, req->txnDigest);
+  //delete FB instance. (doing so early will make sure other ShardClients dont waste work.)
+  // CleanFB(req, req->txnDigest);
 }
 
 bool Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group){

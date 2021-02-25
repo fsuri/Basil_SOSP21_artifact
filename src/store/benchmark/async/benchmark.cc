@@ -897,7 +897,7 @@ int main(int argc, char **argv) {
 
         indicusstore::InjectFailure failure;
         failure.type = injectFailureType;
-        failure.timeMs = FLAGS_indicus_inject_failure_ms;
+        failure.timeMs = FLAGS_indicus_inject_failure_ms + rand() % 100; //offset client failures a bit.
         failure.enabled = rand() % 100 < FLAGS_indicus_inject_failure_proportion;
 				failure.frequency = FLAGS_indicus_inject_failure_freq;
 

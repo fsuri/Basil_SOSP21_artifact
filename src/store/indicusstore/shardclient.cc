@@ -1409,7 +1409,7 @@ void ShardClient::ProcessP1FBR(proto::Phase1Reply &reply, PendingFB *pendingFB, 
 
     pendingFB->p1 = false;
     PendingPhase1 *pendingPhase1 = pendingFB->pendingP1;
-
+    std::cerr<< "Calling Phase1FB callbackA for txn: " << BytesToHex(pendingPhase1->txnDigest_, 64) << " from shardClient " << group <<std::endl;
     pendingFB->p1FBcbA(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict_flag, pendingPhase1->conflict, pendingPhase1->p1ReplySigs);
     //pendingPhase1 needs to be deleted -->> happens in pendingFB destructor
   }
@@ -1642,6 +1642,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
       proto::P2Replies &p2Replies = pendingFB->p2Replies[decision];
       if(p2Replies.p2replies().size() == config->f +1 ){
         pendingFB->p1 = false;
+        std::cerr<< "Calling Phase1FB callbackB for txn: " << BytesToHex(txnDigest, 64) << " from shardClient " << group <<std::endl;
         if(!pendingFB->p1FBcbB(decision, p2Replies)) return true;
       }
     }
