@@ -108,13 +108,13 @@ class Client : public ::Client {
 
     ~PendingRequest() {
       //delete all potentially dependent FB instances..
-      for(auto &fb_instance : req_FB_instances){
-        auto itr = client->FB_instances.find(fb_instance);
-        if(itr != client->FB_instances.end()){
-          std::cerr << "Req: " << id << " terminates. Clean up dependency FB txnDigest: " << BytesToHex(fb_instance, 64) << std::endl;
-          client->CleanFB(itr->second, fb_instance);
-        }
-      }
+      // for(auto &fb_instance : req_FB_instances){
+      //   auto itr = client->FB_instances.find(fb_instance);
+      //   if(itr != client->FB_instances.end()){
+      //     std::cerr << "Req: " << id << " terminates. Clean up dependency FB txnDigest: " << BytesToHex(fb_instance, 64) << std::endl;
+      //     client->CleanFB(itr->second, fb_instance);
+      //   }
+      // }
     }
 
     Client *client;
@@ -210,7 +210,7 @@ class Client : public ::Client {
   bool InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group);
   //keep track of pending Fallback instances. Maps from txnDigest, req Id is oblivious to us.
   std::unordered_map<std::string, PendingRequest*> FB_instances;
-
+  std::unordered_set<std::string> Completed_transactions;
 
   //also: keep map <txnDigest -> normal case pending requests, i.e. reqId as well>
 

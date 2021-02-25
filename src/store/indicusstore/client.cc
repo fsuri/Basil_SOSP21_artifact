@@ -704,6 +704,7 @@ bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
     return false;
   }
 
+  return true; //Altruism
   //TODO: Can be altruistic and finish FB instance even if not blocking.
   auto itrReq = pendingReqs.find(conflict_id);
   if(itrReq == pendingReqs.end() || itrReq->second->outstandingPhase1s == 0){
@@ -759,8 +760,9 @@ void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::strin
   //const std::string &txnDigest = TransactionDigest(p1->txn(), params.hashDigest);
 
   //do not start multiple FB instances for the same TX
-  if(itr->second->req_FB_instances.find(txnDigest) != itr->second->req_FB_instances.end()) return;
-  //if(FB_instances.find(txnDigest) != FB_instances.end()) return;
+  //if(itr->second->req_FB_instances.find(txnDigest) != itr->second->req_FB_instances.end()) return;
+  if(Completed_transactions.find(txnDigest) != Completed_transactions.end()) return;
+  if(FB_instances.find(txnDigest) != FB_instances.end()) return;
   //Check if the current pending request has this txn as dependency.
   if(!isDep(txnDigest, itr->second->txn)){
     Debug("Tx[%s] is not a dependency of ReqId: %d", BytesToHex(txnDigest, 128).c_str(), reqId);
@@ -769,7 +771,7 @@ void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::strin
 
   if(itr->second->startFB){
     std::cerr << "Starting Phase1FB directly" << std::endl;
-    itr->second->req_FB_instances.insert(txnDigest); //XXX mark connection between reqId and FB instance
+    //itr->second->req_FB_instances.insert(txnDigest); //XXX mark connection between reqId and FB instance
     Phase1FB(txnDigest, reqId, p1);
   }
   else{
@@ -789,7 +791,7 @@ void Client::RelayP1TimeoutCallback(uint64_t reqId){
   itr->second->startFB = true;
   for(auto p1_pair : itr->second->RelayP1s){
     std::cerr << "Starting Phase1FB from buffer" << std::endl;
-    itr->second->req_FB_instances.insert(p1_pair.first); //XXX mark connection between reqId and FB instance
+    //itr->second->req_FB_instances.insert(p1_pair.first); //XXX mark connection between reqId and FB instance
     Phase1FB(p1_pair.first, reqId, p1_pair.second);
   }
   //
@@ -818,8 +820,9 @@ void Client::RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest,
   //const std::string &txnDigest = TransactionDigest(p1->txn(), params.hashDigest);
 
   //do not start multiple FB instances for the same TX
-  if(itr->second->req_FB_instances.find(txnDigest) != itr->second->req_FB_instances.end()) return; //Unlike FB_instances, this set only gets erased upon Request completion
-  //if(FB_instances.find(txnDigest) != FB_instances.end()) return;
+  //if(itr->second->req_FB_instances.find(txnDigest) != itr->second->req_FB_instances.end()) return; //Unlike FB_instances, this set only gets erased upon Request completion
+  if(Completed_transactions.find(txnDigest) != Completed_transactions.end()) return;
+  if(FB_instances.find(txnDigest) != FB_instances.end()) return;
    //Check if the current pending request has this txn as dependency.
   if(!isDep(txnDigest, itrFB->second->txn)){
     Debug("Tx[%s] is not a dependency of ReqId: %d", BytesToHex(txnDigest, 128).c_str(), reqId);
@@ -827,7 +830,7 @@ void Client::RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest,
   }
 
   std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec P1FB for deeper depth" << std::endl;
-  itr->second->req_FB_instances.insert(txnDigest); //XXX mark connection between reqId and FB instance
+  //itr->second->req_FB_instances.insert(txnDigest); //XXX mark connection between reqId and FB instance
   Phase1FB_deeper(reqId, txnDigest, dependent_txnDigest, p1);
 }
 
@@ -906,7 +909,8 @@ void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, pr
    bclient[group]->WritebackFB_fast(txnDigest, wb);
  }
  //delete FB instance. (doing so early will make sure other ShardClients dont waste work.)
- //CleanFB(pendingFB, txnDigest);
+ Completed_transactions.insert(txnDigest);
+ CleanFB(pendingFB, txnDigest);
 }
 
 
@@ -1044,7 +1048,8 @@ void Client::WritebackFB(PendingRequest *req){
         req->p2ReplySigsGrouped, req->decision_view);
   }
   //delete FB instance. (doing so early will make sure other ShardClients dont waste work.)
-  // CleanFB(req, req->txnDigest);
+  Completed_transactions.insert(req->txnDigest);
+  CleanFB(req, req->txnDigest);
 }
 
 bool Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group){
