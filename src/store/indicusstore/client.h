@@ -98,17 +98,26 @@ class Client : public ::Client {
    int total_counter;
 
   struct PendingRequest {
-    PendingRequest(uint64_t id) : id(id), outstandingPhase1s(0),
+    PendingRequest(uint64_t id, Client *client) : id(id), outstandingPhase1s(0),
         outstandingPhase2s(0), commitTries(0), maxRepliedTs(0UL),
         decision(proto::COMMIT), fast(true), conflict_flag(false),
         startedPhase2(false), startedWriteback(false),
         callbackInvoked(false), timeout(0UL), slowAbortGroup(-1),
-        decision_view(0UL), startFB(false), eqv_ready(false) {
+        decision_view(0UL), startFB(false), eqv_ready(false), client(client) {
     }
 
     ~PendingRequest() {
+      //delete all potentially dependent FB instances..
+      for(auto &fb_instance : req_FB_instances){
+        auto itr = client->FB_instances.find(fb_instance);
+        if(itr != client->FB_instances.end()){
+          std::cerr << "Req: " << id << " terminates. Clean up dependency FB txnDigest: " << BytesToHex(fb_instance, 64) << std::endl;
+          client->CleanFB(itr->second, fb_instance);
+        }
+      }
     }
 
+    Client *client;
     commit_callback ccb;
     commit_timeout_callback ctcb;
     uint64_t id;
@@ -136,6 +145,7 @@ class Client : public ::Client {
 
     bool startFB;
     std::unordered_map<std::string, proto::Phase1*> RelayP1s;
+    std::unordered_set<std::string> req_FB_instances; //TODO: refactor so that FB_instances only exists as local var.
     //std::vector<std::pair<proto::Phase1*, std::string>> RelayP1s;
 
     uint64_t conflict_id; //id of request that is dependent (directly or through intermediaries) on this tx.
@@ -179,7 +189,8 @@ class Client : public ::Client {
   // Fallback logic
   bool isDep(const std::string &txnDigest, proto::Transaction &Req_txn);
   bool StillActive(uint64_t conflict_id, std::string &txnDigest);
-  void CleanFB(PendingRequest *pendingFB, std::string &txnDigest);
+  void CleanFB(PendingRequest *pendingFB, const std::string &txnDigest);
+  void EraseRelays(proto::RelayP1 &relayP1, std::string &txnDigest);
   void RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::string& txnDigest);
   void RelayP1TimeoutCallback(uint64_t reqId);
   void RelayP1callbackFB(uint64_t reqId, std::string &dependent_txnDigest, proto::RelayP1 &relayP1, std::string& txnDigest);

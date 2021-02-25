@@ -140,7 +140,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   }
 
 //public fallback functions:
-  virtual void CleanFB(std::string &txnDigest);
+  virtual void CleanFB(const std::string &txnDigest);
+  virtual void EraseRelay(const std::string &txnDigest);
   virtual void Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::string &txnDigest, phase1FB_callbackA p1FBcbA,
     phase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb);
   virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,
@@ -199,6 +200,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     Timeout *requestTimeout;
     Timeout *decisionTimeout;
     bool decisionTimeoutStarted;
+    std::unordered_set<uint64_t> replicasVerified;
     std::map<proto::ConcurrencyControl::Result, proto::Signatures> p1ReplySigs;
     phase1_callback pcb;
     phase1_timeout_callback ptcb;
@@ -230,7 +232,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     uint64_t decision_view;  //can omit this for all requests that came from view = 0 because signature matches.
     //TODO: Need to add decision view checks eveywhere.
     Timeout *requestTimeout;
-    std::unordered_set<uint64_t> process_ids; //TODO: add check to avoid duplicates.
+    std::unordered_set<uint64_t> replicasVerified;
     proto::Signatures p2ReplySigs;
     uint64_t matchingReplies;
     phase2_callback pcb;
@@ -393,7 +395,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   };
   std::unordered_map<uint64_t, PendingReqIds> client_seq_num_mapping;
   std::unordered_map<std::string, PendingFB*> pendingFallbacks; //map from txnDigests to their fallback instances.
-
+  std::unordered_set<std::string> pendingRelays;
 
   //keep additional maps for this from txnDigest ->Pending For Fallback instances?
 

@@ -204,7 +204,7 @@ void ShardClient::Phase2(uint64_t id,
     phase2_timeout_callback ptcb, uint32_t timeout) {
   Debug("[group %i] Sending PHASE2 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
-  client_seq_num_mapping[id].pendingP1_id = reqId;
+  client_seq_num_mapping[id].pendingP2_id = reqId;
   PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);  //TODO: add view that this decision is from (default = 0).
   //TODO: When sending an InvokeFB message, this view = the view you propose ; but unclear what decision you are waiting for?
   //Create many mappings for potential views/decisions instead.
@@ -867,6 +867,17 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
       return;
     }
 
+    if (!pendingPhase1->replicasVerified.insert(reply.signed_cc().process_id()).second) {
+      Debug("Already verified signature from %lu.", reply.signed_cc().process_id());
+      if(FB_path){
+        Panic("duplicate P1 sent by server %u on the FB path", reply.signed_cc().process_id());
+      }
+      else{
+        Panic("duplicate P1 sent by server %u on the normal path", reply.signed_cc().process_id());
+      }
+      return;
+    }
+
     if (!IsReplicaInGroup(reply.signed_cc().process_id(), group, config)) {
       Debug("[group %d] Phase1Reply from replica %lu who is not in group.",
           group, reply.signed_cc().process_id());
@@ -1088,6 +1099,12 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
       return;
     }
 
+    if (!itr->second->replicasVerified.insert(reply.signed_p2_decision().process_id()).second) {
+      Debug("Already verified signature from %lu.", reply.signed_p2_decision().process_id());
+      Panic("duplicate P2 from server %lu", reply.signed_p2_decision().process_id());
+      return;
+    }
+
     if (!IsReplicaInGroup(reply.signed_p2_decision().process_id(), group, config)) {
       Debug("[group %d] Phase2Reply from replica %lu who is not in group.",
           group, reply.signed_p2_decision().process_id());
@@ -1099,10 +1116,14 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
             reply.signed_p2_decision().process_id()),
           reply.signed_p2_decision().data(),
           reply.signed_p2_decision().signature())) {
+      Debug("[group %d] Phase2Reply from replica %lu fails verification.",
+                group, reply.signed_p2_decision().process_id());
       return;
     }
 
     if (!validatedP2Decision.ParseFromString(reply.signed_p2_decision().data())) {
+      Debug("[group %d] Phase2Reply from replica %lu fails deserialization.",
+                group, reply.signed_p2_decision().process_id());
       return;
     }
 
@@ -1155,10 +1176,19 @@ void ShardClient::Phase1Decision(uint64_t reqId) {
 void ShardClient::Phase1Decision(
     std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready) {
   PendingPhase1 *pendingPhase1 = itr->second;
+  // if (pendingPhase1->requestTimeout != nullptr) {
+  //   delete pendingPhase1->requestTimeout;
+  //   pendingPhase1->requestTimeout = nullptr;
+  // }
+  // if (pendingPhase1->decisionTimeout != nullptr) {
+  //   delete pendingPhase1->decisionTimeout;
+  //   pendingPhase1->decisionTimeout = nullptr;
+  // }
   pendingPhase1->pcb(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict_flag,
       pendingPhase1->conflict, pendingPhase1->p1ReplySigs, eqv_ready);
-  this->pendingPhase1s.erase(itr);
-  delete pendingPhase1;
+   //Lookup and delete.
+   this->pendingPhase1s.erase(itr);
+   delete pendingPhase1;
 }
 
 ///////////////// Utility /////////////////////////
@@ -1252,18 +1282,25 @@ void ShardClient::FreePhase2Reply(proto::Phase2Reply *reply) {
 
 
 /////////////////////////////////////////FALLBACK CODE STARTS HERE ///////////////////////////////////////////
-void ShardClient::CleanFB(std::string &txnDigest){
+void ShardClient::CleanFB(const std::string &txnDigest){
   auto itr = pendingFallbacks.find(txnDigest);
   if(itr != pendingFallbacks.end()){
     delete itr->second;
     pendingFallbacks.erase(itr);
   }
+
+  //EraseRelay(txnDigest);
+}
+
+void ShardClient::EraseRelay(const std::string &txnDigest){
+  pendingRelays.erase(txnDigest);
 }
 
 void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
 
   std::string txnDigest(TransactionDigest(relayP1.p1().txn(), params.hashDigest));
   //only process the first relay for a txn.
+  //if (!pendingRelays.insert(txnDigest).second) return; //USING this works? seemingly does not either.
   if(this->pendingFallbacks.find(txnDigest) != this->pendingFallbacks.end()) return;
 
   Debug("RelayP1[%lu][%s].", relayP1.dependent_id(),
@@ -1276,7 +1313,7 @@ void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
         return; // this is a stale request and no upcall is necessary!
       }
 
-      std::cerr << "RECEIVED RELAY P1 AT SHARDCLIENT FOR TX: " << itr->second->client_seq_num << std::endl;
+      std::cerr << "RECEIVED RELAY P1[" << BytesToHex(txnDigest, 64) << "] AT SHARDCLIENT FOR CONFLICT TX: " << itr->second->client_seq_num << std::endl;
       itr->second->rcb(relayP1, txnDigest); //upcall to the registered relayP1 callback function.
 
   } else{ //this is a dep for a fallback request (i.e. a deeper depth)
@@ -1284,7 +1321,7 @@ void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
       if (itr == this->pendingFallbacks.end()) {
         return; // this is a stale request and no upcall is necessary!
       }
-      std::cerr << "RECEIVED RELAY P1 AT SHARDCLIENT FOR FB TX: " << itr->first << std::endl;
+      std::cerr << "RECEIVED RELAY P1[" << BytesToHex(txnDigest, 64) << "] AT SHARDCLIENT FOR FB CONFLICT TX: " << itr->first << std::endl;
       itr->second->rcb(relayP1.dependent_txn(), relayP1, txnDigest); //upcall to the registered relayP1 callback function.
   }
 }
