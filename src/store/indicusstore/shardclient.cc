@@ -372,8 +372,8 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
         // PendingReqIds &pRids = itr->second;
         // auto itrP1 = pendingPhase1s.find(pRids.pendingP1_id);
         // if(itrP1 != pendingPhase1s.end()){
-        //   pendingPhase1s.erase(itrP1);
         //   delete itrP1->second;
+        //   pendingPhase1s.erase(itrP1);
         // }
         // auto itrP2 = pendingPhase2s.find(pRids.pendingP2_id);
         // if(itrP2 != pendingPhase2s.end()){
@@ -984,6 +984,10 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
                   if (itr == pendingFallbacks.end()) {
                     return;
                   }
+                  if(!itr->second->p1){
+                    itr->second->pendingP1->decisionTimeout->Stop();
+                    return;
+                  }
                   itr->second->pendingP1->decision = proto::COMMIT;
                   itr->second->pendingP1->fast = false;
                   Phase1FBDecision(itr->second);
@@ -1025,6 +1029,10 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
                   if (itr == pendingFallbacks.end()) {
                     return;
                   }
+                  if(!itr->second->p1){
+                    itr->second->pendingP1->decisionTimeout->Stop();
+                    return;
+                  }
                   itr->second->pendingP1->decision = proto::ABORT;
                   itr->second->pendingP1->fast = false;
                   Phase1FBDecision(itr->second);
@@ -1063,6 +1071,10 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
                   phase1DecisionTimeout, [this, txnDig = *txnDigest]() {
                     auto itr = pendingFallbacks.find(txnDig);
                     if (itr == pendingFallbacks.end()) {
+                      return;
+                    }
+                    if(!itr->second->p1){
+                      itr->second->pendingP1->decisionTimeout->Stop();
                       return;
                     }
                     itr->second->pendingP1->decision = proto::ABORT;
@@ -1191,6 +1203,18 @@ void ShardClient::Phase1Decision(
    delete pendingPhase1;
 }
 
+//XXX Use StopP1 to halt all P1 processing on the shard client.
+void ShardClient::StopP1(uint64_t client_seq_num){
+  auto itr = client_seq_num_mapping.find(client_seq_num);
+  if(itr != client_seq_num_mapping.end()){
+    PendingReqIds &pRids = itr->second;
+    auto itrP1 = pendingPhase1s.find(pRids.pendingP1_id);
+    if(itrP1 != pendingPhase1s.end()){
+      delete itrP1->second;
+      pendingPhase1s.erase(itrP1);
+    }
+  }
+}
 ///////////////// Utility /////////////////////////
 
 
@@ -1371,8 +1395,10 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){
 
   //CASE 1: Received a fully formed WB message. TODO: verify it.
   if(p1fbr.has_wb()){
+    std::cerr << "received WB reply fast for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
     proto::Writeback wb = p1fbr.wb();
     pendingFB->wbFBcb(wb);
+    CleanFB(txnDigest);
     return;
   }
 
@@ -1412,6 +1438,13 @@ void ShardClient::ProcessP1FBR(proto::Phase1Reply &reply, PendingFB *pendingFB, 
     std::cerr<< "Calling Phase1FB callbackA for txn: " << BytesToHex(pendingPhase1->txnDigest_, 64) << " from shardClient " << group <<std::endl;
     pendingFB->p1FBcbA(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict_flag, pendingPhase1->conflict, pendingPhase1->p1ReplySigs);
     //pendingPhase1 needs to be deleted -->> happens in pendingFB destructor
+  }
+
+  void ShardClient::StopP1FB(std::string &txnDigest){
+    auto itr = pendingFallbacks.find(txnDigest);
+    if(itr != pendingFallbacks.end()){
+      itr->second->p1 = false;
+    }
   }
 
 //version A) for p1 based Phase2.  grouped_sigs. //TODO:change callbacks.

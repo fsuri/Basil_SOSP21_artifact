@@ -384,6 +384,8 @@ void Client::Phase1Callback(uint64_t txnId, int group,
   if (req->outstandingPhase1s == 0) {
     HandleAllPhase1Received(req);
   }
+    //XXX use StopP1 to shortcircuit all shard clients 
+  //bclient[group]->StopP1(txnId);
 }
 
 
@@ -472,6 +474,11 @@ void Client::Phase2(PendingRequest *req) {
         std::placeholders::_1),
       std::bind(&Client::Phase2TimeoutCallback, this, logGroup, req->id,
         std::placeholders::_1), req->timeout);
+
+    //XXX use StopP1 to shortcircuit all shard clients
+  // for(auto group : req->txn.involved_groups()){
+  //     bclient[group]->StopP1(req->id);
+  // }
 }
 
 void Client::Phase2Equivocate(PendingRequest *req) {
@@ -625,6 +632,11 @@ void Client::Writeback(PendingRequest *req) {
     req->ccb(result);
     req->callbackInvoked = true;
   }
+  //XXX use StopP1 to shortcircuit all shard clients
+  // for(auto group : req->txn.involved_groups()){
+  //   bclient[group]->StopP1(req->id);
+  // }
+
   this->pendingReqs.erase(req->id);
   delete req;
 }
@@ -727,8 +739,9 @@ bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
 void Client::CleanFB(PendingRequest *pendingFB, const std::string &txnDigest){
   std:cerr << "Called CleanFB for txnDigest: " << BytesToHex(txnDigest, 64) << std::endl;
   for(auto group : pendingFB->txn.involved_groups()){
+    std::cerr<< "Cleaned shard client: " << group << std::endl;
     bclient[group]->CleanFB(txnDigest);
-  }
+  } //TODO: this is not actually necessary if it is part of pendingFB destructor...
   FB_instances.erase(txnDigest);
   delete pendingFB;
 }
@@ -894,7 +907,8 @@ void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, pr
   PendingRequest *pendingFB = itr->second;
   if(pendingFB->startedWriteback) return;
   pendingFB->startedWriteback = true;
-
+  std::cerr<< "Forwarding WritebackFB fast for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+  Debug("Forwarding WritebackFB fast for txn: %s",BytesToHex(txnDigest, 64).c_str());
   //TODO: Need to validate WB message:
   // 1) check that txnDigest matches txn content
   // 2) check that sigs match decision and txnDigest
@@ -919,7 +933,7 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
   proto::CommitDecision decision, bool fast, bool conflict_flag,
   const proto::CommittedProof &conflict,
   const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs)  {
-    std::cerr<< "Phase1CallbackA for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+    std::cerr<< "Phase1CallbackA for txn: " << BytesToHex(txnDigest, 64) << "with decision: "<< decision << std::endl;
   Debug("Phase1FBcallbackA called for txn[%s]", BytesToHex(txnDigest, 64).c_str());
 
   if(!StillActive(conflict_id, txnDigest)) return;
@@ -957,7 +971,7 @@ void Client::FBHandleAllPhase1Received(PendingRequest *req) {
 //making it of type bool so that shard client does not require req Id dependency
 bool Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group,
    proto::CommitDecision decision, const proto::P2Replies &p2replies){
-     std::cerr<< "Phase1CallbackB for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+     std::cerr<< "Phase1CallbackB for txn: " << BytesToHex(txnDigest, 64) << " with decision: " << decision << std::endl;
      Debug("Phase1FBcallbackB called for txn[%s]", BytesToHex(txnDigest, 64).c_str());
 
      // check if conflict transaction still active
@@ -982,6 +996,7 @@ bool Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
 
 void Client::Phase2FB(PendingRequest *req){
 
+      std::cerr<< "sendingPhase2FB for txn: " << BytesToHex(req->txnDigest, 64) << std::endl;
       Debug("sending Phase2FB for txn[%s]", BytesToHex(req->txnDigest, 64).c_str());
       const proto::Transaction &fb_txn = req->txn;
 
@@ -997,13 +1012,15 @@ void Client::Phase2FB(PendingRequest *req){
       if(req->p2Replies.p2replies().size() >= config->f +1){
         req->startedPhase2 = true;
         bclient[logGroup]->Phase2FB(req->id, req->txn, req->txnDigest, req->decision, req->p2Replies);
-        return;
       }
       else{ //OTHERWISE: Use p1 sigs just like in normal case.
         Phase2Processing(req);
 
         bclient[logGroup]->Phase2FB(req->id, req->txn, req->txnDigest, req->decision,
           req->p1ReplySigsGrouped);
+      }
+      for (auto group : req->txn.involved_groups()) {
+        bclient[group]->StopP1FB(req->txnDigest);
       }
 }
 

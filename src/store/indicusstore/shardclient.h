@@ -117,6 +117,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
 
   virtual void Phase1(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
     phase1_callback pcb, phase1_timeout_callback ptcb, relayP1_callback rcb, uint32_t timeout);
+  virtual void StopP1(uint64_t client_seq_num);
   virtual void Phase2(uint64_t id, const proto::Transaction &transaction,
       const std::string &txnDigest, proto::CommitDecision decision,
       const proto::GroupedSignatures &groupedSigs, phase2_callback pcb,
@@ -142,6 +143,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
 //public fallback functions:
   virtual void CleanFB(const std::string &txnDigest);
   virtual void EraseRelay(const std::string &txnDigest);
+  virtual void StopP1FB(std::string &txnDigest);
   virtual void Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::string &txnDigest, phase1FB_callbackA p1FBcbA,
     phase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb);
   virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,
@@ -253,7 +255,13 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   struct PendingFB {
     PendingFB() : max_decision_view(0UL), p1(true), last_view(0), max_view(0), call_invokeFB(false) {}
     ~PendingFB(){
-      delete pendingP1;
+       delete pendingP1; //TODO: make it so that this is "deleted" after we have moved on from
+       // phase1. I.e. If we move to P2 or WB we never want to process additional p1s..
+       // "problem": Phase1Decision timeout checks for FB_txnDigest and not whether this exists.
+      // if(pendingP1 != nullptr){
+      //   delete pendingP1;
+      //   pendingP1 = nullptr;
+      // }
     }
 
     //TODO: pendingP1, pendingP2, Signed View need not be a pointer?
