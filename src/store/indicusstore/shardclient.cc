@@ -1665,7 +1665,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
 
     //XXX Fast case for completing p2 forwarding
     //XXX have to story full reply here because the decision views might differ.
-   if(pendingFB->p1){
+   if(false && pendingFB->p1){
       uint64_t id = reply.signed_p2_decision().process_id();
       if(pendingFB->process_ids.find(id) == pendingFB->process_ids.end()){
         pendingFB->process_ids.insert(id);

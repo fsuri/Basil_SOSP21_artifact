@@ -1918,7 +1918,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //TODO can remove this redundant lookup since it will be checked again...
         ongoingMap::const_accessor b;
         bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-        if (false && inOngoing) {
+        if (inOngoing) {
           std::string dependency_txnDig = dep.write().prepared_txn_digest();
           //schedule Relay for client timeout only..
           uint64_t conflict_id = !fallback_flow ? reqId : -1;

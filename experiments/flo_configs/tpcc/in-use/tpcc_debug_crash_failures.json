@@ -101,8 +101,8 @@
       "key_path": "/usr/local/etc/indicus-keys/donna",
 
       "inject_failure_type" : "client-crash",
-	  "inject_failure_proportion" : 0,
-	  "inject_failure_ms": 10,
+	  "inject_failure_proportion" : 10,
+	  "inject_failure_ms": 0,
 	  "inject_failure freq": 10,
       "all_to_all_fb" : false,
 	  "relayP1_timeout" : 10

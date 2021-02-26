@@ -384,7 +384,7 @@ void Client::Phase1Callback(uint64_t txnId, int group,
   if (req->outstandingPhase1s == 0) {
     HandleAllPhase1Received(req);
   }
-    //XXX use StopP1 to shortcircuit all shard clients 
+    //XXX use StopP1 to shortcircuit all shard clients
   //bclient[group]->StopP1(txnId);
 }
 
@@ -874,6 +874,7 @@ void Client::Phase1FB_deeper(uint64_t conflict_id, const std::string &txnDigest,
 
 void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, PendingRequest *pendingFB){
   for (auto group : p1->txn().involved_groups()) {
+      std::cerr<< "FB Txn: " << BytesToHex(txnDigest, 64) << " has involved group " << group << std::endl;
     //define all the callbacks here
       //bind conflict_id (i.e. the top level dependent) to all, so we can check if it is still waiting.
       //TODO: dont bind it but make it a field of the PendingRequest..

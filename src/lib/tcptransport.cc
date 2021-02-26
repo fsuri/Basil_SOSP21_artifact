@@ -872,7 +872,7 @@ TCPTransport::TCPIncomingEventCallback(struct bufferevent *bev,
                 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
         bufferevent_free(bev);
         return;
-    } else if (what & BEV_EVENT_EOF) {
+    } else if (what & BEV_EVENT_ERROR) {
       fprintf(stderr,"tcp incoming eof\n");
         Debug("EOF on incoming TCP connection\n");
         bufferevent_free(bev);
