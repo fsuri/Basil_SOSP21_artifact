@@ -78,7 +78,7 @@
 	  "_read_quorum": "majority-honest",
 	  "p1DecisionTimeout":10,
 
-      "max_dep_depth": 1,
+      "max_dep_depth": -1,
       "_max_dep_depth": -2, 
 	  "hash_digest": true,
       "verify_deps": false,
@@ -103,7 +103,7 @@
       "inject_failure_type" : "client-crash",
 	  "inject_failure_proportion" : 10,
 	  "inject_failure_ms": 0,
-	  "inject_failure freq": 10,
+	  "inject_failure freq": 100,
       "all_to_all_fb" : false,
 	  "relayP1_timeout" : 10
     }

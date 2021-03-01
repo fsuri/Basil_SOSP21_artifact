@@ -256,6 +256,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       const std::string &txnDigest, const proto::Transaction &txn,
       const proto::CommittedProof* &conflict, bool fallback_flow = false);
 
+  bool ManageDependencies(const std::string &txnDigest, const proto::Transaction &txn, const TransportAddress &remote, uint64_t reqId, bool fallback_flow = false);
+
   void GetWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);
   void GetWrites(

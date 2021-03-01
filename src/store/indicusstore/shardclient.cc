@@ -1337,7 +1337,7 @@ void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
         return; // this is a stale request and no upcall is necessary!
       }
 
-      std::cerr << "RECEIVED RELAY P1[" << BytesToHex(txnDigest, 64) << "] AT SHARDCLIENT FOR CONFLICT TX: " << itr->second->client_seq_num << std::endl;
+      std::cerr << "RECEIVED RELAY P1[" << BytesToHex(txnDigest, 64) << "] AT SHARDCLIENT " << group << " FOR CONFLICT TX: " << itr->second->client_seq_num << std::endl; //"for digest: " << BytesToHex(itr->second->txnDigest_, 64) << std::endl;
       itr->second->rcb(relayP1, txnDigest); //upcall to the registered relayP1 callback function.
 
   } else{ //this is a dep for a fallback request (i.e. a deeper depth)
@@ -1345,14 +1345,16 @@ void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
       if (itr == this->pendingFallbacks.end()) {
         return; // this is a stale request and no upcall is necessary!
       }
-      std::cerr << "RECEIVED RELAY P1[" << BytesToHex(txnDigest, 64) << "] AT SHARDCLIENT FOR FB CONFLICT TX: " << itr->first << std::endl;
+      std::cerr << "RECEIVED RELAY P1[" << BytesToHex(txnDigest, 64) << "] AT SHARDCLIENT " << group << " FOR FB CONFLICT TX: " << BytesToHex(itr->first, 64) << std::endl;
       itr->second->rcb(relayP1.dependent_txn(), relayP1, txnDigest); //upcall to the registered relayP1 callback function.
   }
 }
 
-//TODO: add a relay callback rcb.
-void ShardClient::Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::string &txnDigest, phase1FB_callbackA p1FBcbA,
-  phase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb) {
+//TODO: Move all callbacks (also in client.)
+void ShardClient::Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::string &txnDigest,
+ relayP1FB_callback rP1FB, phase1FB_callbackA p1FBcbA, phase1FB_callbackB p1FBcbB,
+ phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb) {
+
   Debug("[group %i] Sending PHASE1FB [%lu]", group, client_id);
   //uint64_t reqId = lastReqId++;
 
@@ -1365,6 +1367,7 @@ void ShardClient::Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::s
 
   //set all callbacks
   //TODO: need to have relayP1 of its own in theory, to support deeper deps.
+  pendingFB->rcb = rP1FB;
   pendingFB->wbFBcb = wbFBcb;
   pendingFB->p1FBcbA = p1FBcbA;
   pendingFB->p1FBcbB = p1FBcbB;
@@ -1391,6 +1394,9 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){
     Debug("P1FBReply [%s] is stale.", BytesToHex(txnDigest, 128).c_str());
     return; // this is a stale request
   }
+
+    std::cerr << "received Phase1FBReply for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
+
   PendingFB *pendingFB = itr->second;
 
   //CASE 1: Received a fully formed WB message. TODO: verify it.
@@ -1413,10 +1419,13 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){
   //CASE 2: Received a p2 decision
   if(p1fbr.has_p2r()){
     proto::Phase2Reply p2r = p1fbr.p2r();
+    std::cerr << "processing Phase1FBReply P2 for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
     if(ProcessP2FBR(p2r, pendingFB, txnDigest)){  //--> this will invoke the Fallback if inconsistency observed
+      std::cerr << "called P2FB callback: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
       return; //XXX only return if successful p2 callback, otherwise, also eval the p1 case
     }
   }
+  std::cerr << "processing Phase1FBReply P1 for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
   //CASE 3: Received a p1 vote and still processing p1
   if(pendingFB->p1 && p1fbr.has_p1r()){
     proto::Phase1Reply reply = p1fbr.p1r();

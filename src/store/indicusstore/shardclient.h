@@ -144,8 +144,9 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   virtual void CleanFB(const std::string &txnDigest);
   virtual void EraseRelay(const std::string &txnDigest);
   virtual void StopP1FB(std::string &txnDigest);
-  virtual void Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::string &txnDigest, phase1FB_callbackA p1FBcbA,
-    phase1FB_callbackB p1FBcbB, phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb);
+  virtual void Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::string &txnDigest,
+   relayP1FB_callback rP1FB, phase1FB_callbackA p1FBcbA, phase1FB_callbackB p1FBcbB,
+   phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb);
   virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,
     const proto::GroupedSignatures &groupedSigs);
   //overloaded for different p2 alternative

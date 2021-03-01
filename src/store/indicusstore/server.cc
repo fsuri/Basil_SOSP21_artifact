@@ -665,8 +665,12 @@ void Server::HandlePhase1(const TransportAddress &remote,
   if(p1DecItr){
     result = c->second;
     c.release();
-    //TODO: need to check if result is WAIT: if so, need to add to waitingDeps original client..
-    // use original client list and store pairs <txnDigest, <reqID, remote>>
+    // need to check if result is WAIT: if so, need to add to waitingDeps original client..
+        //(TODO) Instead: use original client list and store pairs <txnDigest, <reqID, remote>>
+    if(result == proto::ConcurrencyControl::WAIT){
+        ManageDependencies(txnDigest, *txn, remote, msg.req_id());
+    }
+
     if (result == proto::ConcurrencyControl::ABORT) {
       p1ConflictsMap::const_accessor d;
       auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
@@ -816,14 +820,14 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
     proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
 
     MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
-        [sendCB, p2Decision, msg, this]() {
+      [sendCB, p2Decision, msg, this]() {
         sendCB();
         delete p2Decision;
         //Free allocated memory
         if(params.multiThreading || params.mainThreadDispatching){
           FreePhase2message(msg); // const_cast<proto::Phase2&>(msg));
         }
-        });
+      });
     return (void*) true;
   }
   sendCB();
@@ -1894,89 +1898,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
      a.release();
   }
 
-  bool allFinished = true;
-
-  if(params.maxDepDepth > -2){
-
-     //if(params.mainThreadDispatching) dependentsMutex.lock();
-     if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
-
-    for (const auto &dep : txn.deps()) {
-      if (dep.involved_group() != groupIdx) {
-        continue;
-      }
-
-      // tbb::concurrent_hash_map<std::string, std::mutex>::const_accessor z;
-      // bool currently_completing = completing.find(z, dep.write().prepared_txn_digest());
-      // if(currently_completing) //z->second.lock();
-
-      if (committed.find(dep.write().prepared_txn_digest()) == committed.end() &&
-          aborted.find(dep.write().prepared_txn_digest()) == aborted.end()) {
-        Debug("[%lu:%lu][%s] WAIT for dependency %s to finish.",
-            txn.client_id(), txn.client_seq_num(),
-            BytesToHex(txnDigest, 16).c_str(),
-            BytesToHex(dep.write().prepared_txn_digest(), 16).c_str());
-
-        //XXX start RelayP1 to initiate Fallback handling
-        //TODO can remove this redundant lookup since it will be checked again...
-        ongoingMap::const_accessor b;
-        bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-        if (false && inOngoing) {
-          std::string dependency_txnDig = dep.write().prepared_txn_digest();
-          //schedule Relay for client timeout only..
-          uint64_t conflict_id = !fallback_flow ? reqId : -1;
-          const std::string &dependent_txnDig = !fallback_flow ? std::string() : txnDigest;
-          TransportAddress *remoteCopy = remote.clone();
-          transport->Timer(params.relayP1_timeout, [this, remoteCopy, dependency_txnDig, reqId, dependent_txnDig]() mutable {
-            this->RelayP1(*remoteCopy, dependency_txnDig, reqId, dependent_txnDig);
-            delete remoteCopy;
-          });
-          //proto::Transaction *tx = b->second; //ongoing[txnDig];
-          //RelayP1(remote, *tx, reqId);
-        }
-        b.release();
-
-        allFinished = false;
-        //dependents[dep.write().prepared_txn_digest()].insert(txnDigest);
-
-        // auto dependenciesItr = waitingDependencies.find(txnDigest);
-        // if (dependenciesItr == waitingDependencies.end()) {
-        //   auto inserted = waitingDependencies.insert(std::make_pair(txnDigest,
-        //         WaitingDependency()));
-        //   UW_ASSERT(inserted.second);
-        //   dependenciesItr = inserted.first;
-        // }
-        // dependenciesItr->second.reqId = reqId;
-        // dependenciesItr->second.remote = remote.clone();  //&remote;
-        // dependenciesItr->second.deps.insert(dep.write().prepared_txn_digest());
-
-        dependentsMap::accessor e;
-        dependents.insert(e, dep.write().prepared_txn_digest());
-        e->second.insert(txnDigest);
-        e.release();
-
-        waitingDependenciesMap::accessor f;
-        bool dependenciesItr = waitingDependencies_new.find(f, txnDigest);
-        if (!dependenciesItr) {
-          waitingDependencies_new.insert(f, txnDigest);
-          //f->second = WaitingDependency();
-        }
-        if(!fallback_flow){
-          f->second.original_client = true;
-          f->second.reqId = reqId;
-          f->second.remote = remote.clone();  //&remote;
-        }
-        f->second.deps.insert(dep.write().prepared_txn_digest());
-        f.release();
-      }
-     // if(currently_completing) //z->second.unlock();
-     // z.release();
-    }
-
-     //if(params.mainThreadDispatching) dependentsMutex.unlock();
-     if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
-
- }
+  bool allFinished = ManageDependencies(txnDigest, txn, remote, reqId, fallback_flow);
 
   if (!allFinished) {
     stats.Increment("cc_waits", 1);
@@ -1984,6 +1906,98 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
   } else {
     return CheckDependencies(txn);
   }
+}
+
+//TODO: relay Deeper depth when result is already wait. (If I always re-did the P1 it would be handled)
+// PRoblem: Dont want to re-do P1, otherwise a past Abort can turn into a commit. Hence we
+// ForwardWriteback
+bool Server::ManageDependencies(const std::string &txnDigest, const proto::Transaction &txn, const TransportAddress &remote, uint64_t reqId, bool fallback_flow){
+
+  bool allFinished = true;
+
+  if(params.maxDepDepth > -2){
+
+      //if(params.mainThreadDispatching) dependentsMutex.lock();
+     if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
+
+     for (const auto &dep : txn.deps()) {
+       if (dep.involved_group() != groupIdx) {
+         continue;
+       }
+
+       // tbb::concurrent_hash_map<std::string, std::mutex>::const_accessor z;
+       // bool currently_completing = completing.find(z, dep.write().prepared_txn_digest());
+       // if(currently_completing) //z->second.lock();
+
+       if (committed.find(dep.write().prepared_txn_digest()) == committed.end() &&
+           aborted.find(dep.write().prepared_txn_digest()) == aborted.end()) {
+         Debug("[%lu:%lu][%s] WAIT for dependency %s to finish.",
+             txn.client_id(), txn.client_seq_num(),
+             BytesToHex(txnDigest, 16).c_str(),
+             BytesToHex(dep.write().prepared_txn_digest(), 16).c_str());
+
+         //XXX start RelayP1 to initiate Fallback handling
+         //TODO can remove this redundant lookup since it will be checked again...
+         ongoingMap::const_accessor b;
+         bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
+         if (inOngoing) {
+           std::string dependency_txnDig = dep.write().prepared_txn_digest();
+           //schedule Relay for client timeout only..
+           uint64_t conflict_id = !fallback_flow ? reqId : -1;
+           const std::string &dependent_txnDig = !fallback_flow ? std::string() : txnDigest;
+           TransportAddress *remoteCopy = remote.clone();
+           uint64_t relayDelay = !fallback_flow ? params.relayP1_timeout : 0;
+           transport->Timer(relayDelay, [this, remoteCopy, dependency_txnDig, conflict_id, dependent_txnDig]() mutable {
+             this->RelayP1(*remoteCopy, dependency_txnDig, conflict_id, dependent_txnDig);
+             delete remoteCopy;
+           });
+           //proto::Transaction *tx = b->second; //ongoing[txnDig];
+           //RelayP1(remote, *tx, reqId);
+         }
+         b.release();
+
+         allFinished = false;
+         //dependents[dep.write().prepared_txn_digest()].insert(txnDigest);
+
+         // auto dependenciesItr = waitingDependencies.find(txnDigest);
+         // if (dependenciesItr == waitingDependencies.end()) {
+         //   auto inserted = waitingDependencies.insert(std::make_pair(txnDigest,
+         //         WaitingDependency()));
+         //   UW_ASSERT(inserted.second);
+         //   dependenciesItr = inserted.first;
+         // }
+         // dependenciesItr->second.reqId = reqId;
+         // dependenciesItr->second.remote = remote.clone();  //&remote;
+         // dependenciesItr->second.deps.insert(dep.write().prepared_txn_digest());
+
+         dependentsMap::accessor e;
+         dependents.insert(e, dep.write().prepared_txn_digest());
+         e->second.insert(txnDigest);
+         e.release();
+
+         waitingDependenciesMap::accessor f;
+         bool dependenciesItr = waitingDependencies_new.find(f, txnDigest);
+         if (!dependenciesItr) {
+           waitingDependencies_new.insert(f, txnDigest);
+           //f->second = WaitingDependency();
+         }
+         if(!fallback_flow){
+           f->second.original_client = true;
+           f->second.reqId = reqId;
+           f->second.remote = remote.clone();  //&remote;
+         }
+         f->second.deps.insert(dep.write().prepared_txn_digest());
+         f.release();
+       }
+      // if(currently_completing) //z->second.unlock();
+      // z.release();
+     }
+
+      //if(params.mainThreadDispatching) dependentsMutex.unlock();
+      if(params.mainThreadDispatching) waitingDependenciesMutex.unlock();
+  }
+
+  return allFinished;
 }
 
 void Server::GetPreparedReadTimestamps(
@@ -2338,6 +2352,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
               P1FBorganizer *p1fb_organizer = new P1FBorganizer(0, txnDigest, this);
               SetP1(0, p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
               //TODO: If need reqId, can store it as pairs with the interested client.
+              std::cerr << "Sending Phase1FBReply MULTICAST for txn: " << BytesToHex(txnDigest, 64) << std::endl;
               SendPhase1FBReply(p1fb_organizer, txnDigest, true);
             }
           }
@@ -3053,6 +3068,10 @@ void Server::RelayP1(const TransportAddress &remote, const std::string &dependen
   *relayP1.mutable_p1() = p1;
   if(dependent_id == -1) relayP1.set_dependent_txn(dependent_txnDig);
 
+  if(dependent_id != -1){
+    std::cerr<< "Sending relayP1 for dependent txn: " << BytesToHex(dependent_txnDig, 64) << " stuck waiting for dependency: " << BytesToHex(dependency_txnDig,64) << std::endl;
+  }
+
   transport->SendMessage(this, remote, relayP1);
   Debug("Sent RelayP1[%s].", BytesToHex(dependent_txnDig, 256).c_str());
 }
@@ -3174,6 +3193,11 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
 
+  std::cerr << "Received Phase1FB for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
+  fprintf(stderr, "PHASE1FB[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
+      msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
+      msg.txn().timestamp().timestamp());
+
   //check if already committed. reply with whole proof so client can forward that.
   //1) COMMIT CASE, 2) ABORT CASE
   if(ForwardWriteback(remote, msg.req_id(), txnDigest)){
@@ -3221,8 +3245,13 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
          SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
          //SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 4);
        }
+       else{
+         //Relay deeper depths.
+         ManageDependencies(txnDigest, msg.txn(), remote, 0, true);
+       }
        SetP2(msg.req_id(), p1fb_organizer->p1fbr->mutable_p2r(), txnDigest, decision, decision_view);
        SendPhase1FBReply(p1fb_organizer, txnDigest);
+       std::cerr << "Sent Phase1FBReply 1 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
   }
 
   //4) ONLY P1 CASE: (already did p1 but no p2)
@@ -3245,6 +3274,11 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
           P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
           SendPhase1FBReply(p1fb_organizer, txnDigest);
+          std::cerr << "Sent Phase1FBReply 2 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
+        }
+        else{
+          ManageDependencies(txnDigest, msg.txn(), remote, 0, true);
+          std::cerr << "WAITING on Phase1FBReply 2 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
         }
 
   }
@@ -3271,6 +3305,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       }
 
       SendPhase1FBReply(p1fb_organizer, txnDigest);
+      std::cerr << "Sent Phase1FBReply 3 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
   }
 
   //6) NO STATE STORED: Do p1 normally. copied logic from HandlePhase1(remote, msg)
@@ -3286,6 +3321,10 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
           P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
           SendPhase1FBReply(p1fb_organizer, txnDigest);
+          std::cerr << "Sent Phase1FBReply 4 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
+      }
+      else{
+        std::cerr << "WAITING on Phase1FBReply 4 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
       }
   }
 
@@ -3349,6 +3388,7 @@ bool Server::ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const 
   // }
   return true;
 }
+
 
 void Server::SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest, proto::ConcurrencyControl::Result &result,
   const proto::CommittedProof *conflict){
