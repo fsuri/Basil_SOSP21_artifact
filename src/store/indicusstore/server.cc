@@ -812,22 +812,25 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
     // }
 
 
-  //Free allocated memory
-  if(params.multiThreading || params.mainThreadDispatching){
-    FreePhase2message(msg); // const_cast<proto::Phase2&>(msg));
-  }
-
   if (params.validateProofs && params.signedMessages) {
     proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
 
     MessageToSign(p2Decision, phase2Reply->mutable_signed_p2_decision(),
-        [sendCB, p2Decision]() {
+        [sendCB, p2Decision, msg, this]() {
         sendCB();
         delete p2Decision;
+        //Free allocated memory
+        if(params.multiThreading || params.mainThreadDispatching){
+          FreePhase2message(msg); // const_cast<proto::Phase2&>(msg));
+        }
         });
     return (void*) true;
   }
   sendCB();
+  //Free allocated memory
+  if(params.multiThreading || params.mainThreadDispatching){
+    FreePhase2message(msg); // const_cast<proto::Phase2&>(msg));
+  }
   return (void*) true;
  };
 
@@ -1918,7 +1921,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
         //TODO can remove this redundant lookup since it will be checked again...
         ongoingMap::const_accessor b;
         bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-        if (inOngoing) {
+        if (false && inOngoing) {
           std::string dependency_txnDig = dep.write().prepared_txn_digest();
           //schedule Relay for client timeout only..
           uint64_t conflict_id = !fallback_flow ? reqId : -1;
