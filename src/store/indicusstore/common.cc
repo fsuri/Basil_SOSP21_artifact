@@ -215,7 +215,7 @@ bool ValidateCommittedConflict(const proto::CommittedProof &proof,
         txn->client_id(), txn->client_seq_num(),
         BytesToHex(*txnDigest, 16).c_str());
     std::cerr << "Committed txn does not conflict" << std::endl;
-    //Panic("Committed does not conflict");
+    Panic("Committed does not conflict");
     return false;
   }
 

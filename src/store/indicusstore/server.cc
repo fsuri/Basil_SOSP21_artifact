@@ -2282,6 +2282,7 @@ void Server::Clean(const std::string &txnDigest) {
   auto p1ConfItr = p1Conflicts.find(d, txnDigest);
   //p1Conflicts.erase(txnDigest);
   if(p1ConfItr) p1Conflicts.erase(d);
+  std::cerr << "deleted conflict for txn: " << BytesToHex(txnDigest, 64) << std::endl;
   d.release();
 
   p2MetaDataMap::accessor p;
@@ -3217,9 +3218,6 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       msg.txn().timestamp().timestamp());
 
   std::cerr << "Received Phase1FB for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
-  fprintf(stderr, "PHASE1FB[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
-      msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
-      msg.txn().timestamp().timestamp());
 
   //check if already committed. reply with whole proof so client can forward that.
   //1) COMMIT CASE, 2) ABORT CASE
@@ -3262,8 +3260,19 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
             p1ConflictsMap::const_accessor d;
             auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
             conflict = d->second;
+            if(d->second == nullptr){
+              Panic("1:stored conflict is nullptr");
+            }
+            if(conflict == nullptr){
+              Panic("1:conflict is nullptr");
+            }
             d.release();
             //conflict = p1Conflicts[txnDigest];
+
+              if(!conflict->has_txn()){
+                  Panic("HandleP1FB 1 with NO CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
+              }
+
          }
          SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
          //SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 4);
@@ -3275,6 +3284,9 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
        SetP2(msg.req_id(), p1fb_organizer->p1fbr->mutable_p2r(), txnDigest, decision, decision_view);
        SendPhase1FBReply(p1fb_organizer, txnDigest);
        std::cerr << "Sent Phase1FBReply 1 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
+
+       // c.release();
+       // p.release();
   }
 
   //4) ONLY P1 CASE: (already did p1 but no p2)
@@ -3292,7 +3304,17 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
              auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
              //conflict = p1Conflicts[txnDigest];
              conflict = d->second;
+             if(d->second == nullptr){
+               Panic("2: stored conflict is nullptr");
+             }
+             if(conflict == nullptr){
+               Panic("2: conflict is nullptr");
+             }
+
              d.release();
+             if(!conflict->has_txn()){
+                 Panic("HandleP1FB 2 with NO CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
+             }
           }
           P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
@@ -3303,6 +3325,9 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
           ManageDependencies(txnDigest, msg.txn(), remote, 0, true);
           std::cerr << "WAITING on Phase1FBReply 2 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
         }
+
+        // c.release();
+        // p.release();
 
   }
   //5) ONLY P2 CASE  (received p2, but was not part of p1)
@@ -3325,6 +3350,11 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 
       if (ExecP1(msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
+          if(result == proto::ConcurrencyControl::ABORT){
+             if(!committedProof->has_txn()){
+                 Panic("HandleP1FB 3 with NO CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
+             }
+          }
       }
 
       SendPhase1FBReply(p1fb_organizer, txnDigest);
@@ -3343,6 +3373,11 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       if (ExecP1(msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
           P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
+          if(result == proto::ConcurrencyControl::ABORT){
+             if(!committedProof->has_txn()){
+                 Panic("HandleP1FB 4 with NO CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
+             }
+          }
           SendPhase1FBReply(p1fb_organizer, txnDigest);
           std::cerr << "Sent Phase1FBReply 4 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
       }
@@ -3423,7 +3458,26 @@ void Server::SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::strin
     *p1Reply->mutable_cc()->mutable_txn_digest() = txnDigest;
     p1Reply->mutable_cc()->set_involved_group(groupIdx);
     if (result == proto::ConcurrencyControl::ABORT) {
-      *phase1Reply.mutable_cc()->mutable_committed_conflict() = *conflict;
+      *p1Reply->mutable_cc()->mutable_committed_conflict() = *conflict;
+    }
+  }
+
+  //Debugging why no conflict set.
+  if(p1Reply->cc().ccr() == proto::ConcurrencyControl::ABORT){
+    if(!p1Reply->cc().has_committed_conflict()){
+        if(conflict == nullptr){
+          p1ConflictsMap::const_accessor d;
+          auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
+          if(!p1ConflictsItr){
+            if(committed.find(txnDigest) != committed.end() || aborted.find(txnDigest) != aborted.end()){
+              std::cerr << "tx was finished inbetween" << std::endl;
+            }
+            Panic("conflict pointer was deleted inbetween for txn: %s", BytesToHex(txnDigest, 64).c_str());
+          }
+          d.release();
+          Panic("Set P1 conflict is nullptr");
+        }
+        Panic("Server P1 sets NO CONFLICT for Aborted txn: %s", BytesToHex(txnDigest,64).c_str());
     }
   }
 }
@@ -3488,6 +3542,14 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
     };
 
     if (params.signedMessages) {
+      if(p1FBReply->has_p1r()){
+        if(p1FBReply->p1r().cc().ccr() == proto::ConcurrencyControl::ABORT){
+          if(!p1FBReply->p1r().cc().has_committed_conflict()){
+              Panic("Server sends NO CONFLICT for Aborted txn: %s", BytesToHex(txnDigest,64).c_str());
+          }
+        }
+      }
+
       //First, "atomically" set the outstanding flags. (Need to do this before dispatching anything)
       if(p1FBReply->has_p1r() && p1FBReply->p1r().cc().ccr() != proto::ConcurrencyControl::ABORT){
         p1fb_organizer->p1_sig_outstanding = true;

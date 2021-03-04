@@ -367,6 +367,12 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
   //   *writeback.mutable_txn() = transaction;
   // }
 
+  if(writeback.has_conflict()){
+    if(!writeback.conflict().has_txn()){
+        Panic("WritebackFBcallback with no CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
+    }
+  }
+
   transport->SendMessageToGroup(this, group, writeback);
   if(id > 0) {
     Debug("[group %i] Sent WRITEBACK[%lu]", group, id);
@@ -390,13 +396,8 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
   }
   else{
     Debug("[group %i] Sent Fallback WRITEBACK[%s]", group, txnDigest.c_str());
-    if(!writeback.has_txn()){
-      Panic("WritebackFBcallback with no TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
-    }
-    // if(writeback.has_conflict()){
-    //   if(!writeback.conflict().has_txn()){
-    //       Panic("WritebackFBcallback with no CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
-    //   }
+    // if(!writeback.has_txn()){
+    //   Panic("WritebackFBcallback with no TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
     // }
     //pendingFallbacks.erase(txnDigest);
   }
@@ -909,11 +910,33 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
     }
 
     cc = &validatedCC;
+
+    if(cc->ccr() == proto::ConcurrencyControl::ABORT){
+      if(!cc->has_committed_conflict()){
+          Panic("has Signed: Process P1 NO CONFLICT for Aborted txn: %s", BytesToHex(*txnDigest,64).c_str());
+      }
+    }
+    if(cc->has_committed_conflict()){
+      if(!cc->committed_conflict().has_txn()){
+          Panic("has Signed: Process P1 NO CONFLICT TXN for Aborted txn: %s", BytesToHex(*txnDigest,64).c_str());
+      }
+    }
   } else {
     UW_ASSERT(reply.has_cc());
 
     cc = &reply.cc();
 
+    //TODO:: check that it even has committed conflict if result is Abort. If not --> server is overriding it..
+    if(cc->ccr() == proto::ConcurrencyControl::ABORT){
+      if(!cc->has_committed_conflict()){
+          Panic("does not have Signed: Process P1 NO CONFLICT for Aborted txn: %s", BytesToHex(*txnDigest,64).c_str());
+      }
+    }
+    if(cc->has_committed_conflict()){
+      if(!cc->committed_conflict().has_txn()){
+          Panic("does not have Signed: Process P1 NO CONFLICT TXN for Aborted txn: %s", BytesToHex(*txnDigest,64).c_str());
+      }
+    }
   }
 
   Debug("[group %i] PHASE1 callback ccr=%d", group, cc->ccr());

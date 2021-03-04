@@ -43,6 +43,10 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc, bool f
   switch(cc.ccr()) {
 
     case proto::ConcurrencyControl::ABORT: {
+      if(!cc.committed_conflict().has_txn()){
+          Panic("Process P1 Validator CONFLICT TXN for Aborted txn: %s", BytesToHex(*txnDigest,64).c_str());
+      }
+
       std::string committedTxnDigest = TransactionDigest(
           cc.committed_conflict().txn(), params.hashDigest);
       //TODO: RECOMMENT, just testing
@@ -53,21 +57,21 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc, bool f
             group);
         std::cerr << "         Proof verification fails" << std::endl;
 
-        for(const ReadMessage& read : txn->read_set()){
-          std::cerr<< "dependent txn has read key: " << read.key() << std::endl;
-        }
-
-        for(const WriteMessage& write : txn->write_set()){
-          std::cerr<< "dependent txn has write key: " << write.key() << std::endl;
-        }
-
-        for(const ReadMessage& read : cc.committed_conflict().txn().read_set()){
-          std::cerr<< "conflict txn has read key: " << read.key() << std::endl;
-        }
-
-        for(const WriteMessage& write : cc.committed_conflict().txn().write_set()){
-          std::cerr<< "conflict txn has write key: " << write.key() << std::endl;
-        }
+        // for(const ReadMessage& read : txn->read_set()){
+        //   std::cerr<< "dependent txn has read key: " << read.key() << std::endl;
+        // }
+        //
+        // for(const WriteMessage& write : txn->write_set()){
+        //   std::cerr<< "dependent txn has write key: " << write.key() << std::endl;
+        // }
+        //
+        // for(const ReadMessage& read : cc.committed_conflict().txn().read_set()){
+        //   std::cerr<< "conflict txn has read key: " << read.key() << std::endl;
+        // }
+        //
+        // for(const WriteMessage& write : cc.committed_conflict().txn().write_set()){
+        //   std::cerr<< "conflict txn has write key: " << write.key() << std::endl;
+        // }
 
         return false;
       } else {
