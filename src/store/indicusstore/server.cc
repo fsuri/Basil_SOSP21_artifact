@@ -3068,7 +3068,7 @@ void Server::RelayP1(const TransportAddress &remote, const std::string &dependen
   *relayP1.mutable_p1() = p1;
   if(dependent_id == -1) relayP1.set_dependent_txn(dependent_txnDig);
 
-  if(dependent_id != -1){
+  if(dependent_id == -1){
     std::cerr<< "Sending relayP1 for dependent txn: " << BytesToHex(dependent_txnDig, 64) << " stuck waiting for dependency: " << BytesToHex(dependency_txnDig,64) << std::endl;
   }
 
@@ -3079,8 +3079,9 @@ void Server::RelayP1(const TransportAddress &remote, const std::string &dependen
 bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest){
   //1) COMMIT CASE
   if(committed.find(txnDigest) != committed.end()){
+      std::cerr<< "ForwardingWriteback Commit for txn:" << BytesToHex(txnDigest, 64) << std::endl;
       proto::Phase1FBReply phase1FBReply;
-      phase1FBReply.Clear();   //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
+      phase1FBReply.Clear();
       phase1FBReply.set_req_id(ReqId);
       phase1FBReply.set_txn_digest(txnDigest);
 
@@ -3089,6 +3090,8 @@ bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, co
       wb->set_decision(proto::COMMIT);
       wb->set_txn_digest(txnDigest);
       proto::CommittedProof* proof = committed[txnDigest];
+
+      //*wb->mutable_txn() = proof->txn();
 
       if(proof->has_p1_sigs()){
         *wb->mutable_p1_sigs() = proof->p1_sigs();
@@ -3121,11 +3124,18 @@ bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, co
   //writebackMessages only contains Abort copies. (when can one delete these?)
   //(A blockchain stores all request too, whether commit/abort)
   if(writebackMessages.find(txnDigest) != writebackMessages.end()){
+      std::cerr<< "ForwardingWriteback Abort for txn:" << BytesToHex(txnDigest, 64) << std::endl;
       proto::Phase1FBReply phase1FBReply;
-      phase1FBReply.Clear();   //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
+      phase1FBReply.Clear();
       phase1FBReply.set_req_id(ReqId);
       phase1FBReply.set_txn_digest(txnDigest);
       *phase1FBReply.mutable_wb() = writebackMessages[txnDigest];
+      if(phase1FBReply.wb().has_conflict()){
+        if(!phase1FBReply.wb().conflict().has_txn()){
+          std::cerr<< "ForwardingWriteback Abort HAS CONFLICT, BUT MISSING TXN for txn:" << BytesToHex(txnDigest, 64) << std::endl;
+        }
+      }
+
       transport->SendMessage(this, remote, phase1FBReply);
       return true;
   }
@@ -3139,7 +3149,8 @@ bool Server::ForwardWritebackMulti(const std::string &txnDigest, interestedClien
   proto::Phase1FBReply phase1FBReply;
 
   if(committed.find(txnDigest) != committed.end()){
-      phase1FBReply.Clear();   //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
+      std::cerr<< "ForwardingWritebackMulti Commit for txn:" << BytesToHex(txnDigest, 64) << std::endl;
+      phase1FBReply.Clear();
       phase1FBReply.set_req_id(0);
       phase1FBReply.set_txn_digest(txnDigest);
 
@@ -3148,6 +3159,8 @@ bool Server::ForwardWritebackMulti(const std::string &txnDigest, interestedClien
       wb->set_decision(proto::COMMIT);
       wb->set_txn_digest(txnDigest);
       proto::CommittedProof* proof = committed[txnDigest];
+
+      //*wb->mutable_txn() = proof->txn();
 
       if(proof->has_p1_sigs()){
         *wb->mutable_p1_sigs() = proof->p1_sigs();
@@ -3164,16 +3177,26 @@ bool Server::ForwardWritebackMulti(const std::string &txnDigest, interestedClien
   }
   //2) ABORT CASE
   else if(writebackMessages.find(txnDigest) != writebackMessages.end()){
-      phase1FBReply.Clear();   //XXX CAUTION: USING GLOBAL OBJECT CURRENTLY
+
+      std::cerr<< "ForwardingWritebackMulti Abort for txn:" << BytesToHex(txnDigest, 64) << std::endl;
+
+      phase1FBReply.Clear();
       phase1FBReply.set_req_id(0);
       phase1FBReply.set_txn_digest(txnDigest);
       *phase1FBReply.mutable_wb() = writebackMessages[txnDigest];
+      if(phase1FBReply.wb().has_conflict()){
+        if(!phase1FBReply.wb().conflict().has_txn()){
+          std::cerr<< "ForwardingWriteback Abort HAS CONFLICT, BUT MISSING TXN for txn:" << BytesToHex(txnDigest, 64) << std::endl;
+        }
+      }
   }
   else{
     return false;
   }
 
   for (const auto addr : i->second) {
+    std::cerr<< "ForwardingWritebackMulti to client: " << std::endl; //would need to store client ID with it to print.
+
     transport->SendMessage(this, *addr, phase1FBReply);
     delete addr;
   }

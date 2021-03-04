@@ -126,7 +126,7 @@
   "server_debug_output": false,
   "server_debug_stats": false,
   "client_debug_stats": false,
-  "client_experiment_length": 30,
+  "client_experiment_length": 20,
   "client_ramp_down": 5,
   "client_ramp_up": 5,
   "default_remote_shell": "bash",

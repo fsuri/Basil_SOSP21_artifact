@@ -250,6 +250,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     req->txnDigest = TransactionDigest(txn, params.hashDigest);
     req->timeout = timeout;
     stats.IncrementList("txn_groups", txn.involved_groups().size());
+
     Phase1(req);
   });
 }
@@ -392,12 +393,13 @@ void Client::Phase1Callback(uint64_t txnId, int group,
 
 
 void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
-  std::cerr << "Timing out on transaction: " << txnId << std::endl;
-  return;
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
     return;
   }
+
+  std::cerr << "Timing out on transaction: " << txnId << std::endl;
+  return;  //TODO:: REMOVE AND REPLACE
 
   PendingRequest *req = itr->second;
   if (req->startedPhase2 || req->startedWriteback) {
@@ -734,6 +736,7 @@ bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
 
   //check if we have a dependent (has_dependent), and whether it is done? If so, call cleanCB()
   if(itr->second->has_dependent && FB_instances.find(itr->second->dependent) == FB_instances.end()){
+    std::cerr<< "Not active because FB conflict txn already finished" << std::endl;
     Debug("Dependent of txn[%s] already committed, aborted, or in the process of doing so.", BytesToHex(txnDigest, 64).c_str());
     CleanFB(itr->second, txnDigest); //call into Shard clients to clean up state as well!
     return false;
@@ -774,8 +777,6 @@ void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::strin
     return;
   }
 
-  proto::Phase1 *p1 = relayP1.release_p1();
-
   //const std::string &txnDigest = TransactionDigest(p1->txn(), params.hashDigest);
 
   //do not start multiple FB instances for the same TX
@@ -787,6 +788,16 @@ void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::strin
     Debug("Tx[%s] is not a dependency of ReqId: %d", BytesToHex(txnDigest, 128).c_str(), reqId);
     return;
   }
+
+  proto::Phase1 *p1 = relayP1.release_p1();
+
+  // for(const ReadMessage& read : p1->txn().read_set()){
+  //   std::cerr<< "txn " << BytesToHex(txnDigest, 64) << " has read key: " << read.key() << std::endl;
+  // }
+  //
+  // for(const WriteMessage& write : p1->txn().write_set()){
+  //   std::cerr<< "txn " << BytesToHex(txnDigest, 64) << "has write key: " << write.key() << std::endl;
+  // }
 
   if(itr->second->startFB){
     std::cerr << "Starting Phase1FB directly" << std::endl;
@@ -834,8 +845,6 @@ void Client::RelayP1callbackFB(uint64_t reqId, const std::string &dependent_txnD
     return;
   }
 
-  proto::Phase1 *p1 = relayP1.release_p1();
-
   //const std::string &txnDigest = TransactionDigest(p1->txn(), params.hashDigest);
 
   //do not start multiple FB instances for the same TX
@@ -847,6 +856,8 @@ void Client::RelayP1callbackFB(uint64_t reqId, const std::string &dependent_txnD
     Debug("Tx[%s] is not a dependency of ReqId: %d", BytesToHex(txnDigest, 128).c_str(), reqId);
     return;
   }
+
+  proto::Phase1 *p1 = relayP1.release_p1();
 
   std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec P1FB for deeper depth. original conflict id: " << reqId
             << " dependent_txnDigest: " << BytesToHex(dependent_txnDigest, 64)
@@ -881,6 +892,7 @@ void Client::Phase1FB_deeper(uint64_t conflict_id, const std::string &txnDigest,
 }
 
 void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, PendingRequest *pendingFB){
+
   for (auto group : p1->txn().involved_groups()) {
       std::cerr<< "Client " << client_id << ":Send FB Txn: " << BytesToHex(txnDigest, 64) << " to involved group " << group << std::endl;
     //define all the callbacks here
@@ -925,8 +937,17 @@ void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, pr
   //TODO:: CHECK THAT fbtxn matches digest? Not necessary if we just set the contents ourselves.
   // set txn field here.
   //Also: server side message might not include txn, hence include it ourselves just in case.
+
   *wb.mutable_txn() = std::move(pendingFB->txn);
 
+  if(!wb.has_txn()){
+    Panic("WritebackFBcallback fast with no TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
+  }
+  if(wb.has_conflict()){
+    if(!wb.conflict().has_txn()){
+        Panic("WritebackFBcallback fast with no CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
+    }
+  }
 
 
  for (auto group : wb.txn().involved_groups()) {

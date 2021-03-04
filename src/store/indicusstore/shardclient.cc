@@ -363,6 +363,9 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
     }
   }
   writeback.set_txn_digest(txnDigest);
+  // if(id == 0) { //in FB a replica may not have seen the txn... not necessary since all failed clients wouldve sent to everyone first...
+  //   *writeback.mutable_txn() = transaction;
+  // }
 
   transport->SendMessageToGroup(this, group, writeback);
   if(id > 0) {
@@ -387,6 +390,14 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
   }
   else{
     Debug("[group %i] Sent Fallback WRITEBACK[%s]", group, txnDigest.c_str());
+    if(!writeback.has_txn()){
+      Panic("WritebackFBcallback with no TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
+    }
+    // if(writeback.has_conflict()){
+    //   if(!writeback.conflict().has_txn()){
+    //       Panic("WritebackFBcallback with no CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
+    //   }
+    // }
     //pendingFallbacks.erase(txnDigest);
   }
 }
@@ -907,6 +918,8 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
 
   Debug("[group %i] PHASE1 callback ccr=%d", group, cc->ccr());
 
+  if(FB_path) std::cerr << "Signature Verification etc success. DECISION: " << cc->ccr() << std::endl;
+
   if (!pendingPhase1->p1Validator.ProcessMessage(*cc, (failureActive && !FB_path) )) {
     return;
   }
@@ -926,11 +939,13 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
       Phase1Decision(itr, true); //use non-default flag to elicit equivcocation path
       break;
     case FAST_COMMIT:
+      std::cerr << "     P1Validator    STATE: FAST_COMMIT" << std::endl;
       pendingPhase1->decision = proto::COMMIT;
       pendingPhase1->fast = true;
       !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       break;
     case FAST_ABORT:
+      std::cerr << "     P1Validator    STATE: FAST_ABORT" << std::endl;
       pendingPhase1->decision = proto::ABORT;
       pendingPhase1->fast = true;
       pendingPhase1->conflict_flag = true;
@@ -940,22 +955,26 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
       !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       break;
     case FAST_ABSTAIN:  //INSERTED THIS NEW
+      std::cerr << "     P1Validator    STATE: FAST_ABSTAIN" << std::endl;
       Debug("Fast_abstain path is taken");
       pendingPhase1->decision = proto::ABORT;
       pendingPhase1->fast = true;
       !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       break;
     case SLOW_COMMIT_FINAL:
+      std::cerr << "     P1Validator    STATE: SLOW_COMMIT_FINAL" << std::endl;
       pendingPhase1->decision = proto::COMMIT;
       pendingPhase1->fast = false;
       !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       break;
     case SLOW_ABORT_FINAL:
+      std::cerr << "     P1Validator    STATE: SLOW_ABORT_FINAL" << std::endl;
       pendingPhase1->decision = proto::ABORT;
       pendingPhase1->fast = false;
       !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       break;
     case SLOW_COMMIT_TENTATIVE:
+      std::cerr << "     P1Validator    STATE: SLOW_COMMIT_TENTATIVE - START TIMER" << std::endl;
       if(phase1DecisionTimeout == 0){
         itr->second->decision = proto::COMMIT;
         itr->second->fast = false;
@@ -980,6 +999,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
           else{
             pendingPhase1->decisionTimeout = new Timeout(transport,
               phase1DecisionTimeout, [this, txnDig = *txnDigest]() {
+                std::cerr << "     P1Validator    STATE: SLOW_COMMIT_TENTATIVE - END TIMER TRY" << std::endl;
                 auto itr = pendingFallbacks.find(txnDig);
                   if (itr == pendingFallbacks.end()) {
                     return;
@@ -988,6 +1008,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
                     itr->second->pendingP1->decisionTimeout->Stop();
                     return;
                   }
+                  std::cerr << "     P1Validator    STATE: SLOW_COMMIT_TENTATIVE - END TIMER SUCCESS" << std::endl;
                   itr->second->pendingP1->decision = proto::COMMIT;
                   itr->second->pendingP1->fast = false;
                   Phase1FBDecision(itr->second);
@@ -1001,6 +1022,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
       break;
 
     case SLOW_ABORT_TENTATIVE:
+      std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE - START TIMER" << std::endl;
       if(phase1DecisionTimeout == 0){
         itr->second->decision = proto::ABORT;
         itr->second->fast = false;
@@ -1025,6 +1047,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
           else{
             pendingPhase1->decisionTimeout = new Timeout(transport,
               phase1DecisionTimeout, [this, txnDig = *txnDigest]() {
+                std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE - END TIMER TRY" << std::endl;
                 auto itr = pendingFallbacks.find(txnDig);
                   if (itr == pendingFallbacks.end()) {
                     return;
@@ -1033,6 +1056,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
                     itr->second->pendingP1->decisionTimeout->Stop();
                     return;
                   }
+                  std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE - START TIMER" << std::endl;
                   itr->second->pendingP1->decision = proto::ABORT;
                   itr->second->pendingP1->fast = false;
                   Phase1FBDecision(itr->second);
@@ -1045,6 +1069,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
       }
       break;
     case SLOW_ABORT_TENTATIVE2:
+        std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE 2 - START TIMER" << std::endl;
         if(phase1DecisionTimeout == 0){
           itr->second->decision = proto::ABORT;
           itr->second->fast = false;
@@ -1069,6 +1094,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
             else{
               pendingPhase1->decisionTimeout = new Timeout(transport,
                   phase1DecisionTimeout, [this, txnDig = *txnDigest]() {
+                    std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE 2 - END TIMER TRY" << std::endl;
                     auto itr = pendingFallbacks.find(txnDig);
                     if (itr == pendingFallbacks.end()) {
                       return;
@@ -1077,6 +1103,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
                       itr->second->pendingP1->decisionTimeout->Stop();
                       return;
                     }
+                    std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE 2 - END TIMER SUCCESS" << std::endl;
                     itr->second->pendingP1->decision = proto::ABORT;
                     itr->second->pendingP1->fast = false;
                     Phase1FBDecision(itr->second);
@@ -1380,6 +1407,7 @@ void ShardClient::Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::s
   *phase1FB.mutable_txn() = txn;
 
   transport->SendMessageToGroup(this, group, phase1FB);
+  std::cerr<< "SentPhase1FB for txn: " << BytesToHex(txnDigest, 64) << " to group: " << group << std::endl;
 
   //pendingPhase1->requestTimeout->Reset();
 }
@@ -1419,13 +1447,14 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){
   //CASE 2: Received a p2 decision
   if(p1fbr.has_p2r()){
     proto::Phase2Reply p2r = p1fbr.p2r();
-    std::cerr << "processing Phase1FBReply P2 for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
+    std::cerr << "      processing Phase1FBReply P2 for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
     if(ProcessP2FBR(p2r, pendingFB, txnDigest)){  //--> this will invoke the Fallback if inconsistency observed
-      std::cerr << "called P2FB callback: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
+      std::cerr << "    called P2FB callback: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
       return; //XXX only return if successful p2 callback, otherwise, also eval the p1 case
     }
   }
-  std::cerr << "processing Phase1FBReply P1 for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
+  std::cerr << "      trying to process Phase1FBReply P1 for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group
+      << " still doing p1? " << pendingFB->p1 << " has p1r? " << p1fbr.has_p1r() << std::endl;
   //CASE 3: Received a p1 vote and still processing p1
   if(pendingFB->p1 && p1fbr.has_p1r()){
     proto::Phase1Reply reply = p1fbr.p1r();

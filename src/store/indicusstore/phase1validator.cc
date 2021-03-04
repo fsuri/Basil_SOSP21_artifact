@@ -25,6 +25,8 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc, bool f
     Debug("[group %d] Phase1Reply digest %s does not match computed digest %s.",
         group, BytesToHex(cc.txn_digest(), 16).c_str(),
         BytesToHex(*txnDigest, 16).c_str());
+
+    std::cerr << "         txnDigest of CC message does not match." << std::endl;
     return false;
   }
 
@@ -49,6 +51,24 @@ bool Phase1Validator::ProcessMessage(const proto::ConcurrencyControl &cc, bool f
             keyManager, config, verifier)) {
         Debug("[group %d] Invalid committed_conflict for Phase1Reply.",
             group);
+        std::cerr << "         Proof verification fails" << std::endl;
+
+        for(const ReadMessage& read : txn->read_set()){
+          std::cerr<< "dependent txn has read key: " << read.key() << std::endl;
+        }
+
+        for(const WriteMessage& write : txn->write_set()){
+          std::cerr<< "dependent txn has write key: " << write.key() << std::endl;
+        }
+
+        for(const ReadMessage& read : cc.committed_conflict().txn().read_set()){
+          std::cerr<< "conflict txn has read key: " << read.key() << std::endl;
+        }
+
+        for(const WriteMessage& write : cc.committed_conflict().txn().write_set()){
+          std::cerr<< "conflict txn has write key: " << write.key() << std::endl;
+        }
+
         return false;
       } else {
         state = FAST_ABORT;
