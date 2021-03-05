@@ -364,7 +364,6 @@ void Client::Phase1Callback(uint64_t txnId, int group,
         " or aborted.", txnId);
     return;
   }
-  std::cerr<< "P1 Reply from group " << group << " with result: " << decision << " for tx: " << txnId << std::endl;
 
   //total_counter++;
   //if(fast) fast_path_counter++;
@@ -398,7 +397,6 @@ void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
     return;
   }
 
-  std::cerr << "Timing out on transaction: " << txnId << std::endl;
   return;  //TODO:: REMOVE AND REPLACE
 
   PendingRequest *req = itr->second;
@@ -587,26 +585,17 @@ void Client::WritebackProcessing(PendingRequest *req){
 
 void Client::Writeback(PendingRequest *req) {
 
-  // struct timeval tv;
-  // gettimeofday(&tv, NULL);
-  // uint64_t elapsed_time = (tv.tv_sec*1000000+tv.tv_usec)/1000  - start_time;  //in miliseconds
-  // if(elapsed_time > 9000){
-  //     std::cerr<< "Finished tx["  << req->id << "] after " << elapsed_time << " ms" << std::endl;
-  // }
-
   Debug("WRITEBACK[%lu:%lu] result %s", client_id, req->id, req->decision ?  "ABORT" : "COMMIT");
 
   req->startedWriteback = true;
 
   if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
-    std::cerr << "CRASHED Writeback for txn Id: " << req->id << " with decision: " << req->decision << "; txn digest: " << BytesToHex(TransactionDigest(req->txn, params.hashDigest), 64)<< std::endl;
-    Debug("INJECT CRASH FAILURE[%lu:%lu]", client_id, req->id);
+    Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
+          BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
     stats.Increment("inject_failure_crash");
     FailureCleanUp(req);
     return;
   }
-
-  std::cerr << "Writeback for txn Id: " << req->id << " with decision: " << req->decision << "; txn digest: " << std::endl; //BytesToHex(TransactionDigest(req->txn, params.hashDigest), 64)<< std::endl;
 
   transaction_status_t result;
   switch (req->decision) {
@@ -729,14 +718,12 @@ bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
   auto itrReq = pendingReqs.find(conflict_id);
   if(itrReq == pendingReqs.end() || itrReq->second->outstandingPhase1s == 0){
     Debug("Request id %lu already committed, aborted, or in the process of doing so.", conflict_id);
-    std::cerr<< "Not active because conflict Id already finished" << std::endl;
     CleanFB(itr->second, txnDigest); //call into Shard clients to clean up state as well!
     return false;
   }
 
   //check if we have a dependent (has_dependent), and whether it is done? If so, call cleanCB()
   if(itr->second->has_dependent && FB_instances.find(itr->second->dependent) == FB_instances.end()){
-    std::cerr<< "Not active because FB conflict txn already finished" << std::endl;
     Debug("Dependent of txn[%s] already committed, aborted, or in the process of doing so.", BytesToHex(txnDigest, 64).c_str());
     CleanFB(itr->second, txnDigest); //call into Shard clients to clean up state as well!
     return false;
@@ -746,9 +733,9 @@ bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
 }
 
 void Client::CleanFB(PendingRequest *pendingFB, const std::string &txnDigest){
-  std:cerr << "Called CleanFB for txnDigest: " << BytesToHex(txnDigest, 64) << std::endl;
+  Debug("Called CleanFB for txnDigest: %s ", BytesToHex(txnDigest, 64).c_str());
   for(auto group : pendingFB->txn.involved_groups()){
-    std::cerr<< "Cleaned shard client: " << group << std::endl;
+    Debug("Cleaned shard client: %d", group);
     bclient[group]->CleanFB(txnDigest);
   } //TODO: this is not actually necessary if it is part of pendingFB destructor...
   FB_instances.erase(txnDigest);
@@ -762,13 +749,6 @@ void Client::EraseRelays(proto::RelayP1 &relayP1, std::string &txnDigest){
 }
 
 void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::string& txnDigest){
-
-  // struct timeval tv;
-  // gettimeofday(&tv, NULL);
-  // uint64_t elapsed_time = (tv.tv_sec*1000000+tv.tv_usec)/1000  - start_time;  //in miliseconds
-  // if(elapsed_time > 9000){
-  //     std::cerr<< "Received RelayP1 tx["  << reqId << "] after " << elapsed_time << " ms" << std::endl;
-  // }
 
   auto itr = pendingReqs.find(reqId);
   if(itr == pendingReqs.end()){
@@ -785,27 +765,19 @@ void Client::RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::strin
   if(FB_instances.find(txnDigest) != FB_instances.end()) return;
   //Check if the current pending request has this txn as dependency.
   if(!isDep(txnDigest, itr->second->txn)){
-    Debug("Tx[%s] is not a dependency of ReqId: %d", BytesToHex(txnDigest, 128).c_str(), reqId);
+    Debug("Tx[%s] is not a dependency of ReqId: %d", BytesToHex(txnDigest, 16).c_str(), reqId);
     return;
   }
 
   proto::Phase1 *p1 = relayP1.release_p1();
 
-  // for(const ReadMessage& read : p1->txn().read_set()){
-  //   std::cerr<< "txn " << BytesToHex(txnDigest, 64) << " has read key: " << read.key() << std::endl;
-  // }
-  //
-  // for(const WriteMessage& write : p1->txn().write_set()){
-  //   std::cerr<< "txn " << BytesToHex(txnDigest, 64) << "has write key: " << write.key() << std::endl;
-  // }
-
   if(itr->second->startFB){
-    std::cerr << "Starting Phase1FB directly" << std::endl;
+    Debug("Starting Phase1FB directly for txn: %s", BytesToHex(txnDigest, 16).c_str());
     //itr->second->req_FB_instances.insert(txnDigest); //XXX mark connection between reqId and FB instance
     Phase1FB(txnDigest, reqId, p1);
   }
   else{
-    std::cerr << " Add Phase1FB to buffer" << std::endl;
+    Debug("Adding to FB buffer for txn: %s", BytesToHex(txnDigest, 16).c_str());
     //itr->second->RelayP1s.emplace_back(p1, txnDigest);
     itr->second->RelayP1s[txnDigest] = p1;
   }
@@ -820,7 +792,7 @@ void Client::RelayP1TimeoutCallback(uint64_t reqId){
 
   itr->second->startFB = true;
   for(auto p1_pair : itr->second->RelayP1s){
-    std::cerr << "Starting Phase1FB from buffer" << std::endl;
+    Debug("Starting Phase1FB from FB buffer for dependent txnId: %d", reqId);
     //itr->second->req_FB_instances.insert(p1_pair.first); //XXX mark connection between reqId and FB instance
     Phase1FB(p1_pair.first, reqId, p1_pair.second);
   }
@@ -859,9 +831,8 @@ void Client::RelayP1callbackFB(uint64_t reqId, const std::string &dependent_txnD
 
   proto::Phase1 *p1 = relayP1.release_p1();
 
-  std::cerr << "CLIENT PROCESSING RELAYP1 UPCALL - Exec P1FB for deeper depth. original conflict id: " << reqId
-            << " dependent_txnDigest: " << BytesToHex(dependent_txnDigest, 64)
-            << " txnDigest of stalled tx:  "  << BytesToHex(txnDigest, 64) << std::endl;
+  Debug("Starting Phase1FB for deeper depth right away");
+
   //itr->second->req_FB_instances.insert(txnDigest); //XXX mark connection between reqId and FB instance
   Phase1FB_deeper(reqId, txnDigest, dependent_txnDigest, p1);
 }
@@ -869,7 +840,8 @@ void Client::RelayP1callbackFB(uint64_t reqId, const std::string &dependent_txnD
 
 void Client::Phase1FB(const std::string &txnDigest, uint64_t conflict_id, proto::Phase1 *p1){  //passes callbacks
 
-  std::cerr << "Started Phase1FB for txn: " << BytesToHex(txnDigest, 64) << " for dependent ID: " << conflict_id << std::endl;
+  Debug("Started Phase1FB for txn: %s, for dependent ID: %d", BytesToHex(txnDigest, 16).c_str(), conflict_id);
+
   PendingRequest* pendingFB = new PendingRequest(p1->req_id(), this); //Id doesnt really matter here
   pendingFB->txn = p1->txn();
   pendingFB->txnDigest = txnDigest;
@@ -881,6 +853,8 @@ void Client::Phase1FB(const std::string &txnDigest, uint64_t conflict_id, proto:
 }
 
 void Client::Phase1FB_deeper(uint64_t conflict_id, const std::string &txnDigest, const std::string &dependent_txnDigest, proto::Phase1 *p1){
+
+  Debug("Starting Phase1FB for deeper depth. Original conflict id: %d, Dependent txnDigest: %s, txnDigest of tx causing the stall %s", conflict_id, BytesToHex(dependent_txnDigest, 16).c_str(), BytesToHex(txnDigest, 16).c_str());
 
   PendingRequest* pendingFB = new PendingRequest(p1->req_id(), this); //Id doesnt really matter here
   pendingFB->txn = p1->txn();
@@ -894,7 +868,8 @@ void Client::Phase1FB_deeper(uint64_t conflict_id, const std::string &txnDigest,
 void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, PendingRequest *pendingFB){
 
   for (auto group : p1->txn().involved_groups()) {
-      std::cerr<< "Client " << client_id << ":Send FB Txn: " << BytesToHex(txnDigest, 64) << " to involved group " << group << std::endl;
+      Debug("Client %d, Send Phase1FB for txn %s to involved group %d", client_id, BytesToHex(txnDigest, 16).c_str(), group);
+
     //define all the callbacks here
       //bind conflict_id (i.e. the top level dependent) to all, so we can check if it is still waiting.
       //TODO: dont bind it but make it a field of the PendingRequest..
@@ -915,7 +890,7 @@ void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::st
       pendingFB->outstandingPhase1s++;
     }
   delete p1;
-  Debug("SentPhase1FB for txn[%s]", BytesToHex(txnDigest, 64).c_str());
+  Debug("Sent all Phase1FB for txn[%s]", BytesToHex(txnDigest, 64).c_str());
   return;
 }
 
@@ -923,14 +898,15 @@ void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::st
 
 //If Receive a finished FB just forward it.
 void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, proto::Writeback &wb) {
-  std::cerr<< "Received WritebackFB callback fast for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+  Debug("Received WritebackFB callback fast for txn: %s", BytesToHex(txnDigest, 16).c_str());
+
   if(!StillActive(conflict_id, txnDigest)) return;
   auto itr = FB_instances.find(txnDigest);
   PendingRequest *pendingFB = itr->second;
   if(pendingFB->startedWriteback) return;
   pendingFB->startedWriteback = true;
-  std::cerr<< "Forwarding WritebackFB fast for txn: " << BytesToHex(txnDigest, 64) << std::endl;
-  Debug("Forwarding WritebackFB fast for txn: %s",BytesToHex(txnDigest, 64).c_str());
+
+  Debug("Forwarding WritebackFB fast for txn: %s",BytesToHex(txnDigest, 16).c_str());
   //TODO: Need to validate WB message:
   // 1) check that txnDigest matches txn content
   // 2) check that sigs match decision and txnDigest
@@ -939,16 +915,6 @@ void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, pr
   //Also: server side message might not include txn, hence include it ourselves just in case.
 
   *wb.mutable_txn() = std::move(pendingFB->txn);
-
-  if(!wb.has_txn()){
-    Panic("WritebackFBcallback fast with no TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
-  }
-  if(wb.has_conflict()){
-    if(!wb.conflict().has_txn()){
-        Panic("WritebackFBcallback fast with no CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
-    }
-  }
-
 
  for (auto group : wb.txn().involved_groups()) {
    bclient[group]->WritebackFB_fast(txnDigest, wb);
@@ -964,8 +930,8 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
   proto::CommitDecision decision, bool fast, bool conflict_flag,
   const proto::CommittedProof &conflict,
   const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs)  {
-    std::cerr<< "Received Phase1CallbackA for txn: " << BytesToHex(txnDigest, 64) << "with decision: "<< decision << std::endl;
-  Debug("Phase1FBcallbackA called for txn[%s]", BytesToHex(txnDigest, 64).c_str());
+
+  Debug("Phase1FBcallbackA called for txn[%s] with decision: %d", BytesToHex(txnDigest, 64).c_str(), decision);
 
   if(!StillActive(conflict_id, txnDigest)) return;
 
@@ -977,11 +943,10 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
     return;
   }
 
-  std::cerr<< "Processing Phase1CallbackA for txn: " << BytesToHex(txnDigest, 64) << "with decision: "<< decision << std::endl;
+  Debug("Processing Phase1CallbackA for txn: %s with decision %d", BytesToHex(txnDigest, 16).c_str(), decision);
   Phase1CallbackProcessing(req, group, decision, fast, conflict_flag, conflict, sigs);
 
   if (req->outstandingPhase1s == 0) {
-    std::cerr<< "0 outstandingPhase1s for txn: " << BytesToHex(txnDigest, 64) << "with decision: "<< decision << std::endl;
     FBHandleAllPhase1Received(req);
   }
   //TODO: find mechanism to include this work in InvokeFB too.
@@ -1004,8 +969,8 @@ void Client::FBHandleAllPhase1Received(PendingRequest *req) {
 //making it of type bool so that shard client does not require req Id dependency
 bool Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int64_t group,
    proto::CommitDecision decision, const proto::P2Replies &p2replies){
-     std::cerr<< "Phase1CallbackB for txn: " << BytesToHex(txnDigest, 64) << " with decision: " << decision << std::endl;
-     Debug("Phase1FBcallbackB called for txn[%s]", BytesToHex(txnDigest, 64).c_str());
+
+     Debug("Phase1FBcallbackB called for txn[%s] with decision %d", BytesToHex(txnDigest, 64).c_str(), decision);
 
      // check if conflict transaction still active
     if(!StillActive(conflict_id, txnDigest)) return false;
@@ -1029,8 +994,8 @@ bool Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
 
 void Client::Phase2FB(PendingRequest *req){
 
-      std::cerr<< "sendingPhase2FB for txn: " << BytesToHex(req->txnDigest, 64) << std::endl;
-      Debug("sending Phase2FB for txn[%s]", BytesToHex(req->txnDigest, 64).c_str());
+      Debug("Sending Phase2FB for txn[%s] with decision: %d", BytesToHex(req->txnDigest, 16).c_str(), req->decision);
+
       const proto::Transaction &fb_txn = req->txn;
 
       uint8_t groupIdx = req->txnDigest[0];
@@ -1061,7 +1026,7 @@ void Client::Phase2FB(PendingRequest *req){
 void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group,
    proto::CommitDecision decision, const proto::Signatures &p2ReplySigs, uint64_t view){
 
-  Debug("Phase2FBcallback called for txn[%s]", BytesToHex(txnDigest, 64).c_str());
+  Debug("Phase2FBcallback called for txn[%s] with decision %d", BytesToHex(txnDigest, 16).c_str(), decision);
   // check if conflict transaction still active
   if(!StillActive(conflict_id, txnDigest)) return;
 
@@ -1086,8 +1051,8 @@ void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64
 }
 
 void Client::WritebackFB(PendingRequest *req){
-  std:cerr <<"WritebackFB for txn: " << BytesToHex(req->txnDigest, 64) << std::endl;
-  Debug("WRITEBACKFB[%lu:%s] result: %s", client_id, req->txnDigest.c_str(), req->decision ? "COMMIT" : "ABORT");
+
+  Debug("WRITEBACKFB[%lu:%s] result: %s", client_id, BytesToHex(req->txnDigest, 16).c_str(), req->decision ? "COMMIT" : "ABORT");
 
   req->startedWriteback = true;
   WritebackProcessing(req);

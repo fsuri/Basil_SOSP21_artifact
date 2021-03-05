@@ -1940,7 +1940,7 @@ bool Server::ManageDependencies(const std::string &txnDigest, const proto::Trans
          //TODO can remove this redundant lookup since it will be checked again...
          ongoingMap::const_accessor b;
          bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-         if (inOngoing) {
+         if (false && inOngoing) {
            std::string dependency_txnDig = dep.write().prepared_txn_digest();
            //schedule Relay for client timeout only..
            uint64_t conflict_id = !fallback_flow ? reqId : -1;
@@ -2282,7 +2282,6 @@ void Server::Clean(const std::string &txnDigest) {
   auto p1ConfItr = p1Conflicts.find(d, txnDigest);
   //p1Conflicts.erase(txnDigest);
   if(p1ConfItr) p1Conflicts.erase(d);
-  std::cerr << "deleted conflict for txn: " << BytesToHex(txnDigest, 64) << std::endl;
   d.release();
 
   p2MetaDataMap::accessor p;
@@ -2353,7 +2352,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
               P1FBorganizer *p1fb_organizer = new P1FBorganizer(0, txnDigest, this);
               SetP1(0, p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
               //TODO: If need reqId, can store it as pairs with the interested client.
-              std::cerr << "Sending Phase1FBReply MULTICAST for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+              Debug("Sending Phase1FBReply MULTICAST for txn: %s", BytesToHex(txnDigest, 64).c_str());
               SendPhase1FBReply(p1fb_organizer, txnDigest, true);
             }
           }
@@ -2451,21 +2450,6 @@ void Server::BufferP1Result(proto::ConcurrencyControl::Result result,
         c->second = result;
       }
     }
-
-    // //p1Decisions.insert(c, std::make_pair(txnDigest, result));
-    // if(!p1Decisions.find(c, txnDigest)){
-    //   // if(result == proto::ConcurrencyControl::WAIT){
-    //   //   std::cerr<< "Buffering Wait first time for txn: " << BytesToHex(txnDigest, 64) << std::endl;
-    //   // }
-    //   p1Decisions.insert(c, std::make_pair(txnDigest, result));
-    // }
-    // else{
-    //   //std::cerr<< "Displacing buffered result: " << c->second << "with new result: " << result << "for txn: " << BytesToHex(txnDigest,64) << std::endl;
-    //
-    //   if(result != proto::ConcurrencyControl::WAIT){
-    //     c->second = result;
-    //   }
-    // }
     c.release();
   //  p1Decisions[txnDigest] = result;
 
@@ -2506,11 +2490,6 @@ void Server::SendPhase1Reply(uint64_t reqId,
       //Latency_Start(&signLat);
       Debug("PHASE1[%s] Batching Phase1Reply.",
             BytesToHex(txnDigest, 16).c_str());
-
-      if(cc->ccr() == proto::ConcurrencyControl::WAIT){
-        std::cerr<< "Result was Wait" << std::endl;
-        Backtrace();
-      }
 
       MessageToSign(cc, phase1Reply->mutable_signed_cc(),
         [sendCB, cc, txnDigest, this, phase1Reply]() {
@@ -3070,7 +3049,7 @@ void Server::RelayP1(const TransportAddress &remote, const std::string &dependen
   if(dependent_id == -1) relayP1.set_dependent_txn(dependent_txnDig);
 
   if(dependent_id == -1){
-    std::cerr<< "Sending relayP1 for dependent txn: " << BytesToHex(dependent_txnDig, 64) << " stuck waiting for dependency: " << BytesToHex(dependency_txnDig,64) << std::endl;
+    Debug("Sending relayP1 for dependent txn: %s stuck waiting for dependency: %s", BytesToHex(dependent_txnDig, 64).c_str(), BytesToHex(dependency_txnDig,64).c_str());
   }
 
   transport->SendMessage(this, remote, relayP1);
@@ -3080,7 +3059,7 @@ void Server::RelayP1(const TransportAddress &remote, const std::string &dependen
 bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest){
   //1) COMMIT CASE
   if(committed.find(txnDigest) != committed.end()){
-      std::cerr<< "ForwardingWriteback Commit for txn:" << BytesToHex(txnDigest, 64) << std::endl;
+      Debug("ForwardingWriteback Commit for txn: %s", BytesToHex(txnDigest, 64).c_str());
       proto::Phase1FBReply phase1FBReply;
       phase1FBReply.Clear();
       phase1FBReply.set_req_id(ReqId);
@@ -3125,17 +3104,12 @@ bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, co
   //writebackMessages only contains Abort copies. (when can one delete these?)
   //(A blockchain stores all request too, whether commit/abort)
   if(writebackMessages.find(txnDigest) != writebackMessages.end()){
-      std::cerr<< "ForwardingWriteback Abort for txn:" << BytesToHex(txnDigest, 64) << std::endl;
+      Debug("ForwardingWriteback Abort for txn: %s", BytesToHex(txnDigest, 64).c_str());
       proto::Phase1FBReply phase1FBReply;
       phase1FBReply.Clear();
       phase1FBReply.set_req_id(ReqId);
       phase1FBReply.set_txn_digest(txnDigest);
       *phase1FBReply.mutable_wb() = writebackMessages[txnDigest];
-      if(phase1FBReply.wb().has_conflict()){
-        if(!phase1FBReply.wb().conflict().has_txn()){
-          std::cerr<< "ForwardingWriteback Abort HAS CONFLICT, BUT MISSING TXN for txn:" << BytesToHex(txnDigest, 64) << std::endl;
-        }
-      }
 
       transport->SendMessage(this, remote, phase1FBReply);
       return true;
@@ -3150,7 +3124,7 @@ bool Server::ForwardWritebackMulti(const std::string &txnDigest, interestedClien
   proto::Phase1FBReply phase1FBReply;
 
   if(committed.find(txnDigest) != committed.end()){
-      std::cerr<< "ForwardingWritebackMulti Commit for txn:" << BytesToHex(txnDigest, 64) << std::endl;
+      Debug("ForwardingWritebackMulti Commit for txn: %s", BytesToHex(txnDigest, 64).c_str());
       phase1FBReply.Clear();
       phase1FBReply.set_req_id(0);
       phase1FBReply.set_txn_digest(txnDigest);
@@ -3178,25 +3152,18 @@ bool Server::ForwardWritebackMulti(const std::string &txnDigest, interestedClien
   }
   //2) ABORT CASE
   else if(writebackMessages.find(txnDigest) != writebackMessages.end()){
-
-      std::cerr<< "ForwardingWritebackMulti Abort for txn:" << BytesToHex(txnDigest, 64) << std::endl;
-
+      Debug("ForwardingWritebackMulti Abort for txn: %s", BytesToHex(txnDigest, 64).c_str());
       phase1FBReply.Clear();
       phase1FBReply.set_req_id(0);
       phase1FBReply.set_txn_digest(txnDigest);
       *phase1FBReply.mutable_wb() = writebackMessages[txnDigest];
-      if(phase1FBReply.wb().has_conflict()){
-        if(!phase1FBReply.wb().conflict().has_txn()){
-          std::cerr<< "ForwardingWriteback Abort HAS CONFLICT, BUT MISSING TXN for txn:" << BytesToHex(txnDigest, 64) << std::endl;
-        }
-      }
   }
   else{
     return false;
   }
 
   for (const auto addr : i->second) {
-    std::cerr<< "ForwardingWritebackMulti to client: " << std::endl; //would need to store client ID with it to print.
+    Debug("ForwardingWritebackMulti for txn: %s to +1 clients", BytesToHex(txnDigest, 64).c_str()); //would need to store client ID with it to print.
 
     transport->SendMessage(this, *addr, phase1FBReply);
     delete addr;
@@ -3213,11 +3180,8 @@ bool Server::ForwardWritebackMulti(const std::string &txnDigest, interestedClien
 void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg) {
 
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
-  Debug("PHASE1FB[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
-      msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
-      msg.txn().timestamp().timestamp());
+  Debug("Received PHASE1FB[%lu:%lu][%s] with ts %lu.", msg.req_id(), BytesToHex(txnDigest, 16).c_str());
 
-  std::cerr << "Received Phase1FB for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
 
   //check if already committed. reply with whole proof so client can forward that.
   //1) COMMIT CASE, 2) ABORT CASE
@@ -3260,19 +3224,8 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
             p1ConflictsMap::const_accessor d;
             auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
             conflict = d->second;
-            if(d->second == nullptr){
-              Panic("1:stored conflict is nullptr");
-            }
-            if(conflict == nullptr){
-              Panic("1:conflict is nullptr");
-            }
             d.release();
             //conflict = p1Conflicts[txnDigest];
-
-              if(!conflict->has_txn()){
-                  Panic("HandleP1FB 1 with NO CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
-              }
-
          }
          SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
          //SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 4);
@@ -3283,8 +3236,8 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
        }
        SetP2(msg.req_id(), p1fb_organizer->p1fbr->mutable_p2r(), txnDigest, decision, decision_view);
        SendPhase1FBReply(p1fb_organizer, txnDigest);
-       std::cerr << "Sent Phase1FBReply 1 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
 
+       Debug("Sent Phase1FBReply on path hasP2+hasP1 for txn: %s, sent by client: %d", BytesToHex(txnDigest, 16).c_str(), msg.req_id());
        // c.release();
        // p.release();
   }
@@ -3304,26 +3257,17 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
              auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
              //conflict = p1Conflicts[txnDigest];
              conflict = d->second;
-             if(d->second == nullptr){
-               Panic("2: stored conflict is nullptr");
-             }
-             if(conflict == nullptr){
-               Panic("2: conflict is nullptr");
-             }
-
              d.release();
-             if(!conflict->has_txn()){
-                 Panic("HandleP1FB 2 with NO CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
-             }
           }
           P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
           SendPhase1FBReply(p1fb_organizer, txnDigest);
-          std::cerr << "Sent Phase1FBReply 2 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
+          Debug("Sent Phase1FBReply on path hasP1 for txn: %s, sent by client: %d", BytesToHex(txnDigest, 16).c_str(), msg.req_id());
+
         }
         else{
           ManageDependencies(txnDigest, msg.txn(), remote, 0, true);
-          std::cerr << "WAITING on Phase1FBReply 2 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
+          Debug("WAITING on dep in order to send Phase1FBReply on path hasP1 for txn: %s, sent by client: %d", BytesToHex(txnDigest, 16).c_str(), msg.req_id());
         }
 
         // c.release();
@@ -3350,15 +3294,10 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 
       if (ExecP1(msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
-          if(result == proto::ConcurrencyControl::ABORT){
-             if(!committedProof->has_txn()){
-                 Panic("HandleP1FB 3 with NO CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
-             }
-          }
       }
 
       SendPhase1FBReply(p1fb_organizer, txnDigest);
-      std::cerr << "Sent Phase1FBReply 3 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
+      Debug("Sent Phase1FBReply on path P2 + ExecP1 for txn: %s, sent by client: %d", BytesToHex(txnDigest, 16).c_str(), msg.req_id());
   }
 
   //6) NO STATE STORED: Do p1 normally. copied logic from HandlePhase1(remote, msg)
@@ -3373,16 +3312,11 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       if (ExecP1(msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
           P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
-          if(result == proto::ConcurrencyControl::ABORT){
-             if(!committedProof->has_txn()){
-                 Panic("HandleP1FB 4 with NO CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
-             }
-          }
           SendPhase1FBReply(p1fb_organizer, txnDigest);
-          std::cerr << "Sent Phase1FBReply 4 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
+          Debug("Sent Phase1FBReply on path ExecP1 for txn: %s, sent by client: %d", BytesToHex(txnDigest, 16).c_str(), msg.req_id());
       }
       else{
-        std::cerr << "WAITING on Phase1FBReply 4 for txn: " << BytesToHex(txnDigest, 64) << "from client: " << msg.req_id() << std::endl;
+        Debug("WAITING on dep in order to send Phase1FBReply on path ExecP1 for txn: %s, sent by client: %d", BytesToHex(txnDigest, 16).c_str(), msg.req_id());
       }
   }
 
@@ -3462,24 +3396,6 @@ void Server::SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::strin
     }
   }
 
-  //Debugging why no conflict set.
-  if(p1Reply->cc().ccr() == proto::ConcurrencyControl::ABORT){
-    if(!p1Reply->cc().has_committed_conflict()){
-        if(conflict == nullptr){
-          p1ConflictsMap::const_accessor d;
-          auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
-          if(!p1ConflictsItr){
-            if(committed.find(txnDigest) != committed.end() || aborted.find(txnDigest) != aborted.end()){
-              std::cerr << "tx was finished inbetween" << std::endl;
-            }
-            Panic("conflict pointer was deleted inbetween for txn: %s", BytesToHex(txnDigest, 64).c_str());
-          }
-          d.release();
-          Panic("Set P1 conflict is nullptr");
-        }
-        Panic("Server P1 sets NO CONFLICT for Aborted txn: %s", BytesToHex(txnDigest,64).c_str());
-    }
-  }
 }
 
 void Server::SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision, uint64_t decision_view){
@@ -3542,14 +3458,6 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
     };
 
     if (params.signedMessages) {
-      if(p1FBReply->has_p1r()){
-        if(p1FBReply->p1r().cc().ccr() == proto::ConcurrencyControl::ABORT){
-          if(!p1FBReply->p1r().cc().has_committed_conflict()){
-              Panic("Server sends NO CONFLICT for Aborted txn: %s", BytesToHex(txnDigest,64).c_str());
-          }
-        }
-      }
-
       //First, "atomically" set the outstanding flags. (Need to do this before dispatching anything)
       if(p1FBReply->has_p1r() && p1FBReply->p1r().cc().ccr() != proto::ConcurrencyControl::ABORT){
         p1fb_organizer->p1_sig_outstanding = true;

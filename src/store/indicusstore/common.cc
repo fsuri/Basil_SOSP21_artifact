@@ -214,14 +214,11 @@ bool ValidateCommittedConflict(const proto::CommittedProof &proof,
         BytesToHex(*committedTxnDigest, 16).c_str(),
         txn->client_id(), txn->client_seq_num(),
         BytesToHex(*txnDigest, 16).c_str());
-    std::cerr << "Committed txn does not conflict" << std::endl;
-    Panic("Committed does not conflict");
     return false;
   }
 
   if (signedMessages && !ValidateCommittedProof(proof, committedTxnDigest,
         keyManager, config, verifier)) {
-    std::cerr << "Signatures for proof are not valid" << std::endl;
     return false;
   }
 
@@ -239,16 +236,13 @@ bool ValidateCommittedProof(const proto::CommittedProof &proof,
   }
 
   if (proof.has_p1_sigs()) {
-    std::cerr << "hasP1 sigs" << std::endl;
     return ValidateP1Replies(proto::COMMIT, true, &proof.txn(), committedTxnDigest,
         proof.p1_sigs(), keyManager, config, -1, proto::ConcurrencyControl::ABORT,
         verifier);
   } else if (proof.has_p2_sigs()) {
-    std::cerr << "hasP2 sigs" << std::endl;
     return ValidateP2Replies(proto::COMMIT, proof.p2_view(), &proof.txn(), committedTxnDigest,
         proof.p2_sigs(), keyManager, config, -1, proto::ABORT, verifier);
   } else {
-    std::cerr << "has NO sigs" << std::endl;
     Debug("Proof has neither P1 nor P2 sigs.");
     return false;
   }

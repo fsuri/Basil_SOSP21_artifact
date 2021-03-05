@@ -367,12 +367,6 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
   //   *writeback.mutable_txn() = transaction;
   // }
 
-  if(writeback.has_conflict()){
-    if(!writeback.conflict().has_txn()){
-        Panic("WritebackFBcallback with no CONFLICT TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
-    }
-  }
-
   transport->SendMessageToGroup(this, group, writeback);
   if(id > 0) {
     Debug("[group %i] Sent WRITEBACK[%lu]", group, id);
@@ -395,10 +389,7 @@ void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, 
      }
   }
   else{
-    Debug("[group %i] Sent Fallback WRITEBACK[%s]", group, txnDigest.c_str());
-    // if(!writeback.has_txn()){
-    //   Panic("WritebackFBcallback with no TXN for txn: %s", BytesToHex(txnDigest,64).c_str());
-    // }
+    Debug("[group %i] Sent Fallback WRITEBACK[%s]", group, BytesToHex(txnDigest, 16).c_str());
     //pendingFallbacks.erase(txnDigest);
   }
 }
@@ -881,12 +872,6 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
 
     if (!pendingPhase1->replicasVerified.insert(reply.signed_cc().process_id()).second) {
       Debug("Already verified signature from %lu.", reply.signed_cc().process_id());
-      if(FB_path){
-        Panic("duplicate P1 sent by server %u on the FB path", reply.signed_cc().process_id());
-      }
-      else{
-        Panic("duplicate P1 sent by server %u on the normal path", reply.signed_cc().process_id());
-      }
       return;
     }
 
@@ -911,37 +896,13 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
 
     cc = &validatedCC;
 
-    if(cc->ccr() == proto::ConcurrencyControl::ABORT){
-      if(!cc->has_committed_conflict()){
-          Panic("has Signed: Process P1 NO CONFLICT for Aborted txn: %s", BytesToHex(*txnDigest,64).c_str());
-      }
-    }
-    if(cc->has_committed_conflict()){
-      if(!cc->committed_conflict().has_txn()){
-          Panic("has Signed: Process P1 NO CONFLICT TXN for Aborted txn: %s", BytesToHex(*txnDigest,64).c_str());
-      }
-    }
   } else {
     UW_ASSERT(reply.has_cc());
 
     cc = &reply.cc();
-
-    //TODO:: check that it even has committed conflict if result is Abort. If not --> server is overriding it..
-    if(cc->ccr() == proto::ConcurrencyControl::ABORT){
-      if(!cc->has_committed_conflict()){
-          Panic("does not have Signed: Process P1 NO CONFLICT for Aborted txn: %s", BytesToHex(*txnDigest,64).c_str());
-      }
-    }
-    if(cc->has_committed_conflict()){
-      if(!cc->committed_conflict().has_txn()){
-          Panic("does not have Signed: Process P1 NO CONFLICT TXN for Aborted txn: %s", BytesToHex(*txnDigest,64).c_str());
-      }
-    }
   }
 
   Debug("[group %i] PHASE1 callback ccr=%d", group, cc->ccr());
-
-  if(FB_path) std::cerr << "Signature Verification etc success. DECISION: " << cc->ccr() << std::endl;
 
   if (!pendingPhase1->p1Validator.ProcessMessage(*cc, (failureActive && !FB_path) )) {
     return;
@@ -962,13 +923,13 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
       Phase1Decision(itr, true); //use non-default flag to elicit equivcocation path
       break;
     case FAST_COMMIT:
-      std::cerr << "     P1Validator    STATE: FAST_COMMIT" << std::endl;
+      Debug("P1Validator STATE: FAST_COMMIT");
       pendingPhase1->decision = proto::COMMIT;
       pendingPhase1->fast = true;
       !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       break;
     case FAST_ABORT:
-      std::cerr << "     P1Validator    STATE: FAST_ABORT" << std::endl;
+      Debug("P1Validator STATE: FAST_ABORT");
       pendingPhase1->decision = proto::ABORT;
       pendingPhase1->fast = true;
       pendingPhase1->conflict_flag = true;
@@ -978,26 +939,25 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
       !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       break;
     case FAST_ABSTAIN:  //INSERTED THIS NEW
-      std::cerr << "     P1Validator    STATE: FAST_ABSTAIN" << std::endl;
-      Debug("Fast_abstain path is taken");
+      Debug("P1Validator STATE: FAST_ABSTAIN");
       pendingPhase1->decision = proto::ABORT;
       pendingPhase1->fast = true;
       !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       break;
     case SLOW_COMMIT_FINAL:
-      std::cerr << "     P1Validator    STATE: SLOW_COMMIT_FINAL" << std::endl;
+      Debug("P1Validator STATE: SLOW_COMMIT_FINAL");
       pendingPhase1->decision = proto::COMMIT;
       pendingPhase1->fast = false;
       !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       break;
     case SLOW_ABORT_FINAL:
-      std::cerr << "     P1Validator    STATE: SLOW_ABORT_FINAL" << std::endl;
+      Debug("P1Validator STATE: SLOW_ABORT_FINAL");
       pendingPhase1->decision = proto::ABORT;
       pendingPhase1->fast = false;
       !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       break;
     case SLOW_COMMIT_TENTATIVE:
-      std::cerr << "     P1Validator    STATE: SLOW_COMMIT_TENTATIVE - START TIMER" << std::endl;
+      Debug("P1Validator STATE: SLOW_COMMIT_TENTATIVE - START TIMER");
       if(phase1DecisionTimeout == 0){
         itr->second->decision = proto::COMMIT;
         itr->second->fast = false;
@@ -1022,7 +982,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
           else{
             pendingPhase1->decisionTimeout = new Timeout(transport,
               phase1DecisionTimeout, [this, txnDig = *txnDigest]() {
-                std::cerr << "     P1Validator    STATE: SLOW_COMMIT_TENTATIVE - END TIMER TRY" << std::endl;
+
                 auto itr = pendingFallbacks.find(txnDig);
                   if (itr == pendingFallbacks.end()) {
                     return;
@@ -1031,7 +991,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
                     itr->second->pendingP1->decisionTimeout->Stop();
                     return;
                   }
-                  std::cerr << "     P1Validator    STATE: SLOW_COMMIT_TENTATIVE - END TIMER SUCCESS" << std::endl;
+                  Debug("P1Validator STATE: SLOW_COMMIT_TENTATIVE - Execute TIMER");
                   itr->second->pendingP1->decision = proto::COMMIT;
                   itr->second->pendingP1->fast = false;
                   Phase1FBDecision(itr->second);
@@ -1045,7 +1005,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
       break;
 
     case SLOW_ABORT_TENTATIVE:
-      std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE - START TIMER" << std::endl;
+      Debug("P1Validator STATE: SLOW_ABORT_TENTATIVE - START TIMER");
       if(phase1DecisionTimeout == 0){
         itr->second->decision = proto::ABORT;
         itr->second->fast = false;
@@ -1070,7 +1030,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
           else{
             pendingPhase1->decisionTimeout = new Timeout(transport,
               phase1DecisionTimeout, [this, txnDig = *txnDigest]() {
-                std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE - END TIMER TRY" << std::endl;
+
                 auto itr = pendingFallbacks.find(txnDig);
                   if (itr == pendingFallbacks.end()) {
                     return;
@@ -1079,7 +1039,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
                     itr->second->pendingP1->decisionTimeout->Stop();
                     return;
                   }
-                  std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE - START TIMER" << std::endl;
+                  Debug("P1Validator STATE: SLOW_ABORT_TENTATIVE - Execute TIMER");
                   itr->second->pendingP1->decision = proto::ABORT;
                   itr->second->pendingP1->fast = false;
                   Phase1FBDecision(itr->second);
@@ -1092,7 +1052,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
       }
       break;
     case SLOW_ABORT_TENTATIVE2:
-        std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE 2 - START TIMER" << std::endl;
+        Debug("P1Validator STATE: SLOW_ABORT_TENTATIVE2 - START TIMER");
         if(phase1DecisionTimeout == 0){
           itr->second->decision = proto::ABORT;
           itr->second->fast = false;
@@ -1117,7 +1077,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
             else{
               pendingPhase1->decisionTimeout = new Timeout(transport,
                   phase1DecisionTimeout, [this, txnDig = *txnDigest]() {
-                    std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE 2 - END TIMER TRY" << std::endl;
+
                     auto itr = pendingFallbacks.find(txnDig);
                     if (itr == pendingFallbacks.end()) {
                       return;
@@ -1126,7 +1086,7 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
                       itr->second->pendingP1->decisionTimeout->Stop();
                       return;
                     }
-                    std::cerr << "     P1Validator    STATE: SLOW_ABORT_TENTATIVE 2 - END TIMER SUCCESS" << std::endl;
+                    Debug("P1Validator STATE: SLOW_ABORT_TENTATIVE2 - Execute TIMER");
                     itr->second->pendingP1->decision = proto::ABORT;
                     itr->second->pendingP1->fast = false;
                     Phase1FBDecision(itr->second);
@@ -1387,7 +1347,7 @@ void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
         return; // this is a stale request and no upcall is necessary!
       }
 
-      std::cerr << "RECEIVED RELAY P1[" << BytesToHex(txnDigest, 64) << "] AT SHARDCLIENT " << group << " FOR CONFLICT TX: " << itr->second->client_seq_num << std::endl; //"for digest: " << BytesToHex(itr->second->txnDigest_, 64) << std::endl;
+      Debug("RECEIVED RELAY P1[%s] at shardclient %d, for conflict txId %d", BytesToHex(txnDigest, 16).c_str(), group, itr->second->client_seq_num); //"for digest: " << BytesToHex(itr->second->txnDigest_, 64) << std::endl;
       itr->second->rcb(relayP1, txnDigest); //upcall to the registered relayP1 callback function.
 
   } else{ //this is a dep for a fallback request (i.e. a deeper depth)
@@ -1395,7 +1355,7 @@ void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
       if (itr == this->pendingFallbacks.end()) {
         return; // this is a stale request and no upcall is necessary!
       }
-      std::cerr << "RECEIVED RELAY P1[" << BytesToHex(txnDigest, 64) << "] AT SHARDCLIENT " << group << " FOR FB CONFLICT TX: " << BytesToHex(itr->first, 64) << std::endl;
+      Debug("RECEIVED RELAY P1[%s] at shardclient %d, for FB conflict txn %s", BytesToHex(txnDigest, 16).c_str(), group, BytesToHex(itr->first, 16).c_str());
       itr->second->rcb(relayP1.dependent_txn(), relayP1, txnDigest); //upcall to the registered relayP1 callback function.
   }
 }
@@ -1430,7 +1390,6 @@ void ShardClient::Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::s
   *phase1FB.mutable_txn() = txn;
 
   transport->SendMessageToGroup(this, group, phase1FB);
-  std::cerr<< "SentPhase1FB for txn: " << BytesToHex(txnDigest, 64) << " to group: " << group << std::endl;
 
   //pendingPhase1->requestTimeout->Reset();
 }
@@ -1439,20 +1398,18 @@ void ShardClient::Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::s
 void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){
 
   const std::string &txnDigest = p1fbr.txn_digest();
-  Debug("Handling P1FBReply [%s]", BytesToHex(txnDigest, 128).c_str());
+  Debug("Handling P1FBReply [%s] on group %d", BytesToHex(txnDigest, 16).c_str(), group);
   auto itr = this->pendingFallbacks.find(txnDigest);
   if (itr == this->pendingFallbacks.end()) {
-    Debug("P1FBReply [%s] is stale.", BytesToHex(txnDigest, 128).c_str());
+    Debug("P1FBReply [%s] is stale.", BytesToHex(txnDigest, 16).c_str());
     return; // this is a stale request
   }
 
-    std::cerr << "received Phase1FBReply for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
 
   PendingFB *pendingFB = itr->second;
 
   //CASE 1: Received a fully formed WB message. TODO: verify it.
   if(p1fbr.has_wb()){
-    std::cerr << "received WB reply fast for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
     proto::Writeback wb = p1fbr.wb();
     pendingFB->wbFBcb(wb);
     CleanFB(txnDigest);
@@ -1470,14 +1427,12 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){
   //CASE 2: Received a p2 decision
   if(p1fbr.has_p2r()){
     proto::Phase2Reply p2r = p1fbr.p2r();
-    std::cerr << "      processing Phase1FBReply P2 for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
+    Debug("      processing Phase1FBReply P2 for txn: %s on shardclient %d", BytesToHex(txnDigest, 16).c_str(), group);
     if(ProcessP2FBR(p2r, pendingFB, txnDigest)){  //--> this will invoke the Fallback if inconsistency observed
-      std::cerr << "    called P2FB callback: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group << std::endl;
       return; //XXX only return if successful p2 callback, otherwise, also eval the p1 case
     }
   }
-  std::cerr << "      trying to process Phase1FBReply P1 for txn: " << BytesToHex(txnDigest, 64) << "on shardclient: " << group
-      << " still doing p1? " << pendingFB->p1 << " has p1r? " << p1fbr.has_p1r() << std::endl;
+  Debug("      trying to process Phase1FBReply P1 for txn: %s on shardclient %d. Still doing p1? %s. has p1r? %s", BytesToHex(txnDigest, 16).c_str(), group, pendingFB->p1? "True" : "False", p1fbr.has_p1r()? "True" : "False");
   //CASE 3: Received a p1 vote and still processing p1
   if(pendingFB->p1 && p1fbr.has_p1r()){
     proto::Phase1Reply reply = p1fbr.p1r();
@@ -1496,7 +1451,7 @@ void ShardClient::ProcessP1FBR(proto::Phase1Reply &reply, PendingFB *pendingFB, 
 
     pendingFB->p1 = false;
     PendingPhase1 *pendingPhase1 = pendingFB->pendingP1;
-    std::cerr<< "Calling Phase1FB callbackA for txn: " << BytesToHex(pendingPhase1->txnDigest_, 64) << " from shardClient " << group <<std::endl;
+    Debug("Calling Phase1FB callbackA for txn: %s from shardclient %d", BytesToHex(pendingPhase1->txnDigest_, 16).c_str(), group);
     pendingFB->p1FBcbA(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict_flag, pendingPhase1->conflict, pendingPhase1->p1ReplySigs);
     //pendingPhase1 needs to be deleted -->> happens in pendingFB destructor
   }
@@ -1736,7 +1691,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
       proto::P2Replies &p2Replies = pendingFB->p2Replies[decision];
       if(p2Replies.p2replies().size() == config->f +1 ){
         pendingFB->p1 = false;
-        std::cerr<< "Calling Phase1FB callbackB for txn: " << BytesToHex(txnDigest, 64) << " from shardClient " << group <<std::endl;
+        Debug("Calling Phase1FB callbackB for txn: %s from shardclient %d", BytesToHex(txnDigest, 16).c_str(), group);
         if(!pendingFB->p1FBcbB(decision, p2Replies)) return true;
       }
     }
