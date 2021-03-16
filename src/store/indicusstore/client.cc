@@ -96,6 +96,8 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
 
 Client::~Client()
 {
+  //std::cerr << "total failure injections: " << total_failure_injections << std::endl;
+  //std::cerr << "total writebacks: " << total_writebacks << std::endl;
   //std::cerr<< "total prepares: " << total_counter << std::endl;
   //std::cerr<< "fast path prepares: " << fast_path_counter << std::endl;
   Latency_Dump(&executeLatency);
@@ -134,6 +136,7 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
 
     Latency_Start(&executeLatency);
     client_seq_num++;
+    //std::cerr<< "client_seq_num: " << client_seq_num << std::endl;
     Debug("BEGIN [%lu]", client_seq_num);
 
     txn = proto::Transaction();
@@ -585,6 +588,7 @@ void Client::WritebackProcessing(PendingRequest *req){
 
 void Client::Writeback(PendingRequest *req) {
 
+  //total_writebacks++;
   Debug("WRITEBACK[%lu:%lu] result %s", client_id, req->id, req->decision ?  "ABORT" : "COMMIT");
 
   req->startedWriteback = true;
@@ -592,10 +596,12 @@ void Client::Writeback(PendingRequest *req) {
   if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
     Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
           BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
-    stats.Increment("inject_failure_crash");
+    //stats.Increment("inject_failure_crash");
+    //total_failure_injections++;
     FailureCleanUp(req);
     return;
   }
+
 
   transaction_status_t result;
   switch (req->decision) {
