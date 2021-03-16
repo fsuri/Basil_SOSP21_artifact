@@ -632,7 +632,7 @@ void Server::HandleRead(const TransportAddress &remote,
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
 
-  std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
+  std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest); //could parallelize it too hypothetically
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
@@ -1938,23 +1938,15 @@ bool Server::ManageDependencies(const std::string &txnDigest, const proto::Trans
 
          //XXX start RelayP1 to initiate Fallback handling
          //TODO can remove this redundant lookup since it will be checked again...
-         ongoingMap::const_accessor b;
-         bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-         if (false && inOngoing) {
-           std::string dependency_txnDig = dep.write().prepared_txn_digest();
-           //schedule Relay for client timeout only..
+         // ongoingMap::const_accessor b;
+         // bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
+         // if (inOngoing) {
+         //   std::string dependency_txnDig = dep.write().prepared_txn_digest();
+         //   RelayP1(dep.write().prepared_txn_digest(), fallback_flow, reqId, remote, txnDigest);
            uint64_t conflict_id = !fallback_flow ? reqId : -1;
-           const std::string &dependent_txnDig = !fallback_flow ? std::string() : txnDigest;
-           TransportAddress *remoteCopy = remote.clone();
-           uint64_t relayDelay = !fallback_flow ? params.relayP1_timeout : 0;
-           transport->Timer(relayDelay, [this, remoteCopy, dependency_txnDig, conflict_id, dependent_txnDig]() mutable {
-             this->RelayP1(*remoteCopy, dependency_txnDig, conflict_id, dependent_txnDig);
-             delete remoteCopy;
-           });
-           //proto::Transaction *tx = b->second; //ongoing[txnDig];
-           //RelayP1(remote, *tx, reqId);
-         }
-         b.release();
+           SendRelayP1(remote, dep.write().prepared_txn_digest(), conflict_id, txnDigest);
+         // }
+         // b.release();
 
          allFinished = false;
          //dependents[dep.write().prepared_txn_digest()].insert(txnDigest);
@@ -3026,10 +3018,22 @@ signedMessage.set_signature(hmacs.SerializeAsString());
 
 
 ////////////////////// XXX Fallback realm beings here...
+void Server::RelayP1(const std::string &dependency_txnDig, bool fallback_flow, uint64_t reqId, const TransportAddress &remote, const std::string &txnDigest){
+  stats.Increment("Relays_Called", 1);
+  //schedule Relay for client timeout only..
+  uint64_t conflict_id = !fallback_flow ? reqId : -1;
+  const std::string &dependent_txnDig = !fallback_flow ? std::string() : txnDigest;
+  TransportAddress *remoteCopy = remote.clone();
+  uint64_t relayDelay = !fallback_flow ? params.relayP1_timeout : 0;
+  transport->Timer(relayDelay, [this, remoteCopy, dependency_txnDig, conflict_id, dependent_txnDig]() mutable {
+    this->SendRelayP1(*remoteCopy, dependency_txnDig, conflict_id, dependent_txnDig);
+    delete remoteCopy;
+  });
+}
 
 //RELAY DEPENDENCY IN ORDER FOR CLIENT TO START FALLBACK
 //params: dependent_it = client tx identifier for blocked tx; dependency_txnDigest = tx that is stalling
-void Server::RelayP1(const TransportAddress &remote, const std::string &dependency_txnDig, uint64_t dependent_id, const std::string &dependent_txnDig){
+void Server::SendRelayP1(const TransportAddress &remote, const std::string &dependency_txnDig, uint64_t dependent_id, const std::string &dependent_txnDig){
 
   Debug("RelayP1[%s] timed out. Sending now!", BytesToHex(dependent_txnDig, 256).c_str());
   proto::Transaction *tx;
@@ -3052,6 +3056,7 @@ void Server::RelayP1(const TransportAddress &remote, const std::string &dependen
     Debug("Sending relayP1 for dependent txn: %s stuck waiting for dependency: %s", BytesToHex(dependent_txnDig, 64).c_str(), BytesToHex(dependency_txnDig,64).c_str());
   }
 
+  stats.Increment("Relays_Sent", 1);
   transport->SendMessage(this, remote, relayP1);
   Debug("Sent RelayP1[%s].", BytesToHex(dependent_txnDig, 256).c_str());
 }

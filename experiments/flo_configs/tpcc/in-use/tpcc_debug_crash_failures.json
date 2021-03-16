@@ -105,7 +105,7 @@
 	  "inject_failure_ms": 0,
 	  "inject_failure freq": 10,
       "all_to_all_fb" : false,
-	  "relayP1_timeout" : 10
+	  "relayP1_timeout" : 20
     }
   ],
   "experiment_name": "indicus",
@@ -331,6 +331,8 @@
   "client_gc_debug_trace": false,
   "client_cpuprofile": false,
   "server_gc_debug_trace": false,
-  "_server_wrap_command": "valgrind --tool=none %s"
+  "_server_wrap_command": "valgrind --tool=none %s",
+  "_server_wrap_command": "valgrind --tool=callgrind --separate-threads=no --instr-atstart=no --toggle-collect=\"*TCPTransport::Run*\" %s"
+
 
 }

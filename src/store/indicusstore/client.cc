@@ -845,6 +845,7 @@ void Client::RelayP1callbackFB(uint64_t reqId, const std::string &dependent_txnD
 
 
 void Client::Phase1FB(const std::string &txnDigest, uint64_t conflict_id, proto::Phase1 *p1){  //passes callbacks
+  std::cerr << "Started another FB" << std::endl;
 
   Debug("Started Phase1FB for txn: %s, for dependent ID: %d", BytesToHex(txnDigest, 16).c_str(), conflict_id);
 

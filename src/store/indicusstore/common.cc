@@ -603,7 +603,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
           Debug("Signature with result %u, purportedly from replica %lu"
               " (= my id %ld) doesn't match my response %u.",
               concurrencyControl.ccr(), sig.process_id(), myProcessId, myResult);
-          // std::cerr << "stored CCR[" <<  myResult << "] does not match signed CCR[ " << concurrencyControl.ccr() << "] for txn " << BytesToHex(*txnDigest, 64) << std::endl;
+          std::cerr << "stored CCR[" <<  myResult << "] does not match signed CCR[ " << concurrencyControl.ccr() << "] for txn " << BytesToHex(*txnDigest, 64) << std::endl;
           Panic("Aborting due to mismatch");
           verifyObj->mcb((void*) false);
           delete verifyObj;
