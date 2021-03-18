@@ -279,7 +279,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       const proto::Transaction &txn);
   bool CheckHighWatermark(const Timestamp &ts);
   void BufferP1Result(proto::ConcurrencyControl::Result result,
-    const proto::CommittedProof *conflict, const std::string &txnDigest);
+    const proto::CommittedProof *conflict, const std::string &txnDigest, int fb = 0);
   void SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
     const proto::CommittedProof *conflict, const std::string &txnDigest,

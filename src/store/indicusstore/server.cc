@@ -1938,15 +1938,17 @@ bool Server::ManageDependencies(const std::string &txnDigest, const proto::Trans
 
          //XXX start RelayP1 to initiate Fallback handling
          //TODO can remove this redundant lookup since it will be checked again...
-         // ongoingMap::const_accessor b;
-         // bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
-         // if (inOngoing) {
-         //   std::string dependency_txnDig = dep.write().prepared_txn_digest();
-         //   RelayP1(dep.write().prepared_txn_digest(), fallback_flow, reqId, remote, txnDigest);
-           uint64_t conflict_id = !fallback_flow ? reqId : -1;
-           SendRelayP1(remote, dep.write().prepared_txn_digest(), conflict_id, txnDigest);
-         // }
-         // b.release();
+         if(false){
+           // ongoingMap::const_accessor b;
+           // bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
+           // if (inOngoing) {
+           //   std::string dependency_txnDig = dep.write().prepared_txn_digest();
+           //   RelayP1(dep.write().prepared_txn_digest(), fallback_flow, reqId, remote, txnDigest);
+             uint64_t conflict_id = !fallback_flow ? reqId : -1;
+             SendRelayP1(remote, dep.write().prepared_txn_digest(), conflict_id, txnDigest);
+           // }
+           // b.release();
+         }
 
          allFinished = false;
          //dependents[dep.write().prepared_txn_digest()].insert(txnDigest);
@@ -2324,7 +2326,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
         Debug("print remote: %p", f->second.remote);
         //waitingDependencies.erase(dependent);
         const proto::CommittedProof *conflict = nullptr;
-        BufferP1Result(result, conflict, dependent);
+        BufferP1Result(result, conflict, dependent, 2);
         // std::cerr << "Sending On dependent path. Txn: " << BytesToHex(dependent,64) << " with result: " << result << std::endl;
         // int64_t myProcessId;
         // proto::ConcurrencyControl::Result myResult;
@@ -2431,14 +2433,18 @@ bool Server::CheckHighWatermark(const Timestamp &ts) {
 
 //XXX if you *DONT* want to buffer Wait results then call BufferP1Result only inside SendPhase1Reply
 void Server::BufferP1Result(proto::ConcurrencyControl::Result result,
-  const proto::CommittedProof *conflict, const std::string &txnDigest){
+  const proto::CommittedProof *conflict, const std::string &txnDigest, int fb){
 
     p1DecisionsMap::accessor c;
     if(p1Decisions.insert(c, txnDigest)){
       c->second = result;
     }
     else{
+      //TODO:: change only if c->second = wait. but why does this happen anyways, sync bug?
       if(result != proto::ConcurrencyControl::WAIT){
+        if(c->second != proto::ConcurrencyControl::WAIT){
+          std::cerr << "Path[" << fb << "] Replacing result: " << c->second << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+        }
         c->second = result;
       }
     }
@@ -3018,6 +3024,8 @@ signedMessage.set_signature(hmacs.SerializeAsString());
 
 
 ////////////////////// XXX Fallback realm beings here...
+
+//TODO: change arguments (move strings) to avoid the copy in Timer.
 void Server::RelayP1(const std::string &dependency_txnDig, bool fallback_flow, uint64_t reqId, const TransportAddress &remote, const std::string &txnDigest){
   stats.Increment("Relays_Called", 1);
   //schedule Relay for client timeout only..
@@ -3039,17 +3047,20 @@ void Server::SendRelayP1(const TransportAddress &remote, const std::string &depe
   proto::Transaction *tx;
 
   ongoingMap::const_accessor b;
+  //ongoingMap::accessor b;
   bool ongoingItr = ongoing.find(b, dependency_txnDig);
   if(!ongoingItr) return;  //If txnDigest no longer ongoing, then no FB necessary as it has completed already
 
   tx = b->second;
   b.release();
-  proto::Phase1 p1;
-  p1.set_req_id(0); //doesnt matter, its not used for fallback requests really.
-  *p1.mutable_txn() = *tx;
-  proto::RelayP1 relayP1;
+
+  //proto::RelayP1 relayP1; //use global object.
+  relayP1.Clear();
   relayP1.set_dependent_id(dependent_id);
-  *relayP1.mutable_p1() = p1;
+  relayP1.mutable_p1()->set_req_id(0); //doesnt matter, its not used for fallback requests really.
+  *relayP1.mutable_p1()->mutable_txn() = *tx; //TODO:: avoid copy by allocating, and releasing again after.
+  //relayP1.mutable_p1()->set_allocated_txn(tx);
+
   if(dependent_id == -1) relayP1.set_dependent_txn(dependent_txnDig);
 
   if(dependent_id == -1){
@@ -3058,6 +3069,10 @@ void Server::SendRelayP1(const TransportAddress &remote, const std::string &depe
 
   stats.Increment("Relays_Sent", 1);
   transport->SendMessage(this, remote, relayP1);
+
+  // b->second = relayP1.mutable_p1()->release_txn();
+  // b.release();
+
   Debug("Sent RelayP1[%s].", BytesToHex(dependent_txnDig, 256).c_str());
 }
 
@@ -3369,7 +3384,11 @@ bool Server::ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const 
   //TODO: add parallel OCC check logic here:
   result = DoOCCCheck(msg.req_id(),
       remote, txnDigest, *txn, retryTs, committedProof, true);
-  BufferP1Result(result, committedProof, txnDigest);
+
+  std::cerr << "Exec P1 called, for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+  BufferP1Result(result, committedProof, txnDigest, 1);
+  std::cerr << "FB: Buffered result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+
 
   //What happens in the FB case if the result is WAIT?
   //Since we limit to depth 1, we expect this to not be possible.
