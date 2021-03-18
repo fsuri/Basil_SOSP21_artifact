@@ -648,6 +648,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
   // no-replays property, i.e. recover existing decision/result from storage
   //Ignore duplicate requests that are already committed, aborted, or ongoing
+
   ongoingMap::accessor b;
   if(ongoing.find(b, txnDigest)){
     b.release();
@@ -660,11 +661,16 @@ void Server::HandlePhase1(const TransportAddress &remote,
   ongoing.insert(b, std::make_pair(txnDigest, txn));
   b.release();
 
-  p1DecisionsMap::const_accessor c;
-  bool p1DecItr = p1Decisions.find(c, txnDigest);
-  if(p1DecItr){
-    result = c->second;
-    c.release();
+
+  //TODO: try allocating accessor and deleting it only after.
+  //ongoingMap::accessor *b = new ongoingMap::accessor();
+
+  //add to ongoing, lock ongoing and send to all when done.
+
+  p1MetaDataMap::const_accessor c;
+  bool hasP1 = p1MetaData.find(c, txnDigest);  //TODO: next: make P1 part of ongoing? same for P2?
+  if(hasP1){
+    result = c->second.result;
     // need to check if result is WAIT: if so, need to add to waitingDeps original client..
         //(TODO) Instead: use original client list and store pairs <txnDigest, <reqID, remote>>
     if(result == proto::ConcurrencyControl::WAIT){
@@ -672,12 +678,10 @@ void Server::HandlePhase1(const TransportAddress &remote,
     }
 
     if (result == proto::ConcurrencyControl::ABORT) {
-      p1ConflictsMap::const_accessor d;
-      auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
-      //committedProof = p1Conflicts[txnDigest];
-      committedProof = d->second;
-      d.release();
+      committedProof = c->second.conflict;
+      UW_ASSERT(committedProof != nullptr);
     }
+    c.release();
   } else{
     c.release();
     if (params.validateProofs && params.signedMessages && params.verifyDeps) {
@@ -2266,17 +2270,11 @@ void Server::Clean(const std::string &txnDigest) {
   }
   q.release();
 
-  p1DecisionsMap::accessor c;
-  auto p1DecItr = p1Decisions.find(c, txnDigest);
+  p1MetaDataMap::accessor c;
+  bool hasP1 = p1MetaData.find(c, txnDigest);
   //p1Decisions.erase(txnDigest);
-  if(p1DecItr) p1Decisions.erase(c);
+  if(hasP1) p1MetaData.erase(c);
   c.release();
-
-  p1ConflictsMap::accessor d;
-  auto p1ConfItr = p1Conflicts.find(d, txnDigest);
-  //p1Conflicts.erase(txnDigest);
-  if(p1ConfItr) p1Conflicts.erase(d);
-  d.release();
 
   p2MetaDataMap::accessor p;
   if(p2MetaDatas.find(p, txnDigest)){
@@ -2435,29 +2433,25 @@ bool Server::CheckHighWatermark(const Timestamp &ts) {
 void Server::BufferP1Result(proto::ConcurrencyControl::Result result,
   const proto::CommittedProof *conflict, const std::string &txnDigest, int fb){
 
-    p1DecisionsMap::accessor c;
-    if(p1Decisions.insert(c, txnDigest)){
-      c->second = result;
+    p1MetaDataMap::accessor c;
+    if(p1MetaData.insert(c, txnDigest)){
+      c->second.result = result;
+      //add abort proof so we can use it for fallbacks easily.
+      //if(result == proto::ConcurrencyControl::ABORT) XXX //by default nullptr if passed
+      c->second.conflict = conflict;
     }
     else{
       //TODO:: change only if c->second = wait. but why does this happen anyways, sync bug?
       if(result != proto::ConcurrencyControl::WAIT){
-        if(c->second != proto::ConcurrencyControl::WAIT){
-          std::cerr << "Path[" << fb << "] Replacing result: " << c->second << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+        if(c->second.result != proto::ConcurrencyControl::WAIT){
+          std::cerr << "Path[" << fb << "] Replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
         }
-        c->second = result;
+        c->second.result = result;
+        c->second.conflict = conflict; //by default nullptr if passed; should never be called here since WAIT can only change to COMMIT/ABSTAIN
       }
     }
     c.release();
-  //  p1Decisions[txnDigest] = result;
 
-   //add abort proof so we can use it for fallbacks easily.
-   if(result == proto::ConcurrencyControl::ABORT){
-      p1ConflictsMap::accessor d;
-      p1Conflicts.insert(d, std::make_pair(txnDigest, conflict));
-     //p1Conflicts[txnDigest] = conflict;  //does this work this way for CbR
-     d.release();
-   }
 }
 
 void Server::SendPhase1Reply(uint64_t reqId,
@@ -2549,14 +2543,14 @@ void Server::LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId
   myProcessId = -1;
   // see if we participated in this decision
    //if(params.mainThreadDispatching) p1DecisionsMutex.lock();
-   p1DecisionsMap::const_accessor c;
+  p1MetaDataMap::const_accessor c;
 
-  auto p1DecisionItr = p1Decisions.find(c, txnDigest);
-  if(p1DecisionItr){
+  auto hasP1 = p1MetaData.find(c, txnDigest);
+  if(hasP1){
   //if (p1DecisionItr != p1Decisions.end()) {
-    if(c->second != proto::ConcurrencyControl::WAIT){
+    if(c->second.result != proto::ConcurrencyControl::WAIT){
       myProcessId = id;
-      myResult = c->second;
+      myResult = c->second.result;
     }
     // else{
     //   std::cerr << "LookupP1Decision returned WAIT for txn: " <<  BytesToHex(txnDigest, 64) << std::endl;
@@ -3222,16 +3216,19 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself.
   //Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
   //TODO: could store p2 and p1 signatures (until writeback) in order to avoid re-computation
-  p1DecisionsMap::const_accessor c;
-  bool hasP1 = p1Decisions.find(c, txnDigest);
+  p1MetaDataMap::const_accessor c;
+  bool hasP1 = p1MetaData.find(c, txnDigest);
   p2MetaDataMap::const_accessor p;
   p2MetaDatas.insert(p, txnDigest);
   bool hasP2 = p->second.hasP2;
 
   if(hasP2 && hasP1){
     Debug("Txn[%s] has both P1 and P2", BytesToHex(txnDigest, 64).c_str());
-       proto::ConcurrencyControl::Result result = c->second; //p1Decisions[txnDigest];
+       proto::ConcurrencyControl::Result result = c->second.result; //p1Decisions[txnDigest];
+       //if(result == proto::ConcurrencyControl::ABORT);
+       const proto::CommittedProof *conflict = c->second.conflict;
        c.release();
+
        proto::CommitDecision decision = p->second.p2Decision;
        uint64_t decision_view = p->second.decision_view;
        p.release();
@@ -3239,21 +3236,14 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
        P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
        //recover stored commit proof.
        if (result != proto::ConcurrencyControl::WAIT) { //if the result is WAIT, then the p1 is not necessary..
-         const proto::CommittedProof *conflict;
-         if(result == proto::ConcurrencyControl::ABORT){
-            p1ConflictsMap::const_accessor d;
-            auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
-            conflict = d->second;
-            d.release();
-            //conflict = p1Conflicts[txnDigest];
-         }
          SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
-         //SendPhase1FBReply(msg.req_id(), phase1Reply, phase2Reply, writeback, remote,  txnDigest, 4);
        }
        else{
          //Relay deeper depths.
          ManageDependencies(txnDigest, msg.txn(), remote, 0, true);
        }
+       c.release();
+
        SetP2(msg.req_id(), p1fb_organizer->p1fbr->mutable_p2r(), txnDigest, decision, decision_view);
        SendPhase1FBReply(p1fb_organizer, txnDigest);
 
@@ -3265,20 +3255,13 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   //4) ONLY P1 CASE: (already did p1 but no p2)
   else if(hasP1){
     Debug("Txn[%s] has only P1", BytesToHex(txnDigest, 64).c_str());
-        proto::ConcurrencyControl::Result result = c->second; //p1Decisions[txnDigest];
+        proto::ConcurrencyControl::Result result = c->second.result; //p1Decisions[txnDigest];
+        //if(result == proto::ConcurrencyControl::ABORT);
+        const proto::CommittedProof *conflict = c->second.conflict;
         c.release();
         p.release();
 
         if (result != proto::ConcurrencyControl::WAIT) {
-          const proto::CommittedProof *conflict;
-          //recover stored commit proof.
-          if(result == proto::ConcurrencyControl::ABORT){
-             p1ConflictsMap::const_accessor d;
-             auto p1ConflictsItr = p1Conflicts.find(d, txnDigest);
-             //conflict = p1Conflicts[txnDigest];
-             conflict = d->second;
-             d.release();
-          }
           P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
           SendPhase1FBReply(p1fb_organizer, txnDigest);

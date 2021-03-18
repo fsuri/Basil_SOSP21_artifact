@@ -511,6 +511,16 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   //keep list of the views in which the p2Decision is from
   //std::unordered_map<std::string, uint64_t> decision_views;
 
+  struct P1MetaData {
+    P1MetaData(): conflict(nullptr){}
+    P1MetaData(proto::ConcurrencyControl::Result result): result(result), conflict(nullptr){}
+    ~P1MetaData(){}
+    proto::ConcurrencyControl::Result result;
+    const proto::CommittedProof *conflict;
+  };
+  typedef tbb::concurrent_hash_map<std::string, P1MetaData> p1MetaDataMap;
+  p1MetaDataMap p1MetaData;
+
   struct P2MetaData {
     P2MetaData() : current_view(0UL), decision_view(0UL), hasP2(false){}
     P2MetaData(proto::CommitDecision decision) : current_view(0UL), decision_view(0UL), p2Decision(decision), hasP2(true){}
