@@ -242,7 +242,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     }
   } else if (type == phase1.GetTypeName()) {
 
-
+//TODO: edit for atomic parallel P1.
     if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_CCC)){
      phase1.ParseFromString(data);
      HandlePhase1(remote, phase1);
@@ -629,6 +629,83 @@ void Server::HandleRead(const TransportAddress &remote,
 
 //////////////////////
 
+void Server::HandlePhase1_atomic(const TransportAddress &remote,
+    proto::Phase1 &msg) {
+
+  std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest); //could parallelize it too hypothetically
+  Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
+      msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
+      msg.txn().timestamp().timestamp());
+  proto::ConcurrencyControl::Result result;
+  const proto::CommittedProof *committedProof;
+
+  proto::Transaction *txn = msg.release_txn();
+
+  //TODO: Problem. If client comes after writeback, it will try to do a p2/wb itself but fail
+  //due to ongoing being removed already.
+  //XXX solution: add to ongoing always, and call Clean() for redundant Writebacks as well.
+  //XXX alternative solution: Send a Forward Writeback message for normal path clients too.
+          // make sure that Commit+Clean is atomic; and that the check for commit and remainder is atomic.
+            // use overarching lock on ongoing.
+  ongoingMap::accessor b;
+  ongoing.insert(b, std::make_pair(txnDigest, txn));
+  b.release();
+
+      //NOTE : make sure c and b dont conflict on lock order
+  p1MetaDataMap::accessor c;
+  p1MetaData.insert(c, txnDigest);
+  bool hasP1 = c->second.hasP1;
+  // no-replays property, i.e. recover existing decision/result from storage
+  //Ignore duplicate requests that are already committed, aborted, or ongoing
+  if(hasP1){
+
+    result = c->second.result;
+
+    if(result == proto::ConcurrencyControl::WAIT){
+        ManageDependencies(txnDigest, *txn, remote, msg.req_id());
+    }
+    else if (result == proto::ConcurrencyControl::ABORT) {
+      committedProof = c->second.conflict;
+      UW_ASSERT(committedProof != nullptr);
+    }
+
+  } else{
+
+    if (params.validateProofs && params.signedMessages && params.verifyDeps) {
+      for (const auto &dep : txn->deps()) {
+        if (!dep.has_write_sigs()) {
+          Debug("Dep for txn %s missing signatures.",
+              BytesToHex(txnDigest, 16).c_str());
+          if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(&msg);
+          return;
+        }
+        if (!ValidateDependency(dep, &config, params.readDepSize, keyManager,
+              verifier)) {
+          Debug("VALIDATE Dependency failed for txn %s.",
+              BytesToHex(txnDigest, 16).c_str());
+          // safe to ignore Byzantine client
+          if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(&msg);
+          return;
+        }
+      }
+    }
+
+    //current_views[txnDigest] = 0;
+    p2MetaDataMap::accessor p;
+    p2MetaDatas.insert(p, txnDigest);
+    p.release();
+
+    Timestamp retryTs;
+
+    result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
+          committedProof);
+    BufferP1Result(result, committedProof, txnDigest);
+
+  }
+  c.release();
+  HandlePhase1CB(&msg, result, committedProof, txnDigest, remote);
+}
+
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
 
@@ -649,13 +726,27 @@ void Server::HandlePhase1(const TransportAddress &remote,
   // no-replays property, i.e. recover existing decision/result from storage
   //Ignore duplicate requests that are already committed, aborted, or ongoing
 
+  //TODO: parallelize whole HandlePhase1. (could try to reclaim 2nd main thread duties and use it as worker too.)
+  //TODO: remove/fix ongoing check  (move it into has no P1 case.)
+  //TODO: run again without lock, but no garbage collection. Is GC the problem?
+
   ongoingMap::accessor b;
   if(ongoing.find(b, txnDigest)){
     b.release();
     if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(&msg);
+    //TODO: check if hasP1 and continue
+    //TODO: else, add to original client list and return.
+            // TODO:  before sending. Check for all interested p1 clients. and send P1FB message.
+            //TODO: sepearte interested clients into p1 and p2?
+
     return;
   }
-  if(committed.find(txnDigest) != committed.end() || aborted.find(txnDigest) != aborted.end()) return;
+  //TODO: think about order of this check?
+  //TODO: if it is already committed/aborted, reply to original client with full WB too.
+  if(committed.find(txnDigest) != committed.end() || aborted.find(txnDigest) != aborted.end()){
+    if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(&msg);
+    return;
+  }
 
   proto::Transaction *txn = msg.release_txn();
   ongoing.insert(b, std::make_pair(txnDigest, txn));
@@ -667,10 +758,14 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
   //add to ongoing, lock ongoing and send to all when done.
 
-  p1MetaDataMap::const_accessor c;
-  bool hasP1 = p1MetaData.find(c, txnDigest);  //TODO: next: make P1 part of ongoing? same for P2?
+  p1MetaDataMap::accessor *c = new p1MetaDataMap::accessor();
+  //std::cerr << "[Normal] acquire lock for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+  //p1MetaDataMap::const_accessor c;
+  p1MetaData.insert(*c, txnDigest);  //TODO: next: make P1 part of ongoing? same for P2?
+  (*c)->second.P1meta_mutex.lock();
+  bool hasP1 = (*c)->second.hasP1;
   if(hasP1){
-    result = c->second.result;
+    result = (*c)->second.result;
     // need to check if result is WAIT: if so, need to add to waitingDeps original client..
         //(TODO) Instead: use original client list and store pairs <txnDigest, <reqID, remote>>
     if(result == proto::ConcurrencyControl::WAIT){
@@ -678,12 +773,12 @@ void Server::HandlePhase1(const TransportAddress &remote,
     }
 
     if (result == proto::ConcurrencyControl::ABORT) {
-      committedProof = c->second.conflict;
+      committedProof = (*c)->second.conflict;
       UW_ASSERT(committedProof != nullptr);
     }
-    c.release();
+    //c.release();
   } else{
-    c.release();
+    //c.release();
     if (params.validateProofs && params.signedMessages && params.verifyDeps) {
       //for (const auto &dep : msg.txn().deps()) {
       for (const auto &dep : txn->deps()) {
@@ -727,7 +822,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
       BufferP1Result(result, committedProof, txnDigest);
     }
     else{
-      auto f = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn, committedProof]() mutable {
+      auto f = [this, c, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn, committedProof]() mutable {
         Timestamp retryTs;
           //check if concurrently committed/aborted already, and if so return
           ongoingMap::const_accessor b;
@@ -740,7 +835,11 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
         proto::ConcurrencyControl::Result *result = new proto::ConcurrencyControl::Result(this->DoOCCCheck(msg_ptr->req_id(),
         *remote_ptr, txnDigest, *txn, retryTs, committedProof));
-        BufferP1Result(*result, committedProof, txnDigest);
+        BufferP1Result(*c, *result, committedProof, txnDigest);
+        (*c)->second.P1meta_mutex.unlock();
+        c->release();
+        delete c;
+        //std::cerr << "[Normal] release lock for txn: " << BytesToHex(txnDigest, 64) << std::endl;
         HandlePhase1CB(msg_ptr, *result, committedProof, txnDigest, *remote_ptr);
         delete result;
         return (void*) true;
@@ -749,7 +848,9 @@ void Server::HandlePhase1(const TransportAddress &remote,
       return;
     }
   }
-
+  (*c)->second.P1meta_mutex.unlock();
+  c->release();
+  delete c;
   HandlePhase1CB(&msg, result, committedProof, txnDigest, remote);
 }
 
@@ -1120,7 +1221,12 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
 
   if(committed.find(*txnDigest) != committed.end() || aborted.find(*txnDigest) != aborted.end()){
-    return WritebackCallback(&msg, txnDigest, txn, (void*) false); //duplicate
+    if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+      Clean(*txnDigest); //XXX Clean again since client could have added it back to ongoing...
+      FreeWBmessage(&msg);
+    }
+    return;
+    //return WritebackCallback(&msg, txnDigest, txn, (void*) false); //duplicate
     //TODO: Forward to all interested clients and empty it?
   }
 
@@ -1942,7 +2048,7 @@ bool Server::ManageDependencies(const std::string &txnDigest, const proto::Trans
 
          //XXX start RelayP1 to initiate Fallback handling
          //TODO can remove this redundant lookup since it will be checked again...
-         if(false){
+         if(true){
            // ongoingMap::const_accessor b;
            // bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
            // if (inOngoing) {
@@ -2270,11 +2376,16 @@ void Server::Clean(const std::string &txnDigest) {
   }
   q.release();
 
-  p1MetaDataMap::accessor c;
-  bool hasP1 = p1MetaData.find(c, txnDigest);
-  //p1Decisions.erase(txnDigest);
-  if(hasP1) p1MetaData.erase(c);
-  c.release();
+  //TODO: try to merge more/if not all tx local state into ongoing and hold ongoing locks for simpler atomicity.
+
+  //TODO: XXX Recomment P1MetaData garbage collection.
+  // XXX Problem: honest client that receives P1 for a tx that has already finished, will do p2, and undo p2 garbage collection
+      //Solution: Call clean on redunndant calls of Writeback?
+  // p1MetaDataMap::accessor c;
+  // bool hasP1 = p1MetaData.find(c, txnDigest);
+  // //p1Decisions.erase(txnDigest);
+  // if(hasP1) p1MetaData.erase(c);
+  // c.release();
 
   p2MetaDataMap::accessor p;
   if(p2MetaDatas.find(p, txnDigest)){
@@ -2324,7 +2435,10 @@ void Server::CheckDependents(const std::string &txnDigest) {
         Debug("print remote: %p", f->second.remote);
         //waitingDependencies.erase(dependent);
         const proto::CommittedProof *conflict = nullptr;
-        BufferP1Result(result, conflict, dependent, 2);
+
+        p1MetaDataMap::accessor c;
+        BufferP1Result(c, result, conflict, dependent, 2);
+        c.release();
         // std::cerr << "Sending On dependent path. Txn: " << BytesToHex(dependent,64) << " with result: " << result << std::endl;
         // int64_t myProcessId;
         // proto::ConcurrencyControl::Result myResult;
@@ -2445,13 +2559,36 @@ void Server::BufferP1Result(proto::ConcurrencyControl::Result result,
       if(result != proto::ConcurrencyControl::WAIT){
         if(c->second.result != proto::ConcurrencyControl::WAIT){
           std::cerr << "Path[" << fb << "] Replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+          Panic("Should not be replacing");
         }
         c->second.result = result;
         c->second.conflict = conflict; //by default nullptr if passed; should never be called here since WAIT can only change to COMMIT/ABSTAIN
       }
     }
     c.release();
+}
 
+void Server::BufferP1Result(p1MetaDataMap::accessor &c, proto::ConcurrencyControl::Result result,
+  const proto::CommittedProof *conflict, const std::string &txnDigest, int fb){
+
+    p1MetaData.insert(c, txnDigest);
+    if(!c->second.hasP1){
+      c->second.result = result;
+      //add abort proof so we can use it for fallbacks easily.
+      //if(result == proto::ConcurrencyControl::ABORT) XXX //by default nullptr if passed
+      c->second.conflict = conflict;
+      c->second.hasP1 = true;
+    }
+    else{
+      //TODO:: change only if c->second = wait. but why does this happen anyways, sync bug?
+      if(result != proto::ConcurrencyControl::WAIT){
+        if(c->second.result != proto::ConcurrencyControl::WAIT){
+          std::cerr << "Path[" << fb << "] Replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+        }
+        c->second.result = result;
+        c->second.conflict = conflict; //by default nullptr if passed; should never be called here since WAIT can only change to COMMIT/ABSTAIN
+      }
+    }
 }
 
 void Server::SendPhase1Reply(uint64_t reqId,
@@ -3216,8 +3353,12 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   //might want to include the p1 too in order for there to exist a quorum for p1r (if not enough p2r). if you dont have a p1, then execute it yourself.
   //Alternatively, keep around the decision proof and send it. For now/simplicity, p2 suffices
   //TODO: could store p2 and p1 signatures (until writeback) in order to avoid re-computation
-  p1MetaDataMap::const_accessor c;
-  bool hasP1 = p1MetaData.find(c, txnDigest);
+  //XXX CHANGED IT TO ACCESSOR FOR LOCK TEST
+  p1MetaDataMap::accessor c;
+  p1MetaData.insert(c, txnDigest);
+  c->second.P1meta_mutex.lock();
+  bool hasP1 = c->second.hasP1;
+  std::cerr << "[FB] acquire lock for txn: " << BytesToHex(txnDigest, 64) << std::endl;
   p2MetaDataMap::const_accessor p;
   p2MetaDatas.insert(p, txnDigest);
   bool hasP2 = p->second.hasP2;
@@ -3227,6 +3368,8 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
        proto::ConcurrencyControl::Result result = c->second.result; //p1Decisions[txnDigest];
        //if(result == proto::ConcurrencyControl::ABORT);
        const proto::CommittedProof *conflict = c->second.conflict;
+       c->second.P1meta_mutex.unlock();
+       std::cerr << "[FB:1] release lock for txn: " << BytesToHex(txnDigest, 64) << std::endl;
        c.release();
 
        proto::CommitDecision decision = p->second.p2Decision;
@@ -3242,7 +3385,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
          //Relay deeper depths.
          ManageDependencies(txnDigest, msg.txn(), remote, 0, true);
        }
-       c.release();
+       //c.release();
 
        SetP2(msg.req_id(), p1fb_organizer->p1fbr->mutable_p2r(), txnDigest, decision, decision_view);
        SendPhase1FBReply(p1fb_organizer, txnDigest);
@@ -3258,6 +3401,8 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
         proto::ConcurrencyControl::Result result = c->second.result; //p1Decisions[txnDigest];
         //if(result == proto::ConcurrencyControl::ABORT);
         const proto::CommittedProof *conflict = c->second.conflict;
+        c->second.P1meta_mutex.unlock();
+        std::cerr << "[FB:2] release lock for txn: " << BytesToHex(txnDigest, 64) << std::endl;
         c.release();
         p.release();
 
@@ -3282,7 +3427,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   else if(hasP2){
       Debug("Txn[%s] has only P2, execute P1 as well", BytesToHex(txnDigest, 64).c_str());
 
-      c.release();
+      //c.release();
       proto::CommitDecision decision = p->second.p2Decision;
       uint64_t decision_view = p->second.decision_view;
       p.release();
@@ -3295,10 +3440,12 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       const proto::CommittedProof *committedProof;
       proto::ConcurrencyControl::Result result;
 
-      if (ExecP1(msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
+      if (ExecP1(c, msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
       }
-
+      c->second.P1meta_mutex.unlock();
+      c.release();
+      std::cerr << "[FB:3] release lock for txn: " << BytesToHex(txnDigest, 64) << std::endl;
       SendPhase1FBReply(p1fb_organizer, txnDigest);
       Debug("Sent Phase1FBReply on path P2 + ExecP1 for txn: %s, sent by client: %d", BytesToHex(txnDigest, 16).c_str(), msg.req_id());
   }
@@ -3306,13 +3453,13 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
   //6) NO STATE STORED: Do p1 normally. copied logic from HandlePhase1(remote, msg)
   else{
       Debug("Txn[%s] has no P1 or P2, execute P1", BytesToHex(txnDigest, 64).c_str());
-      c.release();
+      //c.release();
       p.release();
 
       const proto::CommittedProof *committedProof;
       proto::ConcurrencyControl::Result result;
 
-      if (ExecP1(msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
+      if (ExecP1(c, msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
           P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
           SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
           SendPhase1FBReply(p1fb_organizer, txnDigest);
@@ -3321,13 +3468,16 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       else{
         Debug("WAITING on dep in order to send Phase1FBReply on path ExecP1 for txn: %s, sent by client: %d", BytesToHex(txnDigest, 16).c_str(), msg.req_id());
       }
+      c->second.P1meta_mutex.unlock();
+      c.release();
+      std::cerr << "[FB:4] release lock for txn: " << BytesToHex(txnDigest, 64) << std::endl;
   }
 
   if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1FBmessage(&msg);
 }
 
 //TODO: merge this code with the normal case operation.
-bool Server::ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof* &committedProof){
+bool Server::ExecP1(p1MetaDataMap::accessor &c, proto::Phase1FB &msg, const TransportAddress &remote, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof* &committedProof){
   Debug("FB exec PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
@@ -3369,7 +3519,7 @@ bool Server::ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const 
       remote, txnDigest, *txn, retryTs, committedProof, true);
 
   std::cerr << "Exec P1 called, for txn: " << BytesToHex(txnDigest, 64) << std::endl;
-  BufferP1Result(result, committedProof, txnDigest, 1);
+  BufferP1Result(c, result, committedProof, txnDigest, 1);
   std::cerr << "FB: Buffered result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
 
 

@@ -115,6 +115,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       void *meta_data);
 
   void HandleRead(const TransportAddress &remote, proto::Read &msg);
+  void HandlePhase1_atomic(const TransportAddress &remote,
+      proto::Phase1 &msg);
   void HandlePhase1(const TransportAddress &remote,
       proto::Phase1 &msg);
   void HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
@@ -144,77 +146,89 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
   void HandleMoveView(proto::MoveView &msg);
 
-  // Fallback helper functions
-  //FALLBACK helper datastructures
-  struct P1FBorganizer {
-    P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
-      remote(remote.clone()), server(server),
-      p1_sig_outstanding(false), p2_sig_outstanding(false), c_view_sig_outstanding(false) {
-        p1fbr = server->GetUnusedPhase1FBReply();
-        p1fbr->Clear();
-        p1fbr->set_req_id(ReqId);
-        p1fbr->set_txn_digest(txnDigest);
-    }
-    P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server),
-      p1_sig_outstanding(false), p2_sig_outstanding(false), c_view_sig_outstanding(false){
-        p1fbr = server->GetUnusedPhase1FBReply();
-        p1fbr->Clear();
-        p1fbr->set_req_id(ReqId);
-        p1fbr->set_txn_digest(txnDigest);
-    }
-    ~P1FBorganizer() {
-      delete remote;
-      server->FreePhase1FBReply(p1fbr);
-    }
-    Server *server;
+    // Fallback helper functions
+    //FALLBACK helper datastructures
+    struct P1FBorganizer {
+      P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
+        remote(remote.clone()), server(server),
+        p1_sig_outstanding(false), p2_sig_outstanding(false), c_view_sig_outstanding(false) {
+          p1fbr = server->GetUnusedPhase1FBReply();
+          p1fbr->Clear();
+          p1fbr->set_req_id(ReqId);
+          p1fbr->set_txn_digest(txnDigest);
+      }
+      P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server),
+        p1_sig_outstanding(false), p2_sig_outstanding(false), c_view_sig_outstanding(false){
+          p1fbr = server->GetUnusedPhase1FBReply();
+          p1fbr->Clear();
+          p1fbr->set_req_id(ReqId);
+          p1fbr->set_txn_digest(txnDigest);
+      }
+      ~P1FBorganizer() {
+        delete remote;
+        server->FreePhase1FBReply(p1fbr);
+      }
+      Server *server;
 
-    uint64_t req_id;
-    std::string txnDigest;
-    const TransportAddress *remote;
+      uint64_t req_id;
+      std::string txnDigest;
+      const TransportAddress *remote;
 
-    proto::Phase1FBReply *p1fbr;
-    //manage outstanding Sigs
-    std::mutex sendCBmutex;
-    bool p1_sig_outstanding;
-    bool p2_sig_outstanding;
-    bool c_view_sig_outstanding;
-  };
+      proto::Phase1FBReply *p1fbr;
+      //manage outstanding Sigs
+      std::mutex sendCBmutex;
+      bool p1_sig_outstanding;
+      bool p2_sig_outstanding;
+      bool c_view_sig_outstanding;
+    };
 
-  struct P2FBorganizer {
-    P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
-      remote(remote.clone()), server(server),
-      p2_sig_outstanding(false), c_view_sig_outstanding(false) {
-        p2fbr = server->GetUnusedPhase2FBReply();
-        p2fbr->Clear();
-        p2fbr->set_req_id(ReqId);
-        p2fbr->set_txn_digest(txnDigest);
-    }
-    P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server),
-      p2_sig_outstanding(false), c_view_sig_outstanding(false){
-        p2fbr = server->GetUnusedPhase2FBReply();
-        p2fbr->Clear();
-        p2fbr->set_req_id(ReqId);
-        p2fbr->set_txn_digest(txnDigest);
-    }
-    ~P2FBorganizer() {
-      delete remote;
-      server->FreePhase2FBReply(p2fbr);
-    }
-    Server *server;
+    struct P2FBorganizer {
+      P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
+        remote(remote.clone()), server(server),
+        p2_sig_outstanding(false), c_view_sig_outstanding(false) {
+          p2fbr = server->GetUnusedPhase2FBReply();
+          p2fbr->Clear();
+          p2fbr->set_req_id(ReqId);
+          p2fbr->set_txn_digest(txnDigest);
+      }
+      P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server),
+        p2_sig_outstanding(false), c_view_sig_outstanding(false){
+          p2fbr = server->GetUnusedPhase2FBReply();
+          p2fbr->Clear();
+          p2fbr->set_req_id(ReqId);
+          p2fbr->set_txn_digest(txnDigest);
+      }
+      ~P2FBorganizer() {
+        delete remote;
+        server->FreePhase2FBReply(p2fbr);
+      }
+      Server *server;
 
-    uint64_t req_id;
-    std::string txnDigest;
-    const TransportAddress *remote;
+      uint64_t req_id;
+      std::string txnDigest;
+      const TransportAddress *remote;
 
-    proto::Phase2FBReply *p2fbr;
-    //manage outstanding Sigs
-    std::mutex sendCBmutex;
-    bool p2_sig_outstanding;
-    bool c_view_sig_outstanding;
-  };
+      proto::Phase2FBReply *p2fbr;
+      //manage outstanding Sigs
+      std::mutex sendCBmutex;
+      bool p2_sig_outstanding;
+      bool c_view_sig_outstanding;
+    };
+
+    struct P1MetaData {
+      P1MetaData(): conflict(nullptr), hasP1(false){}
+      P1MetaData(proto::ConcurrencyControl::Result result): result(result), conflict(nullptr), hasP1(false){}
+      ~P1MetaData(){}
+      proto::ConcurrencyControl::Result result;
+      const proto::CommittedProof *conflict;
+      bool hasP1;
+      std::mutex P1meta_mutex;
+    };
+    typedef tbb::concurrent_hash_map<std::string, P1MetaData> p1MetaDataMap;
+
     void RelayP1(const std::string &dependency_txnDig, bool fallback_flow, uint64_t reqId, const TransportAddress &remote, const std::string &txnDigest);
     void SendRelayP1(const TransportAddress &remote, const std::string &dependency_txnDig, uint64_t dependent_id, const std::string &dependent_txnDig);
-    bool ExecP1(proto::Phase1FB &msg, const TransportAddress &remote, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof* &committedProof);
+    bool ExecP1(p1MetaDataMap::accessor &c, proto::Phase1FB &msg, const TransportAddress &remote, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof* &committedProof);
     void SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
     void SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision, uint64_t decision_view);
     void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string &txnDigest, bool multi = false);
@@ -279,6 +293,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       const proto::Transaction &txn);
   bool CheckHighWatermark(const Timestamp &ts);
   void BufferP1Result(proto::ConcurrencyControl::Result result,
+    const proto::CommittedProof *conflict, const std::string &txnDigest, int fb = 0);
+  void BufferP1Result(p1MetaDataMap::accessor &c, proto::ConcurrencyControl::Result result,
     const proto::CommittedProof *conflict, const std::string &txnDigest, int fb = 0);
   void SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
@@ -511,14 +527,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   //keep list of the views in which the p2Decision is from
   //std::unordered_map<std::string, uint64_t> decision_views;
 
-  struct P1MetaData {
-    P1MetaData(): conflict(nullptr){}
-    P1MetaData(proto::ConcurrencyControl::Result result): result(result), conflict(nullptr){}
-    ~P1MetaData(){}
-    proto::ConcurrencyControl::Result result;
-    const proto::CommittedProof *conflict;
-  };
-  typedef tbb::concurrent_hash_map<std::string, P1MetaData> p1MetaDataMap;
+
   p1MetaDataMap p1MetaData;
 
   struct P2MetaData {
