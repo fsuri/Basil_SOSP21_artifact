@@ -151,6 +151,7 @@ message Phase2 {
   optional Transaction txn = 3;
   optional bytes txn_digest = 4;
   optional GroupedSignatures grouped_sigs = 5;
+  optional bool simulated_equiv = 6;
 }
 
 //ADD MATCHING VIEW, make it required?

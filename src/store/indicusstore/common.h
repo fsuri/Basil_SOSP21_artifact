@@ -57,7 +57,7 @@ struct asyncVerification{
   asyncVerification(uint32_t _quorumSize, mainThreadCallback mcb, int groupTotals,
     proto::CommitDecision _decision, Transport* tp) :  quorumSize(_quorumSize),
     mcb(mcb), groupTotals(groupTotals), decision(_decision),
-    terminate(false), tp(tp) { }
+    terminate(false), callback(true), tp(tp) { }
   ~asyncVerification() { deleteMessages();}
 
   std::mutex objMutex;
@@ -84,6 +84,7 @@ struct asyncVerification{
 
   int deletable;
   bool terminate;
+  bool callback;
 };
 
 

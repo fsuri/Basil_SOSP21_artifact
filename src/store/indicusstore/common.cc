@@ -303,7 +303,7 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
 
   if(verifyObj->terminate){
       if(verifyObj->deletable == 0){
-        verifyObj->mcb((void*) false);
+        if(verifyObj->callback) verifyObj->mcb((void*) false);
         Debug("Return to CB UNSUCCESSFULLY");
         //verifyObj->deleteMessages();
         if(LocalDispatch) lockScope.unlock();
@@ -359,6 +359,7 @@ void asyncValidateP1RepliesCallback(asyncVerification* verifyObj, uint32_t group
   }
   //bool* ret = new bool(true);
     verifyObj->terminate = true;
+    verifyObj->callback = false;
   Debug("Calling HandlePhase2CB or HandleWritebackCB");
   //verifyObj->mcb((void*) ret);
   if(!LocalDispatch){
@@ -520,7 +521,16 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
   std::vector<std::function<void*()>> verificationJobs2;
   std::vector<std::function<void*()> *> verificationJobs3;
 
+  int no_of_groups = 0;
+
   for (const auto &sigs : groupedSigs.grouped_sigs()) {
+    //only need to verify a single group for Abort decisions.
+    if(decision == proto::ABORT && no_of_groups > 0) {
+      Panic("stopping at ABort group break");
+      break;
+    }
+    no_of_groups++;
+
     concurrencyControl.set_involved_group(sigs.first);
     std::string* ccMsg = GetUnusedMessageString();//new string();
     concurrencyControl.SerializeToString(ccMsg);
@@ -641,15 +651,15 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
       //verificationJobs2.emplace_back(std::move(f));
       verificationJobs3.push_back(f);
       //transport->DispatchTP_noCB_ptr(f);
-      }
     }
+  }
 
   verifyObj->deletable = verificationJobs.size();
 
-//does ref & make a difference here?
-for (std::function<void*()>* f : verificationJobs3){
-  transport->DispatchTP_noCB_ptr(f);
-}
+  //does ref & make a difference here?
+  for (std::function<void*()>* f : verificationJobs3){
+    transport->DispatchTP_noCB_ptr(f);
+  }
 
   // for (auto &verification : verificationJobs2){
   //   transport->DispatchTP_noCB(std::move(verification));
@@ -823,7 +833,7 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
 
   if(verifyObj->terminate){
     if(verifyObj->deletable == 0){
-      verifyObj->mcb((void*) false);
+      if(verifyObj->callback) verifyObj->mcb((void*) false);
       if(LocalDispatch) lockScope.unlock();
       delete verifyObj;
     }
@@ -846,6 +856,7 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
 
   if (verifyObj->groupCounts[groupId] == verifyObj->quorumSize) {
     verifyObj->terminate = true;
+    verifyObj->callback = false;
     //bool* ret = new bool(true);
     //verifyObj->mcb((void*) ret);
     if(!LocalDispatch){
@@ -1257,7 +1268,7 @@ bool VerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
 
           view_s.ParseFromString(signed_view.data());
 
-          if(IsReplicaInGroup(signed_view.process_id(), logGrp, config)){
+          if(!IsReplicaInGroup(signed_view.process_id(), logGrp, config)){
             Debug("Signature for group %lu from replica %lu who is not in group.", logGrp, signed_view.process_id());
             return false;
           }
@@ -1350,7 +1361,7 @@ void asyncVerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
 
         view_s.ParseFromString(signed_view.data());
 
-        if(IsReplicaInGroup(signed_view.process_id(), logGrp, config)){
+        if(!IsReplicaInGroup(signed_view.process_id(), logGrp, config)){
             Debug("Signature for group %lu from replica %lu who is not in group.", logGrp, signed_view.process_id());
             verifyObj->mcb((void*) false);
             delete verifyObj;
@@ -1447,7 +1458,7 @@ bool ValidateFBDecision(proto::CommitDecision decision, uint64_t view,
   for (const auto &sig : sigs.sigs()) {
     //Latency_Start(&lat);
 
-    if(IsReplicaInGroup(sig.process_id(), logGrp, config)){
+    if(!IsReplicaInGroup(sig.process_id(), logGrp, config)){
       Debug("Signature for group %lu from replica %lu who is not in group.", logGrp, sig.process_id());
       return false;
     }

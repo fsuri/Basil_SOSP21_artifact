@@ -1673,7 +1673,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
     }
 
     //can return directly to writeback (p2 complete)
-    if (pendingP2.matchingReplies == QuorumSize(config)) { //make it >=? potentially duplicate cb then..
+    if (false && pendingP2.matchingReplies == QuorumSize(config)) { //make it >=? potentially duplicate cb then..
       pendingFB->p2FBcb(pendingP2.decision, pendingP2.p2ReplySigs, view);
       //dont need to clean, will be cleaned by callback.
       return true;
@@ -1709,9 +1709,10 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
   ////FALLBACK INVOCATION
   //max decision view represents f+1 replicas. Implies that this is the current view.
   //CALL Fallback if detected divergence for newest accepted view. (calling it for older ones is useless)
-  if(pendingFB->max_decision_view == view
+  if(true || (pendingFB->max_decision_view == view
     && pendingFB->pendingP2s[view][proto::COMMIT].matchingReplies == config->f +1
-    && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies == config->f +1){ //== so we only call it once per view.
+    && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies == config->f +1)){ //== so we only call it once per view.
+      pendingFB->p1 = false; 
       if(!pendingFB->invFBcb()) return true;
   }
       //TODO: Also need to call it after some timeout. I.e. if 4f+1 received are all honest but diverge.

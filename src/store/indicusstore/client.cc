@@ -428,7 +428,7 @@ void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
 
 void Client::HandleAllPhase1Received(PendingRequest *req) {
   Debug("All PHASE1's [%lu] received", client_seq_num);
-  if (req->fast) {
+  if (false && req->fast) {
     Writeback(req);
   } else {
     // slow path, must log final result to 1 group
@@ -1057,6 +1057,7 @@ void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64
 }
 
 void Client::WritebackFB(PendingRequest *req){
+  std::cerr << "Writeback FB sent" << std::endl;
 
   Debug("WRITEBACKFB[%lu:%s] result: %s", client_id, BytesToHex(req->txnDigest, 16).c_str(), req->decision ? "COMMIT" : "ABORT");
 
@@ -1076,9 +1077,14 @@ void Client::WritebackFB(PendingRequest *req){
 bool Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group){
   //Just send InvokeFB request to the logging shard. but only if the tx has not already finished. and only if we have already sent a P2
   //Otherwise, Include the P2 here!.
+  std::cerr << "Called InvokeFB" << std::endl;
+
+  if(!callInvokeFB) return false;
+  callInvokeFB = false;
 
   // check if conflict transaction still active
   if(!StillActive(conflict_id, txnDigest)) return false;
+
 
   //TODO: add flags for P2 sent: If not sent yet, need to wait for that.
   PendingRequest* req = FB_instances[txnDigest];
@@ -1086,10 +1092,11 @@ bool Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64
     Debug("Already sent WB - unecessary InvokeFB");
     return true;
   }
-  if(req->p2Replies.p2replies().size() < config->f +1){
+  if(false && req->p2Replies.p2replies().size() < config->f +1){
     Debug("No p2 decision included - invalid InvokeFB");
     return true;
   }
+  std::cerr << "Called InvokeFB - ShardClient" << std::endl;
   //we know this group is the FB group, only that group would have invoked this callback.
   bclient[group]->InvokeFB(conflict_id, txnDigest, req->txn, req->decision, req->p2Replies);
 

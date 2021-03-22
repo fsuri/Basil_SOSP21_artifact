@@ -494,7 +494,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   inline static bool sortReadByKey(const ReadMessage &lhs, const ReadMessage &rhs) { return lhs.key() < rhs.key(); }
   inline static bool sortWriteByKey(const WriteMessage &lhs, const WriteMessage &rhs) { return lhs.key() < rhs.key(); }
 
-  //lock to make dependency handling atomic (per tx)
+  //lock to make dependency handling atomic (per tx)  //TODO: Use this instead of waitingdep global mutex.
   tbb::concurrent_hash_map<std::string, std::mutex> completing;
 
   //std::unordered_map<std::string, proto::ConcurrencyControl::Result> p1Decisions;

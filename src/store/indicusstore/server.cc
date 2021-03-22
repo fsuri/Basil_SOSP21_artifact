@@ -234,10 +234,10 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
         return (void*) true;
       };
       if(params.parallel_reads){
-        transport->DispatchTP_noCB(f);
+        transport->DispatchTP_noCB(std::move(f));
       }
       else{
-        transport->DispatchTP_main(f);
+        transport->DispatchTP_main(std::move(f));
       }
     }
   } else if (type == phase1.GetTypeName()) {
@@ -245,24 +245,49 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
 //TODO: edit for atomic parallel P1.
     if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_CCC)){
      phase1.ParseFromString(data);
-     HandlePhase1(remote, phase1);
+     HandlePhase1_atomic(remote, phase1);
     }
     else{
       proto::Phase1 *phase1Copy = GetUnusedPhase1message();
       phase1Copy->ParseFromString(data);
       auto f = [this, &remote, phase1Copy]() {
-        this->HandlePhase1(remote, *phase1Copy);
+        this->HandlePhase1_atomic(remote, *phase1Copy);
         return (void*) true;
       };
-      if(params.dispatchMessageReceive){
+      if(params.parallel_CCC){
+        transport->DispatchTP_noCB(std::move(f));
+      }
+      else if(params.dispatchMessageReceive){
         f();
       }
       else{
         Debug("Dispatching HandlePhase1");
-        transport->DispatchTP_main(f);
+        transport->DispatchTP_main(std::move(f));
         //transport->DispatchTP_noCB(f); //use if want to dispatch to all workers
       }
     }
+
+    //DEPRECATED only OCC parallel, not full P1. Suffers from non-atomicity
+    // if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_CCC)){
+    //  phase1.ParseFromString(data);
+    //  HandlePhase1(remote, phase1);
+    // }
+    // else{
+    //   proto::Phase1 *phase1Copy = GetUnusedPhase1message();
+    //   phase1Copy->ParseFromString(data);
+    //   auto f = [this, &remote, phase1Copy]() {
+    //     this->HandlePhase1(remote, *phase1Copy);
+    //     return (void*) true;
+    //   };
+    //   if(params.dispatchMessageReceive){
+    //     f();
+    //   }
+    //   else{
+    //     Debug("Dispatching HandlePhase1");
+    //     transport->DispatchTP_main(f);
+    //     //transport->DispatchTP_noCB(f); //use if want to dispatch to all workers
+    //   }
+    // }
 
   } else if (type == phase2.GetTypeName()) {
 
@@ -281,7 +306,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
             this->HandlePhase2(remote, *p2);
             return (void*) true;
           };
-          transport->DispatchTP_main(f);
+          transport->DispatchTP_main(std::move(f));
         }
       }
 
@@ -302,7 +327,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
             this->HandleWriteback(remote, *wb);
             return (void*) true;
           };
-          transport->DispatchTP_main(f);
+          transport->DispatchTP_main(std::move(f));
         }
       }
 
@@ -333,7 +358,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
       }
       else{
         Debug("Dispatching HandlePhase1");
-        transport->DispatchTP_main(f);
+        transport->DispatchTP_main(std::move(f));
         //transport->DispatchTP_noCB(f); //use if want to dispatch to all workers
       }
     }
@@ -355,7 +380,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
             this->HandlePhase2FB(remote, *p2FB);
             return (void*) true;
           };
-          transport->DispatchTP_main(f);
+          transport->DispatchTP_main(std::move(f));
         }
       }
 
@@ -376,7 +401,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           this->HandleInvokeFB(remote, *invFB);
           return (void*) true;
         };
-        transport->DispatchTP_main(f);
+        transport->DispatchTP_main(std::move(f));
       }
     }
 
@@ -393,10 +418,11 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           this->HandleElectFB(*elFB);
           return (void*) true;
       };
-      transport->DispatchTP_main(f);
+      transport->DispatchTP_main(std::move(f));
     }
 
   } else if (type == decisionFB.GetTypeName()) {
+    std::cerr << "received the decisionFB message" << std::endl;
 
     if(!params.multiThreading && (!params.mainThreadDispatching || params.dispatchMessageReceive)){
       decisionFB.ParseFromString(data);
@@ -413,7 +439,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           this->HandleDecisionFB( *decFB);
           return (void*) true;
         };
-        transport->DispatchTP_main(f);
+        transport->DispatchTP_main(std::move(f));
       }
     }
 
@@ -430,7 +456,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
           this->HandleMoveView( *mvView);
           return (void*) true;
       };
-      transport->DispatchTP_main(f);
+      transport->DispatchTP_main(std::move(f));
     }
 
   } else {
@@ -699,7 +725,7 @@ void Server::HandlePhase1_atomic(const TransportAddress &remote,
 
     result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
           committedProof);
-    BufferP1Result(result, committedProof, txnDigest);
+    BufferP1Result(c, result, committedProof, txnDigest);
 
   }
   c.release();
@@ -881,6 +907,9 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
   signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid){
 
   Debug("HandlePhase2CB invoked");
+
+  if(msg->has_simulated_equiv() && msg->simulated_equiv()) valid = (void*) true; //Code to simulate equivocation even when necessary equiv signatures do not exist.
+
   if(!valid){
     Debug("VALIDATE P1Replies for TX %s failed.", BytesToHex(*txnDigest, 16).c_str());
     cleanCB(); //deletes SendCB resources should SendCB not be called.
@@ -1181,6 +1210,8 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
 
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
+
+  return;
 
   stats.Increment("total_transactions", 1);
 
@@ -2029,6 +2060,7 @@ bool Server::ManageDependencies(const std::string &txnDigest, const proto::Trans
 
       //if(params.mainThreadDispatching) dependentsMutex.lock();
      if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
+     //TODO: instead, take a per txnDigest lock in the loop for each dep, (add the mutex if necessary, and remove it at the end)
 
      for (const auto &dep : txn.deps()) {
        if (dep.involved_group() != groupIdx) {
@@ -4055,6 +4087,8 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
     // CHECK if part of logging shard. (this needs to be done at all p2s, reject if its not ourselves)
     const std::string &txnDigest = msg.txn_digest();
 
+    Debug("Received InvokeFB request for txn: %s", BytesToHex(txnDigest, 64).c_str());
+
     if(ForwardWriteback(remote, msg.req_id(), txnDigest)){
       if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
       return;
@@ -4065,6 +4099,7 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
     uint64_t current_view = p->second.current_view;
 
     if(!params.all_to_all_fb && msg.proposed_view() <= current_view){
+      Debug("Proposed view %lu < current view %lu. Sending updated view for txn: %s", msg.proposed_view(), current_view, BytesToHex(txnDigest, 64).c_str());
       SendView(remote, txnDigest);
       if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
       return; //Obsolete Invoke Message, send newer view
@@ -4130,6 +4165,8 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
 
 //TODO: merge with normal ProcessP2FB
 void Server::InvokeFBProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, const proto::Phase2FB &p2fb, proto::InvokeFB *msg){
+
+  Debug("Processing P2FB before processing InvokeFB request for txn: %s", BytesToHex(txnDigest, 64).c_str());
   // find txn. that maps to txnDigest. if not stored locally, and not part of the msg, reject msg.
   const proto::Transaction *txn;
   ongoingMap::const_accessor b;
@@ -4276,6 +4313,7 @@ void Server::InvokeFBProcessP2FBCallback(proto::InvokeFB *msg, const proto::Phas
 }
 
 void Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportAddress &remote){
+
   //Assuming Invoke Message contains SignedMessages for view instead of Signatures.
   if(!msg.has_view_signed()){
     if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(&msg);
@@ -4285,6 +4323,7 @@ void Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportA
 
 
   const std::string &txnDigest = msg.txn_digest();
+  Debug("VerifyingView for txn: %s", BytesToHex(txnDigest, 64).c_str());
   uint64_t myCurrentView;
   LookupCurrentView(txnDigest, myCurrentView);
 
@@ -4332,6 +4371,9 @@ void Server::InvokeFBcallback(proto::InvokeFB *msg, const std::string &txnDigest
 }
 
 void Server::SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, proto::CommitDecision decision, uint64_t logGrp){
+
+  Debug("Sending ElectFB message [decision: %s][proposed_view: %lu] for txn: %s", decision ? "ABORT" : "COMMIT", proposed_view, BytesToHex(txnDigest, 64).c_str());
+
   size_t replicaID = (proposed_view + txnDigest[0]) % config.n;
   //Form and send ElectFB message to all replicas within logging shard.
   proto::ElectFB* electFB = GetUnusedElectFBmessage();
@@ -4391,6 +4433,8 @@ void Server::HandleElectFB(proto::ElectFB &msg){
   proto::ElectMessage electMessage;
   electMessage.ParseFromString(signed_msg->data());
   const std::string &txnDigest = electMessage.txn_digest();
+  Debug("Received ElectFB request for txn: %s", BytesToHex(txnDigest, 64).c_str());
+
   size_t leaderID = (electMessage.elect_view() + txnDigest[0]) % config.n;
   if(leaderID != idx){ //Not the right leader
     if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeElectFBmessage(&msg);
@@ -4446,7 +4490,10 @@ void Server::HandleElectFB(proto::ElectFB &msg){
   //Callback (might need to do lookup again.)
 void Server::ElectFBcallback(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, std::string *signature, uint64_t process_id, void* valid){
 
+  Debug("Processing ElectFB callback [decision: %s][elect_view: %lu] for txn: %s", decision ? "ABORT" : "COMMIT", elect_view, BytesToHex(txnDigest, 64).c_str());
+
   if(!valid){
+    Debug("ElectFB request not valid for txn: %s", BytesToHex(txnDigest, 64).c_str());
     delete signature;
     return;
   }
@@ -4509,13 +4556,14 @@ void Server::ElectFBcallback(const std::string &txnDigest, uint64_t elect_view, 
 
   //Send decision to all replicas.
   transport->SendMessageToGroup(this, groupIdx, decisionFB);
-
+  Debug("Sent DecisionFB message [decision: %s][elect_view: %lu] for txn: %s", decision ? "ABORT" : "COMMIT", elect_view, BytesToHex(txnDigest, 64).c_str());
 }
 
 
 void Server::HandleDecisionFB(proto::DecisionFB &msg){
 
     const std::string &txnDigest = msg.txn_digest();
+    Debug("Received DecisionFB request for txn: %s", BytesToHex(txnDigest, 64).c_str());
 
     interestedClientsMap::accessor i;
     auto jtr = interestedClients.find(i, txnDigest);
