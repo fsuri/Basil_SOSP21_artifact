@@ -4154,7 +4154,7 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
 
     if(params.all_to_all_fb){
       uint64_t proposed_view = current_view + 1; //client does not propose view.
-      BroadcastMoveView(txnDigest, proposed_view);
+      ProcessMoveView(txnDigest, proposed_view, true);
       SendElectFB(&msg, txnDigest, proposed_view, decision, logGrp); //can already send before moving to view since we do not skip views during synchrony (even when no correct clients interested)
     }
     else{
@@ -4298,7 +4298,7 @@ void Server::InvokeFBProcessP2FBCallback(proto::InvokeFB *msg, const proto::Phas
     //Call InvokeFB handling
     if(params.all_to_all_fb){
       uint64_t proposed_view = current_view + 1; //client does not propose view.
-      BroadcastMoveView(txnDigest, proposed_view);
+      ProcessMoveView(txnDigest, proposed_view, true);
       SendElectFB(msg, txnDigest, proposed_view, decision, groupIdx); //can already send before moving to view since we do not skip views during synchrony (even when no correct clients interested)
     }
     else{ //verify views & Send ElectFB
@@ -4343,21 +4343,26 @@ void Server::VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportA
 
 void Server::InvokeFBcallback(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid){
 
+
   if(!valid || ForwardWriteback(*remoteCopy, 0, txnDigest)){
+    Debug("Invalid InvokeFBcallback request for txn: %s", BytesToHex(txnDigest, 64).c_str());
     delete remoteCopy;
     if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
     return; //View verification failed.
   }
 
+  Debug("Processing InvokeFBcallback for txn: %s", BytesToHex(txnDigest, 64).c_str());
+
   p2MetaDataMap::accessor p;
   p2MetaDatas.insert(p, txnDigest);
   uint64_t current_view = p->second.current_view;
   if(!p->second.hasP2){
-    Debug("Transaction[%s] has no phase2 decision yet needs to SendElectFB", BytesToHex(txnDigest, 64).c_str());
+    Debug("Transaction[%s] has no phase2 decision needed in order to SendElectFB", BytesToHex(txnDigest, 64).c_str());
     return;
   }
 
   if(!params.all_to_all_fb && current_view >= proposed_view){
+    Debug("Decline InvokeFB[%s] as Proposed view %lu <= Current View %lu", BytesToHex(txnDigest, 64).c_str(), proposed_view, current_view);
     SendView(*remoteCopy, txnDigest);
     delete remoteCopy;
     if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
@@ -4374,7 +4379,7 @@ void Server::SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uin
 
   Debug("Sending ElectFB message [decision: %s][proposed_view: %lu] for txn: %s", decision ? "ABORT" : "COMMIT", proposed_view, BytesToHex(txnDigest, 64).c_str());
 
-  size_t replicaID = (proposed_view + txnDigest[0]) % config.n;
+  size_t replicaIdx = (proposed_view + txnDigest[0]) % config.n;
   //Form and send ElectFB message to all replicas within logging shard.
   proto::ElectFB* electFB = GetUnusedElectFBmessage();
   proto::ElectMessage* electMessage = GetUnusedElectMessage();
@@ -4384,21 +4389,42 @@ void Server::SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uin
   electMessage->set_decision(decision);
   electMessage->set_elect_view(proposed_view);
 
-  if (params.signedMessages) {
-    MessageToSign(electMessage, electFB->mutable_signed_elect_fb(),
-      [this, electMessage, electFB, logGrp, replicaID](){
-        this->transport->SendMessageToReplica(this, logGrp, replicaID, *electFB);
-        FreeElectMessage(electMessage);
-        FreeElectFBmessage(electFB);
+  //SendElectFB message to proposed leader - unless it is self, then call processing directly
+  //TODO: after signing, call ProcessElectFB()
+
+    if (params.signedMessages) {
+      MessageToSign(electMessage, electFB->mutable_signed_elect_fb(),
+        [this, electMessage, electFB, logGrp, replicaIdx](){
+          if(idx != replicaIdx) {
+            this->transport->SendMessageToReplica(this, logGrp, replicaIdx, *electFB);
+          }
+          else{
+            if(PreProcessElectFB(electMessage->txn_digest(), electMessage->elect_view(), electMessage->decision(), electFB->signed_elect_fb().process_id())){
+              ProcessElectFB(electMessage->txn_digest(), electMessage->elect_view(), electMessage->decision(),
+                                electFB->mutable_signed_elect_fb()->release_signature(), electFB->signed_elect_fb().process_id());
+            }
+          }
+          FreeElectMessage(electMessage);
+          FreeElectFBmessage(electFB);
+        }
+      );
+    }
+    else{
+      if(idx != replicaIdx) {
+        *electFB->mutable_elect_fb() = std::move(*electMessage);
+        transport->SendMessageToReplica(this, logGrp, replicaIdx, *electFB);
+
       }
-    );
-  }
-  else{
-    *electFB->mutable_elect_fb() = std::move(*electMessage);
-    transport->SendMessageToReplica(this, logGrp, replicaID, *electFB);
-    FreeElectMessage(electMessage);
-    FreeElectFBmessage(electFB); //must free in this order.
-  }
+      else{
+        if(PreProcessElectFB(txnDigest, proposed_view, decision, id)){
+          ProcessElectFB(txnDigest, proposed_view, decision, nullptr, id); //TODO: add non-signed version
+        }
+      }
+      FreeElectMessage(electMessage);
+      FreeElectFBmessage(electFB); //must free in this order.
+    }
+
+
 
   if( (!params.all_to_all_fb && params.multiThreading) || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeInvokeFBmessage(msg);
 
@@ -4416,6 +4442,19 @@ void Server::SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uin
   //(TODO 4) Send MoveView message for new view to all other replicas)
 }
 
+
+bool Server::PreProcessElectFB(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, uint64_t process_id){
+  //create management object (if necessary) and insert appropriate replica id to avoid duplicates
+  ElectQuorumMap::accessor q;
+  ElectQuorums.insert(q, txnDigest);
+  ElectFBorganizer &electFBorganizer = q->second;
+  replica_sig_sets_pair &view_decision_quorum = electFBorganizer.view_quorums[elect_view][decision];
+  if(!view_decision_quorum.first.insert(process_id).second){
+    return false;
+  }
+  q.release();
+  return true;
+}
 
 void Server::HandleElectFB(proto::ElectFB &msg){
 
@@ -4454,15 +4493,10 @@ void Server::HandleElectFB(proto::ElectFB &msg){
   }
 
   //create management object (if necessary) and insert appropriate replica id to avoid duplicates
-  ElectQuorumMap::accessor q;
-  ElectQuorums.insert(q, txnDigest);
-  ElectFBorganizer &electFBorganizer = q->second;
-  replica_sig_sets_pair &view_decision_quorum = electFBorganizer.view_quorums[electMessage.elect_view()][electMessage.decision()];
-  if(!view_decision_quorum.first.insert(signed_msg->process_id()).second){
+  if(!PreProcessElectFB(txnDigest, electMessage.elect_view(), electMessage.decision(), signed_msg->process_id())){
     if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeElectFBmessage(&msg);
     return;
   }
-  q.release();
 
   //verify signature before adding it.
   std::string *signature = signed_msg->release_signature();
@@ -4483,14 +4517,15 @@ void Server::HandleElectFB(proto::ElectFB &msg){
   else{
     if(!verifier->Verify(keyManager->GetPublicKey(signed_msg->process_id()),
           signed_msg->data(), signed_msg->signature())) return;
-    ElectFBcallback(txnDigest, electMessage.elect_view(), electMessage.decision(), signature, signed_msg->process_id(), (void*) true);
+    ProcessElectFB(txnDigest, electMessage.elect_view(), electMessage.decision(), signature, signed_msg->process_id());
   }
   if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeElectFBmessage(&msg);
 }
+
   //Callback (might need to do lookup again.)
 void Server::ElectFBcallback(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, std::string *signature, uint64_t process_id, void* valid){
 
-  Debug("Processing ElectFB callback [decision: %s][elect_view: %lu] for txn: %s", decision ? "ABORT" : "COMMIT", elect_view, BytesToHex(txnDigest, 64).c_str());
+  Debug("ElectFB callback [decision: %s][elect_view: %lu] for txn: %s", decision ? "ABORT" : "COMMIT", elect_view, BytesToHex(txnDigest, 64).c_str());
 
   if(!valid){
     Debug("ElectFB request not valid for txn: %s", BytesToHex(txnDigest, 64).c_str());
@@ -4506,6 +4541,12 @@ void Server::ElectFBcallback(const std::string &txnDigest, uint64_t elect_view, 
     i.release();
   }
 
+  ProcessElectFB(txnDigest, elect_view, decision, signature, process_id);
+}
+
+void Server::ProcessElectFB(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, std::string *signature, uint64_t process_id){
+
+  Debug("Processing Elect FB [decision: %s][elect_view: %lu] for txn %s", decision ? "ABORT" : "COMMIT", elect_view, BytesToHex(txnDigest, 64).c_str());
   //Add signature
   ElectQuorumMap::accessor q;
   if(!ElectQuorums.find(q, txnDigest)) return;
@@ -4518,6 +4559,8 @@ void Server::ElectFBcallback(const std::string &txnDigest, uint64_t elect_view, 
   sig->set_process_id(process_id);
   view_decision_quorum.second++; //count the number of valid sigs. (Counting seperately so that the size is monotonous if I move Signatures...)
 
+  std::cerr << "View decision quorum size: " << view_decision_quorum.second << std::endl;
+  std::cerr << "Required quorum: " << 2*config.f + 1 << std::endl;
   if(view_decision_quorum.second == 2*config.f +1){
     //Set message
     proto::DecisionFB decisionFB;
@@ -4534,7 +4577,7 @@ void Server::ElectFBcallback(const std::string &txnDigest, uint64_t elect_view, 
     //   decisionFB.mutable_elect_sigs()->mutable_sigs()->AddAllocated(*itr);
     //   itr = view_decision_quorum.second.erase(itr);
     // }
-  }
+
 
   //delete all released signatures that we dont need/use - If i copied instead would not need this.
   // auto it=electFBorganizer.view_quorums.begin();
@@ -4552,11 +4595,18 @@ void Server::ElectFBcallback(const std::string &txnDigest, uint64_t elect_view, 
   //     it = electFBorganizer.view_quorums.erase(it);
   //   }
   // }
-  q.release();
+    q.release();
 
-  //Send decision to all replicas.
-  transport->SendMessageToGroup(this, groupIdx, decisionFB);
-  Debug("Sent DecisionFB message [decision: %s][elect_view: %lu] for txn: %s", decision ? "ABORT" : "COMMIT", elect_view, BytesToHex(txnDigest, 64).c_str());
+    //Send decision to all replicas (besides itself) and handle Decision FB directly onself.
+    //transport->SendMessageToReplica(this, groupIdx, idx, decisionFB);
+    transport->SendMessageToGroup(this, groupIdx, decisionFB);
+    Debug("Sent DecisionFB message [decision: %s][elect_view: %lu] for txn: %s", decision ? "ABORT" : "COMMIT", elect_view, BytesToHex(txnDigest, 64).c_str());
+
+    AdoptDecision(txnDigest, elect_view, decision);
+  }
+  else{
+    q.release();
+  }
 }
 
 
@@ -4635,33 +4685,37 @@ void Server::FBDecisionCallback(proto::DecisionFB *msg, const std::string &txnDi
       i.release();
     }
 
-
-    //outdated request
-    p2MetaDataMap::accessor p;
-    p2MetaDatas.find(p, txnDigest);
-    uint64_t current_view = p->second.current_view;
-    uint64_t decision_view = p->second.decision_view;
-    if(current_view > view){
-      if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeDecisionFBmessage(msg);
-      return;
-    }
-    else if(current_view < view){
-      p->second.current_view = view;
-    }
-    if(decision_view < view){
-      p->second.decision_view = view;
-      p->second.p2Decision = decision;
-      p->second.hasP2 = true;
-    }
-    p.release();
-
-    //send a p2 message anyways, even if we have a newer one, just so clients can still form quorums on past views.
-    P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, this);
-    SetP2(0, p2fb_organizer->p2fbr->mutable_p2r(), txnDigest, decision, view);
-    SendPhase2FBReply(p2fb_organizer, txnDigest, true);
+    AdoptDecision(txnDigest, view, decision);
 
     if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)) FreeDecisionFBmessage(msg);
 
+}
+
+void Server::AdoptDecision(const std::string &txnDigest, uint64_t view, proto::CommitDecision decision){
+
+  p2MetaDataMap::accessor p;
+  p2MetaDatas.find(p, txnDigest);
+  uint64_t current_view = p->second.current_view;
+  uint64_t decision_view = p->second.decision_view;
+  if(current_view > view){ //outdated request
+    return;
+  }
+  else if(current_view < view){
+    p->second.current_view = view;
+  }
+  if(decision_view < view){
+    p->second.decision_view = view;
+    p->second.p2Decision = decision;
+    p->second.hasP2 = true;
+  }
+  p.release();
+
+  Debug("Adopted new decision [dec: %s][dec_view: %lu] for txn %s", decision ? "ABORT" : "COMMIT", view, BytesToHex(txnDigest, 64).c_str());
+
+  //send a p2 message anyways, even if we have a newer one, just so clients can still form quorums on past views.
+  P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, this);
+  SetP2(0, p2fb_organizer->p2fbr->mutable_p2r(), txnDigest, decision, view);
+  SendPhase2FBReply(p2fb_organizer, txnDigest, true);
 }
 
 void Server::BroadcastMoveView(const std::string &txnDigest, uint64_t proposed_view){
@@ -4716,30 +4770,50 @@ void Server::HandleMoveView(proto::MoveView &msg){
     i.release();
   }
 
+  ProcessMoveView(txnDigest, proposed_view);
+
+  if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeMoveView(&msg);
+}
+
+void Server::ProcessMoveView(const std::string &txnDigest, uint64_t proposed_view, bool self){
   ElectQuorumMap::accessor q;
   ElectQuorums.insert(q, txnDigest);
   ElectFBorganizer &electFBorganizer = q->second;
   if(electFBorganizer.move_view_counts.find(proposed_view) == electFBorganizer.move_view_counts.end()){
     electFBorganizer.move_view_counts[proposed_view] = std::make_pair(0, false);
   }
-  uint64_t count = ++(electFBorganizer.move_view_counts[proposed_view].first); // dont count duplicate replicas.
+
+  uint64_t count;
+
+  if(self){
+    //count our own vote once.
+    if(electFBorganizer.move_view_counts[proposed_view].second) return;
+    BroadcastMoveView(txnDigest, proposed_view);
+    count = ++(electFBorganizer.move_view_counts[proposed_view].first); //have not broadcast yet, count our own vote (only once total).
+    electFBorganizer.move_view_counts[proposed_view].second = true;
+  }
+  else{
+    //count the messages received from other replicas.
+    count = ++(electFBorganizer.move_view_counts[proposed_view].first); //TODO: dont count duplicate replicas.
+  }
 
   p2MetaDataMap::accessor p;
   p2MetaDatas.insert(p, txnDigest);
   if(proposed_view > p->second.current_view){
-    if(count == 2*config.f + 1){
-        p->second.current_view = proposed_view;
-    }
-    else if(count == config.f + 1){
+
+    if(count == config.f + 1){
       if(electFBorganizer.move_view_counts[proposed_view].second) return;
       BroadcastMoveView(txnDigest, proposed_view);
+      count = ++(electFBorganizer.move_view_counts[proposed_view].first); //have not broadcast yet, count our own vote (only once total).
       electFBorganizer.move_view_counts[proposed_view].second = true;
+    }
+
+    if(count == 2*config.f + 1){
+        p->second.current_view = proposed_view;
     }
   }
   p.release();
   q.release();
-
-  if(params.mainThreadDispatching && !params.dispatchMessageReceive) FreeMoveView(&msg);
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

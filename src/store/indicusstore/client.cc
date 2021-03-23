@@ -1079,7 +1079,7 @@ bool Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64
   //Otherwise, Include the P2 here!.
   std::cerr << "Called InvokeFB" << std::endl;
 
-  if(!callInvokeFB) return false;
+  //if(!callInvokeFB) return false;
   callInvokeFB = false;
 
   // check if conflict transaction still active

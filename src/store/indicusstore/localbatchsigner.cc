@@ -221,21 +221,21 @@ void LocalBatchSigner::asyncMessageToSign(::google::protobuf::Message* msg,
         batchTimerRunning = false;
       }
 
-//move these too? After moving I have a clear vector so it should be fine.
+        //move these too? After moving I have a clear vector so it should be fine.
       std::vector<Triplet> results;     // Could also be any iterator
 
       try {
-
-      int batch_count = Batch.size_approx(); //std::min(batchSize, Batch.size_approx());
-      for(int i = 0; i < batch_count; ++i){
-        results.push_back(Triplet());
-      }
-      size_t count = Batch.try_dequeue_bulk(results.begin(), batch_count);
-      if(count == 0) return;
-      results.resize(count);
-    } catch(...) {
+        int batch_count = Batch.size_approx(); //std::min(batchSize, Batch.size_approx());
+        for(int i = 0; i < batch_count; ++i){
+          results.push_back(Triplet());
+        }
+        //Dequeue up to batch_count many Triplets and store them in results.
+        size_t count = Batch.try_dequeue_bulk(results.begin(), batch_count);
+        if(count == 0) return;
+        results.resize(count);
+      } catch(...) {
        Panic("Caught exception");
-    }
+      }
       std::function<void*()> f(std::bind(&LocalBatchSigner::asyncSignBatch2, this,
         std::move(results))); //can I move results?
 

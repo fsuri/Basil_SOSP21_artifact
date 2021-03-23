@@ -228,25 +228,36 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
     void RelayP1(const std::string &dependency_txnDig, bool fallback_flow, uint64_t reqId, const TransportAddress &remote, const std::string &txnDigest);
     void SendRelayP1(const TransportAddress &remote, const std::string &dependency_txnDig, uint64_t dependent_id, const std::string &dependent_txnDig);
+
     bool ExecP1(p1MetaDataMap::accessor &c, proto::Phase1FB &msg, const TransportAddress &remote, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof* &committedProof);
+
     void SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
     void SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision, uint64_t decision_view);
+
     void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string &txnDigest, bool multi = false);
     void SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi = false);
 
     void ProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, const proto::Phase2FB &p2fb);
     void ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string &txnDigest,
       const TransportAddress *remote, void* valid);
+
     void SendView(const TransportAddress &remote, const std::string &txnDigest);
+
     void InvokeFBProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, const proto::Phase2FB &p2fb, proto::InvokeFB *msg);
     void InvokeFBProcessP2FBCallback(proto::InvokeFB *msg, const proto::Phase2FB *p2fb, const std::string &txnDigest,
       const TransportAddress *remote, void* valid);
     void VerifyViews(proto::InvokeFB &msg, uint32_t logGrp, const TransportAddress &remote);
     void InvokeFBcallback(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, uint64_t logGrp, const TransportAddress *remoteCopy, void* valid);
     void SendElectFB(proto::InvokeFB *msg, const std::string &txnDigest, uint64_t proposed_view, proto::CommitDecision decision, uint64_t logGrp);
+
     void ElectFBcallback(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, std::string *signature, uint64_t process_id, void* valid);
+    bool PreProcessElectFB(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, uint64_t process_id);
+    void ProcessElectFB(const std::string &txnDigest, uint64_t elect_view, proto::CommitDecision decision, std::string *signature, uint64_t process_id);
+
     void FBDecisionCallback(proto::DecisionFB *msg, const std::string &txnDigest, uint64_t view, proto::CommitDecision decision, void* valid);
+    void AdoptDecision(const std::string &txnDigest, uint64_t view, proto::CommitDecision decision);
     void BroadcastMoveView(const std::string &txnDigest, uint64_t proposed_view);
+    void ProcessMoveView(const std::string &txnDigest, uint64_t proposed_view, bool self = false);
 
     //keep list of all remote addresses == interested client_seq_num
     //TODO: store original client separately..
