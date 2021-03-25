@@ -1503,6 +1503,7 @@ void ShardClient::ProcessP1FBR(proto::Phase1Reply &reply, PendingFB *pendingFB, 
 
   }
 
+//TODO: release Signed Message and move pointers instead of copying!!!!!!
 void ShardClient::UpdateViewStructure(PendingFB *pendingFB, const proto::AttachedView &ac){
 
   uint64_t stored_view;
@@ -1513,7 +1514,7 @@ void ShardClient::UpdateViewStructure(PendingFB *pendingFB, const proto::Attache
 
   if (params.validateProofs && params.signedMessages) {
         if(!ac.has_signed_current_view()) return;
-        proto::SignedMessage signed_msg = ac.signed_current_view();
+        proto::SignedMessage signed_msg = std::move(ac.signed_current_view());
         proto::CurrentView new_view;
         new_view.ParseFromString(signed_msg.data());
 
@@ -1530,11 +1531,12 @@ void ShardClient::UpdateViewStructure(PendingFB *pendingFB, const proto::Attache
               signed_msg.data(), signed_msg.signature())) return;
 
         set_view = new_view.current_view();
-        update = true;
-        pendingFB->current_views.emplace(new_view.replica_id(), SignedView(set_view, signed_msg));
-        // itr->second->current_views[new_view.replica_id()].view = set_view;
-        // itr->second->current_views[new_view.replica_id()].signed_view = signed_msg;
         id = signed_msg.process_id();
+        update = true;
+        pendingFB->current_views[new_view.replica_id()].view = set_view;
+        pendingFB->current_views[new_view.replica_id()].signed_view = std::move(signed_msg);
+
+
   } else{
     if(!ac.has_current_view()) return;
     proto::CurrentView new_view = ac.current_view();
@@ -1673,7 +1675,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
     }
 
     //can return directly to writeback (p2 complete)
-    if (false && pendingP2.matchingReplies == QuorumSize(config)) { //make it >=? potentially duplicate cb then..
+    if (pendingP2.matchingReplies == QuorumSize(config)) { //make it >=? potentially duplicate cb then..
       pendingFB->p2FBcb(pendingP2.decision, pendingP2.p2ReplySigs, view);
       //dont need to clean, will be cleaned by callback.
       return true;
@@ -1709,10 +1711,10 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
   ////FALLBACK INVOCATION
   //max decision view represents f+1 replicas. Implies that this is the current view.
   //CALL Fallback if detected divergence for newest accepted view. (calling it for older ones is useless)
-  if(true || (pendingFB->max_decision_view == view
+  if(pendingFB->max_decision_view == view
     && pendingFB->pendingP2s[view][proto::COMMIT].matchingReplies == config->f +1
-    && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies == config->f +1)){ //== so we only call it once per view.
-      pendingFB->p1 = false; 
+    && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies == config->f +1){ //== so we only call it once per view.
+      pendingFB->p1 = false;
       if(!pendingFB->invFBcb()) return true;
   }
       //TODO: Also need to call it after some timeout. I.e. if 4f+1 received are all honest but diverge.
@@ -1757,6 +1759,7 @@ void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::T
 
       transport->SendMessageToGroup(this, group, invokeFB);
       Debug("[group %i] Sent InvokeFB[%lu]", group, client_id);
+      std::cerr << "Invoking on all to all FB" << std::endl;
   }
 
   else{
@@ -1786,6 +1789,7 @@ void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::T
             SignedView &sv = itr->second->current_views[id];
             proto::SignedMessage* sm = view_signed.add_sig_msgs();
             *sm = sv.signed_view;
+
             count++;
             if(count == 0) break;
           }

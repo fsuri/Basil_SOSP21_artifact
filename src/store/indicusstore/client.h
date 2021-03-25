@@ -62,7 +62,7 @@ static uint64_t start_time = 0;
 static uint64_t total_failure_injections=0;
 static uint64_t total_writebacks=0;
 
-static bool callInvokeFB = true;
+static int callInvokeFB = 0;
 
 class Client : public ::Client {
  public:

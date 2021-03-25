@@ -383,7 +383,7 @@ void Client::Phase1Callback(uint64_t txnId, int group,
         " response from group %d.", txnId, group);
     return;
   }
-
+  
   Phase1CallbackProcessing(req, group, decision, fast, conflict_flag, conflict, sigs, eqv_ready);
 
   if (req->outstandingPhase1s == 0) {
@@ -428,7 +428,8 @@ void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
 
 void Client::HandleAllPhase1Received(PendingRequest *req) {
   Debug("All PHASE1's [%lu] received", client_seq_num);
-  if (false && req->fast) {
+  //TO force P2, add "req->conflict_flag". Conflict Aborts *must* go fast path.
+  if (req->fast) {
     Writeback(req);
   } else {
     // slow path, must log final result to 1 group
@@ -441,6 +442,7 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
 }
 
 void Client::Phase2Processing(PendingRequest *req){
+
   if (params.validateProofs && params.signedMessages) {
     if (req->decision == proto::ABORT) {
       UW_ASSERT(req->slowAbortGroup >= 0);
@@ -1057,7 +1059,6 @@ void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64
 }
 
 void Client::WritebackFB(PendingRequest *req){
-  std::cerr << "Writeback FB sent" << std::endl;
 
   Debug("WRITEBACKFB[%lu:%s] result: %s", client_id, BytesToHex(req->txnDigest, 16).c_str(), req->decision ? "COMMIT" : "ABORT");
 
@@ -1077,10 +1078,6 @@ void Client::WritebackFB(PendingRequest *req){
 bool Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group){
   //Just send InvokeFB request to the logging shard. but only if the tx has not already finished. and only if we have already sent a P2
   //Otherwise, Include the P2 here!.
-  std::cerr << "Called InvokeFB" << std::endl;
-
-  //if(!callInvokeFB) return false;
-  callInvokeFB = false;
 
   // check if conflict transaction still active
   if(!StillActive(conflict_id, txnDigest)) return false;
@@ -1092,11 +1089,13 @@ bool Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64
     Debug("Already sent WB - unecessary InvokeFB");
     return true;
   }
+  //TODO: RECOMMENT. Currently assuming that all servers already have p2 decision.
   if(false && req->p2Replies.p2replies().size() < config->f +1){
     Debug("No p2 decision included - invalid InvokeFB");
     return true;
   }
-  std::cerr << "Called InvokeFB - ShardClient" << std::endl;
+
+  Debug("Called InvokeFB on logging shard group %lu, for txn: %s", group, BytesToHex(txnDigest, 16).c_str());
   //we know this group is the FB group, only that group would have invoked this callback.
   bclient[group]->InvokeFB(conflict_id, txnDigest, req->txn, req->decision, req->p2Replies);
 

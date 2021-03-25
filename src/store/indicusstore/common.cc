@@ -1375,7 +1375,14 @@ void asyncVerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
         }
         //check for catchup that replica view is not smaller than proposed view
         //check for non-catchup that replica view is not smaller than proposed view - 1
-        if(view_s.txn_digest() != *txnDigest || view_s.current_view() < proposed_view - (1-catch_up) ){
+        if(view_s.txn_digest() != *txnDigest){
+            Debug("Txn digest of View message [%s] does not match Invoked txn digest [%s]", BytesToHex(view_s.txn_digest(), 64).c_str(), BytesToHex(*txnDigest, 64).c_str());
+            verifyObj->mcb((void*) false);
+            delete verifyObj;
+            return;
+        }
+        if(view_s.current_view() < proposed_view - (1-catch_up) ){
+            Debug("View message [%s]: signed view = %lu < %lu proposed_view. Catch_up = %s", BytesToHex(*txnDigest, 64).c_str(), view_s.current_view(), proposed_view - (1-catch_up), catch_up ? "True" : "False");
             verifyObj->mcb((void*) false);
             delete verifyObj;
             return;

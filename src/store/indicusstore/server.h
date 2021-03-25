@@ -150,14 +150,14 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
     //FALLBACK helper datastructures
     struct P1FBorganizer {
       P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
-        remote(remote.clone()), server(server),
+        remote(remote.clone()), has_remote(true), server(server),
         p1_sig_outstanding(false), p2_sig_outstanding(false), c_view_sig_outstanding(false) {
           p1fbr = server->GetUnusedPhase1FBReply();
           p1fbr->Clear();
           p1fbr->set_req_id(ReqId);
           p1fbr->set_txn_digest(txnDigest);
       }
-      P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server),
+      P1FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : has_remote(false), server(server),
         p1_sig_outstanding(false), p2_sig_outstanding(false), c_view_sig_outstanding(false){
           p1fbr = server->GetUnusedPhase1FBReply();
           p1fbr->Clear();
@@ -165,13 +165,14 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
           p1fbr->set_txn_digest(txnDigest);
       }
       ~P1FBorganizer() {
-        delete remote;
+        if(has_remote) delete remote;
         server->FreePhase1FBReply(p1fbr);
       }
       Server *server;
 
       uint64_t req_id;
       std::string txnDigest;
+      bool has_remote;
       const TransportAddress *remote;
 
       proto::Phase1FBReply *p1fbr;
@@ -184,14 +185,14 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
 
     struct P2FBorganizer {
       P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, const TransportAddress &remote, Server *server) :
-        remote(remote.clone()), server(server),
+        remote(remote.clone()), has_remote(true), server(server),
         p2_sig_outstanding(false), c_view_sig_outstanding(false) {
           p2fbr = server->GetUnusedPhase2FBReply();
           p2fbr->Clear();
           p2fbr->set_req_id(ReqId);
           p2fbr->set_txn_digest(txnDigest);
       }
-      P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : server(server),
+      P2FBorganizer(uint64_t ReqId, const std::string &txnDigest, Server *server) : has_remote(false), server(server),
         p2_sig_outstanding(false), c_view_sig_outstanding(false){
           p2fbr = server->GetUnusedPhase2FBReply();
           p2fbr->Clear();
@@ -199,13 +200,14 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
           p2fbr->set_txn_digest(txnDigest);
       }
       ~P2FBorganizer() {
-        delete remote;
+        if(has_remote) delete remote;
         server->FreePhase2FBReply(p2fbr);
       }
       Server *server;
 
       uint64_t req_id;
       std::string txnDigest;
+      bool has_remote;
       const TransportAddress *remote;
 
       proto::Phase2FBReply *p2fbr;

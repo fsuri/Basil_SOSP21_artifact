@@ -1211,7 +1211,11 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
 
-  return;
+  //simulating failures in local experiment
+  // fail_writeback++;
+  // if(fail_writeback %2 == 1){
+  //   return;
+  // }
 
   stats.Increment("total_transactions", 1);
 
@@ -4154,6 +4158,7 @@ void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg
 
     if(params.all_to_all_fb){
       uint64_t proposed_view = current_view + 1; //client does not propose view.
+      Debug("txn[%s] in current view: %lu, proposing view:", BytesToHex(txnDigest, 64).c_str(), current_view, proposed_view);
       ProcessMoveView(txnDigest, proposed_view, true);
       SendElectFB(&msg, txnDigest, proposed_view, decision, logGrp); //can already send before moving to view since we do not skip views during synchrony (even when no correct clients interested)
     }
@@ -4559,8 +4564,6 @@ void Server::ProcessElectFB(const std::string &txnDigest, uint64_t elect_view, p
   sig->set_process_id(process_id);
   view_decision_quorum.second++; //count the number of valid sigs. (Counting seperately so that the size is monotonous if I move Signatures...)
 
-  std::cerr << "View decision quorum size: " << view_decision_quorum.second << std::endl;
-  std::cerr << "Required quorum: " << 2*config.f + 1 << std::endl;
   if(view_decision_quorum.second == 2*config.f +1){
     //Set message
     proto::DecisionFB decisionFB;
@@ -4780,17 +4783,17 @@ void Server::ProcessMoveView(const std::string &txnDigest, uint64_t proposed_vie
   ElectQuorums.insert(q, txnDigest);
   ElectFBorganizer &electFBorganizer = q->second;
   if(electFBorganizer.move_view_counts.find(proposed_view) == electFBorganizer.move_view_counts.end()){
-    electFBorganizer.move_view_counts[proposed_view] = std::make_pair(0, false);
+    electFBorganizer.move_view_counts[proposed_view] = std::make_pair(0, true);
   }
 
-  uint64_t count;
-
+  uint64_t count = 0;
   if(self){
     //count our own vote once.
-    if(electFBorganizer.move_view_counts[proposed_view].second) return;
-    BroadcastMoveView(txnDigest, proposed_view);
-    count = ++(electFBorganizer.move_view_counts[proposed_view].first); //have not broadcast yet, count our own vote (only once total).
-    electFBorganizer.move_view_counts[proposed_view].second = true;
+    if(electFBorganizer.move_view_counts[proposed_view].second){
+      BroadcastMoveView(txnDigest, proposed_view);
+      count = ++(electFBorganizer.move_view_counts[proposed_view].first); //have not broadcast yet, count our own vote (only once total).
+      electFBorganizer.move_view_counts[proposed_view].second = false;
+    }
   }
   else{
     //count the messages received from other replicas.
@@ -4802,10 +4805,11 @@ void Server::ProcessMoveView(const std::string &txnDigest, uint64_t proposed_vie
   if(proposed_view > p->second.current_view){
 
     if(count == config.f + 1){
-      if(electFBorganizer.move_view_counts[proposed_view].second) return;
-      BroadcastMoveView(txnDigest, proposed_view);
-      count = ++(electFBorganizer.move_view_counts[proposed_view].first); //have not broadcast yet, count our own vote (only once total).
-      electFBorganizer.move_view_counts[proposed_view].second = true;
+      if(electFBorganizer.move_view_counts[proposed_view].second){
+        BroadcastMoveView(txnDigest, proposed_view);
+        count = ++(electFBorganizer.move_view_counts[proposed_view].first); //have not broadcast yet, count our own vote (only once total).
+        electFBorganizer.move_view_counts[proposed_view].second = false;
+      }
     }
 
     if(count == 2*config.f + 1){
