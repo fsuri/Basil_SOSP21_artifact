@@ -72,6 +72,7 @@ typedef std::function<void(int)> phase2_timeout_callback;
 typedef std::function<void()> writeback_callback;
 typedef std::function<void(int)> writeback_timeout_callback;
 
+typedef std::function<void(proto::ForwardWriteback &)> forwardWB_callback;
 
 //Fallback typedefs:
 typedef std::function<void(proto::RelayP1 &, std::string &)> relayP1_callback;
@@ -218,6 +219,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     //relay Callbacks
     uint64_t client_seq_num;
     relayP1_callback rcb;
+
+    forwardWB_callback fwb;
   };
 
 
@@ -241,6 +244,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     uint64_t matchingReplies;
     phase2_callback pcb;
     phase2_timeout_callback ptcb;
+
+    forwardWB_callback fwb;
   };
 
   struct SignedView {
@@ -289,6 +294,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
     phase1FB_callbackB p1FBcbB;
     phase2FB_callback p2FBcb; // callback in case that we finish normal p2, can return just as if it was the normal protocol?
     invokeFB_callback invFBcb;
+
+    forwardWB_callback fwb;
 
     // manage Invocation start
     viewQuorum_callback view_invoker;
@@ -367,6 +374,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   void ComputeMaxLevel(PendingFB *pendingFB);
   void UpdateViewStructure(PendingFB *pendingFB, const proto::AttachedView &ac);
 
+  void HandleForwardWB(proto::ForwardWriteback &forwardWB);
+
   inline size_t GetNthClosestReplica(size_t idx) const {
     if (pingReplicas && GetOrderedReplicas().size() > 0) {
       return GetOrderedReplicas()[idx];
@@ -428,6 +437,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
   proto::Phase2FBReply phase2FBReply;
   proto::InvokeFB invokeFB;
   proto::SendView sendView;
+  proto::ForwardWriteback forwardWB;
 
 
   proto::Write validatedPrepared;

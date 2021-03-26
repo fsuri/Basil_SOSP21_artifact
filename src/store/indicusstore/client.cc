@@ -383,7 +383,7 @@ void Client::Phase1Callback(uint64_t txnId, int group,
         " response from group %d.", txnId, group);
     return;
   }
-  
+
   Phase1CallbackProcessing(req, group, decision, fast, conflict_flag, conflict, sigs, eqv_ready);
 
   if (req->outstandingPhase1s == 0) {
@@ -526,7 +526,7 @@ void Client::Phase2Callback(uint64_t txnId, int group,
     const proto::Signatures &p2ReplySigs) {
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
-    Debug("Phase2Callback for terminated request id %lu (txn already committed or aborted.", txnId);
+    Debug("Phase2Callback for terminated request id %lu (txn already committed or aborted).", txnId);
     return;
   }
 
@@ -701,6 +701,70 @@ void Client::FailureCleanUp(PendingRequest *req) {
   delete req;
 }
 
+void Client::ForwardWBcallback(uint64_t txnId, int group, proto::ForwardWriteback &forwardWB){
+  auto itr = this->pendingReqs.find(txnId);
+  if (itr == this->pendingReqs.end()) {
+    Debug("ForwardWBcallback for terminated request id %lu (txn already committed or aborted).", txnId);
+    return;
+  }
+  PendingRequest *req = itr->second;
+
+  if (req->startedWriteback) {
+    Debug("Already started Writeback for request id %lu. Ignoring Phase2 response.",
+        txnId);
+    return;
+  }
+
+  req->startedWriteback = true;
+  req->decision = forwardWB.decision();
+  if(forwardWB.has_p1_sigs()){
+    req->fast = true;
+    req->p1ReplySigsGrouped.Swap(forwardWB.mutable_p1_sigs());
+  }
+  else if(forwardWB.has_p2_sigs()){
+    req->fast = false;
+    req->p2ReplySigsGrouped.Swap(forwardWB.mutable_p2_sigs());
+  }
+  else if(forwardWB.has_conflict()){
+    req->conflict_flag = true;
+    req->conflict.Swap(forwardWB.mutable_conflict());
+  }
+  else{
+    Panic("ForwardWB message has no proofs");
+  }
+
+  transaction_status_t result;
+  switch (req->decision) {
+    case proto::COMMIT: {
+      Debug("WRITEBACK[%lu:%lu][%s] COMMIT.", client_id, req->id,
+          BytesToHex(req->txnDigest, 16).c_str());
+      result = COMMITTED;
+      break;
+    }
+    case proto::ABORT: {
+      result = ABORTED_SYSTEM;
+      Debug("WRITEBACK[%lu:%lu][%s] ABORT.", client_id, req->id,
+          BytesToHex(req->txnDigest, 16).c_str());
+      break;
+    }
+    default: {
+      NOT_REACHABLE();
+    }
+  }
+
+  for (auto group : txn.involved_groups()) {
+    bclient[group]->Writeback(client_seq_num, txn, req->txnDigest,
+        req->decision, req->fast, req->conflict_flag, req->conflict, req->p1ReplySigsGrouped,
+        req->p2ReplySigsGrouped);
+  }
+
+  if (!req->callbackInvoked) {
+    uint64_t ns = Latency_End(&commitLatency);
+    req->ccb(result);
+    req->callbackInvoked = true;
+  }
+
+}
 ///////////////////////// Fallback logic starts here ///////////////////////////////////////////////////////////////
 
 bool Client::isDep(const std::string &txnDigest, proto::Transaction &Req_txn){

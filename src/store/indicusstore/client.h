@@ -189,6 +189,7 @@ class Client : public ::Client {
   void WritebackProcessing(PendingRequest *req);
   void Writeback(PendingRequest *req);
   void FailureCleanUp(PendingRequest *req);
+  void ForwardWBcallback(uint64_t txnId, int group, proto::ForwardWriteback &forwardWB);
 
   // Fallback logic
   bool isDep(const std::string &txnDigest, proto::Transaction &Req_txn);

@@ -183,6 +183,19 @@ message Writeback {
   optional uint64 p2_view = 7;
 }
 
+//does not include Transaction. Client can supply Transaction itself.
+message ForwardWriteback {
+  required CommitDecision decision = 1;
+  optional uint64 req_id = 2;
+  optional bytes txn_digest = 3;
+  oneof reply_oneof {
+    GroupedSignatures p1_sigs = 4; // fast path commit
+    GroupedSignatures p2_sigs = 5; // slow path commit or abort
+    CommittedProof conflict = 6;   // fast path abort
+  }
+  optional uint64 p2_view = 7;
+}
+
 message AbortInternal {
   required TimestampMessage ts = 1;
   repeated bytes read_set = 2;

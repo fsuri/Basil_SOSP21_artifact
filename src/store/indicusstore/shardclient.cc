@@ -105,6 +105,10 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
     phase2FBReply.ParseFromString(data);
     HandlePhase2FBReply(phase2FBReply); //update pendingFB state -- if complete, upcall to client
   }
+  else if(type == forwardWB.GetTypeName()){
+    forwardWB.ParseFromString(data);
+    HandleForwardWB(forwardWB);
+  }
   else if(type == sendView.GetTypeName()){
     sendView.ParseFromString(data);
     HandleSendViewMessage(sendView);
@@ -332,6 +336,7 @@ void ShardClient::Phase2Equivocate(uint64_t id,
   }
 }
 
+//TODO: make more efficient by swapping sigs instead of copying.
 void ShardClient::Writeback(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
   proto::CommitDecision decision, bool fast, bool conflict_flag, const proto::CommittedProof &conflict,
   const proto::GroupedSignatures &p1Sigs, const proto::GroupedSignatures &p2Sigs, uint64_t decision_view) {
@@ -1105,7 +1110,6 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
   }
 }
 
-
 void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
   auto itr = this->pendingPhase2s.find(reply.req_id());
   if (itr == this->pendingPhase2s.end()) {
@@ -1225,6 +1229,43 @@ void ShardClient::StopP1(uint64_t client_seq_num){
     }
   }
 }
+
+
+void ShardClient::HandleForwardWB(proto::ForwardWriteback &forwardWB){
+
+  //TODO: verify signatures
+  if(forwardWB.has_req_id()){ // normal case
+    auto itrP1 = this->pendingPhase1s.find(forwardWB.req_id());
+
+    if (itrP1 != this->pendingPhase1s.end()) {
+      //upcall to client with Foward message.
+      itrP1->second->fwb(forwardWB);
+      return;
+    }
+
+    auto itrP2 = this->pendingPhase2s.find(forwardWB.req_id());
+
+    if (itrP1 != this->pendingPhase1s.end()) {
+      //upcall to client with Foward message.
+      itrP2->second->fwb(forwardWB);
+      return;
+    }
+  }
+  else if(forwardWB.has_txn_digest()){ //fb case
+    auto itrFB = pendingFallbacks.find(forwardWB.txn_digest());
+    if(itrFB != pendingFallbacks.end()){
+      //upcall to client with Forward message
+      itrFB->second->fwb(forwardWB); //might want more info for FB WB
+      return;
+    }
+  }
+
+
+
+  return;
+
+}
+
 ///////////////// Utility /////////////////////////
 
 
