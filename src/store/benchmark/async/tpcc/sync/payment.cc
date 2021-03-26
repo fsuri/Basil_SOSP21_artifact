@@ -102,7 +102,7 @@ transaction_status_t SyncPayment::Execute(SyncClient &client) {
   h_row.set_w_id(w_id);
   h_row.set_data(w_row.name() + "    " + d_row.name());
   h_row.SerializeToString(&str);
-  client.Put(HistoryRowKey(w_id, d_id, c_id), str, timeout);
+  client.Put(HistoryRowKey(w_id, d_id, c_id), str, timeout); //TODO: should write to a unique key
 
   Debug("COMMIT");
   return client.Commit(timeout);

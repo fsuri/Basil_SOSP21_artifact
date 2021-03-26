@@ -1018,6 +1018,13 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
 void Server::HandlePhase2(const TransportAddress &remote,
        proto::Phase2 &msg) {
 
+         //use original HandlePhase1 function, but remove the committed/check.(if commit/abort exists, use that as p1 result! -->currently never deleted P1MetaData, so thats not necessary)
+         //TODO: check if already committed/aborted. and If so, send back phase2 with that decision.
+         //( then I dont need to add to ongoing always: add to ongoing only if tx does not have p1 result arleady)
+         //Writeback: do the check for previously committed/aborted first
+         //BufferP1Result and make it reference.
+         //TODO: implement forwardWriteback.
+
   const proto::Transaction *txn;
   std::string computedTxnDigest;
   const std::string *txnDigest = &computedTxnDigest;
@@ -1248,7 +1255,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
          if(*txnDigest !=TransactionDigest(*txn, params.hashDigest)) return;
       }
       else{
-        Debug("PHASE2[%s] message does not contain txn, but have not seen"
+        Debug("Writeback[%s] message does not contain txn, but have not seen"
             " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
         return WritebackCallback(&msg, txnDigest, txn, (void*) false);
       }
@@ -1262,6 +1269,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
 
   if(committed.find(*txnDigest) != committed.end() || aborted.find(*txnDigest) != aborted.end()){
     if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
+      Panic("Should not happen without failures");
       Clean(*txnDigest); //XXX Clean again since client could have added it back to ongoing...
       FreeWBmessage(&msg);
     }
