@@ -65,7 +65,9 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
     timeServer(timeServer)
      {
 
-
+  ongoing = ongoingMap(100000);
+  p1MetaData = p1MetaDataMap(100000);
+  p2MetaDatas = p2MetaDataMap(100000);
 
   store.KVStore_Reserve(4200000);
   //Used for Fallback all to all:
@@ -422,7 +424,6 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     }
 
   } else if (type == decisionFB.GetTypeName()) {
-    std::cerr << "received the decisionFB message" << std::endl;
 
     if(!params.multiThreading && (!params.mainThreadDispatching || params.dispatchMessageReceive)){
       decisionFB.ParseFromString(data);
@@ -658,6 +659,7 @@ void Server::HandleRead(const TransportAddress &remote,
 void Server::HandlePhase1_atomic(const TransportAddress &remote,
     proto::Phase1 &msg) {
 
+  //atomic_testMutex.lock();
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest); //could parallelize it too hypothetically
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
@@ -684,7 +686,7 @@ void Server::HandlePhase1_atomic(const TransportAddress &remote,
   // no-replays property, i.e. recover existing decision/result from storage
   //Ignore duplicate requests that are already committed, aborted, or ongoing
   if(hasP1){
-
+    Panic("would never happen");
     result = c->second.result;
 
     if(result == proto::ConcurrencyControl::WAIT){
@@ -715,20 +717,23 @@ void Server::HandlePhase1_atomic(const TransportAddress &remote,
         }
       }
     }
-
+    //c.release();
     //current_views[txnDigest] = 0;
     p2MetaDataMap::accessor p;
     p2MetaDatas.insert(p, txnDigest);
     p.release();
+    //p2MetaDatas.insert(std::make_pair(txnDigest, P2MetaData()));
 
     Timestamp retryTs;
 
     result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
           committedProof);
+
     BufferP1Result(c, result, committedProof, txnDigest);
 
   }
   c.release();
+  //atomic_testMutex.unlock();
   HandlePhase1CB(&msg, result, committedProof, txnDigest, remote);
 }
 
@@ -1530,8 +1535,10 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
 locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
     // timeval tv1;
     // gettimeofday(&tv1, 0);
-
+    // int id = std::rand();
+    // std::cerr << "starting locking for id: " << id << std::endl;
     locks_t locks;
+
     auto itr_r = txn.read_set().begin();
     auto itr_w = txn.write_set().begin();
 
@@ -1582,6 +1589,7 @@ locks_t Server::LockTxnKeys_scoped(const proto::Transaction &txn) {
     // timeval tv2;
     // gettimeofday(&tv2, 0);
     // total_lock_time_ms += (tv2.tv_sec * 1000  + tv2.tv_usec / 1000) - (tv1.tv_sec * 1000  + tv1.tv_usec / 1000);
+    // std::cerr << "ending locking for id: " << id << std::endl;
     return locks;
 }
 
@@ -2084,7 +2092,7 @@ bool Server::ManageDependencies(const std::string &txnDigest, const proto::Trans
 
          //XXX start RelayP1 to initiate Fallback handling
          //TODO can remove this redundant lookup since it will be checked again...
-         if(true){
+         if(false){
            // ongoingMap::const_accessor b;
            // bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
            // if (inOngoing) {
@@ -2584,11 +2592,13 @@ void Server::BufferP1Result(proto::ConcurrencyControl::Result result,
   const proto::CommittedProof *conflict, const std::string &txnDigest, int fb){
 
     p1MetaDataMap::accessor c;
-    if(p1MetaData.insert(c, txnDigest)){
+    p1MetaData.insert(c, txnDigest);
+    if(!c->second.hasP1){
       c->second.result = result;
       //add abort proof so we can use it for fallbacks easily.
       //if(result == proto::ConcurrencyControl::ABORT) XXX //by default nullptr if passed
       c->second.conflict = conflict;
+      c->second.hasP1 = true;
     }
     else{
       //TODO:: change only if c->second = wait. but why does this happen anyways, sync bug?

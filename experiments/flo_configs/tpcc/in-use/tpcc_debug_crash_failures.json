@@ -17,6 +17,7 @@
   "_benchmark_name": "rw",
   "_client_zipf_coefficient": 1.2,
   "_client_key_selector": "zipf",
+  "client_key_selector": "uniform",
   "_rw_num_ops_txn": 25,
 
   "_benchmark_name": "retwis",
@@ -93,6 +94,7 @@
 	  "mainThreadDispatching": true,
       "parallel_reads": true,
       "dispatchCallbacks": true,
+	  "parallel_CCC": false,
       "client_multi_threading": false,
       "hyper_threading": false,
 	  "dispatchMessageReceive": false,

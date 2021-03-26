@@ -397,8 +397,9 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   std::shared_mutex preparedWritesMutex;
   std::shared_mutex committedReadsMutex;
 
-
   std::shared_mutex rtsMutex;
+
+  std::mutex atomic_testMutex;
 
 
 
