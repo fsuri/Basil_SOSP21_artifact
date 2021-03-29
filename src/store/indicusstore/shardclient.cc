@@ -1780,6 +1780,8 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
 
 void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::Transaction &txn, proto::CommitDecision decision, proto::P2Replies &p2Replies){
 
+  //TODO: start a timeout. If cannot receive enough P2FB replies from a view v, then invoke again.
+
   auto itr = this->pendingFallbacks.find(txnDigest);
   if(itr == this->pendingFallbacks.end()) return;
   PendingFB *pendingFB = itr->second;

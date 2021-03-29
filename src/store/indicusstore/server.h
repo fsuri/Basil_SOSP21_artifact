@@ -305,7 +305,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   proto::ConcurrencyControl::Result CheckDependencies(
       const proto::Transaction &txn);
   bool CheckHighWatermark(const Timestamp &ts);
-  void BufferP1Result(proto::ConcurrencyControl::Result result,
+  void BufferP1Result(proto::ConcurrencyControl::Result &result,
     const proto::CommittedProof *conflict, const std::string &txnDigest, int fb = 0);
   void BufferP1Result(p1MetaDataMap::accessor &c, proto::ConcurrencyControl::Result result,
     const proto::CommittedProof *conflict, const std::string &txnDigest, int fb = 0);
@@ -523,6 +523,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   p1ConflictsMap p1Conflicts;
   tbb::concurrent_unordered_map<std::string, proto::CommittedProof *> committed;
   tbb::concurrent_unordered_set<std::string> aborted;
+  tbb::concurrent_unordered_map<std::string, proto::Writeback> writebackMessages;
   //ADD Aborted proof to it.(in order to reply to Fallback)
   //creating new map to store writeback messages..  Need to find a better way, but suffices as placeholder
 
@@ -566,8 +567,6 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   typedef tbb::concurrent_hash_map<std::string, ElectFBorganizer> ElectQuorumMap;
   ElectQuorumMap ElectQuorums;
 
-  tbb::concurrent_unordered_map<std::string, proto::Writeback> writebackMessages;
-
   tbb::concurrent_hash_map<std::string, P1FBorganizer*> fallbackStates;
   //TODO: put all other info such as current views, Quorums etc in this?
 
@@ -580,20 +579,20 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   };
   std::unordered_map<std::string, WaitingDependency> waitingDependencies; // K depends on each V
 
-//XXX re-writing concurrent:
-typedef tbb::concurrent_hash_map<std::string, std::unordered_set<std::string> > dependentsMap; //can be unordered set, as long as i keep lock access long enough
-dependentsMap dependents;
+  //XXX re-writing concurrent:
+  typedef tbb::concurrent_hash_map<std::string, std::unordered_set<std::string> > dependentsMap; //can be unordered set, as long as i keep lock access long enough
+  dependentsMap dependents;
 
-struct WaitingDependency_new {
-  bool original_client;
-  std::string txnDigest;
-  uint64_t reqId;
-  const TransportAddress *remote;
-  std::mutex deps_mutex;
-  std::unordered_set<std::string> deps; //acquire mutex before erasing (or use hashmap)
-};
-typedef tbb::concurrent_hash_map<std::string, WaitingDependency_new> waitingDependenciesMap;
-waitingDependenciesMap waitingDependencies_new;
+  struct WaitingDependency_new {
+    bool original_client;
+    std::string txnDigest;
+    uint64_t reqId;
+    const TransportAddress *remote;
+    std::mutex deps_mutex;
+    std::unordered_set<std::string> deps; //acquire mutex before erasing (or use hashmap)
+  };
+  typedef tbb::concurrent_hash_map<std::string, WaitingDependency_new> waitingDependenciesMap;
+  waitingDependenciesMap waitingDependencies_new;
 
 
   Stats stats;

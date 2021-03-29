@@ -53,6 +53,17 @@ message CommittedProof {
   optional uint64 p2_view = 4;
 }
 
+message AbortedProof {
+  optional Transaction txn = 1;
+  oneof reply_oneof {
+    GroupedSignatures p1_sigs = 2;
+    GroupedSignatures p2_sigs = 3;
+    CommittedProof conflict = 4;
+  }
+  optional uint64 p2_view = 5;
+}
+
+
 message CommittedWrite {
   optional CommittedProof proof = 3;
 }

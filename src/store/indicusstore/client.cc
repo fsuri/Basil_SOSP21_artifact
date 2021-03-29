@@ -701,6 +701,8 @@ void Client::FailureCleanUp(PendingRequest *req) {
   delete req;
 }
 
+
+//INSTEAD: just use the existing ForwardWriteback function from the FB, and then add ongoing txn to it..
 void Client::ForwardWBcallback(uint64_t txnId, int group, proto::ForwardWriteback &forwardWB){
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
