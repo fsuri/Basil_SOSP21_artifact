@@ -1,0 +1,81 @@
+syntax = "proto2";
+
+import "store/common/common-proto.proto";
+import "store/bftsmartstore/pbft-proto.proto";
+
+package bftsmartstore.proto;
+
+message Read {
+  required uint64 req_id = 1;
+  required bytes key = 2;
+  required TimestampMessage timestamp = 3;
+}
+
+message CommitProof {
+  // The commit proof will be a writeback message containing proof that
+  // all participating shards committed the tx
+  required GroupedDecision writeback_message = 1;
+  // the commit proof only contains the tx  txn bytes and the key,value pair must be in the txn's write set
+  // The proof that the value was actually committed
+  // Could still be stale though (i.e. not most recent)
+  required Transaction txn = 2;
+}
+
+message ReadReply {
+  required uint64 req_id = 1;
+  required int32 status = 2;
+  required bytes key = 3;
+  optional bytes value = 4;
+  // this is the timestamp at which the returned value was assigned to the key
+  optional TimestampMessage value_timestamp = 5;
+  // if validating reads, include a commit proof
+  optional CommitProof commit_proof = 6;
+}
+
+// This is the request sent to the replication layer
+message Transaction {
+  repeated ReadMessage readset = 1;
+  repeated WriteMessage writeset = 2;
+  required TimestampMessage timestamp = 3;
+  repeated uint64 participating_shards = 4;
+}
+
+// This is the reply that a shard sends to the client after it finished its
+// CCC
+message TransactionDecision {
+  // the status of the CCC (Commit/Abort)
+  required int32 status = 1;
+  // the digest of the transaction that was checked
+  required bytes txn_digest = 2;
+  // the id of the shard that sent the request
+  required uint64 shard_id = 3;
+}
+
+message ShardSignedDecisions {
+  // Map from shard id to the shard decsion along with f+1 signatures for that decision
+  map<uint64, GroupedSignedMessage> grouped_decisions = 1;
+}
+
+message ShardDecisions {
+  // when we don't have signatures it doesn't make sense to
+  // send f+1 copies of the transaction decision
+  // Map from shard id to the transaction decision (should have gotten f+1 of these)
+  map<uint64, TransactionDecision> grouped_decisions = 1;
+}
+
+// The collected decisions from all shards
+message GroupedDecision {
+  // the status of the collective decision (Commit/Abort)
+  required int32 status = 1;
+  required bytes txn_digest = 2;
+  oneof decisions_oneof {
+    ShardDecisions decisions = 3;
+    ShardSignedDecisions signed_decisions = 4;
+  }
+}
+
+// shards can acknowledge the writeback proof
+message GroupedDecisionAck {
+  required int32 status = 1;
+  required bytes txn_digest = 2;
+}

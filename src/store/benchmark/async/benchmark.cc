@@ -32,7 +32,7 @@
 #include "store/indicusstore/client.h"
 #include "store/pbftstore/client.h"
 // HotStuff
-#include "store/hotstuffstore/client.h"
+#include "store/bftsmartstore/client.h"
 #include "store/common/frontend/one_shot_client.h"
 #include "store/common/frontend/async_one_shot_adapter_client.h"
 #include "store/benchmark/async/common/zipf_key_selector.h"
@@ -966,7 +966,7 @@ int main(int argc, char **argv) {
             NOT_REACHABLE();
         }
 
-        client = new hotstuffstore::Client(*config, clientId, FLAGS_num_shards,
+        client = new bftsmartstore::Client(*config, clientId, FLAGS_num_shards,
                                        FLAGS_num_groups, closestReplicas,
 																			  tport, part,
                                        readMessages, readQuorumSize,

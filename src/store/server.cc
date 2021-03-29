@@ -50,8 +50,8 @@
 #include "store/pbftstore/replica.h"
 #include "store/pbftstore/server.h"
 // HotStuff
-#include "store/hotstuffstore/replica.h"
-#include "store/hotstuffstore/server.h"
+#include "store/bftsmartstore/replica.h"
+#include "store/bftsmartstore/server.h"
 
 #include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
 #include "store/indicusstore/common.h"
@@ -622,14 +622,14 @@ int main(int argc, char **argv) {
           hotstuff_cpu = FLAGS_indicus_process_id * num_cpus;
       }
 
-      server = new hotstuffstore::Server(config, &keyManager,
+      server = new bftsmartstore::Server(config, &keyManager,
                                      FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
                                      FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
                                      FLAGS_indicus_time_delta, part, tport,
 																	   FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort);
 
-      replica = new hotstuffstore::Replica(config, &keyManager,
-                                       dynamic_cast<hotstuffstore::App *>(server),
+      replica = new bftsmartstore::Replica(config, &keyManager,
+                                       dynamic_cast<bftsmartstore::App *>(server),
                                        FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
                                        FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
                                        FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,

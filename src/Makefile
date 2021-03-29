@@ -57,6 +57,12 @@ GMOCK_DIR := /usr/src/gtest-1.10.0/googlemock
 
 CFLAGS += -I$(GTEST_DIR)/include -I$(GMOCK_DIR)/include -isystem $(GTEST_DIR) -isystem $(GMOCK_DIR)
 
+# Java and JNI
+JAVA_HOME := /usr/lib/jvm/java-11-openjdk-amd64
+
+CFLAGS += -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux
+LDFLAGS += -L/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server -ljvm
+
 # Additional flags
 PARANOID = 1
 ifneq ($(PARANOID),0)
@@ -159,7 +165,8 @@ include store/weakstore/Rules.mk
 include store/janusstore/Rules.mk
 include store/indicusstore/Rules.mk
 include store/pbftstore/Rules.mk
-include store/hotstuffstore/Rules.mk
+# include store/hotstuffstore/Rules.mk
+include store/bftsmartstore/Rules.mk
 include store/benchmark/async/tpcc/Rules.mk
 include store/Rules.mk
 include store/benchmark/Rules.mk
@@ -299,10 +306,10 @@ print-%:
 # Targets
 #
 
-.PHONY: hotstuff
-hotstuff: 
+.PHONY: bftsmart
+bftsmart: 
 	@echo '====== Start Building HotStuff ======'
-	cd ./store/hotstuffstore/libhotstuff/; ./build.sh
+	cd ./store/bftsmartstore/libhotstuff/; ./build.sh
 	@echo '====== Finish Building HotStuff ======'
 
 
@@ -311,7 +318,7 @@ indicus: $(BINS)
 
 
 .PHONY: all
-all: hotstuff
+all: bftsmart
 	@echo '====== Start Building Indicus ======'
 	$(MAKE) indicus 
 	@echo '====== Finish Building Indicus ======'
