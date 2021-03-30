@@ -116,11 +116,10 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
       uint32_t timeout) {
   // fail the current txn iff failuer timer is up and
   // the number of txn is a multiple of frequency
-  bool txnFailureActive = failureEnabled &&
+  failureActive = failureEnabled &&
     (client_seq_num % params.injectFailure.frequency == 0);
-  failureActive = txnFailureActive;
   for (auto b : bclient) {
-    b->SetFailureFlag(txnFailureActive);
+    b->SetFailureFlag(failureActive);
   }
 
   transport->Timer(0, [this, bcb, btcb, timeout]() {
@@ -476,6 +475,14 @@ void Client::Phase2(PendingRequest *req) {
 
   Phase2Processing(req);
 
+  //Simulating equiv failures, only if current decision is Commit
+  if(failureActive && params.injectFailure.type == InjectFailureType::CLIENT_EQUIVOCATE_SIMULATE
+       && req->decision == proto::COMMIT){
+    bclient[logGroup]->Phase2Equivocate_Simulate(client_seq_num, txn, req->txnDigest,
+        req->p1ReplySigsGrouped);
+    return;
+  }
+
   bclient[logGroup]->Phase2(client_seq_num, txn, req->txnDigest, req->decision,
       req->p1ReplySigsGrouped,
       std::bind(&Client::Phase2Callback, this, req->id, logGroup,
@@ -513,12 +520,16 @@ void Client::Phase2Equivocate(PendingRequest *req) {
 
   req->startedPhase2 = true;
   bclient[logGroup]->Phase2Equivocate(client_seq_num, txn, req->txnDigest,
-      req->p1ReplySigsGrouped, req->eqvAbortSigsGrouped,
-      std::bind(&Client::Phase2Callback, this, req->id, logGroup,
-        std::placeholders::_1),
-      std::bind(&Client::Phase2TimeoutCallback, this, logGroup, req->id,
-        std::placeholders::_1), req->timeout);
+      req->p1ReplySigsGrouped, req->eqvAbortSigsGrouped);
+  //NOTE DONT need to use version with callbacks... callbacks are obsolete if we return directly.
+  // bclient[logGroup]->Phase2Equivocate(client_seq_num, txn, req->txnDigest,
+  //     req->p1ReplySigsGrouped, req->eqvAbortSigsGrouped,
+  //     std::bind(&Client::Phase2Callback, this, req->id, logGroup,
+  //       std::placeholders::_1),
+  //     std::bind(&Client::Phase2TimeoutCallback, this, logGroup, req->id,
+  //       std::placeholders::_1), req->timeout);
 
+  //terminate ongoing tx mangagement and move to next tx:
   FailureCleanUp(req);
 }
 

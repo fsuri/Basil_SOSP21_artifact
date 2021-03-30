@@ -231,11 +231,13 @@ DEFINE_uint64(indicus_relayP1_timeout, 1, "time (ms) after which to send RelayP1
 
 const std::string if_args[] = {
   "client-crash",
-	"client-equivocate"
+	"client-equivocate",
+	"client-equivocate-simulated"
 };
 const indicusstore::InjectFailureType iff[] {
   indicusstore::InjectFailureType::CLIENT_CRASH,
-  indicusstore::InjectFailureType::CLIENT_EQUIVOCATE
+  indicusstore::InjectFailureType::CLIENT_EQUIVOCATE,
+	indicusstore::InjectFailureType::CLIENT_EQUIVOCATE_SIMULATE
 };
 static bool ValidateInjectFailureType(const char* flagname,
     const std::string &value) {

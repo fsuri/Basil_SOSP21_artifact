@@ -124,6 +124,10 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
       const std::string &txnDigest, proto::CommitDecision decision,
       const proto::GroupedSignatures &groupedSigs, phase2_callback pcb,
       phase2_timeout_callback ptcb, uint32_t timeout);
+virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &txn, const std::string &txnDigest,
+    proto::GroupedSignatures &groupedCommitSigs);
+  virtual void Phase2Equivocate(uint64_t id, const proto::Transaction &txn, const std::string &txnDigest,
+      const proto::GroupedSignatures &groupedCommitSigs, const proto::GroupedSignatures &groupedAbortSigs);
   virtual void Phase2Equivocate(uint64_t id, const proto::Transaction &txn, const std::string &txnDigest,
       const proto::GroupedSignatures &groupedCommitSigs, const proto::GroupedSignatures &groupedAbortSigs,
       phase2_callback pcb, phase2_timeout_callback ptcb, uint32_t timeout);

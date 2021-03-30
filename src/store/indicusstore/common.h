@@ -315,7 +315,8 @@ int64_t GetLogGroup(const proto::Transaction &txn, const std::string &txnDigest)
 
 enum InjectFailureType {
   CLIENT_EQUIVOCATE = 0,
-  CLIENT_CRASH
+  CLIENT_CRASH = 1,
+  CLIENT_EQUIVOCATE_SIMULATE = 2
 };
 
 struct InjectFailure {

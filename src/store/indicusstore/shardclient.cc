@@ -212,6 +212,7 @@ void ShardClient::Phase2(uint64_t id,
   PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);  //TODO: add view that this decision is from (default = 0).
   //TODO: When sending an InvokeFB message, this view = the view you propose ; but unclear what decision you are waiting for?
   //Create many mappings for potential views/decisions instead.
+  //XXX currently not necessary as code is written under the assumption that Invoke only happens for equivocation, and client issuing equivocation moves on to next tx.
   pendingPhase2s[reqId] = pendingPhase2;
   pendingPhase2->pcb = pcb;
   pendingPhase2->ptcb = ptcb;
@@ -239,7 +240,102 @@ void ShardClient::Phase2(uint64_t id,
   pendingPhase2->requestTimeout->Reset();
 }
 
-//TODO: remove the PendingPhase2 creation here..
+void ShardClient::Phase2Equivocate_Simulate(uint64_t id,
+    const proto::Transaction &txn, const std::string &txnDigest,
+    proto::GroupedSignatures &groupedCommitSigs) {
+
+      uint64_t reqId = lastReqId++;
+
+      phase2.Clear();
+      phase2.set_req_id(reqId);
+      phase2.set_decision(proto::COMMIT);
+      *phase2.mutable_txn_digest() = txnDigest;
+      if (params.validateProofs && params.signedMessages) {
+        *phase2.mutable_grouped_sigs() = groupedCommitSigs;
+      }
+      phase2.set_simulated_equiv(true);
+
+      for (size_t i = 0; i < config->n; ++i) {
+        size_t rindex = GetNthClosestReplica(i);
+        if (rindex % 2 == 0) {
+          Debug("[group %i] Sending COMMIT to even-numbered replica %lu", group, rindex);
+          transport->SendMessageToReplica(this, group, rindex, phase2);
+        }
+      }
+
+      proto::GroupedSignatures &groupedAbortSigs = groupedCommitSigs;
+      //Remove additional groups. Only need one group of f+1 sigs to simulate Abort
+      //XXX NOTE! these are not "valid" signatures since they signed Commit.
+      while (groupedAbortSigs.grouped_sigs().size() > 1) {
+        auto itr = groupedAbortSigs.mutable_grouped_sigs()->begin();
+        groupedAbortSigs.mutable_grouped_sigs()->erase(itr);
+      }
+      for (auto &groupSigs : *groupedAbortSigs.mutable_grouped_sigs()) {
+        while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > SlowAbortQuorumSize(config)) {
+          groupSigs.second.mutable_sigs()->RemoveLast();
+        }
+      }
+
+      phase2.Clear();
+      phase2.set_req_id(reqId);
+      phase2.set_decision(proto::ABORT);
+      *phase2.mutable_txn_digest() = txnDigest;
+      if (params.validateProofs && params.signedMessages) {
+        *phase2.mutable_grouped_sigs() = groupedAbortSigs;
+      }
+      phase2.set_simulated_equiv(true);
+
+      for (size_t i = 0; i < config->n; ++i) {
+        size_t rindex = GetNthClosestReplica(i);
+        if (rindex % 2 == 1) {
+          Debug("[group %i] Sending ABORT to odd-numbered replica %lu", group, rindex);
+          transport->SendMessageToReplica(this, group, rindex, phase2);
+        }
+      }
+}
+
+void ShardClient::Phase2Equivocate(uint64_t id,
+    const proto::Transaction &txn, const std::string &txnDigest,
+    const proto::GroupedSignatures &groupedCommitSigs,
+    const proto::GroupedSignatures &groupedAbortSigs) {
+
+      uint64_t reqId = lastReqId++;
+
+      phase2.Clear();
+      phase2.set_req_id(reqId);
+      phase2.set_decision(proto::COMMIT);
+      *phase2.mutable_txn_digest() = txnDigest;
+      if (params.validateProofs && params.signedMessages) {
+        *phase2.mutable_grouped_sigs() = groupedCommitSigs;
+      }
+
+      for (size_t i = 0; i < config->n; ++i) {
+        size_t rindex = GetNthClosestReplica(i);
+        if (rindex % 2 == 0) {
+          Debug("[group %i] Sending COMMIT to even-numbered replica %lu", group, rindex);
+          transport->SendMessageToReplica(this, group, rindex, phase2);
+        }
+      }
+
+      phase2.Clear();
+      phase2.set_req_id(reqId);
+      phase2.set_decision(proto::ABORT);
+      *phase2.mutable_txn_digest() = txnDigest;
+      if (params.validateProofs && params.signedMessages) {
+        *phase2.mutable_grouped_sigs() = groupedAbortSigs;
+      }
+
+      for (size_t i = 0; i < config->n; ++i) {
+        size_t rindex = GetNthClosestReplica(i);
+        if (rindex % 2 == 1) {
+          Debug("[group %i] Sending ABORT to odd-numbered replica %lu", group, rindex);
+          transport->SendMessageToReplica(this, group, rindex, phase2);
+        }
+      }
+}
+
+
+//TODO: remove the PendingPhase2 creation and map insertion if this client simply returns. If it participates fully, then keep.
 void ShardClient::Phase2Equivocate(uint64_t id,
     const proto::Transaction &txn, const std::string &txnDigest,
     const proto::GroupedSignatures &groupedCommitSigs,
@@ -1172,7 +1268,10 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
 //If it receives messages with view != 0 it needs to start its own fallback instance.
   if(params.validateProofs){
     if(!p2Decision->has_view()) return;
-    if(p2Decision->view() != 0) return; //TODO: start fallback instance here. (case can happen if client is slow)
+    if(p2Decision->view() != 0){
+      Panic("Original client cannot handle view != 0");
+      return;
+    }  //TODO: start fallback instance here. (case can happen if client is slow)
     //TODO: start fb "instance" and roll over this request to that fallback function. (makes it so that when
     //client receives bunch of messages from different views, they directly count towards the new Quorums needed)
   }
