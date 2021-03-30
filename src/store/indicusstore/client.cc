@@ -480,6 +480,10 @@ void Client::Phase2(PendingRequest *req) {
        && req->decision == proto::COMMIT){
     bclient[logGroup]->Phase2Equivocate_Simulate(client_seq_num, txn, req->txnDigest,
         req->p1ReplySigsGrouped);
+    
+    std::cerr << "SIMULATED EQUIVOCATION. STOPPING" << std::endl;
+    //terminate ongoing tx mangagement and move to next tx:
+    FailureCleanUp(req);
     return;
   }
 

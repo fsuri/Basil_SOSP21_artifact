@@ -1082,7 +1082,14 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
     int64_t myProcessId;
     proto::ConcurrencyControl::Result myResult;
-    LookupP1Decision(*txnDigest, myProcessId, myResult);
+
+    if(msg.has_simulated_equiv() && msg.simulated_equiv()){
+      myProcessId = -1;
+    }
+    else{
+      LookupP1Decision(*txnDigest, myProcessId, myResult);
+    }
+    //std::cerr<< "phase 2 has simulated equiv: " << (msg.has_simulated_equiv() && msg.simulated_equiv()) << "with decision: " << msg.decision() << std::endl;
 
 
     if (params.validateProofs && params.signedMessages) {
@@ -2559,7 +2566,9 @@ void Server::CheckDependents(const std::string &txnDigest) {
         const proto::CommittedProof *conflict = nullptr;
 
         p1MetaDataMap::accessor c;
+        std::cerr << "trying to buffer result[" << result << "] for txn:" << BytesToHex(dependent, 16) << std::endl;
         BufferP1Result(c, result, conflict, dependent, 2);
+        std::cerr << "after buffering: result[" << result << "] for txn:" << BytesToHex(dependent, 16) << std::endl;
         c.release();
         // std::cerr << "Sending On dependent path. Txn: " << BytesToHex(dependent,64) << " with result: " << result << std::endl;
         // int64_t myProcessId;
@@ -2690,6 +2699,7 @@ void Server::BufferP1Result(proto::ConcurrencyControl::Result &result,
         else{
           c->second.result = result;
           c->second.conflict = conflict; //by default nullptr if passed; should never be called here since WAIT can only change to COMMIT/ABSTAIN
+          std::cerr << "Path[" << fb << "] Replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
         }
       }
     }
@@ -2711,6 +2721,8 @@ void Server::BufferP1Result(p1MetaDataMap::accessor &c, proto::ConcurrencyContro
       //TODO:: change only if c->second = wait. but why does this happen anyways, sync bug?
       if(result != proto::ConcurrencyControl::WAIT){
         if(c->second.result != proto::ConcurrencyControl::WAIT){
+          result = c->second.result;
+          conflict = c->second.conflict;
           std::cerr << "Path[" << fb << "] Replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
         }
         c->second.result = result;
@@ -2724,6 +2736,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
     const proto::CommittedProof *conflict, const std::string &txnDigest,
     const TransportAddress *remote) {
 
+  std::cerr << "Normal sending P1 result:["<< result <<"] for txn: " << BytesToHex(txnDigest, 16) << std::endl;
   //BufferP1Result(result, conflict, txnDigest);
 
   proto::Phase1Reply* phase1Reply = GetUnusedPhase1Reply();
@@ -3745,6 +3758,7 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
     if (params.signedMessages) {
       //First, "atomically" set the outstanding flags. (Need to do this before dispatching anything)
       if(p1FBReply->has_p1r() && p1FBReply->p1r().cc().ccr() != proto::ConcurrencyControl::ABORT){
+        std::cerr << "FB sending P1 result:["<< p1FBReply->p1r().cc().ccr() <<"] for txn: " << BytesToHex(txnDigest, 16) << std::endl;
         p1fb_organizer->p1_sig_outstanding = true;
         // std::cerr << "FBorganizer pointer: " << p1fb_organizer << "   p1FBReply pointer: " << p1FBReply << std::endl;
         // std::cerr << "Sending On FB path. Txn: " << BytesToHex(txnDigest,64) << " with result: " << p1FBReply->p1r().cc().ccr() << std::endl;
