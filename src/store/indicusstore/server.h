@@ -117,6 +117,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void HandleRead(const TransportAddress &remote, proto::Read &msg);
   void HandlePhase1_atomic(const TransportAddress &remote,
       proto::Phase1 &msg);
+  void ProcessPhase1_atomic(const TransportAddress &remote,
+      proto::Phase1 &msg, proto::Transaction *txn, std::string &txnDigest);
   void HandlePhase1(const TransportAddress &remote,
       proto::Phase1 &msg);
   void HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
@@ -307,7 +309,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   bool CheckHighWatermark(const Timestamp &ts);
   void BufferP1Result(proto::ConcurrencyControl::Result &result,
     const proto::CommittedProof *conflict, const std::string &txnDigest, int fb = 0);
-  void BufferP1Result(p1MetaDataMap::accessor &c, proto::ConcurrencyControl::Result result,
+  void BufferP1Result(p1MetaDataMap::accessor &c, proto::ConcurrencyControl::Result &result,
     const proto::CommittedProof *conflict, const std::string &txnDigest, int fb = 0);
   void SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,

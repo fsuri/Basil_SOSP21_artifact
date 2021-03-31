@@ -105,11 +105,11 @@
       "_inject_failure_type" : "client-crash",
 	  "inject_failure_type" : "client-equivocate-simulated",
 	  "_inject_failure_type" : "client-equivocate",
-	  "inject_failure_proportion" : 10,
+	  "inject_failure_proportion" : 0,
 	  "inject_failure_ms": 0,
 	  "inject_failure freq": 5,
       "all_to_all_fb" : false,
-	  "relayP1_timeout" : 5
+	  "relayP1_timeout" : 20
     }
   ],
   "experiment_name": "indicus",
@@ -130,9 +130,9 @@
   "server_debug_output": false,
   "server_debug_stats": false,
   "client_debug_stats": false,
-  "client_experiment_length": 70,
-  "client_ramp_down": 15,
-  "client_ramp_up": 15,
+  "client_experiment_length": 30,
+  "client_ramp_down": 5,
+  "client_ramp_up": 5,
   "default_remote_shell": "bash",
   "server_host_format_str": "%s.%s.%s.utah.cloudlab.us",
   "client_host_format_str": "client-%d-%d.%s.%s.utah.cloudlab.us",

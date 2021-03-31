@@ -264,10 +264,11 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     //     this->HandlePhase1_atomic(remote, *phase1Copy);
     //     return (void*) true;
     //   };
-    //   if(params.parallel_CCC){
-    //     transport->DispatchTP_noCB(std::move(f));
-    //   }
-    //   else if(params.dispatchMessageReceive){
+    //   // if(params.parallel_CCC){
+    //   //   transport->DispatchTP_noCB(std::move(f));
+    //   // }
+    //   // else
+    //   if(params.dispatchMessageReceive){
     //     f();
     //   }
     //   else{
@@ -672,8 +673,6 @@ void Server::HandlePhase1_atomic(const TransportAddress &remote,
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
-  proto::ConcurrencyControl::Result result;
-  const proto::CommittedProof *committedProof;
 
   proto::Transaction *txn = msg.release_txn();
 
@@ -687,6 +686,24 @@ void Server::HandlePhase1_atomic(const TransportAddress &remote,
   ongoing.insert(b, std::make_pair(txnDigest, txn));
   b.release();
 
+  if(params.parallel_CCC){
+    TransportAddress* remoteCopy = remote.clone();
+    auto f = [this, remoteCopy, p1 = &msg, txn, txnDigest]() mutable {
+        this->ProcessPhase1_atomic(*remoteCopy, *p1, txn, txnDigest);
+        delete remoteCopy;
+        return (void*) true;
+      };
+      transport->DispatchTP_noCB(std::move(f));
+  }
+  else{
+    ProcessPhase1_atomic(remote, msg, txn, txnDigest);
+  }
+}
+void Server::ProcessPhase1_atomic(const TransportAddress &remote,
+    proto::Phase1 &msg, proto::Transaction *txn, std::string &txnDigest){
+
+  proto::ConcurrencyControl::Result result;
+  const proto::CommittedProof *committedProof;
       //NOTE : make sure c and b dont conflict on lock order
   p1MetaDataMap::accessor c;
   p1MetaData.insert(c, txnDigest);
@@ -871,7 +888,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
             return (void*) false;
           }
           b.release();
-
+        Debug("starting occ check for txn: %s", BytesToHex(txnDigest, 16).c_str());
         proto::ConcurrencyControl::Result *result = new proto::ConcurrencyControl::Result(this->DoOCCCheck(msg_ptr->req_id(),
         *remote_ptr, txnDigest, *txn, retryTs, committedProof));
         BufferP1Result(*result, committedProof, txnDigest);
@@ -894,11 +911,7 @@ void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Resul
   const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote){
 
   if (result != proto::ConcurrencyControl::WAIT) {
-    // std::cerr << "Sending On normal path. Txn: " << BytesToHex(txnDigest,64) << " with result: " << result << std::endl;
-    // int64_t myProcessId;
-    // proto::ConcurrencyControl::Result myResult;
-    // LookupP1Decision(txnDigest, myProcessId, myResult);
-    // std::cerr<< "Looking up immediately before signing and sending txn: " << BytesToHex(txnDigest,64) << " result: " << myResult << std::endl;
+
     //XXX setting client time outs for Fallback
     // if(client_starttime.find(txnDigest) == client_starttime.end()){
     //   struct timeval tv;
@@ -1210,6 +1223,7 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
         //msg->set_allocated_txn(txn); //dont need to set since client will?
         writebackMessages[*txnDigest] = *msg;  //Only necessary for fallback... (could avoid storing these, if one just replied with a p2 vote instea - but that is not as responsive)
         ///CAUTION: msg might no longer hold txn; could have been released in HanldeWriteback
+
         Abort(*txnDigest);
       }
 
@@ -1968,6 +1982,10 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
                 preparedTs.first.getID(), ts.getTimestamp(), ts.getID());
             stats.Increment("cc_abstains", 1);
             stats.Increment("cc_abstains_wr_conflict", 1);
+
+            // if(fallback_flow){
+            //   std::cerr<< "Abstain ["<<BytesToHex(txnDigest, 16)<<"] against prepared write from tx[" << BytesToHex(TransactionDigest(*preparedTs.second, params.hashDigest), 16) << "]" << std::endl;
+            // }
             return proto::ConcurrencyControl::ABSTAIN;
           }
         }
@@ -2049,6 +2067,10 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
                 preparedReadTxn->timestamp().id());
             stats.Increment("cc_abstains", 1);
             stats.Increment("cc_abstains_rw_conflict", 1);
+
+            // if(fallback_flow){
+            //   std::cerr<< "Abstain ["<<BytesToHex(txnDigest, 16)<<"] against prepared read from tx[" << BytesToHex(TransactionDigest(*preparedReadTxn, params.hashDigest), 16) << "]" << std::endl;
+            // }
             return proto::ConcurrencyControl::ABSTAIN;
           }
         }
@@ -2548,7 +2570,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
 
       waitingDependenciesMap::accessor f;
       bool dependenciesItr = waitingDependencies_new.find(f, dependent);
-      //if(!dependenciesItr){   std::cerr << "waitingdeps empty" << std::endl; e.release(); return;}
+      //if(!dependenciesItr){
       UW_ASSERT(dependenciesItr);  //technically this should never fail, since if it were not
       // in the waitingDep struct anymore, it wouldve also removed itself from the
       //dependents set of txnDigest. XXX Need to reason carefully whether this is still true
@@ -2566,15 +2588,9 @@ void Server::CheckDependents(const std::string &txnDigest) {
         const proto::CommittedProof *conflict = nullptr;
 
         p1MetaDataMap::accessor c;
-        std::cerr << "trying to buffer result[" << result << "] for txn:" << BytesToHex(dependent, 16) << std::endl;
         BufferP1Result(c, result, conflict, dependent, 2);
-        std::cerr << "after buffering: result[" << result << "] for txn:" << BytesToHex(dependent, 16) << std::endl;
         c.release();
-        // std::cerr << "Sending On dependent path. Txn: " << BytesToHex(dependent,64) << " with result: " << result << std::endl;
-        // int64_t myProcessId;
-        // proto::ConcurrencyControl::Result myResult;
-        // LookupP1Decision(dependent, myProcessId, myResult);
-        // std::cerr<< "Looking up immediately before signing and sending txn: " << BytesToHex(dependent,64) << " result: " << myResult << std::endl;
+
         if(f->second.original_client){
           SendPhase1Reply(f->second.reqId, result, conflict, dependent,
               f->second.remote);
@@ -2682,6 +2698,8 @@ void Server::BufferP1Result(proto::ConcurrencyControl::Result &result,
     p1MetaData.insert(c, txnDigest);
     if(!c->second.hasP1){
       c->second.result = result;
+      //std::cerr << "Path[" << fb << "] Buffered initial result: " << c->second.result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+
       //add abort proof so we can use it for fallbacks easily.
       //if(result == proto::ConcurrencyControl::ABORT) XXX //by default nullptr if passed
       c->second.conflict = conflict;
@@ -2691,27 +2709,32 @@ void Server::BufferP1Result(proto::ConcurrencyControl::Result &result,
       //TODO:: change only if c->second = wait. but why does this happen anyways, sync bug?
       if(result != proto::ConcurrencyControl::WAIT){
         if(c->second.result != proto::ConcurrencyControl::WAIT){
+          //std::cerr << "Path[" << fb << "] Tried replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
           result = c->second.result;
           conflict = c->second.conflict;
-          // std::cerr << "Path[" << fb << "] Replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
           // Panic("Should not be replacing");
         }
         else{
           c->second.result = result;
           c->second.conflict = conflict; //by default nullptr if passed; should never be called here since WAIT can only change to COMMIT/ABSTAIN
-          std::cerr << "Path[" << fb << "] Replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+          //std::cerr << "Path[" << fb << "] Replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
         }
+      }
+      else{
+        //std::cerr << "Path[" << fb << "] Unable to buffer result: " << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
       }
     }
     c.release();
 }
 
-void Server::BufferP1Result(p1MetaDataMap::accessor &c, proto::ConcurrencyControl::Result result,
+void Server::BufferP1Result(p1MetaDataMap::accessor &c, proto::ConcurrencyControl::Result &result,
   const proto::CommittedProof *conflict, const std::string &txnDigest, int fb){
 
     p1MetaData.insert(c, txnDigest);
     if(!c->second.hasP1){
       c->second.result = result;
+      //std::cerr << "Path[" << fb << "] Buffered initial result: " << c->second.result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+
       //add abort proof so we can use it for fallbacks easily.
       //if(result == proto::ConcurrencyControl::ABORT) XXX //by default nullptr if passed
       c->second.conflict = conflict;
@@ -2721,12 +2744,18 @@ void Server::BufferP1Result(p1MetaDataMap::accessor &c, proto::ConcurrencyContro
       //TODO:: change only if c->second = wait. but why does this happen anyways, sync bug?
       if(result != proto::ConcurrencyControl::WAIT){
         if(c->second.result != proto::ConcurrencyControl::WAIT){
+          //std::cerr << "Path[" << fb << "] Tried replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
           result = c->second.result;
           conflict = c->second.conflict;
-          std::cerr << "Path[" << fb << "] Replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
         }
-        c->second.result = result;
-        c->second.conflict = conflict; //by default nullptr if passed; should never be called here since WAIT can only change to COMMIT/ABSTAIN
+        else{
+          c->second.result = result;
+          c->second.conflict = conflict; //by default nullptr if passed; should never be called here since WAIT can only change to COMMIT/ABSTAIN
+          //std::cerr << "Path[" << fb << "] Replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
+        }
+      }
+      else{
+        //std::cerr << "Path[" << fb << "] Unable to buffer result: " << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
       }
     }
 }
@@ -2736,7 +2765,7 @@ void Server::SendPhase1Reply(uint64_t reqId,
     const proto::CommittedProof *conflict, const std::string &txnDigest,
     const TransportAddress *remote) {
 
-  std::cerr << "Normal sending P1 result:["<< result <<"] for txn: " << BytesToHex(txnDigest, 16) << std::endl;
+  Debug("Normal sending P1 result:[%d] for txn: %s", result, BytesToHex(txnDigest, 16).c_str());
   //BufferP1Result(result, conflict, txnDigest);
 
   proto::Phase1Reply* phase1Reply = GetUnusedPhase1Reply();
@@ -2789,7 +2818,6 @@ void Server::CleanDependencies(const std::string &txnDigest) {
   //if (dependenciesItr != waitingDependencies.end()) {
     //for (const auto &dependency : dependenciesItr->second.deps) {
     for (const auto &dependency : f->second.deps) {
-      //std::cerr << "ABORTING AT 3" << std::endl;
       dependentsMap::accessor e;
       auto dependentItr = dependents.find(e, dependency);
       if (dependentItr) {
@@ -3758,14 +3786,8 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
     if (params.signedMessages) {
       //First, "atomically" set the outstanding flags. (Need to do this before dispatching anything)
       if(p1FBReply->has_p1r() && p1FBReply->p1r().cc().ccr() != proto::ConcurrencyControl::ABORT){
-        std::cerr << "FB sending P1 result:["<< p1FBReply->p1r().cc().ccr() <<"] for txn: " << BytesToHex(txnDigest, 16) << std::endl;
+        Debug("FB sending P1 result:[%d] for txn: %s", p1FBReply->p1r().cc().ccr(), BytesToHex(txnDigest, 16).c_str());
         p1fb_organizer->p1_sig_outstanding = true;
-        // std::cerr << "FBorganizer pointer: " << p1fb_organizer << "   p1FBReply pointer: " << p1FBReply << std::endl;
-        // std::cerr << "Sending On FB path. Txn: " << BytesToHex(txnDigest,64) << " with result: " << p1FBReply->p1r().cc().ccr() << std::endl;
-        // int64_t myProcessId;
-        // proto::ConcurrencyControl::Result myResult;
-        // LookupP1Decision(txnDigest, myProcessId, myResult);
-        //std::cerr<< "Looking up immediately before signing and sending txn: " << BytesToHex(txnDigest,64) << " result: " << myResult << std::endl;
       }
       if(p1FBReply->has_p2r()){
         p1fb_organizer->p2_sig_outstanding = true;

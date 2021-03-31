@@ -47,6 +47,7 @@
 #include "store/indicusstore/indicus-proto.pb.h"
 #include <sys/time.h>
 #include "store/common/stats.h"
+#include <unistd.h>
 
 #include <thread>
 #include <set>

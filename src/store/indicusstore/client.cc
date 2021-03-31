@@ -480,7 +480,7 @@ void Client::Phase2(PendingRequest *req) {
        && req->decision == proto::COMMIT){
     bclient[logGroup]->Phase2Equivocate_Simulate(client_seq_num, txn, req->txnDigest,
         req->p1ReplySigsGrouped);
-    
+
     std::cerr << "SIMULATED EQUIVOCATION. STOPPING" << std::endl;
     //terminate ongoing tx mangagement and move to next tx:
     FailureCleanUp(req);
@@ -693,6 +693,9 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
 // for crash, report the result of p1
 // for equivocation, always report ABORT, always delete
 void Client::FailureCleanUp(PendingRequest *req) {
+
+  //usleep(10); //sleep 10 miliseconds as to not return immediately...
+
   UW_ASSERT(failureActive);
   transaction_status_t result;
   Debug("FailureCleanUp[%lu:%lu] for type[%s]", client_id, req->id,
@@ -704,8 +707,9 @@ void Client::FailureCleanUp(PendingRequest *req) {
       result = ABORTED_SYSTEM;
     }
   } else {
-    // alaways report ABORT for equivocation
-    result = ABORTED_SYSTEM;
+    // always report ABORT for equivocation
+    result = ABORTED_SYSTEM;  //TODO: This will re-start the same transaction instead of a new one..
+                              //XXX: add a special result that counts as abort in stat, but commit for benchmark.
   }
   if (!req->callbackInvoked) {
     uint64_t ns = Latency_End(&commitLatency);
