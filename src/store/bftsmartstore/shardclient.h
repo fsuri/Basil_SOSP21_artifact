@@ -14,6 +14,8 @@
 #include "store/bftsmartstore/pbft-proto.pb.h"
 #include "store/bftsmartstore/server-proto.pb.h"
 
+#include "store/bftsmartstore/bftsmartagent.h"
+
 #include <map>
 #include <string>
 
@@ -155,6 +157,9 @@ class ShardClient : public TransportReceiver {
 
 
   Stats* stats;
+  
+  bftsmartstore::BftSmartAgent bftsmartagent;
+
 };
 
 } // namespace bftsmartstore

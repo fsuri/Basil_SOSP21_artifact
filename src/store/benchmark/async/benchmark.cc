@@ -56,7 +56,9 @@ enum protomode_t {
   PROTO_INDICUS,
 	PROTO_PBFT,
     // HotStuff
-    PROTO_HOTSTUFF
+    // PROTO_HOTSTUFF
+    // Bftsmart
+    PROTO_BFTSMART
 };
 
 enum benchmode_t {
@@ -285,7 +287,9 @@ const std::string protocol_args[] = {
   "indicus",
 	"pbft",
 // HotStuff
-    "hotstuff"
+    // "hotstuff"
+// BFTSmart
+  "bftsmart"
 };
 const protomode_t protomodes[] {
   PROTO_TAPIR,
@@ -300,7 +304,8 @@ const protomode_t protomodes[] {
   PROTO_INDICUS,
       PROTO_PBFT,
   // HotStuff
-      PROTO_HOTSTUFF
+      // PROTO_HOTSTUFF
+  PROTO_BFTSMART
 };
 const strongstore::Mode strongmodes[] {
   strongstore::Mode::MODE_UNKNOWN,
@@ -935,9 +940,9 @@ int main(int argc, char **argv) {
         break;
     }
 
-// HotStuff
-    case PROTO_HOTSTUFF: {
-        uint64_t readQuorumSize = 0;
+// BFTSmart
+    case PROTO_BFTSMART: {
+      uint64_t readQuorumSize = 0;
         switch (read_quorum) {
         case READ_QUORUM_ONE:
             readQuorumSize = 1;
@@ -976,6 +981,48 @@ int main(int argc, char **argv) {
 																			 TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
     }
+
+// HotStuff
+    /* case PROTO_HOTSTUFF: {
+        uint64_t readQuorumSize = 0;
+        switch (read_quorum) {
+        case READ_QUORUM_ONE:
+            readQuorumSize = 1;
+            break;
+        case READ_QUORUM_ONE_HONEST:
+            readQuorumSize = config->f + 1;
+            break;
+        case READ_QUORUM_MAJORITY_HONEST:
+            readQuorumSize = config->f * 2 + 1;
+            break;
+        default:
+            NOT_REACHABLE();
+        }
+				uint64_t readMessages = 0;
+        switch (read_messages) {
+        case READ_MESSAGES_READ_QUORUM:
+            readMessages = readQuorumSize; // + config->f; //config->n;
+            break;
+        case READ_MESSAGES_MAJORITY:
+            readMessages = (config->n + 1) / 2;
+            break;
+        case READ_MESSAGES_ALL:
+            readMessages = config->n;
+            break;
+        default:
+            NOT_REACHABLE();
+        }
+
+        client = new bftsmartstore::Client(*config, clientId, FLAGS_num_shards,
+                                       FLAGS_num_groups, closestReplicas,
+																			  tport, part,
+                                       readMessages, readQuorumSize,
+                                       FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+                                       keyManager,
+																			 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort,
+																			 TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+        break;
+    }*/
 
 
     default:

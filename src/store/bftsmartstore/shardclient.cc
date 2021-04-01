@@ -432,7 +432,7 @@ void ShardClient::Get(const std::string &key, const Timestamp &ts,
     Debug("[group %i] Sending GET to replica %lu", group_idx, GetNthClosestReplica(i));
     transport->SendMessageToReplica(this, group_idx, GetNthClosestReplica(i), read);
   }
-  //transport->SendMessageToGroup(this, group_idx, read);
+  // transport->SendMessageToGroup(this, group_idx, read);
 
   PendingRead pr;
   pr.rcb = gcb;
@@ -498,7 +498,11 @@ void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
     request.mutable_packed_msg()->set_type(txn.GetTypeName());
 
     Debug("Sending txn to all replicas in shard");
-    transport->SendMessageToGroup(this, group_idx, request);
+    // transport->SendMessageToGroup(this, group_idx, request);
+    size_t size = request.ByteSize(); 
+    void *buffer = malloc(size);
+    request.SerializeToArray(buffer, size);
+    bftsmartagent.send_to_group(this, group_idx, buffer, size);
 
     PendingPrepare pp;
     pp.pcb = pcb;
@@ -550,6 +554,11 @@ void ShardClient::SignedPrepare(const proto::Transaction& txn, signed_prepare_ca
 
     // Debug("Sending txn to all replicas in shard");
     // transport->SendMessageToGroup(this, group_idx, request);
+    size_t size = request.ByteSize(); 
+    void *buffer = malloc(size);
+    request.SerializeToArray(buffer, size);
+    bftsmartagent.send_to_group(this, group_idx, buffer, size);
+
 
     PendingSignedPrepare psp;
     psp.pcb = pcb;
@@ -592,7 +601,12 @@ void ShardClient::Commit(const std::string& txn_digest, const proto::ShardDecisi
     stats->Increment("shard_commit", 1);
 
     Debug("Sending commit to all replicas in shard");
-    transport->SendMessageToGroup(this, group_idx, groupedDecision);
+    // transport->SendMessageToGroup(this, group_idx, groupedDecision);
+    size_t size = groupedDecision.ByteSize(); 
+    void *buffer = malloc(size);
+    groupedDecision.SerializeToArray(buffer, size);
+    bftsmartagent.send_to_group(this, group_idx, buffer, size);
+
 
     PendingWritebackReply pwr;
     pwr.wcb = wcb;
@@ -642,11 +656,18 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
       request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
       request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
       request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
-
-      transport->SendMessageToGroup(this, group_idx, request);
+      // transport->SendMessageToGroup(this, group_idx, request);
+      size_t size = request.ByteSize(); 
+      void *buffer = malloc(size);
+      request.SerializeToArray(buffer, size);
+      bftsmartagent.send_to_group(this, group_idx, buffer, size);
     }
     else{
-      transport->SendMessageToGroup(this, group_idx, groupedDecision);
+      // transport->SendMessageToGroup(this, group_idx, groupedDecision);
+      size_t size = groupedDecision.ByteSize(); 
+      void *buffer = malloc(size);
+      groupedDecision.SerializeToArray(buffer, size);
+      bftsmartagent.send_to_group(this, group_idx, buffer, size);
     }
 
     PendingWritebackReply pwr;
@@ -694,10 +715,18 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
       request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
       request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
 
-      transport->SendMessageToGroup(this, group_idx, request);
+      // transport->SendMessageToGroup(this, group_idx, request);
+      size_t size = request.ByteSize(); 
+      void *buffer = malloc(size);
+      request.SerializeToArray(buffer, size);
+      bftsmartagent.send_to_group(this, group_idx, buffer, size);
     }
     else{
-      transport->SendMessageToGroup(this, group_idx, groupedDecision);
+      // transport->SendMessageToGroup(this, group_idx, groupedDecision);
+      size_t size = groupedDecision.ByteSize(); 
+      void *buffer = malloc(size);
+      groupedDecision.SerializeToArray(buffer, size);
+      bftsmartagent.send_to_group(this, group_idx, buffer, size);
     }
 
     // TODO timeout
@@ -730,7 +759,11 @@ void ShardClient::Abort(std::string& txn_digest, const proto::ShardSignedDecisio
 
     stats->Increment("shard_abort", 1);
     Debug("AB abort to all replicas in shard");
-    transport->SendMessageToGroup(this, group_idx, request);
+    // transport->SendMessageToGroup(this, group_idx, request);
+    size_t size = request.ByteSize(); 
+    void *buffer = malloc(size);
+    request.SerializeToArray(buffer, size);
+    bftsmartagent.send_to_group(this, group_idx, buffer, size);
 
     PendingWritebackReply pwr;
     pendingWritebacks[txn_digest] = pwr;  //not sure what use this has

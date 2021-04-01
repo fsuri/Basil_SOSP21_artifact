@@ -69,7 +69,9 @@ enum protocol_t {
   PROTO_INDICUS,
 	PROTO_PBFT,
     // HotStuff
-    PROTO_HOTSTUFF
+    // PROTO_HOTSTUFF
+    // BftSmart
+    PROTO_BFTSMART
 };
 
 enum transmode_t {
@@ -108,7 +110,8 @@ const std::string protocol_args[] = {
   "morty",
   "indicus",
 	"pbft",
-    "hotstuff"
+  "bftsmart"
+    //"hotstuff"
 };
 const protocol_t protos[] {
   PROTO_TAPIR,
@@ -118,7 +121,8 @@ const protocol_t protos[] {
   PROTO_MORTY,
   PROTO_INDICUS,
       PROTO_PBFT,
-      PROTO_HOTSTUFF
+      PROTO_BFTSMART
+      //PROTO_HOTSTUFF
 };
 static bool ValidateProtocol(const char* flagname,
     const std::string &value) {
@@ -605,9 +609,8 @@ int main(int argc, char **argv) {
       //FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
       break;
   }
-      // HotStuff
-  case PROTO_HOTSTUFF: {
-      int num_cpus = std::thread::hardware_concurrency();
+  case PROTO_BFTSMART: {
+    int num_cpus = std::thread::hardware_concurrency();
       num_cpus /= FLAGS_indicus_total_processes;
 
       int hotstuff_cpu;
@@ -638,6 +641,11 @@ int main(int argc, char **argv) {
 
       break;
   }
+
+      // HotStuff
+  // case PROTO_HOTSTUFF: {
+      
+  // }
 
   default: {
       NOT_REACHABLE();
@@ -735,7 +743,7 @@ int main(int argc, char **argv) {
   CALLGRIND_START_INSTRUMENTATION;
 	//SET THREAD AFFINITY if running multi_threading:
 	//if(FLAGS_indicus_multi_threading){
-	if((proto == PROTO_INDICUS || proto == PROTO_PBFT || proto == PROTO_HOTSTUFF) && FLAGS_indicus_multi_threading){
+	if((proto == PROTO_INDICUS || proto == PROTO_PBFT || proto == PROTO_BFTSMART) && FLAGS_indicus_multi_threading){
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
 		//bool hyperthreading = true;
