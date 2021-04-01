@@ -490,7 +490,7 @@ void Client::Phase2(PendingRequest *req) {
   bclient[logGroup]->Phase2(client_seq_num, txn, req->txnDigest, req->decision,
       req->p1ReplySigsGrouped,
       std::bind(&Client::Phase2Callback, this, req->id, logGroup,
-        std::placeholders::_1),
+        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
       std::bind(&Client::Phase2TimeoutCallback, this, logGroup, req->id,
         std::placeholders::_1), req->timeout);
 
@@ -537,7 +537,7 @@ void Client::Phase2Equivocate(PendingRequest *req) {
   FailureCleanUp(req);
 }
 
-void Client::Phase2Callback(uint64_t txnId, int group,
+void Client::Phase2Callback(uint64_t txnId, int group, proto::CommitDecision decision, uint64_t decision_view,
     const proto::Signatures &p2ReplySigs) {
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
@@ -559,6 +559,9 @@ void Client::Phase2Callback(uint64_t txnId, int group,
     (*req->p2ReplySigsGrouped.mutable_grouped_sigs())[group] = p2ReplySigs;
   }
 
+  req->decision = decision;
+  req->decision_view = decision_view;
+
   Writeback(req);
 }
 
@@ -574,6 +577,7 @@ void Client::Phase2TimeoutCallback(int group, uint64_t txnId, int status) {
   }
 
   Warning("PHASE2[%lu:%lu] group %d timed out.", client_id, txnId, group);
+  //Panic("P2 timing out");
 
   Phase2(req);
 }
@@ -644,7 +648,7 @@ void Client::Writeback(PendingRequest *req) {
   for (auto group : txn.involved_groups()) {
     bclient[group]->Writeback(client_seq_num, txn, req->txnDigest,
         req->decision, req->fast, req->conflict_flag, req->conflict, req->p1ReplySigsGrouped,
-        req->p2ReplySigsGrouped);
+        req->p2ReplySigsGrouped, req->decision_view);
   }
 
   if (!req->callbackInvoked) {
@@ -704,12 +708,14 @@ void Client::FailureCleanUp(PendingRequest *req) {
     if (req->decision == proto::COMMIT) {
       result = COMMITTED;
     } else {
-      result = ABORTED_SYSTEM;
+      result = ABORTED_USER;
+      //result = ABORTED_SYSTEM;
     }
   } else {
     // always report ABORT for equivocation
-    result = ABORTED_SYSTEM;  //TODO: This will re-start the same transaction instead of a new one..
-                              //XXX: add a special result that counts as abort in stat, but commit for benchmark.
+    result = ABORTED_USER;
+    //result = ABORTED_SYSTEM;
+
   }
   if (!req->callbackInvoked) {
     uint64_t ns = Latency_End(&commitLatency);

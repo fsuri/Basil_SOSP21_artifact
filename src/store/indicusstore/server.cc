@@ -676,15 +676,18 @@ void Server::HandlePhase1_atomic(const TransportAddress &remote,
 
   proto::Transaction *txn = msg.release_txn();
 
-  //TODO: Problem. If client comes after writeback, it will try to do a p2/wb itself but fail
+  //NOTE: Ongoing *must* be added before p2/wb since the latter dont include it themselves as an optimization
+  //TCP guarantees that this happens, but I cannot dispatch parallel P1 before logging ongoing or else it could be ordered after p2/wb.
+  ongoingMap::accessor b;
+  ongoing.insert(b, std::make_pair(txnDigest, txn));
+  b.release();
+
+  //NOTE: "Problem": If client comes after writeback, it will try to do a p2/wb itself but fail
   //due to ongoing being removed already.
   //XXX solution: add to ongoing always, and call Clean() for redundant Writebacks as well.
   //XXX alternative solution: Send a Forward Writeback message for normal path clients too.
           // make sure that Commit+Clean is atomic; and that the check for commit and remainder is atomic.
             // use overarching lock on ongoing.
-  ongoingMap::accessor b;
-  ongoing.insert(b, std::make_pair(txnDigest, txn));
-  b.release();
 
   if(params.parallel_CCC){
     TransportAddress* remoteCopy = remote.clone();
@@ -925,7 +928,7 @@ void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Resul
 }
 
 
-void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
+void Server::HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const std::string* txnDigest,
   signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid){
 
   Debug("HandlePhase2CB invoked");
@@ -941,14 +944,13 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
     return;
   }
 
-  auto f = [this, msg, txnDigest, sendCB = std::move(sendCB), phase2Reply, cleanCB = std::move(cleanCB), valid ](){
+  auto f = [this, remote, msg, txnDigest, sendCB = std::move(sendCB), phase2Reply, cleanCB = std::move(cleanCB), valid ](){
 
     p2MetaDataMap::accessor p;
     p2MetaDatas.insert(p, *txnDigest);
     bool hasP2 = p->second.hasP2;
     if(hasP2){
-      proto::CommitDecision &decision = p->second.p2Decision;
-      phase2Reply->mutable_p2_decision()->set_decision(decision);
+      phase2Reply->mutable_p2_decision()->set_decision(p->second.p2Decision);
     }
     else{
       p->second.p2Decision = msg->decision();
@@ -959,6 +961,10 @@ void Server::HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
     if (params.validateProofs) {
       phase2Reply->mutable_p2_decision()->set_view(p->second.decision_view);
     }
+    //NOTE: Temporary hack fix to subscribe original client to p2 decisions from views > 0
+    p->second.has_original = true;
+    p->second.original_msg_id = msg->req_id();
+    p->second.original_address = remote;
     p.release();
 
 
@@ -1085,8 +1091,9 @@ void Server::HandlePhase2(const TransportAddress &remote,
   p2MetaDatas.insert(p, *txnDigest);
   bool hasP2 = p->second.hasP2;
   p.release();
+  TransportAddress *remoteCopy2 = remote.clone();
   if(hasP2){
-     HandlePhase2CB(&msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
+     HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
   }
   //first time receiving p2 message:
   else{
@@ -1132,8 +1139,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
         }
 
         if(params.multiThreading){
-
-          mainThreadCallback mcb(std::bind(&Server::HandlePhase2CB, this,
+          mainThreadCallback mcb(std::bind(&Server::HandlePhase2CB, this, remoteCopy2,
              &msg, txnDigest, sendCB, phase2Reply, cleanCB, std::placeholders::_1));
 
           //OPTION 1: Validation itself is synchronous, i.e. is one job (Would need to be extended with thread safety)
@@ -1157,7 +1163,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
         }
         else{
           if(params.batchVerification){
-            mainThreadCallback mcb(std::bind(&Server::HandlePhase2CB, this,
+            mainThreadCallback mcb(std::bind(&Server::HandlePhase2CB, this, remoteCopy2,
               &msg, txnDigest, sendCB, phase2Reply, cleanCB, std::placeholders::_1));
 
             asyncBatchValidateP1Replies(msg.decision(),
@@ -1170,12 +1176,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
                   false, txn, txnDigest, msg.grouped_sigs(), keyManager, &config, myProcessId,
                   myResult, verifier)) {
               Debug("VALIDATE P1Replies failed.");
-              return HandlePhase2CB(&msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) false);
+              return HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) false);
             }
           }
         }
       }
-    HandlePhase2CB(&msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
+    HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
   }
 }
 
@@ -2706,8 +2712,8 @@ void Server::BufferP1Result(proto::ConcurrencyControl::Result &result,
       c->second.hasP1 = true;
     }
     else{
-      //TODO:: change only if c->second = wait. but why does this happen anyways, sync bug?
       if(result != proto::ConcurrencyControl::WAIT){
+        //If a result was already loggin in parallel, adopt it.
         if(c->second.result != proto::ConcurrencyControl::WAIT){
           //std::cerr << "Path[" << fb << "] Tried replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
           result = c->second.result;
@@ -2741,8 +2747,8 @@ void Server::BufferP1Result(p1MetaDataMap::accessor &c, proto::ConcurrencyContro
       c->second.hasP1 = true;
     }
     else{
-      //TODO:: change only if c->second = wait. but why does this happen anyways, sync bug?
       if(result != proto::ConcurrencyControl::WAIT){
+        //If a result was already loggin in parallel, adopt it.
         if(c->second.result != proto::ConcurrencyControl::WAIT){
           //std::cerr << "Path[" << fb << "] Tried replacing result: " << c->second.result << " with result:" << result << " for txn: " << BytesToHex(txnDigest, 64) << std::endl;
           result = c->second.result;
@@ -3346,20 +3352,20 @@ void Server::SendRelayP1(const TransportAddress &remote, const std::string &depe
   Debug("RelayP1[%s] timed out. Sending now!", BytesToHex(dependent_txnDig, 256).c_str());
   proto::Transaction *tx;
 
-  ongoingMap::const_accessor b;
-  //ongoingMap::accessor b;
+  //ongoingMap::const_accessor b;
+  ongoingMap::accessor b;
   bool ongoingItr = ongoing.find(b, dependency_txnDig);
   if(!ongoingItr) return;  //If txnDigest no longer ongoing, then no FB necessary as it has completed already
 
   tx = b->second;
-  b.release();
+  //b.release();
 
   //proto::RelayP1 relayP1; //use global object.
   relayP1.Clear();
   relayP1.set_dependent_id(dependent_id);
   relayP1.mutable_p1()->set_req_id(0); //doesnt matter, its not used for fallback requests really.
-  *relayP1.mutable_p1()->mutable_txn() = *tx; //TODO:: avoid copy by allocating, and releasing again after.
-  //relayP1.mutable_p1()->set_allocated_txn(tx);
+  //*relayP1.mutable_p1()->mutable_txn() = *tx; //TODO:: avoid copy by allocating, and releasing again after.
+  relayP1.mutable_p1()->set_allocated_txn(tx);
 
   if(dependent_id == -1) relayP1.set_dependent_txn(dependent_txnDig);
 
@@ -3370,8 +3376,8 @@ void Server::SendRelayP1(const TransportAddress &remote, const std::string &depe
   stats.Increment("Relays_Sent", 1);
   transport->SendMessage(this, remote, relayP1);
 
-  // b->second = relayP1.mutable_p1()->release_txn();
-  // b.release();
+  b->second = relayP1.mutable_p1()->release_txn();
+  b.release();
 
   Debug("Sent RelayP1[%s].", BytesToHex(dependent_txnDig, 256).c_str());
 }
@@ -3926,7 +3932,7 @@ void Server::HandlePhase2FB(const TransportAddress &remote,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //TODO: Refactor both P1Reply and P2Reply into a single message and remove all redundant functions.
-void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi) {
+void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi, bool sub_original) {
 
     proto::Phase2FBReply *p2FBReply = p2fb_organizer->p2fbr;
 
@@ -3939,12 +3945,15 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
       attachedView->mutable_current_view()->set_replica_id(id);
     }
 
-    auto sendCB = [this, p2fb_organizer, multi](){
+    auto sendCB = [this, p2fb_organizer, multi, sub_original](){
       if(p2fb_organizer->c_view_sig_outstanding || p2fb_organizer->p2_sig_outstanding){
         p2fb_organizer->sendCBmutex.unlock();
         return;
       }
       p2fb_organizer->sendCBmutex.unlock();
+      if(sub_original){ //XXX sending normal p2 to subscribed original client.
+        transport->SendMessage(this, *p2fb_organizer->original, p2fb_organizer->p2fbr->p2r());
+      }
       if(!multi){
           transport->SendMessage(this, *p2fb_organizer->remote, *p2fb_organizer->p2fbr);
       }
@@ -4824,8 +4833,17 @@ void Server::FBDecisionCallback(proto::DecisionFB *msg, const std::string &txnDi
 
 void Server::AdoptDecision(const std::string &txnDigest, uint64_t view, proto::CommitDecision decision){
 
+
   p2MetaDataMap::accessor p;
   p2MetaDatas.find(p, txnDigest);
+
+  //NOTE: send p2 to subscribed original client.
+  //This is a temporary hack to subscribe the original client to receive p2 replies for higher views.
+  //Should be reconciled with Phase2FB message eventually.
+  bool has_original = p->second.has_original;
+  uint64_t req_id = has_original? p->second.original_msg_id : 0;
+  TransportAddress *original_address = p->second.original_address;
+
   uint64_t current_view = p->second.current_view;
   uint64_t decision_view = p->second.decision_view;
   if(current_view > view){ //outdated request
@@ -4844,10 +4862,12 @@ void Server::AdoptDecision(const std::string &txnDigest, uint64_t view, proto::C
   Debug("Adopted new decision [dec: %s][dec_view: %lu] for txn %s", decision ? "ABORT" : "COMMIT", view, BytesToHex(txnDigest, 64).c_str());
 
   //send a p2 message anyways, even if we have a newer one, just so clients can still form quorums on past views.
-  P2FBorganizer *p2fb_organizer = new P2FBorganizer(0, txnDigest, this);
-  SetP2(0, p2fb_organizer->p2fbr->mutable_p2r(), txnDigest, decision, view);
-  SendPhase2FBReply(p2fb_organizer, txnDigest, true);
+  P2FBorganizer *p2fb_organizer = new P2FBorganizer(req_id, txnDigest, this);
+  p2fb_organizer->original = original_address; //XXX has_remote must be false so its not deleted!!!
+  SetP2(req_id, p2fb_organizer->p2fbr->mutable_p2r(), txnDigest, decision, view);
+  SendPhase2FBReply(p2fb_organizer, txnDigest, true, has_original);
 }
+
 
 void Server::BroadcastMoveView(const std::string &txnDigest, uint64_t proposed_view){
   // make sure we dont broadcast twice for a view.. (set flag in ElectQuorum organizer)

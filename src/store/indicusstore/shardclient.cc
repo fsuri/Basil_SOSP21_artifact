@@ -85,7 +85,8 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
     // }
   } else if (type == phase2Reply.GetTypeName()) {
     phase2Reply.ParseFromString(data);
-    HandlePhase2Reply(phase2Reply);
+    HandlePhase2Reply_MultiView(phase2Reply);
+    //HandlePhase2Reply(phase2Reply);
   } else if (type == ping.GetTypeName()) {
     ping.ParseFromString(data);
     HandlePingResponse(ping);
@@ -1283,7 +1284,84 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
 
   if (itr->second->matchingReplies >= QuorumSize(config)) {
     PendingPhase2 *pendingPhase2 = itr->second;
-    pendingPhase2->pcb(pendingPhase2->p2ReplySigs);
+    pendingPhase2->pcb(pendingPhase2->decision, 0, pendingPhase2->p2ReplySigs);
+    this->pendingPhase2s.erase(itr);
+    delete pendingPhase2;
+  }
+}
+
+void ShardClient::HandlePhase2Reply_MultiView(const proto::Phase2Reply &reply) {
+  auto itr = this->pendingPhase2s.find(reply.req_id());
+  if (itr == this->pendingPhase2s.end()) {
+    Debug("[group %i] Received stale Phase2Reply for request %lu.", group,
+        reply.req_id());
+    return; // this is a stale request
+  }
+
+  const proto::Phase2Decision *p2Decision = nullptr;
+  if (params.validateProofs && params.signedMessages) {
+    if (!reply.has_signed_p2_decision()) {
+      Debug("[group %i] Phase2Reply missing signed_p2_decision.", group);
+      return;
+    }
+
+    if (!IsReplicaInGroup(reply.signed_p2_decision().process_id(), group, config)) {
+      Debug("[group %d] Phase2Reply from replica %lu who is not in group.",
+          group, reply.signed_p2_decision().process_id());
+      return;
+    }
+
+    if (!verifier->Verify(keyManager->GetPublicKey(
+            reply.signed_p2_decision().process_id()),
+          reply.signed_p2_decision().data(),
+          reply.signed_p2_decision().signature())) {
+      Debug("[group %d] Phase2Reply from replica %lu fails verification.",
+                group, reply.signed_p2_decision().process_id());
+      return;
+    }
+
+    if (!validatedP2Decision.ParseFromString(reply.signed_p2_decision().data())) {
+      Debug("[group %d] Phase2Reply from replica %lu fails deserialization.",
+                group, reply.signed_p2_decision().process_id());
+      return;
+    }
+
+    if(!validatedP2Decision.has_view()) return;
+
+    p2Decision = &validatedP2Decision;
+
+  } else {
+    p2Decision = &reply.p2_decision();
+  }
+
+  //WARNING: The following is a "hack" by which we register an honest client to receive
+  //messages from view !=0, but do not have it proactively participate in the FB protocol itself
+      //TODO: Fully merge normal and fallback code paths so that a client can issue FB code components for its own transaction.
+  view_p2ReplySigs &viewP2RS =  itr->second->manage_p2ReplySigs[p2Decision->view()];
+
+  if (params.validateProofs && params.signedMessages) {
+    if (!viewP2RS.first.insert(reply.signed_p2_decision().process_id()).second) {
+      Debug("Already verified signature from %lu. for view %lu", reply.signed_p2_decision().process_id(), p2Decision->view());
+      Panic("duplicate P2 from server %lu", reply.signed_p2_decision().process_id());
+      return;
+    }
+  }
+
+  Debug("[group %i] PHASE2 reply with decision %d for view %lu", group,
+      p2Decision->decision(), p2Decision->view());
+
+  proto::Signatures &p2RS = viewP2RS.second[p2Decision->decision()];
+
+  if (params.validateProofs && params.signedMessages) {
+    proto::Signature *sig = p2RS.add_sigs();
+    sig->set_process_id(reply.signed_p2_decision().process_id());
+    *sig->mutable_signature()= reply.signed_p2_decision().signature();
+  }
+
+  if (p2RS.sigs().size() >= QuorumSize(config)) {
+    if(p2Decision->view() > 0) Panic("Original client subscribe works properly!");
+    PendingPhase2 *pendingPhase2 = itr->second;
+    pendingPhase2->pcb(p2Decision->decision(), p2Decision->view(), p2RS);
     this->pendingPhase2s.erase(itr);
     delete pendingPhase2;
   }

@@ -123,7 +123,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       proto::Phase1 &msg);
   void HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
         const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote);
-  void HandlePhase2CB(proto::Phase2 *msg, const std::string* txnDigest,
+  void HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const std::string* txnDigest,
         signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid); //bool valid);
 
   void HandlePhase2(const TransportAddress &remote,
@@ -211,6 +211,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       std::string txnDigest;
       bool has_remote;
       const TransportAddress *remote;
+      const TransportAddress *original;
 
       proto::Phase2FBReply *p2fbr;
       //manage outstanding Sigs
@@ -239,7 +240,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
     void SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision, uint64_t decision_view);
 
     void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string &txnDigest, bool multi = false);
-    void SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi = false);
+    void SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi = false, bool sub_original = false);
 
     void ProcessP2FB(const TransportAddress &remote, const std::string &txnDigest, const proto::Phase2FB &p2fb);
     void ProcessP2FBCallback(const proto::Phase2FB *p2fb, const std::string &txnDigest,
@@ -267,7 +268,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
     //TODO: store original client separately..
     typedef tbb::concurrent_hash_map<std::string, tbb::concurrent_unordered_set<const TransportAddress*>> interestedClientsMap;
     interestedClientsMap interestedClients;
-    tbb::concurrent_hash_map<std::string, const TransportAddress*> originalClient;
+    tbb::concurrent_hash_map<std::string, std::pair<uint64_t, const TransportAddress*>> originalClient;
 
     bool ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest);
     bool ForwardWritebackMulti(const std::string &txnDigest, interestedClientsMap::accessor &i);
@@ -548,13 +549,22 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   p1MetaDataMap p1MetaData;
 
   struct P2MetaData {
-    P2MetaData() : current_view(0UL), decision_view(0UL), hasP2(false){}
-    P2MetaData(proto::CommitDecision decision) : current_view(0UL), decision_view(0UL), p2Decision(decision), hasP2(true){}
-    ~P2MetaData(){}
+    P2MetaData() : current_view(0UL), decision_view(0UL), hasP2(false),
+        has_original(false),  original_address(nullptr){}
+    P2MetaData(proto::CommitDecision decision) : current_view(0UL), decision_view(0UL),
+                    p2Decision(decision), hasP2(true),
+                    has_original(false), original_address(nullptr){}
+    ~P2MetaData(){
+      if(original_address != nullptr) delete original_address;
+    }
     uint64_t current_view;
     uint64_t decision_view;
     bool hasP2;
     proto::CommitDecision p2Decision;
+
+    bool has_original;
+    uint64_t original_msg_id;
+    TransportAddress *original_address;
   };
   //tbb::concurrent_hash_map<std::string, uint64_t> current_views;
   typedef tbb::concurrent_hash_map<std::string, P2MetaData> p2MetaDataMap;

@@ -66,7 +66,7 @@ typedef std::function<void(proto::CommitDecision, bool, bool,
     const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &, bool)> phase1_callback;
 typedef std::function<void(int)> phase1_timeout_callback;
 
-typedef std::function<void(const proto::Signatures &)> phase2_callback;
+typedef std::function<void(proto::CommitDecision, uint64_t,const proto::Signatures &)> phase2_callback;
 typedef std::function<void(int)> phase2_timeout_callback;
 
 typedef std::function<void()> writeback_callback;
@@ -227,6 +227,7 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
     forwardWB_callback fwb;
   };
 
+  typedef std::pair<std::unordered_set<uint64_t>, std::map<proto::CommitDecision, proto::Signatures>> view_p2ReplySigs;
 
   struct PendingPhase2 {
     PendingPhase2() : requestTimeout(nullptr), matchingReplies(0UL) {}
@@ -246,6 +247,11 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
     std::unordered_set<uint64_t> replicasVerified;
     proto::Signatures p2ReplySigs;
     uint64_t matchingReplies;
+
+    //support for p2 decisions from multiple views. Necessary if interested clients start p2 in parallel
+
+    std::map<uint64_t, view_p2ReplySigs> manage_p2ReplySigs;
+
     phase2_callback pcb;
     phase2_timeout_callback ptcb;
 
@@ -333,6 +339,7 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
   void ProcessP1R(const proto::Phase1Reply &reply, bool FB_path = false, PendingFB *pendingFB = nullptr, const std::string *txnDigest = nullptr);
   void HandleP1REquivocate(const proto::Phase1Reply &phase1Reply);
   void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply);
+  void HandlePhase2Reply_MultiView(const proto::Phase2Reply &reply);
 
   void Phase1Decision(uint64_t reqId);
   void Phase1Decision(
