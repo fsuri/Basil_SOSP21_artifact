@@ -105,11 +105,11 @@
       "_inject_failure_type" : "client-crash",
 	  "inject_failure_type" : "client-equivocate-simulated",
 	  "_inject_failure_type" : "client-equivocate",
-	  "inject_failure_proportion" : 50,
+	  "inject_failure_proportion" : 0,
 	  "inject_failure_ms": 0,
-	  "inject_failure freq": 5,
+	  "inject_failure_freq": 5,
       "all_to_all_fb" : false,
-	  "relayP1_timeout" : 5
+	  "relayP1_timeout" : 20
     }
   ],
   "experiment_name": "indicus",
