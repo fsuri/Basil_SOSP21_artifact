@@ -1551,6 +1551,7 @@ void ShardClient::EraseRelay(const std::string &txnDigest){
 void ShardClient::HandlePhase1Relay(proto::RelayP1 &relayP1){
 
   std::string txnDigest(TransactionDigest(relayP1.p1().txn(), params.hashDigest));
+
   //only process the first relay for a txn.
   //if (!pendingRelays.insert(txnDigest).second) return; //USING this works? seemingly does not either.
   if(this->pendingFallbacks.find(txnDigest) != this->pendingFallbacks.end()) return;
@@ -1896,6 +1897,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
     if (pendingP2.matchingReplies == QuorumSize(config)) { //make it >=? potentially duplicate cb then..
       pendingFB->p2FBcb(pendingP2.decision, pendingP2.p2ReplySigs, view);
       //dont need to clean, will be cleaned by callback.
+      if(view > 0) std::cerr << "elected FB for view [" << view << "] for txn: " << BytesToHex(txnDigest, 16) <<std::endl;;
       return true;
     }
 

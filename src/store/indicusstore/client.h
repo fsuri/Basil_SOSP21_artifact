@@ -182,6 +182,7 @@ class Client : public ::Client {
 
   void Phase2(PendingRequest *req);
   void Phase2Processing(PendingRequest *req);
+  void Phase2SimulateEquivocation(PendingRequest *req);
   void Phase2Equivocate(PendingRequest *req);
 
   void Phase2Callback(uint64_t reqId, int group, proto::CommitDecision decision, uint64_t decision_view,

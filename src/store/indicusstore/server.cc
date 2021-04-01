@@ -4225,9 +4225,11 @@ void Server::SendView(const TransportAddress &remote, const std::string &txnDige
 //otherwise pass and invoke for the first time!
 void Server::HandleInvokeFB(const TransportAddress &remote, proto::InvokeFB &msg) {
 
+
     // CHECK if part of logging shard. (this needs to be done at all p2s, reject if its not ourselves)
     const std::string &txnDigest = msg.txn_digest();
 
+    Panic("received invoke FB");
     Debug("Received InvokeFB request for txn: %s", BytesToHex(txnDigest, 64).c_str());
 
     if(ForwardWriteback(remote, msg.req_id(), txnDigest)){

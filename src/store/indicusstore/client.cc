@@ -427,14 +427,20 @@ void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
 
 void Client::HandleAllPhase1Received(PendingRequest *req) {
   Debug("All PHASE1's [%lu] received", client_seq_num);
-  //TO force P2, add "req->conflict_flag". Conflict Aborts *must* go fast path.
-  if (req->fast) {
+
+  //NOTE: Forcefully imulated failures, even if according to protocol logic it is not possible:
+  if(failureActive && params.injectFailure.type == InjectFailureType::CLIENT_EQUIVOCATE_SIMULATE
+       && req->decision == proto::COMMIT){
+    Phase2SimulateEquivocation(req);
+  }
+  else if (req->fast) { //TO force P2, add "req->conflict_flag". Conflict Aborts *must* go fast path.
     Writeback(req);
   } else {
     // slow path, must log final result to 1 group
     if (req->eqv_ready) {
       Phase2Equivocate(req);
-    } else {
+    }
+    else {
       Phase2(req);
     }
   }
@@ -475,18 +481,6 @@ void Client::Phase2(PendingRequest *req) {
 
   Phase2Processing(req);
 
-  //Simulating equiv failures, only if current decision is Commit
-  if(failureActive && params.injectFailure.type == InjectFailureType::CLIENT_EQUIVOCATE_SIMULATE
-       && req->decision == proto::COMMIT){
-    bclient[logGroup]->Phase2Equivocate_Simulate(client_seq_num, txn, req->txnDigest,
-        req->p1ReplySigsGrouped);
-
-    std::cerr << "SIMULATED EQUIVOCATION. STOPPING" << std::endl;
-    //terminate ongoing tx mangagement and move to next tx:
-    FailureCleanUp(req);
-    return;
-  }
-
   bclient[logGroup]->Phase2(client_seq_num, txn, req->txnDigest, req->decision,
       req->p1ReplySigsGrouped,
       std::bind(&Client::Phase2Callback, this, req->id, logGroup,
@@ -498,6 +492,27 @@ void Client::Phase2(PendingRequest *req) {
   // for(auto group : req->txn.involved_groups()){
   //     bclient[group]->StopP1(req->id);
   // }
+}
+
+void Client::Phase2SimulateEquivocation(PendingRequest *req){
+  int64_t logGroup = GetLogGroup(txn, req->txnDigest);
+
+  Debug("SIMULATE EQUIVOCATION PHASE2[%lu:%lu][%s] logging to group %ld", client_id, client_seq_num,
+      BytesToHex(req->txnDigest, 16).c_str(), logGroup);
+
+  Phase2Processing(req);  //trim commit quorums if applicable.
+
+  //Simulating equiv failures, only if current decision is Commit
+
+  bclient[logGroup]->Phase2Equivocate_Simulate(client_seq_num, txn, req->txnDigest,
+        req->p1ReplySigsGrouped);
+
+  std::cerr << "SIMULATED EQUIVOCATION. STOPPING" << std::endl;
+    //Panic("simulated equiv.");
+    //terminate ongoing tx mangagement and move to next tx:
+  FailureCleanUp(req);
+  return;
+
 }
 
 void Client::Phase2Equivocate(PendingRequest *req) {
