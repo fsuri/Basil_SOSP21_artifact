@@ -55,6 +55,7 @@
 
 namespace indicusstore {
 static int callP2FB = 0;
+static int successful_invoke = 0;
 
 typedef std::function<void(int, const std::string &,
     const std::string &, const Timestamp &, const proto::Dependency &,

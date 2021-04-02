@@ -43,7 +43,7 @@
   "benchmark_name": "tpcc-sync",
   "partitioner": "warehouse",
   "tpcc_num_warehouses": 20,
-  "server_load_time":  8,
+  "server_load_time": 8,
   "tpcc_stock_level_ratio": 4,
   "tpcc_delivery_ratio": 4,
   "tpcc_order_status_ratio": 4,
@@ -105,11 +105,11 @@
       "_inject_failure_type" : "client-crash",
 	  "inject_failure_type" : "client-equivocate-simulated",
 	  "_inject_failure_type" : "client-equivocate",
-	  "inject_failure_proportion" : 0,
+	  "inject_failure_proportion" : 30,
 	  "inject_failure_ms": 0,
-	  "inject_failure_freq": 5,
+	  "inject_failure_freq": 3,
       "all_to_all_fb" : false,
-	  "relayP1_timeout" : 20
+	  "relayP1_timeout" : 5
     }
   ],
   "experiment_name": "indicus",
@@ -335,6 +335,7 @@
   "client_gc_debug_trace": false,
   "client_cpuprofile": false,
   "server_gc_debug_trace": false,
+  "_server_wrap_command": "gdb -ex=r --args %s", 
   "_server_wrap_command": "valgrind --tool=none %s",
   "_server_wrap_command": "valgrind --tool=callgrind --separate-threads=no --instr-atstart=no --toggle-collect=\"*TCPTransport::Run*\" %s"
 

@@ -1897,13 +1897,17 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
     if (pendingP2.matchingReplies == QuorumSize(config)) { //make it >=? potentially duplicate cb then..
       pendingFB->p2FBcb(pendingP2.decision, pendingP2.p2ReplySigs, view);
       //dont need to clean, will be cleaned by callback.
-      if(view > 0) std::cerr << "elected FB for view [" << view << "] for txn: " << BytesToHex(txnDigest, 16) <<std::endl;;
+      if(view > 0){
+        successful_invoke++;
+        std::cerr << "elected FB for view [" << view << "] for txn: " << BytesToHex(txnDigest, 16) <<std::endl;;
+        //if(successful_invoke > 5) Panic("Invoked several times!");
+    }
       return true;
     }
 
     //XXX Fast case for completing p2 forwarding
     //XXX have to story full reply here because the decision views might differ.
-   if(false && pendingFB->p1){
+   if(pendingFB->p1){
       uint64_t id = reply.signed_p2_decision().process_id();
       if(pendingFB->process_ids.find(id) == pendingFB->process_ids.end()){
         pendingFB->process_ids.insert(id);

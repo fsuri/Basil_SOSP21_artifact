@@ -592,7 +592,7 @@ void Client::Phase2TimeoutCallback(int group, uint64_t txnId, int status) {
   }
 
   Warning("PHASE2[%lu:%lu] group %d timed out.", client_id, txnId, group);
-  //Panic("P2 timing out");
+  //Panic("P2 timing out; honest client: %s", failureActive ? "False" : "True");
 
   Phase2(req);
 }
@@ -1098,7 +1098,10 @@ bool Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
     }
 
     req->decision = decision;
-    req->p2Replies = std::move(p2replies);
+    req->p2Replies = std::move(p2replies); 
+
+    //WARNING: CURRENTLY HAVE PHASE1FBCALLBACK B DISABLED. BUT STILL USING P2Replies for Invoke.
+    return true;
        //Issue P2FB.
     Phase2FB(req);
 

@@ -486,7 +486,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
     KeyManager *keyManager,
     const transport::Configuration *config,
     int64_t myProcessId, proto::ConcurrencyControl::Result myResult, Verifier *verifier,
-    mainThreadCallback mcb, Transport *transport, bool multithread) { //last 3 arguments are new.
+    mainThreadCallback mcb, Transport *transport, bool multithread) {
   proto::ConcurrencyControl concurrencyControl;
   concurrencyControl.Clear();
   *concurrencyControl.mutable_txn_digest() = *txnDigest;
@@ -575,6 +575,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
       //IS THIS SAFE?
       bool skip = false;
       if (sig.process_id() == myProcessId && myProcessId >= 0) {
+
         if (concurrencyControl.ccr() == myResult) {
           skip = true;
           if(myResult == proto::ConcurrencyControl::WAIT) Panic("Aborting due to Wait Sent");
@@ -654,7 +655,9 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
     }
   }
 
-  verifyObj->deletable = verificationJobs.size();
+  //verifyObj->deletable = verificationJobs.size();
+  //verifyObj->deletable = verificationJobs2.size();
+  verifyObj->deletable = verificationJobs3.size();
 
   //does ref & make a difference here?
   for (std::function<void*()>* f : verificationJobs3){

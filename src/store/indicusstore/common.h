@@ -18,6 +18,7 @@
 
 #include <google/protobuf/message.h>
 
+#include "store/common/stats.h"
 
 namespace indicusstore {
 

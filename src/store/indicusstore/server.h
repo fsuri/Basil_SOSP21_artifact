@@ -573,6 +573,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   //typedef std::pair< std::unordered_set<uint64_t>, std::unordered_set<proto::Signature*>>replica_sig_sets_pair;
   typedef std::pair< std::unordered_set<uint64_t>, std::pair<proto::Signatures, uint64_t>> replica_sig_sets_pair;
   struct ElectFBorganizer {
+    std::map<uint64_t, bool> view_complete; //TODO: inefficient to do 2 lookups, merge with view_quorums.
     std::map<uint64_t, std::unordered_map<proto::CommitDecision, replica_sig_sets_pair>> view_quorums;
     std::map<uint64_t, std::pair<uint64_t, bool >> move_view_counts;
   };
