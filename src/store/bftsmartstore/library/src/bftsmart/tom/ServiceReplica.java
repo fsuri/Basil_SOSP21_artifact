@@ -40,6 +40,7 @@ import bftsmart.tom.server.Recoverable;
 import bftsmart.tom.server.Replier;
 import bftsmart.tom.server.RequestVerifier;
 import bftsmart.tom.server.SingleExecutable;
+import bftsmart.tom.server.NoReplySingleExecutable;
 
 import bftsmart.tom.server.defaultservices.DefaultReplier;
 import bftsmart.tom.util.KeyLoader;
@@ -341,7 +342,22 @@ public class ServiceReplica {
                                     logger.debug("sending reply to " + response.getSender());
                                     replier.manageReply(response, msgCtx);
                                 }
-                            } else { //this code should never be executed
+                            } else if (executor instanceof NoReplySingleExecutable){
+                                // ==== Content added to execute no reply single executables ====
+                                logger.debug("Delivering request from " + request.getSender() + " via NoReplySingleExecutable");
+                                
+                                // This is used to deliver the content decided by a consensus instance directly to
+                                // a Recoverable object. It is useful to allow the application to create a log and
+                                // store the proof associated with decisions (which are needed by replicas
+                                // that are asking for a state transfer).
+                                if (this.recoverer != null) this.recoverer.Op(msgCtx.getConsensusId(), request.getContent(), msgCtx);
+                                
+                                // This is used to deliver the requests to the application and obtain a reply to deliver
+                                //to the clients. The raw decision is passed to the application in the line above.
+                                ((NoReplySingleExecutable) executor).executeOrdered(id, SVController.getCurrentViewId(), request.getContent(), msgCtx);
+                                
+                            }
+                            else { //this code should never be executed
                                 throw new UnsupportedOperationException("Non-existent interface");
                             }   break;
                         case RECONFIG:
@@ -434,6 +450,7 @@ public class ServiceReplica {
                         repMan.send(reply);
                     } else {
                         logger.debug("Sending reply to " + reply.getSender() + " with sequence number " + reply.getSequence() + " and operation ID " + reply.getOperationId());
+                        // TODO: not doing this reply
                         replier.manageReply(reply, null);
                         //cs.send(new int[]{request.getSender()}, request.reply);
                     }

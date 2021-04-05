@@ -7,6 +7,7 @@
 #include "lib/crypto.h"
 #include "lib/message.h"
 #include "lib/transport.h"
+#include "lib/tcptransport.h"
 #include "store/common/stats.h"
 #include "store/common/timestamp.h"
 #include "store/common/transaction.h"
@@ -158,7 +159,8 @@ class ShardClient : public TransportReceiver {
 
   Stats* stats;
   
-  bftsmartstore::BftSmartAgent bftsmartagent;
+  bftsmartstore::BftSmartAgent* bftsmartagent;
+  void send_to_group(proto::Request& msg, int group_idx);
 
 };
 

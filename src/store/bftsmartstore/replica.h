@@ -8,6 +8,7 @@
 #include "lib/message.h"
 #include "lib/persistent_register.h"
 #include "lib/udptransport.h"
+#include "lib/tcptransport.h"
 #include "lib/crypto.h"
 #include "lib/keymanager.h"
 
@@ -18,6 +19,8 @@
 #include "store/bftsmartstore/common.h"
 #include <mutex>
 #include "tbb/concurrent_unordered_map.h"
+
+#include "store/bftsmartstore/bftsmartagent.h"
 
 // use HotStuff library
 // comment out the below macro to switch back to pbftstore
@@ -157,6 +160,10 @@ public:
   void cancelActionTimer(uint64_t seq_num, uint64_t viewnum, std::string digest);
 
   Stats* stats;
+
+  bftsmartstore::BftSmartAgent* bftsmartagent;
+
+
 };
 
 } // namespace bftsmartstore

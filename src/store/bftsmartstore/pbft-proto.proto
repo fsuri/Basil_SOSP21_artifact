@@ -2,6 +2,11 @@ syntax = "proto2";
 
 package bftsmartstore.proto;
 
+message TransportAddress {
+  required uint32 sin_addr = 1;
+  required uint32 sin_port = 2;
+}
+
 message PackedMessage {
   required bytes msg = 1;
   required string type = 2;
@@ -30,6 +35,7 @@ message Request {
   // the message in the packed message
   required bytes digest = 2;
   required uint64 groupidx = 3;
+  optional TransportAddress client_address = 4;
 }
 
 message RequestRequest {

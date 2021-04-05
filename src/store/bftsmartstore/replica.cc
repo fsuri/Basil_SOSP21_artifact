@@ -72,6 +72,8 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
       sessionKeys[i] = std::string(8, (char) i + 0x30) + std::string(8, (char) idx + 0x30);
     }
   }
+
+  bftsmartagent = new BftSmartAgent(false, this);
 }
 
 Replica::~Replica() {}
@@ -110,6 +112,9 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   string data;
   bool recvSignedMessage = false;
 
+  // TODO: modify transport address!
+  TCPTransportAddress* client = static_cast<TCPTransportAddress*>(malloc(sizeof(TCPTransportAddress)));
+
   Debug("Received message of type %s", t.c_str());
 
   if (t == tmpsignedMessage.GetTypeName()) {
@@ -131,8 +136,15 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   }
 
   if (type == recvrequest.GetTypeName()) {
+
+    // TODO: special processing requests
     recvrequest.ParseFromString(data);
-    HandleRequest(remote, recvrequest);
+    proto::TransportAddress caddr = recvrequest.client_address();
+    sockaddr_in myaddr;
+    myaddr.sin_port = static_cast<uint16_t>(caddr.sin_port());
+    myaddr.sin_addr.s_addr = static_cast<uint32_t>(caddr.sin_addr());
+    client->addr = myaddr;
+    HandleRequest(*client, recvrequest);
   } else if (type == recvbatchedRequest.GetTypeName()) {
     recvbatchedRequest.ParseFromString(data);
     HandleBatchedRequest(remote, recvbatchedRequest);

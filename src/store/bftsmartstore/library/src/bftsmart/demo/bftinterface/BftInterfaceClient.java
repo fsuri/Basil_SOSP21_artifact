@@ -22,11 +22,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 
-import bftsmart.tom.AsynchServiceProxy;
-import bftsmart.tom.RequestContext;
-import bftsmart.tom.core.messages.TOMMessage;
-import bftsmart.tom.core.messages.TOMMessageType;
-import bftsmart.communication.client.ReplyListener;
+import bftsmart.tom.ServiceProxy;
 
 
 /**
@@ -36,64 +32,26 @@ import bftsmart.communication.client.ReplyListener;
 public class BftInterfaceClient{
 
     int id;
-    AsynchServiceProxy serviceProxy;
+    ServiceProxy serviceProxy;
     long callbackHandle;
-    int numberOfOps;
-    int requestSize;
-    int interval;
-    byte[] request;
-    TOMMessageType reqType;
-    boolean verbose;
-    int rampup = 3000;
 
-    public BftInterfaceClient(int id, long callbackHandle){
-        this(id, false, false, callbackHandle);
-    }
-
-    public BftInterfaceClient(int id, boolean readOnly, boolean verbose, long callbackHandle) {
+    public BftInterfaceClient(int id, long callbackHandle) {
 
         this.id = id;
-        this.serviceProxy = new AsynchServiceProxy(id);
-        this.reqType = (readOnly ? TOMMessageType.UNORDERED_REQUEST : TOMMessageType.ORDERED_REQUEST);
-        this.verbose = verbose;
+        this.serviceProxy = new ServiceProxy(id);
         this.callbackHandle = callbackHandle;
 
     }
 
     public void startInterface(byte[] payload){
-        this.serviceProxy.invokeAsynchRequest(payload, new ReplyListener() {
-            private int replies = 0;
-            @Override
-            public void reset() {
-                if (verbose) System.out.println("[RequestContext] The proxy is re-issuing the request to the replicas");
-                replies = 0;
-            }
-            @Override
-            public void replyReceived(RequestContext context, TOMMessage reply) {
-                StringBuilder builder = new StringBuilder();
-                builder.append("[RequestContext] id: " + context.getReqId() + " type: " + context.getRequestType());
-                builder.append("[TOMMessage reply] sender id: " + reply.getSender() + " Hash content: " + Arrays.toString(reply.getContent()));
-                if (verbose) System.out.println(builder.toString());
-
-                replies++;
-
-                bftReplyReceived(reply.getContent(), callbackHandle);
-
-                double q = Math.ceil((double) (serviceProxy.getViewManager().getCurrentViewN() + serviceProxy.getViewManager().getCurrentViewF() + 1) / 2.0);
-
-                if (replies >= q) {
-                    if (verbose) System.out.println("[RequestContext] clean request context id: " + context.getReqId());
-                    serviceProxy.cleanAsynchRequest(context.getOperationId());
-                }
-            }
-        }, this.reqType);
+        this.serviceProxy.invokeOrdered(payload);
     }
 
     public void destructBftClient(){
         this.serviceProxy.close();
     }
 
-    public native void bftReplyReceived(byte[] reply, long callbackHandle);
+    // public native void bftReplyReceived(byte[] reply, long callbackHandle);
 
 }
 

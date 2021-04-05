@@ -12,6 +12,7 @@ ShardClient::ShardClient(const transport::Configuration& config, Transport *tran
     group_idx(group_idx),
     signMessages(signMessages), validateProofs(validateProofs),
     keyManager(keyManager), stats(stats), order_commit(order_commit), validate_abort(validate_abort) {
+  bftsmartagent = new BftSmartAgent(true, this);
   transport->Register(this, config, -1, -1);
   readReq = 0;
 
@@ -499,10 +500,7 @@ void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
 
     Debug("Sending txn to all replicas in shard");
     // transport->SendMessageToGroup(this, group_idx, request);
-    size_t size = request.ByteSize(); 
-    void *buffer = malloc(size);
-    request.SerializeToArray(buffer, size);
-    bftsmartagent.send_to_group(this, group_idx, buffer, size);
+    send_to_group(request, group_idx);
 
     PendingPrepare pp;
     pp.pcb = pcb;
@@ -554,10 +552,7 @@ void ShardClient::SignedPrepare(const proto::Transaction& txn, signed_prepare_ca
 
     // Debug("Sending txn to all replicas in shard");
     // transport->SendMessageToGroup(this, group_idx, request);
-    size_t size = request.ByteSize(); 
-    void *buffer = malloc(size);
-    request.SerializeToArray(buffer, size);
-    bftsmartagent.send_to_group(this, group_idx, buffer, size);
+    send_to_group(request, group_idx);
 
 
     PendingSignedPrepare psp;
@@ -601,11 +596,8 @@ void ShardClient::Commit(const std::string& txn_digest, const proto::ShardDecisi
     stats->Increment("shard_commit", 1);
 
     Debug("Sending commit to all replicas in shard");
-    // transport->SendMessageToGroup(this, group_idx, groupedDecision);
-    size_t size = groupedDecision.ByteSize(); 
-    void *buffer = malloc(size);
-    groupedDecision.SerializeToArray(buffer, size);
-    bftsmartagent.send_to_group(this, group_idx, buffer, size);
+    transport->SendMessageToGroup(this, group_idx, groupedDecision);
+    // send_to_group(groupedDecision, group_idx);
 
 
     PendingWritebackReply pwr;
@@ -657,17 +649,11 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
       request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
       request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
       // transport->SendMessageToGroup(this, group_idx, request);
-      size_t size = request.ByteSize(); 
-      void *buffer = malloc(size);
-      request.SerializeToArray(buffer, size);
-      bftsmartagent.send_to_group(this, group_idx, buffer, size);
+      send_to_group(request, group_idx);
     }
     else{
-      // transport->SendMessageToGroup(this, group_idx, groupedDecision);
-      size_t size = groupedDecision.ByteSize(); 
-      void *buffer = malloc(size);
-      groupedDecision.SerializeToArray(buffer, size);
-      bftsmartagent.send_to_group(this, group_idx, buffer, size);
+      transport->SendMessageToGroup(this, group_idx, groupedDecision);
+      // send_to_group(groupedDecision, group_idx);
     }
 
     PendingWritebackReply pwr;
@@ -716,17 +702,11 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
       request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
 
       // transport->SendMessageToGroup(this, group_idx, request);
-      size_t size = request.ByteSize(); 
-      void *buffer = malloc(size);
-      request.SerializeToArray(buffer, size);
-      bftsmartagent.send_to_group(this, group_idx, buffer, size);
+      send_to_group(request, group_idx);
     }
     else{
-      // transport->SendMessageToGroup(this, group_idx, groupedDecision);
-      size_t size = groupedDecision.ByteSize(); 
-      void *buffer = malloc(size);
-      groupedDecision.SerializeToArray(buffer, size);
-      bftsmartagent.send_to_group(this, group_idx, buffer, size);
+      transport->SendMessageToGroup(this, group_idx, groupedDecision);
+      // send_to_group(groupedDecision, group_idx);
     }
 
     // TODO timeout
@@ -760,10 +740,7 @@ void ShardClient::Abort(std::string& txn_digest, const proto::ShardSignedDecisio
     stats->Increment("shard_abort", 1);
     Debug("AB abort to all replicas in shard");
     // transport->SendMessageToGroup(this, group_idx, request);
-    size_t size = request.ByteSize(); 
-    void *buffer = malloc(size);
-    request.SerializeToArray(buffer, size);
-    bftsmartagent.send_to_group(this, group_idx, buffer, size);
+    send_to_group(request, group_idx);
 
     PendingWritebackReply pwr;
     pendingWritebacks[txn_digest] = pwr;  //not sure what use this has
@@ -771,6 +748,54 @@ void ShardClient::Abort(std::string& txn_digest, const proto::ShardSignedDecisio
   } else {
     Debug("abort called on already aborted tx");
   }
+}
+
+void ShardClient::send_to_group(proto::Request& msg, int group_idx){
+  // Set my address in the request
+  const TCPTransportAddress& addr = dynamic_cast<const TCPTransportAddress&>(*myAddress);
+  msg.mutable_client_address()->set_sin_addr(addr.addr.sin_addr.s_addr);
+  msg.mutable_client_address()->set_sin_port(addr.addr.sin_port);
+
+  // Serialize message
+  string data;
+  UW_ASSERT(msg.SerializeToString(&data));
+  string type = msg.GetTypeName();
+  size_t typeLen = type.length();
+  size_t dataLen = data.length();
+  size_t totalLen = (typeLen + sizeof(typeLen) +
+                      dataLen + sizeof(dataLen) +
+                      sizeof(totalLen) +
+                      sizeof(uint32_t));
+
+  Debug("Message is %lu total bytes", totalLen);
+
+  char buf[totalLen];
+  char *ptr = buf;
+
+  *((uint32_t *) ptr) = MAGIC;
+  ptr += sizeof(uint32_t);
+  UW_ASSERT((size_t)(ptr-buf) < totalLen);
+
+  *((size_t *) ptr) = totalLen;
+  ptr += sizeof(size_t);
+  UW_ASSERT((size_t)(ptr-buf) < totalLen);
+
+  *((size_t *) ptr) = typeLen;
+  ptr += sizeof(size_t);
+  UW_ASSERT((size_t)(ptr-buf) < totalLen);
+
+  UW_ASSERT((size_t)(ptr+typeLen-buf) < totalLen);
+  memcpy(ptr, type.c_str(), typeLen);
+  ptr += typeLen;
+  *((size_t *) ptr) = dataLen;
+  ptr += sizeof(size_t);
+
+  UW_ASSERT((size_t)(ptr-buf) < totalLen);
+  UW_ASSERT((size_t)(ptr+dataLen-buf) == totalLen);
+  memcpy(ptr, data.c_str(), dataLen);
+  ptr += dataLen;
+  
+  this->bftsmartagent->send_to_group(this, group_idx, buf, totalLen);
 }
 
 }
