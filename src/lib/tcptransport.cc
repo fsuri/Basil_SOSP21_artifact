@@ -273,12 +273,12 @@ void TCPTransport::ConnectTCP(
 
     struct bufferevent *bev =
         bufferevent_socket_new(libeventBase, fd,
-                               BEV_OPT_CLOSE_ON_FREE);
+                               BEV_OPT_CLOSE_ON_FREE | BEV_OPT_THREADSAFE);
 
-    // mtx.lock();
+    //mtx.lock();
     tcpOutgoing[dstSrc] = bev;
     tcpAddresses.insert(pair<struct bufferevent*, pair<TCPTransportAddress, TransportReceiver*>>(bev, dstSrc));
-    // mtx.unlock();
+    //mtx.unlock();
 
     bufferevent_setcb(bev, TCPReadableCallback, NULL,
                       TCPOutgoingEventCallback, info);
@@ -287,10 +287,10 @@ void TCPTransport::ConnectTCP(
                                    sizeof(dstSrc.first.addr)) < 0) {
         bufferevent_free(bev);
 
-        // mtx.lock();
+        //mtx.lock();
         tcpOutgoing.erase(dstSrc);
         tcpAddresses.erase(bev);
-        // mtx.unlock();
+        //mtx.unlock();
 
         Warning("Failed to connect to server via TCP");
         return;
@@ -429,7 +429,7 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
         m.GetTypeName().c_str(), inet_ntoa(dst.addr.sin_addr),
         htons(dst.addr.sin_port));
     auto dstSrc = std::make_pair(dst, src);
-    mtx.lock_shared();
+    mtx.lock();
     auto kv = tcpOutgoing.find(dstSrc);
     // See if we have a connection open
     if (kv == tcpOutgoing.end()) {
@@ -438,7 +438,7 @@ TCPTransport::SendMessageInternal(TransportReceiver *src,
     }
 
     struct bufferevent *ev = kv->second;
-    mtx.unlock_shared();
+    mtx.unlock();
 
     UW_ASSERT(ev != NULL);
 
@@ -890,11 +890,12 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
 {
     TCPTransportTCPListener *info = (TCPTransportTCPListener *)arg;
     TCPTransport *transport = info->transport;
-    //transport->mtx.lock();
+    transport->mtx.lock_shared();
     auto it = transport->tcpAddresses.find(bev);
-    //transport->mtx.unlock();
+
     UW_ASSERT(it != transport->tcpAddresses.end());
     TCPTransportAddress addr = it->second.first;
+    transport->mtx.unlock_shared();
 
     if (what & BEV_EVENT_CONNECTED) {
         Debug("Established outgoing TCP connection to server [g:%d][r:%d]", info->groupIdx, info->replicaIdx);
@@ -904,22 +905,22 @@ TCPTransport::TCPOutgoingEventCallback(struct bufferevent *bev,
                 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
         bufferevent_free(bev);
 
-        //transport->mtx.lock();
+        transport->mtx.lock();
         auto it2 = transport->tcpOutgoing.find(std::make_pair(addr, info->receiver));
         transport->tcpOutgoing.erase(it2);
         transport->tcpAddresses.erase(bev);
-        //transport->mtx.unlock();
+        transport->mtx.unlock();
 
         return;
     } else if (what & BEV_EVENT_EOF) {
         Warning("EOF on outgoing TCP connection to server");
         bufferevent_free(bev);
 
-        //transport->mtx.lock();
+        transport->mtx.lock();
         auto it2 = transport->tcpOutgoing.find(std::make_pair(addr, info->receiver));
         transport->tcpOutgoing.erase(it2);
         transport->tcpAddresses.erase(bev);
-        //transport->mtx.unlock();
+        transport->mtx.unlock();
 
         return;
     }

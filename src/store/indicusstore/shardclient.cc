@@ -1350,6 +1350,10 @@ void ShardClient::HandlePhase2Reply_MultiView(const proto::Phase2Reply &reply) {
   Debug("[group %i] PHASE2 reply with decision %d for view %lu", group,
       p2Decision->decision(), p2Decision->view());
 
+  if (!failureActive && p2Decision->decision() != itr->second->decision) {
+        Panic("Expected decision %d, but got decision %d from view %lu", itr->second->decision, p2Decision->decision(), p2Decision->view());
+  }
+
   proto::Signatures &p2RS = viewP2RS.second[p2Decision->decision()];
 
   if (params.validateProofs && params.signedMessages) {
@@ -1898,10 +1902,8 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
       pendingFB->p2FBcb(pendingP2.decision, pendingP2.p2ReplySigs, view);
       //dont need to clean, will be cleaned by callback.
       if(view > 0){
-        successful_invoke++;
         std::cerr << "elected FB for view [" << view << "] for txn: " << BytesToHex(txnDigest, 16) <<std::endl;;
-        //if(successful_invoke > 5) Panic("Invoked several times!");
-    }
+      }
       return true;
     }
 
@@ -2016,7 +2018,7 @@ void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::T
             proto::SignedMessage* sm = view_signed.add_sig_msgs();
             *sm = sv.signed_view;
 
-            count++;
+            count--;
             if(count == 0) break;
           }
           if(count == 0) break;

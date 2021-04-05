@@ -38,6 +38,7 @@
 
 #include <map>
 #include <unordered_map>
+#include <mutex>
 
 template <typename ADDR>
 class TransportCommon : public Transport
@@ -84,9 +85,11 @@ public:
         const transport::Configuration *cfg = configurations[src];
         UW_ASSERT(cfg != NULL);
 
+        //mtx.lock();
         if (!replicaAddressesInitialized) {
             LookupAddresses();
         }
+        //mtx.unlock();
 
         auto kv = replicaAddresses[cfg][groupIdx].find(replicaIdx);
         UW_ASSERT(kv != replicaAddresses[cfg][groupIdx].end());
@@ -99,9 +102,11 @@ public:
         const transport::Configuration *cfg = configurations[src];
         UW_ASSERT(cfg != NULL);
 
+        //mtx.lock();
         if (!replicaAddressesInitialized) {
             LookupAddresses();
         }
+        //mtx.unlock();
 
         auto kv = fcAddresses.find(cfg);
         if (kv == fcAddresses.end()) {
@@ -120,9 +125,11 @@ public:
         const transport::Configuration *cfg = configurations[src];
         UW_ASSERT(cfg != NULL);
 
+        //mtx.lock();
         if (!replicaAddressesInitialized) {
             LookupAddresses();
         }
+        //mtx.unlock();
 
         return SendMessageToGroup(src, groupIdx, m);
     }
@@ -134,9 +141,11 @@ public:
         const transport::Configuration *cfg = configurations[src];
         UW_ASSERT(cfg != NULL);
 
+        //mtx.lock();
         if (!replicaAddressesInitialized) {
             LookupAddresses();
         }
+        //mtx.unlock();
 
         const ADDR *srcAddr = dynamic_cast<const ADDR *>(src->GetAddress());
         for (auto & kv : replicaAddresses[cfg]) {
@@ -168,10 +177,12 @@ public:
         const transport::Configuration *cfg = configurations[src];
         UW_ASSERT(cfg != NULL);
 
+        //mtx.lock();
         if (!replicaAddressesInitialized) {
             LookupAddresses();
         }
-        
+        //mtx.unlock();
+
         int srcGroup = -1;
         auto replicaGroupsItr = replicaGroups.find(src);
         if (replicaGroupsItr != replicaGroups.end()) {
@@ -213,6 +224,8 @@ public:
     }
 
 protected:
+    std::mutex mtx;
+
     virtual bool SendMessageInternal(TransportReceiver *src,
                                      const ADDR &dst,
                                      const Message &m) = 0;
@@ -270,6 +283,7 @@ protected:
         // Mark replicaAddreses as uninitalized so we'll look up
         // replica addresses again the next time we send a message.
         replicaAddressesInitialized = false;
+        LookupAddresses();
         return canonical;
     }
 

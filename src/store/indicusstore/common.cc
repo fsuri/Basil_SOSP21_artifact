@@ -827,7 +827,7 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
   Debug("(CPU:%d - mainthread) asyncValidateP2RepliesCallback with result: %s", sched_getcpu(), result ? "true" : "false");
 
 
-  auto lockScope = LocalDispatch || true ? std::unique_lock<std::mutex>(verifyObj->objMutex) : std::unique_lock<std::mutex>();
+  auto lockScope = LocalDispatch ? std::unique_lock<std::mutex>(verifyObj->objMutex) : std::unique_lock<std::mutex>();
   // std::unique_lock<std::mutex> lock;
   // if(LocalDispatch) lock = std::unique_lock<std::mutex>(verifyObj->objMutex);
 
@@ -854,7 +854,7 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
     }
   verifyObj->groupCounts[groupId]++;
   Debug("%d out of necessary %d Phase2Replies for logging group %d verified.",
-  verifyObj->groupCounts[groupId],verifyObj->quorumSize,(int)groupId);
+    verifyObj->groupCounts[groupId],verifyObj->quorumSize,(int)groupId);
 
 
   if (verifyObj->groupCounts[groupId] == verifyObj->quorumSize) {
@@ -877,7 +877,7 @@ void asyncValidateP2RepliesCallback(asyncVerification* verifyObj, uint32_t group
 
   }
   else{
-      Debug("Phase2Replies for logging group %d not complete.", (int)groupId);
+      Debug("Phase2Replies for logging group %d insufficient to complete.", (int)groupId);
       if(verifyObj->deletable == 0){
         verifyObj->mcb((void*) false);
         if(LocalDispatch) lockScope.unlock();
@@ -1287,7 +1287,7 @@ bool VerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
 
           bool skip = false;
           if (signed_view.process_id() == myProcessId && myProcessId >= 0) {
-            if (myCurrentView < proposed_view - (1-catch_up)) {
+            if (myCurrentView >= proposed_view - (1-catch_up)) {
               skip = true;
             }
           }
@@ -1384,6 +1384,7 @@ void asyncVerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
             delete verifyObj;
             return;
         }
+        //XXX signed view only counts as vote if it is >= than proposed view - (1-catch_up)
         if(view_s.current_view() < proposed_view - (1-catch_up) ){
             Debug("View message [%s]: signed view = %lu < %lu proposed_view. Catch_up = %s", BytesToHex(*txnDigest, 64).c_str(), view_s.current_view(), proposed_view - (1-catch_up), catch_up ? "True" : "False");
             verifyObj->mcb((void*) false);
@@ -1393,7 +1394,8 @@ void asyncVerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
 
         bool skip = false;
         if (signed_view.process_id() == myProcessId && myProcessId >= 0) {
-          if (myCurrentView < proposed_view - (1-catch_up)) {
+          //XXX Useless for catchup. If we are already in a larger >= view then we do not adopt it anyways.
+          if (myCurrentView >= proposed_view - (1-catch_up)) {
               skip = true;
               verifyObj->groupCounts[logGrp]++;
               if (verifyObj->groupCounts[logGrp] == verifyObj->quorumSize) {
@@ -1418,6 +1420,8 @@ void asyncVerifyFBViews(uint64_t proposed_view, bool catch_up, uint64_t logGrp,
     }
 
     verifyObj->deletable = verificationJobs.size();
+    //std::cerr << "deletable: " << verifyObj->deletable << "  vs  quorumSize: " << quorumSize << " -- current group count: " << verifyObj->groupCounts[logGrp] << std::endl;
+    UW_ASSERT(verifyObj->deletable <= quorumSize);// If not, then we might be verifying more than necessary.
     for (auto &verification : verificationJobs){
 
         //a)) Multithreading: Dispatched f: verify , cb: async Callback
