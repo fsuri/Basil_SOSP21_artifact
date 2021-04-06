@@ -123,11 +123,13 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       proto::Phase1 &msg);
   void HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
         const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote);
+
   void HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const std::string* txnDigest,
         signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid); //bool valid);
-
+  void SendPhase2Reply(proto::Phase2 *msg, proto::Phase2Reply *phase2Reply, signedCallback sendCB);
   void HandlePhase2(const TransportAddress &remote,
-       proto::Phase2 &msg);
+             proto::Phase2 &msg);
+
 
   void WritebackCallback(proto::Writeback *msg, const std::string* txnDigest,
     proto::Transaction* txn, void* valid); //bool valid);

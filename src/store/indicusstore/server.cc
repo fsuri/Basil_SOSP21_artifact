@@ -948,21 +948,25 @@ void Server::HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const 
     if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
       FreePhase2message(msg); //const_cast<proto::Phase2&>(msg));
     }
+    delete remote;
+    std::cerr << "Invalid P2 for special id: " << phase2Reply->req_id() << std::endl;
     return;
   }
 
-  auto f = [this, remote, msg, txnDigest, sendCB = std::move(sendCB), phase2Reply, cleanCB = std::move(cleanCB), valid ](){
+  auto f = [this, remote, msg, txnDigest, sendCB = std::move(sendCB), phase2Reply, cleanCB = std::move(cleanCB), valid ]() mutable {
 
     p2MetaDataMap::accessor p;
     p2MetaDatas.insert(p, *txnDigest);
     bool hasP2 = p->second.hasP2;
     if(hasP2){
       phase2Reply->mutable_p2_decision()->set_decision(p->second.p2Decision);
+      std::cerr << "Already had P2 from FB. Setting P2 Decision for specialal id: " << phase2Reply->req_id() << std::endl;
     }
     else{
       p->second.p2Decision = msg->decision();
       p->second.hasP2 = true;
       phase2Reply->mutable_p2_decision()->set_decision(msg->decision());
+      std::cerr << "First time: Setting P2 Decision for speical id: " << phase2Reply->req_id() << std::endl;
     }
 
     if (params.validateProofs) {
@@ -974,16 +978,27 @@ void Server::HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const 
     p->second.original_address = remote;
     p.release();
 
-
-
     //XXX start client timeout for Fallback relay
     // if(client_starttime.find(*txnDigest) == client_starttime.end()){
     //   struct timeval tv;
     //   gettimeofday(&tv, NULL);
-    //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
+    //   uint64_t start_time HandlePhase2CB= (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
     //   client_starttime[*txnDigest] = start_time;
     // }
 
+    SendPhase2Reply(msg, phase2Reply, sendCB);
+    return (void*) true;
+ };
+
+ if(params.multiThreading && params.mainThreadDispatching && params.dispatchCallbacks){
+   transport->DispatchTP_main(std::move(f));
+ }
+ else{
+   f();
+ }
+}
+
+void Server::SendPhase2Reply(proto::Phase2 *msg, proto::Phase2Reply *phase2Reply, signedCallback sendCB){
 
   if (params.validateProofs && params.signedMessages) {
     proto::Phase2Decision* p2Decision = new proto::Phase2Decision(phase2Reply->p2_decision());
@@ -997,24 +1012,17 @@ void Server::HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const 
           FreePhase2message(msg); // const_cast<proto::Phase2&>(msg));
         }
       });
-    return (void*) true;
+    return;
   }
-  sendCB();
-  //Free allocated memory
-  if(params.multiThreading || params.mainThreadDispatching){
-    FreePhase2message(msg); // const_cast<proto::Phase2&>(msg));
+  else{
+    sendCB();
+    //Free allocated memory
+    if(params.multiThreading || params.mainThreadDispatching){
+      FreePhase2message(msg); // const_cast<proto::Phase2&>(msg));
+    }
+    return;
   }
-  return (void*) true;
- };
-
- if(params.multiThreading && params.mainThreadDispatching && params.dispatchCallbacks){
-   transport->DispatchTP_main(std::move(f));
- }
- else{
-   f();
- }
 }
-
 
 //TODO: ADD AUTHENTICATION IN ORDER TO ENFORCE FB TIMEOUTS. ANYBODY THAT IS NOT THE ORIGINAL CLIENT SHOULD ONLY BE ABLE TO SEND P2FB messages and NOT normal P2!!!!!!
 // //TODO: client signatures need to be implemented. keymanager needs to associate with client ids.
@@ -1048,6 +1056,7 @@ void Server::HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const 
 void Server::HandlePhase2(const TransportAddress &remote,
        proto::Phase2 &msg) {
 
+  std::cerr << "Received Phase2 msg with special id: " << msg.req_id() << std::endl;
   const proto::Transaction *txn;
   std::string computedTxnDigest;
   const std::string *txnDigest = &computedTxnDigest;
@@ -1080,6 +1089,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
     this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
+    std::cerr << "Send Phase2Reply for special Id: " << phase2Reply->req_id() << std::endl;
     FreePhase2Reply(phase2Reply);
     delete remoteCopy;
   };
@@ -1094,17 +1104,48 @@ void Server::HandlePhase2(const TransportAddress &remote,
 
   // no-replays property, i.e. recover existing decision/result from storage (do this for HandlePhase1 as well.)
 
-  p2MetaDataMap::const_accessor p;
+  p2MetaDataMap::accessor p;
   p2MetaDatas.insert(p, *txnDigest);
   bool hasP2 = p->second.hasP2;
-  p.release();
-  TransportAddress *remoteCopy2 = remote.clone();
+
+  //If Tx already went P2 or is committed/aborted: Just re-use that decision + view.
+  //Since we currently do not garbage collect P2: anything in committed/aborted but not in metaP2 must have gone FastPath,
+  //so choosing view=0 is ok, since equivocation/split-decisions cannot be possible.
   if(hasP2){
-     HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
+    std::cerr << "Already have P2 for special id: " << msg.req_id() << std::endl;
+    phase2Reply->mutable_p2_decision()->set_decision(p->second.p2Decision);
+    if (params.validateProofs) {
+      phase2Reply->mutable_p2_decision()->set_view(p->second.decision_view);
+    }
+    //NOTE: Temporary hack fix to subscribe original client to p2 decisions from views > 0;; TODO: Replace with ForwardWriteback eventually
+    p->second.has_original = true;
+    p->second.original_msg_id = msg.req_id();
+    p->second.original_address = remote.clone();
+    p.release();
+    SendPhase2Reply(&msg, phase2Reply, std::move(sendCB));
+    //HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
+  }
+  //TODO: Replace both Commit/Abort check with ForwardWriteback at some point. (this should happen before the hasP2 case then.)
+  else if(committed.find(*txnDigest) != committed.end()){
+    p.release();
+    phase2Reply->mutable_p2_decision()->set_decision(proto::COMMIT);
+    if (params.validateProofs) {
+      phase2Reply->mutable_p2_decision()->set_view(0);
+    }
+    SendPhase2Reply(&msg, phase2Reply, std::move(sendCB));
+  }
+  else if(aborted.find(*txnDigest) != aborted.end()){
+    p.release();
+    phase2Reply->mutable_p2_decision()->set_decision(proto::ABORT);
+    if (params.validateProofs) {
+      phase2Reply->mutable_p2_decision()->set_view(0);
+    }
+    SendPhase2Reply(&msg, phase2Reply, std::move(sendCB));
   }
   //first time receiving p2 message:
   else{
-
+    p.release();
+    std::cerr << "First time P2 for special id: " << msg.req_id() << std::endl;
     Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
 
     int64_t myProcessId;
@@ -1132,6 +1173,21 @@ void Server::HandlePhase2(const TransportAddress &remote,
             b.release();
           }
           else{
+            if(committed.find(*txnDigest) != committed.end()){
+              auto itr = committed.find(*txnDigest);
+              bool fast = itr->second->has_p1_sigs();
+               std::cerr << "txn already committd for special id: " << msg.req_id() << "  FAST? " << (fast? "yes" : "no")<< std::endl;
+
+            } else if(aborted.find(*txnDigest) != aborted.end()){
+              auto itr = writebackMessages.find(*txnDigest);
+              bool fast = itr->second.has_p1_sigs();
+              bool has_conflict = itr->second.has_conflict();
+              std::cerr << "txn already aborted for special id: " << msg.req_id() << "  FAST? " << (fast ? "yes" : "no") << " HasConflict? " << (has_conflict? "yes" : "no")<< std::endl;
+            } else{
+              std::cerr << "Neither committed/aborted for txn special id: " << msg.req_id() << std::endl;
+            }
+            Panic("no txn");
+
             b.release();
             if(msg.has_txn()){
               txn = &msg.txn();
@@ -1144,11 +1200,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
               if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
                   FreePhase2message(&msg); //const_cast<proto::Phase2&>(msg));
               }
+              std::cerr << "Cannot validate p2 because do not have tx for special id: " << msg.req_id() << std::endl;
               return;
             }
           }
         }
-
+        TransportAddress *remoteCopy2 = remote.clone();
         if(params.multiThreading){
           mainThreadCallback mcb(std::bind(&Server::HandlePhase2CB, this, remoteCopy2,
              &msg, txnDigest, sendCB, phase2Reply, cleanCB, std::placeholders::_1));
@@ -1192,7 +1249,10 @@ void Server::HandlePhase2(const TransportAddress &remote,
           }
         }
       }
-    HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
+    else{
+      TransportAddress *remoteCopy2 = remote.clone();
+      HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
+    }
   }
 }
 

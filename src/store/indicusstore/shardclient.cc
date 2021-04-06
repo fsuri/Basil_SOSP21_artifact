@@ -210,6 +210,16 @@ void ShardClient::Phase2(uint64_t id,
   Debug("[group %i] Sending PHASE2 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
   client_seq_num_mapping[id].pendingP2_id = reqId;
+
+  uint64_t special_id = reqId << 8 + client_id;
+  std::cerr << "special ID: " << special_id << std::endl;
+  std::cerr << "Trying to " << (decision? "ABORT" : "COMMIT") << "txn on slowpath" << std::endl;
+  reqId = special_id;
+  test_mapping[reqId] = id;
+  std::cerr <<"Sending Phase2 for txnId: " << id << " to group: " << group << std::endl;
+  std::cerr << "TxnId " << id << " maps to reqId: " << reqId << " sent by client" << client_id <<  std::endl;;
+
+
   PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);  //TODO: add view that this decision is from (default = 0).
   //TODO: When sending an InvokeFB message, this view = the view you propose ; but unclear what decision you are waiting for?
   //Create many mappings for potential views/decisions instead.
@@ -245,6 +255,7 @@ void ShardClient::Phase2Equivocate_Simulate(uint64_t id,
     const proto::Transaction &txn, const std::string &txnDigest,
     proto::GroupedSignatures &groupedCommitSigs) {
 
+      std::cerr<<"SendingPhase2_Equiv for txnId: " << id << "to group: " << group << std::endl;
       uint64_t reqId = lastReqId++;
 
       phase2.Clear();
@@ -1291,6 +1302,8 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
 }
 
 void ShardClient::HandlePhase2Reply_MultiView(const proto::Phase2Reply &reply) {
+
+  std::cerr << "Received P2R for Req Id:" << reply.req_id() << " mapping to TxnId["  << test_mapping[reply.req_id()] << "]"<< std::endl;
   auto itr = this->pendingPhase2s.find(reply.req_id());
   if (itr == this->pendingPhase2s.end()) {
     Debug("[group %i] Received stale Phase2Reply for request %lu.", group,
@@ -1350,8 +1363,9 @@ void ShardClient::HandlePhase2Reply_MultiView(const proto::Phase2Reply &reply) {
   Debug("[group %i] PHASE2 reply with decision %d for view %lu", group,
       p2Decision->decision(), p2Decision->view());
 
+  std::cerr << "TxnId["  << test_mapping[reply.req_id()] <<"] received decision " << p2Decision->decision() << " from view " << p2Decision->decision() << std::endl;
   if (!failureActive && p2Decision->decision() != itr->second->decision) {
-        Panic("Expected decision %d, but got decision %d from view %lu", itr->second->decision, p2Decision->decision(), p2Decision->view());
+        fprintf(stderr, "Expected decision %d, but got decision %d from view %lu", itr->second->decision, p2Decision->decision(), p2Decision->view());
   }
 
   proto::Signatures &p2RS = viewP2RS.second[p2Decision->decision()];

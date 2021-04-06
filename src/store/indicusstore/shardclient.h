@@ -427,7 +427,7 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
   std::unordered_map<uint64_t, PendingReqIds> client_seq_num_mapping;
   std::unordered_map<std::string, PendingFB*> pendingFallbacks; //map from txnDigests to their fallback instances.
   std::unordered_set<std::string> pendingRelays;
-
+  std::unordered_map<uint64_t, uint64_t> test_mapping;
   //keep additional maps for this from txnDigest ->Pending For Fallback instances?
 
   proto::Read read;

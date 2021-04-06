@@ -250,7 +250,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     req->ctcb = ctcb;
     req->callbackInvoked = false;
     req->txnDigest = TransactionDigest(txn, params.hashDigest);
-    req->timeout = timeout;
+    req->timeout = 20000UL; //timeout;
     stats.IncrementList("txn_groups", txn.involved_groups().size());
 
     Phase1(req);
@@ -592,7 +592,7 @@ void Client::Phase2TimeoutCallback(int group, uint64_t txnId, int status) {
   }
 
   Warning("PHASE2[%lu:%lu] group %d timed out.", client_id, txnId, group);
-  //Panic("P2 timing out; honest client: %s", failureActive ? "False" : "True");
+  Panic("P2 timing out for txnId: %lu; honest client: %s", txnId, failureActive ? "False" : "True");
 
   Phase2(req);
 }
@@ -1098,7 +1098,7 @@ bool Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
     }
 
     req->decision = decision;
-    req->p2Replies = std::move(p2replies); 
+    req->p2Replies = std::move(p2replies);
 
     //WARNING: CURRENTLY HAVE PHASE1FBCALLBACK B DISABLED. BUT STILL USING P2Replies for Invoke.
     return true;
