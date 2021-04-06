@@ -1074,14 +1074,10 @@ void Server::HandlePhase2(const TransportAddress &remote,
       txnDigest = &computedTxnDigest;
     }
 
-    //TODO: check whether has P2 decision already, or whether committed/aborted.
-
   }
   else{
     txnDigest = &dummyString;  //just so I can run with validate turned off while using params.mainThreadDispatching
   }
-
-  //TODO: forwardWriteback()  //XXX just forwarding existing decision might lead to view mismatch --> if I want to use this, dont garbage collect P2meta data as well.
 
   proto::Phase2Reply* phase2Reply = GetUnusedPhase2Reply();
   TransportAddress *remoteCopy = remote.clone();
@@ -1103,67 +1099,67 @@ void Server::HandlePhase2(const TransportAddress &remote,
   phase2Reply->mutable_p2_decision()->set_involved_group(groupIdx);
 
   // no-replays property, i.e. recover existing decision/result from storage (do this for HandlePhase1 as well.)
-
   p2MetaDataMap::accessor p;
   p2MetaDatas.insert(p, *txnDigest);
   bool hasP2 = p->second.hasP2;
-
-  //If Tx already went P2 or is committed/aborted: Just re-use that decision + view.
+  //NOTE: If Tx already went P2 or is committed/aborted: Just re-use that decision + view.
   //Since we currently do not garbage collect P2: anything in committed/aborted but not in metaP2 must have gone FastPath,
   //so choosing view=0 is ok, since equivocation/split-decisions cannot be possible.
   if(hasP2){
-    std::cerr << "Already have P2 for special id: " << msg.req_id() << std::endl;
-    phase2Reply->mutable_p2_decision()->set_decision(p->second.p2Decision);
-    if (params.validateProofs) {
-      phase2Reply->mutable_p2_decision()->set_view(p->second.decision_view);
-    }
-    //NOTE: Temporary hack fix to subscribe original client to p2 decisions from views > 0;; TODO: Replace with ForwardWriteback eventually
-    p->second.has_original = true;
-    p->second.original_msg_id = msg.req_id();
-    p->second.original_address = remote.clone();
-    p.release();
-    SendPhase2Reply(&msg, phase2Reply, std::move(sendCB));
-    //HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
+      std::cerr << "Already have P2 for special id: " << msg.req_id() << std::endl;
+      phase2Reply->mutable_p2_decision()->set_decision(p->second.p2Decision);
+      if (params.validateProofs) {
+        phase2Reply->mutable_p2_decision()->set_view(p->second.decision_view);
+      }
+      //NOTE: Temporary hack fix to subscribe original client to p2 decisions from views > 0;;
+      //TODO: Replace with ForwardWriteback eventually
+      p->second.has_original = true;
+      p->second.original_msg_id = msg.req_id();
+      p->second.original_address = remote.clone();
+      p.release();
+      SendPhase2Reply(&msg, phase2Reply, std::move(sendCB));
+      //HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
   }
   //TODO: Replace both Commit/Abort check with ForwardWriteback at some point. (this should happen before the hasP2 case then.)
   else if(committed.find(*txnDigest) != committed.end()){
-    p.release();
-    phase2Reply->mutable_p2_decision()->set_decision(proto::COMMIT);
-    if (params.validateProofs) {
+      p.release();
+      phase2Reply->mutable_p2_decision()->set_decision(proto::COMMIT);
       phase2Reply->mutable_p2_decision()->set_view(0);
-    }
-    SendPhase2Reply(&msg, phase2Reply, std::move(sendCB));
+      SendPhase2Reply(&msg, phase2Reply, std::move(sendCB));
   }
   else if(aborted.find(*txnDigest) != aborted.end()){
-    p.release();
-    phase2Reply->mutable_p2_decision()->set_decision(proto::ABORT);
-    if (params.validateProofs) {
+      p.release();
+      phase2Reply->mutable_p2_decision()->set_decision(proto::ABORT);
       phase2Reply->mutable_p2_decision()->set_view(0);
-    }
-    SendPhase2Reply(&msg, phase2Reply, std::move(sendCB));
+      SendPhase2Reply(&msg, phase2Reply, std::move(sendCB));
   }
   //first time receiving p2 message:
   else{
-    p.release();
-    std::cerr << "First time P2 for special id: " << msg.req_id() << std::endl;
-    Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
+      p.release();
+      std::cerr << "First time P2 for special id: " << msg.req_id() << std::endl;
+      Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
 
-    int64_t myProcessId;
-    proto::ConcurrencyControl::Result myResult;
+      int64_t myProcessId;
+      proto::ConcurrencyControl::Result myResult;
 
-    if(msg.has_simulated_equiv() && msg.simulated_equiv()){
-      stats.Increment("total_equiv_received_p2", 1);
-      myProcessId = -1;
-      if(msg.decision() == proto::COMMIT) stats.Increment("total_received_equiv_COMMIT", 1);
-      if(msg.decision() == proto::ABORT) stats.Increment("total_received_equiv_ABORT", 1);
-    }
-    else{
-      LookupP1Decision(*txnDigest, myProcessId, myResult);
-    }
-    //std::cerr<< "phase 2 has simulated equiv: " << (msg.has_simulated_equiv() && msg.simulated_equiv()) << "with decision: " << msg.decision() << std::endl;
+      if(msg.has_simulated_equiv() && msg.simulated_equiv()){
+        //std::cerr<< "phase 2 has simulated equiv with decision: " << msg.decision() << std::endl;
+        stats.Increment("total_equiv_received_p2", 1);
+        myProcessId = -1;
+        if(msg.decision() == proto::COMMIT) stats.Increment("total_received_equiv_COMMIT", 1);
+        if(msg.decision() == proto::ABORT) stats.Increment("total_received_equiv_ABORT", 1);
+      }
+      else{
+        LookupP1Decision(*txnDigest, myProcessId, myResult);
+      }
 
+      if (!(params.validateProofs && params.signedMessages)){
+        TransportAddress *remoteCopy2 = remote.clone();
+        HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
+        return;
+      }
 
-    if (params.validateProofs && params.signedMessages) {
+      else { // i.e. if (params.validateProofs && params.signedMessages) {
 
         if(msg.has_txn_digest()) {
           ongoingMap::const_accessor b;
@@ -1205,6 +1201,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
             }
           }
         }
+
         TransportAddress *remoteCopy2 = remote.clone();
         if(params.multiThreading){
           mainThreadCallback mcb(std::bind(&Server::HandlePhase2CB, this, remoteCopy2,
@@ -1249,10 +1246,6 @@ void Server::HandlePhase2(const TransportAddress &remote,
           }
         }
       }
-    else{
-      TransportAddress *remoteCopy2 = remote.clone();
-      HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
-    }
   }
 }
 
