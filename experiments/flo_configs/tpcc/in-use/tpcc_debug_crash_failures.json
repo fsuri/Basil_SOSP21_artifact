@@ -103,11 +103,11 @@
       "key_path": "/usr/local/etc/indicus-keys/donna",
 
       "_inject_failure_type" : "client-crash",
-	  "inject_failure_type" : "client-equivocate-simulated",
-	  "_inject_failure_type" : "client-equivocate",
-	  "inject_failure_proportion" : 30,
+	  "_inject_failure_type" : "client-equivocate-simulated",
+	  "inject_failure_type" : "client-equivocate",
+	  "inject_failure_proportion" : 80,
 	  "inject_failure_ms": 0,
-	  "inject_failure_freq": 3,
+	  "inject_failure_freq": 2,
       "all_to_all_fb" : false,
 	  "relayP1_timeout" : 5
     }

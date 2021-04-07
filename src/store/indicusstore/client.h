@@ -148,6 +148,7 @@ class Client : public ::Client {
     proto::Transaction txn;
     proto::P2Replies p2Replies;
 
+    int64_t logGrp;
     bool startFB;
     std::unordered_map<std::string, proto::Phase1*> RelayP1s;
     std::unordered_set<std::string> req_FB_instances; //TODO: refactor so that FB_instances only exists as local var.

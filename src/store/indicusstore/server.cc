@@ -1146,9 +1146,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
       int64_t myProcessId;
       proto::ConcurrencyControl::Result myResult;
 
+      if(msg.has_real_equiv() && msg.real_equiv()){
+        stats.Increment("total_real_equiv_received_p2", 1);
+      }
       if(msg.has_simulated_equiv() && msg.simulated_equiv()){
         //std::cerr<< "phase 2 has simulated equiv with decision: " << msg.decision() << std::endl;
-        stats.Increment("total_equiv_received_p2", 1);
+        stats.Increment("total_simul_received_p2", 1);
         myProcessId = -1;
         if(msg.decision() == proto::COMMIT) stats.Increment("total_received_equiv_COMMIT", 1);
         if(msg.decision() == proto::ABORT) stats.Increment("total_received_equiv_ABORT", 1);
@@ -2678,6 +2681,15 @@ void Server::CheckDependents(const std::string &txnDigest) {
             if(!ForwardWritebackMulti(txnDigest, i)){
               P1FBorganizer *p1fb_organizer = new P1FBorganizer(0, txnDigest, this);
               SetP1(0, p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
+
+              p2MetaDataMap::const_accessor p;
+              p2MetaDatas.insert(p, txnDigest);
+              if(p->second.hasP2){
+                proto::CommitDecision decision = p->second.p2Decision;
+                uint64_t decision_view = p->second.decision_view;
+                SetP2(0, p1fb_organizer->p1fbr->mutable_p2r(), txnDigest, decision, decision_view);
+              }
+              p.release();
               //TODO: If need reqId, can store it as pairs with the interested client.
               Debug("Sending Phase1FBReply MULTICAST for txn: %s", BytesToHex(txnDigest, 64).c_str());
               SendPhase1FBReply(p1fb_organizer, txnDigest, true);

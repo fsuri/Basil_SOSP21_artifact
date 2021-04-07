@@ -250,7 +250,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     req->ctcb = ctcb;
     req->callbackInvoked = false;
     req->txnDigest = TransactionDigest(txn, params.hashDigest);
-    req->timeout = 20000UL; //timeout;
+    req->timeout = timeout; //20000UL; //timeout;
     stats.IncrementList("txn_groups", txn.involved_groups().size());
 
     Phase1(req);
@@ -300,7 +300,7 @@ void Client::Phase1CallbackProcessing(PendingRequest *req, int group,
       Debug("Have %d ABSTAIN replies from group %d. Saving in eqvAbortSigsGrouped",
           itr_abort->second.sigs_size(), group);
       (*req->eqvAbortSigsGrouped.mutable_grouped_sigs())[group] = itr_abort->second;
-
+      req->slowAbortGroup = group;
       // saving commit sigs in req->p1ReplySigsGrouped
       auto itr_commit = sigs.find(proto::ConcurrencyControl::COMMIT);
       UW_ASSERT(itr_commit != sigs.end());
@@ -529,7 +529,19 @@ void Client::Phase2Equivocate(PendingRequest *req) {
       }
     }
 
-    // build grouped abort sigs with size of abortQuorum
+    // build grouped abort sigs with *one* shard Quorum the size of abortQuorum
+    if (req->decision == proto::ABORT) {
+      UW_ASSERT(req->slowAbortGroup >= 0);
+      UW_ASSERT(req->eqvAbortSigsGrouped.grouped_sigs().find(req->slowAbortGroup) != req->eqvAbortSigsGrouped.grouped_sigs().end());
+      while (req->eqvAbortSigsGrouped.grouped_sigs().size() > 1) {
+        auto itr = req->eqvAbortSigsGrouped.mutable_grouped_sigs()->begin();
+        if (itr->first == req->slowAbortGroup) {
+          itr++;  //skips this group, i.e. deletes all besides this one.
+        }
+        req->eqvAbortSigsGrouped.mutable_grouped_sigs()->erase(itr);
+      }
+    }
+
     for (auto &groupSigs : *req->eqvAbortSigsGrouped.mutable_grouped_sigs()) {
       while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > SlowAbortQuorumSize(config)) {
         groupSigs.second.mutable_sigs()->RemoveLast();
@@ -981,6 +993,7 @@ void Client::Phase1FB_deeper(uint64_t conflict_id, const std::string &txnDigest,
 
 void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, PendingRequest *pendingFB){
 
+  pendingFB->logGrp = GetLogGroup(pendingFB->txn, txnDigest);
   for (auto group : p1->txn().involved_groups()) {
       Debug("Client %d, Send Phase1FB for txn %s to involved group %d", client_id, BytesToHex(txnDigest, 16).c_str(), group);
 
@@ -999,7 +1012,7 @@ void Client::SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::st
       auto invoke = std::bind(&Client::InvokeFBcallback, this, conflict_id, txnDigest, group); //technically only needed at logging shard
 
       //bclient[group]->Phase1FB(p1->req_id(), pendingFB->txn, txnDigest, p1Relay, p1fbA, p1fbB, p2fb, wb, invoke);
-      bclient[group]->Phase1FB(client_id, pendingFB->txn, txnDigest, p1Relay, p1fbA, p1fbB, p2fb, wb, invoke);
+      bclient[group]->Phase1FB(client_id, pendingFB->txn, txnDigest, p1Relay, p1fbA, p1fbB, p2fb, wb, invoke, pendingFB->logGrp);
 
       pendingFB->outstandingPhase1s++;
     }
@@ -1115,23 +1128,23 @@ void Client::Phase2FB(PendingRequest *req){
 
       const proto::Transaction &fb_txn = req->txn;
 
-      uint8_t groupIdx = req->txnDigest[0];
-      groupIdx = groupIdx % fb_txn.involved_groups_size();
-      UW_ASSERT(groupIdx < fb_txn.involved_groups_size());
-      int64_t logGroup = fb_txn.involved_groups(groupIdx);
+      // uint8_t groupIdx = req->txnDigest[0];
+      // groupIdx = groupIdx % fb_txn.involved_groups_size();
+      // UW_ASSERT(groupIdx < fb_txn.involved_groups_size());
+      // int64_t logGroup = fb_txn.involved_groups(groupIdx);
       Debug("PHASE2FB[%lu:%s][%s] logging to group %ld", client_id, req->txnDigest.c_str(),
-          BytesToHex(req->txnDigest, 16).c_str(), logGroup);
+          BytesToHex(req->txnDigest, 16).c_str(), req->logGrp);
 
       //CASE THAT CHECKS FOR P2 REPLIES AS VALID  PROOFS
       // check if p2Replies is of size f+1
       if(req->p2Replies.p2replies().size() >= config->f +1){
         req->startedPhase2 = true;
-        bclient[logGroup]->Phase2FB(req->id, req->txn, req->txnDigest, req->decision, req->p2Replies);
+        bclient[req->logGrp]->Phase2FB(req->id, req->txn, req->txnDigest, req->decision, req->p2Replies);
       }
       else{ //OTHERWISE: Use p1 sigs just like in normal case.
         Phase2Processing(req);
 
-        bclient[logGroup]->Phase2FB(req->id, req->txn, req->txnDigest, req->decision,
+        bclient[req->logGrp]->Phase2FB(req->id, req->txn, req->txnDigest, req->decision,
           req->p1ReplySigsGrouped);
       }
       for (auto group : req->txn.involved_groups()) {

@@ -153,7 +153,7 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
   virtual void StopP1FB(std::string &txnDigest);
   virtual void Phase1FB(uint64_t reqId, proto::Transaction &txn, const std::string &txnDigest,
    relayP1FB_callback rP1FB, phase1FB_callbackA p1FBcbA, phase1FB_callbackB p1FBcbB,
-   phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb);
+   phase2FB_callback p2FBcb, writebackFB_callback wbFBcb, invokeFB_callback invFBcb, int64_t logGrp);
   virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,
     const proto::GroupedSignatures &groupedSigs);
   //overloaded for different p2 alternative
@@ -284,6 +284,8 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
 
     //TODO: pendingP1, pendingP2, Signed View need not be a pointer?
     PendingPhase1 *pendingP1;
+    int64_t logGrp;
+
     uint64_t max_decision_view;
     std::map<uint64_t, std::map<proto::CommitDecision, PendingPhase2>> pendingP2s;
     proto::Signatures p2ReplySigs;
