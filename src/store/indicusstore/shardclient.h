@@ -160,7 +160,7 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
   virtual void Phase2FB(uint64_t id,const proto::Transaction &txn, const std::string &txnDigest,proto::CommitDecision decision,
     const proto::P2Replies &p2Replies);
   virtual void WritebackFB_fast(std::string txnDigest, proto::Writeback &wb); //fix bracket
-  virtual void InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::Transaction &txn, proto::CommitDecision decision,
+  virtual void InvokeFB(uint64_t conflict_id, std::string &txnDigest, proto::Transaction &txn, proto::CommitDecision decision,
     proto::P2Replies &p2Replies);
 
 
@@ -271,7 +271,7 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
 
   //Fallback request
   struct PendingFB {
-    PendingFB() : max_decision_view(0UL), p1(true), last_view(0), max_view(0), call_invokeFB(false) {}
+    PendingFB() : max_decision_view(0UL), p1(true), last_view(0UL), max_view(0UL), conflict_view(0UL), call_invokeFB(false) {}
     ~PendingFB(){
        delete pendingP1; //TODO: make it so that this is "deleted" after we have moved on from
        // phase1. I.e. If we move to P2 or WB we never want to process additional p1s..
@@ -293,8 +293,9 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
 
     std::map<uint64_t, SignedView> current_views;
     std::map<uint64_t, std::set<uint64_t>> view_levels; //maps from view to ids  in that view
-    uint64_t last_view;
+    uint64_t last_view; //highest view for which we have already proposed
     uint64_t max_view;  //we will propose max_view, but only if its bigger than last_view; otherwise we need better votes.
+    uint64_t conflict_view; //view in which we found inconsistency
     bool catchup;
     //std::set<uint64_t> existing_levels;
 

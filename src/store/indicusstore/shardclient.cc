@@ -1659,6 +1659,7 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){
 //TODO: Currently verifying signature for p1 reply, p2 reply and view seperately, that is wasteful
 //-> integrate current view into all the responses? Problem: Makes messages different.
   if(!params.all_to_all_fb){
+    std::cerr << "[UpdateView] Process P1FBR for txn: " << BytesToHex(txnDigest, 16) << std::endl;
     UpdateViewStructure(pendingFB, p1fbr.attached_view());
   }
   //CASE 2: Received a p2 decision
@@ -1755,6 +1756,7 @@ void ShardClient::UpdateViewStructure(PendingFB *pendingFB, const proto::Attache
         proto::CurrentView new_view;
         new_view.ParseFromString(signed_msg.data());
 
+        std::cerr << "Received view " << new_view.current_view() << " from replica: " << signed_msg.process_id();
         //only update data strucure if new view is bigger.
         if(pendingFB->current_views.find(signed_msg.process_id()) != pendingFB->current_views.end()){
           stored_view =  pendingFB->current_views[signed_msg.process_id()].view;
@@ -1842,6 +1844,7 @@ void ShardClient::HandlePhase2FBReply(proto::Phase2FBReply &p2fbr){
 
 //TODO: move this after message verification? to save processing cost if not necessary to compute views?
   if(!params.all_to_all_fb){
+      std::cerr << "[UpdateView] Process P2FBR for txn: " << BytesToHex(txnDigest, 16) << std::endl;
       UpdateViewStructure(pendingFB, p2fbr.attached_view());
   }
 
@@ -1886,7 +1889,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
         decision, view);
 
     //that message is from likely obsolete views.
-    if(pendingFB->max_decision_view > view +1 ){
+    if(view < pendingFB->max_decision_view - 1 ){
         return false;
     }
 
@@ -1905,7 +1908,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
     pendingP2.matchingReplies++;
 
     if(pendingP2.matchingReplies > config->f){
-      if(pendingFB->max_decision_view < view){
+      if(view > pendingFB->max_decision_view){
             pendingFB->max_decision_view = view;
             delete_old_views = true;
       } //TODO: can just add the check for 3f+1 also, in which case we go to v + 1? Maybe not quite as trivial due to vote subsumption
@@ -1955,6 +1958,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
     && pendingFB->pendingP2s[view][proto::COMMIT].matchingReplies == config->f +1
     && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies == config->f +1){ //== so we only call it once per view.
       pendingFB->p1 = false;
+      pendingFB->conflict_view = view;
       if(!pendingFB->invFBcb()) return true;
   }
       //TODO: Also need to call it after some timeout. I.e. if 4f+1 received are all honest but diverge.
@@ -1977,9 +1981,11 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
   ///////////END
 }
 
-void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::Transaction &txn, proto::CommitDecision decision, proto::P2Replies &p2Replies){
+void ShardClient::InvokeFB(uint64_t conflict_id, std::string &txnDigest, proto::Transaction &txn, proto::CommitDecision decision, proto::P2Replies &p2Replies){
 
   //TODO: start a timeout. If cannot receive enough P2FB replies from a view v, then invoke again.
+  //TODO: do not send invokeFB requests for higher views than the "conflict-view" (i.e. view with inconsistent decisions)
+          // before some timeout has expired. Otherwise one is needlessly pushing for elections (server should schedule them for post-time-out in any case)
 
   auto itr = this->pendingFallbacks.find(txnDigest);
   if(itr == this->pendingFallbacks.end()) return;
@@ -2005,7 +2011,14 @@ void ShardClient::InvokeFB(uint64_t conflict_id, std::string txnDigest, proto::T
   }
 
   else{
-      ComputeMaxLevel(pendingFB);
+
+
+      ComputeMaxLevel(pendingFB); //Find max_view that we can propose.
+
+      std::cerr << "Called InvokeFB for view: " << pendingFB->max_view << " for txn: " << BytesToHex(txnDigest, 16) << std::endl;
+      if(pendingFB->max_view > pendingFB->conflict_view){
+        Panic("Proposing view %lu that is higher than our conflict view %lu.", pendingFB->max_view, pendingFB->conflict_view);
+      }
 
       if(pendingFB->max_view <= itr->second->last_view){
         pendingFB->call_invokeFB = true;
@@ -2069,6 +2082,7 @@ void ShardClient::HandleSendViewMessage(proto::SendView &sendView){
 
 //TODO: move this after message verification? to save processing cost if not necessary to compute views?
   if(!params.all_to_all_fb){
+      std::cerr << "[UpdateView] Process SendView for txn: " << BytesToHex(txnDigest, 16) << std::endl;
       UpdateViewStructure(pendingFB, sendView.attached_view());
   }
 }

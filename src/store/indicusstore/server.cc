@@ -1106,6 +1106,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   //Since we currently do not garbage collect P2: anything in committed/aborted but not in metaP2 must have gone FastPath,
   //so choosing view=0 is ok, since equivocation/split-decisions cannot be possible.
   if(hasP2){
+      //p.release();
       std::cerr << "Already have P2 for special id: " << msg.req_id() << std::endl;
       phase2Reply->mutable_p2_decision()->set_decision(p->second.p2Decision);
       if (params.validateProofs) {
@@ -1118,9 +1119,12 @@ void Server::HandlePhase2(const TransportAddress &remote,
       p->second.original_address = remote.clone();
       p.release();
       SendPhase2Reply(&msg, phase2Reply, std::move(sendCB));
+      //TransportAddress *remoteCopy2 = remote.clone();
       //HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
   }
   //TODO: Replace both Commit/Abort check with ForwardWriteback at some point. (this should happen before the hasP2 case then.)
+  //NOTE: Either approach only works if atomicity of adding to committed/aborted and removing from ongoing is given.
+          //Currently, this is that case as HandlePhase2 and WritebackCB are always on the same thread.
   else if(committed.find(*txnDigest) != committed.end()){
       p.release();
       phase2Reply->mutable_p2_decision()->set_decision(proto::COMMIT);
