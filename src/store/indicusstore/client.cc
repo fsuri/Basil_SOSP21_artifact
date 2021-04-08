@@ -507,7 +507,7 @@ void Client::Phase2SimulateEquivocation(PendingRequest *req){
   bclient[logGroup]->Phase2Equivocate_Simulate(client_seq_num, txn, req->txnDigest,
         req->p1ReplySigsGrouped);
 
-  std::cerr << "SIMULATED EQUIVOCATION. STOPPING" << std::endl;
+  //std::cerr << "SIMULATED EQUIVOCATION. STOPPING" << std::endl;
     //Panic("simulated equiv.");
     //terminate ongoing tx mangagement and move to next tx:
   FailureCleanUp(req);
@@ -641,7 +641,7 @@ void Client::Writeback(PendingRequest *req) {
 
   req->startedWriteback = true;
 
-  if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
+  if (req->decision == proto::COMMIT && failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
     Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
           BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
     //stats.Increment("inject_failure_crash");
@@ -725,7 +725,7 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
 // for equivocation, always report ABORT, always delete
 void Client::FailureCleanUp(PendingRequest *req) {
 
-  //usleep(10); //sleep 10 miliseconds as to not return immediately...
+  //usleep(20); //sleep 10 miliseconds as to not return immediately...
 
   UW_ASSERT(failureActive);
   transaction_status_t result;
@@ -1212,7 +1212,7 @@ bool Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64
     return true;
   }
   //TODO: RECOMMENT. Currently assuming that all servers already have p2 decision.
-  if(false && req->p2Replies.p2replies().size() < config->f +1){
+  if(req->p2Replies.p2replies().size() < config->f +1){
     Debug("No p2 decision included - invalid InvokeFB");
     return true;
   }

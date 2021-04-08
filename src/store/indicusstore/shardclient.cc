@@ -196,6 +196,9 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction, con
   phase1.Clear();
   phase1.set_req_id(reqId);
   *phase1.mutable_txn() = transaction;
+  if(failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH){
+       phase1.set_crash_failure(true);
+  }
 
   transport->SendMessageToGroup(this, group, phase1);
 
@@ -211,13 +214,13 @@ void ShardClient::Phase2(uint64_t id,
   uint64_t reqId = lastReqId++;
   client_seq_num_mapping[id].pendingP2_id = reqId;
 
-  uint64_t special_id = reqId << 8 + client_id;
-  std::cerr << "special ID: " << special_id << std::endl;
-  std::cerr << "Trying to " << (decision? "ABORT" : "COMMIT") << "txn on slowpath" << std::endl;
-  reqId = special_id;
-  test_mapping[reqId] = id;
-  std::cerr <<"Sending Phase2 for txnId: " << id << " to group: " << group << std::endl;
-  std::cerr << "TxnId " << id << " maps to reqId: " << reqId << " sent by client" << client_id <<  std::endl;;
+  // uint64_t special_id = reqId << 8 + client_id;
+  // std::cerr << "special ID: " << special_id << std::endl;
+  // std::cerr << "Trying to " << (decision? "ABORT" : "COMMIT") << "txn on slowpath" << std::endl;
+  // reqId = special_id;
+  // test_mapping[reqId] = id;
+  // std::cerr <<"Sending Phase2 for txnId: " << id << " to group: " << group << std::endl;
+  // std::cerr << "TxnId " << id << " maps to reqId: " << reqId << " sent by client" << client_id <<  std::endl;;
 
 
   PendingPhase2 *pendingPhase2 = new PendingPhase2(reqId, decision);  //TODO: add view that this decision is from (default = 0).
@@ -255,7 +258,7 @@ void ShardClient::Phase2Equivocate_Simulate(uint64_t id,
     const proto::Transaction &txn, const std::string &txnDigest,
     proto::GroupedSignatures &groupedCommitSigs) {
 
-      std::cerr<<"SendingPhase2_Equiv for txnId: " << id << "to group: " << group << std::endl;
+      //std::cerr<<"SendingPhase2_Equiv for txnId: " << id << "to group: " << group << std::endl;
       uint64_t reqId = lastReqId++;
 
       phase2.Clear();
@@ -1305,7 +1308,8 @@ void ShardClient::HandlePhase2Reply(const proto::Phase2Reply &reply) {
 
 void ShardClient::HandlePhase2Reply_MultiView(const proto::Phase2Reply &reply) {
 
-  std::cerr << "Received P2R for Req Id:" << reply.req_id() << " mapping to TxnId["  << test_mapping[reply.req_id()] << "]"<< std::endl;
+  //std::cerr << "Received P2R for Req Id:" << reply.req_id() << " mapping to TxnId["  << test_mapping[reply.req_id()] << "]"<< std::endl;
+
   auto itr = this->pendingPhase2s.find(reply.req_id());
   if (itr == this->pendingPhase2s.end()) {
     Debug("[group %i] Received stale Phase2Reply for request %lu.", group,
@@ -1365,10 +1369,10 @@ void ShardClient::HandlePhase2Reply_MultiView(const proto::Phase2Reply &reply) {
   Debug("[group %i] PHASE2 reply with decision %d for view %lu", group,
       p2Decision->decision(), p2Decision->view());
 
-  std::cerr << "TxnId["  << test_mapping[reply.req_id()] <<"] received decision " << p2Decision->decision() << " from view " << p2Decision->decision() << std::endl;
-  if (!failureActive && p2Decision->decision() != itr->second->decision) {
-        fprintf(stderr, "Expected decision %d, but got decision %d from view %lu", itr->second->decision, p2Decision->decision(), p2Decision->view());
-  }
+  // std::cerr << "TxnId["  << test_mapping[reply.req_id()] <<"] received decision " << p2Decision->decision() << " from view " << p2Decision->decision() << std::endl;
+  // if (!failureActive && p2Decision->decision() != itr->second->decision) {
+  //       fprintf(stderr, "Expected decision %d, but got decision %d from view %lu", itr->second->decision, p2Decision->decision(), p2Decision->view());
+  // }
 
   proto::Signatures &p2RS = viewP2RS.second[p2Decision->decision()];
 
@@ -1663,7 +1667,7 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){
 //TODO: Currently verifying signature for p1 reply, p2 reply and view seperately, that is wasteful
 //-> integrate current view into all the responses? Problem: Makes messages different.
   if(!params.all_to_all_fb && pendingFB->logGrp == group){
-    std::cerr << "[UpdateView] Process P1FBR for txn: " << BytesToHex(txnDigest, 16) << std::endl;
+    //std::cerr << "[UpdateView] Process P1FBR for txn: " << BytesToHex(txnDigest, 16) << std::endl;
     UpdateViewStructure(pendingFB, p1fbr.attached_view());
   }
   //CASE 2: Received a p2 decision
@@ -1760,7 +1764,8 @@ void ShardClient::UpdateViewStructure(PendingFB *pendingFB, const proto::Attache
         proto::CurrentView new_view;
         new_view.ParseFromString(signed_msg.data());
 
-        std::cerr << "Received view " << new_view.current_view() << " from replica: " << signed_msg.process_id() << std::endl;
+        //std::cerr << "Received view " << new_view.current_view() << " from replica: " << signed_msg.process_id() << std::endl;
+
         //only update data strucure if new view is bigger.
         if(pendingFB->current_views.find(signed_msg.process_id()) != pendingFB->current_views.end()){
           stored_view =  pendingFB->current_views[signed_msg.process_id()].view;
@@ -1848,7 +1853,7 @@ void ShardClient::HandlePhase2FBReply(proto::Phase2FBReply &p2fbr){
 
 //TODO: move this after message verification? to save processing cost if not necessary to compute views?
   if(!params.all_to_all_fb && pendingFB->logGrp == group){
-      std::cerr << "[UpdateView] Process P2FBR for txn: " << BytesToHex(txnDigest, 16) << std::endl;
+      //std::cerr << "[UpdateView] Process P2FBR for txn: " << BytesToHex(txnDigest, 16) << std::endl;
       UpdateViewStructure(pendingFB, p2fbr.attached_view());
   }
 
@@ -1891,8 +1896,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
 
     Debug("[group %i] PHASE2FB reply with decision %d and view %lu", group,
         decision, view);
-    fprintf(stderr, "[group %i] PHASE2FB reply with decision %d and view %lu \n", group,
-            decision, view);
+    //fprintf(stderr, "[group %i] PHASE2FB reply with decision %d and view %lu \n", group, decision, view);
 
     //that message is from likely obsolete views.
     if(pendingFB->max_decision_view > view + 1 ){
@@ -1924,9 +1928,8 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
     if (pendingP2.matchingReplies == QuorumSize(config)) { //make it >=? potentially duplicate cb then..
       pendingFB->p2FBcb(pendingP2.decision, pendingP2.p2ReplySigs, view);
       //dont need to clean, will be cleaned by callback.
-      if(view > 0){
-        std::cerr << "elected FB for view [" << view << "] for txn: " << BytesToHex(txnDigest, 16) <<std::endl;;
-      }
+
+      // if(view > 0) std::cerr << "elected FB for view [" << view << "] for txn: " << BytesToHex(txnDigest, 16) <<std::endl;
       return true;
     }
 
@@ -1965,7 +1968,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
     && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies == config->f +1){ //== so we only call it once per view.
       pendingFB->p1 = false;
       pendingFB->conflict_view = view;
-      std::cerr << "inconsistency in view " << view << " for txn " << BytesToHex(txnDigest, 16) << std::endl;
+      //std::cerr << "inconsistency in view " << view << " for txn " << BytesToHex(txnDigest, 16) << std::endl;
       if(!pendingFB->invFBcb()) return true;
   }
       //TODO: Also need to call it after some timeout. I.e. if 4f+1 received are all honest but diverge.
@@ -2021,7 +2024,7 @@ void ShardClient::InvokeFB(uint64_t conflict_id, std::string &txnDigest, proto::
       ComputeMaxLevel(pendingFB); //Find max_view that we can propose.
       uint64_t &proposed_view = pendingFB->max_view;
 
-      std::cerr << "Called InvokeFB for view: " << pendingFB->max_view << " for txn: " << BytesToHex(txnDigest, 16) << std::endl;
+      //std::cerr << "Called InvokeFB for view: " << pendingFB->max_view << " for txn: " << BytesToHex(txnDigest, 16) << std::endl;
       if(pendingFB->max_view > pendingFB->conflict_view + 1){
         proposed_view = pendingFB->conflict_view + 1;
         //TODO: Add timeout before electing the next one.
@@ -2091,7 +2094,7 @@ void ShardClient::HandleSendViewMessage(proto::SendView &sendView){
 
 //TODO: move this after message verification? to save processing cost if not necessary to compute views?
   if(!params.all_to_all_fb && pendingFB->logGrp == group){
-      std::cerr << "[UpdateView] Process SendView for txn: " << BytesToHex(txnDigest, 16) << std::endl;
+      //std::cerr << "[UpdateView] Process SendView for txn: " << BytesToHex(txnDigest, 16) << std::endl;
       UpdateViewStructure(pendingFB, sendView.attached_view());
   }
 }

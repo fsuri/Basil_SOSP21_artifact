@@ -106,6 +106,7 @@ message Transaction {
 message Phase1 {
   required uint64 req_id = 1;
   required Transaction txn = 2;
+  optional bool crash_failure = 3;
 }
 
 
@@ -130,6 +131,7 @@ message Phase1Reply {
     ConcurrencyControl cc = 2;
     SignedMessage signed_cc = 3;
   }
+  optional Transaction abstain_conflict = 4;
 }
 
 message Phase1Replies {

@@ -104,6 +104,7 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
    uint64_t total_lock_time_ms =0 ;
 
    std::string dummyString;
+   proto::Transaction dummyTx;
 
   friend class ServerTest;
   struct Value {
@@ -122,7 +123,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void HandlePhase1(const TransportAddress &remote,
       proto::Phase1 &msg);
   void HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
-        const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote);
+        const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote,
+        const proto::Transaction *abstain_conflict);
 
   void HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const std::string* txnDigest,
         signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid); //bool valid);
@@ -236,10 +238,16 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
     void RelayP1(const std::string &dependency_txnDig, bool fallback_flow, uint64_t reqId, const TransportAddress &remote, const std::string &txnDigest);
     void SendRelayP1(const TransportAddress &remote, const std::string &dependency_txnDig, uint64_t dependent_id, const std::string &dependent_txnDig);
 
-    bool ExecP1(p1MetaDataMap::accessor &c, proto::Phase1FB &msg, const TransportAddress &remote, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof* &committedProof);
+    bool ExecP1(p1MetaDataMap::accessor &c, proto::Phase1FB &msg, const TransportAddress &remote,
+      const std::string &txnDigest, proto::ConcurrencyControl::Result &result,
+      const proto::CommittedProof* &committedProof,
+      const proto::Transaction *abstain_conflict = nullptr);
 
-    void SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict);
-    void SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest, proto::CommitDecision &decision, uint64_t decision_view);
+    void SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest,
+      proto::ConcurrencyControl::Result &result, const proto::CommittedProof *conflict,
+      const proto::Transaction *abstain_conflict = nullptr);
+    void SetP2(uint64_t reqId, proto::Phase2Reply *p2Reply, const std::string &txnDigest,
+      proto::CommitDecision &decision, uint64_t decision_view);
 
     void SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string &txnDigest, bool multi = false);
     void SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string &txnDigest, bool multi = false, bool sub_original = false);
@@ -279,14 +287,15 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   proto::ConcurrencyControl::Result DoOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
-      Timestamp &retryTs, const proto::CommittedProof* &conflict, bool fallback_flow = false);
+      Timestamp &retryTs, const proto::CommittedProof* &conflict,
+      const proto::Transaction *abstain_conflict, bool fallback_flow = false);
   proto::ConcurrencyControl::Result DoTAPIROCCCheck(
       const std::string &txnDigest, const proto::Transaction &txn,
       Timestamp &retryTs);
   proto::ConcurrencyControl::Result DoMVTSOOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
-      const proto::CommittedProof* &conflict, bool fallback_flow = false);
+      const proto::CommittedProof* &conflict, const proto::Transaction *abstain_conflict, bool fallback_flow = false);
 
   bool ManageDependencies(const std::string &txnDigest, const proto::Transaction &txn, const TransportAddress &remote, uint64_t reqId, bool fallback_flow = false);
 
@@ -317,7 +326,8 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   void SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
     const proto::CommittedProof *conflict, const std::string &txnDigest,
-    const TransportAddress *remote);
+    const TransportAddress *remote,
+    const proto::Transaction *abstain_conflict = nullptr);
   void Clean(const std::string &txnDigest);
   void CleanDependencies(const std::string &txnDigest);
   void LookupP1Decision(const std::string &txnDigest, int64_t &myProcessId,

@@ -709,6 +709,7 @@ void Server::ProcessPhase1_atomic(const TransportAddress &remote,
 
   proto::ConcurrencyControl::Result result;
   const proto::CommittedProof *committedProof;
+  const proto::Transaction *abstain_conflict = nullptr;
       //NOTE : make sure c and b dont conflict on lock order
   p1MetaDataMap::accessor c;
   p1MetaData.insert(c, txnDigest);
@@ -756,18 +757,20 @@ void Server::ProcessPhase1_atomic(const TransportAddress &remote,
     Timestamp retryTs;
 
     result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
-          committedProof);
+          committedProof, abstain_conflict);
 
     BufferP1Result(c, result, committedProof, txnDigest);
 
   }
   c.release();
   //atomic_testMutex.unlock();
-  HandlePhase1CB(&msg, result, committedProof, txnDigest, remote);
+  HandlePhase1CB(&msg, result, committedProof, txnDigest, remote, abstain_conflict);
 }
 
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
+
+  //dummyTx = msg.txn(); //PURELY TESTING PURPOSES!!: NOTE WARNING
 
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest); //could parallelize it too hypothetically
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
@@ -775,6 +778,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
       msg.txn().timestamp().timestamp());
   proto::ConcurrencyControl::Result result;
   const proto::CommittedProof *committedProof;
+  const proto::Transaction *abstain_conflict = nullptr;
 
   //KEEP track of interested client //TODO: keep track of original client
   // interestedClientsMap::accessor i;
@@ -879,11 +883,11 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
     if(!params.parallel_CCC || !params.mainThreadDispatching){
       result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
-          committedProof);
+          committedProof, abstain_conflict);
       BufferP1Result(result, committedProof, txnDigest);
     }
     else{
-      auto f = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn, committedProof]() mutable {
+      auto f = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn, committedProof, abstain_conflict]() mutable {
         Timestamp retryTs;
           //check if concurrently committed/aborted already, and if so return
           ongoingMap::const_accessor b;
@@ -895,11 +899,11 @@ void Server::HandlePhase1(const TransportAddress &remote,
           b.release();
         Debug("starting occ check for txn: %s", BytesToHex(txnDigest, 16).c_str());
         proto::ConcurrencyControl::Result *result = new proto::ConcurrencyControl::Result(this->DoOCCCheck(msg_ptr->req_id(),
-        *remote_ptr, txnDigest, *txn, retryTs, committedProof));
+        *remote_ptr, txnDigest, *txn, retryTs, committedProof, abstain_conflict));
         BufferP1Result(*result, committedProof, txnDigest);
         //c->second.P1meta_mutex.unlock();
         //std::cerr << "[Normal] release lock for txn: " << BytesToHex(txnDigest, 64) << std::endl;
-        HandlePhase1CB(msg_ptr, *result, committedProof, txnDigest, *remote_ptr);
+        HandlePhase1CB(msg_ptr, *result, committedProof, txnDigest, *remote_ptr, abstain_conflict);
         delete result;
         return (void*) true;
       };
@@ -908,12 +912,12 @@ void Server::HandlePhase1(const TransportAddress &remote,
     }
   }
 
-  HandlePhase1CB(&msg, result, committedProof, txnDigest, remote);
+  HandlePhase1CB(&msg, result, committedProof, txnDigest, remote, abstain_conflict);
 }
 
 //TODO: move p1Decision into this function (not sendp1: Then, can unlock here.)
 void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
-  const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote){
+  const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote, const proto::Transaction *abstain_conflict){
 
   if (result != proto::ConcurrencyControl::WAIT) {
 
@@ -924,7 +928,7 @@ void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Resul
     //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
     //   client_starttime[txnDigest] = start_time;
     // }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
-    SendPhase1Reply(msg->req_id(), result, committedProof, txnDigest, &remote);
+    SendPhase1Reply(msg->req_id(), result, committedProof, txnDigest, &remote, abstain_conflict);
   }
   if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(msg);
 }
@@ -949,7 +953,6 @@ void Server::HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const 
       FreePhase2message(msg); //const_cast<proto::Phase2&>(msg));
     }
     delete remote;
-    std::cerr << "Invalid P2 for special id: " << phase2Reply->req_id() << std::endl;
     return;
   }
 
@@ -960,13 +963,13 @@ void Server::HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const 
     bool hasP2 = p->second.hasP2;
     if(hasP2){
       phase2Reply->mutable_p2_decision()->set_decision(p->second.p2Decision);
-      std::cerr << "Already had P2 from FB. Setting P2 Decision for specialal id: " << phase2Reply->req_id() << std::endl;
+      //std::cerr << "Already had P2 from FB. Setting P2 Decision for specialal id: " << phase2Reply->req_id() << std::endl;
     }
     else{
       p->second.p2Decision = msg->decision();
       p->second.hasP2 = true;
       phase2Reply->mutable_p2_decision()->set_decision(msg->decision());
-      std::cerr << "First time: Setting P2 Decision for speical id: " << phase2Reply->req_id() << std::endl;
+      //std::cerr << "First time: Setting P2 Decision for speical id: " << phase2Reply->req_id() << std::endl;
     }
 
     if (params.validateProofs) {
@@ -1056,7 +1059,8 @@ void Server::SendPhase2Reply(proto::Phase2 *msg, proto::Phase2Reply *phase2Reply
 void Server::HandlePhase2(const TransportAddress &remote,
        proto::Phase2 &msg) {
 
-  std::cerr << "Received Phase2 msg with special id: " << msg.req_id() << std::endl;
+//  std::cerr << "Received Phase2 msg with special id: " << msg.req_id() << std::endl;
+
   const proto::Transaction *txn;
   std::string computedTxnDigest;
   const std::string *txnDigest = &computedTxnDigest;
@@ -1085,7 +1089,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   auto sendCB = [this, remoteCopy, phase2Reply, txnDigest]() {
     this->transport->SendMessage(this, *remoteCopy, *phase2Reply);
     Debug("PHASE2[%s] Sent Phase2Reply.", BytesToHex(*txnDigest, 16).c_str());
-    std::cerr << "Send Phase2Reply for special Id: " << phase2Reply->req_id() << std::endl;
+    //std::cerr << "Send Phase2Reply for special Id: " << phase2Reply->req_id() << std::endl;
     FreePhase2Reply(phase2Reply);
     delete remoteCopy;
   };
@@ -1107,7 +1111,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   //so choosing view=0 is ok, since equivocation/split-decisions cannot be possible.
   if(hasP2){
       //p.release();
-      std::cerr << "Already have P2 for special id: " << msg.req_id() << std::endl;
+      //std::cerr << "Already have P2 for special id: " << msg.req_id() << std::endl;
       phase2Reply->mutable_p2_decision()->set_decision(p->second.p2Decision);
       if (params.validateProofs) {
         phase2Reply->mutable_p2_decision()->set_view(p->second.decision_view);
@@ -1140,7 +1144,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
   //first time receiving p2 message:
   else{
       p.release();
-      std::cerr << "First time P2 for special id: " << msg.req_id() << std::endl;
+      //std::cerr << "First time P2 for special id: " << msg.req_id() << std::endl;
       Debug("PHASE2[%s].", BytesToHex(*txnDigest, 16).c_str());
 
       int64_t myProcessId;
@@ -1176,20 +1180,20 @@ void Server::HandlePhase2(const TransportAddress &remote,
             b.release();
           }
           else{
-            if(committed.find(*txnDigest) != committed.end()){
-              auto itr = committed.find(*txnDigest);
-              bool fast = itr->second->has_p1_sigs();
-               std::cerr << "txn already committd for special id: " << msg.req_id() << "  FAST? " << (fast? "yes" : "no")<< std::endl;
-
-            } else if(aborted.find(*txnDigest) != aborted.end()){
-              auto itr = writebackMessages.find(*txnDigest);
-              bool fast = itr->second.has_p1_sigs();
-              bool has_conflict = itr->second.has_conflict();
-              std::cerr << "txn already aborted for special id: " << msg.req_id() << "  FAST? " << (fast ? "yes" : "no") << " HasConflict? " << (has_conflict? "yes" : "no")<< std::endl;
-            } else{
-              std::cerr << "Neither committed/aborted for txn special id: " << msg.req_id() << std::endl;
-            }
-            Panic("no txn");
+            // if(committed.find(*txnDigest) != committed.end()){
+            //   auto itr = committed.find(*txnDigest);
+            //   bool fast = itr->second->has_p1_sigs();
+            //    std::cerr << "txn already committd for special id: " << msg.req_id() << "  FAST? " << (fast? "yes" : "no")<< std::endl;
+            //
+            // } else if(aborted.find(*txnDigest) != aborted.end()){
+            //   auto itr = writebackMessages.find(*txnDigest);
+            //   bool fast = itr->second.has_p1_sigs();
+            //   bool has_conflict = itr->second.has_conflict();
+            //   std::cerr << "txn already aborted for special id: " << msg.req_id() << "  FAST? " << (fast ? "yes" : "no") << " HasConflict? " << (has_conflict? "yes" : "no")<< std::endl;
+            // } else{
+            //   std::cerr << "Neither committed/aborted for txn special id: " << msg.req_id() << std::endl;
+            // }
+            // Panic("no txn");
 
             b.release();
             if(msg.has_txn()){
@@ -1203,7 +1207,8 @@ void Server::HandlePhase2(const TransportAddress &remote,
               if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
                   FreePhase2message(&msg); //const_cast<proto::Phase2&>(msg));
               }
-              std::cerr << "Cannot validate p2 because do not have tx for special id: " << msg.req_id() << std::endl;
+              Panic("Cannot validate p2 because server does not have tx for this reqId");
+              //std::cerr << "Cannot validate p2 because do not have tx for special id: " << msg.req_id() << std::endl;
               return;
             }
           }
@@ -1688,6 +1693,7 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
     Timestamp &retryTs, const proto::CommittedProof* &conflict,
+    const proto::Transaction *abstain_conflict,
     bool fallback_flow) {
 
   locks_t locks;
@@ -1700,7 +1706,7 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
     case TAPIR:
       return DoTAPIROCCCheck(txnDigest, txn, retryTs);
     case MVTSO:
-      return DoMVTSOOCCCheck(reqId, remote, txnDigest, txn, conflict, fallback_flow);
+      return DoMVTSOOCCCheck(reqId, remote, txnDigest, txn, conflict, abstain_conflict, fallback_flow);
     default:
       Panic("Unknown OCC type: %d.", occType);
       return proto::ConcurrencyControl::ABORT;
@@ -1989,7 +1995,7 @@ proto::ConcurrencyControl::Result Server::DoTAPIROCCCheck(
 proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
-    const proto::CommittedProof* &conflict, bool fallback_flow) {
+    const proto::CommittedProof* &conflict, const proto::Transaction *abstain_conflict, bool fallback_flow) {
   Debug("PREPARE[%lu:%lu][%s] with ts %lu.%lu.",
       txn.client_id(), txn.client_seq_num(),
       BytesToHex(txnDigest, 16).c_str(),
@@ -2063,6 +2069,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
             // if(fallback_flow){
             //   std::cerr<< "Abstain ["<<BytesToHex(txnDigest, 16)<<"] against prepared write from tx[" << BytesToHex(TransactionDigest(*preparedTs.second, params.hashDigest), 16) << "]" << std::endl;
             // }
+            abstain_conflict = preparedTs.second;
             return proto::ConcurrencyControl::ABSTAIN;
           }
         }
@@ -2849,7 +2856,8 @@ void Server::BufferP1Result(p1MetaDataMap::accessor &c, proto::ConcurrencyContro
 void Server::SendPhase1Reply(uint64_t reqId,
     proto::ConcurrencyControl::Result result,
     const proto::CommittedProof *conflict, const std::string &txnDigest,
-    const TransportAddress *remote) {
+    const TransportAddress *remote,
+    const proto::Transaction *abstain_conflict) {
 
   Debug("Normal sending P1 result:[%d] for txn: %s", result, BytesToHex(txnDigest, 16).c_str());
   //BufferP1Result(result, conflict, txnDigest);
@@ -2857,6 +2865,10 @@ void Server::SendPhase1Reply(uint64_t reqId,
   proto::Phase1Reply* phase1Reply = GetUnusedPhase1Reply();
   phase1Reply->set_req_id(reqId);
   TransportAddress *remoteCopy = remote->clone();
+
+  //NOTE WARNING PURELY testing
+  //if(result == proto::ConcurrencyControl::ABSTAIN) *phase1Reply->mutable_abstain_conflict() = dummyTx;
+  if(abstain_conflict != nullptr) *phase1Reply->mutable_abstain_conflict() = *abstain_conflict;
 
   auto sendCB = [remoteCopy, this, phase1Reply]() {
     this->transport->SendMessage(this, *remoteCopy, *phase1Reply);
@@ -3695,9 +3707,10 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
       //Exec p1 if we do not have it.
       const proto::CommittedProof *committedProof;
       proto::ConcurrencyControl::Result result;
+      const proto::Transaction *abstain_conflict = nullptr;
 
-      if (ExecP1(c, msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
-          SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
+      if (ExecP1(c, msg, remote, txnDigest, result, committedProof, abstain_conflict)) { //only send if the result is not Wait
+          SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof, abstain_conflict);
       }
       //c->second.P1meta_mutex.unlock();
       c.release();
@@ -3714,10 +3727,11 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 
       const proto::CommittedProof *committedProof;
       proto::ConcurrencyControl::Result result;
+      const proto::Transaction *abstain_conflict = nullptr;
 
-      if (ExecP1(c, msg, remote, txnDigest, result, committedProof)) { //only send if the result is not Wait
+      if (ExecP1(c, msg, remote, txnDigest, result, committedProof, abstain_conflict)) { //only send if the result is not Wait
           P1FBorganizer *p1fb_organizer = new P1FBorganizer(msg.req_id(), txnDigest, remote, this);
-          SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof);
+          SetP1(msg.req_id(), p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, committedProof, abstain_conflict);
           SendPhase1FBReply(p1fb_organizer, txnDigest);
           Debug("Sent Phase1FBReply on path ExecP1 for txn: %s, sent by client: %d", BytesToHex(txnDigest, 16).c_str(), msg.req_id());
       }
@@ -3733,7 +3747,11 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 }
 
 //TODO: merge this code with the normal case operation.
-bool Server::ExecP1(p1MetaDataMap::accessor &c, proto::Phase1FB &msg, const TransportAddress &remote, const std::string &txnDigest, proto::ConcurrencyControl::Result &result, const proto::CommittedProof* &committedProof){
+bool Server::ExecP1(p1MetaDataMap::accessor &c, proto::Phase1FB &msg, const TransportAddress &remote,
+  const std::string &txnDigest, proto::ConcurrencyControl::Result &result,
+  const proto::CommittedProof* &committedProof,
+  const proto::Transaction *abstain_conflict){
+
   Debug("FB exec PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
@@ -3772,7 +3790,7 @@ bool Server::ExecP1(p1MetaDataMap::accessor &c, proto::Phase1FB &msg, const Tran
 
   //TODO: add parallel OCC check logic here:
   result = DoOCCCheck(msg.req_id(),
-      remote, txnDigest, *txn, retryTs, committedProof, true);
+      remote, txnDigest, *txn, retryTs, committedProof, abstain_conflict, true);
 
   //std::cerr << "Exec P1 called, for txn: " << BytesToHex(txnDigest, 64) << std::endl;
   BufferP1Result(c, result, committedProof, txnDigest, 1);
@@ -3796,7 +3814,7 @@ bool Server::ExecP1(p1MetaDataMap::accessor &c, proto::Phase1FB &msg, const Tran
 
 
 void Server::SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::string &txnDigest, proto::ConcurrencyControl::Result &result,
-  const proto::CommittedProof *conflict){
+  const proto::CommittedProof *conflict, const proto::Transaction *abstain_conflict){
   //proto::Phase1Reply *p1Reply = p1fb_organizer->p1fbr->mutable_p1r();
 
   p1Reply->set_req_id(reqId);
@@ -3808,6 +3826,7 @@ void Server::SetP1(uint64_t reqId, proto::Phase1Reply *p1Reply, const std::strin
       *p1Reply->mutable_cc()->mutable_committed_conflict() = *conflict;
     }
   }
+  if(abstain_conflict != nullptr) *p1Reply->mutable_abstain_conflict() = *abstain_conflict;
 
 }
 

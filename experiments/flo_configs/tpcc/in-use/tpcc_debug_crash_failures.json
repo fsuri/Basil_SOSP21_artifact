@@ -77,6 +77,8 @@
       "watermark_time_delta": 30000,
       "read_quorum": "one-honest",
 	  "_read_quorum": "majority-honest",
+	  "_read_quorum": "majority",
+	  "_read_quorum": "all",
 	  "p1DecisionTimeout":10,
 
       "max_dep_depth": -1,
@@ -102,14 +104,14 @@
       "_key_path": "/usr/local/etc/indicus-keys/secp256k1",
       "key_path": "/usr/local/etc/indicus-keys/donna",
 
-      "_inject_failure_type" : "client-crash",
+      "inject_failure_type" : "client-crash",
 	  "_inject_failure_type" : "client-equivocate-simulated",
-	  "inject_failure_type" : "client-equivocate",
-	  "inject_failure_proportion" : 80,
+	  "_inject_failure_type" : "client-equivocate",
+	  "inject_failure_proportion" : 0,
 	  "inject_failure_ms": 0,
-	  "inject_failure_freq": 2,
+	  "inject_failure_freq": 3,
       "all_to_all_fb" : false,
-	  "relayP1_timeout" : 5
+	  "relayP1_timeout" : 20
     }
   ],
   "experiment_name": "indicus",
