@@ -288,14 +288,14 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
       Timestamp &retryTs, const proto::CommittedProof* &conflict,
-      const proto::Transaction *abstain_conflict, bool fallback_flow = false);
+      const proto::Transaction* &abstain_conflict, bool fallback_flow = false);
   proto::ConcurrencyControl::Result DoTAPIROCCCheck(
       const std::string &txnDigest, const proto::Transaction &txn,
       Timestamp &retryTs);
   proto::ConcurrencyControl::Result DoMVTSOOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
-      const proto::CommittedProof* &conflict, const proto::Transaction *abstain_conflict, bool fallback_flow = false);
+      const proto::CommittedProof* &conflict, const proto::Transaction* &abstain_conflict, bool fallback_flow = false);
 
   bool ManageDependencies(const std::string &txnDigest, const proto::Transaction &txn, const TransportAddress &remote, uint64_t reqId, bool fallback_flow = false);
 

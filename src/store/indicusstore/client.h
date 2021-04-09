@@ -195,6 +195,7 @@ class Client : public ::Client {
   void ForwardWBcallback(uint64_t txnId, int group, proto::ForwardWriteback &forwardWB);
 
   // Fallback logic
+  void FinishConflict(uint64_t reqId, const std::string &txnDigest, proto::Transaction *txn);
   bool isDep(const std::string &txnDigest, proto::Transaction &Req_txn);
   bool StillActive(uint64_t conflict_id, std::string &txnDigest);
   void CleanFB(PendingRequest *pendingFB, const std::string &txnDigest);
@@ -204,7 +205,7 @@ class Client : public ::Client {
   void RelayP1callbackFB(uint64_t reqId, const std::string &dependent_txnDigest, proto::RelayP1 &relayP1, std::string& txnDigest);
   void Phase1FB(const std::string &txnDigest, uint64_t conflict_id, proto::Phase1 *p1);
   void Phase1FB_deeper(uint64_t conflict_id, const std::string &txnDigest, const std::string &dependent_txnDigest, proto::Phase1 *p1);
-  void SendPhase1FB(proto::Phase1 *p1, uint64_t conflict_id, const std::string &txnDigest, PendingRequest *pendingFB);
+  void SendPhase1FB(uint64_t conflict_id, const std::string &txnDigest, PendingRequest *pendingFB);
   void Phase2FB(PendingRequest *req);
   void WritebackFB(PendingRequest *req);
   void Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int64_t group, proto::CommitDecision decision,

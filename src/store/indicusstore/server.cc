@@ -928,6 +928,7 @@ void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Resul
     //   uint64_t start_time = (tv.tv_sec*1000000+tv.tv_usec)/1000;  //in miliseconds
     //   client_starttime[txnDigest] = start_time;
     // }//time(NULL); //TECHNICALLY THIS SHOULD ONLY START FOR THE ORIGINAL CLIENT, i.e. if another client manages to do it first it shouldnt count... Then again, that client must have gotten it somewhere, so the timer technically started.
+
     SendPhase1Reply(msg->req_id(), result, committedProof, txnDigest, &remote, abstain_conflict);
   }
   if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(msg);
@@ -1693,7 +1694,7 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
     Timestamp &retryTs, const proto::CommittedProof* &conflict,
-    const proto::Transaction *abstain_conflict,
+    const proto::Transaction* &abstain_conflict,
     bool fallback_flow) {
 
   locks_t locks;
@@ -1995,7 +1996,7 @@ proto::ConcurrencyControl::Result Server::DoTAPIROCCCheck(
 proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
-    const proto::CommittedProof* &conflict, const proto::Transaction *abstain_conflict, bool fallback_flow) {
+    const proto::CommittedProof* &conflict, const proto::Transaction* &abstain_conflict, bool fallback_flow) {
   Debug("PREPARE[%lu:%lu][%s] with ts %lu.%lu.",
       txn.client_id(), txn.client_seq_num(),
       BytesToHex(txnDigest, 16).c_str(),
@@ -2868,7 +2869,10 @@ void Server::SendPhase1Reply(uint64_t reqId,
 
   //NOTE WARNING PURELY testing
   //if(result == proto::ConcurrencyControl::ABSTAIN) *phase1Reply->mutable_abstain_conflict() = dummyTx;
-  if(abstain_conflict != nullptr) *phase1Reply->mutable_abstain_conflict() = *abstain_conflict;
+  if(abstain_conflict != nullptr){
+    //Panic("setting abstain_conflict");
+    *phase1Reply->mutable_abstain_conflict() = *abstain_conflict;
+ }
 
   auto sendCB = [remoteCopy, this, phase1Reply]() {
     this->transport->SendMessage(this, *remoteCopy, *phase1Reply);

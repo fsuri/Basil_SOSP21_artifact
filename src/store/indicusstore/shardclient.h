@@ -78,6 +78,7 @@ typedef std::function<void(proto::ForwardWriteback &)> forwardWB_callback;
 //Fallback typedefs:
 typedef std::function<void(proto::RelayP1 &, std::string &)> relayP1_callback;
 typedef std::function<void(const std::string &, proto::RelayP1 &, std::string &)> relayP1FB_callback;
+typedef std::function<void(const std::string &, proto::Transaction*)> finishConflictCB;
 
 typedef std::function<void(proto::CommitDecision, bool, bool, const proto::CommittedProof &,
   const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &)> phase1FB_callbackA;
@@ -119,7 +120,7 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
       uint32_t timeout);
 
   virtual void Phase1(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
-    phase1_callback pcb, phase1_timeout_callback ptcb, relayP1_callback rcb, uint32_t timeout);
+    phase1_callback pcb, phase1_timeout_callback ptcb, relayP1_callback rcb, finishConflictCB fcb, uint32_t timeout);
   virtual void StopP1(uint64_t client_seq_num);
   virtual void Phase2(uint64_t id, const proto::Transaction &transaction,
       const std::string &txnDigest, proto::CommitDecision decision,
@@ -165,6 +166,8 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
 
 
  private:
+  uint64_t consecutive_abstains = 0;
+
   struct PendingQuorumGet {
     PendingQuorumGet(uint64_t reqId) : reqId(reqId),
         numReplies(0UL), numOKReplies(0UL), hasDep(false),
@@ -205,6 +208,9 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
       if (decisionTimeout != nullptr) {
         delete decisionTimeout;
       }
+      for(auto txn : abstain_conflicts){
+        delete txn;
+      }
     }
     uint64_t reqId;
     Timeout *requestTimeout;
@@ -226,6 +232,9 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
     relayP1_callback rcb;
 
     forwardWB_callback fwb;
+
+    std::unordered_set<proto::Transaction*> abstain_conflicts;
+    finishConflictCB ConflictCB;
   };
 
   typedef std::pair<std::unordered_set<uint64_t>, std::map<proto::CommitDecision, proto::Signatures>> view_p2ReplySigs;
@@ -339,8 +348,8 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
 
   /* Callbacks for hearing back from a shard for an operation. */
   void HandleReadReply(const proto::ReadReply &readReply);
-  void HandlePhase1Reply(const proto::Phase1Reply &phase1Reply);
-  void ProcessP1R(const proto::Phase1Reply &reply, bool FB_path = false, PendingFB *pendingFB = nullptr, const std::string *txnDigest = nullptr);
+  void HandlePhase1Reply(proto::Phase1Reply &phase1Reply);
+  void ProcessP1R(proto::Phase1Reply &reply, bool FB_path = false, PendingFB *pendingFB = nullptr, const std::string *txnDigest = nullptr);
   void HandleP1REquivocate(const proto::Phase1Reply &phase1Reply);
   void HandlePhase2Reply(const proto::Phase2Reply &phase2Reply);
   void HandlePhase2Reply_MultiView(const proto::Phase2Reply &reply);

@@ -170,16 +170,17 @@ void ShardClient::Put(uint64_t id, const std::string &key,
 
 
 void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction, const std::string &txnDigest,
-  phase1_callback pcb, phase1_timeout_callback ptcb, relayP1_callback rcb, uint32_t timeout) {
+  phase1_callback pcb, phase1_timeout_callback ptcb, relayP1_callback rcb, finishConflictCB fcb, uint32_t timeout) {
   Debug("[group %i] Sending PHASE1 [%lu]", group, id);
   uint64_t reqId = lastReqId++;
   client_seq_num_mapping[id].pendingP1_id = reqId;
   PendingPhase1 *pendingPhase1 = new PendingPhase1(reqId, group, transaction,
       txnDigest, config, keyManager, params, verifier, id);
   pendingPhase1s[reqId] = pendingPhase1;
-  pendingPhase1->pcb = pcb;
-  pendingPhase1->ptcb = ptcb;
-  pendingPhase1->rcb = rcb;
+  pendingPhase1->pcb = std::move(pcb);
+  pendingPhase1->ptcb = std::move(ptcb);
+  pendingPhase1->rcb = std::move(rcb);
+  pendingPhase1->ConflictCB = std::move(fcb); //TODO: change all to std::move()
   pendingPhase1->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase1]() {
       phase1_timeout_callback ptcb = pendingPhase1->ptcb;
       auto itr = this->pendingPhase1s.find(pendingPhase1->reqId);
@@ -228,8 +229,8 @@ void ShardClient::Phase2(uint64_t id,
   //Create many mappings for potential views/decisions instead.
   //XXX currently not necessary as code is written under the assumption that Invoke only happens for equivocation, and client issuing equivocation moves on to next tx.
   pendingPhase2s[reqId] = pendingPhase2;
-  pendingPhase2->pcb = pcb;
-  pendingPhase2->ptcb = ptcb;
+  pendingPhase2->pcb = std::move(pcb);
+  pendingPhase2->ptcb = std::move(ptcb);
   pendingPhase2->requestTimeout = new Timeout(transport, timeout, [this, pendingPhase2]() {
       phase2_timeout_callback ptcb = pendingPhase2->ptcb;
       auto itr = this->pendingPhase2s.find(pendingPhase2->reqId);
@@ -953,12 +954,12 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
 }
 
 
-void ShardClient::HandlePhase1Reply(const proto::Phase1Reply &reply) {
+void ShardClient::HandlePhase1Reply(proto::Phase1Reply &reply) {
 
   ProcessP1R(reply);
 }
 
-void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, PendingFB *pendingFB, const std::string *txnDigest){
+void ShardClient::ProcessP1R(proto::Phase1Reply &reply, bool FB_path, PendingFB *pendingFB, const std::string *txnDigest){
 
   PendingPhase1 *pendingPhase1;
   std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr;
@@ -1030,6 +1031,12 @@ void ShardClient::ProcessP1R(const proto::Phase1Reply &reply, bool FB_path, Pend
     proto::Signature *sig = pendingPhase1->p1ReplySigs[cc->ccr()].add_sigs();
     sig->set_process_id(reply.signed_cc().process_id());
     *sig->mutable_signature() = reply.signed_cc().signature();
+  }
+
+  //Keep track of conflicts.
+  if(reply.has_abstain_conflict()){
+    proto::Transaction* abstain_conflict = reply.release_abstain_conflict();
+    pendingPhase1->abstain_conflicts.insert(abstain_conflict);
   }
 
   Phase1ValidationState state = pendingPhase1->p1Validator.GetState();
@@ -1383,7 +1390,7 @@ void ShardClient::HandlePhase2Reply_MultiView(const proto::Phase2Reply &reply) {
   }
 
   if (p2RS.sigs().size() >= QuorumSize(config)) {
-    if(p2Decision->view() > 0) Panic("Original client subscribe works properly!");
+    //if(p2Decision->view() > 0) Panic("Original client subscribe works properly!");
     PendingPhase2 *pendingPhase2 = itr->second;
     pendingPhase2->pcb(p2Decision->decision(), p2Decision->view(), p2RS);
     this->pendingPhase2s.erase(itr);
@@ -1413,6 +1420,23 @@ void ShardClient::Phase1Decision(
   // }
   pendingPhase1->pcb(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict_flag,
       pendingPhase1->conflict, pendingPhase1->p1ReplySigs, eqv_ready);
+
+  //Start FB for conflicts if we abstained twice or more in a row:
+  if(pendingPhase1->decision == proto::ABORT && !pendingPhase1->conflict_flag){
+    consecutive_abstains++;
+  }
+  else{
+    consecutive_abstains = 0;
+  }
+  if(consecutive_abstains >= 2){
+    for(auto txn: pendingPhase1->abstain_conflicts){
+      //TODO: dont process redundant digests
+      if(!TransactionsConflict(pendingPhase1->txn_, *txn)) continue;
+      std::string txnDigest(TransactionDigest(*txn, params.hashDigest));
+      pendingPhase1->ConflictCB(txnDigest, txn);
+    }
+  }
+
    //Lookup and delete.
    this->pendingPhase1s.erase(itr);
    delete pendingPhase1;
