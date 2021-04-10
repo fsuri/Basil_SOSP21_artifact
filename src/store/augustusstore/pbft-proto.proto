@@ -1,0 +1,71 @@
+syntax = "proto2";
+
+package augustusstore.proto;
+
+message PackedMessage {
+  required bytes msg = 1;
+  required string type = 2;
+}
+
+message SignedMessage {
+  required bytes packed_msg = 1;
+  required uint64 replica_id = 2;
+  required bytes signature = 3;
+}
+
+message HMACs {
+  map<uint64, bytes> hmacs = 1;
+}
+
+// represents a single message signed by multiple replicas
+message GroupedSignedMessage {
+  required bytes packed_msg = 1;
+  map<uint64, bytes> signatures = 2;
+}
+
+// a request is simply a message with a type
+message Request {
+  required PackedMessage packed_msg = 1;
+  // digest should correspond to an application specific digest of
+  // the message in the packed message
+  required bytes digest = 2;
+}
+
+message RequestRequest {
+  // the digest of the request to request
+  required bytes digest = 1;
+}
+
+message ABRequest {
+  required uint64 seqnum = 1;
+  required uint64 viewnum = 2;
+  required bytes digest = 3;
+}
+
+// The primary can collect N requests and assign them batched sequence
+// numbers to them in 0..N-1
+// Primary then sends out preprepare for batched requests, where the digest
+// of the backed request if the concatenation of the hashes in batch sequence
+// order: H(D0 || D1 || DN-1)
+message BatchedRequest {
+  // map from the batched seq num to message digest
+  map<uint64, bytes> digests = 1;
+}
+
+message Preprepare {
+  required uint64 seqnum = 1;
+  required uint64 viewnum = 2;
+  required bytes digest = 3;
+}
+
+message Prepare {
+  required uint64 seqnum = 1;
+  required uint64 viewnum = 2;
+  required bytes digest = 3;
+}
+
+message Commit {
+  required uint64 seqnum = 1;
+  required uint64 viewnum = 2;
+  required bytes digest = 3;
+}

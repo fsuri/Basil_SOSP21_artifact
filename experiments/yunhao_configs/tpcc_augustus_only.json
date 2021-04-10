@@ -8,8 +8,8 @@
     ["client_total", "client_processes_per_client_node",
       "client_threads_per_process"]
   ],
-  "replication_protocol": ["hotstuff"],
-  "client_protocol_mode": ["hotstuff"],
+  "replication_protocol": ["augustus"],
+  "client_protocol_mode": ["augustus"],
   "num_shards": [6],
   "num_groups": [6],
   "benchmark_name": "tpcc-sync",

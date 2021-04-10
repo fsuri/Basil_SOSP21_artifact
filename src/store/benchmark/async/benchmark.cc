@@ -33,6 +33,8 @@
 #include "store/pbftstore/client.h"
 // HotStuff
 #include "store/hotstuffstore/client.h"
+// Augustus
+#include "store/augustusstore/client.h"
 #include "store/common/frontend/one_shot_client.h"
 #include "store/common/frontend/async_one_shot_adapter_client.h"
 #include "store/benchmark/async/common/zipf_key_selector.h"
@@ -56,7 +58,9 @@ enum protomode_t {
   PROTO_INDICUS,
 	PROTO_PBFT,
     // HotStuff
-    PROTO_HOTSTUFF
+    PROTO_HOTSTUFF,
+    // Augustus
+    PROTO_AUGUSTUS
 };
 
 enum benchmode_t {
@@ -285,7 +289,9 @@ const std::string protocol_args[] = {
   "indicus",
 	"pbft",
 // HotStuff
-    "hotstuff"
+    "hotstuff",
+// Augustus
+    "augustus"
 };
 const protomode_t protomodes[] {
   PROTO_TAPIR,
@@ -300,7 +306,9 @@ const protomode_t protomodes[] {
   PROTO_INDICUS,
       PROTO_PBFT,
   // HotStuff
-      PROTO_HOTSTUFF
+      PROTO_HOTSTUFF,
+  // Augustus
+      PROTO_AUGUSTUS
 };
 const strongstore::Mode strongmodes[] {
   strongstore::Mode::MODE_UNKNOWN,
@@ -977,6 +985,48 @@ int main(int argc, char **argv) {
         break;
     }
 
+
+// Augustus
+    case PROTO_AUGUSTUS: {
+        uint64_t readQuorumSize = 0;
+        switch (read_quorum) {
+        case READ_QUORUM_ONE:
+            readQuorumSize = 1;
+            break;
+        case READ_QUORUM_ONE_HONEST:
+            readQuorumSize = config->f + 1;
+            break;
+        case READ_QUORUM_MAJORITY_HONEST:
+            readQuorumSize = config->f * 2 + 1;
+            break;
+        default:
+            NOT_REACHABLE();
+        }
+				uint64_t readMessages = 0;
+        switch (read_messages) {
+        case READ_MESSAGES_READ_QUORUM:
+            readMessages = readQuorumSize; // + config->f; //config->n;
+            break;
+        case READ_MESSAGES_MAJORITY:
+            readMessages = (config->n + 1) / 2;
+            break;
+        case READ_MESSAGES_ALL:
+            readMessages = config->n;
+            break;
+        default:
+            NOT_REACHABLE();
+        }
+
+        client = new augustusstore::Client(*config, clientId, FLAGS_num_shards,
+                                       FLAGS_num_groups, closestReplicas,
+																			  tport, part,
+                                       readMessages, readQuorumSize,
+                                       FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+                                       keyManager,
+																			 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort,
+																			 TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+        break;
+    }
 
     default:
         NOT_REACHABLE();

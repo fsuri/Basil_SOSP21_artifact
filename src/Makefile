@@ -160,6 +160,7 @@ include store/janusstore/Rules.mk
 include store/indicusstore/Rules.mk
 include store/pbftstore/Rules.mk
 include store/hotstuffstore/Rules.mk
+include store/augustusstore/Rules.mk
 include store/benchmark/async/tpcc/Rules.mk
 include store/Rules.mk
 include store/benchmark/Rules.mk

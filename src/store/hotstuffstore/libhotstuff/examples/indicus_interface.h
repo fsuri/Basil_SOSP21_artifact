@@ -1,3 +1,6 @@
+#ifndef _HOTSTUFF_INTERFACE_H_
+#define _HOTSTUFF_INTERFACE_H_
+
 #include <string>
 #include <functional>
 using std::string;
@@ -22,3 +25,5 @@ namespace hotstuffstore {
         void propose(const std::string& hash, hotstuff_exec_callback execb);
     };
 }
+
+#endif /* _HOTSTUFF_APP_H_ */
