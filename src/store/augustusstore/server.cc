@@ -306,8 +306,9 @@ bool Augustus::TryLock(const proto::Transaction& txn, class Server* server) {
         continue;
       }
       if (locks.count(write.key())) {
-          // write lock cannot be concurrent with write lock
-          if (locks[write.key()].state == rwLock::LOCKED_WRITE)
+          // write lock cannot be concurrent with read or write lock
+          if (locks[write.key()].state == rwLock::LOCKED_READ ||
+              locks[write.key()].state == rwLock::LOCKED_WRITE)
               return false;
       } else {
           locks[write.key()] = rwLock();
