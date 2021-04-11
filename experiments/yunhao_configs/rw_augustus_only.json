@@ -9,7 +9,7 @@
   "num_shards": 1,
   "num_groups": 1,
   "client_num_keys": 10000000,
-  "benchmark_name": "rw_augustus",
+  "benchmark_name": "rw",
   "client_zipf_coefficient": 0.75,
   "client_key_selector": "uniform",
   "rw_num_ops_txn": 2,

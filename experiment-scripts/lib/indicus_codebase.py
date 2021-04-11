@@ -139,7 +139,7 @@ class IndicusCodebase(ExperimentCodebase):
                 client_command += ' --key_selector %s' % config['client_key_selector']
                 if config['client_key_selector'] == 'zipf':
                     client_command += ' --zipf_coefficient %f' % config['client_zipf_coefficient']
-        elif config['benchmark_name'] == 'rw' or config['benchmark_name'] == 'rw_augustus':
+        elif config['benchmark_name'] == 'rw':
             client_command += ' --num_keys %d' % config['client_num_keys']
             client_command += ' --num_ops_txn %d' % config['rw_num_ops_txn']
             if 'client_key_selector' in config:
@@ -354,7 +354,7 @@ class IndicusCodebase(ExperimentCodebase):
             replica_command += ' --num_keys %d' % config['client_num_keys']
             if 'server_preload_keys' in config:
                 replica_command += ' --preload_keys=%s' % str(config['server_preload_keys']).lower()
-        elif config['benchmark_name'] == 'rw' or config['benchmark_name'] == 'rw_augustus':
+        elif config['benchmark_name'] == 'rw':
             replica_command += ' --num_keys %d' % config['client_num_keys']
             if 'server_preload_keys' in config:
                 replica_command += ' --preload_keys=%s' % str(config['server_preload_keys']).lower()

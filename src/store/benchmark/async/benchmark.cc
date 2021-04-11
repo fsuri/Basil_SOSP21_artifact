@@ -24,8 +24,6 @@
 #include "store/benchmark/async/common/uniform_key_selector.h"
 #include "store/benchmark/async/retwis/retwis_client.h"
 #include "store/benchmark/async/rw/rw_client.h"
-// Augustus
-#include "store/benchmark/async/rw_augustus/rw_client.h"
 #include "store/benchmark/async/tpcc/sync/tpcc_client.h"
 #include "store/benchmark/async/tpcc/async/tpcc_client.h"
 #include "store/mortystore/client.h"
@@ -71,7 +69,6 @@ enum benchmode_t {
   BENCH_TPCC,
   BENCH_SMALLBANK_SYNC,
   BENCH_RW,
-  BENCH_RW_AUGUSTUS,
   BENCH_TPCC_SYNC
 };
 
@@ -347,7 +344,6 @@ const std::string benchmark_args[] = {
   "tpcc",
   "smallbank",
   "rw",
-    "rw_augustus",
   "tpcc-sync"
 };
 const benchmode_t benchmodes[] {
@@ -355,7 +351,6 @@ const benchmode_t benchmodes[] {
   BENCH_TPCC,
   BENCH_SMALLBANK_SYNC,
   BENCH_RW,
-      BENCH_RW_AUGUSTUS,
   BENCH_TPCC_SYNC
 };
 static bool ValidateBenchmark(const char* flagname, const std::string &value) {
@@ -671,7 +666,7 @@ int main(int argc, char **argv) {
 
   // parse retwis settings
   std::vector<std::string> keys;
-  if (benchMode == BENCH_RETWIS || benchMode == BENCH_RW || benchMode == BENCH_RW_AUGUSTUS) {
+  if (benchMode == BENCH_RETWIS || benchMode == BENCH_RW) {
     if (FLAGS_keys_path.empty()) {
       if (FLAGS_num_keys > 0) {
         for (size_t i = 0; i < FLAGS_num_keys; ++i) {
@@ -1041,7 +1036,6 @@ int main(int argc, char **argv) {
       case BENCH_RETWIS:
       case BENCH_TPCC:
       case BENCH_RW:
-      case BENCH_RW_AUGUSTUS:
         if (asyncClient == nullptr) {
           UW_ASSERT(client != nullptr);
           asyncClient = new AsyncAdapterClient(client, FLAGS_message_timeout);
@@ -1116,15 +1110,6 @@ int main(int argc, char **argv) {
             FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_backoff,
             FLAGS_max_attempts);
         break;
-      case BENCH_RW_AUGUSTUS:
-        UW_ASSERT(asyncClient != nullptr);
-        bench = new rw_augustus::RWAugustusClient(keySelector, FLAGS_num_ops_txn,
-            *asyncClient, *tport, seed,
-            FLAGS_num_requests, FLAGS_exp_duration, FLAGS_delay,
-            FLAGS_warmup_secs, FLAGS_cooldown_secs, FLAGS_tput_interval,
-            FLAGS_abort_backoff, FLAGS_retry_aborted, FLAGS_max_backoff,
-            FLAGS_max_attempts);
-        break;
 
       default:
         NOT_REACHABLE();
@@ -1134,7 +1119,6 @@ int main(int argc, char **argv) {
       case BENCH_RETWIS:
       case BENCH_TPCC:
       case BENCH_RW:
-      case BENCH_RW_AUGUSTUS:
         // async benchmarks
 	      tport->Timer(0, [bench, bdcb]() { bench->Start(bdcb); });
         break;

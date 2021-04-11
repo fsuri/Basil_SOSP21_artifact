@@ -64,7 +64,7 @@ class MortyCodebase(ExperimentCodebase):
                 client_command += ' --key_selector %s' % config['client_key_selector']
                 if config['client_key_selector'] == 'zipf':
                     client_command += ' --zipf_coefficient %f' % config['client_zipf_coefficient']
-        elif config['benchmark_name'] == 'rw' or config['benchmark_name'] == 'rw_augustus':
+        elif config['benchmark_name'] == 'rw':
             client_command += ' --num_keys %d' % config['client_num_keys']
             client_command += ' --num_ops_txn %d' % config['rw_num_ops_txn']
             if 'client_key_selector' in config:
@@ -177,7 +177,7 @@ class MortyCodebase(ExperimentCodebase):
 
         if config['benchmark_name'] == 'retwis':
             replica_command += ' --num_keys %d' % config['client_num_keys']
-        elif config['benchmark_name'] == 'rw' or config['benchmark_name'] == 'rw_augustus':
+        elif config['benchmark_name'] == 'rw':
             replica_command += ' --num_keys %d' % config['client_num_keys']
         elif config['benchmark_name'] == 'tpcc':
             replica_command += ' --data_file_path %s' % config['tpcc_data_file_path']

@@ -166,7 +166,6 @@ include store/Rules.mk
 include store/benchmark/Rules.mk
 include store/benchmark/async/common/Rules.mk
 include store/benchmark/async/rw/Rules.mk
-include store/benchmark/async/rw_augustus/Rules.mk
 include store/benchmark/async/retwis/Rules.mk
 include store/benchmark/async/smallbank/Rules.mk
 include store/benchmark/async/Rules.mk
