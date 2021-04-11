@@ -22,14 +22,6 @@ Client::Client(const transport::Configuration& config, uint64_t id, int nShards,
   assert(nGroups == nShards);
 
   client_id = id;
-  // generate a random client uuid
-  // client_id = 0;
-  // while (client_id == 0) {
-  //   random_device rd;
-  //   mt19937_64 gen(rd());
-  //   uniform_int_distribution<uint64_t> dis;
-  //   client_id = dis(gen);
-  // }
   client_seq_num = 0;
 
   bclient.reserve(ngroups);
@@ -71,53 +63,48 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb, uint32_t tim
 
 void Client::Get(const std::string &key, get_callback gcb,
     get_timeout_callback gtcb, uint32_t timeout) {
-  transport->Timer(0, [this, key, gcb, gtcb, timeout]() {
-    Debug("GET [%s]", key.c_str());
 
-    // Contact the appropriate shard to get the value.
-    std::vector<int> txnGroups;
-    int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
+    transport->Timer(0, [this, key, gcb, gtcb, timeout]() {
+            Debug("GET [%s]", key.c_str());
+            // Contact the appropriate shard to set the value.
+            std::vector<int> txnGroups;
+            int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
 
-    // If needed, add this shard to set of participants and send BEGIN.
-    if (!IsParticipant(i)) {
-      currentTxn.add_participating_shards(i);
-    }
+            // If needed, add this shard to set of participants and send BEGIN.
+            if (!IsParticipant(i)) {
+                currentTxn.add_participating_shards(i);
+            }
 
-    read_callback rcb = [gcb, this](int status, const std::string &key,
-        const std::string &val, const Timestamp &ts) {
-      if (status == REPLY_OK) {
-        ReadMessage *read = currentTxn.add_readset();
-        read->set_key(key);
-        ts.serialize(read->mutable_readtime());
-      }
-      gcb(status, key, val, ts);
-    };
-    read_timeout_callback rtcb = gtcb;
+            ReadMessage *read = currentTxn.add_readset();
+            read->set_key(key);
+            auto ts = timeServer.GetTime();
+            read->mutable_readtime()->set_timestamp(ts);
+            read->mutable_readtime()->set_id(client_id);
 
-    // Send the GET operation to appropriate shard.
-    bclient[i]->Get(key, currentTxn.timestamp(), readMessages, readQuorumSize, rcb,
-        rtcb, timeout);
-  });
+            // Buffering, so no need to wait.
+            gcb(REPLY_OK, key, "place holder", ts);
+        });
+
 }
 
 void Client::Put(const std::string &key, const std::string &value,
     put_callback pcb, put_timeout_callback ptcb, uint32_t timeout) {
-  transport->Timer(0, [this, key, value, pcb, ptcb, timeout]() {
-    // Contact the appropriate shard to set the value.
-    std::vector<int> txnGroups;
-    int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
+    transport->Timer(0, [this, key, value, pcb, ptcb, timeout]() {
+            // Contact the appropriate shard to set the value.
+            std::vector<int> txnGroups;
+            int i = (*part)(key, nshards, -1, txnGroups) % ngroups;
 
-    // If needed, add this shard to set of participants and send BEGIN.
-    if (!IsParticipant(i)) {
-      currentTxn.add_participating_shards(i);
-    }
+            // If needed, add this shard to set of participants and send BEGIN.
+            if (!IsParticipant(i)) {
+                currentTxn.add_participating_shards(i);
+            }
 
-    WriteMessage *write = currentTxn.add_writeset();
-    write->set_key(key);
-    write->set_value(value);
-    // Buffering, so no need to wait.
-    pcb(REPLY_OK, key, value);
-  });
+            WriteMessage *write = currentTxn.add_writeset();
+            write->set_key(key);
+            write->set_value(value);
+            // Buffering, so no need to wait.
+            pcb(REPLY_OK, key, value);
+        });
 }
 
 void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
