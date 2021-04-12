@@ -118,7 +118,15 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
         continue;
       }
       stats.Increment("apply_augustus_tx_read",1);
-      // TODO: apply read and update decision with read value
+      
+      // attach read result to the decision message back to client
+      proto::ReadResult *readResult = decision->add_readset();
+      readResult->set_key(read.key());
+      if (augustus.store.count(read.key())) {
+          readResult->set_value(augustus.store[read.key()]);
+      } else {
+          readResult->set_value("");
+      }
     }
   } else {
     stats.Increment("augustus_lock_fail",1);

@@ -40,6 +40,11 @@ message Transaction {
   repeated uint64 participating_shards = 4;
 }
 
+message ReadResult {
+  required bytes key = 1;
+  required bytes value = 2;
+}
+
 // This is the reply that a shard sends to the client after it finished its
 // CCC
 message TransactionDecision {
@@ -49,6 +54,8 @@ message TransactionDecision {
   required bytes txn_digest = 2;
   // the id of the shard that sent the request
   required uint64 shard_id = 3;
+  // the value read by Augustus transaction
+  repeated ReadResult readset = 4;
 }
 
 message ShardSignedDecisions {
