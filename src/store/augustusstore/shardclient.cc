@@ -633,17 +633,17 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
 
     Debug("Sending commit to all replicas in shard");
 
-    // if(order_commit){
-    //   proto::Request request;
-    //   request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
-    //   request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
-    //   request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+    if(order_commit){
+      proto::Request request;
+      request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
+      request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
+      request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
 
-    //   transport->SendMessageToGroup(this, group_idx, request);
-    // }
-    // else{
+      transport->SendMessageToGroup(this, group_idx, request);
+    }
+    else{
       transport->SendMessageToGroup(this, group_idx, groupedDecision);
-    // }
+    }
 
     PendingWritebackReply pwr;
     pwr.wcb = wcb;
@@ -684,17 +684,17 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
 
     Debug("Sending commit to all replicas in shard");
 
-    // if(order_commit){
-    //   proto::Request request;
-    //   request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
-    //   request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
-    //   request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+    if(order_commit){
+      proto::Request request;
+      request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
+      request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
+      request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
 
-    //   transport->SendMessageToGroup(this, group_idx, request);
-    // }
-    // else{
+      transport->SendMessageToGroup(this, group_idx, request);
+    }
+    else{
       transport->SendMessageToGroup(this, group_idx, groupedDecision);
-    // }
+    }
 
     // TODO timeout
   } else {
@@ -719,15 +719,18 @@ void ShardClient::Abort(std::string& txn_digest, const proto::ShardSignedDecisio
       *groupedDecision.mutable_decisions() = sd;
     }
 
-    // proto::Request request;
-    // request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
-    // request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
-    // request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+    if(order_commit){
+        proto::Request request;
+        request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
+        request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
+        request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
 
-    stats->Increment("shard_abort", 1);
-    Debug("AB abort to all replicas in shard");
-    // transport->SendMessageToGroup(this, group_idx, request);
-    transport->SendMessageToGroup(this, group_idx, groupedDecision);
+        stats->Increment("shard_abort", 1);
+        Debug("AB abort to all replicas in shard");
+        transport->SendMessageToGroup(this, group_idx, request);
+    } else {
+        transport->SendMessageToGroup(this, group_idx, groupedDecision);
+    }
 
     PendingWritebackReply pwr;
     pendingWritebacks[txn_digest] = pwr;  //not sure what use this has
