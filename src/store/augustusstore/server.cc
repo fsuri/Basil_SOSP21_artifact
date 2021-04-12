@@ -141,6 +141,10 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     decision->set_status(REPLY_FAIL);
     pendingTransactions[digest] = transaction;
 
+    // Augustus client recovery
+    // the transaction is not the conflict transaction, but it doesn't matter since we just want a field in the reply message and we won't use it
+    *(decision->mutable_conflict()) = transaction;
+
     // Augustus single-shard optimization
     if (1 == transaction.participating_shards_size()) {
         cleanupPendingTx(digest);

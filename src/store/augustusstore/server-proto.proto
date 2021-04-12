@@ -57,6 +57,7 @@ message TransactionDecision {
   // the value read by Augustus transaction
   repeated ReadResult readset = 4;
   // one of the transations that abort the current transaction
+  optional Transaction conflict = 5;
 }
 
 message ShardSignedDecisions {
