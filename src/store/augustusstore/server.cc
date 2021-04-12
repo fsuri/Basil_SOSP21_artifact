@@ -39,18 +39,6 @@ std::vector<::google::protobuf::Message*> Server::Execute(const string& type, co
   if (type == transaction.GetTypeName()) {
       transaction.ParseFromString(msg);
       return HandleTransaction(transaction);
-  }  else if (type == gdecision.GetTypeName()) {
-    gdecision.ParseFromString(msg);
-
-    if (gdecision.status() == REPLY_FAIL) {
-      std::vector<::google::protobuf::Message*> results;
-      results.push_back(HandleGroupedAbortDecision(gdecision));
-      return results;
-    } else if(order_commit && gdecision.status() == REPLY_OK) {
-      std::vector<::google::protobuf::Message*> results;
-      results.push_back(HandleGroupedCommitDecision(gdecision));
-      return results;
-    }
   } else {
       Panic("Augustus only uses prepare messages for consensus (multi-cast), GroupedDecisions go through HandleMessage");
   }
@@ -59,6 +47,29 @@ std::vector<::google::protobuf::Message*> Server::Execute(const string& type, co
   results.push_back(nullptr);
   return results;
 }
+
+::google::protobuf::Message* Server::HandleMessage(const string& type, const string& msg) {
+  Debug("Handle %s", type.c_str());
+
+  proto::GroupedDecision gdecision;
+
+  if (type == gdecision.GetTypeName()) {
+    // Augustus doesn't use consensus or reply to client for grouped decisions
+    gdecision.ParseFromString(msg);
+    if (gdecision.status() == REPLY_OK) {
+      HandleGroupedCommitDecision(gdecision);
+    } else {
+      HandleGroupedAbortDecision(gdecision);
+    }
+    return nullptr;
+  }
+  else{
+    Panic("Request not of type GroupedDecision");
+  }
+
+  return nullptr;
+}
+
 
 std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto::Transaction& transaction) {
   std::unique_lock lock(atomicMutex); //TODO: might be able to make it finer.
@@ -79,17 +90,23 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   if (bufferedGDecs.find(digest) != bufferedGDecs.end()) {
     stats.Increment("used_buffered_gdec",1);
     Debug("found buffered gdecision");
+
+    // apply tx writes if committed
     if(bufferedGDecs[digest].status() == REPLY_OK){
-      results.push_back(HandleGroupedCommitDecision(bufferedGDecs[digest]));
+        for (const auto &write : transaction.writeset()) {
+            if(!IsKeyOwned(write.key())) {
+                continue;
+            }
+            augustus.store[write.key()] = write.value();
+            stats.Increment("apply_augustus_tx_write",1);
+        }
     }
-    else{
-      results.push_back(HandleGroupedAbortDecision(bufferedGDecs[digest]));
-    }
+
     bufferedGDecs.erase(digest);
     return results;
   }
 
-  // Augustus check
+  // Augustus lock check
   if (augustus.TryLock(transaction, this)) {
     stats.Increment("augustus_lock_succeed",1);
     Debug("augustus lock succeeded");
@@ -113,27 +130,6 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   results.push_back(decision);
 
   return results;
-}
-
-::google::protobuf::Message* Server::HandleMessage(const string& type, const string& msg) {
-  Debug("Handle %s", type.c_str());
-
-  proto::GroupedDecision gdecision;
-
-  if (type == gdecision.GetTypeName()) {
-    Panic("this version still put commit/abort into consensus slots");
-    gdecision.ParseFromString(msg);
-    if (gdecision.status() == REPLY_OK) {
-      return HandleGroupedCommitDecision(gdecision);
-    } else {
-      return HandleGroupedAbortDecision(gdecision);
-    }
-  }
-  else{
-    Panic("Request not of type GroupedDecision");
-  }
-
-  return nullptr;
 }
 
 

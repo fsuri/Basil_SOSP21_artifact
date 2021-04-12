@@ -205,41 +205,11 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 }
 
 void Replica::handleMessage(const TransportAddress &remote, const string &type, const string &data){
-    static int count = 0;
-    count++;
-    if((numShards <= 6 || numShards == 12)){
-        TransportAddress* clientAddr = remote.clone();
-        auto f = [this, clientAddr, type, data](){
-            //std::unique_lock lock(atomicMutex);
-            ::google::protobuf::Message* reply = app->HandleMessage(type, data);
-            if (reply != nullptr) {
-                this->transport->SendMessage(this, *clientAddr, *reply);
-                delete reply;
-            } else {
-                Debug("Invalid request of type %s", type.c_str());
-            }
-            return (void*) true;
-        };
-        //transport->DispatchTP_main(f);
 
-        if (numShards <= 6)
-            transport->DispatchTP_noCB(f);
-        else // numShards == 12
-            transport->DispatchTP_main(f);
-    }
-    else{
-       std::cerr<< "handle message not being dispatched for pbft" << std::endl;
-        // if (numShards != 24)
-        //     Panic("Currently only support numShards = 6, 12 or 24");
+    // Augustus doesn't need reply for commit/abort group decisions
+    app->HandleMessage(type, data);
+    return;
 
-        ::google::protobuf::Message* reply = app->HandleMessage(type, data);
-        if (reply != nullptr) {
-            transport->SendMessage(this, remote, *reply);
-            delete reply;
-        } else {
-            Debug("Invalid request of type %s", type.c_str());
-        }
-    }
 }
 
 bool Replica::sendMessageToPrimary(const ::google::protobuf::Message& msg) {
