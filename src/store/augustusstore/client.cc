@@ -82,7 +82,8 @@ void Client::Get(const std::string &key, get_callback gcb,
             read->mutable_readtime()->set_id(client_id);
 
             // Buffering, so no need to wait.
-            gcb(REPLY_OK, key, "place holder", ts);
+            std::string place_holder(350, '\0'); //make a longer string
+            gcb(REPLY_OK, key, place_holder.c_str(), ts);
         });
 
 }
@@ -261,6 +262,11 @@ void Client::HandlePrepareReply(std::string digest, uint64_t shard_id, int statu
 
 void Client::WriteBackSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn, std::string digest) {
 
+    // Augustus single-shard optimization
+    if (1 == txn.participating_shards_size()) {
+        return;
+    }
+    
     for (const auto& shard_id : txn.participating_shards()) {
       bclient[shard_id]->CommitSigned(digest, dec);
     }
@@ -270,6 +276,12 @@ void Client::WriteBackSigned(const proto::ShardSignedDecisions& dec, const proto
 
 void Client::WriteBackSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn,
   commit_callback ccb, commit_timeout_callback ctcb, uint32_t timeout) {
+
+  // Augustus single-shard optimization
+  if (1 == txn.participating_shards_size()) {
+      return;
+  }
+
   std::string digest = TransactionDigest(txn);
   if (pendingWritebacks.find(digest) == pendingWritebacks.end()) {
     PendingWriteback pendingWriteback;
@@ -292,6 +304,12 @@ void Client::WriteBackSigned(const proto::ShardSignedDecisions& dec, const proto
 
 void Client::WriteBack(const proto::ShardDecisions& dec, const proto::Transaction& txn,
   commit_callback ccb, commit_timeout_callback ctcb, uint32_t timeout) {
+
+  // Augustus single-shard optimization
+  if (1 == txn.participating_shards_size()) {
+      return;
+  }
+
   std::string digest = TransactionDigest(txn);
   if (pendingWritebacks.find(digest) == pendingWritebacks.end()) {
     PendingWriteback pendingWriteback;
@@ -341,6 +359,12 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
 
 void Client::AbortTxn(const proto::Transaction& txn) {
   stats.Increment("abort", 1);
+
+  // Augustus single-shard optimization
+  if (1 == txn.participating_shards_size()) {
+      return;
+  }
+
   std::string digest = TransactionDigest(txn);
   proto::ShardSignedDecisions dec;
   for (const auto& shard_id : txn.participating_shards()) {
@@ -350,6 +374,12 @@ void Client::AbortTxn(const proto::Transaction& txn) {
 
 void Client::AbortTxnSigned(const proto::ShardSignedDecisions& dec, const proto::Transaction& txn, std::string& digest){
   stats.Increment("abort", 1);
+
+  // Augustus single-shard optimization
+  if (1 == txn.participating_shards_size()) {
+      return;
+  }
+
   //std::string digest = TransactionDigest(txn);
   if (pendingWritebacks.find(digest) == pendingWritebacks.end()) {
     PendingWriteback pendingWriteback;

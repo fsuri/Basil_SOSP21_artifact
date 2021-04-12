@@ -39,6 +39,15 @@ std::vector<::google::protobuf::Message*> Server::Execute(const string& type, co
   if (type == transaction.GetTypeName()) {
       transaction.ParseFromString(msg);
       return HandleTransaction(transaction);
+  } else if (type == gdecision.GetTypeName()) {
+    gdecision.ParseFromString(msg);
+
+    // Augutus doesn't reply to client for commit/abort grouped decisions
+    if (gdecision.status() == REPLY_FAIL) {
+      HandleGroupedAbortDecision(gdecision);
+    } else if(gdecision.status() == REPLY_OK) {
+      HandleGroupedCommitDecision(gdecision);
+    }
   } else {
       Panic("Augustus only uses prepare messages for consensus (multi-cast), GroupedDecisions go through HandleMessage");
   }
@@ -46,28 +55,6 @@ std::vector<::google::protobuf::Message*> Server::Execute(const string& type, co
   std::vector<::google::protobuf::Message*> results;
   results.push_back(nullptr);
   return results;
-}
-
-::google::protobuf::Message* Server::HandleMessage(const string& type, const string& msg) {
-  Debug("Handle %s", type.c_str());
-
-  proto::GroupedDecision gdecision;
-
-  if (type == gdecision.GetTypeName()) {
-    // Augustus doesn't use consensus or reply to client for grouped decisions
-    gdecision.ParseFromString(msg);
-    if (gdecision.status() == REPLY_OK) {
-      HandleGroupedCommitDecision(gdecision);
-    } else {
-      HandleGroupedAbortDecision(gdecision);
-    }
-    return nullptr;
-  }
-  else{
-    Panic("Request not of type GroupedDecision");
-  }
-
-  return nullptr;
 }
 
 
@@ -106,7 +93,8 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     return results;
   }
 
-  // Augustus lock check
+  // Augustus lock check  
+  proto::GroupedDecision gdecision;
   if (augustus.TryLock(transaction, this)) {
     stats.Increment("augustus_lock_succeed",1);
     Debug("augustus lock succeeded");
@@ -128,11 +116,38 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
           readResult->set_value("");
       }
     }
+
+    // Augustus single-shard optimization
+    if (1 == transaction.participating_shards_size()) {
+        Debug("applying tx");
+        for (const auto &write : transaction.writeset()) {
+            if(!IsKeyOwned(write.key())) {
+                continue;
+            }
+            augustus.store[write.key()] = write.value();
+            stats.Increment("apply_augustus_tx_write",1);
+        }
+
+        // mark txn as commited
+        cleanupPendingTx(digest);
+        stats.Increment("augustus_optimized",1);
+    } else {
+        stats.Increment("augustus_not_optimized",1);
+    }
+
   } else {
     stats.Increment("augustus_lock_fail",1);
     Debug("augustus lock failed");
     decision->set_status(REPLY_FAIL);
     pendingTransactions[digest] = transaction;
+
+    // Augustus single-shard optimization
+    if (1 == transaction.participating_shards_size()) {
+        cleanupPendingTx(digest);
+        stats.Increment("augustus_optimized",1);
+    } else {
+        stats.Increment("augustus_not_optimized",1);
+    }
   }
 
   results.push_back(decision);
@@ -267,6 +282,15 @@ bool Server::CCC(const proto::Transaction& txn) {
     return nullptr;
 }
 
+::google::protobuf::Message* Server::HandleMessage(const string& type, const string& msg) {
+  Debug("Handle %s", type.c_str());
+
+  proto::GroupedDecision gdecision;
+
+  Panic("Augustus doesn't use HandleMessage.");
+
+  return nullptr;
+}
     
 void Server::Load(const string &key, const string &value,
     const Timestamp timestamp) {

@@ -45,7 +45,7 @@
 	  "mainThreadDispatching": false,
 	  "dispatchMessageReceive": false,
       "batch_verification": false,
-      "order_commit": false,
+      "order_commit": true,
       "validate_abort": true,
       "key_path": "/usr/local/etc/indicus-keys/donna"
     }
