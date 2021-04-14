@@ -8,7 +8,7 @@ AsyncAdapterClient::~AsyncAdapterClient() {
 }
 
 void AsyncAdapterClient::Execute(AsyncTransaction *txn,
-    execute_callback ecb) {
+    execute_callback ecb, bool retry) {
   currEcb = ecb;
   currTxn = txn;
   outstandingOpCount = 0UL;
@@ -16,7 +16,7 @@ void AsyncAdapterClient::Execute(AsyncTransaction *txn,
   readValues.clear();
   client->Begin([this](uint64_t id) {
     ExecuteNextOperation();
-  }, []{}, timeout);
+  }, []{}, timeout, retry);
 }
 
 void AsyncAdapterClient::ExecuteNextOperation() {
@@ -109,4 +109,3 @@ void AsyncAdapterClient::AbortCallback() {
 void AsyncAdapterClient::AbortTimeout() {
   Warning("Abort timed out :(");
 }
-

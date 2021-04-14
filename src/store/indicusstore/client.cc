@@ -54,10 +54,11 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     keyManager(keyManager),
     timeServer(timeServer), first(true), startedPings(false),
     client_seq_num(0UL), lastReqId(0UL), getIdx(0UL),
-    failureEnabled(false), failureActive(false) {
+    failureEnabled(false), failureActive(false), faulty_counter(0UL) {
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
   std::cerr<< "P1 Decision Timeout: " <<phase1DecisionTimeout<< std::endl;
+  if(params.injectFailure.enabled) stats.Increment("total_byz_clients", 1);
 
   if (params.signatureBatchSize == 1) {
     verifier = new BasicVerifier(transport);//transport, 1000000UL,false); //Need to change interface so client can use it too?
@@ -113,13 +114,16 @@ Client::~Client()
  * abort() are part of this transaction.
  */
 void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
-      uint32_t timeout) {
+      uint32_t timeout, bool retry) {
   // fail the current txn iff failuer timer is up and
   // the number of txn is a multiple of frequency
-  failureActive = failureEnabled &&
-    (client_seq_num % params.injectFailure.frequency == 0);
-  for (auto b : bclient) {
-    b->SetFailureFlag(failureActive);
+  if(!retry) {
+    faulty_counter++;
+    failureActive = failureEnabled &&
+      (faulty_counter % params.injectFailure.frequency == 0);
+    for (auto b : bclient) {
+      b->SetFailureFlag(failureActive);
+    }
   }
 
   transport->Timer(0, [this, bcb, btcb, timeout]() {
@@ -278,6 +282,18 @@ void Client::Phase1(PendingRequest *req) {
   //schedule timeout for when we allow starting FB P1.
   transport->Timer(params.relayP1_timeout, [this, reqId = req->id](){RelayP1TimeoutCallback(reqId);});
 
+  if(!failureEnabled) stats.Increment("total_honest_p1_started", 1);
+
+  //FAIL right after sending P1
+  
+  // if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
+  //   Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
+  //         BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
+  //   //stats.Increment("inject_failure_crash");
+  //   //total_failure_injections++;
+  //   FailureCleanUp(req);
+  //   return;
+  // }
 }
 
 
@@ -681,6 +697,24 @@ void Client::Writeback(PendingRequest *req) {
 
   if (!req->callbackInvoked) {
     uint64_t ns = Latency_End(&commitLatency);
+    //For Failures (byz clients), do not count any commits in order to isolate honest throughput.
+    if(failureEnabled && result == COMMITTED){ //--> breaks overall tput???
+      //stats.Increment("total_user_abort_orig_commit", 1);
+      stats.Increment("total_commit_byz", 1);
+      result = ABORTED_USER;
+    }
+    else if(!failureEnabled && result == COMMITTED){
+      stats.Increment("total_commit_honest", 1);
+    }
+    if(failureEnabled && result == ABORTED_SYSTEM){ //--> breaks overall tput???
+      stats.Increment("total_abort_byz", 1);
+      //stats.Increment("total_user_abort_orig_abort", 1);
+      //result = ABORTED_USER;
+    }
+    else if(!failureEnabled && result == ABORTED_SYSTEM){ //--> breaks overall tput???
+      stats.Increment("total_abort_honest", 1);
+      //result = ABORTED_USER;
+    }
     req->ccb(result);
     req->callbackInvoked = true;
   }
@@ -726,13 +760,14 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
 // for equivocation, always report ABORT, always delete
 void Client::FailureCleanUp(PendingRequest *req) {
 
-  //usleep(20); //sleep 10 miliseconds as to not return immediately...
-
+  //usleep(20000); //sleep 10 miliseconds as to not return immediately...
+  stats.Increment("inject_failure");
+  stats.Increment("total_user_abort", 1);
   UW_ASSERT(failureActive);
   transaction_status_t result;
   Debug("FailureCleanUp[%lu:%lu] for type[%s]", client_id, req->id,
     params.injectFailure.type == InjectFailureType::CLIENT_CRASH ? "CRASH" : "EQUIVOCATE");
-  if (params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
+  if (!failureEnabled && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
     if (req->decision == proto::COMMIT) {
       result = COMMITTED;
     } else {
@@ -840,6 +875,7 @@ void Client::FinishConflict(uint64_t reqId, const std::string &txnDigest, proto:
   Debug("Started Phase1FB for txn: %s, for conflicting ID: %d", BytesToHex(txnDigest, 16).c_str(), reqId);
   SendPhase1FB(reqId, txnDigest, pendingFB); //TODO change so that it does not require p1.
   //delete txn; //WARNING dont delete, since shard client already deletes itself.
+  if(!failureEnabled) stats.Increment("total_honest_conflict_FB_started", 1);
 }
 
 bool Client::isDep(const std::string &txnDigest, proto::Transaction &Req_txn){
@@ -996,6 +1032,13 @@ void Client::Phase1FB(const std::string &txnDigest, uint64_t conflict_id, proto:
   SendPhase1FB(conflict_id, txnDigest, pendingFB);
   delete p1;
 
+  if(!failureEnabled){
+    stats.Increment("total_honest_dep_FB_started", 1);
+    // if(conflict_ids.insert(conflict_id).second){
+    //   stats.Increment("total_honest_p1_needed_FB", 1);
+    // }
+  }
+
 }
 
 void Client::Phase1FB_deeper(uint64_t conflict_id, const std::string &txnDigest, const std::string &dependent_txnDigest, proto::Phase1 *p1){
@@ -1011,6 +1054,8 @@ void Client::Phase1FB_deeper(uint64_t conflict_id, const std::string &txnDigest,
 
   SendPhase1FB(conflict_id, txnDigest, pendingFB);
   delete p1;
+
+  if(!failureEnabled) stats.Increment("total_honest_deeper_FB_started", 1);
 }
 
 void Client::SendPhase1FB(uint64_t conflict_id, const std::string &txnDigest, PendingRequest *pendingFB){

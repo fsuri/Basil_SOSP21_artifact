@@ -9,7 +9,7 @@ class AsyncAdapterClient : public AsyncClient {
   virtual ~AsyncAdapterClient();
 
   // Begin a transaction.
-  virtual void Execute(AsyncTransaction *txn, execute_callback ecb);
+  virtual void Execute(AsyncTransaction *txn, execute_callback ecb, bool retry = false);
 
  private:
   void ExecuteNextOperation();

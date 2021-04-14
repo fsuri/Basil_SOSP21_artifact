@@ -77,7 +77,7 @@ class Client : public ::Client {
 
   // Begin a transaction.
   virtual void Begin(begin_callback bcb, begin_timeout_callback btcb,
-      uint32_t timeout) override;
+      uint32_t timeout, bool retry = false) override;
 
   // Get the value corresponding to key.
   virtual void Get(const std::string &key, get_callback gcb,
@@ -96,11 +96,13 @@ class Client : public ::Client {
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
       uint32_t timeout) override;
 
-  inline const Stats &GetStats() const { return stats; }
+  //inline const Stats &GetStats() const { return stats; }
  private:
-   Stats stats;
+   //Stats stats;
+   uint64_t faulty_counter;
    int fast_path_counter;
    int total_counter;
+   std::unordered_set<uint64_t> conflict_ids;
 
   struct PendingRequest {
     PendingRequest(uint64_t id, Client *client) : id(id), outstandingPhase1s(0),

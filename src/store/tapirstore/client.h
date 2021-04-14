@@ -28,7 +28,7 @@
  * SOFTWARE.
  *
  **********************************************************************/
- 
+
 #ifndef _TAPIR_CLIENT_H_
 #define _TAPIR_CLIENT_H_
 
@@ -63,7 +63,7 @@ class Client : public ::Client {
 
   // Begin a transaction.
   virtual void Begin(begin_callback bcb, begin_timeout_callback btcb,
-      uint32_t timeout) override;
+      uint32_t timeout, bool retry = false) override;
 
   // Get the value corresponding to key.
   virtual void Get(const std::string &key, get_callback gcb,
@@ -77,7 +77,7 @@ class Client : public ::Client {
   // Commit all Get(s) and Put(s) since Begin().
   virtual void Commit(commit_callback ccb, commit_timeout_callback ctcb,
       uint32_t timeout) override;
-  
+
   // Abort all Get(s) and Put(s) since Begin().
   virtual void Abort(abort_callback acb, abort_timeout_callback atcb,
       uint32_t timeout) override;
@@ -130,20 +130,20 @@ class Client : public ::Client {
 
   // Transport used by IR client proxies.
   Transport *transport;
-  
+
   // Buffering client for each shard.
   std::vector<BufferClient *> bclient;
   std::vector<ShardClient *> sclient;
 
   Partitioner *part;
-  
+
   const bool pingReplicas;
   bool syncCommit;
 
 
   // TrueTime server.
   TrueTime timeServer;
-  
+
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
   std::unordered_map<std::string, uint32_t> statInts;

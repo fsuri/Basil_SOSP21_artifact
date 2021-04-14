@@ -12,6 +12,11 @@ Stats::Stats() {
 Stats::~Stats() {
 }
 
+// int64_t Get(const std::string &key){
+//   std::lock_guard<std::mutex> lock(mtx);
+//   return statInts[key];
+// }
+
 void Stats::Increment(const std::string &key, int amount) {
   std::lock_guard<std::mutex> lock(mtx);
   statInts[key] += amount;

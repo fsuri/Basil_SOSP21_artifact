@@ -33,8 +33,8 @@ class Client : public ::AsyncClient {
       bool debugStats);
   virtual ~Client();
 
-  virtual void Execute(AsyncTransaction *txn, execute_callback ecb);
-  
+  virtual void Execute(AsyncTransaction *txn, execute_callback ecb, bool retry = false);
+
  private:
   struct PendingRequest {
     PendingRequest(uint64_t id) : id(id), sentPrepares(0UL),
@@ -60,7 +60,7 @@ class Client : public ::AsyncClient {
     int prepareStatus;
     Timestamp *prepareTimestamp;
     bool callbackInvoked;
-    std::unordered_map<proto::Branch, int64_t, BranchHasher, BranchComparer> prepareOKs; 
+    std::unordered_map<proto::Branch, int64_t, BranchHasher, BranchComparer> prepareOKs;
     std::unordered_map<proto::Branch, std::vector<proto::PrepareKO>, BranchHasher, BranchComparer> prepareKOes;
     bool waitingToAbort;
   };
@@ -101,7 +101,7 @@ class Client : public ::AsyncClient {
 
   Partitioner *part;
   const bool debugStats;
-  
+
   uint64_t lastReqId;
   std::unordered_map<uint64_t, PendingRequest *> pendingReqs;
   std::vector<ShardClient *> sclients;

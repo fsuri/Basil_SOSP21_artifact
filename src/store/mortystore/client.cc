@@ -13,7 +13,7 @@ Client::Client(transport::Configuration *config, uint64_t client_id, int nShards
     bool debugStats) : config(config), client_id(client_id), nshards(nShards),
     ngroups(nGroups), transport(transport), part(part), debugStats(debugStats),
     lastReqId(0UL), prepareBranchIds(0UL) {
-  t_id = client_id << TXN_ID_SHIFT; 
+  t_id = client_id << TXN_ID_SHIFT;
 
   Debug("Initializing Morty client with id [%lu] %lu", client_id, nshards);
 
@@ -33,7 +33,7 @@ Client::~Client() {
   }
 }
 
-void Client::Execute(AsyncTransaction *txn, execute_callback ecb) {
+void Client::Execute(AsyncTransaction *txn, execute_callback ecb, bool retry) {
   PendingRequest *req = new PendingRequest(t_id);
   req->txn = txn;
   req->protoTxn.set_id(t_id);
@@ -334,7 +334,7 @@ void Client::ProcessPrepareKOs(PendingRequest *req,
 
       Debug("Received responses for all outstanding prepares (%lu).",
           itr->second->sentPrepares);
-      
+
       Abort(branch);
 
       itr->second->ecb(ABORTED_SYSTEM, std::map<std::string, std::string>());
@@ -348,7 +348,7 @@ void Client::ProcessPrepareKOs(PendingRequest *req,
 }
 
 void Client::RecordBranch(const proto::Branch &branch) {
-  UW_ASSERT(sent_branches.find(branch) == sent_branches.end());    
+  UW_ASSERT(sent_branches.find(branch) == sent_branches.end());
   sent_branches.insert(branch);
 }
 

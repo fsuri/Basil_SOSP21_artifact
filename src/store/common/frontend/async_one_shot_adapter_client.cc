@@ -8,7 +8,7 @@ AsyncOneShotAdapterClient::~AsyncOneShotAdapterClient() {
 }
 
 void AsyncOneShotAdapterClient::Execute(AsyncTransaction *txn,
-    execute_callback ecb) {
+    execute_callback ecb, bool retry) {
   OneShotTransaction oneShotTxn;
   Operation op;
   std::map<std::string, std::string> emptyReadValues;
@@ -28,4 +28,3 @@ void AsyncOneShotAdapterClient::Execute(AsyncTransaction *txn,
     client->Execute(&oneShotTxn, ecb);
   }
 }
-

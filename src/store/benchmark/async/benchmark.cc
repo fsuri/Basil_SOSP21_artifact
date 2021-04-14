@@ -900,7 +900,10 @@ int main(int argc, char **argv) {
         indicusstore::InjectFailure failure;
         failure.type = injectFailureType;
         failure.timeMs = FLAGS_indicus_inject_failure_ms + rand() % 100; //offset client failures a bit.
-        failure.enabled = rand() % 100 < FLAGS_indicus_inject_failure_proportion;
+        //failure.enabled = rand() % 100 < FLAGS_indicus_inject_failure_proportion;
+				//TODO: WARNING: This is a hack based on 72 total clients --> pass total_clients down as flag.
+				failure.enabled = FLAGS_client_id < floor(72 * FLAGS_indicus_inject_failure_proportion / 100);
+				std::cerr << "client_id = " << FLAGS_client_id << " < ?" << (72* FLAGS_indicus_inject_failure_proportion/100) << ". Failure enabled: "<< failure.enabled <<  std::endl;
 				failure.frequency = FLAGS_indicus_inject_failure_freq;
 
         indicusstore::Parameters params(FLAGS_indicus_sign_messages,

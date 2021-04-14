@@ -52,7 +52,7 @@ Client::~Client()
 /* Begins a transaction. All subsequent operations before a commit() or
  * abort() are part of this transaction.
  */
-void Client::Begin(begin_callback bcb, begin_timeout_callback btcb, uint32_t timeout) {
+void Client::Begin(begin_callback bcb, begin_timeout_callback btcb, uint32_t timeout, bool retry) {
   transport->Timer(0, [this, bcb, btcb, timeout]() {
     Debug("BEGIN tx");
 

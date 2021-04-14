@@ -38,6 +38,9 @@ void AsyncTransactionBenchClient::ExecuteCallback(transaction_status_t result,
     if (result == COMMITTED) {
       stats.Increment(GetLastOp() + "_committed", 1);
     }
+    if(result == ABORTED_USER) {
+      stats.Increment(GetLastOp() + "_aborted_user", 1);
+    }
     if (retryAborted) {
       //stats.Add(GetLastOp() + "_attempts_list", currTxnAttempts);  //TODO: uncomment if want to collect attempt stats
     }
@@ -61,7 +64,7 @@ void AsyncTransactionBenchClient::ExecuteCallback(transaction_status_t result,
     transport.Timer(backoff, [this]() {
         client.Execute(currTxn,
             std::bind(&AsyncTransactionBenchClient::ExecuteCallback, this,
-            std::placeholders::_1, std::placeholders::_2));
+            std::placeholders::_1, std::placeholders::_2), true); //last flag = retry
         });
   }
 }

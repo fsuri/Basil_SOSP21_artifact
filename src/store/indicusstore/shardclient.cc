@@ -1418,6 +1418,7 @@ void ShardClient::Phase1Decision(
   //   delete pendingPhase1->decisionTimeout;
   //   pendingPhase1->decisionTimeout = nullptr;
   // }
+  //std::cerr << "Failing on normal path" << std::endl;
   pendingPhase1->pcb(pendingPhase1->decision, pendingPhase1->fast, pendingPhase1->conflict_flag,
       pendingPhase1->conflict, pendingPhase1->p1ReplySigs, eqv_ready);
 
@@ -1718,6 +1719,8 @@ void ShardClient::ProcessP1FBR(proto::Phase1Reply &reply, PendingFB *pendingFB, 
 
 
   void ShardClient::Phase1FBDecision(PendingFB *pendingFB) {
+
+    //std::cerr << "Failing on FB path" << std::endl;
 
     pendingFB->p1 = false;
     PendingPhase1 *pendingPhase1 = pendingFB->pendingP1;

@@ -780,6 +780,9 @@ void Server::HandlePhase1(const TransportAddress &remote,
   const proto::CommittedProof *committedProof;
   const proto::Transaction *abstain_conflict = nullptr;
 
+  if(msg.has_crash_failure() && msg.crash_failure()){
+    stats.Increment("total_crash", 1);
+  }
   //KEEP track of interested client //TODO: keep track of original client
   // interestedClientsMap::accessor i;
   // bool interestedClientsItr = interestedClients.insert(i, txnDigest);
@@ -1285,6 +1288,8 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
         //duplicate, do nothing. TODO: Forward to all interested clients and empty it?
       }
       else if (msg->decision() == proto::COMMIT) {
+        stats.Increment("total_transactions", 1);
+        stats.Increment("total_transactions_commit", 1);
         Debug("WRITEBACK[%s] successfully committing.", BytesToHex(*txnDigest, 16).c_str());
         bool p1Sigs = msg->has_p1_sigs();
         uint64_t view = -1;
@@ -1302,6 +1307,8 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
         Debug("COMMIT ONLY RUN BY MAINTHREAD: %d", sched_getcpu());
         Commit(*txnDigest, txn, p1Sigs ? msg->release_p1_sigs() : msg->release_p2_sigs(), p1Sigs, view);
       } else {
+        stats.Increment("total_transactions", 1);
+        stats.Increment("total_transactions_abort", 1);
         Debug("WRITEBACK[%s] successfully aborting.", BytesToHex(*txnDigest, 16).c_str());
         //msg->set_allocated_txn(txn); //dont need to set since client will?
         writebackMessages[*txnDigest] = *msg;  //Only necessary for fallback... (could avoid storing these, if one just replied with a p2 vote instea - but that is not as responsive)
@@ -1335,7 +1342,6 @@ void Server::HandleWriteback(const TransportAddress &remote,
   //   return;
   // }
 
-  stats.Increment("total_transactions", 1);
 
   proto::Transaction *txn;
   const std::string *txnDigest;
@@ -3602,6 +3608,7 @@ bool Server::ForwardWritebackMulti(const std::string &txnDigest, interestedClien
 //Could just put abort cases last; but makes for redundant work if it should occur inbetween.
 void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg) {
 
+  stats.Increment("total_p1FB_received", 1);
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
   Debug("Received PHASE1FB[%lu:%lu][%s] with ts %lu.", msg.req_id(), BytesToHex(txnDigest, 16).c_str());
 

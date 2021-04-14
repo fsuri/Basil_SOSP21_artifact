@@ -17,7 +17,7 @@ class AsyncClient {
   virtual ~AsyncClient() {};
 
   // Begin a transaction.
-  virtual void Execute(AsyncTransaction *txn, execute_callback ecb) = 0;
+  virtual void Execute(AsyncTransaction *txn, execute_callback ecb, bool retry=false) = 0;
 
   inline const Stats &GetStats() const { return stats; }
  protected:
