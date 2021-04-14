@@ -1589,7 +1589,6 @@ void ShardClient::CleanFB(const std::string &txnDigest){
     delete itr->second;
     pendingFallbacks.erase(itr);
   }
-
   //EraseRelay(txnDigest);
 }
 
@@ -1681,8 +1680,9 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){
   //CASE 1: Received a fully formed WB message. TODO: verify it.
   if(p1fbr.has_wb()){
     proto::Writeback wb = p1fbr.wb();
+    //std::cerr << "group[" << group << "] triggered FastWriteback for txn: " << BytesToHex(txnDigest, 16) << std::endl;
     pendingFB->wbFBcb(wb);
-    CleanFB(txnDigest);
+    //CleanFB(txnDigest);
     return;
   }
 
@@ -2132,12 +2132,7 @@ void ShardClient::WritebackFB_fast(std::string txnDigest, proto::Writeback &wb) 
   Debug("[group %i] Sent FB-WRITEBACK[%lu]", group, client_id);
 
   // Delete PendingFB instance.  //TODO: delete dependents of instance as well (if we support more than depth 1)
-  // auto itr = pendingFallbacks.find(txnDigest);
-  // if(itr != pendingFallbacks.end()){
-  //   PendingFB *pendFB = itr->second;
-  //   pendingFallbacks.erase(txnDigest);
-  //   delete pendFB;
-  // }
+  CleanFB(txnDigest);
 
 }
 

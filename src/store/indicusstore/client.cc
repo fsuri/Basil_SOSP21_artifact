@@ -285,7 +285,7 @@ void Client::Phase1(PendingRequest *req) {
   if(!failureEnabled) stats.Increment("total_honest_p1_started", 1);
 
   //FAIL right after sending P1
-  
+
   // if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
   //   Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
   //         BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
@@ -302,7 +302,7 @@ void Client::Phase1CallbackProcessing(PendingRequest *req, int group,
     proto::CommitDecision decision, bool fast, bool conflict_flag,
     const proto::CommittedProof &conflict,
     const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
-    bool eqv_ready){
+    bool eqv_ready, bool fb){
 
   if (decision == proto::ABORT && fast && conflict_flag) {
       req->conflict = conflict;
@@ -343,6 +343,14 @@ void Client::Phase1CallbackProcessing(PendingRequest *req, int group,
       req->slowAbortGroup = group;
     } else if (decision == proto::COMMIT) {
       auto itr = sigs.find(proto::ConcurrencyControl::COMMIT);
+      // if(itr == sigs.end()){
+      //   if(fb){
+      //     std::cerr << "abort on fallback path for txn: " << BytesToHex(req->txnDigest, 16) << std::endl;
+      //   }
+      //   if(!fb){
+      //     std::cerr << "abort on normal path for txn: " << BytesToHex(req->txnDigest, 16) << std::endl;
+      //   }
+      // }
       UW_ASSERT(itr != sigs.end());
       Debug("Have %d COMMIT replies from group %d.", itr->second.sigs_size(),
           group);
@@ -400,7 +408,7 @@ void Client::Phase1Callback(uint64_t txnId, int group,
     return;
   }
 
-  Phase1CallbackProcessing(req, group, decision, fast, conflict_flag, conflict, sigs, eqv_ready);
+  Phase1CallbackProcessing(req, group, decision, fast, conflict_flag, conflict, sigs, eqv_ready, false);
 
   if (req->outstandingPhase1s == 0) {
     HandleAllPhase1Received(req);
@@ -913,12 +921,14 @@ bool Client::StillActive(uint64_t conflict_id, std::string &txnDigest){
   return true;
 }
 
-void Client::CleanFB(PendingRequest *pendingFB, const std::string &txnDigest){
+void Client::CleanFB(PendingRequest *pendingFB, const std::string &txnDigest, bool clean_shards){
   Debug("Called CleanFB for txnDigest: %s ", BytesToHex(txnDigest, 64).c_str());
-  for(auto group : pendingFB->txn.involved_groups()){
-    Debug("Cleaned shard client: %d", group);
-    bclient[group]->CleanFB(txnDigest);
-  } //TODO: this is not actually necessary if it is part of pendingFB destructor...
+  if(clean_shards){
+    for(auto group : pendingFB->txn.involved_groups()){
+      Debug("Cleaned shard client: %d", group);
+      bclient[group]->CleanFB(txnDigest);
+    } //TODO: this is not actually necessary if it is part of pendingFB destructor...
+  }
   FB_instances.erase(txnDigest);
   delete pendingFB;
 }
@@ -1114,7 +1124,7 @@ void Client::WritebackFBcallback(uint64_t conflict_id, std::string txnDigest, pr
  }
  //delete FB instance. (doing so early will make sure other ShardClients dont waste work.)
  Completed_transactions.insert(txnDigest);
- CleanFB(pendingFB, txnDigest);
+ CleanFB(pendingFB, txnDigest, false); //NOTE: In this case, shard clients clean themselves (in order to support the move operator)
 }
 
 

@@ -177,7 +177,7 @@ class Client : public ::Client {
       proto::CommitDecision decision, bool fast, bool conflict_flag,
       const proto::CommittedProof &conflict,
       const std::map<proto::ConcurrencyControl::Result, proto::Signatures> &sigs,
-      bool eqv_ready = false);
+      bool eqv_ready = false, bool fb = true);
 
 
   void Phase1TimeoutCallback(int group, uint64_t reqId, int status);
@@ -200,7 +200,7 @@ class Client : public ::Client {
   void FinishConflict(uint64_t reqId, const std::string &txnDigest, proto::Transaction *txn);
   bool isDep(const std::string &txnDigest, proto::Transaction &Req_txn);
   bool StillActive(uint64_t conflict_id, std::string &txnDigest);
-  void CleanFB(PendingRequest *pendingFB, const std::string &txnDigest);
+  void CleanFB(PendingRequest *pendingFB, const std::string &txnDigest, bool clean_shards = true);
   void EraseRelays(proto::RelayP1 &relayP1, std::string &txnDigest);
   void RelayP1callback(uint64_t reqId, proto::RelayP1 &relayP1, std::string& txnDigest);
   void RelayP1TimeoutCallback(uint64_t reqId);
