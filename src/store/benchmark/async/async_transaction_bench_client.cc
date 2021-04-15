@@ -61,6 +61,7 @@ void AsyncTransactionBenchClient::ExecuteCallback(transaction_status_t result,
       stats.Increment(GetLastOp() + "_backoff", backoff);
       Debug("Backing off for %lums", backoff);
     }
+    //std::cerr << "backing off for ms: " << backoff << std::endl;
     transport.Timer(backoff, [this]() {
         client.Execute(currTxn,
             std::bind(&AsyncTransactionBenchClient::ExecuteCallback, this,

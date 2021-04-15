@@ -1021,7 +1021,7 @@ void ShardClient::ProcessP1R(proto::Phase1Reply &reply, bool FB_path, PendingFB 
     cc = &reply.cc();
   }
 
-  Debug("[group %i] PHASE1 callback ccr=%d", group, cc->ccr());
+  Debug("[group %i] PHASE1R process ccr=%d", group, cc->ccr());
 
   if (!pendingPhase1->p1Validator.ProcessMessage(*cc, (failureActive && !FB_path) )) {
     return;
@@ -1319,7 +1319,7 @@ void ShardClient::HandlePhase2Reply_MultiView(const proto::Phase2Reply &reply) {
 
   auto itr = this->pendingPhase2s.find(reply.req_id());
   if (itr == this->pendingPhase2s.end()) {
-    Debug("[group %i] Received stale Phase2Reply for request %lu.", group,
+     Debug("[group %i] Received stale Phase2Reply for request %lu.", group,
         reply.req_id());
     return; // this is a stale request
   }
@@ -1703,9 +1703,9 @@ void ShardClient::HandlePhase1FBReply(proto::Phase1FBReply &p1fbr){
       return; //XXX only return if successful p2 callback, otherwise, also eval the p1 case
     }
   }
-  Debug("      trying to process Phase1FBReply P1 for txn: %s on shardclient %d. Still doing p1? %s. has p1r? %s", BytesToHex(txnDigest, 16).c_str(), group, pendingFB->p1? "True" : "False", p1fbr.has_p1r()? "True" : "False");
   //CASE 3: Received a p1 vote and still processing p1
   if(pendingFB->p1 && p1fbr.has_p1r()){
+    Debug("      trying to process Phase1FBReply P1 for txn: %s on shardclient %d.", BytesToHex(txnDigest, 16).c_str(), group);
     proto::Phase1Reply reply = p1fbr.p1r();
     ProcessP1FBR(reply, pendingFB, txnDigest);
   }
@@ -1873,7 +1873,7 @@ void ShardClient::HandlePhase2FBReply(proto::Phase2FBReply &p2fbr){
   const std::string &txnDigest = p2fbr.txn_digest();
   auto itr = this->pendingFallbacks.find(txnDigest);
   if (itr == this->pendingFallbacks.end()) {
-    Debug("[group %i] Received stale Phase2FBReply for txn %s.", group, txnDigest.c_str());
+    Debug("[group %i] Received stale Phase2FBReply for txn %s.", group, BytesToHex(txnDigest, 16).c_str());
     return; // this is a stale request
   }
   PendingFB *pendingFB = itr->second;
@@ -1934,7 +1934,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
 
     //update respective view/decision pendingP2 item.
     //TODO: make sure that each replica is only counted once. (dont want byz providing full quorum)
-    auto &pendingP2 = pendingFB->pendingP2s[view][decision];
+    PendingPhase2 &pendingP2 = pendingFB->pendingP2s[view][decision];
     pendingP2.reqId = reqID;
     pendingP2.decision = decision;
     if (params.validateProofs && params.signedMessages) {
@@ -1942,6 +1942,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
       sig->set_process_id(reply.signed_p2_decision().process_id());
       *sig->mutable_signature()= reply.signed_p2_decision().signature();
     }
+
     pendingP2.matchingReplies++;
 
     if(pendingP2.matchingReplies > config->f){
@@ -1959,6 +1960,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
       // if(view > 0) std::cerr << "elected FB for view [" << view << "] for txn: " << BytesToHex(txnDigest, 16) <<std::endl;
       return true;
     }
+
 
     //XXX Fast case for completing p2 forwarding
     //XXX have to story full reply here because the decision views might differ.
@@ -1990,13 +1992,16 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
   ////FALLBACK INVOCATION
   //max decision view represents f+1 replicas. Implies that this is the current view.
   //CALL Fallback if detected divergence for newest accepted view. (calling it for older ones is useless)
+
   if(pendingFB->max_decision_view == view
-    && pendingFB->pendingP2s[view][proto::COMMIT].matchingReplies == config->f +1
-    && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies == config->f +1){ //== so we only call it once per view.
+    && pendingFB->pendingP2s[view][proto::COMMIT].matchingReplies >= config->f +1
+    && pendingFB->pendingP2s[view][proto::ABORT].matchingReplies >= config->f +1){
       pendingFB->p1 = false;
       pendingFB->conflict_view = view;
-      //std::cerr << "inconsistency in view " << view << " for txn " << BytesToHex(txnDigest, 16) << std::endl;
-      if(!pendingFB->invFBcb()) return true;
+      if(pendingFB->conflict_view + 1 > pendingFB->last_view){
+        Debug("Calling InvokeFB for [txn: %s][view %lu]", BytesToHex(txnDigest, 16).c_str(), view);
+        if(!pendingFB->invFBcb()) return true;
+      }
   }
       //TODO: Also need to call it after some timeout. I.e. if 4f+1 received are all honest but diverge.
 
@@ -2006,7 +2011,7 @@ bool ShardClient::ProcessP2FBR(proto::Phase2Reply &reply, PendingFB *pendingFB, 
                   //reasoning: if received f+1 for max view, then 2f+1 correct are in view >= max view -1 --> cant receive Quorum anymore. (still possible to receive a few outstanding ones)
     std::map<uint64_t, std::map<proto::CommitDecision, PendingPhase2>>::iterator it;
     for (it=pendingFB->pendingP2s.begin(); it != pendingFB->pendingP2s.end(); it++){
-      if(it->first >= pendingFB->max_decision_view -1){
+      if(it->first +1 >= pendingFB->max_decision_view){
         break;
       }
       else{

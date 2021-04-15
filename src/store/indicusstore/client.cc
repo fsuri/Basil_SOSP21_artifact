@@ -1095,6 +1095,7 @@ void Client::SendPhase1FB(uint64_t conflict_id, const std::string &txnDigest, Pe
     }
   Debug("Sent all Phase1FB for txn[%s]", BytesToHex(txnDigest, 64).c_str());
   return;
+
 }
 
 
@@ -1188,7 +1189,6 @@ bool Client::Phase1FBcallbackB(uint64_t conflict_id, std::string txnDigest, int6
 
     req->decision = decision;
     req->p2Replies = std::move(p2replies);
-
     //WARNING: CURRENTLY HAVE PHASE1FBCALLBACK B DISABLED. BUT STILL USING P2Replies for Invoke.
     return true;
        //Issue P2FB.
@@ -1208,7 +1208,7 @@ void Client::Phase2FB(PendingRequest *req){
       // groupIdx = groupIdx % fb_txn.involved_groups_size();
       // UW_ASSERT(groupIdx < fb_txn.involved_groups_size());
       // int64_t logGroup = fb_txn.involved_groups(groupIdx);
-      Debug("PHASE2FB[%lu:%s][%s] logging to group %ld", client_id, req->txnDigest.c_str(),
+      Debug("PHASE2FB[%lu][%s] logging to group %ld", client_id,
           BytesToHex(req->txnDigest, 16).c_str(), req->logGrp);
 
       //CASE THAT CHECKS FOR P2 REPLIES AS VALID  PROOFS
@@ -1273,6 +1273,7 @@ void Client::WritebackFB(PendingRequest *req){
   CleanFB(req, req->txnDigest);
 }
 
+//TODO: add view here:
 bool Client::InvokeFBcallback(uint64_t conflict_id, std::string txnDigest, int64_t group){
   //Just send InvokeFB request to the logging shard. but only if the tx has not already finished. and only if we have already sent a P2
   //Otherwise, Include the P2 here!.
