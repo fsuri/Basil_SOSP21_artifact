@@ -124,6 +124,7 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
     for (auto b : bclient) {
       b->SetFailureFlag(failureActive);
     }
+    if(failureActive) stats.Increment("failure_attempts", 1);
   }
 
   transport->Timer(0, [this, bcb, btcb, timeout]() {
@@ -286,14 +287,14 @@ void Client::Phase1(PendingRequest *req) {
 
   //FAIL right after sending P1
 
-  // if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
-  //   Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
-  //         BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
-  //   //stats.Increment("inject_failure_crash");
-  //   //total_failure_injections++;
-  //   FailureCleanUp(req);
-  //   return;
-  // }
+  if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
+    Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
+          BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
+    //stats.Increment("inject_failure_crash");
+    //total_failure_injections++;
+    FailureCleanUp(req);
+    return;
+  }
 }
 
 
@@ -555,7 +556,7 @@ void Client::Phase2Equivocate(PendingRequest *req) {
     }
 
     // build grouped abort sigs with *one* shard Quorum the size of abortQuorum
-    if (req->decision == proto::ABORT) {
+
       UW_ASSERT(req->slowAbortGroup >= 0);
       UW_ASSERT(req->eqvAbortSigsGrouped.grouped_sigs().find(req->slowAbortGroup) != req->eqvAbortSigsGrouped.grouped_sigs().end());
       while (req->eqvAbortSigsGrouped.grouped_sigs().size() > 1) {
@@ -565,7 +566,8 @@ void Client::Phase2Equivocate(PendingRequest *req) {
         }
         req->eqvAbortSigsGrouped.mutable_grouped_sigs()->erase(itr);
       }
-    }
+
+
 
     for (auto &groupSigs : *req->eqvAbortSigsGrouped.mutable_grouped_sigs()) {
       while (static_cast<uint64_t>(groupSigs.second.sigs_size()) > SlowAbortQuorumSize(config)) {
@@ -666,14 +668,14 @@ void Client::Writeback(PendingRequest *req) {
 
   req->startedWriteback = true;
 
-  if ((true || req->decision == proto::COMMIT) && failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
-    Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
-          BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
-    //stats.Increment("inject_failure_crash");
-    //total_failure_injections++;
-    FailureCleanUp(req);
-    return;
-  }
+  // if ((true || req->decision == proto::COMMIT) && failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
+  //   Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
+  //         BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
+  //   //stats.Increment("inject_failure_crash");
+  //   //total_failure_injections++;
+  //   FailureCleanUp(req);
+  //   return;
+  // }
 
 
   transaction_status_t result;
@@ -1065,6 +1067,7 @@ void Client::Phase1FB_deeper(uint64_t conflict_id, const std::string &txnDigest,
   SendPhase1FB(conflict_id, txnDigest, pendingFB);
   delete p1;
 
+  Debug("PendingFB request tx:[%s] has default decision: %s", BytesToHex(txnDigest, 16).c_str(), pendingFB->decision ? "ABORT" : "COMMIT");
   if(!failureEnabled) stats.Increment("total_honest_deeper_FB_started", 1);
 }
 
@@ -1159,7 +1162,7 @@ void Client::Phase1FBcallbackA(uint64_t conflict_id, std::string txnDigest, int6
 
 
 void Client::FBHandleAllPhase1Received(PendingRequest *req) {
-  Debug("FB instance [%s]: All PHASE1's received", req->txnDigest.c_str());
+  Debug("FB instance [%s]: All PHASE1's received", BytesToHex(req->txnDigest, 16).c_str());
   if (req->fast) {
     WritebackFB(req);
   } else {
@@ -1258,7 +1261,7 @@ void Client::Phase2FBcallback(uint64_t conflict_id, std::string txnDigest, int64
 
 void Client::WritebackFB(PendingRequest *req){
 
-  Debug("WRITEBACKFB[%lu:%s] result: %s", client_id, BytesToHex(req->txnDigest, 16).c_str(), req->decision ? "COMMIT" : "ABORT");
+  Debug("WRITEBACKFB[%lu:%s] result: %s", client_id, BytesToHex(req->txnDigest, 16).c_str(), req->decision ? "ABORT" : "COMMIT");
 
   req->startedWriteback = true;
   WritebackProcessing(req);

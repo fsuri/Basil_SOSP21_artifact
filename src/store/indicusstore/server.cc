@@ -2271,6 +2271,7 @@ bool Server::ManageDependencies(const std::string &txnDigest, const proto::Trans
      if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
      //TODO: instead, take a per txnDigest lock in the loop for each dep, (add the mutex if necessary, and remove it at the end)
 
+     Debug("Called ManageDependencies for txn: %s", BytesToHex(txnDigest, 16).c_str());
      for (const auto &dep : txn.deps()) {
        if (dep.involved_group() != groupIdx) {
          continue;
@@ -2315,11 +2316,13 @@ bool Server::ManageDependencies(const std::string &txnDigest, const proto::Trans
          // dependenciesItr->second.remote = remote.clone();  //&remote;
          // dependenciesItr->second.deps.insert(dep.write().prepared_txn_digest());
 
+         Debug("Tx:[%s] Added tx %s to %s dependents.", BytesToHex(txnDigest, 16).c_str(), BytesToHex(txnDigest, 16).c_str(), BytesToHex(dep.write().prepared_txn_digest(), 16).c_str());
          dependentsMap::accessor e;
          dependents.insert(e, dep.write().prepared_txn_digest());
          e->second.insert(txnDigest);
          e.release();
 
+         Debug("Tx:[%s] Added %s to waitingDependencies.", BytesToHex(txnDigest, 16).c_str(), BytesToHex(dep.write().prepared_txn_digest(), 16).c_str());
          waitingDependenciesMap::accessor f;
          bool dependenciesItr = waitingDependencies_new.find(f, txnDigest);
          if (!dependenciesItr) {
@@ -2650,7 +2653,7 @@ void Server::CheckDependents(const std::string &txnDigest) {
    //if(params.mainThreadDispatching) dependentsMutex.lock(); //read lock
    if(params.mainThreadDispatching) waitingDependenciesMutex.lock();
   //Latency_End(&waitingOnLocks);
-
+  Debug("Called CheckDependents for txn: %s", BytesToHex(txnDigest, 16).c_str());
   dependentsMap::const_accessor e;
   bool dependentsItr = dependents.find(e, txnDigest);
   //auto dependentsItr = dependents.find(txnDigest);
@@ -2668,9 +2671,11 @@ void Server::CheckDependents(const std::string &txnDigest) {
       // with parallel OCC --> or rather parallel Commit (this is only affected by parallel commit)
 
       f->second.deps.erase(txnDigest);
+      Debug("Removed %s from waitingDependencies of %s.", BytesToHex(txnDigest, 16).c_str(), BytesToHex(dependent, 16).c_str());
       if (f->second.deps.size() == 0) {
         Debug("Dependencies of %s have all committed or aborted.",
             BytesToHex(dependent, 16).c_str());
+
         proto::ConcurrencyControl::Result result = CheckDependencies(
             dependent);
         UW_ASSERT(result != proto::ConcurrencyControl::ABORT);
@@ -2690,23 +2695,23 @@ void Server::CheckDependents(const std::string &txnDigest) {
 
         //Send it to all interested FB clients too:
           interestedClientsMap::accessor i;
-          auto jtr = interestedClients.find(i, txnDigest);
+          auto jtr = interestedClients.find(i, dependent);
           if(jtr){
-            if(!ForwardWritebackMulti(txnDigest, i)){
-              P1FBorganizer *p1fb_organizer = new P1FBorganizer(0, txnDigest, this);
-              SetP1(0, p1fb_organizer->p1fbr->mutable_p1r(), txnDigest, result, conflict);
+            if(!ForwardWritebackMulti(dependent, i)){
+              P1FBorganizer *p1fb_organizer = new P1FBorganizer(0, dependent, this);
+              SetP1(0, p1fb_organizer->p1fbr->mutable_p1r(), dependent, result, conflict);
 
               p2MetaDataMap::const_accessor p;
-              p2MetaDatas.insert(p, txnDigest);
+              p2MetaDatas.insert(p, dependent);
               if(p->second.hasP2){
                 proto::CommitDecision decision = p->second.p2Decision;
                 uint64_t decision_view = p->second.decision_view;
-                SetP2(0, p1fb_organizer->p1fbr->mutable_p2r(), txnDigest, decision, decision_view);
+                SetP2(0, p1fb_organizer->p1fbr->mutable_p2r(), dependent, decision, decision_view);
               }
               p.release();
               //TODO: If need reqId, can store it as pairs with the interested client.
-              Debug("Sending Phase1FBReply MULTICAST for txn: %s", BytesToHex(txnDigest, 64).c_str());
-              SendPhase1FBReply(p1fb_organizer, txnDigest, true);
+              Debug("Sending Phase1FBReply MULTICAST for txn: %s", BytesToHex(dependent, 64).c_str());
+              SendPhase1FBReply(p1fb_organizer, dependent, true);
             }
           }
           i.release();
@@ -3610,7 +3615,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 
   stats.Increment("total_p1FB_received", 1);
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest);
-  Debug("Received PHASE1FB[%lu:%lu][%s] with ts %lu.", msg.req_id(), BytesToHex(txnDigest, 16).c_str());
+  Debug("Received PHASE1FB[%lu][%s]", msg.req_id(), BytesToHex(txnDigest, 16).c_str());
 
 
   //check if already committed. reply with whole proof so client can forward that.
@@ -3662,7 +3667,7 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
        }
        else{
          //Relay deeper depths.
-         ManageDependencies(txnDigest, msg.txn(), remote, 0, true);
+        ManageDependencies(txnDigest, msg.txn(), remote, 0, true);
        }
        //c.release();
 

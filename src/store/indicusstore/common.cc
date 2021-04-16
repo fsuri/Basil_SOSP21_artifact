@@ -526,7 +526,7 @@ void asyncValidateP1Replies(proto::CommitDecision decision,
   for (const auto &sigs : groupedSigs.grouped_sigs()) {
     //only need to verify a single group for Abort decisions.
     if(decision == proto::ABORT && no_of_groups > 0) {
-      Panic("stopping at ABort group break");
+      //Panic("stopping at ABort group break");
       break;
     }
     no_of_groups++;
