@@ -773,6 +773,9 @@ void Server::HandlePhase1(const TransportAddress &remote,
   //dummyTx = msg.txn(); //PURELY TESTING PURPOSES!!: NOTE WARNING
 
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest); //could parallelize it too hypothetically
+
+  //if(waiting.count(txnDigest) > 0){ Panic("P1 did eventually arrive");}
+
   Debug("PHASE1[%lu:%lu][%s] with ts %lu.", msg.txn().client_id(),
       msg.txn().client_seq_num(), BytesToHex(txnDigest, 16).c_str(),
       msg.txn().timestamp().timestamp());
@@ -879,6 +882,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
      ongoingMap::accessor b;
      ongoing.insert(b, std::make_pair(txnDigest, txn));
      b.release();
+     //normal.insert(txnDigest);
+     //std::cerr << "[N] Added tx to ongoing: " << BytesToHex(txnDigest, 16) << std::endl;
      // //ongoing[txnDigest] = txn;
      // //if(params.mainThreadDispatching) ongoingMutex.unlock();
 
@@ -1211,7 +1216,13 @@ void Server::HandlePhase2(const TransportAddress &remote,
               if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
                   FreePhase2message(&msg); //const_cast<proto::Phase2&>(msg));
               }
-              Panic("Cannot validate p2 because server does not have tx for this reqId");
+              std::cerr << "Aborting for txn: " << BytesToHex(msg.txn_digest(), 16) << std::endl;
+              // if(normal.count(msg.txn_digest()) > 0){ std::cerr << "was added on normal P1" << std::endl;}
+              // else if(fallback.count(msg.txn_digest()) > 0){ std::cerr << "was added on ExecP1 FB" << std::endl;}
+              // else{ std::cerr << "have not seen p1" << std::endl;}
+              // waiting.insert(msg.txn_digest());
+              //transport->Timer(10000, [this](){Panic("Fail in P2");});
+              //Panic("Cannot validate p2 because server does not have tx for this reqId");
               //std::cerr << "Cannot validate p2 because do not have tx for special id: " << msg.req_id() << std::endl;
               return;
             }
@@ -1378,7 +1389,13 @@ void Server::HandleWriteback(const TransportAddress &remote,
       else{
         Debug("Writeback[%s] message does not contain txn, but have not seen"
             " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
-        Panic("When using TCP the tx should always be ongoing before doing WB");
+        // std::cerr << "Aborting for txn: " << BytesToHex(msg.txn_digest(), 16) << std::endl;
+        // if(normal.count(*txnDigest) > 0){ std::cerr << "was added on normal P1" << std::endl;}
+        // else if(fallback.count(*txnDigest) > 0){ std::cerr << "was added on ExecP1 FB" << std::endl;}
+        // else{ std::cerr << "have not seen p1" << std::endl;}
+        // waiting.insert(msg.txn_digest());
+        //transport->Timer(10000, [this](){Panic("Fail in WB");});
+        //Panic("When using TCP the tx should always be ongoing before doing WB");
         return WritebackCallback(&msg, txnDigest, txn, (void*) false);
       }
     }
@@ -3801,6 +3818,8 @@ bool Server::ExecP1(p1MetaDataMap::accessor &c, proto::Phase1FB &msg, const Tran
   ongoingMap::accessor b;
   ongoing.insert(b, std::make_pair(txnDigest, txn));
   b.release();
+  //fallback.insert(txnDigest);
+  //std::cerr << "[FB] Added tx to ongoing: " << BytesToHex(txnDigest, 16) << std::endl;
 
   Timestamp retryTs;
 

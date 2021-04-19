@@ -380,6 +380,7 @@ DEFINE_uint64(cooldown_secs, 5, "time (in seconds) to cool down system after"
 DEFINE_uint64(tput_interval, 0, "time (in seconds) between throughput"
     " measurements");
 DEFINE_uint64(num_clients, 1, "number of clients to run in this process");
+DEFINE_uint64(num_client_hosts, 1, "number of client processes across all nodes and servers");
 DEFINE_uint64(num_requests, -1, "number of requests (transactions) per"
     " client");
 DEFINE_int32(closest_replica, -1, "index of the replica closest to the client");
@@ -904,8 +905,10 @@ int main(int argc, char **argv) {
         failure.timeMs = FLAGS_indicus_inject_failure_ms + rand() % 100; //offset client failures a bit.
         //failure.enabled = rand() % 100 < FLAGS_indicus_inject_failure_proportion;
 				//TODO: WARNING: This is a hack based on 72 total clients --> pass total_clients down as flag.
-				failure.enabled = FLAGS_client_id < floor(72 * FLAGS_indicus_inject_failure_proportion / 100);
-				std::cerr << "client_id = " << FLAGS_client_id << " < ?" << (72* FLAGS_indicus_inject_failure_proportion/100) << ". Failure enabled: "<< failure.enabled <<  std::endl;
+				//failure.enabled = FLAGS_client_id < floor(72 * FLAGS_indicus_inject_failure_proportion / 100);
+				//	std::cerr << "client_id = " << FLAGS_client_id << " < ?" << (72* FLAGS_indicus_inject_failure_proportion/100) << ". Failure enabled: "<< failure.enabled <<  std::endl;
+				failure.enabled = FLAGS_num_client_hosts * i + FLAGS_client_id < floor(FLAGS_num_client_hosts * FLAGS_indicus_inject_failure_proportion / 100);
+					std::cerr << "client_id = " << FLAGS_client_id << "thread_id = " << i << ". Failure enabled: "<< failure.enabled <<  std::endl;
 				failure.frequency = FLAGS_indicus_inject_failure_freq;
 
         indicusstore::Parameters params(FLAGS_indicus_sign_messages,
