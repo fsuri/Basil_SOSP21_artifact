@@ -63,7 +63,9 @@ public class Configuration {
 
 	private String defaultKeyLoader;
 
-	protected String configHome = "";
+	protected String configHome = "store/bftsmartstore/library/config/";
+	// MODIFIED
+	// protected String configHome = "";
 
 	protected static String hostsFileName = "";
 

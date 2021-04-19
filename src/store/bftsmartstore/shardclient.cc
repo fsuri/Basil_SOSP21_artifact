@@ -12,7 +12,7 @@ ShardClient::ShardClient(const transport::Configuration& config, Transport *tran
     group_idx(group_idx),
     signMessages(signMessages), validateProofs(validateProofs),
     keyManager(keyManager), stats(stats), order_commit(order_commit), validate_abort(validate_abort) {
-  bftsmartagent = new BftSmartAgent(true, this);
+  bftsmartagent = new BftSmartAgent(true, this, 1000 + client_id);
   transport->Register(this, config, -1, -1);
   readReq = 0;
 
@@ -497,6 +497,7 @@ void ShardClient::Prepare(const proto::Transaction& txn, prepare_callback pcb,
     request.set_digest(digest);
     request.mutable_packed_msg()->set_msg(txn.SerializeAsString());
     request.mutable_packed_msg()->set_type(txn.GetTypeName());
+    request.set_groupidx(group_idx);
 
     Debug("Sending txn to all replicas in shard");
     // transport->SendMessageToGroup(this, group_idx, request);
@@ -648,6 +649,7 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
       request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
       request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
       request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+      request.set_groupidx(group_idx);
       // transport->SendMessageToGroup(this, group_idx, request);
       send_to_group(request, group_idx);
     }
@@ -700,6 +702,7 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
       request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
       request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
       request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+      request.set_groupidx(group_idx);
 
       // transport->SendMessageToGroup(this, group_idx, request);
       send_to_group(request, group_idx);
@@ -736,6 +739,7 @@ void ShardClient::Abort(std::string& txn_digest, const proto::ShardSignedDecisio
     request.set_digest(crypto::Hash(groupedDecision.SerializeAsString()));
     request.mutable_packed_msg()->set_msg(groupedDecision.SerializeAsString());
     request.mutable_packed_msg()->set_type(groupedDecision.GetTypeName());
+    request.set_groupidx(group_idx);
 
     stats->Increment("shard_abort", 1);
     Debug("AB abort to all replicas in shard");
@@ -752,9 +756,10 @@ void ShardClient::Abort(std::string& txn_digest, const proto::ShardSignedDecisio
 
 void ShardClient::send_to_group(proto::Request& msg, int group_idx){
   // Set my address in the request
-  const TCPTransportAddress& addr = dynamic_cast<const TCPTransportAddress&>(*myAddress);
+  const UDPTransportAddress& addr = dynamic_cast<const UDPTransportAddress&>(*myAddress);
   msg.mutable_client_address()->set_sin_addr(addr.addr.sin_addr.s_addr);
   msg.mutable_client_address()->set_sin_port(addr.addr.sin_port);
+  msg.mutable_client_address()->set_sin_family(addr.addr.sin_family);
 
   // Serialize message
   string data;
@@ -794,7 +799,7 @@ void ShardClient::send_to_group(proto::Request& msg, int group_idx){
   UW_ASSERT((size_t)(ptr+dataLen-buf) == totalLen);
   memcpy(ptr, data.c_str(), dataLen);
   ptr += dataLen;
-  
+  Debug("sending the buffer to the group!");
   this->bftsmartagent->send_to_group(this, group_idx, buf, totalLen);
 }
 

@@ -4,7 +4,7 @@ SRCS += $(addprefix $(d), benchmark.cc benchmark_oneshot.cc bench_client.cc asyn
 
 OBJS-all-store-clients := $(OBJS-strong-client) $(OBJS-weak-client) \
 		$(LIB-tapir-client) $(LIB-morty-client) $(LIB-janus-client) \
-		$(LIB-indicus-client) $(LIB-pbft-store) $(LIB-bftsmart-store)
+		$(LIB-indicus-client) $(LIB-pbft-store) $(LIB-hotstuff-store) $(LIB-bftsmart-store) 
 
 LIB-bench-client := $(o)benchmark.o $(o)bench_client.o \
 		$(o)async_transaction_bench_client.o $(o)sync_transaction_bench_client.o

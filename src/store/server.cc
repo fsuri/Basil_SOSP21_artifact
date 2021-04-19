@@ -50,6 +50,9 @@
 #include "store/pbftstore/replica.h"
 #include "store/pbftstore/server.h"
 // HotStuff
+#include "store/hotstuffstore/replica.h"
+#include "store/hotstuffstore/server.h"
+// BftSmart
 #include "store/bftsmartstore/replica.h"
 #include "store/bftsmartstore/server.h"
 
@@ -69,7 +72,7 @@ enum protocol_t {
   PROTO_INDICUS,
 	PROTO_PBFT,
     // HotStuff
-    // PROTO_HOTSTUFF
+    PROTO_HOTSTUFF,
     // BftSmart
     PROTO_BFTSMART
 };
@@ -110,8 +113,8 @@ const std::string protocol_args[] = {
   "morty",
   "indicus",
 	"pbft",
-  "bftsmart"
-    //"hotstuff"
+  "bftsmart",
+  "hotstuff"
 };
 const protocol_t protos[] {
   PROTO_TAPIR,
@@ -121,8 +124,8 @@ const protocol_t protos[] {
   PROTO_MORTY,
   PROTO_INDICUS,
       PROTO_PBFT,
-      PROTO_BFTSMART
-      //PROTO_HOTSTUFF
+      PROTO_BFTSMART,
+      PROTO_HOTSTUFF
 };
 static bool ValidateProtocol(const char* flagname,
     const std::string &value) {
@@ -292,8 +295,8 @@ DEFINE_uint64(pbft_esig_batch, 1, "signature batch size"
 DEFINE_uint64(pbft_esig_batch_timeout, 10, "signature batch timeout ms"
 		" sig batch timeout (for PBFT decision phase)");
 
-DEFINE_bool(pbft_order_commit, false, "order commit writebacks as well");
-DEFINE_bool(pbft_validate_abort, false, "validate abort writebacks as well");
+DEFINE_bool(pbft_order_commit, true, "order commit writebacks as well");
+DEFINE_bool(pbft_validate_abort, true, "validate abort writebacks as well");
 
 DEFINE_bool(rw_or_retwis, false, "load rw workload or retwis");
 
@@ -643,9 +646,38 @@ int main(int argc, char **argv) {
   }
 
       // HotStuff
-  // case PROTO_HOTSTUFF: {
-      
-  // }
+  case PROTO_HOTSTUFF: {
+      int num_cpus = std::thread::hardware_concurrency();
+      num_cpus /= FLAGS_indicus_total_processes;
+
+      int hotstuff_cpu;
+      if (FLAGS_num_shards == 6) {
+          hotstuff_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+      } else if(FLAGS_num_shards == 3) {
+				//hotstuff_cpu = 1;
+				hotstuff_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+			}
+			else{
+          // FLAGS_num_shards should be 12 or 24
+          hotstuff_cpu = FLAGS_indicus_process_id * num_cpus;
+      }
+
+      server = new hotstuffstore::Server(config, &keyManager,
+                                     FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
+                                     FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+                                     FLAGS_indicus_time_delta, part, tport,
+																	   FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort);
+
+      replica = new hotstuffstore::Replica(config, &keyManager,
+                                       dynamic_cast<hotstuffstore::App *>(server),
+                                       FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
+                                       FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
+                                       FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
+                                       FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx,
+																			 hotstuff_cpu, FLAGS_num_shards, tport);
+
+      break;
+  }
 
   default: {
       NOT_REACHABLE();
@@ -743,7 +775,7 @@ int main(int argc, char **argv) {
   CALLGRIND_START_INSTRUMENTATION;
 	//SET THREAD AFFINITY if running multi_threading:
 	//if(FLAGS_indicus_multi_threading){
-	if((proto == PROTO_INDICUS || proto == PROTO_PBFT || proto == PROTO_BFTSMART) && FLAGS_indicus_multi_threading){
+	if((proto == PROTO_INDICUS || proto == PROTO_PBFT || proto == PROTO_BFTSMART || proto == PROTO_HOTSTUFF) && FLAGS_indicus_multi_threading){
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
 		//bool hyperthreading = true;

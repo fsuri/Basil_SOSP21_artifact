@@ -33,6 +33,10 @@
 			<fileset dir="${base.dir}">
 				<include name="config/*" />
 			</fileset>
+			<manifest>
+			        <attribute name="Class-Path" value="{base.dir}/lib/slf4j-api-1.7.25.jar:{base.dir}/lib/logback-classic-1.2.3.jar:{base.dir}/lib/logback-core-1.2.3.jar" />
+			        <attribute name="Main-Class" value="bftsmart.demo.bftinterface.BftInterfaceServer"/>  
+			</manifest>	
 		</jar>
 	</target>
 	<target name="test" depends="compile, jar">

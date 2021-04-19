@@ -132,8 +132,12 @@ public class ServiceReplica {
      * @param loader Used to load signature keys from disk
      */
     public ServiceReplica(int id, String configHome, Executable executor, Recoverable recoverer, RequestVerifier verifier, Replier replier, KeyLoader loader) {
+        logger.info("calling initialize!");
+        // MODIFIED
+        configHome = "store/bftsmartstore/library/config";
         this.id = id;
         this.SVController = new ServerViewController(id, configHome, loader);
+        logger.info("finished creating a service view controller");
         this.executor = executor;
         this.recoverer = recoverer;
         this.replier = (replier != null ? replier : new DefaultReplier());
@@ -145,13 +149,15 @@ public class ServiceReplica {
 
     // this method initializes the object
     private void init() {
+        logger.info("initializing server!");
         try {
             cs = new ServerCommunicationSystem(this.SVController, this);
         } catch (Exception ex) {
+            ex.printStackTrace();
             logger.error("Failed to initialize replica-to-replica communication system", ex);
             throw new RuntimeException("Unable to build a communication system.");
         }
-
+        logger.info("server comm system created " + cs);
         if (this.SVController.isInCurrentView()) {
             logger.info("In current view: " + this.SVController.getCurrentView());
             initTOMLayer(); // initiaze the TOM layer
@@ -169,6 +175,7 @@ public class ServiceReplica {
             
         }
         initReplica();
+        logger.info("finished initializing replica!");
     }
 
     /**
@@ -354,6 +361,14 @@ public class ServiceReplica {
                                 
                                 // This is used to deliver the requests to the application and obtain a reply to deliver
                                 //to the clients. The raw decision is passed to the application in the line above.
+                                byte[] arr = request.getContent();
+                                logger.info("at service replica:");
+                                // for (int i = 0; i < arr.length; ++i){
+                                //     System.out.print(arr[i]);
+                                //     System.out.print(" ");
+                                // }
+                                // System.out.println();
+
                                 ((NoReplySingleExecutable) executor).executeOrdered(id, SVController.getCurrentViewId(), request.getContent(), msgCtx);
                                 
                             }

@@ -269,7 +269,7 @@ public class DiskStateLog extends StateLog {
 		setLastCheckpointCID(transState.getLastCheckpointCID());
 	}
 	
-	protected ApplicationState loadDurableState() {
+	public ApplicationState loadDurableState() {
 		FileRecoverer fr = new FileRecoverer(id, DEFAULT_DIR);
 		lastCkpPath = fr.getLatestFile(".ckp");
 		logPath = fr.getLatestFile(".log");

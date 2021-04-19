@@ -2,16 +2,17 @@
 
 namespace bftsmartstore{
 // client initialization
-BftSmartAgent::BftSmartAgent(bool is_client, TransportReceiver* receiver){
+BftSmartAgent::BftSmartAgent(bool is_client, TransportReceiver* receiver, int id){
     // create Java VM
     create_java_vm();
     if (is_client){
         // create bft interface client
-        create_interface_client(receiver);
+        create_interface_client(receiver, id);
     }
     else {
         // create bft interface client
-        create_interface_server(receiver);
+        create_interface_server(receiver, id);
+        Debug("finished creating an interface server...");
         // register natives
         register_natives();
     }
@@ -22,11 +23,14 @@ bool BftSmartAgent::create_java_vm(){
     JavaVM *this_jvm;
     JNIEnv *this_env;
     JavaVMInitArgs vm_args;
-    JavaVMOption* options = new JavaVMOption[1];
-    options[0].optionString = "-Djava.class.path=library/bin/bftsmart/demo/bftinterface";
-
+    JavaVMOption* options = new JavaVMOption[3];
+    options[0].optionString = "-Djava.class.path=store/bftsmartstore/library/bin/BFT-SMaRt.jar:store/bftsmartstore/library/lib/slf4j-api-1.7.25.jar:store/bftsmartstore/library/lib/bcpkix-jdk15on-160.jar:store/bftsmartstore/library/lib/commons-codec-1.11.jar:store/bftsmartstore/library/lib/logback-classic-1.2.3.jar:store/bftsmartstore/library/lib/netty-all-4.1.34.Final.jar:store/bftsmartstore/library/lib/bcprov-jdk15on-160.jar:store/bftsmartstore/library/lib/core-0.1.4.jar:store/bftsmartstore/library/lib/logback-core-1.2.3.jar";
+    options[1].optionString = "-Dlogback.configurationFile=\"store/bftsmartstore/library/config/logback.xml\"";
+    options[2].optionString = "-Djava.security.properties=\"store/bftsmartstore/library/config/java.security\"";
+    // options[3].optionString = "-Dio.netty.tryReflectionSetAccessible=true";
+    
     vm_args.version = JNI_VERSION_1_6;             // minimum Java version
-    vm_args.nOptions = 1;                          // number of options
+    vm_args.nOptions = 3;                          // number of options
     vm_args.options = options;
     vm_args.ignoreUnrecognized = false;     // invalid options make the JVM init fail
     
@@ -43,59 +47,77 @@ bool BftSmartAgent::create_java_vm(){
     }
     
     //=============== Display JVM version =======================================
-    std::cout << "JVM load succeeded: Version ";
+    Debug("JVM load succeeded: Version ");
     jint ver = env->GetVersion();
-    std::cout << ((ver>>16)&0x0f) << "."<<(ver&0x0f) << std::endl;
+    Debug("%d.%d", ((ver>>16)&0x0f), (ver&0x0f));
     return true;
 }
 
-bool BftSmartAgent::create_interface_client(TransportReceiver* receiver){
-    jclass cls = env->FindClass("BftInterfaceClient");  // try to find the class
+bool BftSmartAgent::create_interface_client(TransportReceiver* receiver, int client_id){
+    jclass cls = env->FindClass("bftsmart/demo/bftinterface/BftInterfaceClient");  // try to find the class
     if(cls == nullptr) {
-        std::cerr << "ERROR: class not found !";
+        std::cerr << "ERROR: class not found !" << std::endl;
         return false;
     }
     else {                                  // if class found, continue
-       std::cout << "Class BftInterfaceClient found" << std::endl;
+       Debug("Class BftInterfaceClient found. Client ID: %d", client_id);
        jmethodID mid = env->GetMethodID(cls, "<init>", "(IJ)V");  // find method
         if(mid == nullptr){
             std::cerr << "ERROR: constructor not found !" << std::endl;
             return false;
         }
         else {
-            this->bft_client = env->NewObject(cls, mid, static_cast<jint>(1001), reinterpret_cast<jlong>(receiver));                      // call method
-            std::cout << std::endl;
+            this->bft_client = env->NewObject(cls, mid, static_cast<jint>(client_id), reinterpret_cast<jlong>(receiver));                      // call method
         }
     }
     return true;
 }
 
-bool BftSmartAgent::create_interface_server(TransportReceiver* receiver){
-    jclass cls = env->FindClass("BftInterfaceServer");  // try to find the class
+bool BftSmartAgent::create_interface_server(TransportReceiver* receiver, int server_id){
+    jclass cls = env->FindClass("bftsmart/demo/bftinterface/BftInterfaceServer");  // try to find the class
     if(cls == nullptr) {
-        std::cerr << "ERROR: class not found !";
+        std::cerr << "ERROR: class not found !" << std::endl;
         return false;
     }
     else {                                  // if class found, continue
-       std::cout << "Class BftInterfaceServer found" << std::endl;
+       Debug("Class BftInterfaceServer found. Server ID: %d", server_id);
+
        jmethodID mid = env->GetMethodID(cls, "<init>", "(IJ)V");  // find method
         if(mid == nullptr){
             std::cerr << "ERROR: constructor not found !" << std::endl;
             return false;
         }
         else {
-            this->bft_server = env->NewObject(cls, mid, static_cast<jint>(1001), reinterpret_cast<jlong>(receiver));                      // call method
-            std::cout << std::endl;
+            Debug("method ID found!");
+            this->bft_server = env->NewObject(cls, mid, static_cast<jint>(server_id), reinterpret_cast<jlong>(receiver)); // call method
+            Debug("new bftsmart server object created! Yeeah!");
         }
     }
     return true;
 }
 
-void agent_request_received(JNIEnv* env, jbyteArray arr, jlong handle){
-    jbyte* buf = env->GetByteArrayElements(arr, NULL);
+void agent_request_received(JNIEnv* env, jobject arr){
+
+    
+    jclass server_cls = env->GetObjectClass(arr);
+    jfieldID fid = env->GetFieldID(server_cls, "buffer", "Ljava/nio/ByteBuffer;");
+    jobject buffer = env->GetObjectField(arr, fid);
+    fid = env->GetFieldID(server_cls, "callbackHandle", "J");
+    jlong handle = env->GetLongField(arr, fid);
     TransportReceiver* replica = reinterpret_cast<TransportReceiver*>(handle);
     ReplTransportAddress* repl_addr = new ReplTransportAddress("client", "");
-    char * req = reinterpret_cast<char*>(buf);
+    
+    jlong capacity = env->GetDirectBufferCapacity(buffer);
+
+    // jmethodID mid = env->GetMethodID(buffer_cls, "position", "()I");
+    // Debug("getting mid!");
+
+    // jint capacity = env->CallIntMethod(arr, mid);
+
+    Debug("capacity: %d", capacity);
+    
+    char* req = static_cast<char*>(env->GetDirectBufferAddress(buffer));
+
     uint32_t *magic = reinterpret_cast<uint32_t*>(req);
     UW_ASSERT(*magic == MAGIC);
 
@@ -103,10 +125,7 @@ void agent_request_received(JNIEnv* env, jbyteArray arr, jlong handle){
 
     size_t totalSize = *sz;
     UW_ASSERT(totalSize < 1073741826);
-
-    if (strlen(req) < totalSize) {
-        return;
-    }
+    UW_ASSERT(totalSize == capacity);
 
     // Parse message
     char *ptr = req + sizeof(*sz) + sizeof(*magic);
@@ -126,26 +145,30 @@ void agent_request_received(JNIEnv* env, jbyteArray arr, jlong handle){
     UW_ASSERT((size_t)(ptr+msgLen-req) <= totalSize);
     string msg(ptr, msgLen);
     ptr += msgLen;
+    Debug("start sending the message to the receiver!");
     replica->ReceiveMessage(*repl_addr, msgType, msg, nullptr);
 }
 
 bool BftSmartAgent::register_natives(){
-    jclass cls = this->env->FindClass("BftInterfaceServer");
-    JNINativeMethod methods[] { { "bftRequestReceived", "([BJ)V", (void *)&agent_request_received } };  // mapping table
+    jclass cls = this->env->FindClass("bftsmart/demo/bftinterface/BftInterfaceServer");
+    Debug("register natives started!");
+    JNINativeMethod methods[] { { "bftRequestReceived", "(Lbftsmart/demo/bftinterface/BftInterfaceServer;)V", reinterpret_cast<void *>(agent_request_received) }};  // mapping table
+    Debug("native registering!");
 
-    if(this->env->RegisterNatives(cls, methods, 1) < 0) {                        // register it
-    if(this->env->ExceptionOccurred())                                        // verify if it's ok
-    {
-        std::cerr << " OOOOOPS: exception when registreing naives" << std::endl;
-        return false;
+    if(this->env->RegisterNatives(cls, methods, sizeof(methods)/sizeof(JNINativeMethod)) < 0) {                        // register it
+        if(this->env->ExceptionOccurred())                                        // verify if it's ok
+        {
+            Debug(" OOOOOPS: exception when registering natives");
+            return false;
+        }
+        else
+        {
+            Debug(" ERROR: problem when registering natives");
+            return false;
+        }
     }
-    else
-    {
-        std::cerr << " ERROR: problem when registreing naives" << std::endl;
-        return false;
-    }
+    Debug("succeeded in registering natives! ");
     return true;
-}
 }
 
 void BftSmartAgent::send_to_group(ShardClient* recv, int group_idx, void * buffer, size_t size){
@@ -154,7 +177,7 @@ void BftSmartAgent::send_to_group(ShardClient* recv, int group_idx, void * buffe
     jbyteArray java_byte_array = this->env->NewByteArray(size);
     this->env->SetByteArrayRegion(java_byte_array, 0, size, reinterpret_cast<jbyte*>(buffer));
 
-    jclass cls = this->env->FindClass("BftInterfaceClient");
+    jclass cls = this->env->GetObjectClass(this->bft_client);
     jmethodID mid = this->env->GetMethodID(cls, "startInterface", "([B)V");
     this->env->CallVoidMethod(this->bft_client, mid, java_byte_array);
 

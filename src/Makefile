@@ -165,7 +165,7 @@ include store/weakstore/Rules.mk
 include store/janusstore/Rules.mk
 include store/indicusstore/Rules.mk
 include store/pbftstore/Rules.mk
-# include store/hotstuffstore/Rules.mk
+include store/hotstuffstore/Rules.mk
 include store/bftsmartstore/Rules.mk
 include store/benchmark/async/tpcc/Rules.mk
 include store/Rules.mk
@@ -308,8 +308,14 @@ print-%:
 
 .PHONY: bftsmart
 bftsmart: 
-	@echo '====== Start Building HotStuff ======'
+	@echo '====== Start Building BftSmart ======'
 	cd ./store/bftsmartstore/libhotstuff/; ./build.sh
+	@echo '====== Finish Building BftSmart ======'
+
+.PHONY: hotstuff
+hotstuff: 
+	@echo '====== Start Building HotStuff ======'
+	cd ./store/hotstuffstore/libhotstuff/; ./build.sh
 	@echo '====== Finish Building HotStuff ======'
 
 
@@ -318,7 +324,7 @@ indicus: $(BINS)
 
 
 .PHONY: all
-all: bftsmart
+all: bftsmart hotstuff
 	@echo '====== Start Building Indicus ======'
 	$(MAKE) indicus 
 	@echo '====== Finish Building Indicus ======'

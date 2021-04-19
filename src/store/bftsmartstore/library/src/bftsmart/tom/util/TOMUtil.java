@@ -243,7 +243,7 @@ public class TOMUtil {
     }
     
     public static MessageDigest getHashEngine() throws NoSuchAlgorithmException {
-        
+        logger.info("getting hash engine here!");
         return MessageDigest.getInstance(TOMUtil.hashAlgorithm, Security.getProvider(TOMUtil.hashAlgorithmProvider));
     }
     

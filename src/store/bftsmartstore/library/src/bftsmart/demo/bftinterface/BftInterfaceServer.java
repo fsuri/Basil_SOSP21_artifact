@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package bftsmart.tom.server.defaultservices;
+package bftsmart.demo.bftinterface;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -30,6 +30,8 @@ import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
+import java.nio.ByteBuffer;
+import java.security.Security;
 
 import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
@@ -38,12 +40,19 @@ import bftsmart.reconfiguration.util.TOMConfiguration;
 import bftsmart.statemanagement.ApplicationState;
 import bftsmart.statemanagement.StateManager;
 import bftsmart.statemanagement.standard.StandardStateManager;
+import bftsmart.tom.server.defaultservices.StateLog;
+import bftsmart.tom.server.defaultservices.DefaultApplicationState;
+import bftsmart.tom.server.defaultservices.CommandsInfo;
+import bftsmart.tom.server.defaultservices.DiskStateLog;
 import bftsmart.tom.ReplicaContext;
+import bftsmart.tom.server.Executable;
 import bftsmart.tom.server.Recoverable;
 import bftsmart.tom.server.NoReplySingleExecutable;
 import bftsmart.tom.util.TOMUtil;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 /**
  * This class provides a basic state transfer protocol using the interface
@@ -51,7 +60,8 @@ import org.slf4j.LoggerFactory;
  * @author Marcel Santos
  */
 public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable {
-    
+// public class BftInterfaceServer{
+   
     private Logger logger = LoggerFactory.getLogger(this.getClass());
     
     protected ReplicaContext replicaContext;
@@ -73,16 +83,26 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
 
     private int counter = 0;
     private int iterations = 0;
-    private long callbackHandle = 0;
+    public long callbackHandle = 0;
+    public ByteBuffer buffer;
+
+    static{
+       Security.addProvider(new BouncyCastleProvider());
+    }
     
     public BftInterfaceServer(int id, long callbackHandle) {
         this.callbackHandle = callbackHandle;
+        logger.info("start bft interface server in java...");
         try {
             md = TOMUtil.getHashEngine();
         } catch (NoSuchAlgorithmException ex) {
             logger.error("Failed to get message digest engine", ex);
         }
-    	new ServiceReplica(id, this, this);
+        logger.info("creating service replica...");
+	    logger.info("Starting service replica with params:" + id + " " + this + " " + this);
+        new ServiceReplica(id, this, this);
+        logger.info("starting server " + id + " in the Java side!");
+
     }
     
     public void executeOrdered(byte[] command, MessageContext msgCtx) {
@@ -106,7 +126,7 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
         
         if(msgCtx.isLastInBatch()) {
 	        if ((cid > 0) && ((cid % checkpointPeriod) == 0)) {
-	            logger.debug("Performing checkpoint for consensus " + cid);
+	            // logger.debug("Performing checkpoint for consensus " + cid);
 	            stateLock.lock();
 	            byte[] snapshot = getSnapshot();
 	            stateLock.unlock();
@@ -181,7 +201,7 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
         logLock.unlock();
     }
 
-    @Override
+    // @Override
     public ApplicationState getState(int cid, boolean sendState) {
         logLock.lock();
         ApplicationState ret = (cid > -1 ? getLog().getApplicationState(cid, sendState) : new DefaultApplicationState());
@@ -196,7 +216,7 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
         return ret;
     }
     
-    @Override
+    // @Override
     public int setState(ApplicationState recvState) {
         int lastCID = -1;
         if (recvState instanceof DefaultApplicationState) {
@@ -252,7 +272,7 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
         return lastCID;
     }
 
-    @Override
+    // @Override
     public void setReplicaContext(ReplicaContext replicaContext) {
         this.replicaContext = replicaContext;
         this.config = replicaContext.getStaticConfiguration();
@@ -280,7 +300,7 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
         getStateManager().askCurrentConsensusId();
     }
 
-    @Override
+    // @Override
     public StateManager getStateManager() {
     	if(stateManager == null)
     		stateManager = new StandardStateManager();
@@ -302,18 +322,18 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
     	}
     }
           
-    @Override
+    // @Override
     public byte[] executeUnordered(byte[] command, MessageContext msgCtx) {
         appExecuteUnordered(command, msgCtx);
         return null;
     }
     
-    @Override
+    // @Override
     public void Op(int CID, byte[] requests, MessageContext msgCtx) {
         //Requests are logged within 'executeOrdered(...)' instead of in this method.
     }
 
-    @Override
+    // @Override
     public void noOp(int CID, byte[][] operations, MessageContext[] msgCtx) {
          
         for (int i = 0; i < msgCtx.length; i++) {
@@ -328,11 +348,17 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
   
     public void appExecuteOrdered(byte[] command, MessageContext msgCtx) {
         iterations++;
-        // TODO: call the native registration...
-        bftRequestReceived(command,this.callbackHandle);
+        logger.info("in app execute ordered. array length: " + command.length);
+        // for (int i = 0; i < command.length; ++i){
+        //     System.out.print((int)command[i]);
+        //     System.out.print(" ");
+        // }
+        // System.out.println();
+        buffer = ByteBuffer.allocateDirect(command.length).put(command);
+        logger.info("is direct? " + buffer.isDirect());
+        bftRequestReceived(this);
+        logger.info("buffer command executed! ");
     }
-
-    public native void bftRequestReceived(byte[] request, long callbackHandle);
     
     @SuppressWarnings("unchecked")
     public void installSnapshot(byte[] state) {
@@ -363,4 +389,13 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
                     + ioe.getMessage());
             return "ERROR".getBytes();
         }
-    }}
+    }
+
+    public native void bftRequestReceived(BftInterfaceServer request);
+
+    // Used for testing purposes
+    public static void main(String[] args){
+        int i = Integer.parseInt(args[0]);
+        new BftInterfaceServer(i, 0);
+    }
+}

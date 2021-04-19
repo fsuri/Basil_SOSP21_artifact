@@ -32,6 +32,7 @@
 #include "store/indicusstore/client.h"
 #include "store/pbftstore/client.h"
 // HotStuff
+#include "store/hotstuffstore/client.h"
 #include "store/bftsmartstore/client.h"
 #include "store/common/frontend/one_shot_client.h"
 #include "store/common/frontend/async_one_shot_adapter_client.h"
@@ -56,7 +57,7 @@ enum protomode_t {
   PROTO_INDICUS,
 	PROTO_PBFT,
     // HotStuff
-    // PROTO_HOTSTUFF
+    PROTO_HOTSTUFF,
     // Bftsmart
     PROTO_BFTSMART
 };
@@ -219,8 +220,8 @@ DEFINE_bool(indicus_batch_verification, false, "using ed25519 donna batch verifi
 DEFINE_uint64(indicus_batch_verification_size, 64, "batch size for ed25519 donna batch verification");
 DEFINE_uint64(indicus_batch_verification_timeout, 5, "batch verification timeout, ms");
 
-DEFINE_bool(pbft_order_commit, false, "order commit writebacks as well");
-DEFINE_bool(pbft_validate_abort, false, "validate abort writebacks as well");
+DEFINE_bool(pbft_order_commit, true, "order commit writebacks as well");
+DEFINE_bool(pbft_validate_abort, true, "validate abort writebacks as well");
 
 
 DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
@@ -287,7 +288,7 @@ const std::string protocol_args[] = {
   "indicus",
 	"pbft",
 // HotStuff
-    // "hotstuff"
+    "hotstuff",
 // BFTSmart
   "bftsmart"
 };
@@ -304,7 +305,7 @@ const protomode_t protomodes[] {
   PROTO_INDICUS,
       PROTO_PBFT,
   // HotStuff
-      // PROTO_HOTSTUFF
+  PROTO_HOTSTUFF,
   PROTO_BFTSMART
 };
 const strongstore::Mode strongmodes[] {
@@ -701,6 +702,8 @@ int main(int argc, char **argv) {
       NOT_REACHABLE();
   }
 
+  Debug("transport protocol used: %d",trans);
+
 
   KeySelector *keySelector;
   switch (keySelectionMode) {
@@ -983,7 +986,7 @@ int main(int argc, char **argv) {
     }
 
 // HotStuff
-    /* case PROTO_HOTSTUFF: {
+    case PROTO_HOTSTUFF: {
         uint64_t readQuorumSize = 0;
         switch (read_quorum) {
         case READ_QUORUM_ONE:
@@ -1013,7 +1016,7 @@ int main(int argc, char **argv) {
             NOT_REACHABLE();
         }
 
-        client = new bftsmartstore::Client(*config, clientId, FLAGS_num_shards,
+        client = new hotstuffstore::Client(*config, clientId, FLAGS_num_shards,
                                        FLAGS_num_groups, closestReplicas,
 																			  tport, part,
                                        readMessages, readQuorumSize,
@@ -1022,7 +1025,7 @@ int main(int argc, char **argv) {
 																			 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort,
 																			 TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
-    }*/
+    }
 
 
     default:

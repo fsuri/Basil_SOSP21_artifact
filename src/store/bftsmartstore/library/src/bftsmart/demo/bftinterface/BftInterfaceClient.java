@@ -21,8 +21,10 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.security.Security;
 
 import bftsmart.tom.ServiceProxy;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 
 /**
@@ -35,6 +37,10 @@ public class BftInterfaceClient{
     ServiceProxy serviceProxy;
     long callbackHandle;
 
+    static{
+       Security.addProvider(new BouncyCastleProvider());
+    }
+
     public BftInterfaceClient(int id, long callbackHandle) {
 
         this.id = id;
@@ -44,6 +50,7 @@ public class BftInterfaceClient{
     }
 
     public void startInterface(byte[] payload){
+        System.out.println("INTERFACE STARTED AT CLIENT SIDE!");
         this.serviceProxy.invokeOrdered(payload);
     }
 

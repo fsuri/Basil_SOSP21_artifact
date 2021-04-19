@@ -1,5 +1,5 @@
-#ifndef _HOTSTUFF_APP_H_
-#define _HOTSTUFF_APP_H_
+#ifndef _BFTSMART_APP_H_
+#define _BFTSMART_APP_H_
 
 #include <string>
 #include "store/bftsmartstore/pbft-proto.pb.h"

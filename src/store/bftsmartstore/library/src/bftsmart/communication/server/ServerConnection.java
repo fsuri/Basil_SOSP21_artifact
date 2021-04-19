@@ -523,7 +523,9 @@ public class ServerConnection {
 
 		String algorithm = Security.getProperty("ssl.KeyManagerFactory.algorithm");
 		try {
-			fis = new FileInputStream("config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
+			// MODIFIED
+			// fis = new FileInputStream("config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
+			fis = new FileInputStream("store/bftsmartstore/library/config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
 			ks = KeyStore.getInstance(KeyStore.getDefaultType());
 			ks.load(fis, SECRET.toCharArray());
 		} catch (FileNotFoundException | KeyStoreException | NoSuchAlgorithmException | CertificateException e) {

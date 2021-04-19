@@ -5,6 +5,7 @@ package bftsmartstore.proto;
 message TransportAddress {
   required uint32 sin_addr = 1;
   required uint32 sin_port = 2;
+  required uint32 sin_family = 3;
 }
 
 message PackedMessage {

@@ -56,7 +56,7 @@ public:
                           const proto::GroupedSignedMessage &msg);
 
  private:
-  IndicusInterface hotstuff_interface;
+  // IndicusInterface hotstuff_interface;
   std::unordered_map<std::string, proto::PackedMessage> requests_dup;
 
   const transport::Configuration &config;

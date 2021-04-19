@@ -53,9 +53,9 @@ class UDPTransportAddress : public TransportAddress
 public:
     virtual UDPTransportAddress * clone() const;
     virtual ~UDPTransportAddress() {}
-private:
-    UDPTransportAddress(const sockaddr_in &addr);
     sockaddr_in addr;
+    UDPTransportAddress(const sockaddr_in &addr);
+private:
     friend class UDPTransport;
     friend bool operator==(const UDPTransportAddress &a,
                            const UDPTransportAddress &b);

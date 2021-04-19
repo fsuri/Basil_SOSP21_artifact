@@ -32,7 +32,6 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
                  uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, int hotstuff_cpu, int numShards, Transport *transport)
     : config(config),
-      hotstuff_interface(groupIdx, idx, hotstuff_cpu),
       keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
     id(groupIdx * config.n + idx), signMessages(signMessages), maxBatchSize(maxBatchSize),
       batchTimeoutMS(batchTimeoutMS), EbatchSize(EbatchSize), EbatchTimeoutMS(EbatchTimeoutMS), primaryCoordinator(primaryCoordinator), requestTx(requestTx), numShards(numShards), transport(transport) {
@@ -73,7 +72,7 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
     }
   }
 
-  bftsmartagent = new BftSmartAgent(false, this);
+  bftsmartagent = new BftSmartAgent(false, this, idx);
 }
 
 Replica::~Replica() {}
@@ -113,8 +112,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   bool recvSignedMessage = false;
 
   // TODO: modify transport address!
-  TCPTransportAddress* client = static_cast<TCPTransportAddress*>(malloc(sizeof(TCPTransportAddress)));
-
+  Debug("message received already in ReceiveMessage()");
   Debug("Received message of type %s", t.c_str());
 
   if (t == tmpsignedMessage.GetTypeName()) {
@@ -143,8 +141,10 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     sockaddr_in myaddr;
     myaddr.sin_port = static_cast<uint16_t>(caddr.sin_port());
     myaddr.sin_addr.s_addr = static_cast<uint32_t>(caddr.sin_addr());
-    client->addr = myaddr;
-    HandleRequest(*client, recvrequest);
+    myaddr.sin_family = static_cast<uint8_t>(caddr.sin_family());
+    UDPTransportAddress client(myaddr);
+    HandleRequest(client, recvrequest);
+    Debug("finished handling requests");
   } else if (type == recvbatchedRequest.GetTypeName()) {
     recvbatchedRequest.ParseFromString(data);
     HandleBatchedRequest(remote, recvbatchedRequest);
@@ -296,6 +296,67 @@ bool Replica::sendMessageToAll(const ::google::protobuf::Message& msg) {
 
 void Replica::HandleRequest(const TransportAddress &remote,
                                const proto::Request &request) {
+  string digest = request.digest();
+  DebugHash(digest);
+  if (requests_dup.find(digest) == requests_dup.end()) {
+    Debug("new request: %s", request.packed_msg().type().c_str());
+    stats->Increment("handle_new_count",1);
+
+    // This unordered map is only used here so read doesn't require locks.
+    requests_dup[digest] = request.packed_msg();
+    Debug("cloning the transport address");
+    TransportAddress* clientAddr = remote.clone();
+    Debug("finished cloning the transport address!");
+    proto::PackedMessage packedMsg = request.packed_msg();
+
+    int seqnum = execSeqNum;
+    
+    Debug("unpacked the packed message");
+    if(numShards <= 6 || numShards == 12){
+      auto f = [this, digest, packedMsg, clientAddr, seqnum](){
+          Debug("Callback: %d, %ld", idx, seqnum);
+          stats->Increment("hotstuff_exec_callback",1);
+
+          // prepare data structures for executeSlots()
+          requests[digest] = packedMsg;
+          replyAddrs[digest] = clientAddr;
+
+          proto::BatchedRequest batchedRequest;
+          (*batchedRequest.mutable_digests())[0] = digest;
+          string batchedDigest = BatchedDigest(batchedRequest);
+          batchedRequests[batchedDigest] = batchedRequest;
+          pendingExecutions[seqnum] = batchedDigest;
+
+          executeSlots();
+          return (void*) true;
+      };
+      transport->DispatchTP_main(f);
+      //transport->DispatchTP_noCB(f);
+    } else {
+      // numShards should be 24
+      if (numShards != 24)
+          Panic("Currently only support numShards == 6, 12 or 24");
+
+      Debug("Callback: %d, %ld", idx, seqnum);
+      stats->Increment("hotstuff_exec_callback",1);
+
+      // prepare data structures for executeSlots()
+      requests[digest] = packedMsg;
+      replyAddrs[digest] = clientAddr;
+
+      proto::BatchedRequest batchedRequest;
+      (*batchedRequest.mutable_digests())[0] = digest;
+      string batchedDigest = BatchedDigest(batchedRequest);
+      batchedRequests[batchedDigest] = batchedRequest;
+      pendingExecutions[seqnum] = batchedDigest;
+
+      executeSlots();
+    }
+  }
+}
+
+/*void OldHandleRequest(const TransportAddress &remote,
+                               const proto::Request &request) {
   Debug("Handling request message");
 
   string digest = request.digest();
@@ -357,7 +418,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
 
       };
       // TODO: Propose to BFT Smart instead
-      hotstuff_interface.propose(digest, execb);
+      // hotstuff_interface.propose(digest, execb);
 
       // digest[0] = 'b';
       // digest[1] = 'u';
@@ -379,7 +440,7 @@ void Replica::HandleRequest(const TransportAddress &remote,
   }
 
 }
-
+*/
 void Replica::sendBatchedPreprepare() {
   proto::BatchedRequest batchedRequest;
   stats->Increment(bStatNames[pendingBatchedDigests.size()], 1);

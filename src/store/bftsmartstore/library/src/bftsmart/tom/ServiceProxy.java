@@ -269,13 +269,15 @@ public class ServiceProxy extends TOMSender {
 					return invoke(request,TOMMessageType.ORDERED_REQUEST);
 				}
 			}else{ 
-				if (!this.sm.tryAcquire(invokeTimeout, TimeUnit.SECONDS)) {
-					logger.info("###################TIMEOUT#######################");
-					logger.info("Reply timeout for reqId=" + reqId + ", Replies received: " + receivedReplies);
-					canSendLock.unlock();
+				// if (!this.sm.tryAcquire(invokeTimeout, TimeUnit.SECONDS)) {
+				// 	logger.info("###################TIMEOUT#######################");
+				// 	logger.info("Reply timeout for reqId=" + reqId + ", Replies received: " + receivedReplies);
+				// 	canSendLock.unlock();
 
-					return null;
-				}
+				// 	return null;
+				// }
+				logger.info("Finished sending to the servers!");
+				return null;
 			}
 		} catch (InterruptedException ex) {
 			logger.error("Problem aquiring semaphore",ex);
