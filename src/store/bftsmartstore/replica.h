@@ -24,7 +24,6 @@
 
 // use HotStuff library
 // comment out the below macro to switch back to pbftstore
-#define USE_BFTSMART_STORE
 #include "store/bftsmartstore/libhotstuff/examples/indicus_interface.h"
 
 namespace bftsmartstore {
@@ -39,6 +38,9 @@ public:
   // Message handlers.
   void ReceiveMessage(const TransportAddress &remote, const std::string &type,
                       const std::string &data, void *meta_data);
+
+  void ReceiveFromBFTSmart(const string &type, const string &data);
+
   void HandleRequest(const TransportAddress &remote,
                            const proto::Request &msg);
   void HandleBatchedRequest(const TransportAddress &remote,

@@ -425,6 +425,7 @@ void ShardClient::Get(const std::string &key, const Timestamp &ts,
   Debug("Get id: %lu", reqId);
   read.set_req_id(reqId);
   read.set_key(key);
+  Debug("name of type: %s", read.GetTypeName());
   ts.serialize(read.mutable_timestamp());
 
 

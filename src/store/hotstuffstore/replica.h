@@ -21,7 +21,7 @@
 
 // use HotStuff library
 // comment out the below macro to switch back to pbftstore
-#define USE_HOTSTUFF_STORE
+// #define USE_HOTSTUFF_STORE
 #include "store/hotstuffstore/libhotstuff/examples/indicus_interface.h"
 
 namespace hotstuffstore {

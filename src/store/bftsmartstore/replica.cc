@@ -41,6 +41,7 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   currentView = 0;
   // initial seqnum
   nextSeqNum = 0;
+  tmpSeqNum = 0;
   execSeqNum = 0;
   execBatchNum = 0;
 
@@ -105,6 +106,31 @@ void Replica::CreateHMACedMessage(const ::google::protobuf::Message &msg, proto:
   signedMessage.set_signature(hmacs.SerializeAsString());
 }
 
+void Replica::ReceiveFromBFTSmart(const string &type, const string &data){
+  bool recvSignedMessage = false;
+
+    // TODO: modify transport address!
+  Debug("message upcalled from BFT smart agent");
+  Debug("Received message of type %s", type.c_str());
+
+  if (type == recvrequest.GetTypeName()) {
+
+    // TODO: special processing requests
+    recvrequest.ParseFromString(data);
+    proto::TransportAddress caddr = recvrequest.client_address();
+    sockaddr_in myaddr;
+    myaddr.sin_port = static_cast<uint16_t>(caddr.sin_port());
+    myaddr.sin_addr.s_addr = static_cast<uint32_t>(caddr.sin_addr());
+    myaddr.sin_family = static_cast<uint8_t>(caddr.sin_family());
+    UDPTransportAddress client(myaddr);
+    HandleRequest(client, recvrequest);
+    Debug("finished handling requests");
+  }else{
+    Panic("message type not proto::Request, unimplemented");
+  }
+
+}
+
 void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
                           const string &d, void *meta_data) {
   string type;
@@ -135,6 +161,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
 
   if (type == recvrequest.GetTypeName()) {
 
+    // Panic("Request should go through BFT smart!!!");
     // TODO: special processing requests
     recvrequest.ParseFromString(data);
     proto::TransportAddress caddr = recvrequest.client_address();
@@ -309,48 +336,81 @@ void Replica::HandleRequest(const TransportAddress &remote,
     Debug("finished cloning the transport address!");
     proto::PackedMessage packedMsg = request.packed_msg();
 
-    int seqnum = execSeqNum;
-    
-    Debug("unpacked the packed message");
-    if(numShards <= 6 || numShards == 12){
-      auto f = [this, digest, packedMsg, clientAddr, seqnum](){
-          Debug("Callback: %d, %ld", idx, seqnum);
-          stats->Increment("hotstuff_exec_callback",1);
+    if (numShards <= 6 || numShards == 12){
+      auto f = [this, digest, packedMsg, clientAddr](){
+        stats->Increment("hotstuff_exec_callback",1);
+        requests[digest] = packedMsg;
+        replyAddrs[digest] = clientAddr;
 
-          // prepare data structures for executeSlots()
-          requests[digest] = packedMsg;
-          replyAddrs[digest] = clientAddr;
+        std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
+        for (const auto& reply : replies) {
+          if (reply != nullptr) {
+            Debug("Sending reply");
+            stats->Increment("execs_sent",1);
+            EpendingBatchedMessages.push_back(reply);
+            EpendingBatchedDigs.push_back(digest);
+            if (EpendingBatchedMessages.size() >= EbatchSize) {
+              Debug("EBatch is full, sending %d", EbatchSize);
 
-          proto::BatchedRequest batchedRequest;
-          (*batchedRequest.mutable_digests())[0] = digest;
-          string batchedDigest = BatchedDigest(batchedRequest);
-          batchedRequests[batchedDigest] = batchedRequest;
-          pendingExecutions[seqnum] = batchedDigest;
+              // HotStuff: disable timer for HotStuff due to concurrency bugs
+              // if (EbatchTimerRunning) {
+              //   transport->CancelTimer(EbatchTimerId);
+              //   EbatchTimerRunning = false;
+              // }
+              sendEbatch();
+            } else if (!EbatchTimerRunning) {
+              EbatchTimerRunning = true;
+              Debug("Starting ebatch timer");
+              // EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
+              //   Debug("EBatch timer expired, sending");
+              //   this->EbatchTimerRunning = false;
+              //   this->sendEbatch();
+              // });
+            }
+          } else {
+            Debug("Invalid execution");
+          }
+        }
 
-          executeSlots();
-          return (void*) true;
+        return (void *)true;
       };
-      transport->DispatchTP_main(f);
-      //transport->DispatchTP_noCB(f);
+      // transport->DispatchTP_main(f);
+      f();
     } else {
-      // numShards should be 24
-      if (numShards != 24)
-          Panic("Currently only support numShards == 6, 12 or 24");
-
-      Debug("Callback: %d, %ld", idx, seqnum);
       stats->Increment("hotstuff_exec_callback",1);
+        requests[digest] = packedMsg;
+        replyAddrs[digest] = clientAddr;
 
-      // prepare data structures for executeSlots()
-      requests[digest] = packedMsg;
-      replyAddrs[digest] = clientAddr;
+        DebugHash(digest);
+        std::vector<::google::protobuf::Message*> replies = app->Execute(packedMsg.type(), packedMsg.msg());
+        for (const auto& reply : replies) {
+          if (reply != nullptr) {
+            Debug("Sending reply");
+            stats->Increment("execs_sent",1);
+            EpendingBatchedMessages.push_back(reply);
+            EpendingBatchedDigs.push_back(digest);
+            if (EpendingBatchedMessages.size() >= EbatchSize) {
+              Debug("EBatch is full, sending %d", EbatchSize);
 
-      proto::BatchedRequest batchedRequest;
-      (*batchedRequest.mutable_digests())[0] = digest;
-      string batchedDigest = BatchedDigest(batchedRequest);
-      batchedRequests[batchedDigest] = batchedRequest;
-      pendingExecutions[seqnum] = batchedDigest;
-
-      executeSlots();
+              // HotStuff: disable timer for HotStuff due to concurrency bugs
+              // if (EbatchTimerRunning) {
+              //   transport->CancelTimer(EbatchTimerId);
+              //   EbatchTimerRunning = false;
+              // }
+              sendEbatch();
+            } else if (!EbatchTimerRunning) {
+              EbatchTimerRunning = true;
+              Debug("Starting ebatch timer");
+              // EbatchTimerId = transport->Timer(EbatchTimeoutMS, [this]() {
+              //   Debug("EBatch timer expired, sending");
+              //   this->EbatchTimerRunning = false;
+              //   this->sendEbatch();
+              // });
+            }
+          } else {
+            Debug("Invalid execution");
+          }
+        }
     }
   }
 }
@@ -955,11 +1015,12 @@ void Replica::executeSlots_internal() {
   }
 }
 void Replica::sendEbatch(){
-  if(true){
+  if(false){
     // std::function<void*> f(std::bind(&Replica::delegateEbatch, this, EpendingBatchedMessages,
     //            EsignedMessages, EpendingBatchedDigs));
     auto f = [this, EpendingBatchedMessages_ = EpendingBatchedMessages,
                EpendingBatchedDigs_ = EpendingBatchedDigs](){
+      Debug("size of the e pending batched messages array: %d", EpendingBatchedMessages_.size());
       this->delegateEbatch(EpendingBatchedMessages_,
                  EpendingBatchedDigs_);
       return (void*) true;
@@ -974,10 +1035,10 @@ void Replica::sendEbatch(){
 }
 
 void Replica::sendEbatch_internal() {
-  //std::cerr << "executing sendEbatch" << std::endl;
+  std::cerr << "executing sendEbatch" << std::endl;
   stats->Increment(EbStatNames[EpendingBatchedMessages.size()], 1);
   std::vector<std::string*> messageStrs;
-  //std::cerr << "EbatchMessages.size: " << EpendingBatchedMessages.size() << std::endl;
+  std::cerr << "EbatchMessages.size: " << EpendingBatchedMessages.size() << std::endl;
   for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
     EsignedMessages[i]->Clear();
     EsignedMessages[i]->set_replica_id(id);
@@ -1013,7 +1074,7 @@ void Replica::delegateEbatch(std::vector<::google::protobuf::Message*> EpendingB
 
     std::vector<proto::SignedMessage> EsignedMessages_;
     std::vector<std::string*> messageStrs;
-    //std::cerr << "EbatchMessages.size: " << EpendingBatchedMessages.size() << std::endl;
+    std::cerr << "EbatchMessages.size: " << EpendingBatchedMessages_.size() << std::endl;
     for (unsigned int i = 0; i < EpendingBatchedMessages_.size(); i++) {
       EsignedMessages_.push_back(proto::SignedMessage());
       //EsignedMessages_[i].Clear();
