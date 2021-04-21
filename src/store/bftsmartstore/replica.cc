@@ -41,7 +41,6 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   currentView = 0;
   // initial seqnum
   nextSeqNum = 0;
-  tmpSeqNum = 0;
   execSeqNum = 0;
   execBatchNum = 0;
 
