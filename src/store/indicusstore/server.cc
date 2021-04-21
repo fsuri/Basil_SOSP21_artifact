@@ -784,7 +784,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
   const proto::Transaction *abstain_conflict = nullptr;
 
   if(msg.has_crash_failure() && msg.crash_failure()){
-    stats.Increment("total_crash", 1);
+    stats.Increment("total_crash_received", 1);
   }
   //KEEP track of interested client //TODO: keep track of original client
   // interestedClientsMap::accessor i;
@@ -1213,16 +1213,18 @@ void Server::HandlePhase2(const TransportAddress &remote,
             else{
               Debug("PHASE2[%s] message does not contain txn, but have not seen"
                   " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
+              std::cerr << "Aborting for txn: " << BytesToHex(msg.txn_digest(), 16) << std::endl;
               if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
                   FreePhase2message(&msg); //const_cast<proto::Phase2&>(msg));
               }
-              std::cerr << "Aborting for txn: " << BytesToHex(msg.txn_digest(), 16) << std::endl;
+
               // if(normal.count(msg.txn_digest()) > 0){ std::cerr << "was added on normal P1" << std::endl;}
               // else if(fallback.count(msg.txn_digest()) > 0){ std::cerr << "was added on ExecP1 FB" << std::endl;}
               // else{ std::cerr << "have not seen p1" << std::endl;}
               // waiting.insert(msg.txn_digest());
               //transport->Timer(10000, [this](){Panic("Fail in P2");});
               //Panic("Cannot validate p2 because server does not have tx for this reqId");
+              Warning("Cannot validate p2 because server does not have tx for this reqId");
               //std::cerr << "Cannot validate p2 because do not have tx for special id: " << msg.req_id() << std::endl;
               return;
             }
@@ -1395,6 +1397,7 @@ void Server::HandleWriteback(const TransportAddress &remote,
         // else{ std::cerr << "have not seen p1" << std::endl;}
         // waiting.insert(msg.txn_digest());
         //transport->Timer(10000, [this](){Panic("Fail in WB");});
+        Warning("Cannot process Writeback because ongoing does not contain tx for this request. Should not happen with TCP...");
         //Panic("When using TCP the tx should always be ongoing before doing WB");
         return WritebackCallback(&msg, txnDigest, txn, (void*) false);
       }
@@ -3928,7 +3931,10 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
       delete p1fb_organizer;
     };
 
+
     if (params.signedMessages) {
+      p1fb_organizer->sendCBmutex.lock();
+
       //First, "atomically" set the outstanding flags. (Need to do this before dispatching anything)
       if(p1FBReply->has_p1r() && p1FBReply->p1r().cc().ccr() != proto::ConcurrencyControl::ABORT){
         Debug("FB sending P1 result:[%d] for txn: %s", p1FBReply->p1r().cc().ccr(), BytesToHex(txnDigest, 16).c_str());
@@ -3975,10 +3981,11 @@ void Server::SendPhase1FBReply(P1FBorganizer *p1fb_organizer, const std::string 
             delete p2Decision;
           });
       }
+      p1fb_organizer->sendCBmutex.unlock();
     }
 
     else{
-      p1fb_organizer->sendCBmutex.unlock(); //just locking in order to support the unlock in sendCB
+      p1fb_organizer->sendCBmutex.lock(); //just locking in order to support the unlock in sendCB
       sendCB(); //lock is unlocked in here...
     }
 }

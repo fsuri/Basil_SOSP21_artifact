@@ -290,7 +290,7 @@ void Client::Phase1(PendingRequest *req) {
   if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
     Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
           BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
-    //stats.Increment("inject_failure_crash");
+    stats.Increment("inject_failure_crash");
     //total_failure_injections++;
     FailureCleanUp(req);
     return;
@@ -536,6 +536,7 @@ void Client::Phase2SimulateEquivocation(PendingRequest *req){
   //std::cerr << "SIMULATED EQUIVOCATION. STOPPING" << std::endl;
     //Panic("simulated equiv.");
     //terminate ongoing tx mangagement and move to next tx:
+  stats.Increment("inject_equiv_forced", 1);
   FailureCleanUp(req);
   return;
 
@@ -588,6 +589,7 @@ void Client::Phase2Equivocate(PendingRequest *req) {
   //       std::placeholders::_1), req->timeout);
 
   //terminate ongoing tx mangagement and move to next tx:
+  stats.Increment("inject_equiv_real");
   FailureCleanUp(req);
 }
 
@@ -671,7 +673,8 @@ void Client::Writeback(PendingRequest *req) {
   if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_STALL_AFTER_P1) {
     Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
           BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
-    stats.Increment("total_stall_after_p1");
+    stats.Increment("inject_stall_after_p1", 1);
+    //stats.Increment("total_stall_after_p1");
     //total_failure_injections++;
     FailureCleanUp(req);
     return;

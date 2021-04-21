@@ -500,9 +500,9 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
   //std::unordered_map<std::string, proto::Transaction *> ongoing;
   typedef tbb::concurrent_hash_map<std::string, proto::Transaction *> ongoingMap;
   ongoingMap ongoing;
-  std::unordered_set<std::string> normal;
-  std::unordered_set<std::string> fallback;
-  std::unordered_set<std::string> waiting;
+  // std::unordered_set<std::string> normal;
+  // std::unordered_set<std::string> fallback;
+  // std::unordered_set<std::string> waiting;
   // Digest -> V
   //std::unordered_map<std::string, std::pair<Timestamp, const proto::Transaction *>> prepared;
   typedef tbb::concurrent_hash_map<std::string, std::pair<Timestamp, const proto::Transaction *>> preparedMap;
