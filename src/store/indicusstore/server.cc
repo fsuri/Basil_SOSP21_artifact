@@ -4098,7 +4098,9 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
       }
       p2fb_organizer->sendCBmutex.unlock();
       if(sub_original){ //XXX sending normal p2 to subscribed original client.
+        //std::cerr << "Sending to subscribed original" << std::endl;
         transport->SendMessage(this, *p2fb_organizer->original, p2fb_organizer->p2fbr->p2r());
+        //std::cerr << "Sending to subscribed original success" << std::endl;
       }
       if(!multi){
           transport->SendMessage(this, *p2fb_organizer->remote, *p2fb_organizer->p2fbr);
@@ -4118,6 +4120,7 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
     };
 
     if (params.signedMessages) {
+      p2fb_organizer->sendCBmutex.lock();
       //First, "atomically" set the outstanding flags. (Need to do this before dispatching anything)
       if(p2FBReply->has_p2r()){
         p2fb_organizer->p2_sig_outstanding = true;
@@ -4147,6 +4150,7 @@ void Server::SendPhase2FBReply(P2FBorganizer *p2fb_organizer, const std::string 
             delete p2Decision;
           });
       }
+      p2fb_organizer->sendCBmutex.unlock();
     }
 
     else{
