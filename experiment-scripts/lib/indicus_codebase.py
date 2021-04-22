@@ -211,6 +211,7 @@ class IndicusCodebase(ExperimentCodebase):
                     client_command = 'setenv DEBUG %s; %s' % (config['client_debug_output'], client_command)
                 else:
                     client_command = 'setenv DEBUG all; %s' % client_command
+	client_command = 'setenv LD_LIBRARY_PATH /usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server/:$LD_LIBRARY_PATH; %s' % client_command
 
         client_command = '(cd %s; %s) & ' % (exp_directory, client_command)
         return client_command
@@ -416,6 +417,7 @@ class IndicusCodebase(ExperimentCodebase):
                             config['server_debug_output'], replica_command)
                 else:
                     replica_command = 'setenv DEBUG all; %s' % replica_command
+	replica_command = 'setenv LD_LIBRARY_PATH /usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server/:$LD_LIBRARY_PATH; %s' % replica_command
         replica_command = 'cd %s; %s' % (exp_directory, replica_command)
         return replica_command
 
