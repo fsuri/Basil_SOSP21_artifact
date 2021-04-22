@@ -39,7 +39,7 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
         // if numShards == 24, don't spawn any additional threads
         num_core_for_hotstuff = 0;
     }
-    for (uint32_t i = 1; i < num_threads -1 ; i++) { //used this setting for Smallbank/Retwis
+    //for (uint32_t i = 1; i < num_threads -1 ; i++) { //used this setting for Smallbank/Retwis
      for (uint32_t i = 0; i < num_threads; i++) { // - num_core_for_hotstuff; i++) {
         std::thread *t;
         //Mainthread
@@ -129,7 +129,7 @@ void ThreadPool::start(int process_id, int total_processes, bool hyperthreading,
         threads.push_back(t);
         t->detach();
     }
-  }
+  //}
   } else{
       fprintf(stderr, "starting client threadpool\n");
       int num_cpus = std::thread::hardware_concurrency(); ///(2-hyperthreading);

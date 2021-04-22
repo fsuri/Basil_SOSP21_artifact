@@ -24,28 +24,28 @@ bool BftSmartAgent::create_java_vm(){
     JNIEnv *this_env;
     JavaVMInitArgs vm_args;
     JavaVMOption* options = new JavaVMOption[3];
-    options[0].optionString = "-Djava.class.path=store/bftsmartstore/library/bin/BFT-SMaRt.jar:store/bftsmartstore/library/lib/slf4j-api-1.7.25.jar:store/bftsmartstore/library/lib/bcpkix-jdk15on-160.jar:store/bftsmartstore/library/lib/commons-codec-1.11.jar:store/bftsmartstore/library/lib/logback-classic-1.2.3.jar:store/bftsmartstore/library/lib/netty-all-4.1.34.Final.jar:store/bftsmartstore/library/lib/bcprov-jdk15on-160.jar:store/bftsmartstore/library/lib/core-0.1.4.jar:store/bftsmartstore/library/lib/logback-core-1.2.3.jar:store/bftsmartstore/library/config/";
+    options[0].optionString = "-Djava.class.path=store/bftsmartstore/library/bin/BFT-SMaRt.jar:store/bftsmartstore/library/lib/slf4j-api-1.7.25.jar:store/bftsmartstore/library/lib/bcpkix-jdk15on-160.jar:store/bftsmartstore/library/lib/commons-codec-1.11.jar:store/bftsmartstore/library/lib/logback-classic-1.2.3.jar:store/bftsmartstore/library/lib/netty-all-4.1.34.Final.jar:store/bftsmartstore/library/lib/bcprov-jdk15on-160.jar:store/bftsmartstore/library/lib/core-0.1.4.jar:store/bftsmartstore/library/lib/logback-core-1.2.3.jar:store/bftsmartstore/library/config";
     options[1].optionString = "-Dlogback.configurationFile=\"store/bftsmartstore/library/config/logback.xml\"";
     options[2].optionString = "-Djava.security.properties=\"store/bftsmartstore/library/config/java.security\"";
     // options[3].optionString = "-Dio.netty.tryReflectionSetAccessible=true";
-    
+
     vm_args.version = JNI_VERSION_1_6;             // minimum Java version
     vm_args.nOptions = 3;                          // number of options
     vm_args.options = options;
     vm_args.ignoreUnrecognized = false;     // invalid options make the JVM init fail
-    
+
     //=============== load and initialize Java VM and JNI interface =============
     jint rc = JNI_CreateJavaVM(&this_jvm, (void**)&this_env, &vm_args);  // YES !!
     this->jvm = this_jvm;
     this->env = this_env;
-    delete options;    // we then no longer need the initialisation options. 
+    delete options;    // we then no longer need the initialisation options.
     if (rc != JNI_OK) {
-        // TO DO: error processing... 
+        // TO DO: error processing...
         // cin.get();
         // exit(EXIT_FAILURE);
         return false;
     }
-    
+
     //=============== Display JVM version =======================================
     Debug("JVM load succeeded: Version ");
     jint ver = env->GetVersion();
@@ -98,7 +98,7 @@ bool BftSmartAgent::create_interface_server(TransportReceiver* receiver, int ser
 
 void agent_request_received(JNIEnv* env, jobject arr){
 
-    
+
     jclass server_cls = env->GetObjectClass(arr);
     jfieldID fid = env->GetFieldID(server_cls, "buffer", "Ljava/nio/ByteBuffer;");
     jobject buffer = env->GetObjectField(arr, fid);
@@ -106,7 +106,7 @@ void agent_request_received(JNIEnv* env, jobject arr){
     jlong handle = env->GetLongField(arr, fid);
     TransportReceiver* replica = reinterpret_cast<TransportReceiver*>(handle);
     ReplTransportAddress* repl_addr = new ReplTransportAddress("client", "");
-    
+
     jlong capacity = env->GetDirectBufferCapacity(buffer);
 
     // jmethodID mid = env->GetMethodID(buffer_cls, "position", "()I");
@@ -115,7 +115,7 @@ void agent_request_received(JNIEnv* env, jobject arr){
     // jint capacity = env->CallIntMethod(arr, mid);
 
     Debug("capacity: %d", capacity);
-    
+
     char* req = static_cast<char*>(env->GetDirectBufferAddress(buffer));
 
     uint32_t *magic = reinterpret_cast<uint32_t*>(req);
@@ -174,7 +174,7 @@ bool BftSmartAgent::register_natives(){
 
 void BftSmartAgent::send_to_group(ShardClient* recv, int group_idx, void * buffer, size_t size){
     // this->shard_client = recv;
-    
+
     jbyteArray java_byte_array = this->env->NewByteArray(size);
     this->env->SetByteArrayRegion(java_byte_array, 0, size, reinterpret_cast<jbyte*>(buffer));
 
