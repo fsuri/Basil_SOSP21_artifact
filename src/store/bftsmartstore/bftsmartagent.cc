@@ -24,7 +24,7 @@ bool BftSmartAgent::create_java_vm(){
     JNIEnv *this_env;
     JavaVMInitArgs vm_args;
     JavaVMOption* options = new JavaVMOption[3];
-    options[0].optionString = "-Djava.class.path=store/bftsmartstore/library/bin/BFT-SMaRt.jar:store/bftsmartstore/library/lib/slf4j-api-1.7.25.jar:store/bftsmartstore/library/lib/bcpkix-jdk15on-160.jar:store/bftsmartstore/library/lib/commons-codec-1.11.jar:store/bftsmartstore/library/lib/logback-classic-1.2.3.jar:store/bftsmartstore/library/lib/netty-all-4.1.34.Final.jar:store/bftsmartstore/library/lib/bcprov-jdk15on-160.jar:store/bftsmartstore/library/lib/core-0.1.4.jar:store/bftsmartstore/library/lib/logback-core-1.2.3.jar";
+    options[0].optionString = "-Djava.class.path=store/bftsmartstore/library/bin/BFT-SMaRt.jar:store/bftsmartstore/library/lib/slf4j-api-1.7.25.jar:store/bftsmartstore/library/lib/bcpkix-jdk15on-160.jar:store/bftsmartstore/library/lib/commons-codec-1.11.jar:store/bftsmartstore/library/lib/logback-classic-1.2.3.jar:store/bftsmartstore/library/lib/netty-all-4.1.34.Final.jar:store/bftsmartstore/library/lib/bcprov-jdk15on-160.jar:store/bftsmartstore/library/lib/core-0.1.4.jar:store/bftsmartstore/library/lib/logback-core-1.2.3.jar:store/bftsmartstore/library/config/";
     options[1].optionString = "-Dlogback.configurationFile=\"store/bftsmartstore/library/config/logback.xml\"";
     options[2].optionString = "-Djava.security.properties=\"store/bftsmartstore/library/config/java.security\"";
     // options[3].optionString = "-Dio.netty.tryReflectionSetAccessible=true";
