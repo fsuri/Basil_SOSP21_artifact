@@ -29,7 +29,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 /**
  * Example client that updates a BFT replicated service (a counter).
- * 
+ *
  */
 public class BftInterfaceClient{
 
@@ -50,7 +50,7 @@ public class BftInterfaceClient{
     }
 
     public void startInterface(byte[] payload){
-        System.out.println("INTERFACE STARTED AT CLIENT SIDE!");
+        System.out.println("BFTSMART-INTERFACE: InvokedOrdered at client side!");
         this.serviceProxy.invokeOrdered(payload);
     }
 
@@ -61,4 +61,3 @@ public class BftInterfaceClient{
     // public native void bftReplyReceived(byte[] reply, long callbackHandle);
 
 }
-

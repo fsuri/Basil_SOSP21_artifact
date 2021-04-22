@@ -373,8 +373,8 @@ void Replica::HandleRequest(const TransportAddress &remote,
 
         return (void *)true;
       };
-      // transport->DispatchTP_main(f);
-      f();
+      transport->DispatchTP_main(f);
+      //f();
     } else {
       stats->Increment("hotstuff_exec_callback",1);
         requests[digest] = packedMsg;
@@ -1014,7 +1014,7 @@ void Replica::executeSlots_internal() {
   }
 }
 void Replica::sendEbatch(){
-  if(false){
+  if(true){
     // std::function<void*> f(std::bind(&Replica::delegateEbatch, this, EpendingBatchedMessages,
     //            EsignedMessages, EpendingBatchedDigs));
     auto f = [this, EpendingBatchedMessages_ = EpendingBatchedMessages,
