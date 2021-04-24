@@ -14,6 +14,7 @@
 
 #include "store/common/stats.h"
 #include "store/bftsmartstore/pbft-proto.pb.h"
+#include "store/bftsmartstore/server-proto.pb.h"
 #include "store/bftsmartstore/slots.h"
 #include "store/bftsmartstore/app.h"
 #include "store/bftsmartstore/common.h"
@@ -87,8 +88,11 @@ public:
   proto::Commit recvcommit;
   proto::BatchedRequest recvbatchedRequest;
   proto::GroupedSignedMessage recvgrouped;
+  proto::Read recvrd;
   proto::RequestRequest recvrr;
   proto::ABRequest recvab;
+
+  std::unordered_map<uint64_t, const TransportAddress*> clientCache; 
 
   std::unordered_map<uint64_t, std::string> sessionKeys;
   bool ValidateHMACedMessage(const proto::SignedMessage &signedMessage, std::string &data, std::string &type);

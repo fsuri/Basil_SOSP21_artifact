@@ -8,6 +8,7 @@
 #include "lib/message.h"
 #include "lib/transport.h"
 #include "lib/udptransport.h"
+#include "lib/tcptransport.h"
 #include "store/common/stats.h"
 #include "store/common/timestamp.h"
 #include "store/common/transaction.h"
@@ -74,6 +75,7 @@ class ShardClient : public TransportReceiver {
   bool signMessages;
   bool validateProofs;
   KeyManager *keyManager;
+  int client_id;
 
   //addtional knobs: 1) order commit, 2) validate abort
   bool order_commit = false;

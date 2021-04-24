@@ -9,6 +9,7 @@ message Read {
   required uint64 req_id = 1;
   required bytes key = 2;
   required TimestampMessage timestamp = 3;
+  required uint64 client_id = 4;
 }
 
 message CommitProof {

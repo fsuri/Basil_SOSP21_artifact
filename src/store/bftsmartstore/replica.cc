@@ -116,13 +116,21 @@ void Replica::ReceiveFromBFTSmart(const string &type, const string &data){
 
     // TODO: special processing requests
     recvrequest.ParseFromString(data);
-    proto::TransportAddress caddr = recvrequest.client_address();
-    sockaddr_in myaddr;
-    myaddr.sin_port = static_cast<uint16_t>(caddr.sin_port());
-    myaddr.sin_addr.s_addr = static_cast<uint32_t>(caddr.sin_addr());
-    myaddr.sin_family = static_cast<uint8_t>(caddr.sin_family());
-    UDPTransportAddress client(myaddr);
-    HandleRequest(client, recvrequest);
+    // proto::TransportAddress caddr = recvrequest.client_address();
+    // sockaddr_in myaddr;
+    // myaddr.sin_port = static_cast<uint16_t>(caddr.sin_port());
+    // myaddr.sin_addr.s_addr = static_cast<uint32_t>(caddr.sin_addr());
+    // myaddr.sin_family = static_cast<uint8_t>(caddr.sin_family());
+    // // UDPTransportAddress client(myaddr);
+    // TCPTransportAddress client(myaddr);
+    uint64_t client_id = recvrequest.client_id();
+    try{
+      const TransportAddress* client = clientCache.at(client_id);
+      HandleRequest(*client, recvrequest);
+    }
+    catch (...){
+      Panic("Failed to get client ID! %d", client_id);
+    }
     Debug("finished handling requests");
   }else{
     Panic("message type not proto::Request, unimplemented");
@@ -163,13 +171,22 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     // Panic("Request should go through BFT smart!!!");
     // TODO: special processing requests
     recvrequest.ParseFromString(data);
-    proto::TransportAddress caddr = recvrequest.client_address();
-    sockaddr_in myaddr;
-    myaddr.sin_port = static_cast<uint16_t>(caddr.sin_port());
-    myaddr.sin_addr.s_addr = static_cast<uint32_t>(caddr.sin_addr());
-    myaddr.sin_family = static_cast<uint8_t>(caddr.sin_family());
-    UDPTransportAddress client(myaddr);
-    HandleRequest(client, recvrequest);
+    // proto::TransportAddress caddr = recvrequest.client_address();
+    // sockaddr_in myaddr;
+    // myaddr.sin_port = static_cast<uint16_t>(caddr.sin_port());
+    // myaddr.sin_addr.s_addr = static_cast<uint32_t>(caddr.sin_addr());
+    // myaddr.sin_family = static_cast<uint8_t>(caddr.sin_family());
+    // UDPTransportAddress client(myaddr);
+    // Debug("client addr: %d %d %d", caddr.sin_port(), caddr.sin_addr(), caddr.sin_family());
+    // TCPTransportAddress client(myaddr);
+    uint64_t client_id = recvrequest.client_id();
+    try{
+      const TransportAddress* client = clientCache.at(client_id);
+      HandleRequest(*client, recvrequest);
+    }
+    catch (...){
+      Panic("Failed to get client ID! %d", client_id);
+    }
     Debug("finished handling requests");
   } else if (type == recvbatchedRequest.GetTypeName()) {
     recvbatchedRequest.ParseFromString(data);
@@ -233,7 +250,13 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     recvgrouped.ParseFromString(data);
 
     HandleGrouped(remote, recvgrouped);
-  } else {
+  } else if (type == recvrd.GetTypeName()){
+    Debug("received Read!");
+    recvrd.ParseFromString(data);
+    // insert to the cid -> addr map
+    clientCache.insert(std::make_pair<uint64_t, const TransportAddress*>(static_cast<uint64_t>(recvrd.client_id()),remote.clone()));
+    handleMessage(remote, type, data);
+  } else{
     Debug("Sending request to app");
     handleMessage(remote, type, data);
 

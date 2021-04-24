@@ -31,7 +31,7 @@ def kill_servers(config, executor, kill_args=' -9'):
     futures = []
     if config['replication_protocol'] == 'indicus':
         n = 5 * config['fault_tolerance'] + 1
-    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff':
+    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'bftsmart':
         n = 3 * config['fault_tolerance'] + 1
     else:
         n = 2 * config['fault_tolerance'] + 1
@@ -190,7 +190,7 @@ def start_servers(config, local_exp_directory, remote_exp_directory, run):
     server_threads = []
     if config['replication_protocol'] == 'indicus' :
         n = 5 * config['fault_tolerance'] + 1
-    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff':
+    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'bftsmart':
         n = 3 * config['fault_tolerance'] + 1
     else:
         n = 2 * config['fault_tolerance'] + 1

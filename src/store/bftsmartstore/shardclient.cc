@@ -9,10 +9,11 @@ ShardClient::ShardClient(const transport::Configuration& config, Transport *tran
     bool signMessages, bool validateProofs,
     KeyManager *keyManager, Stats* stats, bool order_commit, bool validate_abort) :
     config(config), transport(transport),
-    group_idx(group_idx),
+    group_idx(group_idx), client_id(client_id),
     signMessages(signMessages), validateProofs(validateProofs),
     keyManager(keyManager), stats(stats), order_commit(order_commit), validate_abort(validate_abort) {
   bftsmartagent = new BftSmartAgent(true, this, 1000 + client_id);
+  Debug("created bftsmart agent in shard client!");
   transport->Register(this, config, -1, -1);
   readReq = 0;
 
@@ -425,6 +426,7 @@ void ShardClient::Get(const std::string &key, const Timestamp &ts,
   Debug("Get id: %lu", reqId);
   read.set_req_id(reqId);
   read.set_key(key);
+  read.set_client_id(client_id);
   Debug("name of type: %s", read.GetTypeName());
   ts.serialize(read.mutable_timestamp());
 
@@ -757,10 +759,13 @@ void ShardClient::Abort(std::string& txn_digest, const proto::ShardSignedDecisio
 
 void ShardClient::send_to_group(proto::Request& msg, int group_idx){
   // Set my address in the request
-  const UDPTransportAddress& addr = dynamic_cast<const UDPTransportAddress&>(*myAddress);
-  msg.mutable_client_address()->set_sin_addr(addr.addr.sin_addr.s_addr);
-  msg.mutable_client_address()->set_sin_port(addr.addr.sin_port);
-  msg.mutable_client_address()->set_sin_family(addr.addr.sin_family);
+  // const UDPTransportAddress& addr = dynamic_cast<const UDPTransportAddress&>(*myAddress);
+  // const TCPTransportAddress& addr = dynamic_cast<const TCPTransportAddress&>(*myAddress);
+  // msg.mutable_client_address()->set_sin_addr(addr.addr.sin_addr.s_addr);
+  // msg.mutable_client_address()->set_sin_port(addr.addr.sin_port);
+  // msg.mutable_client_address()->set_sin_family(addr.addr.sin_family);
+  // Debug("client addr: %d %d %d", addr.addr.sin_port, addr.addr.sin_addr.s_addr, addr.addr.sin_family);
+  msg.set_client_id(client_id);
 
   // Serialize message
   string data;
@@ -802,6 +807,7 @@ void ShardClient::send_to_group(proto::Request& msg, int group_idx){
   ptr += dataLen;
   Debug("sending the buffer to the group!");
   this->bftsmartagent->send_to_group(this, group_idx, buf, totalLen);
+  Debug("finished sending the buffer to the group!");
 }
 
 }

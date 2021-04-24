@@ -57,8 +57,8 @@ public:
     virtual TCPTransportAddress * clone() const;
     virtual ~TCPTransportAddress() {}
     sockaddr_in addr;
-private:
     TCPTransportAddress(const sockaddr_in &addr);
+private:    
 
     friend class TCPTransport;
     friend bool operator==(const TCPTransportAddress &a,

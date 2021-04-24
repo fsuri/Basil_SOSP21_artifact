@@ -44,18 +44,24 @@ public class BftInterfaceClient{
     public BftInterfaceClient(int id, long callbackHandle) {
 
         this.id = id;
-        this.serviceProxy = new ServiceProxy(id);
         this.callbackHandle = callbackHandle;
+        this.serviceProxy = null;
+        System.out.println("calling bft interface client constructor!");
 
     }
 
-    public void startInterface(byte[] payload){
+    public void startInterface(byte[] payload, String configHome){
         System.out.println("BFTSMART-INTERFACE: InvokedOrdered at client side!");
+        this.serviceProxy = new ServiceProxy(id, configHome);
+        System.out.println("BFTSMART-INTERFACE: Starting a new service proxy! config home: " + configHome);
         this.serviceProxy.invokeOrdered(payload);
+        this.serviceProxy.close();
+        System.out.println("BFTSMART-INTERFACE: Finished ops on the service proxy!");
     }
 
     public void destructBftClient(){
-        this.serviceProxy.close();
+        if (this.serviceProxy != null)
+            this.serviceProxy.close();
     }
 
     // public native void bftReplyReceived(byte[] reply, long callbackHandle);

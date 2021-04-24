@@ -118,7 +118,7 @@ def calculate_statistics_for_run(config, local_out_directory, run):
     num_regions = get_num_regions(config)
     if config['replication_protocol'] == 'indicus':
         n = 5 * config['fault_tolerance'] + 1
-    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff':
+    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'bftsmart':
         n = 3 * config['fault_tolerance'] + 1
     else:
         n = 2 * config['fault_tolerance'] + 1
