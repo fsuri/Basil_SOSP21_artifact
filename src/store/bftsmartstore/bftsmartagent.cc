@@ -224,7 +224,11 @@ void BftSmartAgent::send_to_group(ShardClient* recv, int group_idx, void * buffe
 }
 
 void BftSmartAgent::destroy_java_vm(){
+    jclass cls = BftSmartAgent::env->FindClass("java/lang/System");
+    jmethodID mid = BftSmartAgent::env->GetStaticMethodID(cls, "exit", "(I)V");
+    BftSmartAgent::env->CallStaticVoidMethod(cls, mid, static_cast<jint>(0));
     BftSmartAgent::jvm->DestroyJavaVM();
+    Debug("finished destroying java vm!");
 }
 
 }

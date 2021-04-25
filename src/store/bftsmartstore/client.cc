@@ -38,8 +38,8 @@ Client::Client(const transport::Configuration& config, uint64_t id, int nShards,
 
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
-    bclient[i] = new ShardClient(config, transport, client_id, i, closestReplicas,
-        signMessages, validateProofs, keyManager, &stats, order_commit, validate_abort);
+    bclient.push_back(new ShardClient(config, transport, client_id, i, closestReplicas,
+        signMessages, validateProofs, keyManager, &stats, order_commit, validate_abort));
   }
 
   Debug("HotStuff client [%lu] created! %lu %lu", client_id, ngroups,
@@ -48,9 +48,11 @@ Client::Client(const transport::Configuration& config, uint64_t id, int nShards,
 
 Client::~Client()
 {
+    Debug("client deleted!");
     for (auto b : bclient) {
         delete b;
     }
+    BftSmartAgent::destroy_java_vm();
 }
 
 /* Begins a transaction. All subsequent operations before a commit() or
