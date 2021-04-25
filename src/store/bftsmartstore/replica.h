@@ -91,8 +91,11 @@ public:
   proto::Read recvrd;
   proto::RequestRequest recvrr;
   proto::ABRequest recvab;
+  proto::Begin recbegin;
 
+  std::mutex client_cache_mutex;
   std::unordered_map<uint64_t, const TransportAddress*> clientCache; 
+  std::unordered_map<uint64_t, std::vector<proto::Request>> reqBuffer;
 
   std::unordered_map<uint64_t, std::string> sessionKeys;
   bool ValidateHMACedMessage(const proto::SignedMessage &signedMessage, std::string &data, std::string &type);

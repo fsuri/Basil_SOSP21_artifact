@@ -72,10 +72,12 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
     }
   }
 
-  bftsmartagent = new BftSmartAgent(false, this, idx);
+  bftsmartagent = new BftSmartAgent(false, this, idx, groupIdx);
 }
 
-Replica::~Replica() {}
+Replica::~Replica() {
+  delete bftsmartagent;
+}
 
 bool Replica::ValidateHMACedMessage(const proto::SignedMessage &signedMessage, std::string &data, std::string &type) {
   proto::PackedMessage packedMessage;
@@ -124,12 +126,16 @@ void Replica::ReceiveFromBFTSmart(const string &type, const string &data){
     // // UDPTransportAddress client(myaddr);
     // TCPTransportAddress client(myaddr);
     uint64_t client_id = recvrequest.client_id();
-    try{
-      const TransportAddress* client = clientCache.at(client_id);
-      HandleRequest(*client, recvrequest);
+    std::unique_lock lock(client_cache_mutex);
+    const TransportAddress* client = clientCache[client_id];
+    Debug("handling the request here... ");
+    if (client == nullptr){
+      Debug("Failed to get client ID! %d, putting the request in the buffer...", client_id);
+      reqBuffer[client_id].push_back(recvrequest);
     }
-    catch (...){
-      Panic("Failed to get client ID! %d", client_id);
+    else {
+      Debug("handling the request for real!");
+      HandleRequest(*client, recvrequest);
     }
     Debug("finished handling requests");
   }else{
@@ -180,12 +186,16 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     // Debug("client addr: %d %d %d", caddr.sin_port(), caddr.sin_addr(), caddr.sin_family());
     // TCPTransportAddress client(myaddr);
     uint64_t client_id = recvrequest.client_id();
-    try{
-      const TransportAddress* client = clientCache.at(client_id);
-      HandleRequest(*client, recvrequest);
+    std::unique_lock lock(client_cache_mutex);
+    const TransportAddress* client = clientCache[client_id];
+    Debug("handling the request here... ");
+    if (client == nullptr){
+      Debug("Failed to get client ID! %d, putting the request in the buffer...", client_id);
+      reqBuffer[client_id].push_back(recvrequest);
     }
-    catch (...){
-      Panic("Failed to get client ID! %d", client_id);
+    else {
+      Debug("handling the request for real!");
+      HandleRequest(*client, recvrequest);
     }
     Debug("finished handling requests");
   } else if (type == recvbatchedRequest.GetTypeName()) {
@@ -254,9 +264,26 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     Debug("received Read!");
     recvrd.ParseFromString(data);
     // insert to the cid -> addr map
-    clientCache.insert(std::make_pair<uint64_t, const TransportAddress*>(static_cast<uint64_t>(recvrd.client_id()),remote.clone()));
+    std::unique_lock lock(client_cache_mutex);
+    uint64_t client_id = static_cast<uint64_t>(recvrd.client_id());
+    clientCache[client_id] = remote.clone();
+    if (reqBuffer.find(client_id) != reqBuffer.end()){
+      for (proto::Request request: reqBuffer[client_id]){
+        Debug("fetching previous buffered requests because we get reads!");
+        HandleRequest(*(clientCache[client_id]), request);
+      }
+      reqBuffer.erase(client_id);
+    }
     handleMessage(remote, type, data);
-  } else{
+  } else if (type == recbegin.GetTypeName()){
+    Debug("Received Begin!");
+    recbegin.ParseFromString(data);
+    std::unique_lock lock(client_cache_mutex);
+    uint64_t client_id = static_cast<uint64_t>(recbegin.client_id());
+    clientCache[client_id] = remote.clone();
+    Debug("Putting client ID %d to the cache!", client_id);
+  }
+  else{
     Debug("Sending request to app");
     handleMessage(remote, type, data);
 

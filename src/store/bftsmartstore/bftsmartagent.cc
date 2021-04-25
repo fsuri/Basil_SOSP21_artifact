@@ -5,12 +5,16 @@ namespace bftsmartstore{
 JavaVM *BftSmartAgent::jvm;
 JNIEnv *BftSmartAgent::env;
 // client initialization
-BftSmartAgent::BftSmartAgent(bool is_client, TransportReceiver* receiver, int id){
+BftSmartAgent::BftSmartAgent(bool is_client, TransportReceiver* receiver, int id, int group_idx): is_client(is_client){
     // create Java VM
     create_java_vm();
     if (is_client){
+        // generating the config home
+        std::ostringstream sstream;
+        sstream << "/users/zw494/java-config/java-config-group-" << group_idx << "/";
+        std::string cpp_config_home = sstream.str();
         // create bft interface client
-        create_interface_client(receiver, id);
+        create_interface_client(receiver, id, cpp_config_home);
     }
     else {
         // create bft interface client
@@ -18,6 +22,21 @@ BftSmartAgent::BftSmartAgent(bool is_client, TransportReceiver* receiver, int id
         Debug("finished creating an interface server...");
         // register natives
         register_natives();
+    }
+}
+
+BftSmartAgent::~BftSmartAgent(){
+    Debug("bft smart destructor called!");
+    if (is_client){
+        jclass cls = BftSmartAgent::env->GetObjectClass(this->bft_client);
+        jmethodID mid = BftSmartAgent::env->GetMethodID(cls, "destructBftClient", "()V");
+        Debug("calling void destruct method!");
+        BftSmartAgent::env->CallVoidMethod(this->bft_client, mid);
+        BftSmartAgent::env->DeleteLocalRef(this->bft_client);
+        Debug("finished!");
+    }
+    else {
+        BftSmartAgent::env->DeleteLocalRef(this->bft_server);
     }
 }
 
@@ -58,21 +77,29 @@ bool BftSmartAgent::create_java_vm(){
     return true;
 }
 
-bool BftSmartAgent::create_interface_client(TransportReceiver* receiver, int client_id){
+bool BftSmartAgent::create_interface_client(TransportReceiver* receiver, int client_id, std::string cpp_config_home){
     jclass cls = BftSmartAgent::env->FindClass("bftsmart/demo/bftinterface/BftInterfaceClient");  // try to find the class
     if(cls == nullptr) {
         std::cerr << "ERROR: class not found !" << std::endl;
         return false;
     }
-    else {                                  // if class found, continue
-       Debug("Class BftInterfaceClient found. Client ID: %d", client_id);
-       jmethodID mid = BftSmartAgent::env->GetMethodID(cls, "<init>", "(IJ)V");  // find method
+    else {                                  
+        // if class found, continue
+        Debug("Class BftInterfaceClient found. Client ID: %d", client_id);
+        jmethodID mid = BftSmartAgent::env->GetMethodID(cls, "<init>", "(IJLjava/lang/String;)V");  // find method
         if(mid == nullptr){
             std::cerr << "ERROR: constructor not found !" << std::endl;
             return false;
         }
         else {
-            this->bft_client = BftSmartAgent::env->NewObject(cls, mid, static_cast<jint>(client_id), reinterpret_cast<jlong>(receiver));                      // call method
+            jstring config_home = BftSmartAgent::env->NewStringUTF(cpp_config_home.c_str());
+            Debug("successfully created a string!");
+            // call method
+            this->bft_client = BftSmartAgent::env->NewObject(cls, mid, 
+                                                            static_cast<jint>(client_id), 
+                                                            reinterpret_cast<jlong>(receiver),
+                                                            config_home);
+            if (this->bft_client == nullptr) return false;
         }
     }
     Debug("successfully created BFT interface client!");
@@ -185,18 +212,14 @@ void BftSmartAgent::send_to_group(ShardClient* recv, int group_idx, void * buffe
     BftSmartAgent::env->SetByteArrayRegion(java_byte_array, 0, size, reinterpret_cast<jbyte*>(buffer));
 
     jclass cls = BftSmartAgent::env->GetObjectClass(this->bft_client);
-    jmethodID mid = BftSmartAgent::env->GetMethodID(cls, "startInterface", "([BLjava/lang/String;)V");
+    jmethodID mid = BftSmartAgent::env->GetMethodID(cls, "startInterface", "([B)V");
     if (mid == nullptr){
         Debug("failed to create mid!");
         return;
     }
     else Debug("successfully found mid!");
-    std::ostringstream sstream;
-    sstream << "/users/zw494/java-config/java-config-group-" << group_idx << "/";
-    std::string cpp_config_home = sstream.str();
-    jstring config_home = BftSmartAgent::env->NewStringUTF(cpp_config_home.c_str());
-    Debug("successfully created a string!");
-    BftSmartAgent::env->CallVoidMethod(this->bft_client, mid, java_byte_array, config_home);
+    
+    BftSmartAgent::env->CallVoidMethod(this->bft_client, mid, java_byte_array);
 
 }
 

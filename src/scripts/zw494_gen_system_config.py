@@ -37,17 +37,17 @@ hosts_groups = [['us-east-1-0', 'eu-west-1-0', 'ap-northeast-1-0', 'us-west-1-0'
 
 for i, hostname in enumerate(hosts_dict):
     ipaddr = hosts_dict[hostname]
-    with open("/home/zw494/BFT-DB/src/store/bftsmartstore/library/java-config-" + hostname + "/java-config/system.config") as f:
+    with open("/home/zw494/BFT-DB/src/store/bftsmartstore/library/remote/java-config-" + hostname + "/java-config/system.config") as f:
         s = f.read()
         if "= auto" not in s:
             print("= auto does not exist in the file java-config-" + hostname)
             exit(0)
-    with open("/home/zw494/BFT-DB/src/store/bftsmartstore/library/java-config-" + hostname + "/java-config/system.config", "w") as f:
+    with open("/home/zw494/BFT-DB/src/store/bftsmartstore/library/remote/java-config-" + hostname + "/java-config/system.config", "w") as f:
         s = s.replace("= auto", "= " + ipaddr)
         f.write(s)
         print("the content of s: ")
         print(s)
-    with open("/home/zw494/BFT-DB/src/store/bftsmartstore/library/java-config-" + hostname + "/java-config/hosts.config", "w") as f:
+    with open("/home/zw494/BFT-DB/src/store/bftsmartstore/library/remote/java-config-" + hostname + "/java-config/hosts.config", "w") as f:
         k = i % 3
         for j in range(4):
             f.write("%d %s 30000 30001\n" % (j, hosts_dict[hosts_groups[k][j]]) )

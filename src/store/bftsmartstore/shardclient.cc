@@ -12,7 +12,7 @@ ShardClient::ShardClient(const transport::Configuration& config, Transport *tran
     group_idx(group_idx), client_id(client_id),
     signMessages(signMessages), validateProofs(validateProofs),
     keyManager(keyManager), stats(stats), order_commit(order_commit), validate_abort(validate_abort) {
-  bftsmartagent = new BftSmartAgent(true, this, 1000 + client_id);
+  bftsmartagent = new BftSmartAgent(true, this, 1000 + client_id, group_idx);
   Debug("created bftsmart agent in shard client!");
   transport->Register(this, config, -1, -1);
   readReq = 0;
@@ -27,9 +27,21 @@ ShardClient::ShardClient(const transport::Configuration& config, Transport *tran
     closestReplicas = closestReplicas_;
   }
 
+  // notify the servers about my reply address
+  Debug("Sending begin messages! with client id %d, config n: %d", client_id, config.n);
+  proto::Begin begin;
+  begin.set_client_id(client_id);
+  for (int i = 0; i < config.n; ++i){
+    transport->SendMessageToReplica(this, group_idx, i, begin);
+  }
+  Debug("Finished sending begin messages!");
+
 }
 
-ShardClient::~ShardClient() {}
+ShardClient::~ShardClient() {
+  Debug("shard client destructor called!");
+  delete bftsmartagent;
+}
 
 bool ShardClient::validateReadProof(const proto::CommitProof& commitProof, const std::string& key,
   const std::string& value, const Timestamp& timestamp) {
@@ -766,6 +778,7 @@ void ShardClient::send_to_group(proto::Request& msg, int group_idx){
   // msg.mutable_client_address()->set_sin_family(addr.addr.sin_family);
   // Debug("client addr: %d %d %d", addr.addr.sin_port, addr.addr.sin_addr.s_addr, addr.addr.sin_family);
   msg.set_client_id(client_id);
+  Debug("sending to group with client id %d", client_id);
 
   // Serialize message
   string data;
