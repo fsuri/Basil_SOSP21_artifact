@@ -26,6 +26,9 @@ import java.security.Security;
 import bftsmart.tom.ServiceProxy;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 /**
  * Example client that updates a BFT replicated service (a counter).
@@ -36,6 +39,7 @@ public class BftInterfaceClient{
     int id;
     ServiceProxy serviceProxy;
     long callbackHandle;
+    private Logger logger = LoggerFactory.getLogger(this.getClass());
 
     static{
        Security.addProvider(new BouncyCastleProvider());
@@ -45,20 +49,20 @@ public class BftInterfaceClient{
 
         this.id = id;
         this.callbackHandle = callbackHandle;
-        System.out.println("BFTSMART-INTERFACE: Starting a new service proxy! config home: " + configHome);
+        logger.info("BFTSMART-INTERFACE: Starting a new service proxy! config home: " + configHome);
         this.serviceProxy = new ServiceProxy(id, configHome);
-        System.out.println("calling bft interface client constructor!");
+        logger.info("calling bft interface client constructor!");
 
     }
 
     public void startInterface(byte[] payload){
-        System.out.println("BFTSMART-INTERFACE: InvokedOrdered at client side!");
+        logger.info("BFTSMART-INTERFACE: InvokedOrdered at client side!");
         this.serviceProxy.invokeOrdered(payload);
-        System.out.println("BFTSMART-INTERFACE: Finished ops on the service proxy!");
+        logger.info("BFTSMART-INTERFACE: Finished ops on the service proxy!");
     }
 
     public void destructBftClient(){
-        System.out.println("bft client " + id +  " destructed!");
+        logger.info("bft client " + id +  " destructed!");
         this.serviceProxy.close();
     }
 
