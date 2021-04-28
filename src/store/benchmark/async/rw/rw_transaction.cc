@@ -27,7 +27,7 @@ Operation RWTransaction::GetNextOperation(size_t outstandingOpCount, size_t fini
       return Get(GetKey(outstandingOpCount));
     } else if (finishedOpCount >= GetNumOps() / 2) {
       //std::cerr << "write: " << GetKey(finishedOpCount) << std::endl;
-      auto strValueItr = readValues.find(GetKey(finishedOpCount));
+      auto strValueItr = readValues.find(GetKey(outstandingOpCount));
       UW_ASSERT(strValueItr != readValues.end());
       std::string strValue = strValueItr->second;
       std::string writeValue;
