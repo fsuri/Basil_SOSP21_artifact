@@ -6,10 +6,10 @@ RWTransaction::RWTransaction(KeySelector *keySelector, int numOps,
     std::mt19937 &rand) : keySelector(keySelector), numOps(numOps) {
   for (int i = 0; i < numOps; ++i) {
     uint64_t key;
-    if (i % 2 == 0) {
+    if (i < numOps / 2) {
       key = keySelector->GetKey(rand);
     } else {
-      key = keyIdxs[i - 1];
+      key = keyIdxs[i - numOps / 2];
     }
     keyIdxs.push_back(key);
   }
@@ -22,13 +22,10 @@ Operation RWTransaction::GetNextOperation(size_t outstandingOpCount, size_t fini
     std::map<std::string, std::string> readValues) {
   if (outstandingOpCount < GetNumOps()) {
     //std::cerr << "outstanding: " << outstandingOpCount << "; finished: " << finishedOpCount << "num ops: " << GetNumOps() << std::endl;
-    if(finishedOpCount != outstandingOpCount){
-      return Wait();
-    }
-    else if (outstandingOpCount % 2 == 0) {
+    if (outstandingOpCount < GetNumOps() / 2) {
       //std::cerr << "read: " << GetKey(finishedOpCount) << std::endl;
-      return Get(GetKey(finishedOpCount));
-    } else  {
+      return Get(GetKey(outstandingOpCount));
+    } else if (finishedOpCount >= GetNumOps() / 2) {
       //std::cerr << "write: " << GetKey(finishedOpCount) << std::endl;
       auto strValueItr = readValues.find(GetKey(finishedOpCount));
       UW_ASSERT(strValueItr != readValues.end());
@@ -46,7 +43,9 @@ Operation RWTransaction::GetNextOperation(size_t outstandingOpCount, size_t fini
           writeValue += static_cast<char>((intValue >> (3 - i) * 8) & 0xFF);
         }
       }
-      return Put(GetKey(finishedOpCount), writeValue);
+      return Put(GetKey(outstandingOpCount), writeValue);
+    } else {
+      return Wait();
     }
   } else if (finishedOpCount == GetNumOps()) {
     return Commit();
