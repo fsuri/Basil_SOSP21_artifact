@@ -94,7 +94,8 @@ public:
   proto::Begin recbegin;
 
   std::mutex client_cache_mutex;
-  std::unordered_map<uint64_t, const TransportAddress*> clientCache; 
+  tbb::concurrent_unordered_map<uint64_t, const TransportAddress*> clientCache;
+
   std::unordered_map<uint64_t, std::vector<proto::Request>> reqBuffer;
 
   std::unordered_map<uint64_t, std::string> sessionKeys;

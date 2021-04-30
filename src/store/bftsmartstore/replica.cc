@@ -126,7 +126,7 @@ void Replica::ReceiveFromBFTSmart(const string &type, const string &data){
     // // UDPTransportAddress client(myaddr);
     // TCPTransportAddress client(myaddr);
     uint64_t client_id = recvrequest.client_id();
-    std::unique_lock lock(client_cache_mutex);
+    //std::unique_lock lock(client_cache_mutex);
     const TransportAddress* client = clientCache[client_id];
     Debug("handling the request here... ");
     if (client == nullptr){
@@ -186,7 +186,7 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     // Debug("client addr: %d %d %d", caddr.sin_port(), caddr.sin_addr(), caddr.sin_family());
     // TCPTransportAddress client(myaddr);
     uint64_t client_id = recvrequest.client_id();
-    std::unique_lock lock(client_cache_mutex);
+    //std::unique_lock lock(client_cache_mutex);
     const TransportAddress* client = clientCache[client_id];
     Debug("handling the request here... ");
     if (client == nullptr){
@@ -264,9 +264,11 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
     Debug("received Read!");
     recvrd.ParseFromString(data);
     // insert to the cid -> addr map
-    std::unique_lock lock(client_cache_mutex);
+    //std::unique_lock lock(client_cache_mutex);
     uint64_t client_id = static_cast<uint64_t>(recvrd.client_id());
-    clientCache[client_id] = remote.clone();
+    if(clientCache.find(client_id) == clientCache.end()){
+        clientCache[client_id] = remote.clone();
+    }
     if (reqBuffer.find(client_id) != reqBuffer.end()){
       for (proto::Request request: reqBuffer[client_id]){
         Debug("fetching previous buffered requests because we get reads!");
@@ -278,14 +280,26 @@ void Replica::ReceiveMessage(const TransportAddress &remote, const string &t,
   } else if (type == recbegin.GetTypeName()){
     Debug("Received Begin!");
     recbegin.ParseFromString(data);
-    std::unique_lock lock(client_cache_mutex);
+    //std::unique_lock lock(client_cache_mutex);
     uint64_t client_id = static_cast<uint64_t>(recbegin.client_id());
-    clientCache[client_id] = remote.clone();
+    if(clientCache.find(client_id) == clientCache.end()){
+        clientCache[client_id] = remote.clone();
+    }
+    //clientCache[client_id] = remote.clone();
     Debug("Putting client ID %d to the cache!", client_id);
   }
   else{
     Debug("Sending request to app");
-    handleMessage(remote, type, data);
+    //handleMessage(remote, type, data);
+
+    TransportAddress* clientAddr = remote.clone();
+    auto f = [this, clientAddr, type, data](){
+        ::google::protobuf::Message* reply = app->HandleMessage(type, data);
+        return (void*) true;
+    };
+    transport->DispatchTP_main(f); //NOTE!! Important that Unordered GroupedCommit goes on the
+    //main thread too, or else it will deadlock on parallel sig verification because it is
+    //implemented as blocking; if a worker thread blocks waiting for other worker threads --> deadlock.
 
   }
 }
@@ -1084,10 +1098,10 @@ void Replica::sendEbatch(){
 }
 
 void Replica::sendEbatch_internal() {
-  std::cerr << "executing sendEbatch" << std::endl;
+  //std::cerr << "executing sendEbatch" << std::endl;
   stats->Increment(EbStatNames[EpendingBatchedMessages.size()], 1);
   std::vector<std::string*> messageStrs;
-  std::cerr << "EbatchMessages.size: " << EpendingBatchedMessages.size() << std::endl;
+  //std::cerr << "EbatchMessages.size: " << EpendingBatchedMessages.size() << std::endl;
   for (unsigned int i = 0; i < EpendingBatchedMessages.size(); i++) {
     EsignedMessages[i]->Clear();
     EsignedMessages[i]->set_replica_id(id);
@@ -1123,7 +1137,7 @@ void Replica::delegateEbatch(std::vector<::google::protobuf::Message*> EpendingB
 
     std::vector<proto::SignedMessage> EsignedMessages_;
     std::vector<std::string*> messageStrs;
-    std::cerr << "EbatchMessages.size: " << EpendingBatchedMessages_.size() << std::endl;
+    //std::cerr << "EbatchMessages.size: " << EpendingBatchedMessages_.size() << std::endl;
     for (unsigned int i = 0; i < EpendingBatchedMessages_.size(); i++) {
       EsignedMessages_.push_back(proto::SignedMessage());
       //EsignedMessages_[i].Clear();

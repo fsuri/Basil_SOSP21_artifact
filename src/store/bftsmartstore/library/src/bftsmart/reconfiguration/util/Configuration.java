@@ -63,7 +63,7 @@ public class Configuration {
 
 	private String defaultKeyLoader;
 
-	protected String configHome = "/users/zw494/java-config/";
+	protected String configHome = "/users/fs435/java-config/";
 	// MODIFIED
 	// protected String configHome = "";
 

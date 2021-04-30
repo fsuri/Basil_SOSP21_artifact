@@ -34,6 +34,7 @@
 // HotStuff
 #include "store/hotstuffstore/client.h"
 #include "store/bftsmartstore/client.h"
+#include "store/bftsmartstore_augustus/client.h"
 #include "store/common/frontend/one_shot_client.h"
 #include "store/common/frontend/async_one_shot_adapter_client.h"
 #include "store/benchmark/async/common/zipf_key_selector.h"
@@ -59,7 +60,8 @@ enum protomode_t {
     // HotStuff
     PROTO_HOTSTUFF,
     // Bftsmart
-    PROTO_BFTSMART
+    PROTO_BFTSMART,
+		PROTO_AUGUSTUS_SMART
 };
 
 enum benchmode_t {
@@ -290,7 +292,8 @@ const std::string protocol_args[] = {
 // HotStuff
     "hotstuff",
 // BFTSmart
-  "bftsmart"
+  "bftsmart",
+	"augustus"
 };
 const protomode_t protomodes[] {
   PROTO_TAPIR,
@@ -306,7 +309,8 @@ const protomode_t protomodes[] {
       PROTO_PBFT,
   // HotStuff
   PROTO_HOTSTUFF,
-  PROTO_BFTSMART
+  PROTO_BFTSMART,
+	PROTO_AUGUSTUS_SMART
 };
 const strongstore::Mode strongmodes[] {
   strongstore::Mode::MODE_UNKNOWN,
@@ -376,6 +380,7 @@ DEFINE_uint64(cooldown_secs, 5, "time (in seconds) to cool down system after"
 DEFINE_uint64(tput_interval, 0, "time (in seconds) between throughput"
     " measurements");
 DEFINE_uint64(num_clients, 1, "number of clients to run in this process");
+DEFINE_uint64(num_client_hosts, 0, "number of total client processes across all hosts");
 DEFINE_uint64(num_requests, -1, "number of requests (transactions) per"
     " client");
 DEFINE_int32(closest_replica, -1, "index of the replica closest to the client");
@@ -1027,6 +1032,46 @@ int main(int argc, char **argv) {
         break;
     }
 
+		case PROTO_AUGUSTUS_SMART: {
+			uint64_t readQuorumSize = 0;
+				switch (read_quorum) {
+				case READ_QUORUM_ONE:
+						readQuorumSize = 1;
+						break;
+				case READ_QUORUM_ONE_HONEST:
+						readQuorumSize = config->f + 1;
+						break;
+				case READ_QUORUM_MAJORITY_HONEST:
+						readQuorumSize = config->f * 2 + 1;
+						break;
+				default:
+						NOT_REACHABLE();
+				}
+				uint64_t readMessages = 0;
+				switch (read_messages) {
+				case READ_MESSAGES_READ_QUORUM:
+						readMessages = readQuorumSize; // + config->f; //config->n;
+						break;
+				case READ_MESSAGES_MAJORITY:
+						readMessages = (config->n + 1) / 2;
+						break;
+				case READ_MESSAGES_ALL:
+						readMessages = config->n;
+						break;
+				default:
+						NOT_REACHABLE();
+				}
+
+				client = new bftsmartstore_augustus::Client(*config, clientId, FLAGS_num_shards,
+																			 FLAGS_num_groups, closestReplicas,
+																				tport, part,
+																			 readMessages, readQuorumSize,
+																			 FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+																			 keyManager,
+																			 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort,
+																			 TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+				break;
+		}
 
     default:
         NOT_REACHABLE();

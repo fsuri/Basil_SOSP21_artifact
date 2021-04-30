@@ -55,6 +55,9 @@
 // BftSmart
 #include "store/bftsmartstore/replica.h"
 #include "store/bftsmartstore/server.h"
+// Augustus-BftSmart
+#include "store/bftsmartstore_augustus/replica.h"
+#include "store/bftsmartstore_augustus/server.h"
 
 #include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
 #include "store/indicusstore/common.h"
@@ -74,7 +77,8 @@ enum protocol_t {
     // HotStuff
     PROTO_HOTSTUFF,
     // BftSmart
-    PROTO_BFTSMART
+    PROTO_BFTSMART,
+		PROTO_AUGUSTUS_SMART
 };
 
 enum transmode_t {
@@ -114,7 +118,8 @@ const std::string protocol_args[] = {
   "indicus",
 	"pbft",
   "bftsmart",
-  "hotstuff"
+  "hotstuff",
+	"augustus"
 };
 const protocol_t protos[] {
   PROTO_TAPIR,
@@ -125,7 +130,8 @@ const protocol_t protos[] {
   PROTO_INDICUS,
       PROTO_PBFT,
       PROTO_BFTSMART,
-      PROTO_HOTSTUFF
+      PROTO_HOTSTUFF,
+			PROTO_AUGUSTUS_SMART
 };
 static bool ValidateProtocol(const char* flagname,
     const std::string &value) {
@@ -679,6 +685,40 @@ int main(int argc, char **argv) {
       break;
   }
 
+	// Augustus running on top of BFT smart.
+case PROTO_AUGUSTUS_SMART: {
+	int num_cpus = std::thread::hardware_concurrency();
+	num_cpus /= FLAGS_indicus_total_processes;
+
+	int augustus_cpu;
+	if (FLAGS_num_shards == 6) {
+			augustus_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+	} else if(FLAGS_num_shards == 3) {
+		//hotstuff_cpu = 1;
+	    augustus_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+	}
+	else{
+			// FLAGS_num_shards should be 12 or 24
+			augustus_cpu = FLAGS_indicus_process_id * num_cpus;
+	}
+
+	server = new bftsmartstore_augustus::Server(config, &keyManager,
+																 FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
+																 FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+																 FLAGS_indicus_time_delta, part, tport,
+																 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort);
+
+	replica = new bftsmartstore_augustus::Replica(config, &keyManager,
+																	 dynamic_cast<bftsmartstore_augustus::App *>(server),
+																	 FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
+																	 FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
+																	 FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
+																	 FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx,
+																	 augustus_cpu, FLAGS_num_shards, tport);
+
+	break;
+}
+
   default: {
       NOT_REACHABLE();
   }
@@ -775,7 +815,7 @@ int main(int argc, char **argv) {
   CALLGRIND_START_INSTRUMENTATION;
 	//SET THREAD AFFINITY if running multi_threading:
 	//if(FLAGS_indicus_multi_threading){
-	if((proto == PROTO_INDICUS || proto == PROTO_PBFT || proto == PROTO_BFTSMART || proto == PROTO_HOTSTUFF) && FLAGS_indicus_multi_threading){
+	if((proto == PROTO_INDICUS || proto == PROTO_PBFT || proto == PROTO_BFTSMART || proto == PROTO_HOTSTUFF || proto == PROTO_AUGUSTUS_SMART) && FLAGS_indicus_multi_threading){
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
 		//bool hyperthreading = true;
@@ -785,7 +825,7 @@ int main(int argc, char **argv) {
         int offset = FLAGS_indicus_process_id * num_cpus;
 		//int offset = FLAGS_indicus_process_id;
 		CPU_SET(0 + offset, &cpuset); //first assigned core is for main
-		pthread_setaffinity_np(pthread_self(),	sizeof(cpu_set_t), &cpuset);
+		//pthread_setaffinity_np(pthread_self(),	sizeof(cpu_set_t), &cpuset);
 		Debug("MainThread running on CPU %d.", sched_getcpu());
 	}
 

@@ -263,7 +263,8 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     stats.Increment("used_buffered_gdec",1);
     Debug("found buffered gdecision");
     if(bufferedGDecs[digest].status() == REPLY_OK){
-      results.push_back(HandleGroupedCommitDecision(bufferedGDecs[digest]));
+      //std::cerr <<" trying to call HandleGroupedCommitDecision while holding lock for txn: " << BytesToHex(digest, 16) << std::endl;
+      results.push_back(HandleGroupedCommitDecision(bufferedGDecs[digest], false));
     }
     else{
       results.push_back(HandleGroupedAbortDecision(bufferedGDecs[digest]));
@@ -395,26 +396,29 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   return returnMessage(readReply);
 }
 
-::google::protobuf::Message* Server::HandleGroupedCommitDecision(const proto::GroupedDecision& gdecision) {
+::google::protobuf::Message* Server::HandleGroupedCommitDecision(const proto::GroupedDecision& gdecision, bool lock) {
   // proto::GroupedDecisionAck* groupedDecisionAck = new proto::GroupedDecisionAck();
-
 
   Debug("Handling Grouped commit Decision");
   string digest = gdecision.txn_digest();
   DebugHash(digest);
 
+  //std::cerr <<" called HandleGroupedCommitDecision for txn: " << BytesToHex(digest, 16) << std::endl;
   // groupedDecisionAck->set_txn_digest(digest);
-  atomicMutex.lock();
+  if(lock) atomicMutex.lock();
+  //std::cerr <<" acquired 1st lock in HandleGroupedcommit for txb:" << BytesToHex(digest, 16) << std::endl;
   if (pendingTransactions.find(digest) == pendingTransactions.end()) {
 
     Debug("Buffering gdecision");
     stats.Increment("buff_dec",1);
     // we haven't yet received the tx so buffer this gdecision until we get it
     bufferedGDecs[digest] = gdecision;
-    atomicMutex.unlock();
+    if(lock) atomicMutex.unlock();
+    //std::cerr << "buffering HandleGroupedCommitDecision for txn: " << BytesToHex(digest, 16)  << std::endl;
     return nullptr;
   }
-  atomicMutex.unlock();
+  if(lock) atomicMutex.unlock();
+  //std::cerr <<" released 1st lock in HandleGroupedcommit for txb:" << BytesToHex(digest, 16) << std::endl;
   // verify gdecision
 
     // struct timeval tp;
@@ -422,13 +426,17 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     // long int us = tp.tv_sec * 1000 * 1000 + tp.tv_usec;
 
   if (verifyGDecision_parallel(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f, tp)) {
+
   //if (verifyGDecision(gdecision, pendingTransactions[digest], keyManager, signMessages, config.f)) {
  //if(true){
     // gettimeofday(&tp, NULL);
     // long int lock_time = ((tp.tv_sec * 1000 * 1000 + tp.tv_usec) -us);
     // std::cerr << "Commit Verification takes " << lock_time << " microseconds" << std::endl;
+     //std::cerr <<" about to acquire 2st lock in HandleGroupedcommit for txn:" << BytesToHex(digest, 16) << std::endl;
+    std::unique_lock atomic_lock = lock ? std::unique_lock(atomicMutex) : std::unique_lock<std::shared_mutex>();
 
-    std::unique_lock lock(atomicMutex);
+
+    //std::unique_lock lock(atomicMutex);
     stats.Increment("apply_tx",1);
     proto::Transaction txn = pendingTransactions[digest];
     Timestamp ts(txn.timestamp());
@@ -477,7 +485,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     stats.Increment("gdec_failed_valid",1);
     // groupedDecisionAck->set_status(REPLY_FAIL);
   }
-
+  //std::cerr << "finishing HandleGroupedCommitDecision normally" << BytesToHex(digest, 16) << std::endl;
   // Debug("decision ack status: %d", groupedDecisionAck->status());
 
   // return returnMessage(groupedDecisionAck);

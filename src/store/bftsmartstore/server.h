@@ -57,7 +57,9 @@ private:
   bool order_commit;
   bool validate_abort;
 
-  std::shared_mutex atomicMutex;
+  std::shared_mutex atomicMutex; //NOTE: this is only used for thread safety across SMR related fields if we do not order Commit
+  //If Commit is ordered, then all components that call atomicMutex are on the same thread already
+  //It does *not* block parallel reads, since versionstore.h already implements finegrained locking.
 
   struct ValueAndProof {
     std::string value;
@@ -73,7 +75,7 @@ private:
 
   ::google::protobuf::Message* HandleRead(const proto::Read& read);
 
-  ::google::protobuf::Message* HandleGroupedCommitDecision(const proto::GroupedDecision& gdecision);
+  ::google::protobuf::Message* HandleGroupedCommitDecision(const proto::GroupedDecision& gdecision, bool lock = true);
 
   ::google::protobuf::Message* HandleGroupedAbortDecision(const proto::GroupedDecision& gdecision);
 

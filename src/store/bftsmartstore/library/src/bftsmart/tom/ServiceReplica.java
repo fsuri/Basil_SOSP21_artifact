@@ -134,7 +134,7 @@ public class ServiceReplica {
     public ServiceReplica(int id, String configHome, Executable executor, Recoverable recoverer, RequestVerifier verifier, Replier replier, KeyLoader loader) {
         logger.info("calling initialize!");
         // MODIFIED
-        configHome = "/users/zw494/java-config";
+        configHome = "/users/fs435/java-config";
         this.id = id;
         this.SVController = new ServerViewController(id, configHome, loader);
         logger.info("finished creating a service view controller");

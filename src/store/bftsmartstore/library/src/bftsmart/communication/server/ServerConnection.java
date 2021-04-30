@@ -525,7 +525,7 @@ public class ServerConnection {
 		try {
 			// MODIFIED
 			// fis = new FileInputStream("config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
-			fis = new FileInputStream("/users/zw494/java-config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
+			fis = new FileInputStream("/users/fs435/java-config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
 			ks = KeyStore.getInstance(KeyStore.getDefaultType());
 			ks.load(fis, SECRET.toCharArray());
 		} catch (FileNotFoundException | KeyStoreException | NoSuchAlgorithmException | CertificateException e) {

@@ -82,6 +82,8 @@ bool verifyGDecision_parallel(const proto::GroupedDecision& gdecision,
 bool verifyGDecision_Abort_parallel(const proto::GroupedDecision& gdecision,
   const proto::Transaction& txn, KeyManager* keyManager, bool signMessages, uint64_t f, Transport* tp );
 
+std::string BytesToHex(const std::string &bytes, size_t maxLength);
+
 } // namespace bftsmartstore
 
 #endif /* HOTSTUFF_COMMON_H */

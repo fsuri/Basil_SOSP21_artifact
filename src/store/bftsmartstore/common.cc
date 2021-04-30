@@ -374,7 +374,8 @@ bool verifyGDecision_parallel(const proto::GroupedDecision& gdecision,
   const proto::Transaction& txn, KeyManager* keyManager, bool signMessages, uint64_t f, Transport* tp ) {
   std::string digest = gdecision.txn_digest();
 
- std::cerr<< "starting parallel verification" << std::endl;
+  //return true;
+  //std::cerr<< "starting parallel verification" << std::endl;
   // This will hold the remaining shards that we need to verify
   std::unordered_set<uint64_t> remaining_shards;
   for (auto id : txn.participating_shards()) {
@@ -458,12 +459,13 @@ bool verifyGDecision_parallel(const proto::GroupedDecision& gdecision,
     verifyObj->deletable = verificationJobs.size();
     for(auto &job : verificationJobs){
       tp->DispatchTP_noCB(job);
+      //job();
     }
 
     std::unique_lock lock(verifyObj->objMutex);
     verifyObj->cv_wait.wait(lock, [verifyObj] {return verifyObj->deletable == 0;});
     //
-    std::cerr << "completing verification " << std::endl;
+    //std::cerr << "completing verification " << std::endl;
     if(verifyObj->result){
       //delete verifyObj;
       return true;
@@ -607,5 +609,15 @@ bool verifyGDecision_Abort_parallel(const proto::GroupedDecision& gdecision,
 
 }
 
+std::string BytesToHex(const std::string &bytes, size_t maxLength) {
+  static const char digits[] = "0123456789abcdef";
+  std::string hex;
+  size_t length = (bytes.size() < maxLength) ? bytes.size() : maxLength;
+  for (size_t i = 0; i < length; ++i) {
+    hex.push_back(digits[static_cast<uint8_t>(bytes[i]) >> 4]);
+    hex.push_back(digits[static_cast<uint8_t>(bytes[i]) & 0xF]);
+  }
+  return hex;
+}
 
 } // namespace indicusstore

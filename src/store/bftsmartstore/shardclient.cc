@@ -375,7 +375,7 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
   }
 }
 
-//deprecated
+//deprecate - servers will never send this.
 void ShardClient::HandleWritebackReply(const proto::GroupedDecisionAck& groupedDecisionAck, const proto::SignedMessage& signedMsg) {
   Debug("Handling Writeback reply");
 
@@ -675,6 +675,7 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
 
     PendingWritebackReply pwr;
     pwr.wcb = wcb;
+    //std::cerr << "Timeout schedule in: " << timeout << std::endl;
     pwr.timeout = new Timeout(transport, timeout, [this, txn_digest, wtcp]() {
       Debug("Writeback signed timeout called (but nothing was done)");
       stats->Increment("cs_tout", 1);
@@ -690,7 +691,7 @@ void ShardClient::CommitSigned(const std::string& txn_digest, const proto::Shard
       // this->pendingWritebacks.erase(digest);
       // wtcp(REPLY_FAIL);
     });
-    // pwr.timeout->Start();
+    //pwr.timeout->Start();  //TIMEOUT NEVER TRIGGERS SINCE IT IS DISABLED>
     // pwr.timeout = nullptr;
 
     pendingWritebacks[txn_digest] = pwr;
