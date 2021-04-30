@@ -29,6 +29,7 @@ import bftsmart.consensus.roles.Proposer;
 import bftsmart.reconfiguration.ReconfigureReply;
 import bftsmart.reconfiguration.ServerViewController;
 import bftsmart.reconfiguration.VMMessage;
+import bftsmart.reconfiguration.util.Configuration;
 import bftsmart.tom.core.ReplyManager;
 import bftsmart.tom.core.TOMLayer;
 import bftsmart.tom.core.messages.TOMMessage;
@@ -134,7 +135,7 @@ public class ServiceReplica {
     public ServiceReplica(int id, String configHome, Executable executor, Recoverable recoverer, RequestVerifier verifier, Replier replier, KeyLoader loader) {
         logger.info("calling initialize!");
         // MODIFIED
-        configHome = "/users/zw494/java-config";
+        configHome = Configuration.configBase + "/java-config";
         this.id = id;
         this.SVController = new ServerViewController(id, configHome, loader);
         logger.info("finished creating a service view controller");

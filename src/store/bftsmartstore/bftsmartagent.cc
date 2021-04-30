@@ -11,7 +11,7 @@ BftSmartAgent::BftSmartAgent(bool is_client, TransportReceiver* receiver, int id
     if (is_client){
         // generating the config home
         std::ostringstream sstream;
-        sstream << "/users/zw494/java-config/java-config-group-" << group_idx << "/";
+        sstream << remote_home << "/java-config/java-config-group-" << group_idx << "/";
         std::string cpp_config_home = sstream.str();
         // create bft interface client
         create_interface_client(receiver, id, cpp_config_home);
@@ -47,9 +47,24 @@ bool BftSmartAgent::create_java_vm(){
     JNIEnv *this_env;
     JavaVMInitArgs vm_args;
     JavaVMOption* options = new JavaVMOption[3];
-    options[0].optionString = "-Djava.class.path=/users/zw494/jars/BFT-SMaRt.jar:/users/zw494/jars/slf4j-api-1.7.25.jar:/users/zw494/jars/bcpkix-jdk15on-160.jar:/users/zw494/jars/commons-codec-1.11.jar:/users/zw494/jars/logback-classic-1.2.3.jar:/users/zw494/jars/netty-all-4.1.34.Final.jar:/users/zw494/jars/bcprov-jdk15on-160.jar:/users/zw494/jars/core-0.1.4.jar:/users/zw494/jars/logback-core-1.2.3.jar:/users/zw494/java-config";
-    options[1].optionString = "-Dlogback.configurationFile=\"/users/zw494/java-config/logback.xml\"";
-    options[2].optionString = "-Djava.security.properties=\"/users/zw494/java-config/java.security\"";
+    std::ostringstream sstream;
+    sstream << "-Djava.class.path=" << remote_home << "/jars/BFT-SMaRt.jar:";
+    sstream << remote_home << "/jars/slf4j-api-1.7.25.jar:";
+    sstream << remote_home << "/jars/bcpkix-jdk15on-160.jar:";
+    sstream << remote_home << "/jars/commons-codec-1.11.jar:";
+    sstream << remote_home << "/jars/logback-classic-1.2.3.jar:";
+    sstream << remote_home << "/jars/netty-all-4.1.34.Final.jar:";
+    sstream << remote_home << "/jars/bcprov-jdk15on-160.jar:";
+    sstream << remote_home << "/jars/core-0.1.4.jar:";
+    sstream << remote_home << "/jars/logback-core-1.2.3.jar:";
+    sstream << remote_home << "/java-config";
+    options[0].optionString = (char *)sstream.str().c_str();
+    sstream.str("");
+    sstream << "-Dlogback.configurationFile=\"" << remote_home << "/java-config/logback.xml\"";
+    options[1].optionString = (char *)sstream.str().c_str();
+    sstream.str("");
+    sstream << "-Djava.security.properties=\"" << remote_home << "/java-config/java.security\"";
+    options[2].optionString = (char *)sstream.str().c_str();
     // options[3].optionString = "-Dio.netty.tryReflectionSetAccessible=true";
 
     vm_args.version = JNI_VERSION_1_6;             // minimum Java version
@@ -86,19 +101,21 @@ bool BftSmartAgent::create_interface_client(TransportReceiver* receiver, int cli
     else {                                  
         // if class found, continue
         Debug("Class BftInterfaceClient found. Client ID: %d", client_id);
-        jmethodID mid = BftSmartAgent::env->GetMethodID(cls, "<init>", "(IJLjava/lang/String;)V");  // find method
+        jmethodID mid = BftSmartAgent::env->GetMethodID(cls, "<init>", "(IJLjava/lang/String;Ljava/lang/String;)V");  // find method
         if(mid == nullptr){
             std::cerr << "ERROR: constructor not found !" << std::endl;
             return false;
         }
         else {
+            jstring config_base = BftSmartAgent::env->NewStringUTF(remote_home.c_str());
             jstring config_home = BftSmartAgent::env->NewStringUTF(cpp_config_home.c_str());
             Debug("successfully created a string!");
             // call method
             this->bft_client = BftSmartAgent::env->NewObject(cls, mid, 
                                                             static_cast<jint>(client_id), 
                                                             reinterpret_cast<jlong>(receiver),
-                                                            config_home);
+                                                            config_home,
+                                                            config_base);
             if (this->bft_client == nullptr) return false;
         }
     }
@@ -115,14 +132,19 @@ bool BftSmartAgent::create_interface_server(TransportReceiver* receiver, int ser
     else {                                  // if class found, continue
        Debug("Class BftInterfaceServer found. Server ID: %d", server_id);
 
-       jmethodID mid = BftSmartAgent::env->GetMethodID(cls, "<init>", "(IJ)V");  // find method
+       jmethodID mid = BftSmartAgent::env->GetMethodID(cls, "<init>", "(IJLjava/lang/String;)V");  // find method
         if(mid == nullptr){
             std::cerr << "ERROR: constructor not found !" << std::endl;
             return false;
         }
         else {
             Debug("method ID found!");
-            this->bft_server = BftSmartAgent::env->NewObject(cls, mid, static_cast<jint>(server_id), reinterpret_cast<jlong>(receiver)); // call method
+            jstring config_base = BftSmartAgent::env->NewStringUTF(remote_home.c_str());
+            Debug("successfully created a string!");
+            this->bft_server = BftSmartAgent::env->NewObject(cls, mid, 
+                                                            static_cast<jint>(server_id), 
+                                                            reinterpret_cast<jlong>(receiver),
+                                                            config_base); // call method
             Debug("new bftsmart server object created! Yeeah!");
         }
     }

@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.security.Security;
 
 import bftsmart.tom.ServiceProxy;
+import bftsmart.reconfiguration.util.Configuration;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import org.slf4j.Logger;
@@ -45,8 +46,8 @@ public class BftInterfaceClient{
        Security.addProvider(new BouncyCastleProvider());
     }
 
-    public BftInterfaceClient(int id, long callbackHandle, String configHome) {
-
+    public BftInterfaceClient(int id, long callbackHandle, String configHome, String configBase) {
+        Configuration.configBase = configBase;
         this.id = id;
         this.callbackHandle = callbackHandle;
         logger.info("BFTSMART-INTERFACE: Starting a new service proxy! config home: " + configHome);

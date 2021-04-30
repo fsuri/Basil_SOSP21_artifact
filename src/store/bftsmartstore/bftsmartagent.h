@@ -6,9 +6,9 @@
 #include <sstream>
 const uint32_t MAGIC = 0x06121983;
 
-
 namespace bftsmartstore{
 class ShardClient;
+const std::string remote_home = "/users/zw494";
 
     class BftSmartAgent{
 public:
