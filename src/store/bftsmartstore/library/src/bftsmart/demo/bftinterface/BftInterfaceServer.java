@@ -61,9 +61,9 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
  */
 public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable {
 // public class BftInterfaceServer{
-   
+
     private Logger logger = LoggerFactory.getLogger(this.getClass());
-    
+
     protected ReplicaContext replicaContext;
     private TOMConfiguration config;
     private ServerViewController controller;
@@ -72,13 +72,13 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
     private ReentrantLock logLock = new ReentrantLock();
     private ReentrantLock hashLock = new ReentrantLock();
     private ReentrantLock stateLock = new ReentrantLock();
-    
+
     private MessageDigest md;
-        
+
     private StateLog log;
     private List<byte[]> commands = new ArrayList<>();
     private List<MessageContext> msgContexts = new ArrayList<>();
-    
+
     private StateManager stateManager;
 
     private int counter = 0;
@@ -89,7 +89,7 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
     static{
        Security.addProvider(new BouncyCastleProvider());
     }
-    
+
     public BftInterfaceServer(int id, long callbackHandle) {
         this.callbackHandle = callbackHandle;
         logger.info("start bft interface server in java...");
@@ -104,26 +104,26 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
         logger.info("starting server " + id + " in the Java side!");
 
     }
-    
+
     public void executeOrdered(byte[] command, MessageContext msgCtx) {
-        
+
         executeOrdered(command, msgCtx, false);
-        
+
     }
-    
+
     private void executeOrdered(byte[] command, MessageContext msgCtx, boolean noop) {
-        
+
         int cid = msgCtx.getConsensusId();
-            
+
         if (!noop) {
             stateLock.lock();
             appExecuteOrdered(command, msgCtx);
             stateLock.unlock();
         }
-        
+
         commands.add(command);
         msgContexts.add(msgCtx);
-        
+
         if(msgCtx.isLastInBatch()) {
 	        if ((cid > 0) && ((cid % checkpointPeriod) == 0)) {
 	            // logger.debug("Performing checkpoint for consensus " + cid);
@@ -139,7 +139,7 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
             msgContexts = new ArrayList<>();
         }
     }
-    
+
     private final byte[] computeHash(byte[] data) {
         byte[] ret = null;
         hashLock.lock();
@@ -148,12 +148,12 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
 
         return ret;
     }
-    
+
     private StateLog getLog() {
        	initLog();
     	return log;
     }
-    
+
     private void saveState(byte[] snapshot, int lastCID) {
         StateLog thisLog = getLog();
 
@@ -173,7 +173,7 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
     }
 
     private void saveCommands(byte[][] commands, MessageContext[] msgCtx) {
-        
+
         if (commands.length != msgCtx.length) {
             logger.debug("----SIZE OF COMMANDS AND MESSAGE CONTEXTS IS DIFFERENT----");
             logger.debug("----COMMANDS: " + commands.length + ", CONTEXTS: " + msgCtx.length + " ----");
@@ -185,11 +185,13 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
         for (int i = 0; i <= msgCtx.length; i++) {
             if (i == msgCtx.length) { // the batch command contains only one command or it is the last position of the array
                 byte[][] batch = Arrays.copyOfRange(commands, batchStart, i);
+                System.err.println("Size of batch: " + batch.length);
                 MessageContext[] batchMsgCtx = Arrays.copyOfRange(msgCtx, batchStart, i);
                 log.addMessageBatch(batch, batchMsgCtx, cid);
             } else {
                 if (msgCtx[i].getConsensusId() > cid) { // saves commands when the CID changes or when it is the last batch
                     byte[][] batch = Arrays.copyOfRange(commands, batchStart, i);
+                    System.err.println("Size of batch: " + batch.length;
                     MessageContext[] batchMsgCtx = Arrays.copyOfRange(msgCtx, batchStart, i);
                     log.addMessageBatch(batch, batchMsgCtx, cid);
                     cid = msgCtx[i].getConsensusId();
@@ -197,7 +199,7 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
                 }
             }
         }
-        
+
         logLock.unlock();
     }
 
@@ -208,30 +210,30 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
 
         // Only will send a state if I have a proof for the last logged decision/consensus
         //TODO: I should always make sure to have a log with proofs, since this is a result
-        // of not storing anything after a checkpoint and before logging more requests        
+        // of not storing anything after a checkpoint and before logging more requests
         if (ret == null || (config.isBFT() && ret.getCertifiedDecision(this.controller) == null)) ret = new DefaultApplicationState();
 
         logger.info("Getting log until CID " + cid + ", null: " + (ret == null));
         logLock.unlock();
         return ret;
     }
-    
+
     // @Override
     public int setState(ApplicationState recvState) {
         int lastCID = -1;
         if (recvState instanceof DefaultApplicationState) {
-            
+
             DefaultApplicationState state = (DefaultApplicationState) recvState;
-            
+
             logger.info("Last CID in state: " + state.getLastCID());
-            
+
             logLock.lock();
             initLog();
             log.update(state);
             logLock.unlock();
-            
+
             int lastCheckpointCID = state.getLastCheckpointCID();
-            
+
             lastCID = state.getLastCID();
 
             logger.debug("I'm going to update myself from CID "
@@ -244,14 +246,14 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
                 try {
                     logger.debug("Processing and verifying batched requests for CID " + cid);
 
-                    CommandsInfo cmdInfo = state.getMessageBatch(cid); 
+                    CommandsInfo cmdInfo = state.getMessageBatch(cid);
                     byte[][] cmds = cmdInfo.commands; // take a batch
                     MessageContext[] msgCtxs = cmdInfo.msgCtx;
-                    
+
                     if (cmds == null || msgCtxs == null || msgCtxs[0].isNoOp()) {
                         continue;
                     }
-                    
+
                     for(int i = 0; i < cmds.length; i++) {
                     	appExecuteOrdered(cmds[i], msgCtxs[i]);
                     }
@@ -306,7 +308,7 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
     		stateManager = new StandardStateManager();
     	return stateManager;
     }
-	
+
     private void initLog() {
     	if(log == null) {
     		checkpointPeriod = config.getCheckpointPeriod();
@@ -321,13 +323,13 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
             	log = new StateLog(controller.getStaticConf().getProcessId(), checkpointPeriod, state, computeHash(state));
     	}
     }
-          
+
     // @Override
     public byte[] executeUnordered(byte[] command, MessageContext msgCtx) {
         appExecuteUnordered(command, msgCtx);
         return null;
     }
-    
+
     // @Override
     public void Op(int CID, byte[] requests, MessageContext msgCtx) {
         //Requests are logged within 'executeOrdered(...)' instead of in this method.
@@ -335,17 +337,17 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
 
     // @Override
     public void noOp(int CID, byte[][] operations, MessageContext[] msgCtx) {
-         
+
         for (int i = 0; i < msgCtx.length; i++) {
             executeOrdered(operations[i], msgCtx[i], true);
         }
     }
-            
-    public void appExecuteUnordered(byte[] command, MessageContext msgCtx) {         
+
+    public void appExecuteUnordered(byte[] command, MessageContext msgCtx) {
         iterations++;
         System.out.println("(" + iterations + ") Counter current value: " + counter);
     }
-  
+
     public void appExecuteOrdered(byte[] command, MessageContext msgCtx) {
         iterations++;
         logger.info("in app execute ordered. array length: " + command.length);
@@ -359,7 +361,7 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
         bftRequestReceived(this);
         logger.info("buffer command executed! ");
     }
-    
+
     @SuppressWarnings("unchecked")
     public void installSnapshot(byte[] state) {
         try {
