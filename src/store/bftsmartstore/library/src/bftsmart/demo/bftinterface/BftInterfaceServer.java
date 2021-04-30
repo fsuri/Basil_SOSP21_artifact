@@ -37,6 +37,7 @@ import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.reconfiguration.ServerViewController;
 import bftsmart.reconfiguration.util.TOMConfiguration;
+import bftsmart.reconfiguration.util.Configuration;
 import bftsmart.statemanagement.ApplicationState;
 import bftsmart.statemanagement.StateManager;
 import bftsmart.statemanagement.standard.StandardStateManager;
@@ -89,8 +90,14 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
     static{
        Security.addProvider(new BouncyCastleProvider());
     }
+<<<<<<< HEAD
 
     public BftInterfaceServer(int id, long callbackHandle) {
+=======
+    
+    public BftInterfaceServer(int id, long callbackHandle, String configBase) {
+        Configuration.configBase = configBase;
+>>>>>>> 6ce48787b507e4f9ec420a7913d078a11f10b701
         this.callbackHandle = callbackHandle;
         logger.info("start bft interface server in java...");
         try {
@@ -398,6 +405,6 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
     // Used for testing purposes
     public static void main(String[] args){
         int i = Integer.parseInt(args[0]);
-        new BftInterfaceServer(i, 0);
+        new BftInterfaceServer(i, 0, "/home/zw494/BFT-DB/src/store/bftsmartstore/library/");
     }
 }

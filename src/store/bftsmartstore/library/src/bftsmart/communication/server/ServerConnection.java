@@ -47,6 +47,7 @@ import javax.net.ssl.TrustManagerFactory;
 import bftsmart.communication.SystemMessage;
 import bftsmart.reconfiguration.ServerViewController;
 import bftsmart.reconfiguration.VMMessage;
+import bftsmart.reconfiguration.util.Configuration;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.util.TOMUtil;
 import java.security.SecureRandom;
@@ -525,7 +526,11 @@ public class ServerConnection {
 		try {
 			// MODIFIED
 			// fis = new FileInputStream("config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
+<<<<<<< HEAD
 			fis = new FileInputStream("/users/fs435/java-config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
+=======
+			fis = new FileInputStream(Configuration.configBase + "/java-config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
+>>>>>>> 6ce48787b507e4f9ec420a7913d078a11f10b701
 			ks = KeyStore.getInstance(KeyStore.getDefaultType());
 			ks.load(fis, SECRET.toCharArray());
 		} catch (FileNotFoundException | KeyStoreException | NoSuchAlgorithmException | CertificateException e) {
