@@ -369,7 +369,7 @@ void Client::AbortTxnSigned(const proto::ShardSignedDecisions& dec, const proto:
     // pendingWriteback.ccb = ccb;
     // pendingWriteback.txn = txn;
     pendingWritebacks[digest] = pendingWriteback;
-    std::cerr << "Downcalling to Shard client to send out Abort" << '\n';
+    //std::cerr << "Downcalling to Shard client to send out Abort" << '\n';
     for (const auto& shard_id : txn.participating_shards()) {
       bclient[shard_id]->Abort(digest, dec);
     }

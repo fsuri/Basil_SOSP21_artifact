@@ -680,7 +680,7 @@ int main(int argc, char **argv) {
       break;
   }
 
-      
+
   default: {
       NOT_REACHABLE();
   }

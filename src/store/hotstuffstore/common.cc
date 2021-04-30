@@ -374,7 +374,7 @@ bool verifyGDecision_parallel(const proto::GroupedDecision& gdecision,
   const proto::Transaction& txn, KeyManager* keyManager, bool signMessages, uint64_t f, Transport* tp ) {
   std::string digest = gdecision.txn_digest();
 
- std::cerr<< "starting parallel verification" << std::endl;
+ //std::cerr<< "starting parallel verification" << std::endl;
   // This will hold the remaining shards that we need to verify
   std::unordered_set<uint64_t> remaining_shards;
   for (auto id : txn.participating_shards()) {
@@ -463,7 +463,7 @@ bool verifyGDecision_parallel(const proto::GroupedDecision& gdecision,
     std::unique_lock lock(verifyObj->objMutex);
     verifyObj->cv_wait.wait(lock, [verifyObj] {return verifyObj->deletable == 0;});
     //
-    std::cerr << "completing verification " << std::endl;
+    //std::cerr << "completing verification " << std::endl;
     if(verifyObj->result){
       //delete verifyObj;
       return true;

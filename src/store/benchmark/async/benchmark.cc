@@ -378,6 +378,7 @@ DEFINE_uint64(cooldown_secs, 5, "time (in seconds) to cool down system after"
 DEFINE_uint64(tput_interval, 0, "time (in seconds) between throughput"
     " measurements");
 DEFINE_uint64(num_clients, 1, "number of clients to run in this process");
+DEFINE_uint64(num_client_hosts, 1, "number of clients processing running across all hosts");
 DEFINE_uint64(num_requests, -1, "number of requests (transactions) per"
     " client");
 DEFINE_int32(closest_replica, -1, "index of the replica closest to the client");
