@@ -42,7 +42,8 @@ store/mortystore/tests/branch-generator-test
 store/mortystore/tests/branch-compatible-test
 store/janusstore/tests/janus-client-test
 
-
+store/bftsmartstore/library/remote
+store/bftsmartstore_augustus/library/remote
 
 ################################################################################
 # vim

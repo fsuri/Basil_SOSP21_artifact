@@ -63,13 +63,11 @@ public class Configuration {
 
 	private String defaultKeyLoader;
 
-<<<<<<< HEAD
-	protected String configHome = "/users/fs435/java-config/";
-=======
-	public static String configBase = "/home/zw494/BFT-DB/src/store/bftsmartstore/library";
+
+	public static String configBase = "/users/fs435";
 
 	protected String configHome = configBase + "/java-config/";
->>>>>>> 6ce48787b507e4f9ec420a7913d078a11f10b701
+
 	// MODIFIED
 	// protected String configHome = "";
 
@@ -154,7 +152,7 @@ public class Configuration {
 			} else {
 				hashAlgorithmProvider = s;
 			}
-			
+
 			s = (String) configs.remove("system.communication.defaultKeyLoader");
 			if (s == null) {
 				defaultKeyLoader = DEFAULT_KEYLOADER;
@@ -187,10 +185,10 @@ public class Configuration {
 			}
 
 			TOMUtil.init(
-					secretKeyAlgorithm, 
-					keyLoader.getSignatureAlgorithm(), 
+					secretKeyAlgorithm,
+					keyLoader.getSignatureAlgorithm(),
 					hashAlgorithm,
-					secretKeyAlgorithmProvider, 
+					secretKeyAlgorithmProvider,
 					signatureAlgorithmProvider,
 					hashAlgorithmProvider);
 

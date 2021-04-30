@@ -66,22 +66,22 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Tulio A. Ribeiro.
- * 
+ *
  * Generate a KeyPair used by SSL/TLS connections. Note that keypass argument is
  * equal to the variable SECRET.
- * 
- * The command generates the secret key.*/ 
-//## Elliptic Curve 
-  //$keytool -genkey -keyalg EC -alias bftsmartEC -keypass MySeCreT_2hMOygBwY -keystore ./ecKeyPair -dname "CN=BFT-SMaRT" 
+ *
+ * The command generates the secret key.*/
+//## Elliptic Curve
+  //$keytool -genkey -keyalg EC -alias bftsmartEC -keypass MySeCreT_2hMOygBwY -keystore ./ecKeyPair -dname "CN=BFT-SMaRT"
   //$keytool -importkeystore -srckeystore ./ecKeyPair -destkeystore ./ecKeyPair -deststoretype pkcs12
 
-//## RSA 
+//## RSA
   //$keytool -genkey -keyalg RSA -keysize 2048 -alias bftsmartRSA -keypass MySeCreT_2hMOygBwY -keystore ./RSA_KeyPair_2048.pkcs12 -dname "CN=BFT-SMaRT"
   //$keytool -importkeystore -srckeystore ./RSA_KeyPair_2048.pkcs12 -destkeystore ./RSA_KeyPair_2048.pkcs12 -deststoretype pkcs12
- 
+
 
 public class ServersCommunicationLayer extends Thread {
-    
+
     private Logger logger = LoggerFactory.getLogger(this.getClass());
 
 
@@ -95,8 +95,8 @@ public class ServersCommunicationLayer extends Thread {
     private ReentrantLock waitViewLock = new ReentrantLock();
     private List<PendingConnection> pendingConn = new LinkedList<PendingConnection>();
     private ServiceReplica replica;
-    
-    
+
+
     /**
 	 * Tulio A. Ribeiro
 	 * SSL / TLS.
@@ -113,7 +113,7 @@ public class ServersCommunicationLayer extends Thread {
 	private String ssltlsProtocolVersion;
 
     public ServersCommunicationLayer(ServerViewController controller,
-            LinkedBlockingQueue<SystemMessage> inQueue, 
+            LinkedBlockingQueue<SystemMessage> inQueue,
             ServiceReplica replica) throws Exception {
 
         this.controller = controller;
@@ -125,7 +125,7 @@ public class ServersCommunicationLayer extends Thread {
         String myAddress;
         String confAddress =
                     controller.getStaticConf().getRemoteAddress(controller.getStaticConf().getProcessId()).getAddress().getHostAddress();
-        
+
         if (InetAddress.getLoopbackAddress().getHostAddress().equals(confAddress)) {
             myAddress = InetAddress.getLoopbackAddress().getHostAddress();
             }
@@ -139,18 +139,16 @@ public class ServersCommunicationLayer extends Thread {
         } else {
             myAddress = controller.getStaticConf().getBindAddress();
         }
-        
+
         int myPort = controller.getStaticConf().getServerToServerPort(controller.getStaticConf().getProcessId());
 
 		FileInputStream fis = null;
 		try {
             // MODIFIED
             // fis = new FileInputStream("config/keysSSL_TLS/" + controller.getStaticConf().getSSLTLSKeyStore());
-<<<<<<< HEAD
-			fis = new FileInputStream("/users/fs435/java-config/keysSSL_TLS/" + controller.getStaticConf().getSSLTLSKeyStore());
-=======
+
 			fis = new FileInputStream(Configuration.configBase + "/java-config/keysSSL_TLS/" + controller.getStaticConf().getSSLTLSKeyStore());
->>>>>>> 6ce48787b507e4f9ec420a7913d078a11f10b701
+
 			ks = KeyStore.getInstance(KeyStore.getDefaultType());
 			ks.load(fis, SECRET.toCharArray());
 		} finally {
@@ -186,12 +184,12 @@ public class ServersCommunicationLayer extends Thread {
 		serverSocketSSLTLS.setReuseAddress(true);
 		serverSocketSSLTLS.setNeedClientAuth(true);
 		serverSocketSSLTLS.setWantClientAuth(true);
-		
+
 
 		SecretKeyFactory fac = TOMUtil.getSecretFactory();
 		PBEKeySpec spec = TOMUtil.generateKeySpec(SECRET.toCharArray());
 		selfPwd = fac.generateSecret(spec);
-        
+
       //Try connecting if a member of the current view. Otherwise, wait until the Join has been processed!
         if (controller.isInCurrentView()) {
             int[] initialV = controller.getCurrentViewAcceptors();
@@ -201,12 +199,12 @@ public class ServersCommunicationLayer extends Thread {
                 }
             }
         }
-        
+
         start();
     }
 
     public SecretKey getSecretKey(int id) {
-        if (id == controller.getStaticConf().getProcessId()) 
+        if (id == controller.getStaticConf().getProcessId())
         	return selfPwd;
         else return connections.get(id).getSecretKey();
     }
@@ -250,7 +248,7 @@ public class ServersCommunicationLayer extends Thread {
         connectionsLock.lock();
         ServerConnection ret = this.connections.get(remoteId);
         if (ret == null) {
-            ret = new ServerConnection(controller, null, 
+            ret = new ServerConnection(controller, null,
             		remoteId, this.inQueue, this.replica);
             this.connections.put(remoteId, ret);
         }
@@ -269,13 +267,13 @@ public class ServersCommunicationLayer extends Thread {
         }
 
         byte[] data = bOut.toByteArray();
-        
+
         // this shuffling is done to prevent the replica with the lowest ID/index  from being always
         // the last one receiving the messages, which can result in that replica  to become consistently
         // delayed in relation to the others.
         /*Tulio A. Ribeiro*/
         Integer[] targetsShuffled = Arrays.stream( targets ).boxed().toArray( Integer[]::new );
-        Collections.shuffle(Arrays.asList(targetsShuffled), new Random(System.nanoTime())); 
+        Collections.shuffle(Arrays.asList(targetsShuffled), new Random(System.nanoTime()));
 
         for (int target : targetsShuffled) {
 			try {
@@ -294,9 +292,9 @@ public class ServersCommunicationLayer extends Thread {
     }
 
     public void shutdown() {
-        
+
         logger.info("Shutting down replica sockets");
-        
+
         doWork = false;
 
         //******* EDUARDO BEGIN **************//
@@ -379,7 +377,7 @@ public class ServersCommunicationLayer extends Thread {
                 this.connections.put(remoteId,
                 			new ServerConnection(controller, newSocket, remoteId, inQueue, replica));
             } else {
-                //reconnection	
+                //reconnection
             	logger.debug("ReConnecting with replica: {}", remoteId);
                 this.connections.get(remoteId).reconnect(newSocket);
             }
@@ -400,7 +398,7 @@ public class ServersCommunicationLayer extends Thread {
 			error("Failed to set TCPNODELAY", ex);
 		}
 	}
-    
+
     public static void setSocketOptions(Socket socket) {
         try {
             socket.setTcpNoDelay(true);

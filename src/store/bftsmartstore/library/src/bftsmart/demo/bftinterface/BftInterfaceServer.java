@@ -90,14 +90,10 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
     static{
        Security.addProvider(new BouncyCastleProvider());
     }
-<<<<<<< HEAD
 
-    public BftInterfaceServer(int id, long callbackHandle) {
-=======
-    
     public BftInterfaceServer(int id, long callbackHandle, String configBase) {
         Configuration.configBase = configBase;
->>>>>>> 6ce48787b507e4f9ec420a7913d078a11f10b701
+
         this.callbackHandle = callbackHandle;
         logger.info("start bft interface server in java...");
         try {
@@ -192,13 +188,11 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
         for (int i = 0; i <= msgCtx.length; i++) {
             if (i == msgCtx.length) { // the batch command contains only one command or it is the last position of the array
                 byte[][] batch = Arrays.copyOfRange(commands, batchStart, i);
-                System.err.println("Size of batch: " + batch.length);
                 MessageContext[] batchMsgCtx = Arrays.copyOfRange(msgCtx, batchStart, i);
                 log.addMessageBatch(batch, batchMsgCtx, cid);
             } else {
                 if (msgCtx[i].getConsensusId() > cid) { // saves commands when the CID changes or when it is the last batch
                     byte[][] batch = Arrays.copyOfRange(commands, batchStart, i);
-                    System.err.println("Size of batch: " + batch.length;
                     MessageContext[] batchMsgCtx = Arrays.copyOfRange(msgCtx, batchStart, i);
                     log.addMessageBatch(batch, batchMsgCtx, cid);
                     cid = msgCtx[i].getConsensusId();
@@ -405,6 +399,6 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
     // Used for testing purposes
     public static void main(String[] args){
         int i = Integer.parseInt(args[0]);
-        new BftInterfaceServer(i, 0, "/home/zw494/BFT-DB/src/store/bftsmartstore/library/");
+        new BftInterfaceServer(i, 0, "/home/fs435/BFT-DB/src/store/bftsmartstore/library/");
     }
 }

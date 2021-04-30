@@ -67,7 +67,7 @@ import org.slf4j.LoggerFactory;
  * @author alysson
  */
 public class ServerConnection {
-    
+
     private Logger logger = LoggerFactory.getLogger(this.getClass());
 
 
@@ -80,17 +80,17 @@ public class ServerConnection {
     private boolean useSenderThread;
     protected LinkedBlockingQueue<byte[]> outQueue;// = new LinkedBlockingQueue<byte[]>(SEND_QUEUE_SIZE);
     private LinkedBlockingQueue<SystemMessage> inQueue;
-    
+
     private Lock connectLock = new ReentrantLock();
     /** Only used when there is no sender Thread */
     private Lock sendLock;
     private boolean doWork = true;
-    
+
     private SecretKey secretKey = null;
 
     /**
      * Tulio A. Ribeiro
-     * TLS vars. 
+     * TLS vars.
      */
     private KeyManagerFactory kmf;
 	private KeyStore ks = null;
@@ -99,10 +99,10 @@ public class ServerConnection {
 	private SSLContext context;
 	private SSLSocketFactory socketFactory;
 	private static final String SECRET = "MySeCreT_2hMOygBwY";
-    
-    public ServerConnection(ServerViewController controller, 
+
+    public ServerConnection(ServerViewController controller,
     		SSLSocket socket, int remoteId,
-            LinkedBlockingQueue<SystemMessage> inQueue, 
+            LinkedBlockingQueue<SystemMessage> inQueue,
             ServiceReplica replica) {
 
         this.controller = controller;
@@ -119,7 +119,7 @@ public class ServerConnection {
      		if (isToConnect()) {
      			ssltlsCreateConnection();
      		}
-     		
+
      		if (this.socket != null) {
     			try {
     				socketOutStream = new DataOutputStream(this.socket.getOutputStream());
@@ -128,7 +128,7 @@ public class ServerConnection {
     				logger.error("Error creating connection to " + remoteId, ex);
     			}
     		}
-               
+
        //******* EDUARDO BEGIN **************//
         this.useSenderThread = this.controller.getStaticConf().isUseSenderThread();
 
@@ -137,7 +137,7 @@ public class ServerConnection {
         } else {
             sendLock = new ReentrantLock();
         }
-        
+
         if (!this.controller.getStaticConf().isTheTTP()) {
             if (this.controller.getStaticConf().getTTPId() == remoteId) {
                 //Uma thread "diferente" para as msgs recebidas da TTP
@@ -168,13 +168,13 @@ public class ServerConnection {
 		}
 		return secretKey;
 	}
-    
+
     /**
      * Stop message sending and reception.
      */
     public void shutdown() {
         logger.debug("SHUTDOWN for "+remoteId);
-        
+
         doWork = false;
         closeSocket();
     }
@@ -242,19 +242,19 @@ public class ServerConnection {
         }
         boolean ret = false;
         if (this.controller.isInCurrentView()) {
-            
+
              //in this case, the node with higher ID starts the connection
              if (this.controller.getStaticConf().getProcessId() > remoteId) {
                  ret = true;
              }
-                
+
             /** JCS: I commented the code below to fix a bug, but I am not sure
              whether its completely useless or not. The 'if' above was taken
              from that same code (its the only part I understand why is necessary)
              I keep the code commented just to be on the safe side*/
-            
+
             /**
-            
+
             boolean me = this.controller.isInLastJoinSet(this.controller.getStaticConf().getProcessId());
             boolean remote = this.controller.isInLastJoinSet(remoteId);
 
@@ -272,7 +272,7 @@ public class ServerConnection {
             } //else if (me && !remote) { //this process entered in the last reconfig and the other one is old
                 //ret=false; //not necessary, as ret already is false
             //}
-              
+
             */
         }
         return ret;
@@ -314,11 +314,11 @@ public class ServerConnection {
 		connectLock.unlock();
 	}
 
-  
+
     private void closeSocket() {
-        
+
         connectLock.lock();
-        
+
         if (socket != null) {
             try {
                 socketOutStream.flush();
@@ -333,7 +333,7 @@ public class ServerConnection {
             socketOutStream = null;
             socketInStream = null;
         }
-        
+
         connectLock.unlock();
     }
 
@@ -390,7 +390,7 @@ public class ServerConnection {
 
         @Override
         public void run() {
-          
+
         	while (doWork) {
 				if (socket != null && socketInStream != null) {
 
@@ -440,7 +440,7 @@ public class ServerConnection {
 
     //******* EDUARDO BEGIN: special thread for receiving messages indicating the entrance into the system, coming from the TTP **************//
     // Simly pass the messages to the replica, indicating its entry into the system
-    //TODO: Ask eduardo why a new thread is needed!!! 
+    //TODO: Ask eduardo why a new thread is needed!!!
     //TODO2: Remove all duplicated code
 
     /**
@@ -495,12 +495,12 @@ public class ServerConnection {
 		}
     }
         //******* EDUARDO END **************//
-    
-    
+
+
     /**
 	 * Deal with the creation of SSL/TLS connection.
 	 *  Author: Tulio A. Ribeiro
-	 *  
+	 *
 	 * @throws KeyStoreException
 	 * @throws IOException
 	 * @throws CertificateException
@@ -526,11 +526,9 @@ public class ServerConnection {
 		try {
 			// MODIFIED
 			// fis = new FileInputStream("config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
-<<<<<<< HEAD
-			fis = new FileInputStream("/users/fs435/java-config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
-=======
+
 			fis = new FileInputStream(Configuration.configBase + "/java-config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
->>>>>>> 6ce48787b507e4f9ec420a7913d078a11f10b701
+
 			ks = KeyStore.getInstance(KeyStore.getDefaultType());
 			ks.load(fis, SECRET.toCharArray());
 		} catch (FileNotFoundException | KeyStoreException | NoSuchAlgorithmException | CertificateException e) {
