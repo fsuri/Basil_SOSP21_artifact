@@ -168,6 +168,7 @@ include store/pbftstore/Rules.mk
 include store/hotstuffstore/Rules.mk
 include store/bftsmartstore/Rules.mk
 include store/bftsmartstore_augustus/Rules.mk
+include store/bftsmartstore_stable/Rules.mk
 include store/benchmark/async/tpcc/Rules.mk
 include store/Rules.mk
 include store/benchmark/Rules.mk

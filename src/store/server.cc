@@ -58,6 +58,8 @@
 // Augustus-BftSmart
 #include "store/bftsmartstore_augustus/replica.h"
 #include "store/bftsmartstore_augustus/server.h"
+#include "store/bftsmartstore_stable/replica.h"
+#include "store/bftsmartstore_stable/server.h"
 
 #include "store/benchmark/async/tpcc/tpcc-proto.pb.h"
 #include "store/indicusstore/common.h"
@@ -618,38 +620,6 @@ int main(int argc, char **argv) {
       //FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
       break;
   }
-  case PROTO_BFTSMART: {
-    int num_cpus = std::thread::hardware_concurrency();
-      num_cpus /= FLAGS_indicus_total_processes;
-
-      int hotstuff_cpu;
-      if (FLAGS_num_shards == 6) {
-          hotstuff_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
-      } else if(FLAGS_num_shards == 3) {
-				//hotstuff_cpu = 1;
-				hotstuff_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
-			}
-			else{
-          // FLAGS_num_shards should be 12 or 24
-          hotstuff_cpu = FLAGS_indicus_process_id * num_cpus;
-      }
-
-      server = new bftsmartstore::Server(config, &keyManager,
-                                     FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
-                                     FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-                                     FLAGS_indicus_time_delta, part, tport,
-																	   FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort);
-
-      replica = new bftsmartstore::Replica(config, &keyManager,
-                                       dynamic_cast<bftsmartstore::App *>(server),
-                                       FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
-                                       FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
-                                       FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
-                                       FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx,
-																			 hotstuff_cpu, FLAGS_num_shards, tport);
-
-      break;
-  }
 
       // HotStuff
   case PROTO_HOTSTUFF: {
@@ -685,39 +655,71 @@ int main(int argc, char **argv) {
       break;
   }
 
-	// Augustus running on top of BFT smart.
-case PROTO_AUGUSTUS_SMART: {
-	int num_cpus = std::thread::hardware_concurrency();
-	num_cpus /= FLAGS_indicus_total_processes;
+	case PROTO_BFTSMART: {
+		int num_cpus = std::thread::hardware_concurrency();
+			num_cpus /= FLAGS_indicus_total_processes;
 
-	int augustus_cpu;
-	if (FLAGS_num_shards == 6) {
-			augustus_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
-	} else if(FLAGS_num_shards == 3) {
-		//hotstuff_cpu = 1;
-	    augustus_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+			int hotstuff_cpu;
+			if (FLAGS_num_shards == 6) {
+					hotstuff_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+			} else if(FLAGS_num_shards == 3) {
+				//hotstuff_cpu = 1;
+				hotstuff_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+			}
+			else{
+					// FLAGS_num_shards should be 12 or 24
+					hotstuff_cpu = FLAGS_indicus_process_id * num_cpus;
+			}
+
+			server = new bftsmartstore::Server(config, &keyManager,
+																		 FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
+																		 FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+																		 FLAGS_indicus_time_delta, part, tport,
+																		 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort);
+
+			replica = new bftsmartstore::Replica(config, &keyManager,
+																			 dynamic_cast<bftsmartstore::App *>(server),
+																			 FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
+																			 FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
+																			 FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
+																			 FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx,
+																			 hotstuff_cpu, FLAGS_num_shards, tport);
+
+			break;
 	}
-	else{
-			// FLAGS_num_shards should be 12 or 24
-			augustus_cpu = FLAGS_indicus_process_id * num_cpus;
+		// Augustus running on top of BFT smart.
+	case PROTO_AUGUSTUS_SMART: {
+		int num_cpus = std::thread::hardware_concurrency();
+		num_cpus /= FLAGS_indicus_total_processes;
+
+		int augustus_cpu;
+		if (FLAGS_num_shards == 6) {
+				augustus_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+		} else if(FLAGS_num_shards == 3) {
+			//hotstuff_cpu = 1;
+		    augustus_cpu = FLAGS_indicus_process_id * num_cpus + num_cpus - 1;
+		}
+		else{
+				// FLAGS_num_shards should be 12 or 24
+				augustus_cpu = FLAGS_indicus_process_id * num_cpus;
+		}
+
+		server = new bftsmartstore_stable::Server(config, &keyManager,
+																	 FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
+																	 FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+																	 FLAGS_indicus_time_delta, part, tport,
+																	 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort);
+
+		replica = new bftsmartstore_stable::Replica(config, &keyManager,
+																		 dynamic_cast<bftsmartstore_stable::App *>(server),
+																		 FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
+																		 FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
+																		 FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
+																		 FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx,
+																		 augustus_cpu, FLAGS_num_shards, tport);
+
+		break;
 	}
-
-	server = new bftsmartstore_augustus::Server(config, &keyManager,
-																 FLAGS_group_idx, FLAGS_replica_idx, FLAGS_num_shards, FLAGS_num_groups,
-																 FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-																 FLAGS_indicus_time_delta, part, tport,
-																 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort);
-
-	replica = new bftsmartstore_augustus::Replica(config, &keyManager,
-																	 dynamic_cast<bftsmartstore_augustus::App *>(server),
-																	 FLAGS_group_idx, FLAGS_replica_idx, FLAGS_indicus_sign_messages,
-																	 FLAGS_indicus_sig_batch, FLAGS_indicus_sig_batch_timeout,
-																	 FLAGS_pbft_esig_batch, FLAGS_pbft_esig_batch_timeout,
-																	 FLAGS_indicus_use_coordinator, FLAGS_indicus_request_tx,
-																	 augustus_cpu, FLAGS_num_shards, tport);
-
-	break;
-}
 
   default: {
       NOT_REACHABLE();

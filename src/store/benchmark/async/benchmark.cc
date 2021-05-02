@@ -35,6 +35,8 @@
 #include "store/hotstuffstore/client.h"
 #include "store/bftsmartstore/client.h"
 #include "store/bftsmartstore_augustus/client.h"
+#include "store/bftsmartstore_stable/client.h"
+
 #include "store/common/frontend/one_shot_client.h"
 #include "store/common/frontend/async_one_shot_adapter_client.h"
 #include "store/benchmark/async/common/zipf_key_selector.h"
@@ -948,48 +950,6 @@ int main(int argc, char **argv) {
         break;
     }
 
-// BFTSmart
-    case PROTO_BFTSMART: {
-      uint64_t readQuorumSize = 0;
-        switch (read_quorum) {
-        case READ_QUORUM_ONE:
-            readQuorumSize = 1;
-            break;
-        case READ_QUORUM_ONE_HONEST:
-            readQuorumSize = config->f + 1;
-            break;
-        case READ_QUORUM_MAJORITY_HONEST:
-            readQuorumSize = config->f * 2 + 1;
-            break;
-        default:
-            NOT_REACHABLE();
-        }
-				uint64_t readMessages = 0;
-        switch (read_messages) {
-        case READ_MESSAGES_READ_QUORUM:
-            readMessages = readQuorumSize; // + config->f; //config->n;
-            break;
-        case READ_MESSAGES_MAJORITY:
-            readMessages = (config->n + 1) / 2;
-            break;
-        case READ_MESSAGES_ALL:
-            readMessages = config->n;
-            break;
-        default:
-            NOT_REACHABLE();
-        }
-
-        client = new bftsmartstore::Client(*config, clientId, FLAGS_num_shards,
-                                       FLAGS_num_groups, closestReplicas,
-																			  tport, part,
-                                       readMessages, readQuorumSize,
-                                       FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-                                       keyManager,
-																			 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort,
-																			 TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
-        break;
-    }
-
 // HotStuff
     case PROTO_HOTSTUFF: {
         uint64_t readQuorumSize = 0;
@@ -1032,6 +992,48 @@ int main(int argc, char **argv) {
         break;
     }
 
+		// BFTSmart
+		    case PROTO_BFTSMART: {
+		      uint64_t readQuorumSize = 0;
+		        switch (read_quorum) {
+		        case READ_QUORUM_ONE:
+		            readQuorumSize = 1;
+		            break;
+		        case READ_QUORUM_ONE_HONEST:
+		            readQuorumSize = config->f + 1;
+		            break;
+		        case READ_QUORUM_MAJORITY_HONEST:
+		            readQuorumSize = config->f * 2 + 1;
+		            break;
+		        default:
+		            NOT_REACHABLE();
+		        }
+						uint64_t readMessages = 0;
+		        switch (read_messages) {
+		        case READ_MESSAGES_READ_QUORUM:
+		            readMessages = readQuorumSize; // + config->f; //config->n;
+		            break;
+		        case READ_MESSAGES_MAJORITY:
+		            readMessages = (config->n + 1) / 2;
+		            break;
+		        case READ_MESSAGES_ALL:
+		            readMessages = config->n;
+		            break;
+		        default:
+		            NOT_REACHABLE();
+		        }
+
+		        client = new bftsmartstore::Client(*config, clientId, FLAGS_num_shards,
+		                                       FLAGS_num_groups, closestReplicas,
+																					  tport, part,
+		                                       readMessages, readQuorumSize,
+		                                       FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
+		                                       keyManager,
+																					 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort,
+																					 TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+		        break;
+		    }
+
 		case PROTO_AUGUSTUS_SMART: {
 			uint64_t readQuorumSize = 0;
 				switch (read_quorum) {
@@ -1062,7 +1064,7 @@ int main(int argc, char **argv) {
 						NOT_REACHABLE();
 				}
 
-				client = new bftsmartstore_augustus::Client(*config, clientId, FLAGS_num_shards,
+				client = new bftsmartstore_stable::Client(*config, clientId, FLAGS_num_shards,
 																			 FLAGS_num_groups, closestReplicas,
 																				tport, part,
 																			 readMessages, readQuorumSize,

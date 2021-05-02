@@ -7,7 +7,7 @@ message TimestampMessage {
 
 message ReadMessage {
     required bytes key = 1;
-    required TimestampMessage readtime = 2;
+    optional TimestampMessage readtime = 2;
 }
 
 message WriteMessage {
