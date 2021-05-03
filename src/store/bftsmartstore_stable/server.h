@@ -64,6 +64,8 @@ public:
     std::vector<int> txnGroups;
     return static_cast<int>((*part)(key, numShards, groupIdx, txnGroups) % numGroups) == groupIdx;
   }
+  proto::TransactionDecision* decision_test;
+  std::vector<proto::ReadResult> test_vector;
 
 private:
   Transport* tp;

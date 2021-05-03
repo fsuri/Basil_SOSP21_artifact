@@ -46,6 +46,11 @@ message ReadResult {
   optional bytes value = 2;
 }
 
+message ReadSet {
+  repeated bytes keys = 1;
+  repeated bytes values = 2;
+}
+
 // This is the reply that a shard sends to the client after it finished its
 // CCC
 message TransactionDecision {
@@ -59,6 +64,10 @@ message TransactionDecision {
   repeated ReadResult readset = 4;
   // one of the transations that abort the current transaction
   optional Transaction conflict = 5;
+  optional ReadSet rs = 6;
+  optional ReadResult r1 = 7;
+  optional ReadResult r2 = 8;
+  optional ReadResult r3 = 9;
 }
 
 message ShardSignedDecisions {

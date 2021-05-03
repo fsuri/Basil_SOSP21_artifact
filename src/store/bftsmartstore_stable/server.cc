@@ -27,6 +27,24 @@ Server::Server(const transport::Configuration& config, KeyManager *keyManager,
 
   dummyProof->mutable_txn()->mutable_timestamp()->set_timestamp(0);
   dummyProof->mutable_txn()->mutable_timestamp()->set_id(0);
+
+
+  decision_test = new proto::TransactionDecision();
+  decision_test->set_txn_digest(std::string("dummy digest"));
+  decision_test->set_shard_id(groupIdx);
+  decision_test->set_status(REPLY_OK);
+
+  for(int i = 0; i < 0; i++){
+    proto::ReadResult *readResult = decision_test->add_readset();
+
+    readResult->set_key(std::string("hello"));
+    //std::cerr << "read key size: " << readResult->key().length() << std::endl;
+    readResult->set_value("");
+    test_vector.push_back(*readResult);
+  }
+
+
+
 }
 
 Server::~Server() {}
@@ -258,6 +276,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   stats.Increment("handle_tx",1);
   decision->set_txn_digest(digest);
   decision->set_shard_id(groupIdx);
+  //decision_test->set_txn_digest(digest);
 
 
   if (bufferedGDecs.find(digest) != bufferedGDecs.end()) {
@@ -276,40 +295,53 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
   }
 
   // OCC check
+  bool commit = std::rand() % 100 < 55;
   if(augustus.TryLock(transaction, digest, this)){
   //if (CCC2(transaction)) {
     stats.Increment("ccc_succeed",1);
     Debug("ccc succeeded");
     decision->set_status(REPLY_OK);
-    pendingTransactions[digest] = std::move(transaction);
 
-    proto::TransactionDecision* decision2 = new proto::TransactionDecision();
-    static int ct = 0;
+
+    proto::TransactionDecision* decisio2 = new proto::TransactionDecision();
+    int ct = 0;
     for (const auto &read : transaction.readset()) {
+        ct++;
       if(!IsKeyOwned(read.key())) {
         continue;
       }
       stats.Increment("apply_augustus_tx_read",1);
 
-      // attach read result to the decision message back to client
+      //attach read result to the decision message back to client
 
-      proto::ReadResult *readResult = decision2->add_readset();
+      proto::ReadResult *readResult = decision->add_readset();
 
+      // proto::ReadResult *rR;
+      // if(ct == 1) rR = decision->mutable_r1();
+      // if(ct == 2) rR = decision->mutable_r2();
+      // if(ct == 3) rR = decision->mutable_r3();
 
       readResult->set_key(read.key());
       //std::cerr << "read key size: " << readResult->key().length() << std::endl;
       if (augustus.store.count(read.key())) {
           readResult->set_value(augustus.store[read.key()]);
+          //rR->set_value(augustus.store[read.key()]);
       } else {
           readResult->set_value("");
+          //rR->set_value("");
       }
+      // std::string* rd = decision->mutable_rs()->add_keys();
+      // std::string* write = decision->mutable_rs()->add_values();
+      // *rd = read.key();
+      // *write = augustus.store[read.key()];
+
 
       // if(ct % 100 ==0) {
       //   std::string val = readResult->value();
       //   std::cerr << "+1 read value of size " << val.length() << std::endl;
       // }
     }
-    ct++;
+
 
     // Augustus single-shard optimization
     if (1 == transaction.participating_shards_size()) {
@@ -323,10 +355,12 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
         }
 
         // mark txn as commited
+        pendingTransactions[digest] = std::move(transaction);
         cleanupPendingTx(digest);
         stats.Increment("augustus_optimized",1);
     } else {
         stats.Increment("augustus_not_optimized",1);
+        pendingTransactions[digest] = std::move(transaction);
     }
 
   } else {
@@ -348,7 +382,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     // }
   }
 
-
+  //*decision->mutable_readset() = {test_vector.begin(), test_vector.end()};
   results.push_back(decision);
 
   return results;
@@ -554,7 +588,9 @@ void Server::cleanupPendingTx(std::string &digest) {
     //   preparedReads[read.key()].erase(txTs);
     // }
     // release Augustus locks
+
     augustus.ReleaseLock(tx, digest, this);
+
 
     pendingTransactions.erase(digest);
   }
