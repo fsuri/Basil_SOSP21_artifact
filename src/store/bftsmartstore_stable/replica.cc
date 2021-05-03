@@ -1135,6 +1135,16 @@ void Replica::sendEbatch_internal() {
 void Replica::delegateEbatch(std::vector<::google::protobuf::Message*> EpendingBatchedMessages_,
    std::vector<std::string> EpendingBatchedDigs_){
 
+     // if(EpendingBatchedMessages_.size() == 1){
+     //   proto::SignedMessage *signedMessage = new proto::SignedMessage();
+     //   SignMessage(*EpendingBatchedMessages_[0], keyManager->GetPrivateKey(id), id, *signedMessage);
+     //
+     //   transport->SendMessage(this, *replyAddrs[EpendingBatchedDigs_[0]], *signedMessage);
+     //   //std::cerr << "deleting reply" << std::endl;
+     //   delete EpendingBatchedMessages_[0];
+     //   delete signedMessage;
+     // }
+
     std::vector<proto::SignedMessage> EsignedMessages_;
     std::vector<std::string*> messageStrs;
     //std::cerr << "EbatchMessages.size: " << EpendingBatchedMessages_.size() << std::endl;
@@ -1143,7 +1153,22 @@ void Replica::delegateEbatch(std::vector<::google::protobuf::Message*> EpendingB
       //EsignedMessages_[i].Clear();
       EsignedMessages_[i].set_replica_id(id);
       proto::PackedMessage packedMsg;
+/////////
+      // decision_test = new proto::TransactionDecision();
+      // decision_test->set_txn_digest(EpendingBatchedDigs_[i]);
+      // decision_test->set_shard_id(groupIdx);
+      // decision_test->set_status(REPLY_OK);
+      // proto::TransactionDecision* dec = static_cast<proto::TransactionDecision*>(EpendingBatchedMessages_[i]);
+      // dec->mutable_readset()->Clear();
+
+
+      ///////////////
       *packedMsg.mutable_msg() = EpendingBatchedMessages_[i]->SerializeAsString();
+      //
+      // proto::TransactionDecision* dec = static_cast<proto::TransactionDecision*>(EpendingBatchedMessages_[i]);
+      // dec->mutable_readset()->Clear();
+      // *packedMsg.mutable_msg() = EpendingBatchedMessages_[i]->SerializeAsString();
+      //
       *packedMsg.mutable_type() = EpendingBatchedMessages_[i]->GetTypeName();
       UW_ASSERT(packedMsg.SerializeToString(EsignedMessages_[i].mutable_packed_msg()));
       messageStrs.push_back(EsignedMessages_[i].mutable_packed_msg());

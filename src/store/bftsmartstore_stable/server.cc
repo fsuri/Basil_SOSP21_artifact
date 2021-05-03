@@ -303,7 +303,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
     decision->set_status(REPLY_OK);
 
 
-    proto::TransactionDecision* decisio2 = new proto::TransactionDecision();
+    proto::TransactionDecision* decision2 = new proto::TransactionDecision();
     int ct = 0;
     for (const auto &read : transaction.readset()) {
         ct++;
@@ -314,7 +314,7 @@ std::vector<::google::protobuf::Message*> Server::HandleTransaction(const proto:
 
       //attach read result to the decision message back to client
 
-      proto::ReadResult *readResult = decision->add_readset();
+      proto::ReadResult *readResult = decision2->add_readset();
 
       // proto::ReadResult *rR;
       // if(ct == 1) rR = decision->mutable_r1();

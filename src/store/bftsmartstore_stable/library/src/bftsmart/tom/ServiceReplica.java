@@ -296,7 +296,7 @@ public class ServiceReplica {
 
         for (TOMMessage[] requestsFromConsensus : requests) {
 
-            //System.err.println("Size of batch: " + requestsFromConsensus.length);
+            System.err.println("Size of batch: " + requestsFromConsensus.length);
             TOMMessage firstRequest = requestsFromConsensus[0];
             int requestCount = 0;
             noop = true;
