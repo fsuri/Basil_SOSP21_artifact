@@ -831,9 +831,12 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   Debug("[group %i] ReadReply for %lu.", group, reply.req_id());
 
   const proto::Write *write;
+  bool skip = false;
   if (params.validateProofs && params.signedMessages) {
+    // consecutive_reads++;
+    // skip = (consecutive_reads % 3 == 0) ? true : false;
     if (reply.has_signed_write()) {
-      if (!verifier->Verify(keyManager->GetPublicKey(reply.signed_write().process_id()),
+      if (!skip && !verifier->Verify(keyManager->GetPublicKey(reply.signed_write().process_id()),
               reply.signed_write().data(), reply.signed_write().signature())) {
         Debug("[group %i] Failed to validate signature for write.", group);
         return;
@@ -867,7 +870,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
   // value and timestamp are valid
   req->numReplies++;
   if (write->has_committed_value() && write->has_committed_timestamp()) {
-    if (params.validateProofs) {
+    if (!skip && params.validateProofs) {
       if (!reply.has_proof()) {
         Debug("[group %i] Missing proof for committed write.", group);
         return;

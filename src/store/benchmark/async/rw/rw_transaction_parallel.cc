@@ -4,6 +4,7 @@ namespace rw {
 
 RWTransaction::RWTransaction(KeySelector *keySelector, int numOps,
     std::mt19937 &rand) : keySelector(keySelector), numOps(numOps) {
+    
   for (int i = 0; i < numOps; ++i) {
     uint64_t key;
     if (i < numOps / 2) {

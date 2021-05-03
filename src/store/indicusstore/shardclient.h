@@ -167,6 +167,7 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
 
  private:
   uint64_t consecutive_abstains = 0;
+  uint64_t consecutive_reads = 0;
 
   struct PendingQuorumGet {
     PendingQuorumGet(uint64_t reqId) : reqId(reqId),
