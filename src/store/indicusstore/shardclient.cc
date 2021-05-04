@@ -204,6 +204,10 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction, con
   transport->SendMessageToGroup(this, group, phase1);
 
   pendingPhase1->requestTimeout->Reset();
+
+  // struct timeval tv;
+  //   gettimeofday(&tv, NULL);
+  //   start_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
 }
 
 void ShardClient::Phase2(uint64_t id,
@@ -1412,6 +1416,14 @@ void ShardClient::Phase1Decision(uint64_t reqId) {
 
 void ShardClient::Phase1Decision(
     std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready) {
+
+      // struct timeval tv;
+      //         gettimeofday(&tv, NULL);
+      //         uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
+      //         total_elapsed += (current_time - start_time);
+      //         total_prepare++;
+      //         if(total_prepare == 200) std::cerr << "Average time to prepare: " << (total_elapsed / total_prepare) << " us" << std::endl;
+
   PendingPhase1 *pendingPhase1 = itr->second;
   // if (pendingPhase1->requestTimeout != nullptr) {
   //   delete pendingPhase1->requestTimeout;

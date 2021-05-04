@@ -166,6 +166,10 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
 
 
  private:
+   uint64_t start_time;
+   uint64_t total_elapsed = 0;
+   uint64_t total_prepare = 0;
+   
   uint64_t consecutive_abstains = 0;
   uint64_t consecutive_reads = 0;
 
