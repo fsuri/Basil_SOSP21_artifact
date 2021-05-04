@@ -13,6 +13,7 @@
 #include "store/common/common-proto.pb.h"
 #include "store/hotstuffstore/pbft-proto.pb.h"
 #include "store/hotstuffstore/server-proto.pb.h"
+#include <sys/time.h>
 
 #include <map>
 #include <string>
@@ -64,6 +65,9 @@ class ShardClient : public TransportReceiver {
   void Abort(std::string& txn_digest, const proto::ShardSignedDecisions& dec);
 
  private:
+   uint64_t start_time;
+   uint64_t total_elapsed = 0 ;
+   uint64_t total_prepare = 0;
 
   transport::Configuration config;
   Transport *transport; // Transport layer.
