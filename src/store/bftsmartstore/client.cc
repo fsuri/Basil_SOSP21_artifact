@@ -161,6 +161,10 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
     } else {
       fprintf(stderr, "already committed\n");
     }
+
+    // struct timeval tv;
+    // gettimeofday(&tv, NULL);
+    // start_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
   });
 }
 
@@ -197,6 +201,11 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
         pendingPrepares.erase(digest);
         ccb(ABORTED_SYSTEM);
 
+        // struct timeval tv;
+        // gettimeofday(&tv, NULL);
+        // uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
+        // std::cerr << "Elapsed time for Prepare Phase: " << (current_time - start_time) << std::endl;
+
         return;
       }
 
@@ -212,6 +221,11 @@ void Client::HandleSignedPrepareReply(std::string digest, uint64_t shard_id, int
         uint32_t timeout = pp->timeout;
         pendingPrepares.erase(digest);
         ccb(COMMITTED);
+
+        // struct timeval tv;
+        // gettimeofday(&tv, NULL);
+        // uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
+        // std::cerr << "Elapsed time for Prepare Phase: " << (current_time - start_time) << std::endl;
         //TODO:: remove callbacks...
 
         //WriteBackSigned(dec, txn, digest);

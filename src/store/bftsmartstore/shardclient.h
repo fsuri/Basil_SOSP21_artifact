@@ -68,6 +68,9 @@ class ShardClient : public TransportReceiver {
   void Abort(std::string& txn_digest, const proto::ShardSignedDecisions& dec);
 
  private:
+   uint64_t start_time;
+   uint64_t total_elapsed = 0;
+   uint64_t total_prepare = 0;
 
   transport::Configuration config;
   Transport *transport; // Transport layer.
@@ -160,7 +163,7 @@ class ShardClient : public TransportReceiver {
 
 
   Stats* stats;
-  
+
   bftsmartstore::BftSmartAgent* bftsmartagent;
   void send_to_group(proto::Request& msg, int group_idx);
 

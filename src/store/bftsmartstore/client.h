@@ -50,6 +50,8 @@ class Client : public ::Client {
       uint32_t timeout) override;
 
  private:
+   uint64_t start_time;
+
   uint64_t client_id;
   /* Configuration State */
   transport::Configuration config;

@@ -291,6 +291,17 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
             psp->timeout->Stop();
           }
           pendingSignedPrepares.erase(digest);
+
+          ////
+          // struct timeval tv;
+          // gettimeofday(&tv, NULL);
+          // uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
+          // total_elapsed += (current_time - start_time);
+          // total_prepare++;
+          // if(total_prepare == 50) std::cerr << "Average time to prepare: " << (total_elapsed / total_prepare) << " us" << std::endl;
+          //std::cerr << "Elapsed time for Prepare Phase: " << (current_time - start_time) << std::endl;
+          ////
+
           pcb(REPLY_OK, groupSignedMsg);
           return;
         }
@@ -312,6 +323,16 @@ void ShardClient::HandleTransactionDecision(const proto::TransactionDecision& tr
             psp->timeout->Stop();
           }
           pendingSignedPrepares.erase(digest);
+
+          ////
+          // struct timeval tv;
+          // gettimeofday(&tv, NULL);
+          // uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
+          // total_elapsed += (current_time - start_time);
+          // total_prepare++;
+          // if(total_prepare == 50) std::cerr << "Average time to prepare: " << (total_elapsed / total_prepare) << " us" << std::endl;
+          // //std::cerr << "Elapsed time for Prepare Phase: " << (current_time - start_time) << std::endl;
+          ////
 
           pcb(REPLY_FAIL, groupSignedMsg);
           return;
@@ -569,6 +590,10 @@ void ShardClient::SignedPrepare(const proto::Transaction& txn, signed_prepare_ca
     // Debug("Sending txn to all replicas in shard");
     // transport->SendMessageToGroup(this, group_idx, request);
     send_to_group(request, group_idx);
+
+    // struct timeval tv;
+    // gettimeofday(&tv, NULL);
+    // start_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
 
 
     PendingSignedPrepare psp;
