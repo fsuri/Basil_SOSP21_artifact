@@ -42,7 +42,8 @@ class IndicusCodebase(ExperimentCodebase):
             '--num_groups', config['num_groups'],
             '--protocol_mode', config['client_protocol_mode'],
             '--stats_file', stats_file,
-            '--num_clients', client_threads]])
+            '--num_clients', client_threads,
+            '--num_client_hosts', config['client_total']]])
 
         if config['server_emulate_wan']:
             client_command += ' --ping_replicas=true'
@@ -54,7 +55,7 @@ class IndicusCodebase(ExperimentCodebase):
         if 'message_transport_type' in config['replication_protocol_settings']:
             client_command += ' --trans_protocol %s' % config['replication_protocol_settings']['message_transport_type']
 
-        if config['replication_protocol'] == 'indicus' or config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff':
+        if config['replication_protocol'] == 'indicus' or config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'bftsmart' or config['replication_protocol'] == 'augustus':
             if 'read_quorum' in config['replication_protocol_settings']:
                 client_command += ' --indicus_read_quorum %s' % config['replication_protocol_settings']['read_quorum']
             if 'read_dep' in config['replication_protocol_settings']:
@@ -78,19 +79,30 @@ class IndicusCodebase(ExperimentCodebase):
                 client_command += ' --indicus_sig_batch %d' % config['replication_protocol_settings']['sig_batch']
             if 'merkle_branch_factor' in config['replication_protocol_settings']:
                 client_command += ' --indicus_merkle_branch_factor %d' % config['replication_protocol_settings']['merkle_branch_factor']
+            if 'p1DecisionTimeout' in config['replication_protocol_settings']:
+                client_command += ' --indicus_phase1DecisionTimeout %s' % config['replication_protocol_settings']['p1DecisionTimeout']
+            #multithreading options
+            if 'parallel_CCC' in config['replication_protocol_settings']:
+                client_command += ' --indicus_parallel_CCC=%s' % str(config['replication_protocol_settings']['parallel_CCC']).lower()
+            if 'client_multi_threading' in config['replication_protocol_settings']:
+                client_command += ' --indicus_multi_threading=%s' % str(config['replication_protocol_settings']['client_multi_threading']).lower()
+            if 'hyper_threading' in config['replication_protocol_settings']:
+                client_command += ' --indicus_hyper_threading=%s' % str(config['replication_protocol_settings']['hyper_threading']).lower()
+            #failure simulation options
             if 'inject_failure_type' in config['replication_protocol_settings']:
                 client_command += ' --indicus_inject_failure_type %s' % config['replication_protocol_settings']['inject_failure_type']
             if 'inject_failure_proportion' in config['replication_protocol_settings']:
                 client_command += ' --indicus_inject_failure_proportion %d' % config['replication_protocol_settings']['inject_failure_proportion']
             if 'inject_failure_ms' in config['replication_protocol_settings']:
                 client_command += ' --indicus_inject_failure_ms %d' % config['replication_protocol_settings']['inject_failure_ms']
-            if 'p1DecisionTimeout' in config['replication_protocol_settings']:
-                client_command += ' --indicus_phase1DecisionTimeout %s' % config['replication_protocol_settings']['p1DecisionTimeout']
-            if 'client_multi_threading' in config['replication_protocol_settings']:
-                client_command += ' --indicus_multi_threading=%s' % str(config['replication_protocol_settings']['client_multi_threading']).lower()
-            if 'hyper_threading' in config['replication_protocol_settings']:
-                client_command += ' --indicus_hyper_threading=%s' % str(config['replication_protocol_settings']['hyper_threading']).lower()
-
+            if 'inject_failure_freq' in config['replication_protocol_settings']:
+                client_command += ' --indicus_inject_failure_freq %d' % config['replication_protocol_settings']['inject_failure_freq']
+            #fallback operation options
+            if 'relayP1_timeout' in config['replication_protocol_settings']:
+                client_command += ' --indicus_relayP1_timeout %d' % config['replication_protocol_settings']['relayP1_timeout']
+            if 'all_to_all_fb' in config['replication_protocol_settings']:
+                client_command += ' --indicus_all_to_all_fb=%s' % str(config['replication_protocol_settings']['all_to_all_fb']).lower()
+            #pbft/hotstuff options
             if 'order_commit' in config['replication_protocol_settings']:
                 client_command += ' --pbft_order_commit=%s' % str(config['replication_protocol_settings']['order_commit']).lower()
             if 'validate_abort' in config['replication_protocol_settings']:
@@ -239,7 +251,7 @@ class IndicusCodebase(ExperimentCodebase):
 
         if config['replication_protocol'] == 'indicus':
             n = 5 * config['fault_tolerance'] + 1
-        elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff':
+        elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'bftsmart' or config['replication_protocol'] == 'augustus':
             n = 3 * config['fault_tolerance'] + 1
         else:
             n = 2 * config['fault_tolerance'] + 1
@@ -277,7 +289,7 @@ class IndicusCodebase(ExperimentCodebase):
 
 
 
-        if config['replication_protocol'] == 'indicus' or config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff':
+        if config['replication_protocol'] == 'indicus' or config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'bftsmart' or config['replication_protocol'] == 'augustus':
             if 'read_dep' in config['replication_protocol_settings']:
                 replica_command += ' --indicus_read_dep %s' % config['replication_protocol_settings']['read_dep']
             if 'watermark_time_delta' in config['replication_protocol_settings']:
@@ -334,17 +346,26 @@ class IndicusCodebase(ExperimentCodebase):
                 replica_command += ' --indicus_parallel_reads=%s' % str(config['replication_protocol_settings']['parallel_reads']).lower()
             if 'dispatchCallbacks' in config['replication_protocol_settings']:
                 replica_command += ' --indicus_dispatchCallbacks=%s' % str(config['replication_protocol_settings']['dispatchCallbacks']).lower()
+            if 'parallel_CCC' in config['replication_protocol_settings']:
+                replica_command += ' --indicus_parallel_CCC=%s' % str(config['replication_protocol_settings']['parallel_CCC']).lower()
+
             #disable hyperthreading and boosting
             if 'hyper_threading' in config['replication_protocol_settings']:
                 replica_command += ' --indicus_hyper_threading=%s' % str(config['replication_protocol_settings']['hyper_threading']).lower()
-
+            #fallback options
+            if 'relayP1_timeout' in config['replication_protocol_settings']:
+                replica_command += ' --indicus_relayP1_timeout %d' % config['replication_protocol_settings']['relayP1_timeout']
+            if 'all_to_all_fb' in config['replication_protocol_settings']:
+                replica_command += ' --indicus_all_to_all_fb=%s' % str(config['replication_protocol_settings']['all_to_all_fb']).lower()
+            #pbft/hotstuff options
             if 'order_commit' in config['replication_protocol_settings']:
                 replica_command += ' --pbft_order_commit=%s' % str(config['replication_protocol_settings']['order_commit']).lower()
             if 'validate_abort' in config['replication_protocol_settings']:
                 replica_command += ' --pbft_validate_abort=%s' % str(config['replication_protocol_settings']['validate_abort']).lower()
 
 
-
+        #if 'rw_or_retwis' in config:
+        #    replica_command += ' --rw_or_retwis=%s' % str(config['rw_or_retwis']).lower()
 
         if 'server_debug_stats' in config and config['server_debug_stats']:
             replica_command += ' --debug_stats'
@@ -352,10 +373,12 @@ class IndicusCodebase(ExperimentCodebase):
 
         if config['benchmark_name'] == 'retwis':
             replica_command += ' --num_keys %d' % config['client_num_keys']
+            replica_command += ' --rw_or_retwis=false'
             if 'server_preload_keys' in config:
                 replica_command += ' --preload_keys=%s' % str(config['server_preload_keys']).lower()
         elif config['benchmark_name'] == 'rw':
             replica_command += ' --num_keys %d' % config['client_num_keys']
+            replica_command += ' --rw_or_retwis=true'
             if 'server_preload_keys' in config:
                 replica_command += ' --preload_keys=%s' % str(config['server_preload_keys']).lower()
         elif config['benchmark_name'] == 'tpcc' or config['benchmark_name'] == 'tpcc-sync':
@@ -425,7 +448,7 @@ class IndicusCodebase(ExperimentCodebase):
         with open(config_file, 'w') as f:
             if config['replication_protocol'] == 'indicus':
                 n = 5 * config['fault_tolerance'] + 1
-            elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff':
+            elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'bftsmart' or config['replication_protocol'] == 'augustus':
                 n = 3 * config['fault_tolerance'] + 1
             else:
                 n = 2 * config['fault_tolerance'] + 1
@@ -447,7 +470,7 @@ class IndicusCodebase(ExperimentCodebase):
         return local_exp_directory
 
     def prepare_remote_server_codebase(self, config, host, local_exp_directory, remote_out_directory):
-        if config['replication_protocol'] == 'indicus' or config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff':
+        if config['replication_protocol'] == 'indicus' or config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'bftsmart' or config['replication_protocol'] == 'augustus':
             run_remote_command_sync('sudo rm -rf /dev/shm/*', config['emulab_user'], host)
 
     def setup_nodes(self, config):

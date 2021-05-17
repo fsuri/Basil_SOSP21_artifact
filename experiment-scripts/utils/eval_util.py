@@ -118,7 +118,7 @@ def calculate_statistics_for_run(config, local_out_directory, run):
     num_regions = get_num_regions(config)
     if config['replication_protocol'] == 'indicus':
         n = 5 * config['fault_tolerance'] + 1
-    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff':
+    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'bftsmart' or config['replication_protocol'] == 'augustus':
         n = 3 * config['fault_tolerance'] + 1
     else:
         n = 2 * config['fault_tolerance'] + 1
@@ -380,6 +380,7 @@ def calculate_statistics_for_run(config, local_out_directory, run):
     # TODO: decide if this is a hack that needs to be removed?
     total_committed = 0
     total_attempts = 0
+    total_abort_user = 0
     stats_new = {}
     for k, v in stats.items():
         if k.endswith('_committed'):
@@ -389,8 +390,19 @@ def calculate_statistics_for_run(config, local_out_directory, run):
             k_abort_rate = k_prefix + '_abort_rate'
             total_committed += stats[k]
             total_attempts += stats[k_attempts]
-            stats_new[k_commit_rate] = stats[k] / stats[k_attempts]
+            stats_new[k_commit_rate] = stats[k] / stats[k_attempts]  ## - user aborts.
             stats_new[k_abort_rate] = 1 - stats_new[k_commit_rate]
+
+            #added this stat to compute "true" commit/abort rate when counting all failures as user-abort
+            k_aborted_user = k_prefix + '_aborted_user'
+            k_aborted_user_total = 0
+            if(k_aborted_user in stats):
+                k_aborted_user_total = stats[k_aborted_user]
+                total_abort_user += stats[k_aborted_user]
+            k_commit_rate_honest = k_prefix + '_commit_rate_honest'
+            k_abort_rate_honest = k_prefix + '_abort_rate_honest'
+            stats_new[k_commit_rate_honest] = stats[k] / (stats[k_attempts] - k_aborted_user_total)
+            stats_new[k_abort_rate_honest] = 1 - stats_new[k_commit_rate_honest]
 
     for k, v in stats_new.items():
         stats[k] = v
@@ -400,6 +412,19 @@ def calculate_statistics_for_run(config, local_out_directory, run):
         stats['attempts'] = total_attempts
         stats['commit_rate'] = total_committed / total_attempts
         stats['abort_rate'] = 1 - stats['commit_rate']
+
+        #added this stat to compute "true" commit/abort rate when counting all failures as user-abort
+        stats['commit_rate_honest'] = total_committed / (total_attempts - total_abort_user)
+        stats['abort_rate_honest'] = 1 - stats['commit_rate_honest']
+
+    total_injected_failures = 0
+    if 'inject_failure' in stats:
+        total_injected_failures = stats['inject_failure']
+    stats['tx_successful_failure_percentage'] = total_injected_failures/stats['attempts']  #added this stat to compute total failure % of transactions
+    total_attempted_failures = 0
+    if 'failure_attempts' in stats:
+        total_attempted_failures = stats['failure_attempts']
+    stats['tx_attempted_failure_percentage'] = total_attempted_failures/stats['attempts']
 
     norm_op_latencies, norm_op_times = calculate_all_op_statistics(config, stats, region_op_latencies, region_op_times, region_op_latency_counts, region_op_tputs)
     for k, v in norm_op_latencies.items():
@@ -418,6 +443,15 @@ def calculate_op_statistics(config, stats, total_recorded_time, op_type, latenci
         else:
             stats[op_type]['tput'] = len(latencies) / total_recorded_time
             stats[op_type]['new_tput'] = tput
+
+            #added stat to compute tx/s/honest_client
+            if 'inject_failure_proportion' in config['replication_protocol_settings']:
+                #total_honest = config['client_total'] - stats['total_byz_clients']
+                total_honest = math.ceil((1 - config['replication_protocol_settings']['inject_failure_proportion']/100) * config['client_total'] * config['client_threads_per_process'])
+                print(total_honest)
+                #print(total_honest2)
+                stats[op_type]['tput_s_honest'] = stats[op_type]['tput']/total_honest
+
         if op_type == 'combined':
             stats['combined']['ops'] = len(latencies)
             stats['combined']['time'] = total_recorded_time
