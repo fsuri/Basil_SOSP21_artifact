@@ -199,8 +199,18 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction, con
   *phase1.mutable_txn() = transaction;
   if(failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH){
        phase1.set_crash_failure(true);
+  //      for (size_t i = 0; i < config->n; ++i) {
+  //        size_t rindex = GetNthClosestReplica(i);
+  //        if(rindex <= 2){
+  //        //if (rindex % 2 == 1) {
+  //          Debug("[group %i] Sending P1 to odd-numbered replica %lu", group, rindex);
+  //          transport->SendMessageToReplica(this, group, rindex, phase1);
+  //        }
+  //      }
+  // }
+  // else{
+  //   transport->SendMessageToGroup(this, group, phase1);
   }
-
   transport->SendMessageToGroup(this, group, phase1);
 
   pendingPhase1->requestTimeout->Reset();

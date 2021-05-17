@@ -117,6 +117,7 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
       uint32_t timeout, bool retry) {
   // fail the current txn iff failuer timer is up and
   // the number of txn is a multiple of frequency
+  //only fail fresh transactions
   if(!retry) {
     faulty_counter++;
     failureActive = failureEnabled &&
@@ -125,6 +126,9 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
       b->SetFailureFlag(failureActive);
     }
     if(failureActive) stats.Increment("failure_attempts", 1);
+    if(failureEnabled) stats.Increment("total_fresh_tx_byz", 1);
+    if(!failureEnabled) stats.Increment("total_fresh_tx_honest", 1);
+
   }
 
   transport->Timer(0, [this, bcb, btcb, timeout]() {
@@ -773,7 +777,7 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
 // for equivocation, always report ABORT, always delete
 void Client::FailureCleanUp(PendingRequest *req) {
 
-  //usleep(20000); //sleep 10 miliseconds as to not return immediately...
+  //usleep(2000); //sleep X/1000 miliseconds as to not return immediately...
   stats.Increment("inject_failure");
   stats.Increment("total_user_abort", 1);
   UW_ASSERT(failureActive);
