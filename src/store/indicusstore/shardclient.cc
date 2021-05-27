@@ -197,27 +197,29 @@ void ShardClient::Phase1(uint64_t id, const proto::Transaction &transaction, con
   phase1.Clear();
   phase1.set_req_id(reqId);
   *phase1.mutable_txn() = transaction;
+  phase1.set_replica_gossip(false);
+
   if(failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH){
        phase1.set_crash_failure(true);
-  //      for (size_t i = 0; i < config->n; ++i) {
-  //        size_t rindex = GetNthClosestReplica(i);
-  //        if(rindex <= 2){
-  //        //if (rindex % 2 == 1) {
-  //          Debug("[group %i] Sending P1 to odd-numbered replica %lu", group, rindex);
-  //          transport->SendMessageToReplica(this, group, rindex, phase1);
-  //        }
-  //      }
-  // }
-  // else{
-  //   transport->SendMessageToGroup(this, group, phase1);
+       for (size_t i = 0; i < config->n; ++i) {
+         size_t rindex = GetNthClosestReplica(i);
+         //if(rindex <= 3){
+         if (rindex % 2 == 1) {
+           Debug("[group %i] Sending P1 to odd-numbered replica %lu", group, rindex);
+           transport->SendMessageToReplica(this, group, rindex, phase1);
+         }
+       }
   }
-  transport->SendMessageToGroup(this, group, phase1);
+  else{
+    transport->SendMessageToGroup(this, group, phase1);
+  }
+  //transport->SendMessageToGroup(this, group, phase1);
 
   pendingPhase1->requestTimeout->Reset();
 
-  // struct timeval tv;
-  //   gettimeofday(&tv, NULL);
-  //   start_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    start_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
 }
 
 void ShardClient::Phase2(uint64_t id,
@@ -1427,12 +1429,12 @@ void ShardClient::Phase1Decision(uint64_t reqId) {
 void ShardClient::Phase1Decision(
     std::unordered_map<uint64_t, PendingPhase1 *>::iterator itr, bool eqv_ready) {
 
-      // struct timeval tv;
-      //         gettimeofday(&tv, NULL);
-      //         uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
-      //         total_elapsed += (current_time - start_time);
-      //         total_prepare++;
-      //         if(total_prepare == 200) std::cerr << "Average time to prepare: " << (total_elapsed / total_prepare) << " us" << std::endl;
+      struct timeval tv;
+      gettimeofday(&tv, NULL);
+      uint64_t current_time = (tv.tv_sec*1000000+tv.tv_usec);  //in microseconds
+      total_elapsed += (current_time - start_time);
+      total_prepare++;
+      if(total_prepare == 200) std::cerr << "Average time to prepare: " << (total_elapsed / total_prepare) << " us" << std::endl;
 
   PendingPhase1 *pendingPhase1 = itr->second;
   // if (pendingPhase1->requestTimeout != nullptr) {
@@ -1454,7 +1456,7 @@ void ShardClient::Phase1Decision(
   else{
     consecutive_abstains = 0;
   }
-  if(consecutive_abstains >= 2){
+  if(consecutive_abstains >= 1){
     for(auto txn: pendingPhase1->abstain_conflicts){
       //TODO: dont process redundant digests
       if(!TransactionsConflict(pendingPhase1->txn_, *txn)) continue;

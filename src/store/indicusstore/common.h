@@ -359,6 +359,7 @@ typedef struct Parameters {
 
   const bool all_to_all_fb;
   const uint64_t relayP1_timeout;
+  const bool replicaGossip;
 
   Parameters(bool signedMessages, bool validateProofs, bool hashDigest, bool verifyDeps,
     int signatureBatchSize, int64_t maxDepDepth, uint64_t readDepSize,
@@ -370,7 +371,8 @@ typedef struct Parameters {
     bool parallel_CCC,
     bool dispatchCallbacks,
     bool all_to_all_fb,
-    uint64_t relayP1_timeout) :
+    uint64_t relayP1_timeout,
+    bool replicaGossip) :
     signedMessages(signedMessages), validateProofs(validateProofs),
     hashDigest(hashDigest), verifyDeps(verifyDeps), signatureBatchSize(signatureBatchSize),
     maxDepDepth(maxDepDepth), readDepSize(readDepSize),
@@ -385,7 +387,8 @@ typedef struct Parameters {
     parallel_CCC(parallel_CCC),
     dispatchCallbacks(dispatchCallbacks),
     all_to_all_fb(all_to_all_fb),
-    relayP1_timeout(relayP1_timeout) { }
+    relayP1_timeout(relayP1_timeout),
+    replicaGossip(replicaGossip) { }
 } Parameters;
 
 } // namespace indicusstore

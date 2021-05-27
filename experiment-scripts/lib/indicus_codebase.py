@@ -357,6 +357,9 @@ class IndicusCodebase(ExperimentCodebase):
                 replica_command += ' --indicus_relayP1_timeout %d' % config['replication_protocol_settings']['relayP1_timeout']
             if 'all_to_all_fb' in config['replication_protocol_settings']:
                 replica_command += ' --indicus_all_to_all_fb=%s' % str(config['replication_protocol_settings']['all_to_all_fb']).lower()
+            if 'replica_gossip' in config['replication_protocol_settings']:
+                replica_command += ' --indicus_replica_gossip=%s' % str(config['replication_protocol_settings']['replica_gossip']).lower()
+                
             #pbft/hotstuff options
             if 'order_commit' in config['replication_protocol_settings']:
                 replica_command += ' --pbft_order_commit=%s' % str(config['replication_protocol_settings']['order_commit']).lower()

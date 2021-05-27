@@ -120,11 +120,15 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       proto::Phase1 &msg);
   void ProcessPhase1_atomic(const TransportAddress &remote,
       proto::Phase1 &msg, proto::Transaction *txn, std::string &txnDigest);
+
+  void ForwardPhase1(proto::Phase1 &msg);
+  void Inform_P1_GC_Leader(proto::Phase1Reply &reply, proto::Transaction &txn, std::string &txnDigest, int64_t grpLeader);
+
   void HandlePhase1(const TransportAddress &remote,
       proto::Phase1 &msg);
   void HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
         const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote,
-        const proto::Transaction *abstain_conflict);
+        const proto::Transaction *abstain_conflict, bool replicaGossip = false);
 
   void HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const std::string* txnDigest,
         signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid); //bool valid);
@@ -288,16 +292,18 @@ class Server : public TransportReceiver, public ::Server, public PingServer {
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
       Timestamp &retryTs, const proto::CommittedProof* &conflict,
-      const proto::Transaction* &abstain_conflict, bool fallback_flow = false);
+      const proto::Transaction* &abstain_conflict,
+      bool fallback_flow = false, bool replicaGossip = false);
   proto::ConcurrencyControl::Result DoTAPIROCCCheck(
       const std::string &txnDigest, const proto::Transaction &txn,
       Timestamp &retryTs);
   proto::ConcurrencyControl::Result DoMVTSOOCCCheck(
       uint64_t reqId, const TransportAddress &remote,
       const std::string &txnDigest, const proto::Transaction &txn,
-      const proto::CommittedProof* &conflict, const proto::Transaction* &abstain_conflict, bool fallback_flow = false);
+      const proto::CommittedProof* &conflict, const proto::Transaction* &abstain_conflict,
+      bool fallback_flow = false, bool replicaGossip = false);
 
-  bool ManageDependencies(const std::string &txnDigest, const proto::Transaction &txn, const TransportAddress &remote, uint64_t reqId, bool fallback_flow = false);
+  bool ManageDependencies(const std::string &txnDigest, const proto::Transaction &txn, const TransportAddress &remote, uint64_t reqId, bool fallback_flow = false, bool replicaGossip = false);
 
   void GetWriteTimestamps(
       std::unordered_map<std::string, std::set<Timestamp>> &writes);

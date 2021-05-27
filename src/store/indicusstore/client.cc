@@ -777,7 +777,7 @@ void Client::Abort(abort_callback acb, abort_timeout_callback atcb,
 // for equivocation, always report ABORT, always delete
 void Client::FailureCleanUp(PendingRequest *req) {
 
-  //usleep(2000); //sleep X/1000 miliseconds as to not return immediately...
+  usleep(3000); //sleep X/1000 miliseconds as to not return immediately...
   stats.Increment("inject_failure");
   stats.Increment("total_user_abort", 1);
   UW_ASSERT(failureActive);

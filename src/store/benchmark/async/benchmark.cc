@@ -926,7 +926,8 @@ int main(int argc, char **argv) {
 																				FLAGS_indicus_parallel_CCC,
 																				false,
 																				FLAGS_indicus_all_to_all_fb,
-																			  FLAGS_indicus_relayP1_timeout);
+																			  FLAGS_indicus_relayP1_timeout,
+																			  false);
 
         client = new indicusstore::Client(config, clientId,
                                           FLAGS_num_shards,

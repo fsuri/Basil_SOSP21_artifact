@@ -84,6 +84,7 @@ Server::Server(const transport::Configuration &config, int groupIdx, int idx,
 
   stats.Increment("total_equiv_received_adopt", 0);
 
+  fprintf(stderr, "Starting Indicus replica. ID: %d, IDX: %d, GROUP: %d\n", id, idx, groupIdx);
   Debug("Starting Indicus replica %d.", id);
   transport->Register(this, config, groupIdx, idx);
   _Latency_Init(&committedReadInsertLat, "committed_read_insert_lat");
@@ -764,7 +765,25 @@ void Server::ProcessPhase1_atomic(const TransportAddress &remote,
   }
   c.release();
   //atomic_testMutex.unlock();
-  HandlePhase1CB(&msg, result, committedProof, txnDigest, remote, abstain_conflict);
+  HandlePhase1CB(&msg, result, committedProof, txnDigest, remote, abstain_conflict, false);
+}
+
+void Server::ForwardPhase1(proto::Phase1 &msg){
+  //std::vector<uint64_t> recipients;
+  // msg.set_replica_gossip(true);
+  // for(int i = 1; i <= config.f+1; ++i){
+  //   uint64_t nextReplica = (idx + i) % config.n;
+  //   transport->SendMessageToReplica(this, groupIdx, nextReplica, msg);
+  // }
+
+  // uint64_t nextReplica = (idx + 1) % config.n;
+  // transport->SendMessageToReplica(this, groupIdx, nextReplica, msg);
+}
+
+void Server::Inform_P1_GC_Leader(proto::Phase1Reply &reply, proto::Transaction &txn, std::string &txnDigest, int64_t grpLeader){ //default -1
+  int64_t logGrp = GetLogGroup(txn, txnDigest);
+  if(grpLeader == -1) grpLeader = txnDigest[0] % config.n; //Default *first* leader,
+  transport->SendMessageToReplica(this, logGrp, grpLeader,reply);
 }
 
 void Server::HandlePhase1(const TransportAddress &remote,
@@ -829,6 +848,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
   //ongoingMap::accessor *b = new ongoingMap::accessor();
 
   //add to ongoing, lock ongoing and send to all when done.
+  bool replicaGossip = msg.replica_gossip();
 
   p1MetaDataMap::const_accessor c;
   //std::cerr << "[Normal] acquire lock for txn: " << BytesToHex(txnDigest, 64) << std::endl;
@@ -836,7 +856,11 @@ void Server::HandlePhase1(const TransportAddress &remote,
   p1MetaData.insert(c, txnDigest);  //TODO: next: make P1 part of ongoing? same for P2?
   //c->second.P1meta_mutex.lock();
   bool hasP1 = c->second.hasP1;
-  if(hasP1){
+  if(hasP1 && replicaGossip){
+    //Do not need to reply to forwarded P1. If adding replica GC -> want to forward it to leader.
+    //Inform_P1_GC_Leader(proto::Phase1Reply &reply, proto::Transaction &txn, std::string &txnDigest, int64_t grpLeader);
+  }
+  else if(hasP1){
     result = c->second.result;
     // need to check if result is WAIT: if so, need to add to waitingDeps original client..
         //(TODO) Instead: use original client list and store pairs <txnDigest, <reqID, remote>>
@@ -851,6 +875,9 @@ void Server::HandlePhase1(const TransportAddress &remote,
     c.release();
   } else{
     c.release();
+    if(params.replicaGossip) ForwardPhase1(msg); 
+    if(!replicaGossip) msg.set_replica_gossip(false); //unset it.
+
     if (params.validateProofs && params.signedMessages && params.verifyDeps) {
       for (const auto &dep : msg.txn().deps()) {
     //  for (const auto &dep : txn->deps()) {
@@ -891,11 +918,11 @@ void Server::HandlePhase1(const TransportAddress &remote,
 
     if(!params.parallel_CCC || !params.mainThreadDispatching){
       result = DoOCCCheck(msg.req_id(), remote, txnDigest, *txn, retryTs,
-          committedProof, abstain_conflict);
+          committedProof, abstain_conflict, false, replicaGossip); //forwarded messages dont need to be treated as original client.
       BufferP1Result(result, committedProof, txnDigest);
     }
     else{
-      auto f = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn, committedProof, abstain_conflict]() mutable {
+      auto f = [this, msg_ptr = &msg, remote_ptr = &remote, txnDigest, txn, committedProof, abstain_conflict, replicaGossip]() mutable {
         Timestamp retryTs;
           //check if concurrently committed/aborted already, and if so return
           ongoingMap::const_accessor b;
@@ -907,11 +934,11 @@ void Server::HandlePhase1(const TransportAddress &remote,
           b.release();
         Debug("starting occ check for txn: %s", BytesToHex(txnDigest, 16).c_str());
         proto::ConcurrencyControl::Result *result = new proto::ConcurrencyControl::Result(this->DoOCCCheck(msg_ptr->req_id(),
-        *remote_ptr, txnDigest, *txn, retryTs, committedProof, abstain_conflict));
+        *remote_ptr, txnDigest, *txn, retryTs, committedProof, abstain_conflict, false, replicaGossip));
         BufferP1Result(*result, committedProof, txnDigest);
         //c->second.P1meta_mutex.unlock();
         //std::cerr << "[Normal] release lock for txn: " << BytesToHex(txnDigest, 64) << std::endl;
-        HandlePhase1CB(msg_ptr, *result, committedProof, txnDigest, *remote_ptr, abstain_conflict);
+        HandlePhase1CB(msg_ptr, *result, committedProof, txnDigest, *remote_ptr, abstain_conflict, replicaGossip);
         delete result;
         return (void*) true;
       };
@@ -920,15 +947,14 @@ void Server::HandlePhase1(const TransportAddress &remote,
     }
   }
 
-  HandlePhase1CB(&msg, result, committedProof, txnDigest, remote, abstain_conflict);
+  HandlePhase1CB(&msg, result, committedProof, txnDigest, remote, abstain_conflict, replicaGossip);
 }
 
 //TODO: move p1Decision into this function (not sendp1: Then, can unlock here.)
 void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
-  const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote, const proto::Transaction *abstain_conflict){
+  const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote, const proto::Transaction *abstain_conflict, bool replicaGossip){
 
-  if (result != proto::ConcurrencyControl::WAIT) {
-
+  if (result != proto::ConcurrencyControl::WAIT && !replicaGossip) { //forwarded P1 needs no reply.
     //XXX setting client time outs for Fallback
     // if(client_starttime.find(txnDigest) == client_starttime.end()){
     //   struct timeval tv;
@@ -1721,7 +1747,7 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
     const std::string &txnDigest, const proto::Transaction &txn,
     Timestamp &retryTs, const proto::CommittedProof* &conflict,
     const proto::Transaction* &abstain_conflict,
-    bool fallback_flow) {
+    bool fallback_flow, bool replicaGossip) {
 
   locks_t locks;
   //lock keys to perform an atomic OCC check when parallelizing OCC checks.
@@ -1733,7 +1759,7 @@ proto::ConcurrencyControl::Result Server::DoOCCCheck(
     case TAPIR:
       return DoTAPIROCCCheck(txnDigest, txn, retryTs);
     case MVTSO:
-      return DoMVTSOOCCCheck(reqId, remote, txnDigest, txn, conflict, abstain_conflict, fallback_flow);
+      return DoMVTSOOCCCheck(reqId, remote, txnDigest, txn, conflict, abstain_conflict, fallback_flow, replicaGossip);
     default:
       Panic("Unknown OCC type: %d.", occType);
       return proto::ConcurrencyControl::ABORT;
@@ -2022,7 +2048,8 @@ proto::ConcurrencyControl::Result Server::DoTAPIROCCCheck(
 proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
     uint64_t reqId, const TransportAddress &remote,
     const std::string &txnDigest, const proto::Transaction &txn,
-    const proto::CommittedProof* &conflict, const proto::Transaction* &abstain_conflict, bool fallback_flow) {
+    const proto::CommittedProof* &conflict, const proto::Transaction* &abstain_conflict,
+    bool fallback_flow, bool replicaGossip) {
   Debug("PREPARE[%lu:%lu][%s] with ts %lu.%lu.",
       txn.client_id(), txn.client_seq_num(),
       BytesToHex(txnDigest, 16).c_str(),
@@ -2096,6 +2123,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
             // if(fallback_flow){
             //   std::cerr<< "Abstain ["<<BytesToHex(txnDigest, 16)<<"] against prepared write from tx[" << BytesToHex(TransactionDigest(*preparedTs.second, params.hashDigest), 16) << "]" << std::endl;
             // }
+            //std::cerr << "Abstain caused by txn: " << BytesToHex(TransactionDigest(*abstain_conflict, params.hashDigest), 16) << std::endl;
             abstain_conflict = preparedTs.second;
             return proto::ConcurrencyControl::ABSTAIN;
           }
@@ -2268,7 +2296,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
      a.release();
   }
 
-  bool allFinished = ManageDependencies(txnDigest, txn, remote, reqId, fallback_flow);
+  bool allFinished = ManageDependencies(txnDigest, txn, remote, reqId, fallback_flow, replicaGossip);
 
   if (!allFinished) {
     stats.Increment("cc_waits", 1);
@@ -2281,7 +2309,7 @@ proto::ConcurrencyControl::Result Server::DoMVTSOOCCCheck(
 //TODO: relay Deeper depth when result is already wait. (If I always re-did the P1 it would be handled)
 // PRoblem: Dont want to re-do P1, otherwise a past Abort can turn into a commit. Hence we
 // ForwardWriteback
-bool Server::ManageDependencies(const std::string &txnDigest, const proto::Transaction &txn, const TransportAddress &remote, uint64_t reqId, bool fallback_flow){
+bool Server::ManageDependencies(const std::string &txnDigest, const proto::Transaction &txn, const TransportAddress &remote, uint64_t reqId, bool fallback_flow, bool replicaGossip){
 
   bool allFinished = true;
 
@@ -2309,10 +2337,10 @@ bool Server::ManageDependencies(const std::string &txnDigest, const proto::Trans
              BytesToHex(dep.write().prepared_txn_digest(), 16).c_str());
 
          //XXX start RelayP1 to initiate Fallback handling
-         //TODO can remove this redundant lookup since it will be checked again...
-         if(true){
+
+         if(true && !replicaGossip){ //do not send relay if it is a gossiped message. Unless we are doinig replica leader gargabe Collection (unimplemented)
            // ongoingMap::const_accessor b;
-           // bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest());
+           // bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest()); //TODO can remove this redundant lookup since it will be checked again...
            // if (inOngoing) {
            //   std::string dependency_txnDig = dep.write().prepared_txn_digest();
            //   RelayP1(dep.write().prepared_txn_digest(), fallback_flow, reqId, remote, txnDigest);
@@ -2349,7 +2377,7 @@ bool Server::ManageDependencies(const std::string &txnDigest, const proto::Trans
            waitingDependencies_new.insert(f, txnDigest);
            //f->second = WaitingDependency();
          }
-         if(!fallback_flow){
+         if(!fallback_flow && !replicaGossip){
            f->second.original_client = true;
            f->second.reqId = reqId;
            f->second.remote = remote.clone();  //&remote;

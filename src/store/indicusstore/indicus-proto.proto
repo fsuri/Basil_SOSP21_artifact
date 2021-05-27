@@ -107,6 +107,7 @@ message Phase1 {
   required uint64 req_id = 1;
   required Transaction txn = 2;
   optional bool crash_failure = 3;
+  optional bool replica_gossip = 4;
 }
 
 
