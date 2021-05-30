@@ -291,7 +291,7 @@ void Client::Phase1(PendingRequest *req) {
 
   //FAIL right after sending P1
 
-  if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_CRASH) {
+  if (failureActive && (params.injectFailure.type == InjectFailureType::CLIENT_CRASH || params.injectFailure.type == InjectFailureType::CLIENT_SEND_PARTIAL_P1)) {
     Debug("INJECT CRASH FAILURE[%lu:%lu] with decision %d. txnDigest: %s", client_id, req->id, req->decision,
           BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str());
     stats.Increment("inject_failure_crash");
