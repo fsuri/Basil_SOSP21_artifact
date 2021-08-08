@@ -145,5 +145,4 @@ You'll also want to setup `googletest`. The project is known to compile with [ve
 9. `g++ -isystem ./include -I . -pthread -c ./src/gtest-all.cc`
 10. `g++ -isystem ./include -I . -pthread -c ./src/gtest_main.cc`
 
-## Contact and Questions
-Please email Irene at iyzhang@cs.washington.edu, Dan at drkp@cs.washington.edu and Naveen at naveenks@cs.washington.edu
+
