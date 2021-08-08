@@ -12,7 +12,7 @@
 
 namespace bftsmartstore{
 class ShardClient;
-const std::string remote_home = "/users/fs435";
+const std::string remote_home = "/users/zw494";
 
     class BftSmartAgent{
 public:

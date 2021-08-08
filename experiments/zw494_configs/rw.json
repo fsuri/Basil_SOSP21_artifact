@@ -3,8 +3,8 @@
     ["replication_protocol", "client_protocol_mode", "server_names",
       "replication_protocol_settings", "server_regions"]
   ],
-  "replication_protocol": ["bftsmart"],
-  "client_protocol_mode": ["bftsmart"],
+  "replication_protocol": "bftsmart",
+  "client_protocol_mode": "bftsmart",
   "fault_tolerance": 1,
   "num_shards": 3,
   "num_groups": 3,
@@ -27,7 +27,7 @@
   "client_retry_aborted": false,
   "client_max_attempts": 1,
   "run_locally": false,
-  "replication_protocol_settings": [
+  "replication_protocol_settings": 
     {
       "message_transport_type": "tcp",
       "watermark_time_delta": 30000,
@@ -36,19 +36,20 @@
       "sign_messages": true,
       "key_path": "/usr/local/etc/indicus-keys/donna"
     }
-  ],
+  ,
   "experiment_name": "bftsmart",
   "codebase_name": "indicus",
+  "trans_protocol": "tcp",
   "client_total": 100,
   "client_processes_per_client_node": 1,
   "client_nodes_per_server": 1,
   "client_threads_per_process": 1,
   "pin_server_processes": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   "pin_client_processes": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-  "client_debug_output": false,
-  "server_debug_output": false,
-  "server_debug_stats": false,
-  "client_debug_stats": false,
+  "client_debug_output": true,
+  "server_debug_output": true,
+  "server_debug_stats": true,
+  "client_debug_stats": true,
   "client_experiment_length": 60,
   "client_ramp_down": 10,
   "client_ramp_up": 10,
@@ -59,9 +60,9 @@
   "client_host_format_str": "client-%d-%d.%s.%s.utah.cloudlab.us",
   "project_name": "morty-pg0",
   "server_names": [
-    ["us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
+    "us-east-1-0", "us-east-1-1", "us-east-1-2", "eu-west-1-0",
     "eu-west-1-1", "eu-west-1-2", "ap-northeast-1-0", "ap-northeast-1-1",
-    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2"]
+    "ap-northeast-1-2", "us-west-1-0", "us-west-1-1", "us-west-1-2"
   ],
   "server_regions": [
     {
@@ -153,7 +154,8 @@
   ],
   "make_clean": false,
   "network_config_file_name": "shard.config",
-
+  "pbft_order_commit": true,
+  "pbft_validate_abort": true,
   "remote_bin_directory_nfs_enabled": false,
   "client_combine_stats_blacklist": [],
   "client_stats_blacklist": [],

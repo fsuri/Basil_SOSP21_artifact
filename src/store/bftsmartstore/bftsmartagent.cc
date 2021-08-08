@@ -12,7 +12,7 @@ BftSmartAgent::BftSmartAgent(bool is_client, TransportReceiver* receiver, int id
         // generating the config home
         std::ostringstream sstream;
 
-        //sstream << "/users/fs435/java-config/java-config-group-" << group_idx << "/";
+        //sstream << "/users/zw494/java-config/java-config-group-" << group_idx << "/";
 
         sstream << remote_home << "/java-config/java-config-group-" << group_idx << "/";
 
@@ -75,9 +75,9 @@ bool BftSmartAgent::create_java_vm(){
     // std::cerr << "option 2: " << options[1].optionString << std::endl;
     // std::cerr << "option 3: " << options[2].optionString << std::endl;
 
-    options[0].optionString = "-Djava.class.path=/users/fs435/jars/BFT-SMaRt.jar:/users/fs435/jars/slf4j-api-1.7.25.jar:/users/fs435/jars/bcpkix-jdk15on-160.jar:/users/fs435/jars/commons-codec-1.11.jar:/users/fs435/jars/logback-classic-1.2.3.jar:/users/fs435/jars/netty-all-4.1.34.Final.jar:/users/fs435/jars/bcprov-jdk15on-160.jar:/users/fs435/jars/core-0.1.4.jar:/users/fs435/jars/logback-core-1.2.3.jar:/users/fs435/java-config";
-    options[1].optionString = "-Dlogback.configurationFile=\"/users/fs435/java-config/logback.xml\"";
-    options[2].optionString = "-Djava.security.properties=\"/users/fs435/java-config/java.security\"";
+    options[0].optionString = "-Djava.class.path=/users/zw494/jars/BFT-SMaRt.jar:/users/zw494/jars/slf4j-api-1.7.25.jar:/users/zw494/jars/bcpkix-jdk15on-160.jar:/users/zw494/jars/commons-codec-1.11.jar:/users/zw494/jars/logback-classic-1.2.3.jar:/users/zw494/jars/netty-all-4.1.34.Final.jar:/users/zw494/jars/bcprov-jdk15on-160.jar:/users/zw494/jars/core-0.1.4.jar:/users/zw494/jars/logback-core-1.2.3.jar:/users/zw494/java-config";
+    options[1].optionString = "-Dlogback.configurationFile=\"/users/zw494/java-config/logback.xml\"";
+    options[2].optionString = "-Djava.security.properties=\"/users/zw494/java-config/java.security\"";
 
     // options[3].optionString = "-Dio.netty.tryReflectionSetAccessible=true";
 

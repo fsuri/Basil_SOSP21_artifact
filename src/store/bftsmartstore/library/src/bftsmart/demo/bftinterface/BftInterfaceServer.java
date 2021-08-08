@@ -399,6 +399,6 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
     // Used for testing purposes
     public static void main(String[] args){
         int i = Integer.parseInt(args[0]);
-        new BftInterfaceServer(i, 0, "/home/fs435/BFT-DB/src/store/bftsmartstore/library/");
+        new BftInterfaceServer(i, 0, "/home/zw494/BFT-DB/src/store/bftsmartstore/library/");
     }
 }
