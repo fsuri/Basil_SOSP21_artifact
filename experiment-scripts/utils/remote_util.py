@@ -151,7 +151,7 @@ def get_name_to_ip_map(config, remote_user, remote_host):
 def get_ip_to_delay(config, name_to_ip, server_name, delay_to_clients=False):
     ip_to_delay = {}
     region = None
-    for reg, servers in config['server_regions'][0].items():
+    for reg, servers in config['server_regions'].items():
         if server_name in servers:
             region = reg
             break
@@ -167,7 +167,7 @@ def get_ip_to_delay(config, name_to_ip, server_name, delay_to_clients=False):
             for j in range(config['client_nodes_per_server']):
                 client_name = config['client_name_format_str'] % (i, j)
                 other_region = None
-                for reg, servers in config['server_regions'][0].items():
+                for reg, servers in config['server_regions'].items():
                     if config['server_names'][i] in servers:
                         other_region = reg
                         break

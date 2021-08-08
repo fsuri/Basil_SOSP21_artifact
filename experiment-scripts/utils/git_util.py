@@ -50,9 +50,9 @@ def remake_binaries(config):
         checked_out = True
     elif 'src_commit_hash' not in config:
         config['src_commit_hash'] = current_branch
+    #always write src commit hash, even if given...
     compile_make(config)
     if checked_out:
         checkout_commit(config['src_directory'], current_branch)
     if not clean:
         pop_stashed_changes(config['src_directory'])
-
