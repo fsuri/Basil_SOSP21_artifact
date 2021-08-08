@@ -31,7 +31,7 @@ def kill_servers(config, executor, kill_args=' -9'):
     futures = []
     if config['replication_protocol'] == 'indicus':
         n = 5 * config['fault_tolerance'] + 1
-    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'augustus':
+    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'bftsmart' or config['replication_protocol'] == 'augustus':
         n = 3 * config['fault_tolerance'] + 1
     else:
         n = 2 * config['fault_tolerance'] + 1
@@ -172,6 +172,11 @@ def start_clients(config, local_exp_directory, remote_exp_directory, run):
                         run_remote_command_async(cmd1, config['emulab_user'], client_host)
                         cmd2 = 'sudo /usr/local/etc/turn_off_turbo.sh'
                         run_remote_command_async(cmd2, config['emulab_user'], client_host)
+                        #perm = 'sudo chmod +x ~/indicus/bin/benchmark'
+                        #run_remote_command_async(perm, config['emulab_user'], client_host)
+
+                    cmd4 = 'export LD_LIBRARY_PATH=/usr/lib/jvm/java-11-openjdk-amd64/lib/server/:$LD_LIBRARY_PATH;'
+                    appended_client_commands = cmd4 + appended_client_commands
 
                     client_processes.append(run_remote_command_async(
                         appended_client_commands + ' & wait', config['emulab_user'],
@@ -190,7 +195,7 @@ def start_servers(config, local_exp_directory, remote_exp_directory, run):
     server_threads = []
     if config['replication_protocol'] == 'indicus' :
         n = 5 * config['fault_tolerance'] + 1
-    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'augustus':
+    elif config['replication_protocol'] == 'pbft' or config['replication_protocol'] == 'hotstuff' or config['replication_protocol'] == 'bftsmart' or config['replication_protocol'] == 'augustus':
         n = 3 * config['fault_tolerance'] + 1
     else:
         n = 2 * config['fault_tolerance'] + 1
@@ -223,11 +228,15 @@ def start_servers(config, local_exp_directory, remote_exp_directory, run):
                 run_remote_command_async(cmd1, config['emulab_user'], server_host)
                 cmd2 = 'sudo /usr/local/etc/turn_off_turbo.sh'
                 run_remote_command_async(cmd2, config['emulab_user'], server_host)
+                #perm = 'sudo chmod +x ~/indicus/bin/server'
+                #run_remote_command_async(perm, config['emulab_user'], server_host)
 
             ##
             cmd3 = 'source /opt/intel/oneapi/setvars.sh --force; '
             #run_remote_command_async(cmd3, config['emulab_user'], server_host, detach=False)
             cmd =  cmd3 + cmd
+            cmd4 = 'export LD_LIBRARY_PATH=/usr/lib/jvm/java-11-openjdk-amd64/lib/server/:$LD_LIBRARY_PATH;'
+            cmd = cmd4 + cmd
             server_threads.append(run_remote_command_async(cmd,
                 config['emulab_user'], server_host, detach=False))
         else:
