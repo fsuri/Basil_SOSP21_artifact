@@ -198,9 +198,8 @@ Go to /src and build:
 
 When building on branch TxBFTSmart the following additional steps are necessary:
 #### Additional prereq for BFTSmart (only on TxBFTSmart branch)
-# Install java open jdk 1.11.0 in /usr/lib/jvm
-First, install Java 11 and export your LD_LIBRARY_Path:
-1. `sudo apt-get install openjdk-11-jdk`
+First, install Java open jdk 1.110 in /usr/lib/jvm and export your LD_LIBRARY_Path:
+1. `sudo apt-get install openjdk-11-jdk` Confirm that it is indeed installed in /usr/lib/jvm
 2. `export LD_LIBRARY_PATH=/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server:$LD_LIBRARY_PATH`
 Next, modify all references of "fs435" or "zw494" in the source code and replace them with your cloudlab id  (TODO: please write script that automates this)
 After that, compile BFT-SMART (TODO: integrate this into Makefile)
