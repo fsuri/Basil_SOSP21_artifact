@@ -2,9 +2,9 @@
 This is the repository for the Artifact Evaluation of SOSP'21 submission #108: "Basil: Breaking up BFT with ACID transactions" 
 
 
-## Claims
+## Claims TODO
 
-We made 4 claims which can be found in Figure 3 of our submission. We copy-and-paste them here.
+our claims are everything we evaluate in our figures..
 
 - **claim1**: Basil comes within competitive performance (both throughput and latency) compared to Tapir, a Crash Fault Tolerant database. Basils current code-base was modified since the Basil results reported in the paper (for microbenchmarks too) to include failure handling, so while results should be largely consistent, they may differ slightly.
 
