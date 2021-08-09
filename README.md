@@ -33,12 +33,13 @@ Alternatively, I could put all the source code in a different repo?
      --> Point to installation guide
 
 2. Setting up experiments on Cloudlab 
-     --> Point to Cloudlab guide (should also include
+     --> Point to Cloudlab guide: a) how to start a profile and what images to use, b) how to generate these images (all installs + extras)
      
 3. Running experiments:
       1) Go to respective branch, 
       2) follow additional installs & remote configs for Hotstuff and BFTsmart
       3) build
       4) experiments.
-           --> Point to experiment scripts and configs guide.
+           --> Show how to run basic dummy test locally, just to confirm that binaries work.
+           --> Point to experiment scripts and configs guide. to run remotely.
 
