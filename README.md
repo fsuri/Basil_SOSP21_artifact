@@ -6,7 +6,7 @@ This is the repository for the Artifact Evaluation of SOSP'21 submission #108: "
 
 We made 4 claims which can be found in Figure 3 of our submission. We copy-and-paste them here.
 
-- **claim1**: Basil comes within competitive performance (both throughput and latency) compared to Tapir, a Crash Fault Tolerant database.
+- **claim1**: Basil comes within competitive performance (both throughput and latency) compared to Tapir, a Crash Fault Tolerant database. Basils current code-base was modified since the Basil results reported in the paper (for microbenchmarks too) to include failure handling, so while results should be largely consistent, they may differ slightly.
 
 - **claim2**: Basil achieves both higher throughput and lower latency than both BFT baselines (TxHotstuff, TxBFTSmart)
 
