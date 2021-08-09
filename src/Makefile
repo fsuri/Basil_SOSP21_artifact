@@ -299,8 +299,25 @@ print-%:
 # Targets
 #
 
+.PHONY: hotstuff
+hotstuff: 
+	@echo '====== Start Building HotStuff ======'
+	cd ./store/hotstuffstore/libhotstuff/; ./build.sh
+	@echo '====== Finish Building HotStuff ======'
+
+
+.PHONY: indicus
+indicus: $(BINS)
+
+
 .PHONY: all
-all: $(BINS)
+all: hotstuff
+	@echo '====== Start Building Indicus ======'
+	$(MAKE) indicus 
+	@echo '====== Finish Building Indicus ======'
+
+#.PHONY: all
+#all: $(BINS)
 
 $(TEST_BINS:%=run-%): run-%: %
 	$(call trace,RUN,$<,$<)
