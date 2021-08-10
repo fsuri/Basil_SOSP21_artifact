@@ -15,7 +15,7 @@ our claims are everything we evaluate in our figures..
 - **claim4**: All other microbenchmarks are correct...
 
 
-# Artifacts
+## Artifacts
 The artifact is spread across the following three branches. Please checkout a given branch when validating claims for a respective system.
 0. Branch main: Contains the paper, the exeriment scripts, and all experiment configurations used.
 1. Branch Basil/Tapir: Contains the source code used for all Basil and Tapir evaluation
@@ -238,4 +238,55 @@ try to install googletest directly into src as follows:
 9. `make -j`
 10. `g++ -isystem ./include -I . -pthread -c ./src/gtest-all.cc`
 11. `g++ -isystem ./include -I . -pthread -c ./src/gtest_main.cc`
+
+## Confirming that binaries work locally
+Simple single server/single client experiment
+If it doesnt work.. contact us I guess...
+
+## Setting up Cloudlab
+In order to run experiments on Cloudlab you will have to register an account with your academic email and create a new project.
+Alternatively, if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted.
+If you use your local machine to start experiments, then you need to set up and register ssh in order to connect to the cloudlab servers. 
+If you are instead using a cloudlab control machine (see next steps) you can skip this step.
+To create an ssh key and register it with your ssh agent follow these instructions: https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent (Install ssh if you have not already.)
+Next, register your public key under your Cloudlab account user->Manage SSH Keys
+
+You are ready to start up an experiment:
+To use a pre-declared profile, go to the search tab and select Profile "SOSP108". 
+The profile by default starts with 18 server machines (follow the naming convention) and 18 client machines, all of which use m510 hardware on the Utah cluster.
+When running expeirments for Tapir, you may instead use only 9 server machines (remove the trailing 9 server names from the profile); When running TxHotstuff and TxBFTSmart,
+you may use 12 server machines (remove the trailing 6 server names from the profile). Since experiments require a fairly large number of machines, you may have to create a reservation in order to have enough resources. go to the "Make reservation tab" and make a reservation for 36 m510 machines on the Utah cluster (37 if you plan to use a control machine).
+
+This profile includes two disk images "SOSP108.server" and "SOSP108.client" that already include all dependencies and additional machinery necessary to run experiments. If you instead want to build an image from scratch, start by loading a default Ubuntu 18.04 LTS image (urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD). Then, follow the above manual installation guide to install all dependencies (you may skip adding tbb setvars.sh to .bashrc). Additionally, you will have to install the following requisites:
+1. NTP:  TODO add instructions
+2. Data Sets: Build TPCC/Smallbank , move them to /usr/local/etc/  (can skip this on client machines for tpcc)
+3. Public Keys: Build crypto keys, move them to /usr/local/etc/donna/
+4. Create Hyperthreading/Turbo off scripts and put them in /usr/local/etc/
+Once complete, create a new disk image. Then, start the profile with the disk image specified.
+
+## Using a control machine:
+When using a control machine, you will need to source setvars.sh and export the LD path for java before building (everytime you start a new expeirment) because those will not be persisted across images.
+You dont need to setup ssh(?)
+
+## Running experiments:
+Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
+The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion.
+To use the provided config files, you will need to make the following modifications to each file:
+1. src_commit_hash: “branch_name” (i.e. Basil/Tapir, or a specific commit hash)
+IMPORTANT: In new scripts dont use this param, it will detach git. Instead just leave it blank (i.e. remove the flag) and the script will automatically use the current branch you are on
+2. base_local_exp_directory: “media/floriansuri/experiments” (set the local path where output files will be generated)
+3. base_remote_bin_directory_nfs: “users/<cloudlab-user>/indicus” (set the directory on the cloudlab machines for uploading compiled files)
+4. src_directory : “/home/floriansuri/Indicus/BFT-DB/src” (Set your local source directory)
+5. emulab_user: <cloudlab-username>
+6. run_locally: false (set to false to run remote experiments on distributed hardware (cloud lab), set to true to run locally)
+   
+After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go to the appropriate folder and enter /out. Look for the stats.json file. Throughput measurements will be under: /combined /tput   Latency will be under: /combined /mean
+   
+### Extra Pre-Configurations necessary for TxHotstuff and TxBFTSmart
+   --> see the branch... Extra coudlab configuration is necessary before running (some even necessary before building)
+   
+Now you are ready to start a experiment:
+- Use any of the provided configs under /experiments/<Figures>. Make sure to use the binary code from branches TXHotstuff/TxBFTSmart if you are running any of those configs
+- To confirm that we indeed report the max throughput you can modify the num_clients fields on the baseline configs.. One can put multiple [a,b,c] which will run multiple experiments and output the results in a plot.
+   
 
