@@ -243,13 +243,13 @@ try to install googletest directly into src as follows:
 Simple single server/single client experiment
 
 Run all this from /src/
-To do so need to first generate keys: use keygen.sh and put them into /keys
+To do so need to first generate keys: go to /src and run ./keygen.sh 
 
 Run server:
-DEBUG=store/indicusstore/* store/server --config_path shard-r0.config --group_idx 0 --num_groups 1 --num_shards 1 --replica_idx 0 --protocol indicus --num_keys 1 --debug_stats --indicus_key_path keys &> server.out
+`DEBUG=store/indicusstore/* store/server --config_path shard-r0.config --group_idx 0 --num_groups 1 --num_shards 1 --replica_idx 0 --protocol indicus --num_keys 1 --debug_stats --indicus_key_path keys &> server.out`
 
 Run client 
-store/benchmark/async/benchmark --config_path shard-r0.config --num_groups 1 --num_shards 1 --protocol_mode indicus --num_keys 1 --benchmark rw --num_ops_txn 2 --exp_duration 10 --client_id 0 --warmup_secs 0 --cooldown_secs 0 --key_selector zipf --zipf_coefficient 0.0 --stats_file "stats-0.json" --indicus_key_path keys &> client-0.out
+`store/benchmark/async/benchmark --config_path shard-r0.config --num_groups 1 --num_shards 1 --protocol_mode indicus --num_keys 1 --benchmark rw --num_ops_txn 2 --exp_duration 10 --client_id 0 --warmup_secs 0 --cooldown_secs 0 --key_selector zipf --zipf_coefficient 0.0 --stats_file "stats-0.json" --indicus_key_path keys &> client-0.out`
 
 Client should finish within 10 seconds, output file should have summary at the end.
 If it doesnt work.. contact us I guess...
@@ -269,14 +269,50 @@ When running expeirments for Tapir, you may instead use only 9 server machines (
 you may use 12 server machines (remove the trailing 6 server names from the profile). Since experiments require a fairly large number of machines, you may have to create a reservation in order to have enough resources. go to the "Make reservation tab" and make a reservation for 36 m510 machines on the Utah cluster (37 if you plan to use a control machine).
 
 This profile includes two disk images "SOSP108.server" and "SOSP108.client" that already include all dependencies and additional machinery necessary to run experiments. If you instead want to build an image from scratch, start by loading a default Ubuntu 18.04 LTS image (urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD). Then, follow the above manual installation guide to install all dependencies (you may skip adding tbb setvars.sh to .bashrc). Additionally, you will have to install the following requisites:
-1. NTP:  TODO add instructions
+1. NTP:  https://vitux.com/how-to-install-ntp-server-and-client-on-ubuntu/ 
+         Confirm that it is running: sudo service ntp status (check for status Active)
+
 2. Data Sets: Build TPCC/Smallbank , move them to /usr/local/etc/  (can skip this on client machines for tpcc)
+   Store TPCC data:
+- Run tpcc_generator bin from /src/store/benchmark/async/tpcc/
+- `./tpcc_generator --num_warehouses=<N> > tpcc-<N>-warehouse`
+- Move output file to /usr/local/etc/tpcc-<N>-warehouse
+- We used 20 warehouses, so do N=20
+ 
+   Store Smallbank data:
+- Run smallbank_generator_main bin from /src/store/benchmark/async/smallbank/
+- `./smallbank_generator_main --num_customers=<N>`
+- It will generate two files, smallbank_names, and smallbank_data. Move them to /usr/local/etc/
+- The server needs both, the client needs only names (not storing smallbank_data saves space for the image)
+- We used 1 million customers
+
+   
 3. Public Keys: Build crypto keys, move them to /usr/local/etc/donna/
-4. Create Hyperthreading/Turbo off scripts and put them in /usr/local/etc/
+ - Go to /src and use keygen.sh
+- Run ./keygen.sh → creates a lot of keys using ./create_key <key_type>  
+- By default keygen.sh uses type 4 = Donna, but you can modify it to 3 for secp256k1
+- Move the key-pairs in the /keys folder to /usr/local/etc/indicus-keys/donna/ or to /usr/local/etc/indicus-keys/secp256k1/ depending on what type used
+
+4. Create the following two scripts (and enable execution permissions) and place them in /usr/local/etc/
+   The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
+- Hyperthreading script:
+-   name it: `disable_HT.sh`
+-   `#!/bin/bash`
+-   `for i in {8..15}; do`
+-   `   echo "Disabling logical HT core $i."`
+-   `   echo 0 > /sys/devices/system/cpu/cpu${i}/online;`
+-   `Done`
+
+- Turbo script:
+- name it: turn_off_turbo.sh
+- `#!/bin/bash`
+- `echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo`
+
 Once complete, create a new disk image. Then, start the profile with the disk image specified.
+   
 
 ## Using a control machine:
-When using a control machine, you will need to source setvars.sh and export the LD path for java before building (everytime you start a new expeirment) because those will not be persisted across images.
+When using a control machine (and not your local machine) to start experiments, you will need to source setvars.sh and export the LD path for java before building (everytime you start a new control machine) because those will not be persisted across images.
 You dont need to setup ssh(?)
 
 ## Running experiments:
