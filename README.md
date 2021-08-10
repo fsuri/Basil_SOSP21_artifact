@@ -241,6 +241,17 @@ try to install googletest directly into src as follows:
 
 ## Confirming that binaries work locally
 Simple single server/single client experiment
+
+Run all this from /src/
+To do so need to first generate keys: use keygen.sh and put them into /keys
+
+Run server:
+DEBUG=store/indicusstore/* store/server --config_path shard-r0.config --group_idx 0 --num_groups 1 --num_shards 1 --replica_idx 0 --protocol indicus --num_keys 1 --debug_stats --indicus_key_path keys &> server.out
+
+Run client 
+store/benchmark/async/benchmark --config_path shard-r0.config --num_groups 1 --num_shards 1 --protocol_mode indicus --num_keys 1 --benchmark rw --num_ops_txn 2 --exp_duration 10 --client_id 0 --warmup_secs 0 --cooldown_secs 0 --key_selector zipf --zipf_coefficient 0.0 --stats_file "stats-0.json" --indicus_key_path keys &> client-0.out
+
+Client should finish within 10 seconds, output file should have summary at the end.
 If it doesnt work.. contact us I guess...
 
 ## Setting up Cloudlab
