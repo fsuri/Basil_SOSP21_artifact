@@ -252,7 +252,7 @@ To create an ssh key and register it with your ssh agent follow these instructio
 Next, register your public key under your Cloudlab account user->Manage SSH Keys
 
 You are ready to start up an experiment:
-To use a pre-declared profile, go to the search tab and select Profile "SOSP108". 
+To use a pre-declared profile, use the following public profile "SOSP108" https://www.cloudlab.us/p/morty/SOSP108
 The profile by default starts with 18 server machines (follow the naming convention) and 18 client machines, all of which use m510 hardware on the Utah cluster.
 When running expeirments for Tapir, you may instead use only 9 server machines (remove the trailing 9 server names from the profile); When running TxHotstuff and TxBFTSmart,
 you may use 12 server machines (remove the trailing 6 server names from the profile). Since experiments require a fairly large number of machines, you may have to create a reservation in order to have enough resources. go to the "Make reservation tab" and make a reservation for 36 m510 machines on the Utah cluster (37 if you plan to use a control machine).
