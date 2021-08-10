@@ -55,6 +55,10 @@ And cannot be easily aided by us. We recommend running on Ubuntu 18.  If you can
 (To re-install from scratch use a clean image:       urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD.
 Or use an existing image: tbb, or East for bftsmart - TODO: make public)
 - Requires python3 for scripts
+   - Download pip and numpy:
+   - Sudo apt install python3-pip
+   - Python3 -m pip install numpy
+
 - C++ 17 for Main code (gcc version > 5)
 - Java 11 for BFT Smart code (install included below)
 
