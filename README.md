@@ -272,7 +272,10 @@ You dont need to setup ssh(?)
 Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
 The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion.
 To use the provided config files, you will need to make the following modifications to each file:
-1. src_commit_hash: “branch_name” (i.e. Basil/Tapir, or a specific commit hash)
+0. "project_name": "morty-pg0" --> change to the name of your project ((where does the -pg0 come from?)
+1. "experiment_name": "indicus", --> change to the name of your experiment.
+2. "codebase_name": dont think this matters?
+3. src_commit_hash: “branch_name” (i.e. Basil/Tapir, or a specific commit hash)
 IMPORTANT: In new scripts dont use this param, it will detach git. Instead just leave it blank (i.e. remove the flag) and the script will automatically use the current branch you are on
 2. base_local_exp_directory: “media/floriansuri/experiments” (set the local path where output files will be generated)
 3. base_remote_bin_directory_nfs: “users/<cloudlab-user>/indicus” (set the directory on the cloudlab machines for uploading compiled files)
