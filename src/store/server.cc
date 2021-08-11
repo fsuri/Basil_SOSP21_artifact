@@ -286,6 +286,7 @@ DEFINE_uint64(indicus_total_processes, 1, "number of server processes per machin
 DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
 
 DEFINE_bool(indicus_all_to_all_fb, false, "use the all to all view change method");
+DEFINE_bool(indicus_no_relayP1, false, "turn off relays");
 DEFINE_uint64(indicus_relayP1_timeout, 100, "time (ms) after which to send RelayP1");
 DEFINE_bool(indicus_replica_gossip, false, "use gossip between replicas to exchange p1");
 
@@ -590,7 +591,7 @@ int main(int argc, char **argv) {
 																			FLAGS_indicus_parallel_CCC,
 																			FLAGS_indicus_dispatchCallbacks,
 																			FLAGS_indicus_all_to_all_fb,
-																		  FLAGS_indicus_relayP1_timeout,
+																		  FLAGS_indicus_no_relayP1, FLAGS_indicus_relayP1_timeout,
 																		  FLAGS_indicus_replica_gossip);
       Debug("Starting new server object");
       server = new indicusstore::Server(config, FLAGS_group_idx,
