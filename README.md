@@ -67,7 +67,7 @@ Before beginning the install process, update your distribution:
 1. `sudo apt-get update`
 2. `sudo apt-get upgrade`
 Then, install the following tools:
-3. `sudo apt-get install autoconf automake libtool curl make g++ unzip valgrind cmake`
+3. `sudo apt-get install autoconf automake libtool curl make g++ unzip valgrind cmake gnuplot`
 
 
 ### Development library dependencies
@@ -323,17 +323,20 @@ You dont need to setup ssh(?)
 Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
 The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion.
 To use the provided config files, you will need to make the following modifications to each file:
-0. "project_name": "morty-pg0" --> change to the name of your project ((where does the -pg0 come from?)
-1. "experiment_name": "indicus", --> change to the name of your experiment.
+1. "project_name": "morty-pg0" --> change to the name of your project. On cloudlab.us (utah cluster) you will generally need to add "-pg0" to your project_name in order to ssh into the machines. To confirm which is the case for you, try to ssh into a machine directly using
+   `ssh <cloudlab-user>@us-east-1-0.<experiment-name>.<project-name>.utah.cloudlab.us`
+   
+2. "experiment_name": "indicus", --> change to the name of your experiment.
 3. src_commit_hash: “branch_name” (i.e. Basil/Tapir, or a specific commit hash)
 IMPORTANT: In new scripts dont use this param, it will detach git. Instead just leave it blank (i.e. remove the flag) and the script will automatically use the current branch you are on
-2. base_local_exp_directory: “media/floriansuri/experiments” (set the local path where output files will be generated)
-3. base_remote_bin_directory_nfs: “users/<cloudlab-user>/indicus” (set the directory on the cloudlab machines for uploading compiled files)
-4. src_directory : “/home/floriansuri/Indicus/BFT-DB/src” (Set your local source directory)
-5. emulab_user: <cloudlab-username>
-6. run_locally: false (set to false to run remote experiments on distributed hardware (cloud lab), set to true to run locally)
+4. base_local_exp_directory: “media/floriansuri/experiments” (set the local path where output files will be generated)
+5. base_remote_bin_directory_nfs: “users/<cloudlab-user>/indicus” (set the directory on the cloudlab machines for uploading compiled files)
+6. src_directory : “/home/floriansuri/Indicus/BFT-DB/src” (Set your local source directory)
+7. emulab_user: <cloudlab-username>
+8. run_locally: false (set to false to run remote experiments on distributed hardware (cloud lab), set to true to run locally)
    
-After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go to the appropriate folder and enter /out. Look for the stats.json file. Throughput measurements will be under: /combined /tput   Latency will be under: /combined /mean
+After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go deeper into the folders (total of 3 timestamped folders) until you enter /out. Look for the stats.json file. Throughput measurements will be under: aggregate/combined/tput (or run-stats/combined /tput if you run multiple experiments for error bars) Latency will be under: aggregate/combined /mean
+   Plots: go to /plots/tput-clients.png and /plots/lat-tput.png to look at the data points directly. On the control machine looking at stats is necessary
    
 ### Extra Pre-Configurations necessary for TxHotstuff and TxBFTSmart
    --> see the branch... Extra coudlab configuration is necessary before running (some even necessary before building)
