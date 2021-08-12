@@ -52,15 +52,15 @@ Alternatively, I could put all the source code in a different repo?
 ## Installing Dependencies (NOT NECESSARY IF USING PROVIDED CLOUDLAB IMAGE AND USING CONTROLLER MACHINE TO START SCRIPTS)
 Compiling Basil requires the following high level requirements: 
 - Operating System: Ubuntu 18.04 LTS, Bionic  
-(You may try to run on Mac, which has worked for us in the past, but is not documented 
-And cannot be easily aided by us. We recommend running on Ubuntu 18.  If you cannot do this locally, we recommend using a CloudLab controller machine - see section "setting up CloudLab")
-(To re-install from scratch use a clean image:       urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD.
-Or use an existing image: tbb, or East for bftsmart - TODO: make public)
-- Requires python3 for scripts
-   - Download pip and numpy:
-   - Sudo apt install python3-pip
-   - Python3 -m pip install numpy
+   - You may try to run on Mac, which has worked for us in the past, but is not documented 
+   And cannot be easily aided by us. We recommend running on Ubuntu 18.  If you cannot do this locally, we recommend using a CloudLab controller machine - see       section "setting up CloudLab")
+   - You may try to use Ubuntu 20.04.2 LTS instead of 18.04 LTS. However, we do not guarantee a fully documented install process, nor precise repicability of our results. In order to use Ubuntu 20.04.2 LTS you will have to manually create a disk image instead of using our supplied images for 18.04 LTS. Note, that using Ubuntu 20.04.2 LTS locally as control machine to generate and upload binaries may *not* be compatible with our cloud lab images running on 18.04 LTS.
 
+(To re-install from scratch use a clean image:   18.04 LTS:     urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD.
+20.04 LTS urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD
+Or use a image pre-configured by us: urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server and urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client under public Profile: "SOSP108" https://www.cloudlab.us/p/morty/SOSP108)
+- Requires python3 and numpy for scripts
+ 
 - C++ 17 for Main code (gcc version > 5)
 - Java 11 for BFT Smart code (install included below)
 
@@ -69,7 +69,9 @@ Before beginning the install process, update your distribution:
 1. `sudo apt-get update`
 2. `sudo apt-get upgrade`
 Then, install the following tools:
-3. `sudo apt-get install autoconf automake libtool curl make g++ unzip valgrind cmake gnuplot`
+3. `sudo apt install python3-pip`
+4. `python3 -m pip install numpy`
+5. `sudo apt-get install autoconf automake libtool curl make g++ unzip valgrind cmake gnuplot pkg-config`
 
 
 ### Development library dependencies
@@ -84,7 +86,7 @@ The artifact depends the following development libraries:
 - libuv1-dev
 You may install them directly using:
 - `sudo apt install libsodium-dev libgflags-dev libssl-dev libevent-dev libevent-openssl-2.1-6 libevent-pthreads-2.1-6 libboost-all-dev libuv1-dev`
-
+- If using Ubuntu 20, use `sudo apt install libevent-openssl-2.1-7 libevent-pthreads-2.1-7` instead for openssl and pthreads.
 
 In addition, you need to install the following libraries from source:
 - [googletest-1.10](https://github.com/google/googletest/releases/tag/release-1.10.0)
@@ -185,6 +187,7 @@ Move the shared libary:
 Download and execute the installation script:
 1. `wget https://registrationcenter-download.intel.com/akdlm/irc_nas/17977/l_BaseKit_p_2021.3.0.3219.sh`
 2. `sudo bash l_BaseKit_p_2021.3.0.3219.sh`
+(To run the installation script you may have to manually install `apt -y install ncurses-term` if you do not have it already).
 Follow the installation instructions: Doing a custom installation saves space as the only dependency is "Intel oneAPI Threading Building Blocks" 
 (Use space bar to unmark X other items. You do not need to consent to data collection)
 
