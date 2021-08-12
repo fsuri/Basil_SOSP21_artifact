@@ -875,7 +875,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
     c.release();
   } else{
     c.release();
-    if(params.replicaGossip) ForwardPhase1(msg); 
+    if(params.replicaGossip) ForwardPhase1(msg);
     if(!replicaGossip) msg.set_replica_gossip(false); //unset it.
 
     if (params.validateProofs && params.signedMessages && params.verifyDeps) {

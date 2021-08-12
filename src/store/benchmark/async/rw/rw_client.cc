@@ -4,7 +4,7 @@
 
 namespace rw {
 
-RWClient::RWClient(KeySelector *keySelector, uint64_t numKeys,
+RWClient::RWClient(KeySelector *keySelector, uint64_t numKeys, bool readOnly,
     AsyncClient &client,
     Transport &transport, uint64_t id, int numRequests, int expDuration,
     uint64_t delay, int warmupSec, int cooldownSec, int tputInterval,
@@ -13,14 +13,14 @@ RWClient::RWClient(KeySelector *keySelector, uint64_t numKeys,
     : AsyncTransactionBenchClient(client, transport, id, numRequests,
         expDuration, delay, warmupSec, cooldownSec, tputInterval, abortBackoff,
         retryAborted, maxBackoff, maxAttempts, latencyFilename), keySelector(keySelector),
-        numKeys(numKeys) {
+        numKeys(numKeys), readOnly(readOnly) {
 }
 
 RWClient::~RWClient() {
 }
 
 AsyncTransaction *RWClient::GetNextTransaction() {
-  RWTransaction *rw_tx = new RWTransaction(keySelector, numKeys, GetRand());
+  RWTransaction *rw_tx = new RWTransaction(keySelector, numKeys, readOnly, GetRand());
   // for(int key : rw_tx->getKeyIdxs()){
   //   //key_counts[key]++;
   //   stats.IncrementList("key distribution", key, 1);

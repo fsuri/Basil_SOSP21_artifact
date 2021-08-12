@@ -2,8 +2,8 @@
 
 namespace rw {
 
-RWTransaction::RWTransaction(KeySelector *keySelector, int numOps,
-    std::mt19937 &rand) : keySelector(keySelector), numOps(numOps) {
+RWTransaction::RWTransaction(KeySelector *keySelector, int numOps, bool readOnly,
+    std::mt19937 &rand) : keySelector(keySelector), numOps(numOps), readOnly(readOnly) {
   for (int i = 0; i < numOps; ++i) {
     uint64_t key;
     if (i % 2 == 0) {
@@ -25,7 +25,7 @@ Operation RWTransaction::GetNextOperation(size_t outstandingOpCount, size_t fini
     if(finishedOpCount != outstandingOpCount){
       return Wait();
     }
-    else if (outstandingOpCount % 2 == 0) {
+    else if (readOnly || outstandingOpCount % 2 == 0) {
       //std::cerr << "read: " << GetKey(finishedOpCount) << std::endl;
       return Get(GetKey(finishedOpCount));
     } else  {
