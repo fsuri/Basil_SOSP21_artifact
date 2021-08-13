@@ -171,69 +171,72 @@ def calculate_statistics_for_run(config, local_out_directory, run):
                                             foundEnd = True
                                             break
                                     if not opCols[x] in config['client_stats_blacklist']:
-                                        if 'input_latency_scale' in config:
-                                            opLat = float(opCols[x+1]) / config['input_latency_scale']
-                                        else:
-                                            opLat = float(opCols[x+1]) / 1e9
-                                        if 'output_latency_scale' in config:
-                                            opLat = opLat * config['output_latency_scale']
-                                        else:
-                                            opLat = opLat * 1e3
-
-                                        opTime = 0.0
-                                        if x + 2 < len(opCols):
+                                        if x + 1 < len(opCols):
                                             if 'input_latency_scale' in config:
-                                                opTime = float(opCols[x+2]) / config['input_latency_scale']
+                                                print(len(opCols))
+                                                print(x)
+                                                opLat = float(opCols[x + 1]) / config['input_latency_scale']
                                             else:
-                                                opTime = float(opCols[x+2]) / 1e9
+                                                opLat = float(opCols[x + 1]) / 1e9
                                             if 'output_latency_scale' in config:
-                                                opTime = opTime * config['output_latency_scale']
+                                                opLat = opLat * config['output_latency_scale']
                                             else:
-                                                opTime = opTime * 1e3
+                                                opLat = opLat * 1e3
 
-                                        cid = 0
-                                        if x + 3 < len(opCols):
-                                            cid = int(opCols[x + 3])
+                                            opTime = 0.0
+                                            if x + 2 < len(opCols):
+                                                if 'input_latency_scale' in config:
+                                                    opTime = float(opCols[x+2]) / config['input_latency_scale']
+                                                else:
+                                                    opTime = float(opCols[x+2]) / 1e9
+                                                if 'output_latency_scale' in config:
+                                                    opTime = opTime * config['output_latency_scale']
+                                                else:
+                                                    opTime = opTime * 1e3
 
-                                        if cid not in op_latencies:
-                                            op_latencies[cid] = {}
+                                            cid = 0
+                                            if x + 3 < len(opCols):
+                                                cid = int(opCols[x + 3])
 
-                                        if cid not in op_times:
-                                            op_times[cid] = {}
+                                            if cid not in op_latencies:
+                                                op_latencies[cid] = {}
 
-                                        if cid not in op_latency_counts:
-                                            op_latency_counts[cid] = {}
+                                            if cid not in op_times:
+                                                op_times[cid] = {}
 
-                                        if opCols[x] in op_latencies[cid]:
-                                            op_latencies[cid][opCols[x]].append(opLat)
-                                        else:
-                                            op_latencies[cid][opCols[x]] = [opLat]
+                                            if cid not in op_latency_counts:
+                                                op_latency_counts[cid] = {}
 
-                                        if opCols[x] in op_times[cid]:
-                                            op_times[cid][opCols[x]].append(opTime)
-                                        else:
-                                            op_times[cid][opCols[x]] = [opTime]
-
-                                        if not opCols[x] in config['client_combine_stats_blacklist']:
-                                            if 'combined' in op_latencies[cid]:
-                                                op_latencies[cid]['combined'].append(opLat)
+                                            if opCols[x] in op_latencies[cid]:
+                                                op_latencies[cid][opCols[x]].append(opLat)
                                             else:
-                                                op_latencies[cid]['combined'] = [opLat]
+                                                op_latencies[cid][opCols[x]] = [opLat]
 
-                                            if 'combined' in op_times[cid]:
-                                                op_times[cid]['combined'].append(opTime)
+                                            if opCols[x] in op_times[cid]:
+                                                op_times[cid][opCols[x]].append(opTime)
                                             else:
-                                                op_times[cid]['combined'] = [opTime]
+                                                op_times[cid][opCols[x]] = [opTime]
 
-                                            if 'combined' in op_latency_counts[cid]:
-                                                op_latency_counts[cid]['combined'] += 1
+                                            if not opCols[x] in config['client_combine_stats_blacklist']:
+                                                if 'combined' in op_latencies[cid]:
+                                                    op_latencies[cid]['combined'].append(opLat)
+                                                else:
+                                                    op_latencies[cid]['combined'] = [opLat]
+
+                                                if 'combined' in op_times[cid]:
+                                                    op_times[cid]['combined'].append(opTime)
+                                                else:
+                                                    op_times[cid]['combined'] = [opTime]
+
+                                                if 'combined' in op_latency_counts[cid]:
+                                                    op_latency_counts[cid]['combined'] += 1
+                                                else:
+                                                    op_latency_counts[cid]['combined'] = 1
+
+                                            if opCols[x] in op_latency_counts[cid]:
+                                                op_latency_counts[cid][opCols[x]] += 1
                                             else:
-                                                op_latency_counts[cid]['combined'] = 1
-
-                                        if opCols[x] in op_latency_counts[cid]:
-                                            op_latency_counts[cid][opCols[x]] += 1
-                                        else:
-                                            op_latency_counts[cid][opCols[x]] = 1
+                                                op_latency_counts[cid][opCols[x]] = 1
 
                                 if foundEnd:
                                     run_time_sec = end_time_sec[cid]

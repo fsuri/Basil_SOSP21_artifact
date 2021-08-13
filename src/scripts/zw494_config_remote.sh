@@ -9,9 +9,9 @@ do
     echo $REMOTE_IP_ADDR
     #scp  -r config fs435@${machine}.indicus.morty-pg0.utah.cloudlab.us:/users/fs435/
 
-    rsync -rtuv -e "ssh -o StrictHostKeyChecking=no" --delete config $2@${machine}.$3.morty-pg0.utah.cloudlab.us:/users/$2/
-    rsync -rtuv -e "ssh -o StrictHostKeyChecking=no" --delete ../store/bftsmartstore/library/remote/java-config-${machine}/java-config $2@${machine}.$3.morty-pg0.utah.cloudlab.us:/users/$2/
-    rsync -rtuv -e "ssh -o StrictHostKeyChecking=no" --delete ../store/bftsmartstore/library/jars $2@${machine}.$3.morty-pg0.utah.cloudlab.us:/users/$2/
+    rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete config $2@${machine}.$3.morty-pg0.utah.cloudlab.us:/users/$2/
+    rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete ../store/bftsmartstore/library/remote/java-config-${machine}/java-config $2@${machine}.$3.morty-pg0.utah.cloudlab.us:/users/$2/
+    rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete ../store/bftsmartstore/library/jars $2@${machine}.$3.morty-pg0.utah.cloudlab.us:/users/$2/
 
 done
 
