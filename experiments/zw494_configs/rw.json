@@ -181,5 +181,6 @@
   "server_rpc_port": 8087,
   "client_gc_debug_trace": false,
   "client_cpuprofile": false,
-  "server_gc_debug_trace": false
+  "server_gc_debug_trace": false,
+  "bftsmart_codebase_dir":"/users/zw494"
 }

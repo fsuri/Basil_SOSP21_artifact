@@ -5,14 +5,13 @@ namespace bftsmartstore{
 JavaVM *BftSmartAgent::jvm;
 JNIEnv *BftSmartAgent::env;
 // client initialization
-BftSmartAgent::BftSmartAgent(bool is_client, TransportReceiver* receiver, int id, int group_idx): is_client(is_client){
+BftSmartAgent::BftSmartAgent(bool is_client, TransportReceiver* receiver, int id, int group_idx, const std::string& bftsmart_config_path): remote_home(bftsmart_config_path), is_client(is_client){
     // create Java VM
-    create_java_vm();
+    std::cerr << "bftsmart config path: " << remote_home << std::endl;
+    create_java_vm(remote_home);
     if (is_client){
         // generating the config home
         std::ostringstream sstream;
-
-        //sstream << "/users/fs435/java-config/java-config-group-" << group_idx << "/";
 
         sstream << remote_home << "/java-config/java-config-group-" << group_idx << "/";
 
@@ -44,7 +43,7 @@ BftSmartAgent::~BftSmartAgent(){
     }
 }
 
-bool BftSmartAgent::create_java_vm(){
+bool BftSmartAgent::create_java_vm(const std::string& remote_home){
     using namespace std;
     if (BftSmartAgent::jvm != nullptr) return true;
     JavaVM *this_jvm;
@@ -52,32 +51,46 @@ bool BftSmartAgent::create_java_vm(){
     JavaVMInitArgs vm_args;
     JavaVMOption* options = new JavaVMOption[3];
 
-    // std::ostringstream sstream;
-    // sstream << "-Djava.class.path=" << remote_home << "/jars/BFT-SMaRt.jar:";
-    // sstream << remote_home << "/jars/slf4j-api-1.7.25.jar:";
-    // sstream << remote_home << "/jars/bcpkix-jdk15on-160.jar:";
-    // sstream << remote_home << "/jars/commons-codec-1.11.jar:";
-    // sstream << remote_home << "/jars/logback-classic-1.2.3.jar:";
-    // sstream << remote_home << "/jars/netty-all-4.1.34.Final.jar:";
-    // sstream << remote_home << "/jars/bcprov-jdk15on-160.jar:";
-    // sstream << remote_home << "/jars/core-0.1.4.jar:";
-    // sstream << remote_home << "/jars/logback-core-1.2.3.jar:";
-    // sstream << remote_home << "/java-config";
-    // options[0].optionString = (char *)sstream.str().c_str();
-    // sstream.str("");
-    // sstream << "-Dlogback.configurationFile=\"" << remote_home << "/java-config/logback.xml\"";
-    // options[1].optionString = (char *)sstream.str().c_str();
-    // sstream.str("");
-    // sstream << "-Djava.security.properties=\"" << remote_home << "/java-config/java.security\"";
-    // options[2].optionString = (char *)sstream.str().c_str();
-    //
-    // std::cerr << "option 1: " << options[0].optionString << std::endl;
-    // std::cerr << "option 2: " << options[1].optionString << std::endl;
-    // std::cerr << "option 3: " << options[2].optionString << std::endl;
+    std::string path = "";
+    path += "-Djava.class.path=";
+    path += remote_home;
+    path += "/jars/BFT-SMaRt.jar:";
+    path += remote_home;
+    path += "/jars/slf4j-api-1.7.25.jar:";
+    path += remote_home;
+    path += "/jars/bcpkix-jdk15on-160.jar:";
+    path += remote_home;
+    path += "/jars/commons-codec-1.11.jar:";
+    path += remote_home;
+    path += "/jars/logback-classic-1.2.3.jar:";
+    path += remote_home;
+    path += "/jars/netty-all-4.1.34.Final.jar:";
+    path += remote_home;
+    path += "/jars/bcprov-jdk15on-160.jar:";
+    path += remote_home;
+    path += "/jars/core-0.1.4.jar:";
+    path += remote_home;
+    path += "/jars/logback-core-1.2.3.jar:";
+    path += remote_home;
+    path += "/java-config";
+    options[0].optionString = (char *)path.c_str();
+    std::cerr << "option 1: " << options[0].optionString << std::endl;
 
-    options[0].optionString = "-Djava.class.path=/users/fs435/jars/BFT-SMaRt.jar:/users/fs435/jars/slf4j-api-1.7.25.jar:/users/fs435/jars/bcpkix-jdk15on-160.jar:/users/fs435/jars/commons-codec-1.11.jar:/users/fs435/jars/logback-classic-1.2.3.jar:/users/fs435/jars/netty-all-4.1.34.Final.jar:/users/fs435/jars/bcprov-jdk15on-160.jar:/users/fs435/jars/core-0.1.4.jar:/users/fs435/jars/logback-core-1.2.3.jar:/users/fs435/java-config";
-    options[1].optionString = "-Dlogback.configurationFile=\"/users/fs435/java-config/logback.xml\"";
-    options[2].optionString = "-Djava.security.properties=\"/users/fs435/java-config/java.security\"";
+    std::string path1 = "";
+    path1 += "-Dlogback.configurationFile=\"";
+    path1 += remote_home;
+    path1 += "/java-config/logback.xml\"";
+    options[1].optionString = (char *)path1.c_str();
+
+    std::string path2 = "";
+    path2 += "-Djava.security.properties=\"";
+    path2 += remote_home;
+    path2 += "/java-config/java.security\"";
+    options[2].optionString = (char *)path2.c_str();
+
+    std::cerr << "option 1: " << options[0].optionString << std::endl;
+    std::cerr << "option 2: " << options[1].optionString << std::endl;
+    std::cerr << "option 3: " << options[2].optionString << std::endl;
 
     // options[3].optionString = "-Dio.netty.tryReflectionSetAccessible=true";
 
