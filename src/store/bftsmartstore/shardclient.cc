@@ -7,12 +7,12 @@ namespace bftsmartstore {
 ShardClient::ShardClient(const transport::Configuration& config, Transport *transport,
     uint64_t client_id, uint64_t group_idx, const std::vector<int> &closestReplicas_,
     bool signMessages, bool validateProofs,
-    KeyManager *keyManager, Stats* stats, bool order_commit, bool validate_abort) :
+    KeyManager *keyManager, Stats* stats, bool order_commit, bool validate_abort, const std::string& bftsmart_config_path) :
     config(config), transport(transport),
     group_idx(group_idx), client_id(client_id),
     signMessages(signMessages), validateProofs(validateProofs),
     keyManager(keyManager), stats(stats), order_commit(order_commit), validate_abort(validate_abort) {
-  bftsmartagent = new BftSmartAgent(true, this, 1000 + client_id, group_idx);
+  bftsmartagent = new BftSmartAgent(true, this, 1000 + client_id, group_idx, bftsmart_config_path);
   Debug("created bftsmart agent in shard client!");
   transport->Register(this, config, -1, -1);
   readReq = 0;

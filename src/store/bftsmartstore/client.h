@@ -23,7 +23,7 @@ class Client : public ::Client {
       const std::vector<int> &closestReplicas,
       Transport *transport, Partitioner *part,
       uint64_t readMessages, uint64_t readQuorumSize, bool signMessages,
-      bool validateProofs, KeyManager *keyManager,
+      bool validateProofs, KeyManager *keyManager, const std::string& bftsmart_config_path,
       bool order_commit = false, bool validate_abort = false,
       TrueTime timeserver = TrueTime(0,0));
   ~Client();
@@ -72,6 +72,7 @@ class Client : public ::Client {
   // TrueTime server.
   TrueTime timeServer;
   int client_seq_num;
+  const std::string& bftsmart_config_path;
 
   //addtional knobs: 1) order commit, 2) validate abort
   bool order_commit = false;

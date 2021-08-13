@@ -228,6 +228,9 @@ DEFINE_bool(pbft_order_commit, true, "order commit writebacks as well");
 DEFINE_bool(pbft_validate_abort, true, "validate abort writebacks as well");
 
 
+DEFINE_string(bftsmart_codebase_dir, "", "path to directory containing bftsmart configurations");
+
+
 DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
 
 const std::string if_args[] = {
@@ -1028,7 +1031,7 @@ int main(int argc, char **argv) {
 																					  tport, part,
 		                                       readMessages, readQuorumSize,
 		                                       FLAGS_indicus_sign_messages, FLAGS_indicus_validate_proofs,
-		                                       keyManager,
+		                                       keyManager, FLAGS_bftsmart_codebase_dir,
 																					 FLAGS_pbft_order_commit, FLAGS_pbft_validate_abort,
 																					 TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
 		        break;

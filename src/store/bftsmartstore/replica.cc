@@ -30,7 +30,7 @@ using namespace std;
 
 Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
   App *app, int groupIdx, int idx, bool signMessages, uint64_t maxBatchSize,
-                 uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, int hotstuff_cpu, int numShards, Transport *transport)
+                 uint64_t batchTimeoutMS, uint64_t EbatchSize, uint64_t EbatchTimeoutMS, bool primaryCoordinator, bool requestTx, int hotstuff_cpu, int numShards, Transport *transport, const std::string& bftsmart_config_path)
     : config(config),
       keyManager(keyManager), app(app), groupIdx(groupIdx), idx(idx),
     id(groupIdx * config.n + idx), signMessages(signMessages), maxBatchSize(maxBatchSize),
@@ -71,8 +71,8 @@ Replica::Replica(const transport::Configuration &config, KeyManager *keyManager,
       sessionKeys[i] = std::string(8, (char) i + 0x30) + std::string(8, (char) idx + 0x30);
     }
   }
-
-  bftsmartagent = new BftSmartAgent(false, this, idx, groupIdx);
+  std::cerr << "bftsmart config path: " << bftsmart_config_path << std::endl;
+  bftsmartagent = new BftSmartAgent(false, this, idx, groupIdx, bftsmart_config_path);
 }
 
 Replica::~Replica() {

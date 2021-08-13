@@ -96,6 +96,8 @@ class IndicusCodebase(ExperimentCodebase):
             if 'validate_abort' in config['replication_protocol_settings']:
                 client_command += ' --pbft_validate_abort=%s' % str(config['replication_protocol_settings']['validate_abort']).lower()
 
+        if config['replication_protocol'] == 'bftsmart':
+            client_command += " --bftsmart_codebase_dir=%s" % str(config['bftsmart_codebase_dir'])
 
         if config['replication_protocol'] == 'morty':
             if 'send_writes' in config['replication_protocol_settings']:
@@ -344,8 +346,8 @@ class IndicusCodebase(ExperimentCodebase):
             if 'validate_abort' in config['replication_protocol_settings']:
                 replica_command += ' --pbft_validate_abort=%s' % str(config['replication_protocol_settings']['validate_abort']).lower()
 
-
-
+        if config['replication_protocol'] == 'bftsmart':
+            replica_command += " --bftsmart_codebase_dir=%s" % str(config['bftsmart_codebase_dir'])
 
         if 'server_debug_stats' in config and config['server_debug_stats']:
             replica_command += ' --debug_stats'
