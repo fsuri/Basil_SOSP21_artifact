@@ -1114,8 +1114,8 @@ void ShardClient::ProcessP1R(proto::Phase1Reply &reply, bool FB_path, PendingFB 
     case SLOW_COMMIT_TENTATIVE:
       Debug("P1Validator STATE: SLOW_COMMIT_TENTATIVE - START TIMER");
       if(phase1DecisionTimeout == 0){
-        itr->second->decision = proto::COMMIT;
-        itr->second->fast = false;
+        pendingPhase1->decision = proto::COMMIT;
+        pendingPhase1->fast = false;
         !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       }
       else{
@@ -1162,8 +1162,8 @@ void ShardClient::ProcessP1R(proto::Phase1Reply &reply, bool FB_path, PendingFB 
     case SLOW_ABORT_TENTATIVE:
       Debug("P1Validator STATE: SLOW_ABORT_TENTATIVE - START TIMER");
       if(phase1DecisionTimeout == 0){
-        itr->second->decision = proto::ABORT;
-        itr->second->fast = false;
+        pendingPhase1->decision = proto::ABORT;
+        pendingPhase1->fast = false;
         !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
       }
       else{
@@ -1209,8 +1209,8 @@ void ShardClient::ProcessP1R(proto::Phase1Reply &reply, bool FB_path, PendingFB 
     case SLOW_ABORT_TENTATIVE2:
         Debug("P1Validator STATE: SLOW_ABORT_TENTATIVE2 - START TIMER");
         if(phase1DecisionTimeout == 0){
-          itr->second->decision = proto::ABORT;
-          itr->second->fast = false;
+          pendingPhase1->decision = proto::ABORT;
+          pendingPhase1->fast = false;
           !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
         }
         else{
