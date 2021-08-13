@@ -359,7 +359,7 @@ typedef struct Parameters {
   const bool dispatchCallbacks;
 
   const bool all_to_all_fb;
-  const bool no_relayP1;
+  const bool no_fallback;
   const uint64_t relayP1_timeout;
   const bool replicaGossip;
 
@@ -373,7 +373,7 @@ typedef struct Parameters {
     bool parallel_CCC,
     bool dispatchCallbacks,
     bool all_to_all_fb,
-    bool no_relayP1,
+    bool no_fallback,
     uint64_t relayP1_timeout,
     bool replicaGossip) :
     signedMessages(signedMessages), validateProofs(validateProofs),
@@ -390,7 +390,7 @@ typedef struct Parameters {
     parallel_CCC(parallel_CCC),
     dispatchCallbacks(dispatchCallbacks),
     all_to_all_fb(all_to_all_fb),
-    no_relayP1(no_relayP1),
+    no_fallback(no_fallback),
     relayP1_timeout(relayP1_timeout),
     replicaGossip(replicaGossip) { }
 } Parameters;

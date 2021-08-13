@@ -875,7 +875,6 @@ void Client::ForwardWBcallback(uint64_t txnId, int group, proto::ForwardWritebac
 ///////////////////////// Fallback logic starts here ///////////////////////////////////////////////////////////////
 
 void Client::FinishConflict(uint64_t reqId, const std::string &txnDigest, proto::Transaction *txn){
-
   //check whether we already have FB instance for this going.. dont do multiple and replace old FB.
   if(FB_instances.find(txnDigest) != FB_instances.end()) return;
 

@@ -226,6 +226,7 @@ DEFINE_bool(indicus_parallel_CCC, true, "sort read/write set for parallel CCC lo
 
 DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
 
+DEFINE_bool(indicus_no_fallback, false, "turn off fallback protocol");
 DEFINE_bool(indicus_all_to_all_fb, false, "use the all to all view change method");
 DEFINE_uint64(indicus_relayP1_timeout, 1, "time (ms) after which to send RelayP1");
 
@@ -929,7 +930,8 @@ int main(int argc, char **argv) {
 																				FLAGS_indicus_parallel_CCC,
 																				false,
 																				FLAGS_indicus_all_to_all_fb,
-																			  false, FLAGS_indicus_relayP1_timeout,
+																			  FLAGS_indicus_no_fallback,
+																				FLAGS_indicus_relayP1_timeout,
 																			  false);
 
         client = new indicusstore::Client(config, clientId,

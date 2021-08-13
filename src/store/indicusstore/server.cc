@@ -231,6 +231,7 @@ Server::~Server() {
 void Server::ReceiveMessageInternal(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
 
+
   if (type == read.GetTypeName()) {
 
     //if no dispatching OR if dispatching both deser and Handling to 2nd main thread (no workers)
@@ -788,7 +789,6 @@ void Server::Inform_P1_GC_Leader(proto::Phase1Reply &reply, proto::Transaction &
 
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
-
   //dummyTx = msg.txn(); //PURELY TESTING PURPOSES!!: NOTE WARNING
 
   std::string txnDigest = TransactionDigest(msg.txn(), params.hashDigest); //could parallelize it too hypothetically
@@ -1137,6 +1137,16 @@ void Server::HandlePhase2(const TransportAddress &remote,
   *phase2Reply->mutable_p2_decision()->mutable_txn_digest() = *txnDigest;
   phase2Reply->mutable_p2_decision()->set_involved_group(groupIdx);
 
+  if (!(params.validateProofs && params.signedMessages)){
+  //TransportAddress *remoteCopy2 = remote.clone();
+    phase2Reply->mutable_p2_decision()->set_decision(msg.decision());
+    SendPhase2Reply(&msg, phase2Reply, sendCB);
+    //HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
+    return;
+  }
+
+  // ELSE: i.e. if (params.validateProofs && params.signedMessages)
+
   // no-replays property, i.e. recover existing decision/result from storage (do this for HandlePhase1 as well.)
   p2MetaDataMap::accessor p;
   p2MetaDatas.insert(p, *txnDigest);
@@ -1199,13 +1209,9 @@ void Server::HandlePhase2(const TransportAddress &remote,
         LookupP1Decision(*txnDigest, myProcessId, myResult);
       }
 
-      if (!(params.validateProofs && params.signedMessages)){
-        TransportAddress *remoteCopy2 = remote.clone();
-        HandlePhase2CB(remoteCopy2, &msg, txnDigest, sendCB, phase2Reply, cleanCB, (void*) true);
-        return;
-      }
 
-      else { // i.e. if (params.validateProofs && params.signedMessages) {
+
+       // i.e. if (params.validateProofs && params.signedMessages) {
 
         if(msg.has_txn_digest()) {
           ongoingMap::const_accessor b;
@@ -1239,7 +1245,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
             else{
               Debug("PHASE2[%s] message does not contain txn, but have not seen"
                   " txn_digest previously.", BytesToHex(msg.txn_digest(), 16).c_str());
-              std::cerr << "Aborting for txn: " << BytesToHex(msg.txn_digest(), 16) << std::endl;
+              //std::cerr << "Aborting for txn: " << BytesToHex(msg.txn_digest(), 16) << std::endl;
               if(params.multiThreading || (params.mainThreadDispatching && !params.dispatchMessageReceive)){
                   FreePhase2message(&msg); //const_cast<proto::Phase2&>(msg));
               }
@@ -1300,7 +1306,7 @@ void Server::HandlePhase2(const TransportAddress &remote,
             }
           }
         }
-      }
+
   }
 }
 
@@ -2338,7 +2344,7 @@ bool Server::ManageDependencies(const std::string &txnDigest, const proto::Trans
 
          //XXX start RelayP1 to initiate Fallback handling
 
-         if(!params.no_relayP1 && true && !replicaGossip){ //do not send relay if it is a gossiped message. Unless we are doinig replica leader gargabe Collection (unimplemented)
+         if(!params.no_fallback && true && !replicaGossip){ //do not send relay if it is a gossiped message. Unless we are doinig replica leader gargabe Collection (unimplemented)
            // ongoingMap::const_accessor b;
            // bool inOngoing = ongoing.find(b, dep.write().prepared_txn_digest()); //TODO can remove this redundant lookup since it will be checked again...
            // if (inOngoing) {

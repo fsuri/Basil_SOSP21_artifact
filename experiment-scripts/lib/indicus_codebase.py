@@ -98,6 +98,8 @@ class IndicusCodebase(ExperimentCodebase):
             if 'inject_failure_freq' in config['replication_protocol_settings']:
                 client_command += ' --indicus_inject_failure_freq %d' % config['replication_protocol_settings']['inject_failure_freq']
             #fallback operation options
+            if 'no_fallback' in config['replication_protocol_settings']:
+                client_command += ' --indicus_no_fallback=%s' % str(config['replication_protocol_settings']['no_fallback']).lower()
             if 'relayP1_timeout' in config['replication_protocol_settings']:
                 client_command += ' --indicus_relayP1_timeout %d' % config['replication_protocol_settings']['relayP1_timeout']
             if 'all_to_all_fb' in config['replication_protocol_settings']:
@@ -154,6 +156,8 @@ class IndicusCodebase(ExperimentCodebase):
         elif config['benchmark_name'] == 'rw':
             client_command += ' --num_keys %d' % config['client_num_keys']
             client_command += ' --num_ops_txn %d' % config['rw_num_ops_txn']
+            if 'rw_read_only' in config:            
+                client_command += ' --rw_read_only=%s' % (str(config['rw_read_only']).lower())
             if 'client_key_selector' in config:
                 client_command += ' --key_selector %s' % config['client_key_selector']
                 if config['client_key_selector'] == 'zipf':
@@ -353,8 +357,8 @@ class IndicusCodebase(ExperimentCodebase):
             if 'hyper_threading' in config['replication_protocol_settings']:
                 replica_command += ' --indicus_hyper_threading=%s' % str(config['replication_protocol_settings']['hyper_threading']).lower()
             #fallback option
-            if 'no_relayP1' in config['replication_protocol_settings']:
-                replica_command += ' --indicus_no_relayP1=%s' % str(config['replication_protocol_settings']['no_relayP1']).lower()
+            if 'no_fallback' in config['replication_protocol_settings']:
+                replica_command += ' --indicus_no_fallback=%s' % str(config['replication_protocol_settings']['no_fallback']).lower()
             if 'relayP1_timeout' in config['replication_protocol_settings']:
                 replica_command += ' --indicus_relayP1_timeout %d' % config['replication_protocol_settings']['relayP1_timeout']
             if 'all_to_all_fb' in config['replication_protocol_settings']:

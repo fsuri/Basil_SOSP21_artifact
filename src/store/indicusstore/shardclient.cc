@@ -85,7 +85,14 @@ void ShardClient::ReceiveMessage(const TransportAddress &remote,
     // }
   } else if (type == phase2Reply.GetTypeName()) {
     phase2Reply.ParseFromString(data);
-    HandlePhase2Reply_MultiView(phase2Reply);
+    //Use old handle Read only when proofs/signatures disabled
+    if(!(params.validateProofs && params.signedMessages)){
+      HandlePhase2Reply(phase2Reply);
+    }
+    else{ //If validateProofs and signMessages are true, then use multi view
+      HandlePhase2Reply_MultiView(phase2Reply);
+    }
+    //HandlePhase2Reply_MultiView(phase2Reply);
     //HandlePhase2Reply(phase2Reply);
   } else if (type == ping.GetTypeName()) {
     ping.ParseFromString(data);
@@ -1460,7 +1467,7 @@ void ShardClient::Phase1Decision(
   else{
     consecutive_abstains = 0;
   }
-  if(consecutive_abstains >= 1){
+  if(!params.no_fallback && consecutive_abstains >= 1){
     for(auto txn: pendingPhase1->abstain_conflicts){
       //TODO: dont process redundant digests
       if(!TransactionsConflict(pendingPhase1->txn_, *txn)) continue;
