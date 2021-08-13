@@ -169,7 +169,7 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
    uint64_t start_time;
    uint64_t total_elapsed = 0;
    uint64_t total_prepare = 0;
-   
+
   uint64_t consecutive_abstains = 0;
   uint64_t consecutive_reads = 0;
 
@@ -205,7 +205,7 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
         p1Validator(group, &txn_, &txnDigest_, config, keyManager, params,
             verifier),
         decision(proto::ABORT), fast(false), conflict_flag(false),
-        client_seq_num(client_seq_num) { }
+        client_seq_num(client_seq_num), first_decision(true){ }
     ~PendingPhase1() {
       if (requestTimeout != nullptr) {
         delete requestTimeout;
@@ -217,6 +217,7 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
         delete txn;
       }
     }
+    bool first_decision; // Just a sanity flag. remove again...
     uint64_t reqId;
     Timeout *requestTimeout;
     Timeout *decisionTimeout;

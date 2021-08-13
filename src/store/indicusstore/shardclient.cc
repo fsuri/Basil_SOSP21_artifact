@@ -1069,6 +1069,7 @@ void ShardClient::ProcessP1R(proto::Phase1Reply &reply, bool FB_path, PendingFB 
     pendingPhase1->abstain_conflicts.insert(abstain_conflict);
   }
 
+
   Phase1ValidationState state = pendingPhase1->p1Validator.GetState();
   switch (state) {
     case EQUIVOCATE:
@@ -1113,7 +1114,8 @@ void ShardClient::ProcessP1R(proto::Phase1Reply &reply, bool FB_path, PendingFB 
       break;
     case SLOW_COMMIT_TENTATIVE:
       Debug("P1Validator STATE: SLOW_COMMIT_TENTATIVE - START TIMER");
-      if(phase1DecisionTimeout == 0){
+      if(phase1DecisionTimeout == 0 && pendingPhase1->first_decision){
+        pendingPhase1->first_decision = false;
         pendingPhase1->decision = proto::COMMIT;
         pendingPhase1->fast = false;
         !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
@@ -1161,7 +1163,8 @@ void ShardClient::ProcessP1R(proto::Phase1Reply &reply, bool FB_path, PendingFB 
 
     case SLOW_ABORT_TENTATIVE:
       Debug("P1Validator STATE: SLOW_ABORT_TENTATIVE - START TIMER");
-      if(phase1DecisionTimeout == 0){
+      if(phase1DecisionTimeout == 0 && pendingPhase1->first_decision){
+        pendingPhase1->first_decision = false;
         pendingPhase1->decision = proto::ABORT;
         pendingPhase1->fast = false;
         !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
@@ -1208,7 +1211,8 @@ void ShardClient::ProcessP1R(proto::Phase1Reply &reply, bool FB_path, PendingFB 
       break;
     case SLOW_ABORT_TENTATIVE2:
         Debug("P1Validator STATE: SLOW_ABORT_TENTATIVE2 - START TIMER");
-        if(phase1DecisionTimeout == 0){
+        if(phase1DecisionTimeout == 0 && pendingPhase1->first_decision){
+          pendingPhase1->first_decision = false;
           pendingPhase1->decision = proto::ABORT;
           pendingPhase1->fast = false;
           !FB_path ? Phase1Decision(itr) : Phase1FBDecision(pendingFB);
@@ -1467,7 +1471,7 @@ void ShardClient::Phase1Decision(
   else{
     consecutive_abstains = 0;
   }
-  if(!params.no_fallback && consecutive_abstains >= 1){
+  if(!params.no_fallback && consecutive_abstains >= 2){
     for(auto txn: pendingPhase1->abstain_conflicts){
       //TODO: dont process redundant digests
       if(!TransactionsConflict(pendingPhase1->txn_, *txn)) continue;

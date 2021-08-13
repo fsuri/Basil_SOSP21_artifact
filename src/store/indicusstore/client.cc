@@ -464,6 +464,7 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
     Phase2SimulateEquivocation(req);
   }
   else if (req->fast) { //TO force P2, add "req->conflict_flag". Conflict Aborts *must* go fast path.
+    std::cerr << "GOING FAST EVEN THOUGH WE SHOULD NOT: Decision " << req->decision << std::endl;
     Writeback(req);
   } else {
     // slow path, must log final result to 1 group
@@ -471,6 +472,7 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
       Phase2Equivocate(req);
     }
     else {
+      std::cerr << "GOING SLOW PATH LIKE WE SHOULD: Decision " << req->decision << std::endl;
       Phase2(req);
     }
   }
