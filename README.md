@@ -72,7 +72,7 @@ Before beginning the install process, update your distribution:
 Then, install the following tools:
 3. `sudo apt install python3-pip`
 4. `pip3 install numpy` or `python3 -m pip install numpy`
-5. `sudo apt-get install autoconf automake libtool curl make g++ unzip valgrind cmake gnuplot pkg-config`
+5. `sudo apt-get install autoconf automake libtool curl make g++ unzip valgrind cmake gnuplot pkg-config ant`
 
 
 ### Development library dependencies
