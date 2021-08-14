@@ -314,6 +314,18 @@ bftsmart:
 	cd ./store/bftsmartstore/libhotstuff/; ./build.sh
 	@echo '====== Finish Building BftSmart ======'
 
+.PHONY: augustus
+bftsmart: 
+	@echo '====== Start Building BftSmart_Augustus ======'
+	cd ./store/bftsmartstore_augustus/libhotstuff/; ./build.sh
+	@echo '====== Finish Building BftSmart_Augustus ======'
+
+.PHONY: stable
+bftsmart: 
+	@echo '====== Start Building BftSmart_stable ======'
+	cd ./store/bftsmartstore_stable/libhotstuff/; ./build.sh
+	@echo '====== Finish Building BftSmart_stable ======'
+
 .PHONY: hotstuff
 hotstuff: 
 	@echo '====== Start Building HotStuff ======'
@@ -326,7 +338,7 @@ indicus: $(BINS)
 
 
 .PHONY: all
-all: bftsmart hotstuff
+all: bftsmart hotstuff augustus stable
 	@echo '====== Start Building Indicus ======'
 	$(MAKE) indicus 
 	@echo '====== Finish Building Indicus ======'

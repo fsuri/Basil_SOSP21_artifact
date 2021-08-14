@@ -399,6 +399,8 @@ public class BftInterfaceServer implements Recoverable, NoReplySingleExecutable 
     // Used for testing purposes, NOT USED DURING REMOTE DEPLOYMENT
     public static void main(String[] args){
         int i = Integer.parseInt(args[0]);
+        System.out.println("THIS MAIN SHOULD NOT BE CALLED: ABORT");
+        System.exit(-1);
         new BftInterfaceServer(i, 0, args[1]);
     }
 }

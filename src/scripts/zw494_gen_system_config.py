@@ -114,6 +114,7 @@ print("num servers:", num_servers, "num_server_per_group", num_server_per_group)
 
 for i, hostname in enumerate(hosts_dict):
     ipaddr = hosts_dict[hostname]
+    print(i, hostname)
     with open(sys.argv[1] + "/src/store/bftsmartstore/library/remote/java-config-" + hostname + "/java-config/system.config") as f:
         s = f.read()
         if "= auto" not in s:
@@ -122,14 +123,13 @@ for i, hostname in enumerate(hosts_dict):
     with open(sys.argv[1] + "/src/store/bftsmartstore/library/remote/java-config-" + hostname + "/java-config/system.config", "w") as f:
         s = s.replace("= auto", "= " + ipaddr)
         f.write(s)
-        print("the content of s: ")
-        print(s)
-    with open(sys.argv[1] + "/src/store/bftsmartstore/library/remote/java-config-" + hostname + "/java-config/hosts.config", "w") as f:
-        k = i % num_groups
-        for j in range(num_server_per_group):
-            f.write("%d %s 30000 30001\n" % (j, hosts_dict[server_hosts[k * num_server_per_group + j]]) )
-        # for j in range(18):
-        #     f.write("%d %s 30000 30001\n" % (j + 7000, hosts_dict["client-" + str(j) + "-0"]))
+    if i < len(server_hosts):
+        with open(sys.argv[1] + "/src/store/bftsmartstore/library/remote/java-config-" + hostname + "/java-config/hosts.config", "w") as f:
+            k = i // num_server_per_group
+            for j in range(num_server_per_group):
+                f.write("%d %s 30000 30001\n" % (j, hosts_dict[server_hosts[k * num_server_per_group + j]]) )
+            # for j in range(18):
+            #     f.write("%d %s 30000 30001\n" % (j + 7000, hosts_dict["client-" + str(j) + "-0"]))
 
 # Adjust host.config for clients
 

@@ -64,7 +64,7 @@ public class Configuration {
 	private String defaultKeyLoader;
 
 
-	public static String configBase = "";
+	public static String configBase = "ERROR AT CONFIG STRING";
 
 	protected String configHome = configBase + "/java-config/";
 

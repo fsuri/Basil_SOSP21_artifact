@@ -1,6 +1,7 @@
 #!/bin/bash
 cd $1/src/store/bftsmartstore/library
 rm -rf jars
+mkdir bin
 ant
 mkdir jars
 cp bin/BFT-SMaRt.jar jars
