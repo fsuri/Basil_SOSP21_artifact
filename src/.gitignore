@@ -55,6 +55,9 @@ store/mortystore/tests/branch-compatible-test
 store/pbftstore/testclient
 store/pbftstore/testserver
 
+scripts/config/*
+
+
 bft_tapir/replica
 bft_tapir/client
 create_keys/create_key
