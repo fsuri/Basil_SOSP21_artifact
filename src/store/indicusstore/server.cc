@@ -587,7 +587,7 @@ void Server::HandleRead(const TransportAddress &remote,
 
             Debug("Prepared write with most recent ts %lu.%lu.",
                 mostRecent->timestamp().timestamp(), mostRecent->timestamp().id());
-            std::cerr << "Dependency depth: " << (DependencyDepth(mostRecent)) << std::endl;
+            //std::cerr << "Dependency depth: " << (DependencyDepth(mostRecent)) << std::endl;
             if (params.maxDepDepth == -1 || DependencyDepth(mostRecent) <= params.maxDepDepth) {
               readReply->mutable_write()->set_prepared_value(preparedValue);
               *readReply->mutable_write()->mutable_prepared_timestamp() = mostRecent->timestamp();

@@ -850,6 +850,7 @@ void ShardClient::HandleReadReplyCB2(proto::ReadReply* reply, proto::Write *writ
 
 /* Callback from a group replica on get operation completion. */
 void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
+
   auto itr = this->pendingGets.find(reply.req_id());
   if (itr == this->pendingGets.end()) {
     return; // this is a stale request
@@ -859,6 +860,7 @@ void ShardClient::HandleReadReply(const proto::ReadReply &reply) {
 
   const proto::Write *write;
   bool skip = false;
+
   if (params.validateProofs && params.signedMessages) {
     // consecutive_reads++;
     // skip = (consecutive_reads % 3 == 0) ? true : false;
@@ -1068,7 +1070,6 @@ void ShardClient::ProcessP1R(proto::Phase1Reply &reply, bool FB_path, PendingFB 
     proto::Transaction* abstain_conflict = reply.release_abstain_conflict();
     pendingPhase1->abstain_conflicts.insert(abstain_conflict);
   }
-
 
   Phase1ValidationState state = pendingPhase1->p1Validator.GetState();
   switch (state) {

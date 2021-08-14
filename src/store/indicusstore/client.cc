@@ -144,7 +144,7 @@ void Client::Begin(begin_callback bcb, begin_timeout_callback btcb,
 
     Latency_Start(&executeLatency);
     client_seq_num++;
-    //std::cerr<< "client_seq_num: " << client_seq_num << std::endl;
+    //std::cerr<< "BEGIN TX with client_seq_num: " << client_seq_num << std::endl;
     Debug("BEGIN [%lu]", client_seq_num);
 
     txn = proto::Transaction();
@@ -215,7 +215,6 @@ void Client::Put(const std::string &key, const std::string &value,
   transport->Timer(0, [this, key, value, pcb, ptcb, timeout]() {
 
     //std::cerr << "value size: " << value.size() << "; key " << BytesToHex(key,16).c_str() << std::endl;
-
     Debug("PUT[%lu:%lu] for key %s", client_id, client_seq_num, BytesToHex(key,
           16).c_str());
 
@@ -269,6 +268,7 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
 void Client::Phase1(PendingRequest *req) {
   Debug("PHASE1 [%lu:%lu] at %lu", client_id, client_seq_num,
       txn.timestamp().timestamp());
+
 
   UW_ASSERT(txn.involved_groups().size() > 0);
 
@@ -464,7 +464,6 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
     Phase2SimulateEquivocation(req);
   }
   else if (req->fast) { //TO force P2, add "req->conflict_flag". Conflict Aborts *must* go fast path.
-    std::cerr << "GOING FAST EVEN THOUGH WE SHOULD NOT: Decision " << req->decision << std::endl;
     Writeback(req);
   } else {
     // slow path, must log final result to 1 group
@@ -472,7 +471,6 @@ void Client::HandleAllPhase1Received(PendingRequest *req) {
       Phase2Equivocate(req);
     }
     else {
-      std::cerr << "GOING SLOW PATH LIKE WE SHOULD: Decision " << req->decision << std::endl;
       Phase2(req);
     }
   }
@@ -601,6 +599,7 @@ void Client::Phase2Equivocate(PendingRequest *req) {
 
 void Client::Phase2Callback(uint64_t txnId, int group, proto::CommitDecision decision, uint64_t decision_view,
     const proto::Signatures &p2ReplySigs) {
+
   auto itr = this->pendingReqs.find(txnId);
   if (itr == this->pendingReqs.end()) {
     Debug("Phase2Callback for terminated request id %lu (txn already committed or aborted).", txnId);
@@ -673,7 +672,6 @@ void Client::Writeback(PendingRequest *req) {
 
   //total_writebacks++;
   Debug("WRITEBACK[%lu:%lu] result %s", client_id, req->id, req->decision ?  "ABORT" : "COMMIT");
-
   req->startedWriteback = true;
 
   if (failureActive && params.injectFailure.type == InjectFailureType::CLIENT_STALL_AFTER_P1) {
