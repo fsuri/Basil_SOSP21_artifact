@@ -99,7 +99,8 @@ class ShardClient : public TransportReceiver, public PingInitiator, public PingT
       uint64_t client_id, int group, const std::vector<int> &closestReplicas,
       bool pingReplicas,
       Parameters params, KeyManager *keyManager, Verifier *verifier,
-      TrueTime &timeServer, uint64_t phase1DecisionTimeout);
+      TrueTime &timeServer, uint64_t phase1DecisionTimeout,
+      uint64_t consecutiveMax = 1UL);
   virtual ~ShardClient();
 
   virtual void ReceiveMessage(const TransportAddress &remote,
@@ -170,6 +171,7 @@ virtual void Phase2Equivocate_Simulate(uint64_t id, const proto::Transaction &tx
    uint64_t total_elapsed = 0;
    uint64_t total_prepare = 0;
 
+  uint64_t consecutiveMax;
   uint64_t consecutive_abstains = 0;
   uint64_t consecutive_reads = 0;
 

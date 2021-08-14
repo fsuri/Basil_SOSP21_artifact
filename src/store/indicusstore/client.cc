@@ -46,7 +46,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     const std::vector<int> &closestReplicas, bool pingReplicas, Transport *transport,
     Partitioner *part, bool syncCommit, uint64_t readMessages,
     uint64_t readQuorumSize, Parameters params,
-    KeyManager *keyManager, uint64_t phase1DecisionTimeout, TrueTime timeServer)
+    KeyManager *keyManager, uint64_t phase1DecisionTimeout, uint64_t consecutiveMax, TrueTime timeServer)
     : config(config), client_id(id), nshards(nShards), ngroups(nGroups),
     transport(transport), part(part), syncCommit(syncCommit), pingReplicas(pingReplicas),
     readMessages(readMessages), readQuorumSize(readQuorumSize),
@@ -54,7 +54,8 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
     keyManager(keyManager),
     timeServer(timeServer), first(true), startedPings(false),
     client_seq_num(0UL), lastReqId(0UL), getIdx(0UL),
-    failureEnabled(false), failureActive(false), faulty_counter(0UL) {
+    failureEnabled(false), failureActive(false), faulty_counter(0UL),
+    consecutiveMax(consecutiveMax) {
 
   Debug("Initializing Indicus client with id [%lu] %lu", client_id, nshards);
   std::cerr<< "P1 Decision Timeout: " <<phase1DecisionTimeout<< std::endl;
@@ -70,7 +71,7 @@ Client::Client(transport::Configuration *config, uint64_t id, int nShards,
   for (uint64_t i = 0; i < ngroups; i++) {
     bclient.push_back(new ShardClient(config, transport, client_id, i,
         closestReplicas, pingReplicas, params,
-        keyManager, verifier, timeServer, phase1DecisionTimeout));
+        keyManager, verifier, timeServer, phase1DecisionTimeout, consecutiveMax));
   }
 
   Debug("Indicus client [%lu] created! %lu %lu", client_id, nshards,

@@ -227,6 +227,7 @@ DEFINE_bool(indicus_parallel_CCC, true, "sort read/write set for parallel CCC lo
 DEFINE_bool(indicus_hyper_threading, true, "use hyperthreading");
 
 DEFINE_bool(indicus_no_fallback, false, "turn off fallback protocol");
+DEFINE_uint64(indicus_max_consecutive_abstains, 1, "number of consecutive conflicts before fallback is triggered");
 DEFINE_bool(indicus_all_to_all_fb, false, "use the all to all view change method");
 DEFINE_uint64(indicus_relayP1_timeout, 1, "time (ms) after which to send RelayP1");
 
@@ -938,7 +939,9 @@ int main(int argc, char **argv) {
                                           FLAGS_num_shards,
                                           FLAGS_num_groups, closestReplicas, FLAGS_ping_replicas, tport, part,
                                           FLAGS_tapir_sync_commit, readMessages, readQuorumSize,
-                                          params, keyManager, FLAGS_indicus_phase1DecisionTimeout, TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
+                                          params, keyManager, FLAGS_indicus_phase1DecisionTimeout,
+																					FLAGS_indicus_max_consecutive_abstains,
+																					TrueTime(FLAGS_clock_skew, FLAGS_clock_error));
         break;
     }
     case PROTO_PBFT: {

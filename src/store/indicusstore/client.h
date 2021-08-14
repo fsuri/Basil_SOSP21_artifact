@@ -72,6 +72,7 @@ class Client : public ::Client {
       Transport *transport, Partitioner *part, bool syncCommit,
       uint64_t readMessages, uint64_t readQuorumSize,
       Parameters params, KeyManager *keyManager, uint64_t phase1DecisionTimeout,
+      uint64_t consecutiveMax = 1UL,
       TrueTime timeserver = TrueTime(0,0));
   virtual ~Client();
 
@@ -99,6 +100,7 @@ class Client : public ::Client {
   //inline const Stats &GetStats() const { return stats; }
  private:
    //Stats stats;
+   uint64_t consecutiveMax;
    uint64_t faulty_counter;
    int fast_path_counter;
    int total_counter;

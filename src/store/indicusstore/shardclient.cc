@@ -41,12 +41,12 @@ ShardClient::ShardClient(transport::Configuration *config, Transport *transport,
     uint64_t client_id, int group, const std::vector<int> &closestReplicas_,
     bool pingReplicas,
     Parameters params, KeyManager *keyManager, Verifier *verifier,
-    TrueTime &timeServer, uint64_t phase1DecisionTimeout) :
+    TrueTime &timeServer, uint64_t phase1DecisionTimeout, uint64_t consecutiveMax) :
     PingInitiator(this, transport, config->n),
     client_id(client_id), transport(transport), config(config), group(group),
     timeServer(timeServer), pingReplicas(pingReplicas), params(params),
     keyManager(keyManager), verifier(verifier), phase1DecisionTimeout(phase1DecisionTimeout),
-    lastReqId(0UL), failureActive(false) {
+    lastReqId(0UL), failureActive(false), consecutiveMax(consecutiveMax) {
   transport->Register(this, *config, -1, -1); //phase1DecisionTimeout(1000UL)
 
   if (closestReplicas_.size() == 0) {
@@ -1472,7 +1472,7 @@ void ShardClient::Phase1Decision(
   else{
     consecutive_abstains = 0;
   }
-  if(!params.no_fallback && consecutive_abstains >= 2){
+  if(!params.no_fallback && consecutive_abstains >= consecutiveMax){
     for(auto txn: pendingPhase1->abstain_conflicts){
       //TODO: dont process redundant digests
       if(!TransactionsConflict(pendingPhase1->txn_, *txn)) continue;
