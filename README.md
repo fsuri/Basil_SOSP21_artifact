@@ -62,7 +62,8 @@ Or use a image pre-configured by us: urn:publicid:IDN+utah.cloudlab.us+image+mor
 - Requires python3 and numpy for scripts
  
 - C++ 17 for Main code (gcc version > 5)
-- Java 11 for BFT Smart code (install included below)
+- Java Version >= 1.8 for BFT Smart code. We suggest you run the Open JDK java 11 version. (install included below) as our Makefile is hard-coded for it.
+
 
 ### General installation pre-reqs
 Before beginning the install process, update your distribution:
@@ -207,7 +208,7 @@ Go to /src and build:
 
 When building on branch TxBFTSmart the following additional steps are necessary:
 #### Additional prereq for BFTSmart (only on TxBFTSmart branch)
-First, install Java open jdk 1.110 in /usr/lib/jvm and export your LD_LIBRARY_Path:
+First, install Java open jdk 1.11.0 in /usr/lib/jvm and export your LD_LIBRARY_Path:
 1. `sudo apt-get install openjdk-11-jdk` Confirm that it is indeed installed in /usr/lib/jvm
 2. `export LD_LIBRARY_PATH=/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server:$LD_LIBRARY_PATH`
 Next, modify all references of "fs435" or "zw494" in the source code and replace them with your cloudlab id  (TODO: please write script that automates this)
