@@ -2,16 +2,22 @@
 
 cd $1
 
-cat ./hosts | while read machine
+cat ./server-hosts | while read machine
 do
-    echo "#### send config to machine ${machine}"
-    REMOTE_IP_ADDR=$(dig +short ${machine}.indicus.morty-pg0.utah.cloudlab.us | tail -n1)
-    echo $REMOTE_IP_ADDR
-    #scp  -r config fs435@${machine}.indicus.morty-pg0.utah.cloudlab.us:/users/fs435/
+    if [[ $machine =~ [:digit:] ]]; then 
+        echo "#### send config to machine ${machine}"
 
-    rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete config $2@${machine}.$3.morty-pg0.utah.cloudlab.us:/users/$2/
-    rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete ../store/bftsmartstore/library/remote/java-config-${machine}/java-config $2@${machine}.$3.morty-pg0.utah.cloudlab.us:/users/$2/
-    rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete ../store/bftsmartstore/library/jars $2@${machine}.$3.morty-pg0.utah.cloudlab.us:/users/$2/
-
+        rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete config $2@${machine}.$3.$4.$5:/users/$2/
+        rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete ../store/bftsmartstore/library/remote/java-config-${machine}/java-config $2@${machine}.$3.$4.$5:/users/$2/
+        rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete ../store/bftsmartstore/library/jars $2@${machine}.$3.$4.$5:/users/$2/
+    fi
 done
 
+cat ./client-hosts | while read machine
+do
+    echo "#### send config to machine ${machine}"
+
+    rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete config $2@${machine}.$3.$4.$5:/users/$2/
+    rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete ../store/bftsmartstore/library/remote/java-config-${machine}/java-config $2@${machine}.$3.$4.$5:/users/$2/
+    rsync -e "ssh -o StrictHostKeyChecking=no" -rtuv --delete ../store/bftsmartstore/library/jars $2@${machine}.$3.$4.$5:/users/$2/
+done

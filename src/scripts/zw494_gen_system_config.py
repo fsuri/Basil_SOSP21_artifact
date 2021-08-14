@@ -34,16 +34,21 @@ import socket
 #     "client-17-0": "10.10.1.36"
 # }
 
-hosts_dict = {}
-with open(sys.argv[2] + "/hosts") as f:
-    hosts = f.readlines()
+# Get server hosts
 
-for i,k in enumerate(hosts):
-    hosts[i] = hosts[i][:-1]
-    host_name = hosts[i] + "." + sys.argv[3] + ".morty-pg0.utah.cloudlab.us"
-    hosts_dict[hosts[i]] = socket.gethostbyname(host_name)
-    print(host_name)
-    print(hosts_dict[hosts[i]])
+hosts_dict = {}
+with open(sys.argv[2] + "/server-hosts") as f:
+    server_hosts = f.readlines()
+    num_groups = int(server_hosts[0])
+    server_hosts = server_hosts[1:]
+
+for i,k in enumerate(server_hosts):
+    server_hosts[i] = server_hosts[i][:-1]
+    host_name = server_hosts[i] + "." + sys.argv[3] + "." + sys.argv[4] + "." + sys.argv[5]
+    hosts_dict[server_hosts[i]] = socket.gethostbyname(host_name)
+print(server_hosts)
+print(hosts_dict)
+
 
 
 # hosts_dict = {
@@ -86,9 +91,26 @@ for i,k in enumerate(hosts):
 
 # }
 
-hosts_groups = [['us-east-1-0', 'eu-west-1-0', 'ap-northeast-1-0', 'us-west-1-0'],
-                ['us-east-1-1', 'eu-west-1-1', 'ap-northeast-1-1', 'us-west-1-1'],
-                ['us-east-1-2', 'eu-west-1-2', 'ap-northeast-1-2', 'us-west-1-2']]
+# Get client hosts
+
+with open(sys.argv[2] + "/client-hosts") as f:
+    client_hosts = f.readlines()
+
+for i,k in enumerate(client_hosts):
+    client_hosts[i] = client_hosts[i][:-1]
+    host_name = client_hosts[i] + "." + sys.argv[3] + "." + sys.argv[4] + "." + sys.argv[5]
+    hosts_dict[client_hosts[i]] = socket.gethostbyname(host_name)
+
+num_servers = len(server_hosts)
+num_server_per_group = num_servers // num_groups
+print("num servers:", num_servers, "num_server_per_group", num_server_per_group)
+
+# hosts_groups = [['us-east-1-0', 'eu-west-1-0', 'ap-northeast-1-0', 'us-west-1-0'],
+#                 ['us-east-1-1', 'eu-west-1-1', 'ap-northeast-1-1', 'us-west-1-1'],
+#                 ['us-east-1-2', 'eu-west-1-2', 'ap-northeast-1-2', 'us-west-1-2']]
+
+# Generate system.config for hosts
+# Edit host.config for servers
 
 for i, hostname in enumerate(hosts_dict):
     ipaddr = hosts_dict[hostname]
@@ -103,8 +125,31 @@ for i, hostname in enumerate(hosts_dict):
         print("the content of s: ")
         print(s)
     with open(sys.argv[1] + "/src/store/bftsmartstore/library/remote/java-config-" + hostname + "/java-config/hosts.config", "w") as f:
-        k = i % 3
-        for j in range(4):
-            f.write("%d %s 30000 30001\n" % (j, hosts_dict[hosts_groups[k][j]]) )
+        k = i % num_groups
+        for j in range(num_server_per_group):
+            f.write("%d %s 30000 30001\n" % (j, hosts_dict[server_hosts[k * num_server_per_group + j]]) )
         # for j in range(18):
         #     f.write("%d %s 30000 30001\n" % (j + 7000, hosts_dict["client-" + str(j) + "-0"]))
+
+# Adjust host.config for clients
+
+import shutil
+import os
+import re
+
+bftsmart_dir = sys.argv[1] + "/src/store/bftsmartstore/library"
+for i in range(num_groups):
+    shutil.copy(bftsmart_dir + "/remote/java-config-" + server_hosts[i * num_server_per_group] + "/java-config/hosts.config", bftsmart_dir + "/host" + str(i) + ".config")
+
+remote_dir = bftsmart_dir + "/remote"
+
+subdirs = next(os.walk(remote_dir))[1]
+for f in subdirs:
+    print(f)
+    if re.match(r'^java-config-client-', f):
+        for i in range(num_groups):
+            print("making directory at", remote_dir + "/" + f + "/java-config/java-config-group-" + str(i))
+            os.makedirs(remote_dir + "/" + f + "/java-config/java-config-group-" + str(i))
+            print("copying from ", bftsmart_dir + "/host" + str(i) + ".config", "to", remote_dir + "/" + f + "/java-config/java-config-group-" + str(i) + "/hosts.config")
+            shutil.copy(bftsmart_dir + "/host" + str(i) + ".config", remote_dir + "/" + f + "/java-config/java-config-group-" + str(i) + "/hosts.config")
+            shutil.copy(remote_dir + "/" + f + "/java-config/system.config", remote_dir + "/" + f + "/java-config/java-config-group-" + str(i))
