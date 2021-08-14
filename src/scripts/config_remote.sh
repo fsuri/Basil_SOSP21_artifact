@@ -1,5 +1,14 @@
 #!/bin/bash
 
+TARGET_DIR="/users/fs435/config/"
+
+echo 'Update hotstuff header file remote_config_dir.h as'
+echo '#define REMOTE_CONFIG_DIR "'$TARGET_DIR'"'
+
+echo '#define REMOTE_CONFIG_DIR "'$TARGET_DIR'"' > ../store/hotstuffstore/libhotstuff/examples/remote_config_dir.h
+
+
+
 cat ./hosts | while read machine
 do
     echo "#### send config to machine ${machine}"
