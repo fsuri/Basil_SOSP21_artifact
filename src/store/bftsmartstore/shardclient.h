@@ -40,7 +40,7 @@ class ShardClient : public TransportReceiver {
   ShardClient(const transport::Configuration& config, Transport *transport,
       uint64_t client_id, uint64_t group_idx, const std::vector<int> &closestReplicas_,
       bool signMessages, bool validateProofs,
-      KeyManager *keyManager, Stats* stats, bool order_commit = false, bool validate_abort = false);
+      KeyManager *keyManager, Stats* stats, bool order_commit, bool validate_abort, const std::string& bftsmart_config_path);
   ~ShardClient();
 
   void ReceiveMessage(const TransportAddress &remote,

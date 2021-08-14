@@ -10,14 +10,14 @@ Client::Client(const transport::Configuration& config, uint64_t id, int nShards,
       const std::vector<int> &closestReplicas,
       Transport *transport, Partitioner *part,
       uint64_t readMessages, uint64_t readQuorumSize, bool signMessages,
-      bool validateProofs, KeyManager *keyManager,
+      bool validateProofs, KeyManager *keyManager, const std::string &bftsmart_config_path,
       bool order_commit, bool validate_abort,
       TrueTime timeserver) : config(config), nshards(nShards),
     ngroups(nGroups), transport(transport), part(part), readMessages(readMessages), readQuorumSize(readQuorumSize),
     signMessages(signMessages),
     validateProofs(validateProofs), keyManager(keyManager),
     order_commit(order_commit), validate_abort(validate_abort),
-    timeServer(timeserver) {
+    timeServer(timeserver), bftsmart_config_path(bftsmart_config_path) {
   // just an invariant for now for everything to work ok
   assert(nGroups == nShards);
 
@@ -39,7 +39,7 @@ Client::Client(const transport::Configuration& config, uint64_t id, int nShards,
   /* Start a client for each shard. */
   for (uint64_t i = 0; i < ngroups; i++) {
     bclient.push_back(new ShardClient(config, transport, client_id, i, closestReplicas,
-        signMessages, validateProofs, keyManager, &stats, order_commit, validate_abort));
+        signMessages, validateProofs, keyManager, &stats, order_commit, validate_abort, bftsmart_config_path));
   }
 
   Debug("HotStuff client [%lu] created! %lu %lu", client_id, ngroups,
