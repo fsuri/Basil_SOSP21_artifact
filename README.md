@@ -431,6 +431,9 @@ To create a disk image, select "Create Disk Image" and name it accordingly.
    
 
 ## Running experiments:
+Hurray! You have completed the tedious process of installing the binaries and setting up Cloudlab. Treat yourself to a Gummy Bear :)
+Next, we will cover how to run experiments. This is a straightfoward, but time-consuming process, and importantly requires good network connectivity to upload binaries to the remote machines, and download experiment results. Uploading binaries on high speed (e.g university) connections takes a few minutes and needs to be done only once per branch - however iff your uplink speed is low it may take (as I have painstakenly experienced in preparing this documentation for you) several hours. Downloading experiment outputs requires a moderate amount of download bandwidth, but it usually quite fast.
+
 Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
 The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion.
 To use the provided config files, you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
