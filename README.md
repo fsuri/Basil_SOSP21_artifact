@@ -330,7 +330,9 @@ The client should finish within 10 seconds and the output file `client-0.out` sh
 
 ## Setting up Cloudlab
    
-In order to run experiments on Cloudlab (https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project ("Start/Join project") if you do not already have one. (https://cloudlab.us/signup.php). If you face any issues with registering, please make a post at the Cloudlab forum https://groups.google.com/g/cloudlab-users?pli=1 (replies are usually very swift during workdays, on US time).
+In order to run experiments on Cloudlab (https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project ("Start/Join project") if you do not already have one. (https://cloudlab.us/signup.php). Follow the cloudlab manual if you need additional information (http://docs.cloudlab.us/) for any of the steps below. We have included screenshots below for easy useability.
+
+If you face any issues with registering, please make a post at the Cloudlab forum https://groups.google.com/g/cloudlab-users?pli=1 (replies are usually very swift during workdays, on US time).
 Alternatively (but not recommended), if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted (reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join).
 
 ![image](https://user-images.githubusercontent.com/42611410/129490833-eb99f58c-8f0a-43d9-8b99-433af5dab559.png)
@@ -365,7 +367,7 @@ Connect to your control machine via ssh: `ssh <cloudlab-user>@control.<experimen
 
 ### Using a custom profile (skip if using pre-supplied profile)
 
-If you decide to instead create a profile of your own use the following parameters (be careful to follow the same naming conventions of our profile for the servers or the experiment scripts/configuration provided will not work). You will need to buid your own disk image from scratch, as the public image is tied to the public profile. (You can try if the above images work, but likely they will not).
+If you decide to instead create a profile of your own (https://www.cloudlab.us/manage_profile.php) use the following parameters (be careful to follow the same naming conventions of our profile for the servers or the experiment scripts/configuration provided will not work). You will need to buid your own disk image from scratch, as the public image is tied to the public profile. (You can try if the above images work, but likely they will not).
 
 - Number of Replicas: `['us-east-1-0', 'us-east-1-1', 'us-east-1-2', 'eu-west-1-0', 'eu-west-1-1', 'eu-west-1-2', 'ap-northeast-1-0', 'ap-northeast-1-1', 'ap-northeast-1-2', 'us-west-1-0', 'us-west-1-1', 'us-west-1-2', 'eu-central-1-0', 'eu-central-1-1', 'eu-central-1-2', 'ap-southeast-2-0', 'ap-southeast-2-1', 'ap-southeast-2-2']`
 - Number of sites (DCs): 6
@@ -383,7 +385,7 @@ If you decide to instead create a profile of your own use the following paramete
 ### Building and configuring disk images from scratch
 If you want to build an image from scratch, follow the instructions below:
 
-Start by choosing to load a default Ubuntu 18.04 LTS image: `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD)` - for Ubuntu 20.04 LTS use: `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD`. 
+Start by choosing to load a default Ubuntu 18.04 LTS image as "Replica disk image" and "Client disk image": `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD)` - for Ubuntu 20.04 LTS use: `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD`. 
 
 Next, follow the above manual installation guide (section "Installing Dependencies" to install all dependencies (you can skip adding tbb setvars.sh to .bashrc). 
 
@@ -421,6 +423,9 @@ Additionally, you will have to install the following requisites:
 
    
 Once complete, create a new disk image (separate ones for server and client if you want to save space/time). Then, start the profile by choosing the newly created disk image.
+To create a disk image, select "Create Disk Image" and name it accordingly.
+![image](https://user-images.githubusercontent.com/42611410/129491499-eb7d0618-5dc4-4942-a25a-3b4a955c5077.png)
+
    
   
    
@@ -428,7 +433,8 @@ Once complete, create a new disk image (separate ones for server and client if y
 ## Running experiments:
 Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
 The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion.
-To use the provided config files, you will need to make the following modifications to each file:
+To use the provided config files, you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
+
 1. "project_name": "morty-pg0" --> change to the name of your project. On cloudlab.us (utah cluster) you will generally need to add "-pg0" to your project_name in order to ssh into the machines. To confirm which is the case for you, try to ssh into a machine directly using
    `ssh <cloudlab-user>@us-east-1-0.<experiment-name>.<project-name>.utah.cloudlab.us`
    
@@ -441,12 +447,27 @@ IMPORTANT: In new scripts dont use this param, it will detach git. Instead just 
 7. emulab_user: <cloudlab-username>
 8. run_locally: false (set to false to run remote experiments on distributed hardware (cloud lab), set to true to run locally)
    
-After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go deeper into the folders (total of 3 timestamped folders) until you enter /out. Look for the stats.json file. Throughput measurements will be under: aggregate/combined/tput (or run-stats/combined /tput if you run multiple experiments for error bars) Latency will be under: aggregate/combined /mean
-   Plots: go to /plots/tput-clients.png and /plots/lat-tput.png to look at the data points directly. On the control machine looking at stats is necessary
+After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go deeper into the folders (total of 3 timestamped folders) until you enter /out. Look for the stats.json file. Throughput measurements will be under: aggregate/combined/tput (or run-stats/combined /tput if you run multiple experiments for error bars) Latency will be under: aggregate/combined /mean  On the control machine looking at stats is necessary
+  On your local machine, you can also look at output Plots: go to /plots/tput-clients.png and /plots/lat-tput.png to look at the data points directly. currently it shows the number of total client processes on the x axis, not total number of client threads.
    
 ### Extra Pre-Configurations necessary for TxHotstuff and TxBFTSmart
    --> see the branch... Extra coudlab configuration is necessary before running (some even necessary before building)
-   
+   Hotstuff:
+   1. Need to modify all cloudlab user ids in config_remote:
+      - Line3: Target Dir: users/<cloudlab-user>/config
+      - Line 14: <cloudlab-user>@${machine}.<experiment-name>.<project-name>.utah.cloudlab.us:/users/<cloudlab-user>/
+(Remember that project-name might have to include -pg0
+    2. Run ./batch_size <batch_size> to set the batch size used by Hotstuff
+    3. Run ./config_remote. 
+
+   BFTSmart:
+   TODO: Add the local client check, and the troubleshooting...
+   1. To change the batch size: src/store/bftsmartstore/library/java-config/system.config
+Change line system.totalordermulticast.maxbatchsize = 64 !!!!!
+(For tpcc 16 is enough)
+   2. In src/scripts, run ./one_step_config.sh <Local BFT-DB directory> <Cloudlab user name> <Cloudlab experiment name> <Cloudlab project prefix name> <Cloudlab        cluster domain name>, for example, ./zw494_one_step_config.sh /home/zw494/BFT-DB zw494 bftsmart morty-pg0 utah.cloudlab.us
+         - Troubleshooting: Make sure server-hosts and clients-hosts do not contain an empty line at the end
+
 Now you are ready to start a experiment:
 - Use any of the provided configs under /experiments/<Figures>. Make sure to use the binary code from branches TXHotstuff/TxBFTSmart if you are running any of those configs
 - To confirm that we indeed report the max throughput you can modify the num_clients fields on the baseline configs.. One can put multiple [a,b,c] which will run multiple experiments and output the results in a plot.
