@@ -137,7 +137,7 @@ Alternatively, you may download and unzip from source:
 
 1. `get https://github.com/google/googletest/archive/release-1.10.0.zip`
 2. `unzip release-1.10.0.zip`  
-3. Proceed install as above  
+3. Proceed with installs as above  
 
 
 #### Installing protobuf
@@ -162,7 +162,7 @@ Alternatively, you may download and unzip from source:
 
 1.`wget https://github.com/protocolbuffers/protobuf/releases/download/v3.5.1/protobuf-all-3.5.1.zip`
 2.`unzip protobuf-all-3.5.1.zip`
-3. Proceed install as above
+3. Proceed with install as above
 
 #### Installing secp256k1
 
