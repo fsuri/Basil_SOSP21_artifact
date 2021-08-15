@@ -34,8 +34,8 @@ For convenience, all branches include the experiment scripts and configurations 
 We recommend making a separate copy of the configs (and experiment scripts) in order to keep track of changes made to them in a single location, while checking out different branches to run the respective source code binaries.
 
 
-## Validating the Claims
-All our experiments were run on the Cloudlab Utah cluster, using m510 machines. In order to re-produce our results and validate the claims you will need to 1) instantiate a matching cloudlab experiment, 2) build the necessary binaries, and 3) run the provided experiment scripts with the supplied configs we used to generate our results. You may go about 2) and 3) in two ways: You can either build and control the experiments from a local machine (easier to parse/record results & troubleshoot, but more initial installs necessary), or, you can build and control the experiments from a dedicated cloudlab control machine, using pre-supplied disk images (faster setup out of the box, but more overhead to parse/record results and troubleshoot). Both options are outlined below.
+## Validating the Claims - Overview
+All our experiments were run using Cloudlab . In order to re-produce our results and validate the claims you will need to 1) instantiate a matching cloudlab experiment, 2) build the necessary binaries, and 3) run the provided experiment scripts with the supplied configs we used to generate our results. You may go about 2) and 3) in two ways: You can either build and control the experiments from a local machine (easier to parse/record results & troubleshoot, but more initial installs necessary), or, you can build and control the experiments from a dedicated cloudlab control machine, using pre-supplied disk images (faster setup out of the box, but more overhead to parse/record results and troubleshoot). Both options are outlined below.
 
 The ReadMe is organized into the following high level sections:
 1. *Installing pre-requisites and building binaries*
@@ -45,7 +45,7 @@ The ReadMe is organized into the following high level sections:
 
 2. *Setting up experiments on Cloudlab* 
 
-     In order to re-run our experiments you will need to instantiate a distributed and replicated server (and client) configuration using Cloudlab. We have provided a public profile as well as public disk images that capture the configurations used by us to produce our results. Section "Setting up Cloudlab" covers the necessary steps in detail. Alternatively, you may create a profile of your own and generate disk images from scratch (more work) - refer to section "Setting up Cloudlab" as well for more information.
+     In order to re-run our experiments you will need to instantiate a distributed and replicated server (and client) configuration using Cloudlab. We have provided a public profile as well as public disk images that capture the configurations used by us to produce our results. Section "Setting up Cloudlab" covers the necessary steps in detail. Alternatively, you may create a profile of your own and generate disk images from scratch (more work) - refer to section "Setting up Cloudlab" as well for more information. Note, that you will need to use the same Cluster (Utah) and machine types (m510) to reproduce our results.
 
 
 3. *Running experiments*
@@ -56,24 +56,21 @@ The ReadMe is organized into the following high level sections:
 
 ## Installing Dependencies (Skip if using Cloudlab control machine using supplied images) 
 Compiling Basil requires the following high level requirements: 
-- Operating System: Ubuntu 18.04 LTS, Bionic  
-   - You may try to run on Mac, which has worked for us in the past, but is not documented 
-   And cannot be easily aided by us. We recommend running on Ubuntu 18.  If you cannot do this locally, we recommend using a CloudLab controller machine - see       section "setting up CloudLab")
-   - You may try to use Ubuntu 20.04.2 LTS instead of 18.04 LTS. However, we do not guarantee a fully documented install process, nor precise repicability of our results. In order to use Ubuntu 20.04.2 LTS you will have to manually create a disk image instead of using our supplied images for 18.04 LTS. Note, that using Ubuntu 20.04.2 LTS locally as control machine to generate and upload binaries may *not* be compatible with our cloud lab images running on 18.04 LTS.
-
-(To re-install from scratch use a clean image:   18.04 LTS:     urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD.
-20.04 LTS urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD
-Or use a image pre-configured by us: urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server and urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client under public Profile: "SOSP108" https://www.cloudlab.us/p/morty/SOSP108)
-- Requires python3 and numpy for scripts
- 
-- C++ 17 for Main code (gcc version > 5)
-- Java Version >= 1.8 for BFT Smart code. We suggest you run the Open JDK java 11 version. (install included below) as our Makefile is hard-coded for it.
+- Operating System: Ubuntu 18.04 LTS, Bionic (recommended)
+   - We recommend running on Ubuntu 18.04 LTS, Bionic, as a) binaries were built and run on this operating system, and b) our supplied images use Ubuntu 18.04 LTS. If you cannot do this locally, consider using a CloudLab controller machine - see section "Setting up CloudLab".
+   - You may try to use Ubuntu 20.04.2 LTS instead of 18.04 LTS. However, we do not guarantee a fully documented install process, nor precise repicability of our results. Note, that using Ubuntu 20.04.2 LTS locally (or as control machine) to generate and upload binaries may *not* be compatible with running cloudlab machines using our cloud lab images (as they use 18.04 LTS(. In order to use Ubuntu 20.04.2 LTS you may have to manually create new disk images for CloudLab instead of using our supplied images for 18.04 LTS to guarantee library compatibility.
+   - You may try to run on Mac, which has worked for us in the past, but is not documented in the following ReadMe and may not easily be trouble-shooted by us.
+  
+- Requires python3 
+- Requires C++ 17 
+- Requires Java Version >= 1.8 for BFTSmart. We suggest you run the Open JDK java 11 version (install included below) as our Makefile is currently hard-coded for it.
 
 
 ### General installation pre-reqs
 Before beginning the install process, update your distribution:
 1. `sudo apt-get update`
 2. `sudo apt-get upgrade`
+
 Then, install the following tools:
 3. `sudo apt install python3-pip`
 4. `pip3 install numpy` or `python3 -m pip install numpy`
@@ -90,11 +87,12 @@ The artifact depends the following development libraries:
 - libsodium-dev
 - libbost-all-dev
 - libuv1-dev
+
 You may install them directly using:
 - `sudo apt install libsodium-dev libgflags-dev libssl-dev libevent-dev libevent-openssl-2.1-6 libevent-pthreads-2.1-6 libboost-all-dev libuv1-dev`
 - If using Ubuntu 20, use `sudo apt install libevent-openssl-2.1-7 libevent-pthreads-2.1-7` instead for openssl and pthreads.
 
-In addition, you need to install the following libraries from source:
+In addition, you will need to install the following libraries from source (detailed instructions below):
 - [googletest-1.10](https://github.com/google/googletest/releases/tag/release-1.10.0)
 - [protobuf-3.5.1](https://github.com/protocolbuffers/protobuf/releases/tag/v3.5.1)
 - [cryptopp-8.2](htps://cryptopp.com/cryptopp820.zip)
@@ -103,7 +101,7 @@ In addition, you need to install the following libraries from source:
 - [ed25519-donna] (https://github.com/floodyberry/ed25519-donna)
 - [Intel TBB] (https://software.intel.com/content/www/us/en/develop/tools/oneapi/base-toolkit/get-the-toolkit.html). In order to compile, will need to configure CPU: https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html
 
-Detailed instructions are included below:
+Detailed install instructions:
 
 We recommend organizing all installs in a dedicated folder:
 1. `mkdir dependencies`
@@ -114,6 +112,7 @@ Download the library:
 1. `git clone https://github.com/google/googletest.git`
 2. `cd googletest`
 3. `git checkout release-1.10.0`
+
 Next, build googletest:
 4. `sudo cmake CMakeLists.txt`
 5. `sudo make -j #cores`
@@ -121,6 +120,7 @@ Next, build googletest:
 7. `sudo cp -r googletest /usr/src/gtest-1.10.0`
 8. `sudo ldconfig`
 9. `cd ..`
+
 Alternatively, you may download and unzip from source: 
 1. `get https://github.com/google/googletest/archive/release-1.10.0.zip`
 2. `unzip release-1.10.0.zip`  
@@ -132,6 +132,7 @@ Download the library:
 1. `git clone https://github.com/protocolbuffers/protobuf.git`
 2. `cd protobuf`
 3. `git checkout v3.5.1`
+
 Next, build protobuf:
 4. `./autogen.sh`
 5. `./configure`
@@ -140,6 +141,7 @@ Next, build protobuf:
 8. `sudo make install`
 9. `sudo ldconfig`
 10. `cd ..`
+
 Alternatively, you may download and unzip from source: 
 1.`wget https://github.com/protocolbuffers/protobuf/releases/download/v3.5.1/protobuf-all-3.5.1.zip`
 2.`unzip protobuf-all-3.5.1.zip`
@@ -171,8 +173,10 @@ Download and build the library:
 Download the library:
 1. `git clone https://github.com/BLAKE3-team/BLAKE3`
 2. `cd BLAKE3/c`
+
 Create a shared libary:
 3. `gcc -fPIC -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c blake3_sse2_x86-64_unix.S blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S`
+
 Move the shared libary:
 4. `sudo cp libblake3.so /usr/local/lib/`
 5. `sudo ldconfig`
@@ -182,8 +186,10 @@ Move the shared libary:
 Download the library:
 1. `git clone https://github.com/floodyberry/ed25519-donna`
 2. `cd ed25519-donna`
+
 Create a shared library:
 3. `gcc -fPIC -shared -O3 -m64 -o libed25519_donna.so ed25519.c -lssl -lcrypto`
+
 Move the shared libary:
 4. `sudo cp libed25519_donna.so /usr/local/lib`
 5. `sudo ldconfig`
@@ -194,90 +200,103 @@ Download and execute the installation script:
 1. `wget https://registrationcenter-download.intel.com/akdlm/irc_nas/17977/l_BaseKit_p_2021.3.0.3219.sh`
 2. `sudo bash l_BaseKit_p_2021.3.0.3219.sh`
 (To run the installation script you may have to manually install `apt -y install ncurses-term` if you do not have it already).
-Follow the installation instructions: Doing a custom installation saves space as the only dependency is "Intel oneAPI Threading Building Blocks" 
-(Use space bar to unmark X other items. You do not need to consent to data collection)
 
-Next, set up the intel TBB environment variables (Reference: https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html):
+Follow the installation instructions: Doing a custom installation saves space, the only required dependency is "Intel oneAPI Threading Building Blocks" (Use space bar to unmark X other items. You do not need to consent to data collection).
+
+Next, set up the intel TBB environment variables (Refer to https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html if necessary):
 If you installed Intel TBB with root access, it should be installed under /opt/intel/oneapi. Run the following to initialize environment variables:
 3. `source /opt/intel/oneapi/setvars.sh`
+
 Note, that this must be done everytime you open a new terminal. You may add it to your .bashrc to automate it:
-3. `echo source /opt/intel/oneapi/setvars.sh --force >> ~/.bashrc`
-4. `source ~/.bashrc`
-(When building on a cloudlab controller instead of locally, the setvars.sh must be sourced manually everytime since bashrc will not be persisted across images. All experiment machines will be source via the experiment scripts, so no further action is necessary there.)
+4. `echo source /opt/intel/oneapi/setvars.sh --force >> ~/.bashrc`
+5. `source ~/.bashrc`
+
+(When building on a cloudlab controller instead of locally, the setvars.sh must be sourced manually everytime since bashrc will not be persisted across images. All other experiment machines will be source via the experiment scripts, so no further action is necessary there.)
 
 
-This completes all requires installs for branches Basil/Tapir and TxHotstuff:
-### Building:
-Go to /src and build:
-- `make -j #num-cores`
+This completes all requires installs for branches Basil/Tapir and TxHotstuff. 
 
-When building on branch TxBFTSmart the following additional steps are necessary:
+When building TxBFTSmart (on branch TxBFTSmart) the following additional steps are necessary:
 #### Additional prereq for BFTSmart (only on TxBFTSmart branch)
 First, install Java open jdk 1.11.0 in /usr/lib/jvm and export your LD_LIBRARY_Path:
 1. `sudo apt-get install openjdk-11-jdk` Confirm that `java-11-openjdk-amd64` it is installed in /usr/lib/jvm  
 2. `export LD_LIBRARY_PATH=/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server:$LD_LIBRARY_PATH`
-If it is not installed in /usr/lib/jvm source the LD_LIBRARY_PATH accordingly and adjust the following lines in the Makefile accordingly, and source the LD_LIBRARY_PATH accordingly:
-`# Java and JNI`
-`JAVA_HOME := /usr/lib/jvm/java-11-openjdk-amd64`
-`CFLAGS += -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux`
-`LDFLAGS += -L/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server -ljvm`
+
+If it is not installed in `/usr/lib/jvm` then source the `LD_LIBRARY_PATH` according to your install location and adjust the following lines in the Makefile with your path:
+- `# Java and JNI`
+- `JAVA_HOME := /usr/lib/jvm/java-11-openjdk-amd64`  (adjust this)
+- `CFLAGS += -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux`
+- `LDFLAGS += -L/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server -ljvm`  (adjust this)
+
+Finally (before building the TxBFTSmart codebase), you will have to build the BFTSmart java module. This process is automated as part of the additional steps necessary to configure the cloudlab experiment for TxBFTSmart. Refer to section "Running Experiments", sub-section "TxBFTSmart" for further details. You will have to complete section 2 "Setting up Cloudlab" as well. For completeness (if you have completed section 2 already), the instruction is included here too:
+
+Navigate to `src/scripts`and run
+1. `./one_step_config.sh <Local github directory> <Cloudlab user name> <Cloudlab experiment name> <Cloudlab project prefix name> <Cloudlab cluster domain name>`
+
+For example, ./one_step_config.sh /home/<user>/SOSP21_artifact_eval fs435 indicus morty-pg0 utah.cloudlab.us
 
 
-Next, modify all references of "fs435" or "zw494" in the source code and replace them with your cloudlab id  (TODO: please write script that automates this)
-After that, compile BFT-SMART (TODO: integrate this into Makefile)
-3. `cd /src/store/bftsmartstore/library`
-4. `mkdir bin`
-5. `ant`
-6. Mkdir jars; cp bin/BftSmart.jar jars/; cp lib/* jars
-Finally, return to /src/ and build using `make -j #num-cores`
+### Building binaries:
+   Finally, you can build the binaries:
+Navigate to `SOSP21_artifact_eval/src` and build:
+- `make -j #num-cores`
+
 
 
 #### Troubleshooting:
 ##### Problems with locating libraries:
 1. You may need to export your path if your installations are in non-standard locations:
-Include: `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH`
-Additionally, you may want to add `/usr/local/lib:/usr/local/share:/usr/local/include` depending on where `make install` puts the libraries.
-The default install locations are:
+   
+   Include: `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH`
+   
+   Additionally, you may want to add `/usr/local/lib:/usr/local/share:/usr/local/include` depending on where `make install` puts the libraries.
+   
+   The default install locations are:
 
-Secp256k1:  /usr/local/lib
-CryptoPP: /usr/local/include  /usr/local/bin   /usr/local/share
-Blake3: /usr/local/lib
-Donna: /usr/local/lib
-Googletest: /usr/local/lib /usr/local/include
-Protobufs: /usr/local/lib
-Intel TBB: /opt/intel/oneapi
+   - Secp256k1:  /usr/local/lib
+   - CryptoPP: /usr/local/include  /usr/local/bin   /usr/local/share
+   - Blake3: /usr/local/lib
+   - Donna: /usr/local/lib
+   - Googletest: /usr/local/lib /usr/local/include
+   - Protobufs: /usr/local/lib
+   - Intel TBB: /opt/intel/oneapi
 
 2. Building googletest differently:
-If you get this error: `make: *** No rule to make target '.obj/gtest/gtest-all.o', needed by '.obj/gtest/gtest_main.a'.  Stop.`
-try to install googletest directly into src as follows:
-1. `git clone https://github.com/google/googletest.git`
-2. `cd googletest`
-3. `git checkout release-1.10.0`
-4. `rm -rf <PATH>/src/.obj/gtest`
-5. `mkdir <PATH>/src/.obj`
-6. `cp -r googletest <PATH>/src/.obj/gtest`
-7. `cd <PATH>/src/.obj/gtest`
-8. `cmake CMakeLists.txt`
-9. `make -j`
-10. `g++ -isystem ./include -I . -pthread -c ./src/gtest-all.cc`
-11. `g++ -isystem ./include -I . -pthread -c ./src/gtest_main.cc`
+   
+   If you get error: `make: *** No rule to make target '.obj/gtest/gtest-all.o', needed by '.obj/gtest/gtest_main.a'.  Stop.` try to install googletest directly into src as follows:
+   1. `git clone https://github.com/google/googletest.git`
+   2. `cd googletest`
+   3. `git checkout release-1.10.0`
+   4. `rm -rf <PATH>/src/.obj/gtest`
+   5. `mkdir <PATH>/src/.obj`
+   6. `cp -r googletest <PATH>/src/.obj/gtest`
+   7. `cd <PATH>/src/.obj/gtest`
+   8. `cmake CMakeLists.txt`
+   9. `make -j`
+   10. `g++ -isystem ./include -I . -pthread -c ./src/gtest-all.cc`
+   11. `g++ -isystem ./include -I . -pthread -c ./src/gtest_main.cc`
 
-## Confirming that binaries work locally
-Simple single server/single client experiment
+### Confirming that Basil binaries work locally (optional sanity check)
+You may want to run a simple toy single server/single client experiment to validate that the binaries you built do not have an obvious error.
 
-Run all this from /src/
-To do so need to first generate keys: go to /src and run ./keygen.sh 
+Navigate to `SOSP21_artifact_eval/src`. Run `./keygen.sh` to generate local priv/pub key-pairs. 
 
 Run server:
+   
 `DEBUG=store/indicusstore/* store/server --config_path shard-r0.config --group_idx 0 --num_groups 1 --num_shards 1 --replica_idx 0 --protocol indicus --num_keys 1 --debug_stats --indicus_key_path keys &> server.out`
 
-Run client 
+Run client:
+   
 `store/benchmark/async/benchmark --config_path shard-r0.config --num_groups 1 --num_shards 1 --protocol_mode indicus --num_keys 1 --benchmark rw --num_ops_txn 2 --exp_duration 10 --client_id 0 --warmup_secs 0 --cooldown_secs 0 --key_selector zipf --zipf_coefficient 0.0 --stats_file "stats-0.json" --indicus_key_path keys &> client-0.out`
 
-Client should finish within 10 seconds, output file should have summary at the end.
-If it doesnt work.. contact us I guess...
+The client should finish within 10 seconds and the output file `client-0.out` should include summary of the transactions committed at the end. If this is not the case, contact `fs435@cornell.edu`. Cancel the server manually using `ctrl C`. 
+
 
 ## Setting up Cloudlab
+(To re-install from scratch use a clean image:   18.04 LTS:     urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD.
+20.04 LTS urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD
+Or use a image pre-configured by us: urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server and urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client under public Profile: "SOSP108" https://www.cloudlab.us/p/morty/SOSP108)
+
 In order to run experiments on Cloudlab you will have to register an account with your academic email and create a new project.
 Alternatively, if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted.
 If you use your local machine to start experiments, then you need to set up and register ssh in order to connect to the cloudlab servers. 
