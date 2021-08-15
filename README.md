@@ -16,13 +16,15 @@ The artifact contains, and allows to reproduce, experiments for all figures incl
 
 ### Concrete claims in the paper
 
-- **claim1**: Basil comes within competitive throughput (within 4x on TPCC, 3x on Smallbank, and 2x on Retwis) compared to Tapir, a state of the art Crash Fault Tolerant database. 
+- **Main claim 1**: Basil comes within competitive throughput (within 4x on TPCC, 3x on Smallbank, and 2x on Retwis) compared to Tapir, a state of the art Crash Fault Tolerant database. 
 
-- **claim2**: Basil achieves both higher throughput and lower latency than both BFT baselines (TxHotstuff, TxBFTSmart).
+- **Main claim 2**: Basil achieves both higher throughput and lower latency than both BFT baselines (TxHotstuff, TxBFTSmart).
 
-- **claim3**: Basil maintains robust throughput for correct clients under simulated attack by Byzantine Clients.
+All comparisons for claims 1 and 2 are made under gracious system execution, i.e. in the absence of failures for all systems.
 
-- **claim4**: All other microbenchmarks reported realistically represent Basil.
+- **Main claim 3**: Basil maintains robust throughput for correct clients under simulated attack by Byzantine Clients.
+
+- **Supplementary**: All other microbenchmarks reported realistically represent Basil.
 
 
 ## Artifacts
@@ -328,8 +330,11 @@ The client should finish within 10 seconds and the output file `client-0.out` sh
 
 ## Setting up Cloudlab
    
-In order to run experiments on Cloudlab you will need to register an account with your academic email and create a new project ("Start/Join project").
+In order to run experiments on Cloudlab (https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project ("Start/Join project") if you do not already have one. (https://cloudlab.us/signup.php).
 Alternatively (but not recommended), if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted (reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join).
+
+![image](https://user-images.githubusercontent.com/42611410/129490787-10a46b97-7428-4f43-86e6-7bbb705c2dc3.png)
+
 
 If you use will use local machine to start experiments, then you will need to set up and register ssh in order to connect to the Cloudlab machines. If you are instead using a cloudlab control machine  you can skip this step.
 To create an ssh key and register it with your ssh agent follow these instructions: https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent (Install ssh if you have not already.) Next, register your public key under your Cloudlab account user->Manage SSH Keys.
