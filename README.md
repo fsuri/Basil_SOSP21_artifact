@@ -333,17 +333,25 @@ The client should finish within 10 seconds and the output file `client-0.out` sh
 In order to run experiments on Cloudlab (https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project ("Start/Join project") if you do not already have one. (https://cloudlab.us/signup.php).
 Alternatively (but not recommended), if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted (reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join).
 
-![image](https://user-images.githubusercontent.com/42611410/129490787-10a46b97-7428-4f43-86e6-7bbb705c2dc3.png)
-
+![image](https://user-images.githubusercontent.com/42611410/129490833-eb99f58c-8f0a-43d9-8b99-433af5dab559.png)
 
 If you use will use local machine to start experiments, then you will need to set up and register ssh in order to connect to the Cloudlab machines. If you are instead using a cloudlab control machine  you can skip this step.
-To create an ssh key and register it with your ssh agent follow these instructions: https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent (Install ssh if you have not already.) Next, register your public key under your Cloudlab account user->Manage SSH Keys.
+To create an ssh key and register it with your ssh agent follow these instructions: https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent (Install ssh if you have not already.) Next, register your public key under your Cloudlab account user->Manage SSH Keys. Alternatively, you may add your keys driectly upon project creation.
 
 Next, you are ready to start up an experiment:
 
 To use a pre-declared profile supplied by us, start an experiment using the following public profile "SOSP108" https://www.cloudlab.us/p/morty/SOSP108. 
+![image](https://user-images.githubusercontent.com/42611410/129490911-8c97d826-caa7-4f04-95a7-8a2c8f3874f7.png)
+
 This profile by default starts with 18 server machines and 18 client machines, all of which use m510 hardware on the Utah cluster. This profile includes two disk images "SOSP108.server" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server`) and "SOSP108.client" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client`) that already include all dependencies and additional setup necessary to run experiments. 
-Click "Next" and name your experiment (e.g. "sosp108"). Finally, set a duration and start your experiment. Starting all machines may take a decent amount of time as the server disk images contain large datasets that need to be loaded.
+Click "Next" and name your experiment (e.g. "sosp108"). Finally, set a duration and start your experiment. 
+![image](https://user-images.githubusercontent.com/42611410/129490922-a99a1287-6ecc-4d50-b05d-dfe7bd0496d9.png)
+![image](https://user-images.githubusercontent.com/42611410/129490940-6c527b08-5def-4158-afd2-bc544e4758ab.png)
+Starting all machines may take a decent amount of time as the server disk images contain large datasets that need to be loaded. Wait for it to be "ready":
+![image](https://user-images.githubusercontent.com/42611410/129490974-f2b26280-d5e9-42ca-a9fe-82b80b8e2349.png)
+You may ssh into the machines to test your connection using the ssh commands shown under "List View" or by using `ssh <cloudlab-username>@<host-name>.<experiment-name>.<project-name>-pg0.<cluster-name>`. In the example below it would be: `ssh fs435@us-east-1-0.indicus.morty-pg0.utah.cloudlab.us`.
+![image](https://user-images.githubusercontent.com/42611410/129490991-035a1865-43c3-4238-a264-e0d43dd0095f.png)
+
 
 Since experiments require a fairly large number of machines, you may have to create a reservation in order to have enough resources. Go to the "Make reservation tab" and make a reservation for 36 m510 machines on the Utah cluster (37 if you plan to use a control machine).
 All experiments work using an experiment profile with 18 servers, but if you cannot get access to enough machine, you may instead use only 9 server machines for Tapir (remove the trailing 9 server names from the profile); or 12 server machines when running TxHotstuff and TxBFTSmart (remove the trailing 6 server names from the profile). 
