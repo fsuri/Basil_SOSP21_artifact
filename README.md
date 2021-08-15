@@ -6,14 +6,16 @@ For all questions about the artifact please e-mail (or message over google hango
 
 ## Claims 
 
-   ### General
-   The artifact contains, and allows to reproduce, experiments for all figures included in the paper. 
+### General
+
+The artifact contains, and allows to reproduce, experiments for all figures included in the paper. 
 
    This prototype implements (alongside several baselines) Basil, a replicated Byzantine Fault Tolerant key-value store offering interactive transactions and sharding. The prototype uses cryptographically secure hash functions and signatures for all replicas, but does not sign client requests on any of the evaluated prototype systems, as we delegate this problem to the application layer. The Basil prototype can simulate Byzantine Clients failing via Stalling or Equivocation, and is robust to both. While the Basil prototype uses tolerates many obvious faults such as message corruptions, duplications, it does *not* exhaustively implement defences against arbitrary failures or data format corruptions, nor does it simulate all possible behaviors. For example, while the prototype implements fault tolerance (safety) to leader failures during recovery, it does not include code to simulate these, nor does it implement explicit exponential timeouts to enter new views that are necessary for theoretical liveness under partial synchrony.
 
    Basils current code-base was modified beyond some of the results reported in the paper (both for workloads, and microbenchmarks) to include failure handling: While results should be largely consistent, they may differ slightly across the microbenchmarks (better performance in some cases).
 
 ### Concrete claims in the paper
+
 - **claim1**: Basil comes within competitive throughput (within 4x on TPCC, 3x on Smallbank, and 2x on Retwis) compared to Tapir, a state of the art Crash Fault Tolerant database. 
 
 - **claim2**: Basil achieves both higher throughput and lower latency than both BFT baselines (TxHotstuff, TxBFTSmart).
@@ -24,6 +26,7 @@ For all questions about the artifact please e-mail (or message over google hango
 
 
 ## Artifacts
+
 The artifact is spread across the following four branches. Please checkout the corresponding branch when validating claims for a respective system.
 1. Branch main: Contains the Readme, the paper, the exeriment scripts, and all experiment configurations used.
 2. Branch Basil/Tapir: Contains the source code used for all Basil and Tapir evaluation
@@ -35,6 +38,7 @@ We recommend making a separate copy of the configs (and experiment scripts) in o
 
 
 ## Validating the Claims - Overview
+
 All our experiments were run using Cloudlab . In order to re-produce our results and validate the claims you will need to 1) instantiate a matching cloudlab experiment, 2) build the necessary binaries, and 3) run the provided experiment scripts with the supplied configs we used to generate our results. You may go about 2) and 3) in two ways: You can either build and control the experiments from a local machine (easier to parse/record results & troubleshoot, but more initial installs necessary), or, you can build and control the experiments from a dedicated cloudlab control machine, using pre-supplied disk images (faster setup out of the box, but more overhead to parse/record results and troubleshoot). Both options are outlined below.
 
 The ReadMe is organized into the following high level sections:
@@ -55,6 +59,7 @@ The ReadMe is organized into the following high level sections:
 
 
 ## Installing Dependencies (Skip if using Cloudlab control machine using supplied images) 
+
 Compiling Basil requires the following high level requirements: 
 - Operating System: Ubuntu 18.04 LTS, Bionic (recommended)
    - We recommend running on Ubuntu 18.04 LTS, Bionic, as a) binaries were built and run on this operating system, and b) our supplied images use Ubuntu 18.04 LTS. If you cannot do this locally, consider using a CloudLab controller machine - see section "Setting up CloudLab".
@@ -67,6 +72,7 @@ Compiling Basil requires the following high level requirements:
 
 
 ### General installation pre-reqs
+
 Before beginning the install process, update your distribution:
 1. `sudo apt-get update`
 2. `sudo apt-get upgrade`
@@ -78,6 +84,7 @@ Then, install the following tools:
 
 
 ### Development library dependencies
+
 The artifact depends the following development libraries:
 - libevent-openssl
 - libevent-pthreads
@@ -108,6 +115,7 @@ We recommend organizing all installs in a dedicated folder:
 2. `cd dependencies`
 
 #### Installing google test
+
 Download the library:
 1. `git clone https://github.com/google/googletest.git`
 2. `cd googletest`
@@ -128,6 +136,7 @@ Alternatively, you may download and unzip from source:
 
 
 #### Installing protobuf
+
 Download the library:
 1. `git clone https://github.com/protocolbuffers/protobuf.git`
 2. `cd protobuf`
@@ -148,6 +157,7 @@ Alternatively, you may download and unzip from source:
 3. Proceed install as above
 
 #### Installing secp256k1
+
 Download and build the library:
 1. `git clone https://github.com/bitcoin-core/secp256k1.git`
 2. `cd secp256k1`
@@ -161,6 +171,7 @@ Download and build the library:
 
 
 #### Installing cryptopp
+
 Download and build the library:
 1. `git clone https://github.com/weidai11/cryptopp.git`
 2. `cd cryptopp`
@@ -170,6 +181,7 @@ Download and build the library:
 6. `cd ..`
 
 #### Installing BLAKE3
+
 Download the library:
 1. `git clone https://github.com/BLAKE3-team/BLAKE3`
 2. `cd BLAKE3/c`
@@ -183,6 +195,7 @@ Move the shared libary:
 6. `cd ../../`
 
 #### Installing ed25519-donna
+
 Download the library:
 1. `git clone https://github.com/floodyberry/ed25519-donna`
 2. `cd ed25519-donna`
@@ -196,6 +209,7 @@ Move the shared libary:
 6. `cd ..`
 
 #### Innstalling Intel TBB
+
 Download and execute the installation script:
 1. `wget https://registrationcenter-download.intel.com/akdlm/irc_nas/17977/l_BaseKit_p_2021.3.0.3219.sh`
 2. `sudo bash l_BaseKit_p_2021.3.0.3219.sh`
@@ -217,7 +231,9 @@ Note, that this must be done everytime you open a new terminal. You may add it t
 This completes all requires installs for branches Basil/Tapir and TxHotstuff. 
 
 When building TxBFTSmart (on branch TxBFTSmart) the following additional steps are necessary:
+
 #### Additional prereq for BFTSmart (only on TxBFTSmart branch)
+
 First, install Java open jdk 1.11.0 in /usr/lib/jvm and export your LD_LIBRARY_Path:
 1. `sudo apt-get install openjdk-11-jdk` Confirm that `java-11-openjdk-amd64` it is installed in /usr/lib/jvm  
 2. `export LD_LIBRARY_PATH=/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server:$LD_LIBRARY_PATH`
@@ -237,6 +253,7 @@ For example, ./one_step_config.sh /home/<user>/SOSP21_artifact_eval fs435 indicu
 
 
 ### Building binaries:
+   
    Finally, you can build the binaries:
 Navigate to `SOSP21_artifact_eval/src` and build:
 - `make -j #num-cores`
@@ -244,7 +261,9 @@ Navigate to `SOSP21_artifact_eval/src` and build:
 
 
 #### Troubleshooting:
+   
 ##### Problems with locating libraries:
+   
 1. You may need to export your path if your installations are in non-standard locations:
    
    Include: `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH`
@@ -293,6 +312,7 @@ The client should finish within 10 seconds and the output file `client-0.out` sh
 
 
 ## Setting up Cloudlab
+   
 (To re-install from scratch use a clean image:   18.04 LTS:     urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD.
 20.04 LTS urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD
 Or use a image pre-configured by us: urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server and urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client under public Profile: "SOSP108" https://www.cloudlab.us/p/morty/SOSP108)
