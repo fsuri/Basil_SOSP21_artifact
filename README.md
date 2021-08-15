@@ -78,6 +78,7 @@ Before beginning the install process, update your distribution:
 2. `sudo apt-get upgrade`
 
 Then, install the following tools:
+
 3. `sudo apt install python3-pip`
 4. `pip3 install numpy` or `python3 -m pip install numpy`
 5. `sudo apt-get install autoconf automake libtool curl make g++ unzip valgrind cmake gnuplot pkg-config ant`
@@ -111,17 +112,20 @@ In addition, you will need to install the following libraries from source (detai
 Detailed install instructions:
 
 We recommend organizing all installs in a dedicated folder:
+
 1. `mkdir dependencies`
 2. `cd dependencies`
 
 #### Installing google test
 
 Download the library:
+
 1. `git clone https://github.com/google/googletest.git`
 2. `cd googletest`
 3. `git checkout release-1.10.0`
 
 Next, build googletest:
+
 4. `sudo cmake CMakeLists.txt`
 5. `sudo make -j #cores`
 6. `sudo make install`
@@ -130,6 +134,7 @@ Next, build googletest:
 9. `cd ..`
 
 Alternatively, you may download and unzip from source: 
+
 1. `get https://github.com/google/googletest/archive/release-1.10.0.zip`
 2. `unzip release-1.10.0.zip`  
 3. Proceed install as above  
@@ -138,6 +143,7 @@ Alternatively, you may download and unzip from source:
 #### Installing protobuf
 
 Download the library:
+
 1. `git clone https://github.com/protocolbuffers/protobuf.git`
 2. `cd protobuf`
 3. `git checkout v3.5.1`
@@ -153,6 +159,7 @@ Next, build protobuf:
 10. `cd ..`
 
 Alternatively, you may download and unzip from source: 
+
 1.`wget https://github.com/protocolbuffers/protobuf/releases/download/v3.5.1/protobuf-all-3.5.1.zip`
 2.`unzip protobuf-all-3.5.1.zip`
 3. Proceed install as above
@@ -160,6 +167,7 @@ Alternatively, you may download and unzip from source:
 #### Installing secp256k1
 
 Download and build the library:
+
 1. `git clone https://github.com/bitcoin-core/secp256k1.git`
 2. `cd secp256k1`
 3. `./autogen.sh`
@@ -174,6 +182,7 @@ Download and build the library:
 #### Installing cryptopp
 
 Download and build the library:
+
 1. `git clone https://github.com/weidai11/cryptopp.git`
 2. `cd cryptopp`
 3. `make -j`
@@ -184,13 +193,16 @@ Download and build the library:
 #### Installing BLAKE3
 
 Download the library:
+
 1. `git clone https://github.com/BLAKE3-team/BLAKE3`
 2. `cd BLAKE3/c`
 
 Create a shared libary:
+
 3. `gcc -fPIC -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c blake3_sse2_x86-64_unix.S blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S`
 
 Move the shared libary:
+
 4. `sudo cp libblake3.so /usr/local/lib/`
 5. `sudo ldconfig`
 6. `cd ../../`
@@ -198,13 +210,16 @@ Move the shared libary:
 #### Installing ed25519-donna
 
 Download the library:
+
 1. `git clone https://github.com/floodyberry/ed25519-donna`
 2. `cd ed25519-donna`
 
 Create a shared library:
+
 3. `gcc -fPIC -shared -O3 -m64 -o libed25519_donna.so ed25519.c -lssl -lcrypto`
 
 Move the shared libary:
+
 4. `sudo cp libed25519_donna.so /usr/local/lib`
 5. `sudo ldconfig`
 6. `cd ..`
@@ -212,6 +227,7 @@ Move the shared libary:
 #### Innstalling Intel TBB
 
 Download and execute the installation script:
+
 1. `wget https://registrationcenter-download.intel.com/akdlm/irc_nas/17977/l_BaseKit_p_2021.3.0.3219.sh`
 2. `sudo bash l_BaseKit_p_2021.3.0.3219.sh`
 (To run the installation script you may have to manually install `apt -y install ncurses-term` if you do not have it already).
@@ -220,9 +236,11 @@ Follow the installation instructions: Doing a custom installation saves space, t
 
 Next, set up the intel TBB environment variables (Refer to https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html if necessary):
 If you installed Intel TBB with root access, it should be installed under /opt/intel/oneapi. Run the following to initialize environment variables:
+
 3. `source /opt/intel/oneapi/setvars.sh`
 
 Note, that this must be done everytime you open a new terminal. You may add it to your .bashrc to automate it:
+
 4. `echo source /opt/intel/oneapi/setvars.sh --force >> ~/.bashrc`
 5. `source ~/.bashrc`
 
@@ -236,10 +254,12 @@ When building TxBFTSmart (on branch TxBFTSmart) the following additional steps a
 #### Additional prereq for BFTSmart (only on TxBFTSmart branch)
 
 First, install Java open jdk 1.11.0 in /usr/lib/jvm and export your LD_LIBRARY_Path:
+
 1. `sudo apt-get install openjdk-11-jdk` Confirm that `java-11-openjdk-amd64` it is installed in /usr/lib/jvm  
 2. `export LD_LIBRARY_PATH=/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server:$LD_LIBRARY_PATH`
 
 If it is not installed in `/usr/lib/jvm` then source the `LD_LIBRARY_PATH` according to your install location and adjust the following lines in the Makefile with your path:
+
 - `# Java and JNI`
 - `JAVA_HOME := /usr/lib/jvm/java-11-openjdk-amd64`  (adjust this)
 - `CFLAGS += -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux`
