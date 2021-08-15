@@ -315,60 +315,79 @@ To create an ssh key and register it with your ssh agent follow these instructio
 
 Next, you are ready to start up an experiment:
 
-To use a pre-declared profile supplied by us, use the following public profile "SOSP108" https://www.cloudlab.us/p/morty/SOSP108. 
-This profile by default starts with 18 server machines and 18 client machines, all of which use m510 hardware on the Utah cluster. 
+To use a pre-declared profile supplied by us, start an experiment using the following public profile "SOSP108" https://www.cloudlab.us/p/morty/SOSP108. 
+This profile by default starts with 18 server machines and 18 client machines, all of which use m510 hardware on the Utah cluster. This profile includes two disk images "SOSP108.server" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server`) and "SOSP108.client" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client`) that already include all dependencies and additional setup necessary to run experiments. 
+Click "Next" and name your experiment (e.g. "sosp108"). Finally, set a duration and start your experiment. Starting all machines may take a decent amount of time as the server disk images contain large datasets that need to be loaded.
+
 Since experiments require a fairly large number of machines, you may have to create a reservation in order to have enough resources. Go to the "Make reservation tab" and make a reservation for 36 m510 machines on the Utah cluster (37 if you plan to use a control machine).
 All experiments work using an experiment profile with 18 servers, but if you cannot get access to enough machine, you may instead use only 9 server machines for Tapir (remove the trailing 9 server names from the profile); or 12 server machines when running TxHotstuff and TxBFTSmart (remove the trailing 6 server names from the profile). 
 
+### Using a control machine (skip if using local machine)
+When using a control machine (and not your local machine) to start experiments, you will need to source setvars.sh and export the LD path for java (see section "Install Dependencies") before building. You will need to do this everytime you start a new control machine because those will not be persisted across images.
 
-This profile includes two disk images "SOSP108.server" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server`) and "SOSP108.client" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client`) that already include all dependencies and additional setup necessary to run experiments. 
+Connect to your control machine via ssh: `ssh <cloudlab-user>@control.<experiment-name>.<project-name>.utah.cloudlab.us.`  You may need to add `-pg0` to your project name. (i.e. if your project is called "sosp108", it may need to be "sosp108-pg0" in order to connect. Find out by Trial and Error.).
 
-If you decide to instead create a profile of your own, be careful to follow the same naming conventions of our profile for the servers: 
+### Using a custom profile (skip if using pre-supplied profile)
+
+If you decide to instead create a profile of your own use the following parameters (be careful to follow the same naming conventions of our profile for the servers or the experiment scripts/configuration provided will not work). You will need to buid your own disk image from scratch, as the public image is tied to the public profile. (You can try if the above images work, but likely they will not).
 
 - Number of Replicas: `['us-east-1-0', 'us-east-1-1', 'us-east-1-2', 'eu-west-1-0', 'eu-west-1-1', 'eu-west-1-2', 'ap-northeast-1-0', 'ap-northeast-1-1', 'ap-northeast-1-2', 'us-west-1-0', 'us-west-1-1', 'us-west-1-2', 'eu-central-1-0', 'eu-central-1-1', 'eu-central-1-2', 'ap-southeast-2-0', 'ap-southeast-2-1', 'ap-southeast-2-2']`
-- Replica Hardware: `m510`
-- Client Hardware: ``m510``
-
-If you instead want to build an image from scratch, follow the instructions below:
+- Number of sites (DCs): 6
+- Replica Hardware Type: `m510`
+- Replica storage: `64GB`
+- Replica disk image: Your own (server) image
+- Client Hardware Type: `'m510'
+- Client storage: `16GB`
+- Client disk image: Your own (client) image
+- Number of clients per replica: `1`
+- Total number of clients: `0` (this will still create 18 clients)
+- Use control machine?:  Check this if you plan to use a control machine
+- Control Hardware Type: `m510`
 
 ### Building and configuring disk images from scratch
+If you want to build an image from scratch, follow the instructions below:
+
 Start by choosing to load a default Ubuntu 18.04 LTS image: `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD)` - for Ubuntu 20.04 LTS use: `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD`. 
 
 Next, follow the above manual installation guide (section "Installing Dependencies" to install all dependencies (you can skip adding tbb setvars.sh to .bashrc). 
 
 Additionally, you will have to install the following requisites:
-1. NTP:  https://vitux.com/how-to-install-ntp-server-and-client-on-ubuntu/ 
-         Confirm that it is running: sudo service ntp status (check for status Active)
+1. **NTP**:  https://vitux.com/how-to-install-ntp-server-and-client-on-ubuntu/ 
+   
+   Confirm that it is running: sudo service ntp status (check for status Active)
 
-2. Data Sets: Build TPCC/Smallbank data sets and move them to /usr/local/etc/  (can skip this on client disk images for tpcc)
-   Store TPCC data:
-- Run tpcc_generator bin from /src/store/benchmark/async/tpcc/
-- `./tpcc_generator --num_warehouses=<N> > tpcc-<N>-warehouse`
-- Move output file to /usr/local/etc/tpcc-<N>-warehouse
-- We used 20 warehouses, so do N=20
+2. **Data Sets**: Build TPCC/Smallbank data sets and move them to /usr/local/etc/ 
+   
+      **Store TPCC data:**
+   - Navigate to`SOSP21_artifact_eval/src/store/benchmark/async/tpcc` 
+   - Run `./tpcc_generator --num_warehouses=<N> > tpcc-<N>-warehouse`
+   - We used 20 warehouses, so replace `<N>` with `20`
+   - Move output file to `/usr/local/etc/tpcc-<N>-warehouse`
+   - You can skip this on client machines and create a separate disk image for cients without. This will considerably reduce image size and speed up experiment startup. 
  
-   Store Smallbank data:
-- Run smallbank_generator_main bin from /src/store/benchmark/async/smallbank/
-- `./smallbank_generator_main --num_customers=<N>`
-- It will generate two files, smallbank_names, and smallbank_data. Move them to /usr/local/etc/
-- The server needs both, the client needs only names (not storing smallbank_data saves space for the image)
-- We used 1 million customers
+      **Store Smallbank data:**
+   - Navigate to `SOSP21_artifact_eval/src/store/benchmark/async/smallbank/`
+   - Run `./smallbank_generator_main --num_customers=<N>`
+   - We used 1 million customers, so replace `<N>` with `1000000`
+   - The script will generate two files, smallbank_names, and smallbank_data. Move them to /usr/local/etc/
+   - The server needs both, the client needs only smallbank_names (not storing smallbank_data saves space for the image)
 
    
-3. Public Keys: Build crypto keys, move them to /usr/local/etc/donna/
- - Go to /src and use keygen.sh
-- Run ./keygen.sh → creates a lot of keys using ./create_key <key_type>  
-- By default keygen.sh uses type 4 = Donna, but you can modify it to 3 for secp256k1
-- Move the key-pairs in the /keys folder to /usr/local/etc/indicus-keys/donna/ or to /usr/local/etc/indicus-keys/secp256k1/ depending on what type used
+3. **Public Keys**: Generate Pub/Priv key-pairs, move them to /usr/local/etc/donna/
 
-4. (On branch main) Navigate to SOSP21_artifact_eval/helper-scripts. copy both these scripts (with the exact name) and place them in /usr/local/etc on the cloudlab machine. Add execution permissions: `chmod +x disable_HT.sh; chmod +x turn_off_turbo.sh`
-The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
+    - Navigate to `SOSP21_artifact_eval/src` and run `keygen.sh`
+    - By default keygen.sh uses type 4 = Ed25519 (this is what we evaluated unde); it can be modifed secp256k1 (type 3), but this requires editing the config files as well. (do not do this, to re-produce our experiments)
+    - Move the key-pairs in the `/keys` folder to `/usr/local/etc/indicus-keys/donna/` (or to `/usr/local/etc/indicus-keys/secp256k1/` depending on what type used)
+
+4. **Helper scripts**: 
+
+    (On branch main) Navigate to SOSP21_artifact_eval/helper-scripts. Copy both these scripts (with the exact name) and place them in `/usr/local/etc` on the cloudlab machine. Add execution permissions: `chmod +x disable_HT.sh; chmod +x turn_off_turbo.sh` The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
 
    
-Once complete, create a new disk image. Then, start the profile with the disk image specified.
+Once complete, create a new disk image (separate ones for server and client if you want to save space/time). Then, start the profile by choosing the newly created disk image.
    
-### Using a control machine:
-When using a control machine (and not your local machine) to start experiments, you will need to source setvars.sh and export the LD path for java (see section "Install Dependencies") before building. You will need to do this everytime you start a new control machine because those will not be persisted across images.
+  
+   
 
 ## Running experiments:
 Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
