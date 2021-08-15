@@ -16,13 +16,15 @@ The artifact contains, and allows to reproduce, experiments for all figures incl
 
 ### Concrete claims in the paper
 
-- **claim1**: Basil comes within competitive throughput (within 4x on TPCC, 3x on Smallbank, and 2x on Retwis) compared to Tapir, a state of the art Crash Fault Tolerant database. 
+- **Main claim 1**: Basil comes within competitive throughput (within 4x on TPCC, 3x on Smallbank, and 2x on Retwis) compared to Tapir, a state of the art Crash Fault Tolerant database. 
 
-- **claim2**: Basil achieves both higher throughput and lower latency than both BFT baselines (TxHotstuff, TxBFTSmart).
+- **Main claim 2**: Basil achieves both higher throughput and lower latency than both BFT baselines (TxHotstuff, TxBFTSmart).
 
-- **claim3**: Basil maintains robust throughput for correct clients under simulated attack by Byzantine Clients.
+All comparisons for claims 1 and 2 are made under gracious system execution, i.e. in the absence of failures for all systems.
 
-- **claim4**: All other microbenchmarks reported realistically represent Basil.
+- **Main claim 3**: Basil maintains robust throughput for correct clients under simulated attack by Byzantine Clients.
+
+- **Supplementary**: All other microbenchmarks reported realistically represent Basil.
 
 
 ## Artifacts
@@ -39,7 +41,7 @@ We recommend making a separate copy of the configs (and experiment scripts) in o
 
 ## Validating the Claims - Overview
 
-All our experiments were run using Cloudlab . In order to re-produce our results and validate the claims you will need to 1) instantiate a matching cloudlab experiment, 2) build the necessary binaries, and 3) run the provided experiment scripts with the supplied configs we used to generate our results. You may go about 2) and 3) in two ways: You can either build and control the experiments from a local machine (easier to parse/record results & troubleshoot, but more initial installs necessary), or, you can build and control the experiments from a dedicated cloudlab control machine, using pre-supplied disk images (faster setup out of the box, but more overhead to parse/record results and troubleshoot). Both options are outlined below.
+All our experiments were run using Cloudlab (https://www.cloudlab.us/), specifically the Cloudlab Utah cluster. In order to re-produce our results and validate the claims you will need to 1) instantiate a matching Cloudlab experiment, 2) build the necessary binaries, and 3) run the provided experiment scripts with the supplied configs we used to generate our results. You may go about 2) and 3) in two ways: You can either build and control the experiments from a local machine (easier to parse/record results & troubleshoot, but more initial installs necessary), or, you can build and control the experiments from a dedicated cloudlab control machine, using pre-supplied disk images (faster setup out of the box, but more overhead to parse/record results and troubleshoot). Both options are outlined below.
 
 The ReadMe is organized into the following high level sections:
 1. *Installing pre-requisites and building binaries*
@@ -78,6 +80,7 @@ Before beginning the install process, update your distribution:
 2. `sudo apt-get upgrade`
 
 Then, install the following tools:
+
 3. `sudo apt install python3-pip`
 4. `pip3 install numpy` or `python3 -m pip install numpy`
 5. `sudo apt-get install autoconf automake libtool curl make g++ unzip valgrind cmake gnuplot pkg-config ant`
@@ -111,17 +114,20 @@ In addition, you will need to install the following libraries from source (detai
 Detailed install instructions:
 
 We recommend organizing all installs in a dedicated folder:
+
 1. `mkdir dependencies`
 2. `cd dependencies`
 
 #### Installing google test
 
 Download the library:
+
 1. `git clone https://github.com/google/googletest.git`
 2. `cd googletest`
 3. `git checkout release-1.10.0`
 
 Next, build googletest:
+
 4. `sudo cmake CMakeLists.txt`
 5. `sudo make -j #cores`
 6. `sudo make install`
@@ -130,19 +136,22 @@ Next, build googletest:
 9. `cd ..`
 
 Alternatively, you may download and unzip from source: 
+
 1. `get https://github.com/google/googletest/archive/release-1.10.0.zip`
 2. `unzip release-1.10.0.zip`  
-3. Proceed install as above  
+3. Proceed with installs as above  
 
 
 #### Installing protobuf
 
 Download the library:
+
 1. `git clone https://github.com/protocolbuffers/protobuf.git`
 2. `cd protobuf`
 3. `git checkout v3.5.1`
 
 Next, build protobuf:
+
 4. `./autogen.sh`
 5. `./configure`
 6. `sudo make -j #cores`
@@ -152,13 +161,15 @@ Next, build protobuf:
 10. `cd ..`
 
 Alternatively, you may download and unzip from source: 
+
 1.`wget https://github.com/protocolbuffers/protobuf/releases/download/v3.5.1/protobuf-all-3.5.1.zip`
 2.`unzip protobuf-all-3.5.1.zip`
-3. Proceed install as above
+3. Proceed with install as above
 
 #### Installing secp256k1
 
 Download and build the library:
+
 1. `git clone https://github.com/bitcoin-core/secp256k1.git`
 2. `cd secp256k1`
 3. `./autogen.sh`
@@ -173,6 +184,7 @@ Download and build the library:
 #### Installing cryptopp
 
 Download and build the library:
+
 1. `git clone https://github.com/weidai11/cryptopp.git`
 2. `cd cryptopp`
 3. `make -j`
@@ -183,13 +195,16 @@ Download and build the library:
 #### Installing BLAKE3
 
 Download the library:
+
 1. `git clone https://github.com/BLAKE3-team/BLAKE3`
 2. `cd BLAKE3/c`
 
 Create a shared libary:
+
 3. `gcc -fPIC -shared -O3 -o libblake3.so blake3.c blake3_dispatch.c blake3_portable.c blake3_sse2_x86-64_unix.S blake3_sse41_x86-64_unix.S blake3_avx2_x86-64_unix.S blake3_avx512_x86-64_unix.S`
 
 Move the shared libary:
+
 4. `sudo cp libblake3.so /usr/local/lib/`
 5. `sudo ldconfig`
 6. `cd ../../`
@@ -197,13 +212,16 @@ Move the shared libary:
 #### Installing ed25519-donna
 
 Download the library:
+
 1. `git clone https://github.com/floodyberry/ed25519-donna`
 2. `cd ed25519-donna`
 
 Create a shared library:
+
 3. `gcc -fPIC -shared -O3 -m64 -o libed25519_donna.so ed25519.c -lssl -lcrypto`
 
 Move the shared libary:
+
 4. `sudo cp libed25519_donna.so /usr/local/lib`
 5. `sudo ldconfig`
 6. `cd ..`
@@ -211,6 +229,7 @@ Move the shared libary:
 #### Innstalling Intel TBB
 
 Download and execute the installation script:
+
 1. `wget https://registrationcenter-download.intel.com/akdlm/irc_nas/17977/l_BaseKit_p_2021.3.0.3219.sh`
 2. `sudo bash l_BaseKit_p_2021.3.0.3219.sh`
 (To run the installation script you may have to manually install `apt -y install ncurses-term` if you do not have it already).
@@ -219,9 +238,11 @@ Follow the installation instructions: Doing a custom installation saves space, t
 
 Next, set up the intel TBB environment variables (Refer to https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html if necessary):
 If you installed Intel TBB with root access, it should be installed under /opt/intel/oneapi. Run the following to initialize environment variables:
+
 3. `source /opt/intel/oneapi/setvars.sh`
 
 Note, that this must be done everytime you open a new terminal. You may add it to your .bashrc to automate it:
+
 4. `echo source /opt/intel/oneapi/setvars.sh --force >> ~/.bashrc`
 5. `source ~/.bashrc`
 
@@ -235,10 +256,12 @@ When building TxBFTSmart (on branch TxBFTSmart) the following additional steps a
 #### Additional prereq for BFTSmart (only on TxBFTSmart branch)
 
 First, install Java open jdk 1.11.0 in /usr/lib/jvm and export your LD_LIBRARY_Path:
+
 1. `sudo apt-get install openjdk-11-jdk` Confirm that `java-11-openjdk-amd64` it is installed in /usr/lib/jvm  
 2. `export LD_LIBRARY_PATH=/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server:$LD_LIBRARY_PATH`
 
 If it is not installed in `/usr/lib/jvm` then source the `LD_LIBRARY_PATH` according to your install location and adjust the following lines in the Makefile with your path:
+
 - `# Java and JNI`
 - `JAVA_HOME := /usr/lib/jvm/java-11-openjdk-amd64`  (adjust this)
 - `CFLAGS += -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux`
@@ -247,22 +270,11 @@ If it is not installed in `/usr/lib/jvm` then source the `LD_LIBRARY_PATH` accor
 
 ### Building binaries:
    
-   #### Branches: Basil/Tapir, TxHotstuff
-   Finally, you can build the binaries:
+   
+   Finally, you can build the binaries (you will need to do this anew on each branch):
 Navigate to `SOSP21_artifact_eval/src` and build:
 - `make -j #num-cores`
 
-   #### Branches: TxBFTSmart
-   Before building the TxBFTSmart codebase, you will have to build the BFTSmart java module. This process is automated as part of the additional steps necessary to configure the cloudlab experiment for TxBFTSmart. Refer to section "Running Experiments", sub-section "TxBFTSmart" for further details. You will have to complete section 2 "Setting up Cloudlab" as well. For completeness (if you have completed section 2 already), the instruction is included here too:
-
-   Navigate to `src/scripts`and run
-   1. `./one_step_config.sh <Local github directory> <Cloudlab user name> <Cloudlab experiment name> <Cloudlab project prefix name> <Cloudlab cluster domain name>`
-
-   For example, ./one_step_config.sh /home/<user>/SOSP21_artifact_eval fs435 indicus morty-pg0 utah.cloudlab.us
-
-      Finally, you can build the binaries:
-   Navigate to `SOSP21_artifact_eval/src` and build:
-   - `make -j #num-cores`
 
 
 #### Troubleshooting:
@@ -318,74 +330,111 @@ The client should finish within 10 seconds and the output file `client-0.out` sh
 
 ## Setting up Cloudlab
    
-(To re-install from scratch use a clean image:   18.04 LTS:     urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD.
-20.04 LTS urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD
-Or use a image pre-configured by us: urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server and urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client under public Profile: "SOSP108" https://www.cloudlab.us/p/morty/SOSP108)
+In order to run experiments on Cloudlab (https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project ("Start/Join project") if you do not already have one. (https://cloudlab.us/signup.php). Follow the cloudlab manual if you need additional information (http://docs.cloudlab.us/) for any of the steps below. We have included screenshots below for easy useability.
 
-In order to run experiments on Cloudlab you will have to register an account with your academic email and create a new project.
-Alternatively, if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted.
-If you use your local machine to start experiments, then you need to set up and register ssh in order to connect to the cloudlab servers. 
-If you are instead using a cloudlab control machine (see next steps) you can skip this step.
-To create an ssh key and register it with your ssh agent follow these instructions: https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent (Install ssh if you have not already.)
-Next, register your public key under your Cloudlab account user->Manage SSH Keys
+If you face any issues with registering, please make a post at the Cloudlab forum https://groups.google.com/g/cloudlab-users?pli=1 (replies are usually very swift during workdays, on US time).
+Alternatively (but not recommended), if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted (reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join).
 
-You are ready to start up an experiment:
-To use a pre-declared profile, use the following public profile "SOSP108" https://www.cloudlab.us/p/morty/SOSP108
-The profile by default starts with 18 server machines (follow the naming convention) and 18 client machines, all of which use m510 hardware on the Utah cluster.
-When running expeirments for Tapir, you may instead use only 9 server machines (remove the trailing 9 server names from the profile); When running TxHotstuff and TxBFTSmart,
-you may use 12 server machines (remove the trailing 6 server names from the profile). Since experiments require a fairly large number of machines, you may have to create a reservation in order to have enough resources. go to the "Make reservation tab" and make a reservation for 36 m510 machines on the Utah cluster (37 if you plan to use a control machine).
+![image](https://user-images.githubusercontent.com/42611410/129490833-eb99f58c-8f0a-43d9-8b99-433af5dab559.png)
 
-This profile includes two disk images "SOSP108.server" and "SOSP108.client" that already include all dependencies and additional machinery necessary to run experiments. If you instead want to build an image from scratch, start by loading a default Ubuntu 18.04 LTS image (urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD). Then, follow the above manual installation guide to install all dependencies (you may skip adding tbb setvars.sh to .bashrc). Additionally, you will have to install the following requisites:
-1. NTP:  https://vitux.com/how-to-install-ntp-server-and-client-on-ubuntu/ 
-         Confirm that it is running: sudo service ntp status (check for status Active)
+If you will use your local machine to start experiments, then you will need to set up and register ssh in order to connect to the Cloudlab machines. If you are instead going to use a Cloudlab control machine (see below) you can skip this step.
+To create an ssh key and register it with your ssh agent follow these instructions: https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent (Install ssh if you have not already.) Next, register your public key under your Cloudlab account user->Manage SSH Keys. Alternatively, you may add your keys driectly upon project creation.
 
-2. Data Sets: Build TPCC/Smallbank , move them to /usr/local/etc/  (can skip this on client machines for tpcc)
-   Store TPCC data:
-- Run tpcc_generator bin from /src/store/benchmark/async/tpcc/
-- `./tpcc_generator --num_warehouses=<N> > tpcc-<N>-warehouse`
-- Move output file to /usr/local/etc/tpcc-<N>-warehouse
-- We used 20 warehouses, so do N=20
+Next, you are ready to start up an experiment:
+
+To use a pre-declared profile supplied by us, start an experiment using the following public profile "SOSP108" https://www.cloudlab.us/p/morty/SOSP108. If you face any issues using this profile (or the disk images specified below) please make a post at https://groups.google.com/g/cloudlab-users?pli=1 and contact `fs435@cornell.edu` and `mlb452@cornell.edu`.
+![image](https://user-images.githubusercontent.com/42611410/129490911-8c97d826-caa7-4f04-95a7-8a2c8f3874f7.png)
+
+This profile by default starts with 18 server machines and 18 client machines, all of which use m510 hardware on the Utah cluster. This profile includes two disk images "SOSP108.server" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server`) and "SOSP108.client" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client`) that already include all dependencies and additional setup necessary to run experiments. Check the box "Use Control Machine" if you want to build binaries and run all experiments from one of the Cloudlab machines.
+![image](https://user-images.githubusercontent.com/42611410/129490922-a99a1287-6ecc-4d50-b05d-dfe7bd0496d9.png)
+Click "Next" and name your experiment (e.g. "sosp108"). In the example below, our experiment name is "indicus", and the project name is "morty". All our pre-supplied experiment configurations use these names as default, and you will need to change them accordingly to your chosen names (see section "Running Experiments").
+![image](https://user-images.githubusercontent.com/42611410/129490940-6c527b08-5def-4158-afd2-bc544e4758ab.png)
+Finally, set a duration and start your experiment. Starting all machines may take a decent amount of time as the server disk images contain large datasets that need to be loaded. Wait for it to be "ready":
+![image](https://user-images.githubusercontent.com/42611410/129490974-f2b26280-d5e9-42ca-a9fe-82b80b8e2349.png)
+You may ssh into the machines to test your connection using the ssh commands shown under "List View" or by using `ssh <cloudlab-username>@<host-name>.<experiment-name>.<project-name>-pg0.<cluster-name>`. In the example below it would be: `ssh fs435@us-east-1-0.indicus.morty-pg0.utah.cloudlab.us`.
+![image](https://user-images.githubusercontent.com/42611410/129490991-035a1865-43c3-4238-a264-e0d43dd0095f.png)
+
+
+Since experiments require a fairly large number of machines, you may have to create a reservation in order to have enough resources. Go to the "Make reservation tab" and make a reservation for 36 m510 machines on the Utah cluster (37 if you plan to use a control machine). 
+![image](https://user-images.githubusercontent.com/42611410/129491361-b13ef31b-707b-4e02-9c0f-800e6d9b4def.png)
+
+All experiments work using an experiment profile with 18 servers (36 total machines), but if you cannot get access to enough machines, it suffices to use 9 server machines for Tapir (remove the trailing 9 server names from the profile, i.e. `['us-east-1-0', 'us-east-1-1', 'us-east-1-2', 'eu-west-1-0', 'eu-west-1-1', 'eu-west-1-2', 'ap-northeast-1-0', 'ap-northeast-1-1', 'ap-northeast-1-2']`); or 12 server machines when running TxHotstuff and TxBFTSmart (remove the trailing 6 server names from the profile, i.e. `['us-east-1-0', 'us-east-1-1', 'us-east-1-2', 'eu-west-1-0', 'eu-west-1-1', 'eu-west-1-2', 'ap-northeast-1-0', 'ap-northeast-1-1', 'ap-northeast-1-2', 'us-west-1-0', 'us-west-1-1', 'us-west-1-2']`). 
+
+### Using a control machine (skip if using local machine)
+When using a control machine (and not your local machine) to start experiments, you will need to source setvars.sh and export the LD path for java (see section "Install Dependencies") before building. You will need to do this everytime you start a new control machine because those will not be persisted across images.
+
+Connect to your control machine via ssh: `ssh <cloudlab-user>@control.<experiment-name>.<project-name>.utah.cloudlab.us.`  You may need to add `-pg0` to your project name. (i.e. if your project is called "sosp108", it may need to be "sosp108-pg0" in order to connect. Find out by Trial and Error.).
+
+### Using a custom profile (skip if using pre-supplied profile)
+
+If you decide to instead create a profile of your own (https://www.cloudlab.us/manage_profile.php) use the following parameters (be careful to follow the same naming conventions of our profile for the servers or the experiment scripts/configuration provided will not work). You will need to buid your own disk image from scratch, as the public image is tied to the public profile. (You can try if the above images work, but likely they will not).
+
+- Number of Replicas: `['us-east-1-0', 'us-east-1-1', 'us-east-1-2', 'eu-west-1-0', 'eu-west-1-1', 'eu-west-1-2', 'ap-northeast-1-0', 'ap-northeast-1-1', 'ap-northeast-1-2', 'us-west-1-0', 'us-west-1-1', 'us-west-1-2', 'eu-central-1-0', 'eu-central-1-1', 'eu-central-1-2', 'ap-southeast-2-0', 'ap-southeast-2-1', 'ap-southeast-2-2']`
+- Number of sites (DCs): 6
+- Replica Hardware Type: `m510`
+- Replica storage: `64GB`
+- Replica disk image: Your own (server) image
+- Client Hardware Type: `'m510'` (add the '')
+- Client storage: `16GB`
+- Client disk image: Your own (client) image
+- Number of clients per replica: `1`
+- Total number of clients: `0` (this will still create 18 clients)
+- Use control machine?:  Check this if you plan to use a control machine
+- Control Hardware Type: `m510`
+
+### Building and configuring disk images from scratch
+If you want to build an image from scratch, follow the instructions below:
+
+Start by choosing to load a default Ubuntu 18.04 LTS image as "Replica disk image" and "Client disk image": `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD)` - for Ubuntu 20.04 LTS use: `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD`. 
+
+Next, follow the above manual installation guide (section "Installing Dependencies" to install all dependencies (you can skip adding tbb setvars.sh to .bashrc). 
+
+Additionally, you will have to install the following requisites:
+1. **NTP**:  https://vitux.com/how-to-install-ntp-server-and-client-on-ubuntu/ 
+   
+   Confirm that it is running: sudo service ntp status (check for status Active)
+
+2. **Data Sets**: Build TPCC/Smallbank data sets and move them to /usr/local/etc/ 
+   
+      **Store TPCC data:**
+   - Navigate to`SOSP21_artifact_eval/src/store/benchmark/async/tpcc` 
+   - Run `./tpcc_generator --num_warehouses=<N> > tpcc-<N>-warehouse`
+   - We used 20 warehouses, so replace `<N>` with `20`
+   - Move output file to `/usr/local/etc/tpcc-<N>-warehouse`
+   - You can skip this on client machines and create a separate disk image for cients without. This will considerably reduce image size and speed up experiment startup. 
  
-   Store Smallbank data:
-- Run smallbank_generator_main bin from /src/store/benchmark/async/smallbank/
-- `./smallbank_generator_main --num_customers=<N>`
-- It will generate two files, smallbank_names, and smallbank_data. Move them to /usr/local/etc/
-- The server needs both, the client needs only names (not storing smallbank_data saves space for the image)
-- We used 1 million customers
+      **Store Smallbank data:**
+   - Navigate to `SOSP21_artifact_eval/src/store/benchmark/async/smallbank/`
+   - Run `./smallbank_generator_main --num_customers=<N>`
+   - We used 1 million customers, so replace `<N>` with `1000000`
+   - The script will generate two files, smallbank_names, and smallbank_data. Move them to /usr/local/etc/
+   - The server needs both, the client needs only smallbank_names (not storing smallbank_data saves space for the image)
 
    
-3. Public Keys: Build crypto keys, move them to /usr/local/etc/donna/
- - Go to /src and use keygen.sh
-- Run ./keygen.sh → creates a lot of keys using ./create_key <key_type>  
-- By default keygen.sh uses type 4 = Donna, but you can modify it to 3 for secp256k1
-- Move the key-pairs in the /keys folder to /usr/local/etc/indicus-keys/donna/ or to /usr/local/etc/indicus-keys/secp256k1/ depending on what type used
+3. **Public Keys**: Generate Pub/Priv key-pairs, move them to /usr/local/etc/donna/
 
-4. Create the following two scripts (and enable execution permissions) and place them in /usr/local/etc/
-   The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
-- Hyperthreading script:
--   name it: `disable_HT.sh`
--   `#!/bin/bash`
--   `for i in {8..15}; do`
--   `   echo "Disabling logical HT core $i."`
--   `   echo 0 > /sys/devices/system/cpu/cpu${i}/online;`
--   `Done`
+    - Navigate to `SOSP21_artifact_eval/src` and run `keygen.sh`
+    - By default keygen.sh uses type 4 = Ed25519 (this is what we evaluated unde); it can be modifed secp256k1 (type 3), but this requires editing the config files as well. (do not do this, to re-produce our experiments)
+    - Move the key-pairs in the `/keys` folder to `/usr/local/etc/indicus-keys/donna/` (or to `/usr/local/etc/indicus-keys/secp256k1/` depending on what type used)
 
-- Turbo script:
-- name it: turn_off_turbo.sh
-- `#!/bin/bash`
-- `echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo`
+4. **Helper scripts**: 
 
-Once complete, create a new disk image. Then, start the profile with the disk image specified.
+    (On branch main) Navigate to SOSP21_artifact_eval/helper-scripts. Copy both these scripts (with the exact name) and place them in `/usr/local/etc` on the cloudlab machine. Add execution permissions: `chmod +x disable_HT.sh; chmod +x turn_off_turbo.sh` The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
+
    
+Once complete, create a new disk image (separate ones for server and client if you want to save space/time). Then, start the profile by choosing the newly created disk image.
+To create a disk image, select "Create Disk Image" and name it accordingly.
+![image](https://user-images.githubusercontent.com/42611410/129491499-eb7d0618-5dc4-4942-a25a-3b4a955c5077.png)
 
-## Using a control machine:
-When using a control machine (and not your local machine) to start experiments, you will need to source setvars.sh and export the LD path for java before building (everytime you start a new control machine) because those will not be persisted across images.
-You dont need to setup ssh(?)
+   
+  
+   
 
 ## Running experiments:
 Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
 The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion.
-To use the provided config files, you will need to make the following modifications to each file:
+To use the provided config files, you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
+
 1. "project_name": "morty-pg0" --> change to the name of your project. On cloudlab.us (utah cluster) you will generally need to add "-pg0" to your project_name in order to ssh into the machines. To confirm which is the case for you, try to ssh into a machine directly using
    `ssh <cloudlab-user>@us-east-1-0.<experiment-name>.<project-name>.utah.cloudlab.us`
    
@@ -398,14 +447,36 @@ IMPORTANT: In new scripts dont use this param, it will detach git. Instead just 
 7. emulab_user: <cloudlab-username>
 8. run_locally: false (set to false to run remote experiments on distributed hardware (cloud lab), set to true to run locally)
    
-After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go deeper into the folders (total of 3 timestamped folders) until you enter /out. Look for the stats.json file. Throughput measurements will be under: aggregate/combined/tput (or run-stats/combined /tput if you run multiple experiments for error bars) Latency will be under: aggregate/combined /mean
-   Plots: go to /plots/tput-clients.png and /plots/lat-tput.png to look at the data points directly. On the control machine looking at stats is necessary
    
 ### Extra Pre-Configurations necessary for TxHotstuff and TxBFTSmart
    --> see the branch... Extra coudlab configuration is necessary before running (some even necessary before building)
-   
+   Hotstuff:
+   1. Need to modify all cloudlab user ids in config_remote:
+      - Line3: Target Dir: users/<cloudlab-user>/config
+      - Line 14: <cloudlab-user>@${machine}.<experiment-name>.<project-name>.utah.cloudlab.us:/users/<cloudlab-user>/
+(Remember that project-name might have to include -pg0
+    2. Run ./batch_size <batch_size> to set the batch size used by Hotstuff
+    3. Run ./config_remote. 
+
+   BFTSmart:
+   TODO: Add the local client check, and the troubleshooting...
+   1. To change the batch size: src/store/bftsmartstore/library/java-config/system.config
+Change line system.totalordermulticast.maxbatchsize = 64 !!!!!
+(For tpcc 16 is enough)
+   2. In src/scripts, run ./one_step_config.sh <Local BFT-DB directory> <Cloudlab user name> <Cloudlab experiment name> <Cloudlab project prefix name> <Cloudlab        cluster domain name>, for example, ./zw494_one_step_config.sh /home/zw494/BFT-DB zw494 bftsmart morty-pg0 utah.cloudlab.us
+         - Troubleshooting: Make sure server-hosts and clients-hosts do not contain an empty line at the end
+
 Now you are ready to start a experiment:
 - Use any of the provided configs under /experiments/<Figures>. Make sure to use the binary code from branches TXHotstuff/TxBFTSmart if you are running any of those configs
 - To confirm that we indeed report the max throughput you can modify the num_clients fields on the baseline configs.. One can put multiple [a,b,c] which will run multiple experiments and output the results in a plot.
    
+   Explain how to vary experiment length. How to vary number of clients (total, threads). How to run multiple experiments in one go ([] operator) to confirm peaks. 
+   
+   After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go deeper into the folders (total of 3 timestamped folders) until you enter /out. Look for the stats.json file. Throughput measurements will be under: aggregate/combined/tput (or run-stats/combined /tput if you run multiple experiments for error bars) Latency will be under: aggregate/combined /mean  On the control machine looking at stats is necessary
+  On your local machine, you can also look at output Plots: go to /plots/tput-clients.png and /plots/lat-tput.png to look at the data points directly. currently it shows the number of total client processes on the x axis, not total number of client threads.
 
+   Explain all experiments: 
+   - What numbers are expected, and how to read them. (tput_s_honest)
+   - mention to just use the 90-2 for failures as representative if you dont want to run all
+   - same for batching
+   - same for reads peaks
