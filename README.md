@@ -4,54 +4,54 @@ This is the repository for the Artifact Evaluation of SOSP'21 submission #108: "
 For all questions about the artifact please e-mail (or message over google hangouts) "fs435@cornell.edu". For specific questions about 1) building the codebase or 2) running TxBFTSmart aditionally CC zw494@cornell.edu, for questions about 3) running TxHotstuff CC yz2327@cornell.edu, and 4) for questions about the experiment scripts or cloudlab CC mlb452@cornell.edu.
 
 
-## Claims TODO
+## Claims 
 
-our claims are everything we evaluate in our figures..
-this prototype implements Basil, and offers replication, sharding and interactive transactions. The prototype uses cryptographically secure hash functions and signatures for all replicas, and implements byzantine clients failing via Stalling or Equivocation, and is robust to both. The artifact contains, and allows to reproduce, experiments for all figures included in the paper. Client requests are unsigned on all prototype systems, as we delegate this problem to the application layer. 
-While the prototype uses tolerates many obvious faults such as message corruptions, duplications, it does *not* exhaustively defend against arbitrary byzantine failures or corruptions, nor does it simulate all possible behaviors. For example, the prototype implements fault tolerance (safety) to leader failures during recovery, it does not include code to simulate these, nor does it implement explicit exponential timeouts to enter new views that are necessary for theoretical liveness under partial synchrony.
+### General
+The artifact contains, and allows to reproduce, experiments for all figures included in the paper. 
 
-- **claim1**: Basil comes within competitive performance (both throughput and latency) compared to Tapir, a Crash Fault Tolerant database. Basils current code-base was modified since the Basil results reported in the paper (for microbenchmarks too) to include failure handling, so while results should be largely consistent, they may differ slightly.
+This prototype implements (alongside several baselines) Basil, a replicated Byzantine Fault Tolerant key-value store offering interactive transactions and sharding. The prototype uses cryptographically secure hash functions and signatures for all replicas, but does not sign client requests on any of the evaluated prototype systems, as we delegate this problem to the application layer. The Basil prototype can simulate Byzantine Clients failing via Stalling or Equivocation, and is robust to both. While the Basil prototype uses tolerates many obvious faults such as message corruptions, duplications, it does *not* exhaustively implement defences against arbitrary failures or data format corruptions, nor does it simulate all possible behaviors. For example, while the prototype implements fault tolerance (safety) to leader failures during recovery, it does not include code to simulate these, nor does it implement explicit exponential timeouts to enter new views that are necessary for theoretical liveness under partial synchrony.
 
-- **claim2**: Basil achieves both higher throughput and lower latency than both BFT baselines (TxHotstuff, TxBFTSmart)
+Basils current code-base was modified beyond some of the results reported in the paper (both for workloads, and microbenchmarks) to include failure handling: While results should be largely consistent, they may differ slightly across the microbenchmarks (better performance in some cases).
 
-- **claim3**: Basil maintains robust throughput for correct clients under attack by byzantine Clients
+### Concrete claims in the paper
+- **claim1**: Basil comes within competitive throughput (within 4x on TPCC, 3x on Smallbank, and 2x on Retwis) compared to Tapir, a state of the art Crash Fault Tolerant database. 
 
-- **claim4**: All other microbenchmarks are correct...
+- **claim2**: Basil achieves both higher throughput and lower latency than both BFT baselines (TxHotstuff, TxBFTSmart).
+
+- **claim3**: Basil maintains robust throughput for correct clients under simulated attack by Byzantine Clients.
+
+- **claim4**: All other microbenchmarks reported realistically represent Basil.
 
 
 ## Artifacts
-The artifact is spread across the following three branches. Please checkout a given branch when validating claims for a respective system.
-0. Branch main: Contains the paper, the exeriment scripts, and all experiment configurations used.
-1. Branch Basil/Tapir: Contains the source code used for all Basil and Tapir evaluation
+The artifact is spread across the following four branches. Please checkout the corresponding branch when validating claims for a respective system.
+1. Branch main: Contains the Readme, the paper, the exeriment scripts, and all experiment configurations used.
+2. Branch Basil/Tapir: Contains the source code used for all Basil and Tapir evaluation
 3. Branch TxHotstuff: Contains the source code used for TxHotstuff evaluation
 4. Branch TxBFTSmart: Contains the source code used for TxBFTSmart evaluation
-For convenience, all branches have the necessary experiment scripts as well. Do however, make sure to only run the configs for a specific system on the respective branch.
-We recommend making a separate copy of the configs (and experiment scripts) and checking out the other branches.
 
-Alternatively, I could put all the source code in a different repo?
-
+For convenience, all branches include the experiment scripts and configurations necessary to re-produce our results. Do however, *make sure* to only run the configs for a specific system on the respective branch (i.e. only run configs for Basil from the Basil branch, Hotstuff from TxHotstuff, etc.).
+We recommend making a separate copy of the configs (and experiment scripts) in order to keep track of changes made to them in a single location, while checking out different branches to run the respective source code binaries.
 
 
 ## Validating the Claims
-1. Building binaries (for all branches)  
-   In order to build Basil and baseline source code in any of the branches several dependencies must be installed. 
-   Alternatively, you may use a dedicated Cloudlab "control" machine that is pre-loaded with a fully configured disk image.
-   In this case, you may skip step 1, and move straight to setting up a CloudLab experiment. Otherwise, please follow the
-   instructions in section "Installing Dependencies" in order to compile the code.
+All our experiments were run on the Cloudlab Utah cluster, using m510 machines. In order to re-produce our results and validate the claims you will need to 1) instantiate a matching cloudlab experiment, 2) build the necessary binaries, and 3) run the provided experiment scripts with the supplied configs we used to generate our results. You may go about 2) and 3) in two ways: You can either build and control the experiments from a local machine (easier to parse/record results & troubleshoot, but more initial installs necessary), or, you can build and control the experiments from a dedicated cloudlab control machine, using pre-supplied disk images (faster setup out of the box, but more overhead to parse/record results and troubleshoot). Both options are outlined below.
 
-2. Setting up experiments on Cloudlab 
-     --> Point to Cloudlab guide: a) how to start a profile and what images to use, b) how to generate these images (all installs + extras)
+The ReadMe is organized into the following high level sections:
+1. *Installing pre-requisites and building binaries*
+   In order to build Basil and baseline source code in any of the branches several dependencies must be installed. Refer to section "Installing Dependencies" for detailed instructions on how to install dependencies and compile the code. You may skip this step if you choose to use a dedicated Cloudlab "control" machine using *our* supplied fully configured disk images. Note, that if you choose to use a control machine, but not use our images, you will have to follow the Installation guide too, and additionally create your own disk images. More on disk images can be found in section "Setting up Cloudlab".
+  
+
+2. *Setting up experiments on Cloudlab* 
+  In order to re-run our experiments you will need to instantiate a distributed and replicated server (and client) configuration using Cloudlab. We have provided a public profile as well as public disk images that capture the configurations used by us to produce our results. Section "Setting up Cloudlab" covers the necessary steps in detail. Alternatively, you may create a profile of your own and generate disk images from scratch (more work) - refer to section "Setting up Cloudlab" as well for more information.
+
+   
+3. *Running experiments*
+  To reproduce our results you will need to checkout the respective branch, and and run the supplied experiment scripts using the supplied experiment configurations. Section "Running Experiments" includes instructions for using the experiment scripts, modifying the configurations and parsing the output. For the baseline systems TxHotstuff and TxBFTSmart additional configuration steps are necessary, all of which are detailed in section "Running Experiments" as well.
+  configure (and upload configurations to cloudlab) the systems
      
-3. Running experiments:
-      1) Go to respective branch, 
-      2) follow additional installs & remote configs for Hotstuff and BFTsmart
-      3) build
-      4) experiments.
-           --> Show how to run basic dummy test locally, just to confirm that binaries work.
-           --> Point to experiment scripts and configs guide. to run remotely.
 
-
-## Installing Dependencies (NOT NECESSARY IF USING PROVIDED CLOUDLAB IMAGE AND USING CONTROLLER MACHINE TO START SCRIPTS)
+## Installing Dependencies (Skip if using Cloudlab control machine using supplied images) 
 Compiling Basil requires the following high level requirements: 
 - Operating System: Ubuntu 18.04 LTS, Bionic  
    - You may try to run on Mac, which has worked for us in the past, but is not documented 
