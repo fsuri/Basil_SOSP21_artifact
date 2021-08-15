@@ -244,20 +244,25 @@ If it is not installed in `/usr/lib/jvm` then source the `LD_LIBRARY_PATH` accor
 - `CFLAGS += -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux`
 - `LDFLAGS += -L/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server -ljvm`  (adjust this)
 
-Finally (before building the TxBFTSmart codebase), you will have to build the BFTSmart java module. This process is automated as part of the additional steps necessary to configure the cloudlab experiment for TxBFTSmart. Refer to section "Running Experiments", sub-section "TxBFTSmart" for further details. You will have to complete section 2 "Setting up Cloudlab" as well. For completeness (if you have completed section 2 already), the instruction is included here too:
-
-Navigate to `src/scripts`and run
-1. `./one_step_config.sh <Local github directory> <Cloudlab user name> <Cloudlab experiment name> <Cloudlab project prefix name> <Cloudlab cluster domain name>`
-
-For example, ./one_step_config.sh /home/<user>/SOSP21_artifact_eval fs435 indicus morty-pg0 utah.cloudlab.us
-
 
 ### Building binaries:
    
+   #### Branches: Basil/Tapir, TxHotstuff
    Finally, you can build the binaries:
 Navigate to `SOSP21_artifact_eval/src` and build:
 - `make -j #num-cores`
 
+   #### Branches: TxBFTSmart
+   Before building the TxBFTSmart codebase, you will have to build the BFTSmart java module. This process is automated as part of the additional steps necessary to configure the cloudlab experiment for TxBFTSmart. Refer to section "Running Experiments", sub-section "TxBFTSmart" for further details. You will have to complete section 2 "Setting up Cloudlab" as well. For completeness (if you have completed section 2 already), the instruction is included here too:
+
+   Navigate to `src/scripts`and run
+   1. `./one_step_config.sh <Local github directory> <Cloudlab user name> <Cloudlab experiment name> <Cloudlab project prefix name> <Cloudlab cluster domain name>`
+
+   For example, ./one_step_config.sh /home/<user>/SOSP21_artifact_eval fs435 indicus morty-pg0 utah.cloudlab.us
+
+      Finally, you can build the binaries:
+   Navigate to `SOSP21_artifact_eval/src` and build:
+   - `make -j #num-cores`
 
 
 #### Troubleshooting:
