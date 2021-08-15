@@ -447,8 +447,6 @@ IMPORTANT: In new scripts dont use this param, it will detach git. Instead just 
 7. emulab_user: <cloudlab-username>
 8. run_locally: false (set to false to run remote experiments on distributed hardware (cloud lab), set to true to run locally)
    
-After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go deeper into the folders (total of 3 timestamped folders) until you enter /out. Look for the stats.json file. Throughput measurements will be under: aggregate/combined/tput (or run-stats/combined /tput if you run multiple experiments for error bars) Latency will be under: aggregate/combined /mean  On the control machine looking at stats is necessary
-  On your local machine, you can also look at output Plots: go to /plots/tput-clients.png and /plots/lat-tput.png to look at the data points directly. currently it shows the number of total client processes on the x axis, not total number of client threads.
    
 ### Extra Pre-Configurations necessary for TxHotstuff and TxBFTSmart
    --> see the branch... Extra coudlab configuration is necessary before running (some even necessary before building)
@@ -472,4 +470,13 @@ Now you are ready to start a experiment:
 - Use any of the provided configs under /experiments/<Figures>. Make sure to use the binary code from branches TXHotstuff/TxBFTSmart if you are running any of those configs
 - To confirm that we indeed report the max throughput you can modify the num_clients fields on the baseline configs.. One can put multiple [a,b,c] which will run multiple experiments and output the results in a plot.
    
+   Explain how to vary experiment length. How to vary number of clients (total, threads). How to run multiple experiments in one go ([] operator) to confirm peaks. 
+   
+   After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go deeper into the folders (total of 3 timestamped folders) until you enter /out. Look for the stats.json file. Throughput measurements will be under: aggregate/combined/tput (or run-stats/combined /tput if you run multiple experiments for error bars) Latency will be under: aggregate/combined /mean  On the control machine looking at stats is necessary
+  On your local machine, you can also look at output Plots: go to /plots/tput-clients.png and /plots/lat-tput.png to look at the data points directly. currently it shows the number of total client processes on the x axis, not total number of client threads.
 
+   Explain all experiments: 
+   - What numbers are expected, and how to read them. (tput_s_honest)
+   - mention to just use the 90-2 for failures as representative if you dont want to run all
+   - same for batching
+   - same for reads peaks
