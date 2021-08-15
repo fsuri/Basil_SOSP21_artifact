@@ -1,6 +1,7 @@
 # SOSP21 Artifact Evaluation #108
 This is the repository for the Artifact Evaluation of SOSP'21 submission #108: "Basil: Breaking up BFT with ACID transactions".
-For questions please e-mail (or message over google hangouts) "fs435@cornell.edu". For specific questions about 1) building the codebase or 2) running TxBFTSmart cc zw494@cornell.edu, for questions about 3) running TxHotstuff cc yz2327@cornelle.edu, and 4) for questions about the experiment scripts or cloudlab cc mlb452@cornell.edu.
+
+For all questions about the artifact please e-mail (or message over google hangouts) "fs435@cornell.edu". For specific questions about 1) building the codebase or 2) running TxBFTSmart aditionally CC zw494@cornell.edu, for questions about 3) running TxHotstuff CC yz2327@cornelle.edu, and 4) for questions about the experiment scripts or cloudlab CC mlb452@cornell.edu.
 
 
 ## Claims TODO
