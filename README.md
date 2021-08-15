@@ -45,14 +45,14 @@ The ReadMe is organized into the following high level sections:
 
 2. *Setting up experiments on Cloudlab* 
 
-  In order to re-run our experiments you will need to instantiate a distributed and replicated server (and client) configuration using Cloudlab. We have provided a public profile as well as public disk images that capture the configurations used by us to produce our results. Section "Setting up Cloudlab" covers the necessary steps in detail. Alternatively, you may create a profile of your own and generate disk images from scratch (more work) - refer to section "Setting up Cloudlab" as well for more information.
+     In order to re-run our experiments you will need to instantiate a distributed and replicated server (and client) configuration using Cloudlab. We have provided a public profile as well as public disk images that capture the configurations used by us to produce our results. Section "Setting up Cloudlab" covers the necessary steps in detail. Alternatively, you may create a profile of your own and generate disk images from scratch (more work) - refer to section "Setting up Cloudlab" as well for more information.
 
-   
+
 3. *Running experiments*
 
-  To reproduce our results you will need to checkout the respective branch, and and run the supplied experiment scripts using the supplied experiment configurations. Section "Running Experiments" includes instructions for using the experiment scripts, modifying the configurations and parsing the output. For the baseline systems TxHotstuff and TxBFTSmart additional configuration steps are necessary, all of which are detailed in section "Running Experiments" as well.
-  configure (and upload configurations to cloudlab) the systems
-     
+     To reproduce our results you will need to checkout the respective branch, and and run the supplied experiment scripts using the supplied experiment configurations. Section "Running Experiments" includes instructions for using the experiment scripts, modifying the configurations and parsing the output. For the baseline systems TxHotstuff and TxBFTSmart additional configuration steps are necessary, all of which are detailed in section "Running Experiments" as well.
+     configure (and upload configurations to cloudlab) the systems
+
 
 ## Installing Dependencies (Skip if using Cloudlab control machine using supplied images) 
 Compiling Basil requires the following high level requirements: 
