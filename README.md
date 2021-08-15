@@ -247,22 +247,11 @@ If it is not installed in `/usr/lib/jvm` then source the `LD_LIBRARY_PATH` accor
 
 ### Building binaries:
    
-   #### Branches: Basil/Tapir, TxHotstuff
-   Finally, you can build the binaries:
+   
+   Finally, you can build the binaries (you will need to do this anew on each branch):
 Navigate to `SOSP21_artifact_eval/src` and build:
 - `make -j #num-cores`
 
-   #### Branches: TxBFTSmart
-   Before building the TxBFTSmart codebase, you will have to build the BFTSmart java module. This process is automated as part of the additional steps necessary to configure the cloudlab experiment for TxBFTSmart. Refer to section "Running Experiments", sub-section "TxBFTSmart" for further details. You will have to complete section 2 "Setting up Cloudlab" as well. For completeness (if you have completed section 2 already), the instruction is included here too:
-
-   Navigate to `src/scripts`and run
-   1. `./one_step_config.sh <Local github directory> <Cloudlab user name> <Cloudlab experiment name> <Cloudlab project prefix name> <Cloudlab cluster domain name>`
-
-   For example, ./one_step_config.sh /home/<user>/SOSP21_artifact_eval fs435 indicus morty-pg0 utah.cloudlab.us
-
-      Finally, you can build the binaries:
-   Navigate to `SOSP21_artifact_eval/src` and build:
-   - `make -j #num-cores`
 
 
 #### Troubleshooting:
@@ -318,28 +307,40 @@ The client should finish within 10 seconds and the output file `client-0.out` sh
 
 ## Setting up Cloudlab
    
-(To re-install from scratch use a clean image:   18.04 LTS:     urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD.
-20.04 LTS urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD
-Or use a image pre-configured by us: urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server and urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client under public Profile: "SOSP108" https://www.cloudlab.us/p/morty/SOSP108)
+In order to run experiments on Cloudlab you will need to register an account with your academic email and create a new project ("Start/Join project").
+Alternatively (but not recommended), if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted (reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join).
 
-In order to run experiments on Cloudlab you will have to register an account with your academic email and create a new project.
-Alternatively, if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted.
-If you use your local machine to start experiments, then you need to set up and register ssh in order to connect to the cloudlab servers. 
-If you are instead using a cloudlab control machine (see next steps) you can skip this step.
-To create an ssh key and register it with your ssh agent follow these instructions: https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent (Install ssh if you have not already.)
-Next, register your public key under your Cloudlab account user->Manage SSH Keys
+If you use will use local machine to start experiments, then you will need to set up and register ssh in order to connect to the Cloudlab machines. If you are instead using a cloudlab control machine  you can skip this step.
+To create an ssh key and register it with your ssh agent follow these instructions: https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent (Install ssh if you have not already.) Next, register your public key under your Cloudlab account user->Manage SSH Keys.
 
-You are ready to start up an experiment:
-To use a pre-declared profile, use the following public profile "SOSP108" https://www.cloudlab.us/p/morty/SOSP108
-The profile by default starts with 18 server machines (follow the naming convention) and 18 client machines, all of which use m510 hardware on the Utah cluster.
-When running expeirments for Tapir, you may instead use only 9 server machines (remove the trailing 9 server names from the profile); When running TxHotstuff and TxBFTSmart,
-you may use 12 server machines (remove the trailing 6 server names from the profile). Since experiments require a fairly large number of machines, you may have to create a reservation in order to have enough resources. go to the "Make reservation tab" and make a reservation for 36 m510 machines on the Utah cluster (37 if you plan to use a control machine).
+Next, you are ready to start up an experiment:
 
-This profile includes two disk images "SOSP108.server" and "SOSP108.client" that already include all dependencies and additional machinery necessary to run experiments. If you instead want to build an image from scratch, start by loading a default Ubuntu 18.04 LTS image (urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD). Then, follow the above manual installation guide to install all dependencies (you may skip adding tbb setvars.sh to .bashrc). Additionally, you will have to install the following requisites:
+To use a pre-declared profile supplied by us, use the following public profile "SOSP108" https://www.cloudlab.us/p/morty/SOSP108. 
+This profile by default starts with 18 server machines and 18 client machines, all of which use m510 hardware on the Utah cluster. 
+Since experiments require a fairly large number of machines, you may have to create a reservation in order to have enough resources. Go to the "Make reservation tab" and make a reservation for 36 m510 machines on the Utah cluster (37 if you plan to use a control machine).
+All experiments work using an experiment profile with 18 servers, but if you cannot get access to enough machine, you may instead use only 9 server machines for Tapir (remove the trailing 9 server names from the profile); or 12 server machines when running TxHotstuff and TxBFTSmart (remove the trailing 6 server names from the profile). 
+
+
+This profile includes two disk images "SOSP108.server" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server`) and "SOSP108.client" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client`) that already include all dependencies and additional setup necessary to run experiments. 
+
+If you decide to instead create a profile of your own, be careful to follow the same naming conventions of our profile for the servers: 
+
+- Number of Replicas: `['us-east-1-0', 'us-east-1-1', 'us-east-1-2', 'eu-west-1-0', 'eu-west-1-1', 'eu-west-1-2', 'ap-northeast-1-0', 'ap-northeast-1-1', 'ap-northeast-1-2', 'us-west-1-0', 'us-west-1-1', 'us-west-1-2', 'eu-central-1-0', 'eu-central-1-1', 'eu-central-1-2', 'ap-southeast-2-0', 'ap-southeast-2-1', 'ap-southeast-2-2']`
+- Replica Hardware: `m510`
+- Client Hardware: ``m510``
+
+If you instead want to build an image from scratch, follow the instructions below:
+
+### Building and configuring disk images from scratch
+Start by choosing to load a default Ubuntu 18.04 LTS image: `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD)` - for Ubuntu 20.04 LTS use: `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD`. 
+
+Next, follow the above manual installation guide (section "Installing Dependencies" to install all dependencies (you can skip adding tbb setvars.sh to .bashrc). 
+
+Additionally, you will have to install the following requisites:
 1. NTP:  https://vitux.com/how-to-install-ntp-server-and-client-on-ubuntu/ 
          Confirm that it is running: sudo service ntp status (check for status Active)
 
-2. Data Sets: Build TPCC/Smallbank , move them to /usr/local/etc/  (can skip this on client machines for tpcc)
+2. Data Sets: Build TPCC/Smallbank data sets and move them to /usr/local/etc/  (can skip this on client disk images for tpcc)
    Store TPCC data:
 - Run tpcc_generator bin from /src/store/benchmark/async/tpcc/
 - `./tpcc_generator --num_warehouses=<N> > tpcc-<N>-warehouse`
@@ -360,27 +361,14 @@ This profile includes two disk images "SOSP108.server" and "SOSP108.client" that
 - By default keygen.sh uses type 4 = Donna, but you can modify it to 3 for secp256k1
 - Move the key-pairs in the /keys folder to /usr/local/etc/indicus-keys/donna/ or to /usr/local/etc/indicus-keys/secp256k1/ depending on what type used
 
-4. Create the following two scripts (and enable execution permissions) and place them in /usr/local/etc/
-   The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
-- Hyperthreading script:
--   name it: `disable_HT.sh`
--   `#!/bin/bash`
--   `for i in {8..15}; do`
--   `   echo "Disabling logical HT core $i."`
--   `   echo 0 > /sys/devices/system/cpu/cpu${i}/online;`
--   `Done`
+4. (On branch main) Navigate to SOSP21_artifact_eval/helper-scripts. copy both these scripts (with the exact name) and place them in /usr/local/etc on the cloudlab machine. Add execution permissions: `chmod +x disable_HT.sh; chmod +x turn_off_turbo.sh`
+The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
 
-- Turbo script:
-- name it: turn_off_turbo.sh
-- `#!/bin/bash`
-- `echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo`
-
+   
 Once complete, create a new disk image. Then, start the profile with the disk image specified.
    
-
-## Using a control machine:
-When using a control machine (and not your local machine) to start experiments, you will need to source setvars.sh and export the LD path for java before building (everytime you start a new control machine) because those will not be persisted across images.
-You dont need to setup ssh(?)
+### Using a control machine:
+When using a control machine (and not your local machine) to start experiments, you will need to source setvars.sh and export the LD path for java (see section "Install Dependencies") before building. You will need to do this everytime you start a new control machine because those will not be persisted across images.
 
 ## Running experiments:
 Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
