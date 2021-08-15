@@ -143,6 +143,7 @@ Download the library:
 3. `git checkout v3.5.1`
 
 Next, build protobuf:
+
 4. `./autogen.sh`
 5. `./configure`
 6. `sudo make -j #cores`
