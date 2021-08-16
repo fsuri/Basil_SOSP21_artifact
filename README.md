@@ -561,6 +561,8 @@ Next, we will go over each included experiment individually to provide some poin
 We have included recently re-validated experiment outputs (for most of the experiments) for easy cross-validation of the claimed througput (and latency) numbers under `/sample-output/ValidatedResults`. To directly compare against the numbers reported in our paper please refer to the figures there (we include rough numbers below as well). Some of Basil's workload and microbenchmark performances have changed slightly (documented below) since the codebase has matured since, but is nonetheless mostly consistent.
 
 #### 1 - Workloads:
+We report evaluation results for 3 workloads (TPCC, Smallbank, Retwis) and 4 systems: Tapir (Crash Failure baseline), Basil (our system), TxHotstuff (BFT baseline), and TxBFTSmart (BFT baseline). All systems were evaluated using 3 shards each, but use different replication factors.
+
    1. **Tapir**: 
    
    > :warning: Make sure to run on branch `Basil/Tapir`. Build the binaries before running (see instructions above)
@@ -582,7 +584,7 @@ We have included recently re-validated experiment outputs (for most of the exper
       - Smallbank: Throughput: ~23k tx/s Latency: ~12 ms
       - Retwis: Throughput: ~24 k tx/s, Latency: ~10 ms
         
-   > [NOTE] On both Smallbank and Retwis throughput has decreased (and Latency has increased) ever so slightly since the reported paper results, as the system now additionally implements failure handling, which is optimistically triggered even under absence of failures. To disable this option set the JSON value `"no_fallback" : "true"`. We note, that none of the baseline systems (implement and) run with failure handling.\
+   > **[NOTE]** On both Smallbank and Retwis throughput has decreased (and Latency has increased) ever so slightly since the reported paper results, as the system now additionally implements failure handling, which is optimistically triggered even under absence of failures. To disable this option set the JSON value `"no_fallback" : "true"`. We note, that none of the baseline systems (implement and) run with failure handling.\
          
    3. **TxHotstuff:** 
    > :warning: Make sure to run on branch `TxHotstuff`. Build the binaries before running (see instructions above)
@@ -606,8 +608,8 @@ We have included recently re-validated experiment outputs (for most of the exper
       - Smallbank: Throughput: ~8.7k tx/s Latency: ~19 ms
       - Retwis: Throughput: ~6.3k tx/s, Latency: ~23 ms
 
-   > [NOTE] **Optional - read fully** To change batch size in BFTSmart navigate to  `src/store/bftsmartstore/library/java-config/system.config` and change line `system.totalordermulticast.maxbatchsize = <batch_size>`. Use 16 for TPCC and 64 for Smallbank/Retwis for optimal results. However, explicitly setting this batch size is not necessary, as long as the currently configured `<batch_size>` is `>=` the desired one. This is because BFTSmart performs optimally with a batch timeout of 0, and hence the batch size set *only* dictates an upper bound for consensus batches. Using a larger batch size has no effect. Hence, our reported optimal batch sizes of 16 and 64 respectively correspond to the upper bound after which no further improvements are seen. By default our configurations are set to `<batch_size> = 64`, so no further edits are necessary. \
-   > **[Troubleshooting]]*: If you run into any issues (specifically the error: “SSLHandShakeException: No Appropriate Protocol” ) with running BFT-Smart please comment out the following in your `java-11-openjdk-amd64/conf/security/java.security` file: `jdk.tls.disabledAlgorithms=SSLv3, TLSv1, RC4, DES, MD5withRSA, DH keySize < 1024 EC keySize < 224, 3DES_EDE_CBC, anon, NULL`
+   > **[OPTIONAL NOTE]** **If you read, read fully**: To change batch size in BFTSmart navigate to  `src/store/bftsmartstore/library/java-config/system.config` and change line `system.totalordermulticast.maxbatchsize = <batch_size>`. Use 16 for TPCC and 64 for Smallbank/Retwis for optimal results. However, explicitly setting this batch size is not necessary, as long as the currently configured `<batch_size>` is `>=` the desired one. This is because BFTSmart performs optimally with a batch timeout of 0, and hence the batch size set *only* dictates an upper bound for consensus batches. Using a larger batch size has no effect. Hence, our reported optimal batch sizes of 16 and 64 respectively correspond to the upper bound after which no further improvements are seen. By default our configurations are set to `<batch_size> = 64`, so no further edits are necessary. \
+   > **[Troubleshooting]**: If you run into any issues (specifically the error: “SSLHandShakeException: No Appropriate Protocol” ) with running BFT-Smart please comment out the following in your `java-11-openjdk-amd64/conf/security/java.security` file: `jdk.tls.disabledAlgorithms=SSLv3, TLSv1, RC4, DES, MD5withRSA, DH keySize < 1024 EC keySize < 224, 3DES_EDE_CBC, anon, NULL`
 
 
 #### 2-Client Failures:
@@ -615,8 +617,8 @@ We have included recently re-validated experiment outputs (for most of the exper
    
    To reproduce the full lines/slope in the paper you need to re-run several configs per failure type, per workload. To only validate our claims, it may instead suffice to re-run data points near the maximum evaluated fault threshold (e.g. config Indicus-90-2). Configs are named after the total number of faulty clients, and the frequency at which they issue failures: E.g. Indicus-90-2.json (in a given failure type folder) simulates 90% of clients injecting a failure every 2nd transaction. To read the total percentage of faulty transaction (relative to total transactions injected) search for `"tx_attempted_failure_percentage"`.
    
-   > ⚠️ Do NOT change the client settings in any of the configurations. To facilitate comparisons between different failure levels all must use the same number of clients. The client numbers used correspond to those reported in the paper.
-   > *[NOTE]* Experiment stats are only collected on correct clients. Due to the high number of failure fractions evaluated, only few clients are used to collect stats which can lead to higher variance in the results; Hence all our results reported in the paper are averages over 4 runs and include standard deviation. You *may* want to do the same, but it is not necessary. We recommend using Indicus-90-2.json instead of 98-2.json for higher stability (if you only run one config).
+   > ⚠️ **[WARNING]** Do NOT change the client settings in any of the configurations. To facilitate comparisons between different failure levels all must use the same number of clients. The client numbers used correspond to those reported in the paper.
+   > **[NOTE]** Experiment stats are only collected on correct clients. Due to the high number of failure fractions evaluated, only few clients are used to collect stats which can lead to higher variance in the results; Hence all our results reported in the paper are averages over 4 runs and include standard deviation. You *may* want to do the same, but it is not necessary. We recommend using Indicus-90-2.json instead of 98-2.json for higher stability (if you only run one config).
 
 
    1. **Evaluating RW-U**: Use configs from `/experiment-configs/2-Client-Failures/RW-U
@@ -677,28 +679,74 @@ We have included recently re-validated experiment outputs (for most of the exper
             | stall-early   |      -       |       -      |   [10%, 65]  |  [18%, 60]   |  [29%, 55]   |  [36%, 50]   |  [40%, 46]   |  [42%, 44]
             | stall-late    |      -       |       -      |   [10%, 65]  |  [18%, 62]   |  [25%, 61]   |  [36%, 59]   |  [40%, 56]   |  [42%, 54]
      
-   > *[NOTE]* Why does %faulty/total end at different points?
-     
-   The explanation is not unavailability, or a failure to run the experiment: rather, it is an artifact of how we count transactions. In particular, (faulty_clients x failure_frequency) % (e.g. 45% for Indicus-90-2) of the transactions newly submitted to Basil are faulty. However, contention (and dependencies on equivocating transactions) can require some of the correct transactions to abort and re-execute (faulty transactions instead do not care to retry), which decreases the percentage of faulty transactions that Basil processes (since, again, some correct transactions end up being prepared multiple times). Thus, when measuring the throughout, the percentage of faulty transactions we report is the fraction of faulty transactions among all processed (as opposed to admitted) transactions--the latter is set at (faulty_clients x failure_frequency) %, while the former depends on the number of re-executions of correct transactions.
+ > **[NOTE]** Why does %faulty/total end at different points?/
+     The explanation is not unavailability, or a failure to run the experiment: rather, it is an artifact of how we count transactions. In particular, (faulty_clients x failure_frequency) % (e.g. 45% for Indicus-90-2) of the transactions newly submitted to Basil are faulty. However, contention (and dependencies on equivocating transactions) can require some of the correct transactions to abort and re-execute (faulty transactions instead do not care to retry), which decreases the percentage of faulty transactions that Basil processes (since, again, some correct transactions end up being prepared multiple times). Thus, when measuring the throughout, the percentage of faulty transactions we report is the fraction of faulty transactions among all processed (as opposed to admitted) transactions--the latter is set at (faulty_clients x failure_frequency) %, while the former depends on the number of re-executions of correct transactions.
  
 
 #### Microbenchmarks:
+Finally, we review the reported Microbenchmarks
 
 ##### 3-Crypto Overheads:
-- must run with fallback off, since non-crypto isnt implemented for that. Codebase has changed slightly for non-signature handling. (it is not a stable supported version - its not safe for BFT - so do not use it for anything else than the microbenchmark)
-- RWU: ~38k and ~143k, now 140k?
-- RWZ: 4.8k and ~22k, now 20k
+To reproduce the reported evaluation of the impact of proofs and cryptography on the system navigate to `experiment-configs/3-Micro:Crypto`. The evaluation covers the RW-U workload as well as RW-Z, and for each includes a config with Crypto/Proofs disabled and enabled respectively. Since signatures induce a high amount of overhead the full Basil system is multithreaded and uses several worker threads to handle cryptography - Since this overhead falls to the wayside, the Non-Crypto/Proofs version instead runs single-threaded (no crypto worker threads) and instead uses the available cores to run more shards. In total, the Non-Crypto/Proofs version uses 24 shards, vs normal Basil using 3.
+
+> **[NOTE]** Since running this microbenchmark the codebase has changed significantly to include client failure handling. The No-Crypto/Proofs option is no longer supported on the full version, and hence must run with the fallback protocol disabled (since failures are not simulated it will not regularly be triggered anyways, but it may be occasionally, leading to segmentation faults). The provided config has the fallback protocol disabled by default `"no_fallback": true"` - Make sure to not change this. We remark that the No-crypto/Proofs version is **not** a safe BFT implementation, it is purely an option for microbenchmarking overheads. The throughput for the No-Crypto/Proofs version has changed ever so slightly given the updates.
+
+1. **RW-U**
+   - Navigate to the `RW-U` folder and run `Indicus.json` and `Indicus-NoCrypto.json` respectively.
+   - The reported results are ~38k tput for Crypto enabled (Indicus.json) and ~143k for Crypto/Proofs disabled.
+2. **RW-Z**
+   - Navigate to the `RW-Z` folder and run `Indicus.json` and `Indicus-NoCrypto.json` respectively.
+   - The reported results are ~4.8k tput for Crypto enabled (Indicus.json) and ~22k for Crypto/Proofs disabled.
+
 ##### 4-Reads:
-- runs read only, uses eager read optimization (that is used by all systems)
-- run just a few peak points
-- 2f+1: 12k
-- f+1:13.5k
-- 1: 17k
+To reproduce the reported evaluation of the impact of different Read Quorum sizes on the system navigate to `experiment-configs/4-Micro:Reads`. The evaluation uses a read only workload and compares Read Quorums consisting of 1) a single read, 2) f+1 reads from different replicas, and 3) 2f+1 reads from different replicas. All configurations use an "eager-reads" optimization (which is used by all baseline systems too) in which read messages are optimistically only sent to the Read Quorum itself (instead of pessimistically sending to f additional replicas).
+
+> ⚠️**[Warning]** Do **not** run the single read configuration on a non-read-only workload (i.e. a workload with writes as well) as the prototype is hard coded to only read uncommitted values from f+1 replicas (which is necessary for Byzantine Independence). Running with a single read is **not** BFT tolerant and is purely an option for microbenchmarking purposes.
+
+The provided configs only run an experiment for the rough peak points reported in the paper which is sufficient to compare the overheads of larger Quorums. If you want to reproduce the full figure reported, you may run `combined.json`, however we advise against it, since it takes a *considerable* amount of time. You may instead run each configuration for a few neighboring client configurations (already included as comments in the configs). 
+
+1. **Single read*
+   - Run configuration `1.json`.
+   - The reported peak throughput is ~17k tx/s.
+2. **f+1 reads**
+   - Run configuration `f+1.json`.
+   - The reported peak throughput is ~13.5k tx/s
+3. **2f+1 reads**
+   - Run configuration `2f+1.json`.
+   - The reported peak throughput is ~17k tx/s
+  
 ##### 5-Sharding:
-Non-crypto runs on more shards
-Crypto: 20k, ? 27k
-Non-crypto: 45k, 63k, 85k
-(Performance may be a little better now)
+To reproduce the reported evaluation of the impact of proofs and cryptography on sharding navigate to `experiment-configs/5-Micro:Sharding`. The evaluation covers the RW-U workload and includes configurations for different number of shards with Crypto/Proofs disabled and enabled respectively. Since the Non-Crypto/Proofs version is single threaded (see subsection 3-Crypto above) we run 8 times more shards than in the full Basil system, since the latter uses 8 threads, over 8 cores (since m510 machines have 8 cores).
+
+> **[NOTE]** Like mentioned under **3-Crypto** above, th No-Crypto/Proofs option is no longer supported on the full Basil prototype  and hence must run with the fallback protocol disabled The provided config has the fallback protocol disabled by default `"no_fallback": true"` - Make sure to not change this. 
+
+1. **Crypto/Proofs enabled** (normal Basil): 
+   - Navigate to folder `/Crypto`.
+   1. Scale Factor 1 (1 shard): 
+      - Run config `1-Indicus-RW-U.json`
+      - Reported throughput: ~20k
+   2. Scale Factor 2 (2 shards): 
+      - Run config `2-Indicus-RW-U.json`
+      - Reported throughput: ~23k
+   3. Scale Factor 3 (3 shards): 
+      - Run config `3-Indicus-RW-U.json`
+      - Reported throughput: ~27k
+
+1. **Crypto/Proofs disabled**: 
+   - Navigate to folder `/Non-Crypto`.
+   1. Scale Factor 1 (8 shards): 
+      - Run config `8-RW-U-cryptoOFF.json`
+      - Reported throughput: ~45k
+   2. Scale Factor 2 (16 shards): 
+      - Run config `16-RW-U-cryptoOFF.json`
+      - Reported throughput: ~61k
+   3. Scale Factor 3 (24 shards): 
+      - Run config `24-RW-U-cryptoOFF.json`
+      - Reported throughput: ~86k
+
+   > Throughput may be a little better on the current version - which only emphasizes the overhead that Crypto and Quroum Proofs impose.
+
+
 ##### 6-FastPath:
 RW-U 32k, 38k
 RW-Z 2.4k 4.8k
