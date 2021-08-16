@@ -1,7 +1,7 @@
 # SOSP21 Artifact Evaluation #108
 This is the repository for the Artifact Evaluation of SOSP'21 submission #108: "Basil: Breaking up BFT with ACID transactions".
 
-For all questions about the artifact please e-mail (or message over google hangouts) "fs435@cornell.edu". For specific questions about 1) building the codebase or 2) running TxBFTSmart aditionally CC zw494@cornell.edu, for questions about 3) running TxHotstuff CC yz2327@cornell.edu, and 4) for questions about the experiment scripts or cloudlab CC mlb452@cornell.edu.
+For all questions about the artifact that do not require anonymity please e-mail (or message over google hangouts) "fs435@cornell.edu". For specific questions about 1) building the codebase or 2) running TxBFTSmart aditionally CC zw494@cornell.edu, for questions about 3) running TxHotstuff CC yz2327@cornell.edu, and 4) for questions about the experiment scripts or cloudlab CC mlb452@cornell.edu.
 
 
 ## Claims 
@@ -464,7 +464,7 @@ On branches TxHotstuff and TxBFTSmart you will need to complete the following pr
 
 Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
 The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion.
-To use the provided config files, you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
+To use the provided config Json files, you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
 
 1. "project_name": "morty-pg0" --> change to the name of your project. On cloudlab.us (utah cluster) you will generally need to add "-pg0" to your project_name in order to ssh into the machines. To confirm which is the case for you, try to ssh into a machine directly using
    `ssh <cloudlab-user>@us-east-1-0.<experiment-name>.<project-name>.utah.cloudlab.us`
@@ -478,16 +478,19 @@ IMPORTANT: In new scripts dont use this param, it will detach git. Instead just 
 7. emulab_user: <cloudlab-username>
 8. run_locally: false (set to false to run remote experiments on distributed hardware (cloud lab), set to true to run locally)
    
+  The provided configs by default are set to run for 30 seconds total for time convenience. However, we ran experiments for 90 seconds (30 sec warmup, 30 cooldown), so if you want to get more robust numbers you may change XYZ to run it longer. Shorter experiments will suffice for cross-validation. To additionally account for variance, you may run each experiment multiple times automatically by setting "num_experiments". The scripts will aggregate these stats and compute standard deviation etc for you. (this is what we used to generate error bars). 
+   The configs provided already use the "peak" numbers for possible client settings. If you want to instead manually play around with different client settings you can do this by editing: client_total (upper bound on total client processes), client_processes_per_server, client_threads_per_process. Total clients = max(client_total, num_servers * client_processes_per_server) * threads_per_process. You can run multiple experiments automatically, by just adding a list. We have for convenience included such configuration sequences (commented out): To comment them in remove the underscore, and add it to the single config.  To confirm that we indeed report the max throughput you can modify the num_clients fields on the baseline configs.. One can put multiple [a,b,c] which will run multiple experiments and output the results in a plot.
+    Explain how to vary experiment length. How to vary number of clients (total, threads). How to run multiple experiments in one go ([] operator) to confirm peaks. 
+   
    Now you are ready to start a experiment:
 - Use any of the provided configs under /experiments/<Figures>. Make sure to use the binary code from branches TXHotstuff/TxBFTSmart if you are running any of those configs
-- To confirm that we indeed report the max throughput you can modify the num_clients fields on the baseline configs.. One can put multiple [a,b,c] which will run multiple experiments and output the results in a plot.
-   
-   Explain how to vary experiment length. How to vary number of clients (total, threads). How to run multiple experiments in one go ([] operator) to confirm peaks. 
-   
+-
+   run `python3 <relative-PATH>/experiment-scripts/run_multiple_experiments.py <relative-PATH><CONFIG>`
+   and wait!
+   To monitor experiment progress you can ssh into a server machine (us-east-1-0) and run htop. During the experiment the cpus will be loaded (to different degrees depending on contention and client count).
   
-
-
-
+   
+ 
 ### Parsing outputs
     After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go deeper into the folders (total of 3 timestamped folders) until you enter /out. Look for the stats.json file. Throughput measurements will be under: aggregate/combined/tput (or run-stats/combined /tput if you run multiple experiments for error bars) Latency will be under: aggregate/combined /mean  On the control machine looking at stats is necessary
   On your local machine, you can also look at output Plots: go to /plots/tput-clients.png and /plots/lat-tput.png to look at the data points directly. currently it shows the number of total client processes on the x axis, not total number of client threads.
