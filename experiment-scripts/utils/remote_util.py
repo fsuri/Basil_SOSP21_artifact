@@ -45,6 +45,7 @@ def copy_path_to_remote_host(local_path, remote_user,
     print('%s:%s' % (remote_host, remote_path))
     args = ["rsync", "-r", "-e", "ssh", local_path,
         '%s@%s:%s' % (remote_user, remote_host, remote_path)]
+    #print(args)
     if exclude_paths is not None:
         for i in range(len(exclude_paths)):
             args.append('--exclude')
