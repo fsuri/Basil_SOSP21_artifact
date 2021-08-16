@@ -66,12 +66,22 @@
   ],
 
 "client_total": [
-    [71]
+    [63]
   ],
   "client_processes_per_client_node": [
-    [8]
+    [7]
   ],
   "client_threads_per_process": [
+    [3]
+  ],
+
+"_client_total": [
+    [71]
+  ],
+  "_client_processes_per_client_node": [
+    [8]
+  ],
+  "_client_threads_per_process": [
     [2]
   ],
 
