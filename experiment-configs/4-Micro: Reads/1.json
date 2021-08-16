@@ -67,7 +67,7 @@
 	  "mainThreadDispatching": true,
       "parallel_reads": true,
       "parallel_CCC" : false,
-      "no_relayP1": true,
+      "no_fallback": true,
       "dispatchCallbacks": true,
       "client_multi_threading": false,
       "hyper_threading": false,
