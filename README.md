@@ -462,40 +462,88 @@ On branches TxHotstuff and TxBFTSmart you will need to complete the following pr
 
 ### Using the experiment scripts
 
-Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
-The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion.
-To use the provided config Json files, you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
+To run an experiment you simply need to run: `python3 SOSP21_artifact_eval/experiment-scripts/run_multiple_experiments.py <CONFIG>` using a specified configuration JSON file (see below). The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion. We have provided experiment configurations for all experiments claimed by the paper that you can find under `SOSP21_artifact_eva./experiment-configs`. In order for you to use them yourself you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
 
-1. "project_name": "morty-pg0" --> change to the name of your project. On cloudlab.us (utah cluster) you will generally need to add "-pg0" to your project_name in order to ssh into the machines. To confirm which is the case for you, try to ssh into a machine directly using
-   `ssh <cloudlab-user>@us-east-1-0.<experiment-name>.<project-name>.utah.cloudlab.us`
+#### Required Modifications:
+1. `"project_name": "morty-pg0"`
+   - change the value field to the name of your Cloudlab project `<project-name>`. On cloudlab.us (utah cluster) you will generally need to add "-pg0" to your project_name in order to ssh into the machines. To confirm which is the case for you, try to ssh into a machine directly using `ssh <cloudlab-user>@us-east-1-0.<experiment-name>.<project-name>.utah.cloudlab.us`.  
+2. `"experiment_name": "indicus"`
+   - change the value field to the name of your Cloudlab experiment `<experiment-name>`.
+3. `"base_local_exp_directory": “home/florian/Indicus/output”`
+   - Set the value field to be the local path (on your machine or the control machine) where experiment output files will be downloaded to and aggregated. 
+4. `"base_remote_bin_directory_nfs": “users/<cloudlab-user>/indicus”` 
+   - Set the field `<cloudlab-user>`. This is the directory on the Cloudlab machines where the binaries will be uploaded
+5. `"src_directory" : “/home/florian/Indicus/SOSP21_artifact_eval/src”` 
+   - Set the value field to your local path (on your machine or the control machine) to the source directory 
+6. `"emulab_user": "<cloudlab-username>"`
+   - Set the field `<cloudlab-user>`. 
+
+#### **Optional** Modifications 
+1. Experiment duration:
+   - The provided configs are by default, for time convenience, set to run for 30 seconds total, using a warmup and cooldown period of 5 seconds respectively. 
+      - "client_experiment_length": 30,
+      - "client_ramp_down": 5,
+      - "client_ramp_up": 5,
+   - All experiment results in the paper were run for longer: 90 seconds total, with a warmup and cooldown period of 30 seconds respectively. If you want to run the experiments as long, replace the above settings with respective durations. For cross-validation purposes shorter experiments will suffice and save you time (and memory, since output files will be smaller)
    
-2. "experiment_name": "indicus", --> change to the name of your experiment.
-3. src_commit_hash: “branch_name” (i.e. Basil/Tapir, or a specific commit hash)
-IMPORTANT: In new scripts dont use this param, it will detach git. Instead just leave it blank (i.e. remove the flag) and the script will automatically use the current branch you are on
-4. base_local_exp_directory: “media/floriansuri/experiments” (set the local path where output files will be generated)
-5. base_remote_bin_directory_nfs: “users/<cloudlab-user>/indicus” (set the directory on the cloudlab machines for uploading compiled files)
-6. src_directory : “/home/floriansuri/Indicus/BFT-DB/src” (Set your local source directory)
-7. emulab_user: <cloudlab-username>
-8. run_locally: false (set to false to run remote experiments on distributed hardware (cloud lab), set to true to run locally)
-   
-  The provided configs by default are set to run for 30 seconds total for time convenience. However, we ran experiments for 90 seconds (30 sec warmup, 30 cooldown), so if you want to get more robust numbers you may change XYZ to run it longer. Shorter experiments will suffice for cross-validation. To additionally account for variance, you may run each experiment multiple times automatically by setting "num_experiments". The scripts will aggregate these stats and compute standard deviation etc for you. (this is what we used to generate error bars). 
-   The configs provided already use the "peak" numbers for possible client settings. If you want to instead manually play around with different client settings you can do this by editing: client_total (upper bound on total client processes), client_processes_per_server, client_threads_per_process. Total clients = max(client_total, num_servers * client_processes_per_server) * threads_per_process. You can run multiple experiments automatically, by just adding a list. We have for convenience included such configuration sequences (commented out): To comment them in remove the underscore, and add it to the single config.  To confirm that we indeed report the max throughput you can modify the num_clients fields on the baseline configs.. One can put multiple [a,b,c] which will run multiple experiments and output the results in a plot.
-    Explain how to vary experiment length. How to vary number of clients (total, threads). How to run multiple experiments in one go ([] operator) to confirm peaks. 
-   
-   Now you are ready to start a experiment:
-- Use any of the provided configs under /experiments/<Figures>. Make sure to use the binary code from branches TXHotstuff/TxBFTSmart if you are running any of those configs
--
-   run `python3 <relative-PATH>/experiment-scripts/run_multiple_experiments.py <relative-PATH><CONFIG>`
-   and wait!
-   To monitor experiment progress you can ssh into a server machine (us-east-1-0) and run htop. During the experiment the cpus will be loaded (to different degrees depending on contention and client count).
+2. Number of experiments:
+   - The provided config files by default run the configured experiment once. Experiment results from the paper for 1-Workloads and 2-Failures were instead run several times (four times) and report the mean throughput/latency as well as standard deviations across the runs. For cross-validation purposes, this is not necessary. If you do however want to run the experiment multiple times, you can modify the config entry `num_experiment_runs: 1` to a repitition of your choice, which will automatically run the experiment the specified amount of times, and aggregate the joint statistics.
+3. Number of clients:
+   - The provided config files by default run an experiment for a single client setting that corresponds to the rough "peak" for throughput. Client settings are defined by the following JSON entries:
+      - "client_total": [[71]],
+         - "client_total" specifies the upper limit for total client *processes* used
+      - "client_processes_per_client_node": [[8]],
+         - "client_proccesses_per_client_node" specifies the number of client processes run on each server machine. 
+      - "client_threads_per_process": [[2]],
+         - "client_threads_per_process" specifies the number of client threads run by each client process.  
+   - The *absolute total number* of clients used by an experiment is: **Total clients** *= max(client_total, num_servers x client_processes_per_client_node) *x client_threads_per_process*. For Tapir "num_servers" = 9, for Basil "num_servers" = 18, and for TxHotstuff/TxBFTSmart "num_servers" = 12.
+   - To determine the peak **Total clients** settings we ran a *series* of client settings for each experiment. For simple cross-validation purposes this is not necessary - If you do however want to, you can run multiple settings automatically by specifying a list of client settings. For example:
+      - "client_total": [[71, 54, 63, 71, 54, 63]],
+      - "client_processes_per_client_node": [[8, 6, 7, 8, 6, 7]],
+      - "client_threads_per_process": [[1, 2, 2, 2, 3, 3]]
+   - For convenience, we have included such series (in comments) in all configuration files. To use them, uncomment them (by removing the underscore `_`) and comment out the pre-specified single settings (by adding an underscore `_`).
+   - 
+#### Starting an experiment:
+You are ready to start an experiment. Use any of the provided JSON configs under `SOSP21_artifact_eval/experiment-configs/<PATH>/<config>.json`. **Make sure** to use the binaries from a respective branch when running configs for Basil/Tapir, TxHotstuff, and TxBFTSmart respectively. All microbenchmark configs are Basil exclusive.
+
+Run: `python3 <PATH>/SOSP21_artifact_eval/experiment-scripts/run_multiple_experiments.py <PATH>SOSP21_artifact_eval/experiment-configs/<PATH>/<config>.json` and wait!
+
+Optional: To monitor experiment progress you can ssh into a server machine (us-east-1-0) and run htop. During the experiment run-time the cpus will be loaded (to different degrees depending on contention and client count).
   
    
- 
 ### Parsing outputs
-    After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go deeper into the folders (total of 3 timestamped folders) until you enter /out. Look for the stats.json file. Throughput measurements will be under: aggregate/combined/tput (or run-stats/combined /tput if you run multiple experiments for error bars) Latency will be under: aggregate/combined /mean  On the control machine looking at stats is necessary
-  On your local machine, you can also look at output Plots: go to /plots/tput-clients.png and /plots/lat-tput.png to look at the data points directly. currently it shows the number of total client processes on the x axis, not total number of client threads.
+After the experiment is complete, the scripts will generate an output folder at your specified `base_local_exp_directory`. Each folder is timestamped. 
 
+To parse experiment results you have 2 options:
+1. (Recommended) Looking at the `stats.json` file:
+   1. Navigate into the timestamped folder, and keep following the timestamped folders until you enter folder `/out`. Open the file `stats.json`. When running multiple client settings, each setting will generate its own internal timestamped folder, with its own `stats.json` file. Multiple runs of the same experiment setting instead will directly be aggregated in a single `stats.json` file.
+   2. In the `stats.json` file search for the Json field: `run_stats: ` 
+   3. Then, search for the JSON field: `combined:`
+   4. Finally, find Throughput measurments under `tput`, Latency measurements under `mean`, and Throughput per Correct client under `tput_s_honest` (**this will exist only for failure experiments**).
+2. Looking at generated png plots:
+   Alternatively, on your local machine you can navigate to `<time_stamped_folder>/plots/tput-clients.png` and `<time_stamped_folder>/plots/lat-tput.png` to look at the data points directly. Currently however, it shows as "Number of Clients" the number of total client **processes** (i.e. `client_total`) and not the number of **Total clients** specified above. Keep this in mind when viewing output that was generated for experiments with a list of client settings.
    
+Find below, some example screenshots from looking at a provided experiment output from `SOSP21_artifact_eval/sample-output/Validated Results`:
+
+Experiment output folder:
+![image](https://user-images.githubusercontent.com/42611410/129566751-a179de6e-8b22-49bc-96f5-bfb517e8eb9e.png)
+
+Subfolder that contains `stats.json`
+![image](https://user-images.githubusercontent.com/42611410/129566648-808ea2d7-a2c0-48b4-b2e8-57221b040f13.png) (For convencience of memory overhead, we have removed all the server/client folders in /sample-output
+
+JSON fiels `run_stats` and `combined`. Note that `combined` might not be the first entry within `run_stats` in every config, so double check to get the right data.
+![image](https://user-images.githubusercontent.com/42611410/129566877-87000119-c43b-4fa2-973a-2a9e571d9351.png)
+
+Throughput: ![image](https://user-images.githubusercontent.com/42611410/129566950-f0126263-7bd4-4978-8270-9051ad403a37.png)
+Latency: ![image](https://user-images.githubusercontent.com/42611410/129566988-5fc99464-a6c2-4e7a-8108-320c55e5b82e.png)
+Correct Client Throughput: ![image](https://user-images.githubusercontent.com/42611410/129567041-4f002dca-5c6f-4617-bab5-87d7f4bd1af0.png)
+
+Alternatively Plots (Throughput):
+![image](https://user-images.githubusercontent.com/42611410/129566828-694cf8e2-2c25-4e5b-941e-9a745340ea74.png)
+
+
+Next, we will go over each included experiment individually to provide some pointers.
+
 ### 1-by-1 experiment guide   
    
    Explain all experiments: 
