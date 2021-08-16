@@ -77,34 +77,15 @@
   ],
   "experiment_name": "indicus",
   "codebase_name": "indicus",
-  "_client_total": [
-    [ 100, 120, 130, 140]
-  ],
-  "_client_processes_per_client_node": [
-    [ 6, 7, 8, 8]
-  ],
-  "_client_threads_per_process": [
-    [ 2, 2, 2, 2]
-  ],
-
-	"_client_total": [
-    [  140, 100, 110, 120]
-  ],
-  "_client_processes_per_client_node": [
-    [  8, 6, 7, 7]
-  ],
-  "_client_threads_per_process": [
-    [ 2, 3, 3, 3]
-  ],
 
 "_client_total": [
-    [  120, 130, 140, 110 ]
+    [110, 120, 130, 140, 110 ]
   ],
   "_client_processes_per_client_node": [
-    [  7, 8, 8, 7]
+    [7, 7, 8, 8, 7]
   ],
   "_client_threads_per_process": [
-    [  3, 3, 3, 4]
+    [3, 3, 3, 3, 4]
   ],
 
 "client_total": [

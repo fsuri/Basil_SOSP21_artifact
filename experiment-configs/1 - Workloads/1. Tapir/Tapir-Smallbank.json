@@ -56,32 +56,23 @@
   "experiment_name": "indicus",
   "codebase_name": "indicus",
   "_client_total": [
-    [36, 45, 54, 63, 71, 54, 63, 71]
+    [71, 54, 63, 71, 63]
   ],
   "_client_processes_per_client_node": [
-    [4, 5, 6, 7, 8, 6, 7, 8]
+    [8, 6, 7, 8, 7]
   ],
   "_client_threads_per_process": [
-    [1, 1, 1, 1, 1, 2, 2, 2]
+    [1, 2, 2, 2, 3]
   ],
 
-"client_total": [
-    [63]
-  ],
-  "client_processes_per_client_node": [
-    [7]
-  ],
-  "client_threads_per_process": [
-    [3]
-  ],
 
-"_client_total": [
+  "client_total": [
     [71]
   ],
-  "_client_processes_per_client_node": [
+  "client_processes_per_client_node": [
     [8]
   ],
-  "_client_threads_per_process": [
+  "client_threads_per_process": [
     [2]
   ],
 
@@ -174,7 +165,7 @@
       "height": 600,
       "width": 800,
       "series_indep_vars_idx": 0,
-      "series_titles": ["Indicus-Multi"],
+      "series_titles": ["Tapir"],
       "x_var_is_config": false,
       "x_var": ["run_stats", "combined", "tput", "mean"],
       "x_label": "Throughput (txn/s)",
@@ -188,7 +179,7 @@
       "height": 600,
       "width": 800,
       "series_indep_vars_idx": 0,
-      "series_titles": ["Indicus-Multi"],
+      "series_titles": ["Tapir"],
       "x_var_is_config": true,
       "x_var": ["client_total"],
       "x_label": "Number of Clients",

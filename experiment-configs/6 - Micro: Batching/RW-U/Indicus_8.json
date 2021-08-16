@@ -77,14 +77,24 @@
   "codebase_name": "indicus",
  
 
-  "client_total": [
+  "_client_total": [
     [140, 115, 140, 120]
   ],
-  "client_processes_per_client_node": [
+  "_client_processes_per_client_node": [
     [ 8, 7, 8, 7]
   ],
-  "client_threads_per_process": [
+  "_client_threads_per_process": [
     [ 3, 4, 4, 5]
+  ],
+
+ "client_total": [
+    [140]
+  ],
+  "client_processes_per_client_node": [
+    [ 8]
+  ],
+  "client_threads_per_process": [
+    [4]
   ],
 
 

@@ -75,15 +75,15 @@
   "experiment_name": "indicus",
   "codebase_name": "indicus",
 	
-	"_client_total": [
+   "_client_total": [
     
-    [144]
+    [36, 54, 72, 90, 108, 126]
   ],
   "_client_processes_per_client_node": [
-    [8]
+    [2, 3, 4, 5, 6, 7]
   ],
   "_client_threads_per_process": [
-    [1]
+    [1, 1, 1, 1, 1, 1]
   ],
 
 

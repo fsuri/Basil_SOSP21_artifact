@@ -78,7 +78,6 @@
 
 
   "_client_total": [
-    
     [18, 36, 54, 72]
   ],
   "_client_processes_per_client_node": [
@@ -89,7 +88,6 @@
   ],
 
   "client_total": [
-    
     [54]
   ],
   "client_processes_per_client_node": [
