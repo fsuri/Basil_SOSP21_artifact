@@ -431,7 +431,7 @@ To create a disk image, select "Create Disk Image" and name it accordingly.
    
 
 ## Running experiments:
-Hurray! You have completed the tedious process of installing the binaries and setting up Cloudlab. Next, we will cover how to run experiments. This is a straightfoward, but time-consuming process, and importantly requires good network connectivity to upload binaries to the remote machines, and download experiment results. Uploading binaries on high speed (e.g university) connections takes a few minutes and needs to be done only once per branch -- however if your uplink speed is low it may take (as I have painstakenly experienced in preparing this documentation for you) several hours. Downloading experiment outputs requires a moderate amount of download bandwidth, and is usually quite fast.
+Hurray! You have completed the tedious process of installing the binaries and setting up Cloudlab. Next, we will cover how to run experiments. This is a straightfoward, but time-consuming process, and importantly requires good network connectivity to upload binaries to the remote machines, and download experiment results. Uploading binaries on high speed (e.g university) connections takes a few minutes and needs to be done only once per branch -- however if your uplink speed is low it may take (as I have painstakenly experienced in preparing this documentation for you) several hours. Downloading experiment outputs requires a moderate amount of download bandwidth, and is usually quite fast. The section is split into 4 subsections: 1) Pre-configurations for Hotstuff and BFTSmart, 2) Using the experiment scripts, 3) Parsing outputs, and finally 4) reproducing experiment claims 1-by-1.
 
 Before you proceed, please confirm that the following credentials are accurate:
 1. Cloudlab-username `<cloudlab-user>`: e.g. "fs435"
@@ -440,7 +440,7 @@ Before you proceed, please confirm that the following credentials are accurate:
 
 Confirm these by attempting to ssh into a machine you started (on the Utah cluster): `ssh <cloudlab-user>@us-east-1-0.<experiment-name>.<project-name>.utah.cloudlab.us`
 
-### Pre-configurations for Hotstuff and BFTSmart
+### 1) Pre-configurations for Hotstuff and BFTSmart
 
 On branches TxHotstuff and TxBFTSmart you will need to complete the following pre-configuration steps before running an experiment script:
 
@@ -460,7 +460,7 @@ On branches TxHotstuff and TxBFTSmart you will need to complete the following pr
    4. This will upload the necessary configurations for the BFTSmart Conesnsus module to the Cloudlab machines.
       - Troubleshooting: Make sure files `server-hosts` and `client-hosts` in `/src/scripts/` do not contain empty lines at the end
 
-### Using the experiment scripts
+### 2) Using the experiment scripts
 
 To run an experiment you simply need to run: `python3 SOSP21_artifact_eval/experiment-scripts/run_multiple_experiments.py <CONFIG>` using a specified configuration JSON file (see below). The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion. We have provided experiment configurations for all experiments claimed by the paper that you can find under `SOSP21_artifact_eva./experiment-configs`. In order for you to use them yourself you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
 
@@ -511,7 +511,7 @@ Run: `python3 <PATH>/SOSP21_artifact_eval/experiment-scripts/run_multiple_experi
 Optional: To monitor experiment progress you can ssh into a server machine (us-east-1-0) and run htop. During the experiment run-time the cpus will be loaded (to different degrees depending on contention and client count).
   
    
-### Parsing outputs
+### 3) Parsing outputs
 After the experiment is complete, the scripts will generate an output folder at your specified `base_local_exp_directory`. Each folder is timestamped. 
 
 To parse experiment results you have 2 options:
@@ -556,7 +556,7 @@ Alternatively Plots (Throughput):
 
 Next, we will go over each included experiment individually to provide some pointers.
 
-### 1-by-1 experiment guide   
+### 4) Reproducing experiment claims 1-by-1 
    
    Explain all experiments: 
    - What numbers are expected, and how to read them. (tput_s_honest)
