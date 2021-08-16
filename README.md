@@ -689,7 +689,9 @@ We report evaluation results for 3 workloads (TPCC, Smallbank, Retwis) and 4 sys
  
 
 #### **[Microbenchmarks]**:
-Finally, we review the reported Microbenchmarks
+Finally, we review the reported Microbenchmarks.
+
+> :warning: Make sure to run on branch `Basil/Tapir`. Build the binaries before running (see instructions above)
 
 #### **[3-Crypto Overheads]**:
 To reproduce the reported evaluation of the impact of proofs and cryptography on the system navigate to `experiment-configs/3-Micro:Crypto`. The evaluation covers the RW-U workload as well as RW-Z, and for each includes a config with Crypto/Proofs disabled and enabled respectively. Since signatures induce a high amount of overhead the full Basil system is multithreaded and uses several worker threads to handle cryptography - Since this overhead falls to the wayside, the Non-Crypto/Proofs version instead runs single-threaded (no crypto worker threads) and instead uses the available cores to run more shards. In total, the Non-Crypto/Proofs version uses 24 shards, vs normal Basil using 3.
