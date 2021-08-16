@@ -1,7 +1,10 @@
 # SOSP21 Artifact Evaluation #108
 This is the repository for the Artifact Evaluation of SOSP'21 submission #108: "Basil: Breaking up BFT with ACID transactions".
 
-For all questions about the artifact that do not require anonymity please e-mail (or message over google hangouts) "fs435@cornell.edu". For specific questions about 1) building the codebase or 2) running TxBFTSmart, aditionally please CC zw494@cornell.edu. For questions about 3) running TxHotstuff, please CC yz2327@cornell.edu, and 4) for questions about the experiment scripts or Cloudlab, please  CC mlb452@cornell.edu.
+For all questions about the artifact that do not require anonymity please e-mail (or message over google hangouts) Florian Suri-Payer <fs435@cornell.edu>. For specific questions about 1) building the codebase or 2) running TxBFTSmart, additionally please
+CC Zheng Wang <zw494@cornell.edu>. For questions about 3) running TxHotstuff,
+please CC Yunhao Zhang <yz2327@cornell.edu>, and 4) for questions about the
+experiment scripts or Cloudlab, please  CC Matthew Burke <matthelb@cs.cornell.edu>.
 
 
 # Table of Contents
@@ -351,7 +354,7 @@ To run experiments on [Cloudlab](https://www.cloudlab.us/) you will need to requ
 
 We have included screenshots below for easy usebility. Follow the [cloudlab manual](http://docs.cloudlab.us/) if you need additional information for any of the outlined steps. 
 
-If you face any issues with registering, please make a post at the [Cloudlab forum](https://groups.google.com/g/cloudlab-users?pli=1). Replies are usually very swift during workdays on US mountain time (MT). Alternatively -- but *not recommended* --, if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted. Reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join.
+If you face any issues with registering, please make a post at the [Cloudlab forum](https://groups.google.com/g/cloudlab-users?pli=1). Replies are usually very swift during workdays on US mountain time (MT). Alternatively -- but *not recommended* --, if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted. Reach out to Matthew Burke <matthelb@cs.cornell.edu> if you are not accepted, or unsure how to join.
 
 ![image](https://user-images.githubusercontent.com/42611410/129490833-eb99f58c-8f0a-43d9-8b99-433af5dab559.png)
 
@@ -361,7 +364,7 @@ Install ssh if you do not already have it: `sudo apt-get install ssh`. To create
 
 Next, you are ready to start up an experiment:
 
-To use a pre-declared profile supplied by us, start an experiment using the public profile ["SOSP108"](https://www.cloudlab.us/p/morty/SOSP108). If you face any issues using this profile (or the disk images specified below), please make a post at the [Cloudlab forum](https://groups.google.com/g/cloudlab-users?pli=1) or contact `fs435@cornell.edu` and `mlb452@cornell.edu`.
+To use a pre-declared profile supplied by us, start an experiment using the public profile ["SOSP108"](https://www.cloudlab.us/p/morty/SOSP108). If you face any issues using this profile (or the disk images specified below), please make a post at the [Cloudlab forum](https://groups.google.com/g/cloudlab-users?pli=1) or contact Florian Suri-Payer <fs435@cornell.edu> and Matthew Burke <matthelb@cs.cornell.edu>.
 ![image](https://user-images.githubusercontent.com/42611410/129490911-8c97d826-caa7-4f04-95a7-8a2c8f3874f7.png)
 
 This profile by default starts with 18 server machines and 18 client machines, all of which use m510 hardware on the Utah cluster. This profile includes two disk images "SOSP108.server" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server`) and "SOSP108.client" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client`) that already include all dependencies and additional setup necessary to run experiments. Check the box "Use Control Machine" if you want to build binaries and run all experiments from one of the Cloudlab machines.
