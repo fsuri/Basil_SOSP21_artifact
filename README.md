@@ -444,7 +444,7 @@ Confirm these by attempting to ssh into a machine you started (on the Utah clust
 
 On branches TxHotstuff and TxBFTSmart you will need to complete the following pre-configuration steps before running an experiment script:
 
-1. *TxHotstuff*
+1. **TxHotstuff**
    1. Navigate to `SOSP21_artifact_eval/src/scripts`
    2. Run `./batch_size <batch_size>` to configure the internal batch size used by the Hotstuff Consensus module. See sub-section "1-by-1 experiment guide" for what settings to use
    3. Open file `config_remote.sh` and edit the following lines to match your Cloudlab credentials:
@@ -453,7 +453,7 @@ On branches TxHotstuff and TxBFTSmart you will need to complete the following pr
    4. Finally, run `./config_remote.sh` 
    5. This will upload the necessary configurations for the Hotstuff Consensus module to the Cloudlab machines.
 
-3. *TxBFTSmart*
+3. **TxBFTSmart**
    1. Navigate to `SOSP21_artifact_eval/src/scripts`
    2. Run `./one_step_config.sh <Local SOSP21_artifact_eval directory> <cloudlab-user> <experiment-name> <project-name> <cloudlab-cluster>`
    3. For example: `./one_step_config.sh /home/florian/Indicus/SOSP21_artifact_eval fs435 indicus morty-pg0 utah.cloudlab.us`
@@ -461,13 +461,6 @@ On branches TxHotstuff and TxBFTSmart you will need to complete the following pr
       - Troubleshooting: Make sure files `server-hosts` and `client-hosts` in `/src/scripts/` do not contain empty lines at the end
 
 ### Using the experiment scripts
-
-
-
-### Parsing outputs
-   
-### 1-by-1 experiment guide   
-Use `<batch-size> = 4` for running TPCC, and `<batch-size> = 16` for Smallbank and Retwis for optimal results. 
 
 Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
 The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion.
@@ -485,36 +478,40 @@ IMPORTANT: In new scripts dont use this param, it will detach git. Instead just 
 7. emulab_user: <cloudlab-username>
 8. run_locally: false (set to false to run remote experiments on distributed hardware (cloud lab), set to true to run locally)
    
-   
-### Extra Pre-Configurations necessary for TxHotstuff and TxBFTSmart
-   --> see the branch... Extra coudlab configuration is necessary before running (some even necessary before building)
-   Hotstuff:
-   1. Need to modify all cloudlab user ids in config_remote:
-      - Line3: Target Dir: users/<cloudlab-user>/config
-      - Line 14: <cloudlab-user>@${machine}.<experiment-name>.<project-name>.utah.cloudlab.us:/users/<cloudlab-user>/
-(Remember that project-name might have to include -pg0
-    2. Run ./batch_size <batch_size> to set the batch size used by Hotstuff
-    3. Run ./config_remote. 
-
-   BFTSmart:
-   TODO: Add the local client check, and the troubleshooting...
-   1. To change the batch size: src/store/bftsmartstore/library/java-config/system.config
-Change line system.totalordermulticast.maxbatchsize = 64 !!!!!
-(For tpcc 16 is enough)
-   2. In src/scripts, run ./one_step_config.sh <Local BFT-DB directory> <Cloudlab user name> <Cloudlab experiment name> <Cloudlab project prefix name> <Cloudlab        cluster domain name>, for example, ./zw494_one_step_config.sh /home/zw494/BFT-DB zw494 bftsmart morty-pg0 utah.cloudlab.us
-         - Troubleshooting: Make sure server-hosts and clients-hosts do not contain an empty line at the end
-
-Now you are ready to start a experiment:
+   Now you are ready to start a experiment:
 - Use any of the provided configs under /experiments/<Figures>. Make sure to use the binary code from branches TXHotstuff/TxBFTSmart if you are running any of those configs
 - To confirm that we indeed report the max throughput you can modify the num_clients fields on the baseline configs.. One can put multiple [a,b,c] which will run multiple experiments and output the results in a plot.
    
    Explain how to vary experiment length. How to vary number of clients (total, threads). How to run multiple experiments in one go ([] operator) to confirm peaks. 
    
-   After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go deeper into the folders (total of 3 timestamped folders) until you enter /out. Look for the stats.json file. Throughput measurements will be under: aggregate/combined/tput (or run-stats/combined /tput if you run multiple experiments for error bars) Latency will be under: aggregate/combined /mean  On the control machine looking at stats is necessary
+  
+
+
+
+### Parsing outputs
+    After the expeirment is complete, the scripts will generate an output folder at your specified base_local_exp_directory. Each folder is timestamped: Go deeper into the folders (total of 3 timestamped folders) until you enter /out. Look for the stats.json file. Throughput measurements will be under: aggregate/combined/tput (or run-stats/combined /tput if you run multiple experiments for error bars) Latency will be under: aggregate/combined /mean  On the control machine looking at stats is necessary
   On your local machine, you can also look at output Plots: go to /plots/tput-clients.png and /plots/lat-tput.png to look at the data points directly. currently it shows the number of total client processes on the x axis, not total number of client threads.
 
+   
+### 1-by-1 experiment guide   
+   
    Explain all experiments: 
    - What numbers are expected, and how to read them. (tput_s_honest)
    - mention to just use the 90-2 for failures as representative if you dont want to run all
    - same for batching
    - same for reads peaks
+   
+Use `<batch-size> = 4` for running TPCC, and `<batch-size> = 16` for Smallbank and Retwis for optimal results. 
+   Explain that Hotstuff client total and batch size is volatile:
+
+
+   
+   BFTSmart Troubleshooting: If you run into any issues (specifically the error: “SSLHandShakeException: No Appropriate Protocol” 
+) with running BFT-Smart please modify the following in your java-11-openjdk-amd64/conf/security/java.security:
+You probably had a line called
+jdk.tls.disabledAlgorithms=SSLv3, TLSv1, RC4, DES, MD5withRSA, DH keySize < 1024, \
+EC keySize < 224, 3DES_EDE_CBC, anon, NULL
+Please comment out this line. 
+  
+
+
