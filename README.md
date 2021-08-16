@@ -560,17 +560,20 @@ Next, we will go over each included experiment individually to provide some poin
    
 We have included recently re-validated experiment outputs (for most of the experiments) for easy cross-validation of the claimed througput (and latency) numbers under `/sample-output/ValidatedResults`. To directly compare against the numbers reported in our paper please refer to the figures there (we include rough numbers below as well). Some of Basil's workload and microbenchmark performances have changed slightly (documented below) since the codebase has matured since, but is nonetheless mostly consistent.
 
-1. Workloads:
-   1. Tapir: 
+#### 1 - Workloads:
+   1. **Tapir**: 
+   
    > :warning: Make sure to run on branch `Basil/Tapir`. Build the binaries before running (see instructions above)
    
    Reproducing our claimed results is straightforward and requires no additional setup besides running the included configs under `/experiment-configs/1-Workloads/1.Tapir`.  Reported peak results were roughly:
+   
       - TPCC: Throughput: ~20k tx/s, Latency: ~7 ms
       - Smallbank: Throughput: ~ 61,5k tx/s, Latency: ~2.3 ms
       - Retwis: Throughput: ~45k tx/s, Latency: 2 ms
-      All Tapir experiments were run using 24 shards to allow for even use of resources across systems, since unlike the BFT systems (all use 3 shards) that require multiple cores to handle cryptography, Tapir's servers are single threaded. 
+      All Tapir experiments were run using 24 shards to allow for even use of resources across systems, since unlike the BFT systems (all use 3 shards) that require multiple cores to handle cryptography, Tapir's servers are single threaded. \
 
-   2. Basil: 
+
+   2. **Basil**: 
    > :warning: Make sure to run on branch `Basil/Tapir`. Build the binaries before running (see instructions above)
    
    Use the configurations under `/experiment-configs/1-Workloads/2.Basil`. Reported peak results were roughly:
@@ -578,9 +581,9 @@ We have included recently re-validated experiment outputs (for most of the exper
       - TPCC: Throughput: ~4.8k tx/s, Latency: ~30 ms
       - Smallbank: Throughput: ~23k tx/s Latency: ~12 ms
       - Retwis: Throughput: ~24 k tx/s, Latency: ~10 ms
-         > [NOTE] On both Smallbank and Retwis throughput has decreased (and Latency has increased) ever so slightly since the reported results, as the system now additionally implements failure handling, which is optimistically triggered even under absence of failures. To disable this option set the JSON value `"no_fallback" : "true"`. We note, that the baseline systems (do not implement and) are not running with failure handling.
+         > [NOTE] On both Smallbank and Retwis throughput has decreased (and Latency has increased) ever so slightly since the reported results, as the system now additionally implements failure handling, which is optimistically triggered even under absence of failures. To disable this option set the JSON value `"no_fallback" : "true"`. We note, that the baseline systems (do not implement and) are not running with failure handling.\
          
-   3. TxHotstuff: 
+   3. **TxHotstuff:** 
    > :warning: Make sure to run on branch `TxHotstuff`. Build the binaries before running (see instructions above)
    
    Use the configurations under `/experiment-configs/1-Workloads/3.TxHotstuff`. Before running these configs, you must configure Hotstuff using the instructions from section "1) Pre-configurations for Hotstuff and BFTSmart" (see above). Use a batch size of 4 when running TPCC, and 16 for Smallbank and Retwis for optimal results. Note, that you must re-run `src/scripts/remote_config.sh` **after** updating the batch size and **before** starting an experiment. 
@@ -590,9 +593,9 @@ We have included recently re-validated experiment outputs (for most of the exper
       - Smallbank: Throughput: ~6.4k tx/s Latency: ~42 ms
       - Retwis: Throughput: ~5.2k tx/s, Latency: ~48 ms
       
-      > :warning: **[WARNING]**: Hotstuffs performance is quite volatile with respect to total number of clients and the batch size specified. Since the Hotstuff protocol uses a pipelined consensus mechanism, it requires at least `batch_size x 4` active client requests per shard at any given time for progress. Using too few clients, and too large of a batch size will get Hotstuff stuck. In turn, using too many total clients will result in contention that is too high, causing exponential backoffs which leads to few active clients, hence slowing down the remaining active clients. These slow downs in turn lead to more contention and aborts, resulting in no throughput. The configs provided by us roughly capture the window of balance that allows for peak thorughput.  
+      > :warning: **[WARNING]**: Hotstuffs performance is quite volatile with respect to total number of clients and the batch size specified. Since the Hotstuff protocol uses a pipelined consensus mechanism, it requires at least `batch_size x 4` active client requests per shard at any given time for progress. Using too few clients, and too large of a batch size will get Hotstuff stuck. In turn, using too many total clients will result in contention that is too high, causing exponential backoffs which leads to few active clients, hence slowing down the remaining active clients. These slow downs in turn lead to more contention and aborts, resulting in no throughput. The configs provided by us roughly capture the window of balance that allows for peak throughput. \  
       
-   4. TxBFTSmart: 
+   4. **TxBFTSmart**: 
    > :warning: Make sure to run on branch `TxBFTSmart`. Build the binaries before running (see instructions above)
    
    Use the configurations under `/experiment-configs/1-Workloads/4.TxBFTSmart`. Before running these configs, you must configure Hotstuff using the instructions from section "1) Pre-configurations for Hotstuff and BFTSmart" (see above). You can, but do not need to manually set the batch size for BFTSmart (see optional instruction below). Note, that you must re-run `src/scripts/one_step_config.sh` **after** updating the batch size and **before** starting an experiment. 
@@ -602,30 +605,115 @@ We have included recently re-validated experiment outputs (for most of the exper
       - Smallbank: Throughput: ~8.7k tx/s Latency: ~19 ms
       - Retwis: Throughput: ~6.3k tx/s, Latency: ~23 ms
 
-      > [NOTE] **Optional - read fully** To change batch size in BFTSmart navigate to  `src/store/bftsmartstore/library/java-config/system.config` and change line `system.totalordermulticast.maxbatchsize = <batch_size>`. Use 16 for TPCC and 64 for Smallbank/Retwis for optimal results. However, explicitly setting this batch size is not necessary, as long as the currently configured `<batch_size>` is `>=` the desired one. This is because BFTSmart performs optimally with a batch timeout of 0, and hence the batch size set *only* dictates an upper bound for consensus batches. Using a larger batch size has no effect. Hence, our reported optimal batch sizes of 16 and 64 respectively correspond to the upper bound after which no further improvements are seen. By default our configurations are set to `<batch_size> = 64`, so no further edits are necessary. 
+      > [NOTE] **Optional - read fully** To change batch size in BFTSmart navigate to  `src/store/bftsmartstore/library/java-config/system.config` and change line `system.totalordermulticast.maxbatchsize = <batch_size>`. Use 16 for TPCC and 64 for Smallbank/Retwis for optimal results. However, explicitly setting this batch size is not necessary, as long as the currently configured `<batch_size>` is `>=` the desired one. This is because BFTSmart performs optimally with a batch timeout of 0, and hence the batch size set *only* dictates an upper bound for consensus batches. Using a larger batch size has no effect. Hence, our reported optimal batch sizes of 16 and 64 respectively correspond to the upper bound after which no further improvements are seen. By default our configurations are set to `<batch_size> = 64`, so no further edits are necessary. \
+      > **[Troubleshooting]]*: If you run into any issues (specifically the error: “SSLHandShakeException: No Appropriate Protocol” ) with running BFT-Smart please comment out the following in your `java-11-openjdk-amd64/conf/security/java.security` file: `jdk.tls.disabledAlgorithms=SSLv3, TLSv1, RC4, DES, MD5withRSA, DH keySize < 1024 EC keySize < 224, 3DES_EDE_CBC, anon, NULL`
 
 
+#### 2-Client Failures:
+   We evaluated 4 types of client failures: 1) forced simulated equivocation (equiv-forced), 2) realistic equivocation (equiv-real), 3) early client stalling (stall-early), and 4) late client stalling (stall-late). We evaluated all failures across 2 simple YCSB workloads: a) a uniform workload (RW-U), and b) a heavily skewed/contended workload (RW-Z). The metric used is Throughput/Correct-Clients: It can be found under `stats.json` -> `run_stats` -> `combined` -> `tput_s_honest` (see subsection 3) Parsing outputs) /
    
-2. Failures:
-3. Microbenchmarks:
-
-   Explain all experiments: 
-   - What numbers are expected, and how to read them. (tput_s_honest)
-   - mention to just use the 90-2 for failures as representative if you dont want to run all
-   - same for batching
-   - same for reads peaks
+   To reproduce the full lines/slope in the paper you need to re-run several configs per failure type, per workload. To only validate our claims, it may instead suffice to re-run data points near the maximum evaluated fault threshold (e.g. config Indicus-90-2). Configs are named after the total number of faulty clients, and the frequency at which they issue failures: E.g. Indicus-90-2.json (in a given failure type folder) simulates 90% of clients injecting a failure every 2nd transaction. To read the total percentage of faulty transaction (relative to total transactions injected) search for `"tx_attempted_failure_percentage"`.
    
-Use `<batch-size> = 4` for running TPCC, and `<batch-size> = 16` for Smallbank and Retwis for optimal results. 
-   Explain that Hotstuff client total and batch size is volatile:
+   > ⚠️ Do NOT change the client settings in any of the configurations. To facilitate comparisons between different failure levels all must use the same number of clients. The client numbers used correspond to those reported in the paper.
+   > *[NOTE]* Experiment stats are only collected on correct clients. Due to the high number of failure fractions evaluated, only few clients are used to collect stats which can lead to higher variance in the results; Hence all our results reported in the paper are averages over 4 runs and include standard deviation. You *may* want to do the same, but it is not necessary. We recommend using Indicus-90-2.json instead of 98-2.json for higher stability (if you only run one config).
 
 
+   1. **Evaluating RW-U**: Use configs from `/experiment-configs/2-Client-Failures/RW-U
+      1. No Failures baseline:
+         - First, run the baseline `Indicus-NoFailures.json` to establish the throughput per correct client when no failures are occuring. 
+         - Reported Tput/CorrectClients: ~107
+      2. equiv-forced:
+         - Navigate to folder `EquivForced` and run a config file.
+         - Reported Tput for Indicus-90-2: Corresponds to 40% fautly/total tx. Tput/Corectclients: ~76
+         
+      3. equiv-real
+         - Navigate to folder `EquivReal` and run a config file.
+         - Reported Tput for Indicus-90-2: Corresponds to 45% faulty/total tx. Tput/Corectclients: ~107
+         
+      4. stall-early
+         - Navigate to folder `StallEarly` and run a config file.
+         - Reported Tput for Indicus-90-2: Corresponds to 46% faulty/total tx. Tput/CorrectClients: ~90
+         
+      5. stall-late
+         - Navigate to folder `StallLate` and run a config file.
+         - Reported Tput for Indicus-90-2: corresponds to 45% of faulty/total tx. Tput/CorrectClient: ~96
+         
+      Other reported data points. Data format: [% faulty/total, Tput/CorrectClients]
+      
+            |  Failure Type | Indicus-10-3 | Indicus-15-2 | Indicus-30-3 | Indicus-60-3 | Indicus-60-2 | Indicus-80-2 | Indicus-90-2 | Indicus-98-2
+            |---------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|-------------
+            | equiv-forced  |  [3%, 104]   |  [7%, 100]   |  [10%, 97]   |  [19%, 39]   |  [28%, 83]   |  [36%, 79]   |  [40%, 76]   |  [43%, 74]
+            | equiv-real    |      -       |       -      |  [10%, 107]  |  [20%, 106]  |  [30%, 106]  |  [40%, 107]  |  [45%, 107]  |  [49%, 107]
+            | stall-early   |      -       |       -      |  [11%, 101]  |  [21%, 101]  |  [32%, 97]   |  [41%, 93]   |  [46%, 90]   |  [49%, 90]
+            | stall-late    |      -       |       -      |  [10%, 106]  |  [20%, 104]  |  [30%, 102]  |  [40%, 100]  |  [45%, 90]   |  [49%, 95]
+      
+   2. **Evaluating RW-Z**: Use configs from `/experiment-configs/2-Client-Failures/RW-U
+      1. No Failures baseline:
+         - First, run the baseline `Indicus-NoFailures.json` to establish the throughput per correct client when no failures are occuring. 
+         - Reported Tput/CorrectClients: ~67
+      2. equiv-forced:
+         - Navigate to folder `EquivForced` and run a config file.
+         - Reported Tput for Indicus-90-2: Corresponds to 27% fautly/total tx. Tput/Corectclients: ~24
+         
+      3. equiv-real
+         - Navigate to folder `EquivReal` and run a config file.
+         - Reported Tput for Indicus-90-2: Corresponds to 36% faulty/total tx. Tput/Corectclients: ~66
+         
+      4. stall-early
+         - Navigate to folder `StallEarly` and run a config file.
+         - Reported Tput for Indicus-90-2: Corresponds to 40% faulty/total tx. Tput/CorrectClients: ~46
+         
+      5. stall-late
+         - Navigate to folder `StallLate` and run a config file.
+         - Reported Tput for Indicus-90-2: corresponds to 40% of faulty/total tx. Tput/CorrectClient: ~56
+         
+      Other reported data points. Data format: [% faulty/total, Tput/CorrectClients]
+      
+            |  Failure Type | Indicus-10-3 | Indicus-15-2 | Indicus-30-3 | Indicus-60-3 | Indicus-60-2 | Indicus-80-2 | Indicus-90-2 | Indicus-98-2
+            |---------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|-------------
+            | equiv-forced  |   [2%, 53]   |   [5%, 48]   |   [7%, 43]   |  [13%, 35]   |  [19%, 30]   |  [24%, 26]   |  [27%, 24]   |  [29%, 22]
+            | equiv-real    |      -       |       -      |   [8%, 67]   |  [16%, 67]   |  [24%, 67]   |  [32%, 66]   |  [36%, 66]   |  [39%, 67]
+            | stall-early   |      -       |       -      |   [10%, 65]  |  [18%, 60]   |  [29%, 55]   |  [36%, 50]   |  [40%, 46]   |  [42%, 44]
+            | stall-late    |      -       |       -      |   [10%, 65]  |  [18%, 62]   |  [25%, 61]   |  [36%, 59]   |  [40%, 56]   |  [42%, 54]
+     
+     > *[NOTE]* Why does %faulty/total end at different points?
+     
+     The explanation is not unavailability, or a failure to run the experiment: rather, it is an artifact of how we count transactions. In particular, (faulty_clients x failure_frequency) % (e.g. 45% for Indicus-90-2) of the transactions newly submitted to Basil are faulty. However, contention (and dependencies on equivocating transactions) can require some of the correct transactions to abort and re-execute (faulty transactions instead do not care to retry), which decreases the percentage of faulty transactions that Basil processes (since, again, some correct transactions end up being prepared multiple times). Thus, when measuring the throughout, the percentage of faulty transactions we report is the fraction of faulty transactions among all processed (as opposed to admitted) transactions--the latter is set at (faulty_clients x failure_frequency) %, while the former depends on the number of re-executions of correct transactions.
+ 
+
+#### Microbenchmarks:
+
+##### 3-Crypto Overheads:
+- must run with fallback off, since non-crypto isnt implemented for that. Codebase has changed slightly for non-signature handling. (it is not a stable supported version - its not safe for BFT - so do not use it for anything else than the microbenchmark)
+- RWU: ~38k and ~143k, now 140k?
+- RWZ: 4.8k and ~22k, now 20k
+##### 4-Reads:
+- runs read only, uses eager read optimization (that is used by all systems)
+- run just a few peak points
+- 2f+1: 12k
+- f+1:13.5k
+- 1: 17k
+##### 5-Sharding:
+Non-crypto runs on more shards
+Crypto: 20k, ? 27k
+Non-crypto: 45k, 63k, 85k
+(Performance may be a little better now)
+##### 6-FastPath:
+RW-U 32k, 38k
+RW-Z 2.4k 4.8k
+Maybe RW-Z no fast path is a little higher now, because we improved some code.
+     
+##### 7-Batching:
+Just say which ones are the peaks.
+Run a few of them. Performance is slightly better now than reported in the paper
+RW-U: 10k to 38k
+RW-Z: 3k to 4.8k
+ 
+ 
    
-   BFTSmart Troubleshooting: If you run into any issues (specifically the error: “SSLHandShakeException: No Appropriate Protocol” 
-) with running BFT-Smart please modify the following in your java-11-openjdk-amd64/conf/security/java.security:
-You probably had a line called
-jdk.tls.disabledAlgorithms=SSLv3, TLSv1, RC4, DES, MD5withRSA, DH keySize < 1024, \
-EC keySize < 224, 3DES_EDE_CBC, anon, NULL
-Please comment out this line. 
+
+
+
   
 
 
