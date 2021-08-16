@@ -558,6 +558,32 @@ Next, we will go over each included experiment individually to provide some poin
 
 ### 4) Reproducing experiment claims 1-by-1 
    
+We have included recently re-validated experiment outputs (for most of the experiments) for easy cross-validation of the claimed througput (and latency) numbers under `/sample-output/ValidatedResults`. To directly compare against the numbers reported in our paper please refer to the figures there (we include rough numbers below as well). Some of Basil's workload and microbenchmark performances have changed slightly (documented below) since the codebase has matured since, but is nonetheless mostly consistent.
+
+1. Workloads:
+   1. Tapir: Reproducing our claimed results is straightforward and requires no additional setup besides running the included configs under `/experiment-configs/1-Workloads/1.Tapir`. Make sure to run on branch `Basil/Tapir`. Reported peak results were roughly:
+      - TPCC: Throughput: ~20k tx/s, Latency: ~7 ms
+      - Smallbank: Throughput: ~ 61,5k tx/s, Latency: ~2.3 ms
+      - Retwis: Throughput: ~45k tx/s, Latency: 2 ms
+      All Tapir experiments were run using 24 shards to allow for even use of resources across systems, since unlike the BFT systems (all use 3 shards) that require multiple cores to handle cryptography, Tapir's servers are single threaded. 
+
+   2. Basil: Use the configurations under `/experiment-configs/1-Workloads/2.Basil`. Reported peak results were roughly:
+      - TPCC: Throughput: ~4.8k tx/s, Latency: ~30 ms
+      - Smallbank: Throughput: ~23k tx/s Latency: ~12 ms
+      - Retwis: Throughput: ~24 k tx/s, Latency: ~10 ms
+         - On both Smallbank and Retwis throughput has decreased (and Latency has increased) ever so slightly since the reported results, as the system now additionally implements failure handling, which is optimistically triggered even under absence of failures. To disable this option set the JSON value `"no_fallback" : "true"`. We note, that the baseline systems (do not implement and) are not running with failure handling.
+         
+   3. TxHotstuff: Use the configurations under `/experiment-configs/1-Workloads/3.Hotstuff`. Before running these configs, you must configure Hotstuff using the instructions from section "1) Pre-configurations for Hotstuff and BFTSmart" (see above). Use a batch size of 4 when running TPCC, and 16 for Smallbank and Retwis for optimal results. Note, that you must re-run `src/scripts/remote_config.sh` **after** updating the batch size and **before** starting an experiment. 
+      Reported peak results were roughly:
+      - TPCC: Throughput: ~920 tx/s, Latency: ~73 ms
+      - Smallbank: Throughput: ~6.4k tx/s Latency: ~42 ms
+      - Retwis: Throughput: ~5.2k tx/s, Latency: ~48 ms
+      > @icon-warning Note: Hotstuffs performance is quite volatile with respect to total number of clients and the batch size specified. Since the Hotstuff protocol uses a pipelined consensus mechanism, it requires at least `batch_size x 4` active client requests per shard at any given time for progress. Using too few clients, and too large of a batch size will get Hotstuff stuck. In turn, using too many total clients will result in contention that is too high, causing exponential backoffs which leads to few active clients, hence slowing down the remaining active clients. These slow downs in turn lead to more contention and aborts, resulting in no throughput. The configs provided by us roughly capture the window of balance that allows for peak thorughput.  
+   5. TxBFTSmart:
+   
+2. Failures:
+3. Microbenchmarks:
+
    Explain all experiments: 
    - What numbers are expected, and how to read them. (tput_s_honest)
    - mention to just use the 90-2 for failures as representative if you dont want to run all
