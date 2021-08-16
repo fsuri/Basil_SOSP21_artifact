@@ -80,7 +80,10 @@ class IndicusCodebase(ExperimentCodebase):
             if 'merkle_branch_factor' in config['replication_protocol_settings']:
                 client_command += ' --indicus_merkle_branch_factor %d' % config['replication_protocol_settings']['merkle_branch_factor']
             if 'p1DecisionTimeout' in config['replication_protocol_settings']:
-                client_command += ' --indicus_phase1DecisionTimeout %s' % config['replication_protocol_settings']['p1DecisionTimeout']
+                client_command += ' --indicus_phase1DecisionTimeout %d' % config['replication_protocol_settings']['p1DecisionTimeout']
+            if 'max_consecutive_abstains' in config['replication_protocol_settings']:
+                client_command += ' --indicus_max_consecutive_abstains %d' % config['replication_protocol_settings']['max_consecutive_abstains']
+
             #multithreading options
             if 'parallel_CCC' in config['replication_protocol_settings']:
                 client_command += ' --indicus_parallel_CCC=%s' % str(config['replication_protocol_settings']['parallel_CCC']).lower()
@@ -98,6 +101,8 @@ class IndicusCodebase(ExperimentCodebase):
             if 'inject_failure_freq' in config['replication_protocol_settings']:
                 client_command += ' --indicus_inject_failure_freq %d' % config['replication_protocol_settings']['inject_failure_freq']
             #fallback operation options
+            if 'no_fallback' in config['replication_protocol_settings']:
+                client_command += ' --indicus_no_fallback=%s' % str(config['replication_protocol_settings']['no_fallback']).lower()
             if 'relayP1_timeout' in config['replication_protocol_settings']:
                 client_command += ' --indicus_relayP1_timeout %d' % config['replication_protocol_settings']['relayP1_timeout']
             if 'all_to_all_fb' in config['replication_protocol_settings']:
@@ -108,6 +113,8 @@ class IndicusCodebase(ExperimentCodebase):
             if 'validate_abort' in config['replication_protocol_settings']:
                 client_command += ' --pbft_validate_abort=%s' % str(config['replication_protocol_settings']['validate_abort']).lower()
 
+        if config['replication_protocol'] == 'bftsmart':
+            client_command += " --bftsmart_codebase_dir=%s" % str(config['bftsmart_codebase_dir'])
 
         if config['replication_protocol'] == 'morty':
             if 'send_writes' in config['replication_protocol_settings']:
@@ -154,6 +161,8 @@ class IndicusCodebase(ExperimentCodebase):
         elif config['benchmark_name'] == 'rw':
             client_command += ' --num_keys %d' % config['client_num_keys']
             client_command += ' --num_ops_txn %d' % config['rw_num_ops_txn']
+            if 'rw_read_only' in config:            
+                client_command += ' --rw_read_only=%s' % (str(config['rw_read_only']).lower())
             if 'client_key_selector' in config:
                 client_command += ' --key_selector %s' % config['client_key_selector']
                 if config['client_key_selector'] == 'zipf':
@@ -352,7 +361,9 @@ class IndicusCodebase(ExperimentCodebase):
             #disable hyperthreading and boosting
             if 'hyper_threading' in config['replication_protocol_settings']:
                 replica_command += ' --indicus_hyper_threading=%s' % str(config['replication_protocol_settings']['hyper_threading']).lower()
-            #fallback options
+            #fallback option
+            if 'no_fallback' in config['replication_protocol_settings']:
+                replica_command += ' --indicus_no_fallback=%s' % str(config['replication_protocol_settings']['no_fallback']).lower()
             if 'relayP1_timeout' in config['replication_protocol_settings']:
                 replica_command += ' --indicus_relayP1_timeout %d' % config['replication_protocol_settings']['relayP1_timeout']
             if 'all_to_all_fb' in config['replication_protocol_settings']:
@@ -369,6 +380,9 @@ class IndicusCodebase(ExperimentCodebase):
 
         #if 'rw_or_retwis' in config:
         #    replica_command += ' --rw_or_retwis=%s' % str(config['rw_or_retwis']).lower()
+
+        if config['replication_protocol'] == 'bftsmart':
+            replica_command += " --bftsmart_codebase_dir=%s" % str(config['bftsmart_codebase_dir'])        
 
         if 'server_debug_stats' in config and config['server_debug_stats']:
             replica_command += ' --debug_stats'
