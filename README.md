@@ -10,19 +10,22 @@ For all questions about the artifact that do not require anonymity please e-mail
 
 The artifact contains, and allows to reproduce, experiments for all figures included in the paper. 
 
-   This prototype implements (alongside several baselines) Basil, a replicated Byzantine Fault Tolerant key-value store offering interactive transactions and sharding. The prototype uses cryptographically secure hash functions and signatures for all replicas, but does not sign client requests on any of the evaluated prototype systems, as we delegate this problem to the application layer. The Basil prototype can simulate Byzantine Clients failing via Stalling or Equivocation, and is robust to both. While the Basil prototype uses tolerates many obvious faults such as message corruptions, duplications, it does *not* exhaustively implement defences against arbitrary failures or data format corruptions, nor does it simulate all possible behaviors. For example, while the prototype implements fault tolerance (safety) to leader failures during recovery, it does not include code to simulate these, nor does it implement explicit exponential timeouts to enter new views that are necessary for theoretical liveness under partial synchrony.
+   This prototype implements Basil, a replicated Byzantine Fault Tolerant key-value store offering interactive transactions and sharding. The prototype uses cryptographically secure hash functions and signatures for all replicas, but does not sign client requests on any of the evaluated prototype systems, as we delegate this problem to the application layer. The Basil prototype can simulate Byzantine Clients failing via Stalling or Equivocation, and is robust to both. While the Basil prototype uses tolerates many obvious faults such as message corruptions, duplications, it does *not* exhaustively implement defences against arbitrary failures or data format corruptions, nor does it simulate all possible behaviors. For example, while the prototype implements fault tolerance (safety) to leader failures during recovery, it does not include code to simulate these, nor does it implement explicit exponential timeouts to enter new views that are necessary for theoretical liveness under partial synchrony.
 
-   Basils current code-base was modified beyond some of the results reported in the paper (both for workloads, and microbenchmarks) to include failure handling: While results should be largely consistent, they may differ slightly across the microbenchmarks (better performance in some cases).
+   Basils current code-base was modified beyond some of the results reported in the paper to include failure handling: While results remain consistent, they may differ slightly across the microbenchmarks (better performance in some cases).
+
+In addition to Basil, this artifact contains implementations for 3 baselines: 1) An extension of the original codebase for Tapir, a Crash Failure replicated and sharded key-value store, 2) TxHotstuff and 3) TxBFTSmart, two Byzantine Fault tolerant replicated and sharded key-value stores built atop 3rd party implementations of Consensus modules 
 
 ### Concrete claims in the paper
 
 - **Main claim 1**: Basil comes within competitive throughput (within 4x on TPCC, 3x on Smallbank, and 2x on Retwis) compared to Tapir, a state of the art Crash Fault Tolerant database. 
 
-- **Main claim 2**: Basil achieves both higher throughput and lower latency than both BFT baselines (TxHotstuff, TxBFTSmart).
+- **Main claim 2**: Basil achieves higher throughput and lower latency than both BFT baselines. (>5x over TxHotstuff on TPCC, 4x on Smallbank, and close to 5x on Retwis; close to 4x over TxBFTSmart on TPCC, 3x on Smallbank, and 4x on Retwis).
 
-All comparisons for claims 1 and 2 are made under gracious system execution, i.e. in the absence of failures for all systems.
+   All comparisons for claims 1 and 2 are made under gracious system execution, i.e. in the absence of failures for all systems.
 
-- **Main claim 3**: Basil maintains robust throughput for correct clients under simulated attack by Byzantine Clients.
+- **Main claim 3**: Basil maintains robust throughput for correct clients under simulated attack by Byzantine Clients. With 30% Byzantine clients,
+throughput experienced by correct clients drops by less than 25% in the worst-case.
 
 - **Supplementary**: All other microbenchmarks reported realistically represent Basil.
 
@@ -558,9 +561,9 @@ Next, we will go over each included experiment individually to provide some poin
 
 ### 4) Reproducing experiment claims 1-by-1 
    
-We have included recently re-validated experiment outputs (for most of the experiments) for easy cross-validation of the claimed througput (and latency) numbers under `/sample-output/ValidatedResults`. To directly compare against the numbers reported in our paper please refer to the figures there (we include rough numbers below as well). Some of Basil's workload and microbenchmark performances have changed slightly (documented below) since the codebase has matured since, but is nonetheless mostly consistent.
+We have included recently re-validated experiment outputs (for most of the experiments) for easy cross-validation of the claimed througput (and latency) numbers under `/sample-output/ValidatedResults`. To directly compare against the numbers reported in our paper please refer to the figures there -- we include rough numbers below as well. Some of Basil' reported microbenchmark performances have changed slightly (documented below) as the codebase has since matured, but all takeaways remain consistent.
 
-#### 1 - Workloads:
+#### **1 - Workloads**:
 We report evaluation results for 3 workloads (TPCC, Smallbank, Retwis) and 4 systems: Tapir (Crash Failure baseline), Basil (our system), TxHotstuff (BFT baseline), and TxBFTSmart (BFT baseline). All systems were evaluated using 3 shards each, but use different replication factors.
 
    1. **Tapir**: 
@@ -612,8 +615,10 @@ We report evaluation results for 3 workloads (TPCC, Smallbank, Retwis) and 4 sys
    > **[Troubleshooting]**: If you run into any issues (specifically the error: “SSLHandShakeException: No Appropriate Protocol” ) with running BFT-Smart please comment out the following in your `java-11-openjdk-amd64/conf/security/java.security` file: `jdk.tls.disabledAlgorithms=SSLv3, TLSv1, RC4, DES, MD5withRSA, DH keySize < 1024 EC keySize < 224, 3DES_EDE_CBC, anon, NULL`
 
 
-#### 2-Client Failures:
-   We evaluated 4 types of client failures: 1) forced simulated equivocation (equiv-forced), 2) realistic equivocation (equiv-real), 3) early client stalling (stall-early), and 4) late client stalling (stall-late). We evaluated all failures across 2 simple YCSB workloads: a) a uniform workload (RW-U), and b) a heavily skewed/contended workload (RW-Z). The metric used is Throughput/Correct-Clients: It can be found under `stats.json` -> `run_stats` -> `combined` -> `tput_s_honest` (see subsection 3) Parsing outputs) /
+#### **2-Client Failures**:
+   We evaluated 4 types of client failures: 1) forced simulated equivocation (equiv-forced), 2) realistic equivocation (equiv-real), 3) early client stalling (stall-early), and 4) late client stalling (stall-late). We evaluated all failures across 2 simple YCSB workloads: a) a uniform workload (RW-U), and b) a heavily skewed/contended workload (RW-Z). We remark once again that "equiv-forced" is **not** the realistic worst-case, as it simulates an artificial execution; Instead, it is "stall-early" that corresponds to the worst-case statistics claimed by us.
+   
+   The metric used is Throughput/Correct-Clients: It can be found under `stats.json` -> `run_stats` -> `combined` -> `tput_s_honest` (see subsection 3) Parsing outputs) /
    
    To reproduce the full lines/slope in the paper you need to re-run several configs per failure type, per workload. To only validate our claims, it may instead suffice to re-run data points near the maximum evaluated fault threshold (e.g. config Indicus-90-2). Configs are named after the total number of faulty clients, and the frequency at which they issue failures: E.g. Indicus-90-2.json (in a given failure type folder) simulates 90% of clients injecting a failure every 2nd transaction. To read the total percentage of faulty transaction (relative to total transactions injected) search for `"tx_attempted_failure_percentage"`.
    
@@ -641,7 +646,7 @@ We report evaluation results for 3 workloads (TPCC, Smallbank, Retwis) and 4 sys
          - Navigate to folder `StallLate` and run a config file.
          - Reported Tput for Indicus-90-2: corresponds to 45% of faulty/total tx. Tput/CorrectClient: ~96
          
-      Other reported data points. Data format: [% faulty/total, Tput/CorrectClients]
+      All reported data points. Data format: [% faulty/total, Tput/CorrectClients]
       
             |  Failure Type | Indicus-10-3 | Indicus-15-2 | Indicus-30-3 | Indicus-60-3 | Indicus-60-2 | Indicus-80-2 | Indicus-90-2 | Indicus-98-2
             |---------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|-------------
@@ -670,7 +675,7 @@ We report evaluation results for 3 workloads (TPCC, Smallbank, Retwis) and 4 sys
          - Navigate to folder `StallLate` and run a config file.
          - Reported Tput for Indicus-90-2: corresponds to 40% of faulty/total tx. Tput/CorrectClient: ~56
          
-      Other reported data points. Data format: [% faulty/total, Tput/CorrectClients]
+      All reported data points. Data format: [% faulty/total, Tput/CorrectClients]
       
             |  Failure Type | Indicus-10-3 | Indicus-15-2 | Indicus-30-3 | Indicus-60-3 | Indicus-60-2 | Indicus-80-2 | Indicus-90-2 | Indicus-98-2
             |---------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|-------------
@@ -683,10 +688,10 @@ We report evaluation results for 3 workloads (TPCC, Smallbank, Retwis) and 4 sys
      The explanation is not unavailability, or a failure to run the experiment: rather, it is an artifact of how we count transactions. In particular, (faulty_clients x failure_frequency) % (e.g. 45% for Indicus-90-2) of the transactions newly submitted to Basil are faulty. However, contention (and dependencies on equivocating transactions) can require some of the correct transactions to abort and re-execute (faulty transactions instead do not care to retry), which decreases the percentage of faulty transactions that Basil processes (since, again, some correct transactions end up being prepared multiple times). Thus, when measuring the throughout, the percentage of faulty transactions we report is the fraction of faulty transactions among all processed (as opposed to admitted) transactions--the latter is set at (faulty_clients x failure_frequency) %, while the former depends on the number of re-executions of correct transactions.
  
 
-#### Microbenchmarks:
+#### **Microbenchmarks**:
 Finally, we review the reported Microbenchmarks
 
-##### 3-Crypto Overheads:
+##### **3-Crypto Overheads**:
 To reproduce the reported evaluation of the impact of proofs and cryptography on the system navigate to `experiment-configs/3-Micro:Crypto`. The evaluation covers the RW-U workload as well as RW-Z, and for each includes a config with Crypto/Proofs disabled and enabled respectively. Since signatures induce a high amount of overhead the full Basil system is multithreaded and uses several worker threads to handle cryptography - Since this overhead falls to the wayside, the Non-Crypto/Proofs version instead runs single-threaded (no crypto worker threads) and instead uses the available cores to run more shards. In total, the Non-Crypto/Proofs version uses 24 shards, vs normal Basil using 3.
 
 > **[NOTE]** Since running this microbenchmark the codebase has changed significantly to include client failure handling. The No-Crypto/Proofs option is no longer supported on the full version, and hence must run with the fallback protocol disabled (since failures are not simulated it will not regularly be triggered anyways, but it may be occasionally, leading to segmentation faults). The provided config has the fallback protocol disabled by default `"no_fallback": true"` - Make sure to not change this. We remark that the No-crypto/Proofs version is **not** a safe BFT implementation, it is purely an option for microbenchmarking overheads. The throughput for the No-Crypto/Proofs version has changed ever so slightly given the updates.
@@ -698,7 +703,7 @@ To reproduce the reported evaluation of the impact of proofs and cryptography on
    - Navigate to the `RW-Z` folder and run `Indicus.json` and `Indicus-NoCrypto.json` respectively.
    - The reported results are ~4.8k tput for Crypto enabled (Indicus.json) and ~22k for Crypto/Proofs disabled.
 
-##### 4-Reads:
+##### **4-Reads**:
 To reproduce the reported evaluation of the impact of different Read Quorum sizes on the system navigate to `experiment-configs/4-Micro:Reads`. The evaluation uses a read only workload and compares Read Quorums consisting of 1) a single read, 2) f+1 reads from different replicas, and 3) 2f+1 reads from different replicas. All configurations use an "eager-reads" optimization (which is used by all baseline systems too) in which read messages are optimistically only sent to the Read Quorum itself (instead of pessimistically sending to f additional replicas).
 
 > ⚠️**[Warning]** Do **not** run the single read configuration on a non-read-only workload (i.e. a workload with writes as well) as the prototype is hard coded to only read uncommitted values from f+1 replicas (which is necessary for Byzantine Independence). Running with a single read is **not** BFT tolerant and is purely an option for microbenchmarking purposes.
@@ -715,7 +720,7 @@ The provided configs only run an experiment for the rough peak points reported i
    - Run configuration `2f+1.json`.
    - The reported peak throughput is ~17k tx/s
   
-##### 5-Sharding:
+##### **5-Sharding**:
 To reproduce the reported evaluation of the impact of proofs and cryptography on sharding navigate to `experiment-configs/5-Micro:Sharding`. The evaluation covers the RW-U workload and includes configurations for different number of shards with Crypto/Proofs disabled and enabled respectively. Since the Non-Crypto/Proofs version is single threaded (see subsection 3-Crypto above) we run 8 times more shards than in the full Basil system, since the latter uses 8 threads, over 8 cores (since m510 machines have 8 cores).
 
 > **[NOTE]** Like mentioned under **3-Crypto** above, th No-Crypto/Proofs option is no longer supported on the full Basil prototype  and hence must run with the fallback protocol disabled The provided config has the fallback protocol disabled by default `"no_fallback": true"` - Make sure to not change this. 
@@ -747,22 +752,35 @@ To reproduce the reported evaluation of the impact of proofs and cryptography on
    > Throughput may be a little better on the current version - which only emphasizes the overhead that Crypto and Quroum Proofs impose.
 
 
-##### 6-FastPath:
-RW-U 32k, 38k
-RW-Z 2.4k 4.8k
-Maybe RW-Z no fast path is a little higher now, because we improved some code.
+##### **6-FastPath**:
+To reproduce the reported evaluation of the utility of the Fast Path navigate to `experiment-configs/6-Micro:FastPath`. The evaluation covers both the RW-U and RW-Z workload and includes configurations to run the normal Basil prototype, and the Basil prototype with the Fast Path explicitly disabled.
+
+1. **RW-U**
+   - Navigate to the `RW-U` folder and run `Indicus_16_FP_ON.json` and `Indicus_16_FP_OFF.json` to run Basil with Fast Path enabled and disabled respectively.
+   - The reported results are ~38k tput for Fast Path enabled, and ~32k for Fast Path disabled.
+2. **RW-Z**
+   - Navigate to the `RW-Z` folder and run `Indicus_4_FP_ON.json` and `Indicus_4_FP_OFF.json` to run Basil with Fast Path enabled and disabled respectively.
+   - The reported results are ~4.8k tput for Fast Path enabled and ~2.4k for Fast Path disabled.
+   > The RW-Z results for Fast-Path disabled may be slightly higher (which is a good thing) than the reported results since we modified the codebase since.
+
+   > [Note] The evaluation with no Fast Path is a lower bound on the impact of a replica failure during the Prepare phase. While Basil cannot use the Commit Fast Path in presence of a misbhehaving replica, it might still be able to use the Abort Fast Path, which reduces contention by removing tentative transactions faster, and allows clients submitting aborting transactions to retry sooner. This microbenchmark instead fully disables all Fast Paths.
      
-##### 7-Batching:
-Just say which ones are the peaks.
-Run a few of them. Performance is slightly better now than reported in the paper
-RW-U: 10k to 38k
-RW-Z: 3k to 4.8k
+##### **7-Batching**:
+To reproduce the reported evaluation of different batch sizes in Basil navigate to `experiment-configs/7-Micro:Batching`. The evaluation covers both the RW-U and RW-Z workload and includes configurations to run Basil with several different batch sizes. 
+
+1. **RW-U**
+   - Navigate to the `RW-U` folder and run different batch sizes by running `Indicus_<batch_size>.json`.
+   - The reported peak results are for batch size 16/31 at ~38k at which point there are no further improvements
+2. **RW-Z**
+   - Navigate to the `RW-Z` folder and run different batch sizes by running `Indicus_<batch_size>.json`.
+   - The reported peak results are for batch size 2/4 at ~4.8k at which point further increasing the batch size is detrimental.
+   - The RW-Z results for batch sizes 1 and 8 may be slightly higher than the reported results since we modified the codebase since, but the peak remains the same.
+       
+All reported data points. 
+     
+            | Workload | Batch Size: 1 | Batch Size: 2 | Batch Size: 4 | Batch Size: 8 | Batch size: 16 | Batch size: 32 |
+            |----------|---------------|---------------|---------------|---------------|----------------|----------------|
+            |   RW-U   |   9600 tx/s   |   14400 tx/s  |   21700 tx/s  |   30300 tx/s  |   38200 tx/s   |  38200 tx/s    |
+            |   RW-Z   |   3300 tx/s   |    4600 tx/s  |    4800 tx/s  |    2900 tx/s  |        -       |        -       |
+
  
- 
-   
-
-
-
-  
-
-
