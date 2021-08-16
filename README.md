@@ -523,7 +523,7 @@ To parse experiment results you have 2 options:
 2. Looking at generated png plots:
    Alternatively, on your local machine you can navigate to `<time_stamped_folder>/plots/tput-clients.png` and `<time_stamped_folder>/plots/lat-tput.png` to look at the data points directly. Currently however, it shows as "Number of Clients" the number of total client **processes** (i.e. `client_total`) and not the number of **Total clients** specified above. Keep this in mind when viewing output that was generated for experiments with a list of client settings.
    
-   Find below, some example screenshots from looking at a provided experiment output from `SOSP21_artifact_eval/sample-output/Validated Results`:
+ Find below, some example screenshots from looking at a provided experiment output from `SOSP21_artifact_eval/sample-output/Validated Results`:
 
    Experiment output folder:
 
@@ -533,7 +533,7 @@ To parse experiment results you have 2 options:
 
    ![image](https://user-images.githubusercontent.com/42611410/129566648-808ea2d7-a2c0-48b4-b2e8-57221b040f13.png) 
 
-   JSON fiedls `run_stats` and `combined`. Note: `combined` might not be the first entry within `run_stats` in every config, so double check to get the right data.
+   JSON fields `run_stats` and `combined`. Note: `combined` might not be the first entry within `run_stats` in every config, so double check to get the right data.
 
    ![image](https://user-images.githubusercontent.com/42611410/129566877-87000119-c43b-4fa2-973a-2a9e571d9351.png)
 
