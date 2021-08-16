@@ -431,8 +431,43 @@ To create a disk image, select "Create Disk Image" and name it accordingly.
    
 
 ## Running experiments:
-Hurray! You have completed the tedious process of installing the binaries and setting up Cloudlab. Treat yourself to a Gummy Bear :)
-Next, we will cover how to run experiments. This is a straightfoward, but time-consuming process, and importantly requires good network connectivity to upload binaries to the remote machines, and download experiment results. Uploading binaries on high speed (e.g university) connections takes a few minutes and needs to be done only once per branch - however iff your uplink speed is low it may take (as I have painstakenly experienced in preparing this documentation for you) several hours. Downloading experiment outputs requires a moderate amount of download bandwidth, but it usually quite fast.
+Hurray! You have completed the tedious process of installing the binaries and setting up Cloudlab. Next, we will cover how to run experiments. This is a straightfoward, but time-consuming process, and importantly requires good network connectivity to upload binaries to the remote machines, and download experiment results. Uploading binaries on high speed (e.g university) connections takes a few minutes and needs to be done only once per branch -- however if your uplink speed is low it may take (as I have painstakenly experienced in preparing this documentation for you) several hours. Downloading experiment outputs requires a moderate amount of download bandwidth, and is usually quite fast.
+
+Before you proceed, please confirm that the following credentials are accurate:
+1. Cloudlab-username `<cloudlab-user>`: e.g. "fs435"
+2. Cloudlab experiment name `<experiment-name>`: e.g. "indicus"
+3. Cloudlab project name `<project-name`>: e.g. "morty-pg0"  (May need the "-pg0" extension)
+
+Confirm these by attempting to ssh into a machine you started (on the Utah cluster): `ssh <cloudlab-user>@us-east-1-0.<experiment-name>.<project-name>.utah.cloudlab.us`
+
+### Pre-configurations for Hotstuff and BFTSmart
+
+On branches TxHotstuff and TxBFTSmart you will need to complete the following pre-configuration steps before running an experiment script:
+
+1. *TxHotstuff*
+   1. Navigate to `SOSP21_artifact_eval/src/scripts`
+   2. Run `./batch_size <batch_size>` to configure the internal batch size used by the Hotstuff Consensus module. See sub-section "1-by-1 experiment guide" for what settings to use
+   3. Open file `config_remote.sh` and edit the following lines to match your Cloudlab credentials:
+      - Line 3: `TARGET_DIR="/users/<cloudlab-user>/config/"`
+      - Line 14: `rsync -rtuv config <cloudlab-user>@${machine}.<experiment-name>.<project-name>.utah.cloudlab.us:/users/<cloudlab-user>/`
+   4. Finally, run `./config_remote.sh` 
+   5. This will upload the necessary configurations for the Hotstuff Consensus module to the Cloudlab machines.
+
+3. *TxBFTSmart*
+   1. Navigate to `SOSP21_artifact_eval/src/scripts`
+   2. Run `./one_step_config.sh <Local SOSP21_artifact_eval directory> <cloudlab-user> <experiment-name> <project-name> <cloudlab-cluster>`
+   3. For example: `./one_step_config.sh /home/florian/Indicus/SOSP21_artifact_eval fs435 indicus morty-pg0 utah.cloudlab.us`
+   4. This will upload the necessary configurations for the BFTSmart Conesnsus module to the Cloudlab machines.
+      - Troubleshooting: Make sure files `server-hosts` and `client-hosts` in `/src/scripts/` do not contain empty lines at the end
+
+### Using the experiment scripts
+
+
+
+### Parsing outputs
+   
+### 1-by-1 experiment guide   
+Use `<batch-size> = 4` for running TPCC, and `<batch-size> = 16` for Smallbank and Retwis for optimal results. 
 
 Scripts: run: `python3 <PATH>/experiment-scripts/run_multiple_experiments.py <CONFIG>`
 The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion.
