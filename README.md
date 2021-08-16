@@ -385,7 +385,15 @@ All experiments work using an experiment profile with 18 servers (36 total machi
 ### Using a control machine (skip if using local machine)
 When using a control machine (and not your local machine) to start experiments, you will need to source setvars.sh and may need to export the LD_LIBRARY_PATH for the Java dependencies (see section "Install Dependencies") before building. You will need to do this everytime you start a new control machine because those may not be persisted across images.
 
-Connect to your control machine via ssh: `ssh -A <cloudlab-user>@control.<experiment-name>.<project-name>.utah.cloudlab.us`. It is crucial that you connect using the `-A` setting in order to transfer your local ssh-agent (that manages the ssh key you registered with Cloudlab) to the control machine.  You may need to add `-pg0` to your project name in order to connect, i.e. if your project is called "sosp108", it may need to be "sosp108-pg0" in order to connect. Find out by Trial and Error.
+Before connecting to your control machine, start an SSH agent in your local terminal
+with `eval $(ssh-agent -s)`. Then add your Cloudlab SSH key to the agent `ssh-add <path to Cloudlab key>`.
+
+Connect using your Cloudlab username and the following domain name:
+`ssh -A <cloudlab-user>@control.<experiment-name>.<project-name>.utah.cloudlab.us`.
+It is crucial that you connect using the `-A` setting in order to transfer your
+local SSH agent to the control machine.  You may need to add `-pg0` to your
+project name in order to connect, i.e. if your project is called "sosp108", it
+may need to be "sosp108-pg0" in order to connect.
 
 ### Using a custom profile (skip if using pre-supplied profile)
 
