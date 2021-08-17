@@ -349,11 +349,11 @@ The client should finish within 10 seconds and the output file `client-0.out` sh
 
 ## Setting up Cloudlab <a name="cloudlab"></a>
    
-In order to run experiments on Cloudlab (https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project if you do not already have one. To request an account click [here](https://cloudlab.us/signup.php). You can create a new project either directly while requesting an account, or by selecting "Start/Join project" in your account drop down menu.
+In order to run experiments on [Cloudlab](https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project if you do not already have one. To request an account click [here](https://cloudlab.us/signup.php). You can create a new project either directly while requesting an account, or by selecting "Start/Join project" in your account drop down menu.
 
-We have included screenshots below for easy useability. Follow the cloudlab manual if you need additional information (http://docs.cloudlab.us/) for any of the outlined steps. 
+We have included screenshots below for easy useability. Follow the [cloudlab manual](http://docs.cloudlab.us/) if you need additional information () for any of the outlined steps. 
 
-If you face any issues with registering, please make a post at the Cloudlab forum https://groups.google.com/g/cloudlab-users?pli=1. Replies are usually very swift during workdays on US mountain time (MT). Alternatively -- but *not recommended* --, if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted. Reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join.
+If you face any issues with registering, please make a post at the [Cloudlab forum](https://groups.google.com/g/cloudlab-users?pli=1). Replies are usually very swift during workdays on US mountain time (MT). Alternatively -- but *not recommended* --, if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted. Reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join.
 
 ![image](https://user-images.githubusercontent.com/42611410/129490833-eb99f58c-8f0a-43d9-8b99-433af5dab559.png)
 
