@@ -3,6 +3,20 @@ This is the repository for the Artifact Evaluation of SOSP'21 submission #108: "
 
 For all questions about the artifact that do not require anonymity please e-mail (or message over google hangouts) "fs435@cornell.edu". For specific questions about 1) building the codebase or 2) running TxBFTSmart aditionally CC zw494@cornell.edu, for questions about 3) running TxHotstuff CC yz2327@cornell.edu, and 4) for questions about the experiment scripts or cloudlab CC mlb452@cornell.edu.
 
+Table of Contents:
+
+1. Claims
+2. Artifact organization
+3. Validating the Claims - overview
+4. Installing dependencies
+5. Setting up Cloudlab
+6. Running experiments
+
+# Table of Contents
+1. [High Level Claims](#Claims)
+2. [Artifact Organization](#Artifacts)
+3. [Overview of steps to validate Claims](#Validating the Claims - Overview)
+4. [Fourth Example](#fourth-examplehttpwwwfourthexamplecom)
 
 ## Claims 
 
@@ -129,6 +143,11 @@ Download the library:
 2. `cd googletest`
 3. `git checkout release-1.10.0`
 
+Alternatively, you may download and unzip from source: 
+
+1. `get https://github.com/google/googletest/archive/release-1.10.0.zip`
+2. `unzip release-1.10.0.zip`  
+
 Next, build googletest:
 
 4. `sudo cmake CMakeLists.txt`
@@ -138,12 +157,6 @@ Next, build googletest:
 8. `sudo ldconfig`
 9. `cd ..`
 
-Alternatively, you may download and unzip from source: 
-
-1. `get https://github.com/google/googletest/archive/release-1.10.0.zip`
-2. `unzip release-1.10.0.zip`  
-3. Proceed with installs as above  
-
 
 #### Installing protobuf
 
@@ -152,6 +165,11 @@ Download the library:
 1. `git clone https://github.com/protocolbuffers/protobuf.git`
 2. `cd protobuf`
 3. `git checkout v3.5.1`
+
+Alternatively, you may download and unzip from source: 
+
+1.`wget https://github.com/protocolbuffers/protobuf/releases/download/v3.5.1/protobuf-all-3.5.1.zip`
+2.`unzip protobuf-all-3.5.1.zip`
 
 Next, build protobuf:
 
@@ -163,11 +181,6 @@ Next, build protobuf:
 9. `sudo ldconfig`
 10. `cd ..`
 
-Alternatively, you may download and unzip from source: 
-
-1.`wget https://github.com/protocolbuffers/protobuf/releases/download/v3.5.1/protobuf-all-3.5.1.zip`
-2.`unzip protobuf-all-3.5.1.zip`
-3. Proceed with install as above
 
 #### Installing secp256k1
 
@@ -288,7 +301,7 @@ Navigate to `SOSP21_artifact_eval/src` and build:
    
    Include: `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH`
    
-   Additionally, you may want to add `/usr/local/lib:/usr/local/share:/usr/local/include` depending on where `make install` puts the libraries.
+   Additionally, you may want to add `/usr/local/lib:/usr/local/share:/usr/local/include` to `PATH` depending on where `make install` puts the libraries.
    
    The default install locations are:
 
@@ -306,10 +319,10 @@ Navigate to `SOSP21_artifact_eval/src` and build:
    1. `git clone https://github.com/google/googletest.git`
    2. `cd googletest`
    3. `git checkout release-1.10.0`
-   4. `rm -rf <PATH>/src/.obj/gtest`
-   5. `mkdir <PATH>/src/.obj`
+   4. `rm -rf SOSP21_artifact_eval/src/.obj/gtest`
+   5. `mkdir SOSP21_artifact_eval/src/.obj`
    6. `cp -r googletest <PATH>/src/.obj/gtest`
-   7. `cd <PATH>/src/.obj/gtest`
+   7. `cd SOSP21_artifact_eval/src/.obj/gtest`
    8. `cmake CMakeLists.txt`
    9. `make -j`
    10. `g++ -isystem ./include -I . -pthread -c ./src/gtest-all.cc`
