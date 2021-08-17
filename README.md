@@ -1,7 +1,7 @@
 # SOSP21 Artifact Evaluation #108
 This is the repository for the Artifact Evaluation of SOSP'21 submission #108: "Basil: Breaking up BFT with ACID transactions".
 
-For all questions about the artifact that do not require anonymity please e-mail (or message over google hangouts) "fs435@cornell.edu". For specific questions about 1) building the codebase or 2) running TxBFTSmart, aditionally please CC zw494@cornell.edu. For questions about 3) running TxHotstuff, please CC yz2327@cornell.edu, and 4) for questions about the experiment scripts or cloudlab, please  CC mlb452@cornell.edu.
+For all questions about the artifact that do not require anonymity please e-mail (or message over google hangouts) "fs435@cornell.edu". For specific questions about 1) building the codebase or 2) running TxBFTSmart, aditionally please CC zw494@cornell.edu. For questions about 3) running TxHotstuff, please CC yz2327@cornell.edu, and 4) for questions about the experiment scripts or Cloudlab, please  CC mlb452@cornell.edu.
 
 
 # Table of Contents
@@ -77,7 +77,7 @@ The ReadMe is organized into the following high level sections:
 The high-level requirements for compiling Basil and the baselines are: 
 - Operating System: Ubuntu 18.04 LTS, Bionic 
    - We recommend running on Ubuntu 18.04 LTS, Bionic, as a) binaries were built and run on this operating system, and b) our supplied images use Ubuntu 18.04 LTS.    - If you cannot do this locally, consider using a CloudLab controller machine - see section "Setting up CloudLab".
-   <!-- You may try to use Ubuntu 20.04.2 LTS instead of 18.04 LTS. However, we do not guarantee a fully documented install process, nor precise repicability of our results. Note, that using Ubuntu 20.04.2 LTS locally (or as control machine) to generate and upload binaries may *not* be compatible with running cloudlab machines using our cloud lab images (as they use 18.04 LTS(. In order to use Ubuntu 20.04.2 LTS you may have to manually create new disk images for CloudLab instead of using our supplied images for 18.04 LTS to guarantee library compatibility. -->
+   <!-- You may try to use Ubuntu 20.04.2 LTS instead of 18.04 LTS. However, we do not guarantee a fully documented install process, nor precise repicability of our results. Note, that using Ubuntu 20.04.2 LTS locally (or as control machine) to generate and upload binaries may *not* be compatible with running Cloudlab machines using our cloud lab images (as they use 18.04 LTS(. In order to use Ubuntu 20.04.2 LTS you may have to manually create new disk images for CloudLab instead of using our supplied images for 18.04 LTS to guarantee library compatibility. -->
    <!-- You may try to run on Mac, which has worked for us in the past, but is not documented in the following ReadMe and may not easily be trouble-shooted by us. -->
   
 - Requires python3 
@@ -264,7 +264,7 @@ Note, that this must be done everytime you open a new terminal. You may add it t
 4. `echo source /opt/intel/oneapi/setvars.sh --force >> ~/.bashrc`
 5. `source ~/.bashrc`
 
-(When building on a cloudlab controller instead of locally, the setvars.sh must be sourced manually everytime since bashrc will not be persisted across images. All other experiment machines will be source via the experiment scripts, so no further action is necessary there.)
+(When building on a Cloudlab controller instead of locally, the setvars.sh must be sourced manually everytime since bashrc will not be persisted across images. All other experiment machines will be source via the experiment scripts, so no further action is necessary there.)
 
 
 This completes all requires installs for branches Basil/Tapir and TxHotstuff. 
@@ -361,14 +361,14 @@ Install ssh if you do not already have it: `sudo apt-get install ssh`. To create
 
 Next, you are ready to start up an experiment:
 
-To use a pre-declared profile supplied by us, start an experiment using the public profile ["SOSP108"](https://www.cloudlab.us/p/morty/SOSP108). If you face any issues using this profile (or the disk images specified below) please make a post at the [Cloudlab forum](https://groups.google.com/g/cloudlab-users?pli=1) or contact `fs435@cornell.edu` and `mlb452@cornell.edu`.
+To use a pre-declared profile supplied by us, start an experiment using the public profile ["SOSP108"](https://www.cloudlab.us/p/morty/SOSP108). If you face any issues using this profile (or the disk images specified below), please make a post at the [Cloudlab forum](https://groups.google.com/g/cloudlab-users?pli=1) or contact `fs435@cornell.edu` and `mlb452@cornell.edu`.
 ![image](https://user-images.githubusercontent.com/42611410/129490911-8c97d826-caa7-4f04-95a7-8a2c8f3874f7.png)
 
 This profile by default starts with 18 server machines and 18 client machines, all of which use m510 hardware on the Utah cluster. This profile includes two disk images "SOSP108.server" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server`) and "SOSP108.client" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client`) that already include all dependencies and additional setup necessary to run experiments. Check the box "Use Control Machine" if you want to build binaries and run all experiments from one of the Cloudlab machines.
 ![image](https://user-images.githubusercontent.com/42611410/129490922-a99a1287-6ecc-4d50-b05d-dfe7bd0496d9.png)
 Click "Next" and name your experiment (e.g. "sosp108"). In the example below, our experiment name is "indicus", and the project name is "morty". All our pre-supplied experiment configurations use these names as default, and you will need to change them accordingly to your chosen names (see section "Running Experiments").
 ![image](https://user-images.githubusercontent.com/42611410/129490940-6c527b08-5def-4158-afd2-bc544e4758ab.png)
-Finally, set a duration and start your experiment. Starting all machines may take a decent amount of time as the server disk images contain large datasets that need to be loaded. Wait for it to be "ready":
+Finally, set a duration and start your experiment. Starting all machines may take a decent amount of time, as the server disk images contain large datasets that need to be loaded. Wait for it to be "ready":
 ![image](https://user-images.githubusercontent.com/42611410/129490974-f2b26280-d5e9-42ca-a9fe-82b80b8e2349.png)
 You may ssh into the machines to test your connection using the ssh commands shown under "List View" or by using `ssh <cloudlab-username>@<node-name>.<experiment-name>.<project-name>-pg0.<cluster-domain-name>`. In the example below it would be: `ssh fs435@us-east-1-0.indicus.morty-pg0.utah.cloudlab.us`.
 ![image](https://user-images.githubusercontent.com/42611410/129490991-035a1865-43c3-4238-a264-e0d43dd0095f.png)
@@ -438,7 +438,7 @@ Additionally, you will have to install the following requisites:
 
 4. **Helper scripts**: 
 
-    (On branch main) Navigate to SOSP21_artifact_eval/helper-scripts. Copy both these scripts (with the exact name) and place them in `/usr/local/etc` on the cloudlab machine. Add execution permissions: `chmod +x disable_HT.sh; chmod +x turn_off_turbo.sh` The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
+    (On branch main) Navigate to SOSP21_artifact_eval/helper-scripts. Copy both these scripts (with the exact name) and place them in `/usr/local/etc` on the Cloudlab machine. Add execution permissions: `chmod +x disable_HT.sh; chmod +x turn_off_turbo.sh` The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
 
    
 Once complete, create a new disk image (separate ones for server and client if you want to save space/time). Then, start the profile by choosing the newly created disk image.
@@ -451,7 +451,7 @@ To create a disk image, select "Create Disk Image" and name it accordingly.
 
 ## Running experiments <a name="experiments"></a>
 
-Hurray! You have completed the tedious process of installing the binaries and setting up Cloudlab. Next, we will cover how to run experiments. This is a straightfoward, but time-consuming process, and importantly requires good network connectivity to upload binaries to the remote machines and download experiment results. Uploading binaries on high speed (e.g university) connections takes a few minutes and needs to be done only once per branch -- however, if your uplink speed is low it may take (as I have painstakenly experienced in preparing this documentation for you) several hours. Downloading experiment outputs requires a moderate amount of download bandwidth and is usually quite fast. This section is split into 4 subsections: 1) Pre-configurations for Hotstuff and BFTSmart, 2) Using the experiment scripts, 3) Parsing outputs, and finally 4) reproducing experiment claims 1-by-1.
+Hurray! You have completed the tedious process of installing the binaries and setting up Cloudlab. Next, we will cover how to run experiments. This is a straightfo but time-consuming process, and importantly requires good network connectivity to upload binaries to the remote machines and download experiment results. Uploading binaries on high speed (e.g university) connections takes a few minutes and needs to be done only once per branch -- however, if your uplink speed is low it may take (as I have painstakingly experienced in preparing this documentation for you) several hours. Downloading experiment outputs requires a moderate amount of download bandwidth and is usually quite fast. This section is split into 4 subsections: 1) Pre-configurations for Hotstuff and BFTSmart, 2) Using the experiment scripts, 3) Parsing outputs, and finally 4) reproducing experiment claims 1-by-1.
 
 Before you proceed, please confirm that the following credentials are accurate:
 1. Cloudlab-username `<cloudlab-user>`: e.g. "fs435"
@@ -482,7 +482,7 @@ On branches TxHotstuff and TxBFTSmart you will need to complete the following pr
 
 ### 2) Using the experiment scripts
 
-To run an experiment you simply need to run: `python3 SOSP21_artifact_eval/experiment-scripts/run_multiple_experiments.py <CONFIG>` using a specified configuration JSON file (see below). The script will load all binaries and configurations onto the remote cloudlab machines, and collect experiment data upon completion. We have provided experiment configurations for all experiments claimed by the paper that you can find under `SOSP21_artifact_eva./experiment-configs`. In order for you to use them yourself you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
+To run an experiment, you simply need to run: `python3 SOSP21_artifact_eval/experiment-scripts/run_multiple_experiments.py <CONFIG>` using a specified configuration JSON file (see below). The script will load all binaries and configurations onto the remote Cloudlab machines, and collect experiment data upon completion. We have provided experiment configurations for all experiments claimed by the paper, which you can find under `SOSP21_artifact_eva./experiment-configs`. In order for you to use them, you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
 
 #### Required Modifications:
 1. `"project_name": "morty-pg0"`
