@@ -279,6 +279,7 @@ First, install Java open jdk 1.11.0 in /usr/lib/jvm and export your LD_LIBRARY_P
 
 1. `sudo apt-get install openjdk-11-jdk` Confirm that `java-11-openjdk-amd64` it is installed in /usr/lib/jvm  
 2. `export LD_LIBRARY_PATH=/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server:$LD_LIBRARY_PATH`
+3. `sudo ldconfig`
 
 If it is not installed in `/usr/lib/jvm` then source the `LD_LIBRARY_PATH` according to your install location and adjust the following lines in the Makefile with your path:
 
@@ -300,12 +301,7 @@ Navigate to `SOSP21_artifact_eval/src` and build:
    
 ##### Problems with locating libraries:
    
-1. You may need to export your path if your installations are in non-standard locations:
-   
-   Include: `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH`
-   
-   Additionally, you may want to add `/usr/local/lib:/usr/local/share:/usr/local/include` to `PATH` depending on where `make install` puts the libraries.
-   
+1. You may need to export your `LD_LIBRARY_PATH` if your installations are in non-standard locations:
    The default install locations are:
 
    - Secp256k1:  /usr/local/lib
@@ -316,7 +312,11 @@ Navigate to `SOSP21_artifact_eval/src` and build:
    - Protobufs: /usr/local/lib
    - Intel TBB: /opt/intel/oneapi
 
-2. Building googletest differently:
+ Run `export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/share:/usr/local/include:$LD_LIBRARY_PATH` (adjusted depending on where `make install` puts the libraries) followed by `sudo ldconfig`.
+   
+2. If you installed more Intel API tools besides "Intel oneAPI Threading Building Blocks" then the Intel oneAPI installation might have  installed a different protobuf binary. Since the application pre-pends the Intel install locations to `PATH` you may need to manually pre-pend the original directories. Run: `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH`
+
+3. Building googletest differently:
    
    If you get an error: `make: *** No rule to make target '.obj/gtest/gtest-all.o', needed by '.obj/gtest/gtest_main.a'.  Stop.` try to install googletest directly into the `src` directory as follows:
    1. `git clone https://github.com/google/googletest.git`
@@ -382,7 +382,7 @@ Since experiments require a fairly large number of machines, you may have to cre
 All experiments work using an experiment profile with 18 servers (36 total machines), but if you cannot get access to enough machines, it suffices to use 9 server machines for Tapir (remove the trailing 9 server names from the profile, i.e. `['us-east-1-0', 'us-east-1-1', 'us-east-1-2', 'eu-west-1-0', 'eu-west-1-1', 'eu-west-1-2', 'ap-northeast-1-0', 'ap-northeast-1-1', 'ap-northeast-1-2']`); or 12 server machines when running TxHotstuff and TxBFTSmart (remove the trailing 6 server names from the profile, i.e. `['us-east-1-0', 'us-east-1-1', 'us-east-1-2', 'eu-west-1-0', 'eu-west-1-1', 'eu-west-1-2', 'ap-northeast-1-0', 'ap-northeast-1-1', 'ap-northeast-1-2', 'us-west-1-0', 'us-west-1-1', 'us-west-1-2']`). 
 
 ### Using a control machine (skip if using local machine)
-When using a control machine (and not your local machine) to start experiments, you will need to source setvars.sh and export the LD path for java (see section "Install Dependencies") before building. You will need to do this everytime you start a new control machine because those will not be persisted across images.
+When using a control machine (and not your local machine) to start experiments, you will need to source setvars.sh and may need to export the LD_LIBRARY_PATH for the Java dependencies (see section "Install Dependencies") before building. You will need to do this everytime you start a new control machine because those may not be persisted across images.
 
 Connect to your control machine via ssh: `ssh <cloudlab-user>@control.<experiment-name>.<project-name>.utah.cloudlab.us.`  You may need to add `-pg0` to your project name. (i.e. if your project is called "sosp108", it may need to be "sosp108-pg0" in order to connect. Find out by Trial and Error.).
 
