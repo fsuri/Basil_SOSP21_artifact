@@ -44,8 +44,6 @@
 #include "store/strongstore/server.h"
 #include "store/tapirstore/server.h"
 #include "store/weakstore/server.h"
-#include "store/janusstore/server.h"
-#include "store/mortystore/server.h"
 #include "store/indicusstore/server.h"
 #include "store/pbftstore/replica.h"
 #include "store/pbftstore/server.h"
@@ -72,8 +70,6 @@ enum protocol_t {
 	PROTO_TAPIR,
 	PROTO_WEAK,
 	PROTO_STRONG,
-  PROTO_JANUS,
-  PROTO_MORTY,
   PROTO_INDICUS,
 	PROTO_PBFT,
     // HotStuff
@@ -115,8 +111,6 @@ const std::string protocol_args[] = {
 	"tapir",
   "weak",
   "strong",
-  "janus",
-  "morty",
   "indicus",
 	"pbft",
   "bftsmart",
@@ -127,8 +121,6 @@ const protocol_t protos[] {
   PROTO_TAPIR,
   PROTO_WEAK,
   PROTO_STRONG,
-  PROTO_JANUS,
-  PROTO_MORTY,
   PROTO_INDICUS,
       PROTO_PBFT,
       PROTO_BFTSMART,
@@ -549,15 +541,6 @@ int main(int argc, char **argv) {
                                        FLAGS_clock_error);
       replica = new replication::vr::VRReplica(config, FLAGS_group_idx, FLAGS_replica_idx,
                                                tport, 1, dynamic_cast<replication::AppReplica *>(server));
-      break;
-  }
-  case PROTO_JANUS: {
-      server = new janusstore::Server(config, FLAGS_group_idx, FLAGS_replica_idx, tport);
-      break;
-  }
-  case PROTO_MORTY: {
-      server = new mortystore::Server(config, FLAGS_group_idx, FLAGS_replica_idx,
-                                      tport, FLAGS_debug_stats, FLAGS_prepare_batch_period);
       break;
   }
   case PROTO_INDICUS: {

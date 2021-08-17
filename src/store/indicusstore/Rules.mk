@@ -6,7 +6,7 @@ SRCS += $(addprefix $(d), client.cc shardclient.cc server.cc store.cc common.cc 
 
 PROTOS += $(addprefix $(d), indicus-proto.proto)
 
-LIB-indicus-store := $(o)server.o \
+LIB-indicus-store := $(o)server.o $(LIB-latency) \
 	$(o)indicus-proto.o  $(o)common.o $(LIB-crypto) $(LIB-batched-sigs) $(LIB-bft-tapir-config) \
 	$(LIB-configuration) $(LIB-store-common) $(LIB-transport) $(o)phase1validator.o \
 	$(o)localbatchsigner.o $(o)sharedbatchsigner.o $(o)basicverifier.o \
