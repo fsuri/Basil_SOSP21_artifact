@@ -15,10 +15,10 @@ Table of Contents:
 # Table of Contents
 1. [High Level Claims](#Claims)
 2. [Artifact Organization](#Artifacts)
-3. [Overview of steps to validate Claims](#Validating the Claims - Overview)
-4. [Installing Dependencies and Building Binaries](#Installing Dependencies (Skip if using Cloudlab control machine using supplied images))
-5. [Setting up CloudLab](#Setting up Cloudlab)
-6. [Running Experiments](#Running Experiments)
+3. [Overview of steps to validate Claims](#Validating)
+4. [Installing Dependencies and Building Binaries](#Installing)
+5. [Setting up CloudLab](#Setting)
+6. [Running Experiments](#Running)
 
 ## Claims 
 
