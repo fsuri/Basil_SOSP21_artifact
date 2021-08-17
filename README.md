@@ -8,9 +8,9 @@ For all questions about the artifact that do not require anonymity please e-mail
 1. [High Level Claims](#Claims)
 2. [Artifact Organization](#Artifacts)
 3. [Overview of steps to validate Claims](#validating)
-4. [Installing Dependencies and Building Binaries](#Installing)
-5. [Setting up CloudLab](#Setting)
-6. [Running Experiments](#Running)
+4. [Installing Dependencies and Building Binaries](#installing)
+5. [Setting up CloudLab](#cloudlab)
+6. [Running Experiments](#experiments)
 
 ## Claims 
 
@@ -71,7 +71,7 @@ The ReadMe is organized into the following high level sections:
      configure (and upload configurations to cloudlab) the systems
 
 
-## Installing Dependencies (Skip if using Cloudlab control machine using supplied images) 
+## Installing Dependencies (Skip if using Cloudlab control machine using supplied images) <a name="installing"></a>
 
 Compiling Basil requires the following high level requirements: 
 - Operating System: Ubuntu 18.04 LTS, Bionic (recommended)
@@ -338,7 +338,7 @@ Run client:
 The client should finish within 10 seconds and the output file `client-0.out` should include summary of the transactions committed at the end. If this is not the case, contact `fs435@cornell.edu`. Cancel the server manually using `ctrl C`. 
 
 
-## Setting up Cloudlab
+## Setting up Cloudlab <a name="cloudlab"></a>
    
 In order to run experiments on Cloudlab (https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project ("Start/Join project") if you do not already have one. (https://cloudlab.us/signup.php). Follow the cloudlab manual if you need additional information (http://docs.cloudlab.us/) for any of the steps below. We have included screenshots below for easy useability.
 
@@ -440,8 +440,9 @@ To create a disk image, select "Create Disk Image" and name it accordingly.
   
    
 
-## Running experiments:
-Hurray! You have completed the tedious process of installing the binaries and setting up Cloudlab. Next, we will cover how to run experiments. This is a straightfoward, but time-consuming process, and importantly requires good network connectivity to upload binaries to the remote machines, and download experiment results. Uploading binaries on high speed (e.g university) connections takes a few minutes and needs to be done only once per branch -- however if your uplink speed is low it may take (as I have painstakenly experienced in preparing this documentation for you) several hours. Downloading experiment outputs requires a moderate amount of download bandwidth, and is usually quite fast. The section is split into 4 subsections: 1) Pre-configurations for Hotstuff and BFTSmart, 2) Using the experiment scripts, 3) Parsing outputs, and finally 4) reproducing experiment claims 1-by-1.
+## Running experiments <a name="experiments"></a>
+
+Hurray! You have completed the tedious process of installing the binaries and setting up Cloudlab. Next, we will cover how to run experiments. This is a straightfoward, but time-consuming process, and importantly requires good network connectivity to upload binaries to the remote machines and download experiment results. Uploading binaries on high speed (e.g university) connections takes a few minutes and needs to be done only once per branch -- however, if your uplink speed is low it may take (as I have painstakenly experienced in preparing this documentation for you) several hours. Downloading experiment outputs requires a moderate amount of download bandwidth and is usually quite fast. This section is split into 4 subsections: 1) Pre-configurations for Hotstuff and BFTSmart, 2) Using the experiment scripts, 3) Parsing outputs, and finally 4) reproducing experiment claims 1-by-1.
 
 Before you proceed, please confirm that the following credentials are accurate:
 1. Cloudlab-username `<cloudlab-user>`: e.g. "fs435"
