@@ -321,13 +321,13 @@ bftsmart2:
 	@echo '====== Finish Building BftSmart2 ======'
 
 .PHONY: augustus
-bftsmart: 
+augustus: 
 	@echo '====== Start Building BftSmart_Augustus ======'
 	cd ./store/bftsmartstore_augustus/libhotstuff/; ./build.sh
 	@echo '====== Finish Building BftSmart_Augustus ======'
 
 .PHONY: stable
-bftsmart: 
+stable: 
 	@echo '====== Start Building BftSmart_stable ======'
 	cd ./store/bftsmartstore_stable/libhotstuff/; ./build.sh
 	@echo '====== Finish Building BftSmart_stable ======'
