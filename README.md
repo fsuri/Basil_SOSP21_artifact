@@ -123,7 +123,7 @@ In addition, you will need to install the following libraries from source (detai
 - [BLAKE3](https://github.com/BLAKE3-team/BLAKE3)
 - [ed25519-donna](https://github.com/floodyberry/ed25519-donna)
 - [Intel TBB](https://software.intel.com/content/www/us/en/develop/tools/oneapi/base-toolkit/get-the-toolkit.html). 
-   - In order to compile, will need to [configure CPU](https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html)
+   - You will additionally need to [configure your CPU](https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html) before being able to compile the prototypes.
 
 Detailed install instructions:
 
@@ -148,7 +148,7 @@ Alternatively, you may download and unzip from source:
 Next, build googletest:
 
 4. `sudo cmake CMakeLists.txt`
-5. `sudo make -j #cores`
+5. `sudo make -j $(nproc)`
 6. `sudo make install`
 7. `sudo cp -r googletest /usr/src/gtest-1.10.0`
 8. `sudo ldconfig`
@@ -172,8 +172,8 @@ Next, build protobuf:
 
 4. `./autogen.sh`
 5. `./configure`
-6. `sudo make -j #cores`
-7. `sudo make check -j #cores`
+6. `sudo make -j $(nproc)`
+7. `sudo make check -j $(nproc)`
 8. `sudo make install`
 9. `sudo ldconfig`
 10. `cd ..`
@@ -187,8 +187,8 @@ Download and build the library:
 2. `cd secp256k1`
 3. `./autogen.sh`
 4. `./configure`
-5. `make -j #num_cores`
-6. `make check -j`
+5. `make -j $(nproc)`
+6. `make check -j $(nproc)`
 7. `sudo make install`
 8. `sudo ldconfig`
 9. `cd ..`
@@ -200,7 +200,7 @@ Download and build the library:
 
 1. `git clone https://github.com/weidai11/cryptopp.git`
 2. `cd cryptopp`
-3. `make -j`
+3. `make -j $(nproc)`
 4. `sudo make install`
 5. `sudo ldconfig`
 6. `cd ..`
@@ -247,10 +247,16 @@ Download and execute the installation script:
 2. `sudo bash l_BaseKit_p_2021.3.0.3219.sh`
 (To run the installation script you may have to manually install `apt -y install ncurses-term` if you do not have it already).
 
-Follow the installation instructions: Doing a custom installation saves space, the only required dependency is "Intel oneAPI Threading Building Blocks" (Use space bar to unmark X other items. You do not need to consent to data collection).
+Follow the installation instructions: 
+- It will either open a GUI installation interface if availalbe, or otherwise show the same within the shell (e.g. on a control machine)
+- Select custom installation 
+- You need only "Intel oneAPI Threading Building Blocks". You may uncheck every other install -- In the shell use the space bar to uncheck all items marked with an X 
+- Skip Eclipse IDE configuration
+- You do not need to consent to data collection
 
 Next, set up the intel TBB environment variables (Refer to https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html if necessary):
-If you installed Intel TBB with root access, it should be installed under /opt/intel/oneapi. Run the following to initialize environment variables:
+
+If you installed Intel TBB with root access, it should be installed under `/opt/intel/oneapi`. Run the following to initialize environment variables:
 
 3. `source /opt/intel/oneapi/setvars.sh`
 
@@ -283,10 +289,9 @@ If it is not installed in `/usr/lib/jvm` then source the `LD_LIBRARY_PATH` accor
 
 ### Building binaries:
    
-   
-   Finally, you can build the binaries (you will need to do this anew on each branch):
+Finally, you can build the binaries (you will need to do this anew on each branch):
 Navigate to `SOSP21_artifact_eval/src` and build:
-- `make -j #num-cores`
+- `make -j $(nproc)`
 
 
 
@@ -312,16 +317,16 @@ Navigate to `SOSP21_artifact_eval/src` and build:
 
 2. Building googletest differently:
    
-   If you get error: `make: *** No rule to make target '.obj/gtest/gtest-all.o', needed by '.obj/gtest/gtest_main.a'.  Stop.` try to install googletest directly into src as follows:
+   If you get an error: `make: *** No rule to make target '.obj/gtest/gtest-all.o', needed by '.obj/gtest/gtest_main.a'.  Stop.` try to install googletest directly into the `src` directory as follows:
    1. `git clone https://github.com/google/googletest.git`
    2. `cd googletest`
    3. `git checkout release-1.10.0`
-   4. `rm -rf SOSP21_artifact_eval/src/.obj/gtest`
-   5. `mkdir SOSP21_artifact_eval/src/.obj`
-   6. `cp -r googletest <PATH>/src/.obj/gtest`
-   7. `cd SOSP21_artifact_eval/src/.obj/gtest`
+   4. `rm -rf <Relative-Path>/SOSP21_artifact_eval/src/.obj/gtest`
+   5. `mkdir <Relative-Path>/SOSP21_artifact_eval/src/.obj`
+   6. `cp -r googletest <Relative-Path>/SOSP21_artifact_eval/src/.obj/gtest`
+   7. `cd <Relative-Path>/SOSP21_artifact_eval/src/.obj/gtest`
    8. `cmake CMakeLists.txt`
-   9. `make -j`
+   9. `make -j $(nproc)`
    10. `g++ -isystem ./include -I . -pthread -c ./src/gtest-all.cc`
    11. `g++ -isystem ./include -I . -pthread -c ./src/gtest_main.cc`
 
@@ -338,20 +343,22 @@ Run client:
    
 `store/benchmark/async/benchmark --config_path shard-r0.config --num_groups 1 --num_shards 1 --protocol_mode indicus --num_keys 1 --benchmark rw --num_ops_txn 2 --exp_duration 10 --client_id 0 --warmup_secs 0 --cooldown_secs 0 --key_selector zipf --zipf_coefficient 0.0 --stats_file "stats-0.json" --indicus_key_path keys &> client-0.out`
 
-The client should finish within 10 seconds and the output file `client-0.out` should include summary of the transactions committed at the end. If this is not the case, contact `fs435@cornell.edu`. Cancel the server manually using `ctrl C`. 
+The client should finish within 10 seconds and the output file `client-0.out` should include summary of the transactions committed at the end. Cancel the server manually using `ctrl C`. 
 
 
 ## Setting up Cloudlab <a name="cloudlab"></a>
    
-In order to run experiments on Cloudlab (https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project ("Start/Join project") if you do not already have one. (https://cloudlab.us/signup.php). Follow the cloudlab manual if you need additional information (http://docs.cloudlab.us/) for any of the steps below. We have included screenshots below for easy useability.
+In order to run experiments on Cloudlab (https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project if you do not already have one. To request an account click [here](https://cloudlab.us/signup.php). You can create a new project either directly while requesting an account, or by selecting "Start/Join project" in your account drop down menu.
 
-If you face any issues with registering, please make a post at the Cloudlab forum https://groups.google.com/g/cloudlab-users?pli=1 (replies are usually very swift during workdays, on US time).
-Alternatively (but not recommended), if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted (reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join).
+We have included screenshots below for easy useability. Follow the cloudlab manual if you need additional information (http://docs.cloudlab.us/) for any of the outlined steps. 
+
+If you face any issues with registering, please make a post at the Cloudlab forum https://groups.google.com/g/cloudlab-users?pli=1. Replies are usually very swift during workdays on US mountain time (MT). Alternatively -- but *not recommended* --, if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted. Reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join.
 
 ![image](https://user-images.githubusercontent.com/42611410/129490833-eb99f58c-8f0a-43d9-8b99-433af5dab559.png)
 
-If you will use your local machine to start experiments, then you will need to set up and register ssh in order to connect to the Cloudlab machines. If you are instead going to use a Cloudlab control machine (see below) you can skip this step.
-To create an ssh key and register it with your ssh agent follow these instructions: https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent (Install ssh if you have not already.) Next, register your public key under your Cloudlab account user->Manage SSH Keys. Alternatively, you may add your keys driectly upon project creation.
+In order to start experiments that connect to remote Cloudlab machines you will need to set up ssh and register your key with Cloudlab. This is necessary regardless whether you are using your local machine or a Cloudlab control machine. 
+
+Install ssh if you do not already have it: `sudo apt-get install ssh`. To create an ssh key and register it with your ssh agent follow these instructions: https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent. Next, register your public key under your Cloudlab account user->Manage SSH Keys. Alternatively, you may add your keys driectly upon project creation.
 
 Next, you are ready to start up an experiment:
 
@@ -364,7 +371,7 @@ Click "Next" and name your experiment (e.g. "sosp108"). In the example below, ou
 ![image](https://user-images.githubusercontent.com/42611410/129490940-6c527b08-5def-4158-afd2-bc544e4758ab.png)
 Finally, set a duration and start your experiment. Starting all machines may take a decent amount of time as the server disk images contain large datasets that need to be loaded. Wait for it to be "ready":
 ![image](https://user-images.githubusercontent.com/42611410/129490974-f2b26280-d5e9-42ca-a9fe-82b80b8e2349.png)
-You may ssh into the machines to test your connection using the ssh commands shown under "List View" or by using `ssh <cloudlab-username>@<host-name>.<experiment-name>.<project-name>-pg0.<cluster-name>`. In the example below it would be: `ssh fs435@us-east-1-0.indicus.morty-pg0.utah.cloudlab.us`.
+You may ssh into the machines to test your connection using the ssh commands shown under "List View" or by using `ssh <cloudlab-username>@<node-name>.<experiment-name>.<project-name>-pg0.<cluster-domain-name>`. In the example below it would be: `ssh fs435@us-east-1-0.indicus.morty-pg0.utah.cloudlab.us`.
 ![image](https://user-images.githubusercontent.com/42611410/129490991-035a1865-43c3-4238-a264-e0d43dd0095f.png)
 
 
@@ -469,7 +476,7 @@ On branches TxHotstuff and TxBFTSmart you will need to complete the following pr
 
 3. **TxBFTSmart**
    1. Navigate to `SOSP21_artifact_eval/src/scripts`
-   2. Run `./one_step_config.sh <Local SOSP21_artifact_eval directory> <cloudlab-user> <experiment-name> <project-name> <cloudlab-cluster>`
+   2. Run `./one_step_config.sh <Local SOSP21_artifact_eval directory> <cloudlab-user> <experiment-name> <project-name> <cluster-domain-name>`
    3. For example: `./one_step_config.sh /home/florian/Indicus/SOSP21_artifact_eval fs435 indicus morty-pg0 utah.cloudlab.us`
    4. This will upload the necessary configurations for the BFTSmart Conesnsus module to the Cloudlab machines.
       - Troubleshooting: Make sure files `server-hosts` and `client-hosts` in `/src/scripts/` do not contain empty lines at the end
