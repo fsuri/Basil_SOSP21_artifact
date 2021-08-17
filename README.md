@@ -24,7 +24,7 @@ It contains a prototype implemententation of Basil, a replicated Byzantine Fault
 
 Basils current codebase (Indicus) was modified beyond some of the results reported in the paper to include the fallback protocol used to defend against client failures. While takeaways remain consistent, individual performance results may differ slightly across the microbenchmarks (better performance in some cases) as other minor modifications to the codebase were necessary to support the fallback protocol implementation.
 
-In addition to Basil, this artifact contains prototype implementations for three baselines: 1) An extension of the original codebase for Tapir, a Crash Failure replicated and sharded key-value store, 2) TxHotstuff and 3) TxBFTSmart, two Byzantine Fault Tolerant replicated and sharded key-value stores built atop 3rd party implementations of consensus modules. 
+In addition to Basil, this artifact contains prototype implementations for three baselines: 1) An extension of the original codebase for Tapir, a Crash Failure replicated and sharded key-value store, as well as 2) TxHotstuff and 3) TxBFTSmart, two Byzantine Fault Tolerant replicated and sharded key-value stores built atop 3rd party implementations of consensus modules. 
 
 ### Concrete claims in the paper
 
