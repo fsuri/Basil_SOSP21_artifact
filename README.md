@@ -7,7 +7,7 @@ For all questions about the artifact that do not require anonymity please e-mail
 # Table of Contents
 1. [High Level Claims](#Claims)
 2. [Artifact Organization](#Artifacts)
-3. [Overview of steps to validate Claims](#Validating the Claims - Overview)
+3. [Overview of steps to validate Claims](#validating)
 4. [Installing Dependencies and Building Binaries](#Installing)
 5. [Setting up CloudLab](#Setting)
 6. [Running Experiments](#Running)
@@ -50,7 +50,7 @@ For convenience, all branches include the experiment scripts and configurations 
 We recommend making a separate copy of the configs (and experiment scripts) in order to keep track of changes made to them in a single location, while checking out different branches to run the respective source code binaries.
 
 
-## Validating the Claims - Overview
+## Validating the Claims - Overview <a name="validating"></a>
 
 All our experiments were run using Cloudlab (https://www.cloudlab.us/), specifically the Cloudlab Utah cluster. In order to re-produce our results and validate the claims you will need to 1) instantiate a matching Cloudlab experiment, 2) build the necessary binaries, and 3) run the provided experiment scripts with the supplied configs we used to generate our results. You may go about 2) and 3) in two ways: You can either build and control the experiments from a local machine (easier to parse/record results & troubleshoot, but more initial installs necessary), or, you can build and control the experiments from a dedicated cloudlab control machine, using pre-supplied disk images (faster setup out of the box, but more overhead to parse/record results and troubleshoot). Both options are outlined below.
 
