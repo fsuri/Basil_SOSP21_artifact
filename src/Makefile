@@ -153,10 +153,8 @@ include replication/vr/Rules.mk
 include replication/ir/Rules.mk
 include store/common/Rules.mk
 include store/tapirstore/Rules.mk
-include store/mortystore/Rules.mk
 include store/strongstore/Rules.mk
 include store/weakstore/Rules.mk
-include store/janusstore/Rules.mk
 include store/indicusstore/Rules.mk
 include store/pbftstore/Rules.mk
 include store/hotstuffstore/Rules.mk
