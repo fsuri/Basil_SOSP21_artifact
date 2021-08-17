@@ -404,7 +404,7 @@ If you decide to instead [create your own profile](https://www.cloudlab.us/manag
 ### Building and configuring disk images from scratch (skip if using pre-supplied images)
 If you want to build an image from scratch, follow the instructions below:
 
-Start by choosing to load a default Ubuntu 18.04 LTS image as "Replica disk image" and "Client disk image": `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD)` - for Ubuntu 20.04 LTS use: `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD`. 
+Start by choosing to load a default Ubuntu 18.04 LTS image as "Replica disk image" and "Client disk image": `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD`. <!-- for Ubuntu 20.04 LTS use: `urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU20-64-STD`. --> 
 
 Next, follow the above manual installation guide (section "Installing Dependencies" to install all dependencies (you can skip adding tbb setvars.sh to .bashrc). 
 
