@@ -48,7 +48,7 @@ The artifact spans across the following four branches. Please checkout the corre
 4. Branch TxBFTSmart: Contains the source code used for TxBFTSmart evaluation.
 
 For convenience, all branches include the experiment scripts and configurations necessary to reproduce our results. Do however, *make sure* to only run the configs for a specific system on the respective branch (i.e. only run configs for Basil from the Basil branch, Hotstuff from TxHotstuff, etc.).
-We recommend making a separate copy of the configs (and experiment scripts) in order to keep track of changes made to them in a single location while checking out different branches to run the respective source code binaries.
+Since we require edits to the configs (see Section "Running experiments"), we recommend copying the configs (and experiement scripts) to a separate location, outside the github folder, to avoid duplicating your changes for every branch that you check out.
 
 
 ## Validating the Claims - Overview <a name="validating"></a>
@@ -69,9 +69,8 @@ The ReadMe is organized into the following high level sections:
 
 3. *Running experiments*
 
-     To reproduce our results you will need to checkout the respective branch, and and run the supplied experiment scripts using the supplied experiment configurations. Section "Running Experiments" includes instructions for using the experiment scripts, modifying the configurations, and parsing the output. TxHotstuff and TxBFTSmart require additional configuration steps, also detailed in section "Running Experiments".
-     configure (and upload configurations to cloudlab) the systems
-
+     To reproduce our results you will need to checkout the respective branch, and run the supplied experiment scripts using the supplied experiment configurations. Section "Running Experiments" includes instructions for using the experiment scripts, modifying the configurations, and parsing the output. TxHotstuff and TxBFTSmart require additional configuration steps, also detailed in section "Running Experiments".
+     
 
 ## Installing Dependencies (Skip if using Cloudlab control machine using supplied images) <a name="installing"></a>
 
