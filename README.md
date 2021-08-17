@@ -312,7 +312,7 @@ Navigate to `SOSP21_artifact_eval/src` and build:
 
  Run `export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/share:/usr/local/include:$LD_LIBRARY_PATH` (adjusted depending on where `make install` puts the libraries) followed by `sudo ldconfig`.
    
-2. If you installed more Intel API tools besides "Intel oneAPI Threading Building Blocks" then the Intel oneAPI installation might have  installed a different protobuf binary. Since the application pre-pends the Intel install locations to `PATH` you may need to manually pre-pend the original directories. Run: `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH`
+2. If you installed more Intel API tools besides "Intel oneAPI Threading Building Blocks", then the Intel oneAPI installation might have  installed a different protobuf binary. Since the application pre-pends the Intel install locations to `PATH`, you may need to manually pre-pend the original directories. Run: `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH`
 
 3. Building googletest differently:
    
@@ -347,15 +347,15 @@ The client should finish within 10 seconds and the output file `client-0.out` sh
 
 ## Setting up Cloudlab <a name="cloudlab"></a>
    
-In order to run experiments on [Cloudlab](https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project if you do not already have one. To request an account click [here](https://cloudlab.us/signup.php). You can create a new project either directly while requesting an account, or by selecting "Start/Join project" in your account drop down menu.
+To run experiments on [Cloudlab](https://www.cloudlab.us/) you will need to request an account with your academic email (if you do not already have one) and create a new project  To request an account click [here](https://cloudlab.us/signup.php). You can create a new project either directly while requesting an account, or by selecting "Start/Join project" in your account drop down menu.
 
-We have included screenshots below for easy useability. Follow the [cloudlab manual](http://docs.cloudlab.us/) if you need additional information for any of the outlined steps. 
+We have included screenshots below for easy usebility. Follow the [cloudlab manual](http://docs.cloudlab.us/) if you need additional information for any of the outlined steps. 
 
 If you face any issues with registering, please make a post at the [Cloudlab forum](https://groups.google.com/g/cloudlab-users?pli=1). Replies are usually very swift during workdays on US mountain time (MT). Alternatively -- but *not recommended* --, if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted. Reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join.
 
 ![image](https://user-images.githubusercontent.com/42611410/129490833-eb99f58c-8f0a-43d9-8b99-433af5dab559.png)
 
-In order to start experiments that connect to remote Cloudlab machines you will need to set up ssh and register your key with Cloudlab. This is necessary regardless whether you are using your local machine or a Cloudlab control machine. 
+To start experiments that connect to remote Cloudlab machines, you will need to set up ssh and register your key with Cloudlab. This is necessary regardless of whether you are using your local machine or a Cloudlab control machine. 
 
 Install ssh if you do not already have it: `sudo apt-get install ssh`. To create an ssh key and register it with your ssh agent follow these instructions: https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent. Next, register your public key under your Cloudlab account user->Manage SSH Keys. Alternatively, you may add your keys driectly upon project creation.
 
