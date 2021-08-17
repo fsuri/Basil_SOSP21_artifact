@@ -3,19 +3,11 @@ This is the repository for the Artifact Evaluation of SOSP'21 submission #108: "
 
 For all questions about the artifact that do not require anonymity please e-mail (or message over google hangouts) "fs435@cornell.edu". For specific questions about 1) building the codebase or 2) running TxBFTSmart aditionally CC zw494@cornell.edu, for questions about 3) running TxHotstuff CC yz2327@cornell.edu, and 4) for questions about the experiment scripts or cloudlab CC mlb452@cornell.edu.
 
-Table of Contents:
-
-1. Claims
-2. Artifact organization
-3. Validating the Claims - overview
-4. Installing dependencies
-5. Setting up Cloudlab
-6. Running experiments
 
 # Table of Contents
 1. [High Level Claims](#Claims)
 2. [Artifact Organization](#Artifacts)
-3. [Overview of steps to validate Claims](#Validating)
+3. [Overview of steps to validate Claims](#Validating the Claims - Overview)
 4. [Installing Dependencies and Building Binaries](#Installing)
 5. [Setting up CloudLab](#Setting)
 6. [Running Experiments](#Running)
