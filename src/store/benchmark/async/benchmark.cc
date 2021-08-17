@@ -26,9 +26,7 @@
 #include "store/benchmark/async/rw/rw_client.h"
 #include "store/benchmark/async/tpcc/sync/tpcc_client.h"
 #include "store/benchmark/async/tpcc/async/tpcc_client.h"
-#include "store/mortystore/client.h"
 #include "store/benchmark/async/smallbank/smallbank_client.h"
-#include "store/janusstore/client.h"
 #include "store/indicusstore/client.h"
 #include "store/pbftstore/client.h"
 // HotStuff
@@ -51,8 +49,6 @@ enum protomode_t {
 	PROTO_TAPIR,
 	PROTO_WEAK,
 	PROTO_STRONG,
-  PROTO_JANUS,
-  PROTO_MORTY,
   PROTO_INDICUS,
 	PROTO_PBFT,
     // HotStuff
@@ -294,8 +290,6 @@ const std::string protocol_args[] = {
   "lock",
   "span-occ",
   "span-lock",
-  "janus",
-  "morty",
   "indicus",
 	"pbft",
 // HotStuff
@@ -309,8 +303,6 @@ const protomode_t protomodes[] {
   PROTO_STRONG,
   PROTO_STRONG,
   PROTO_STRONG,
-  PROTO_JANUS,
-  PROTO_MORTY,
   PROTO_INDICUS,
       PROTO_PBFT,
   // HotStuff
@@ -831,27 +823,6 @@ int main(int argc, char **argv) {
                                         tport, part, FLAGS_ping_replicas, FLAGS_tapir_sync_commit,
                                         TrueTime(FLAGS_clock_skew,
                                                  FLAGS_clock_error));
-        break;
-    }
-    case PROTO_JANUS: {
-        oneShotClient = new janusstore::Client(config,
-                                               FLAGS_num_shards, FLAGS_closest_replica, tport);
-        asyncClient = new AsyncOneShotAdapterClient(oneShotClient);
-        break;
-    }
-        /*case MODE_WEAK: {
-          protoClient = new weakstore::Client(configPath, nshards, closestReplica);
-          break;
-          }
-          case MODE_STRONG: {
-          protoClient = new strongstore::Client(strongmode, configPath, nshards,
-          closestReplica, TrueTime(skew, error));
-          break;
-          }*/
-    case PROTO_MORTY: {
-        asyncClient = new mortystore::Client(config,
-                                             clientId, FLAGS_num_shards, FLAGS_num_groups,
-                                             FLAGS_closest_replica, tport, part, FLAGS_debug_stats);
         break;
     }
     case PROTO_INDICUS: {
