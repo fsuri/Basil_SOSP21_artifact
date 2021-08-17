@@ -6,7 +6,7 @@ For all questions about the artifact that do not require anonymity please e-mail
 
 # Table of Contents
 1. [High Level Claims](#Claims)
-2. [Artifact Organization](#Artifacts)
+2. [Artifact Organization](#artifact)
 3. [Overview of steps to validate Claims](#validating)
 4. [Installing Dependencies and Building Binaries](#installing)
 5. [Setting up CloudLab](#cloudlab)
@@ -18,11 +18,13 @@ For all questions about the artifact that do not require anonymity please e-mail
 
 The artifact contains, and allows to reproduce, experiments for all figures included in the paper. 
 
-   This prototype implements Basil, a replicated Byzantine Fault Tolerant key-value store offering interactive transactions and sharding. The prototype uses cryptographically secure hash functions and signatures for all replicas, but does not sign client requests on any of the evaluated prototype systems, as we delegate this problem to the application layer. The Basil prototype can simulate Byzantine Clients failing via Stalling or Equivocation, and is robust to both. While the Basil prototype uses tolerates many obvious faults such as message corruptions, duplications, it does *not* exhaustively implement defences against arbitrary failures or data format corruptions, nor does it simulate all possible behaviors. For example, while the prototype implements fault tolerance (safety) to leader failures during recovery, it does not include code to simulate these, nor does it implement explicit exponential timeouts to enter new views that are necessary for theoretical liveness under partial synchrony.
+It contains a prototype implemententation of Basil, a replicated Byzantine Fault Tolerant key-value store offering interactive transactions and sharding. The prototype uses cryptographically secure hash functions and signatures for all replicas, but does not sign client requests on any of the evaluated prototype systems, as we delegate this problem to the application layer. The Basil prototype can simulate Byzantine Clients failing via Stalling or Equivocation, and is robust to both. While the Basil prototype uses tolerates many obvious faults such as message corruptions, duplications, it does *not* exhaustively implement defences against arbitrary failures or data format corruptions, nor does it simulate all possible behaviors. For example, while the prototype implements fault tolerance (safety) to leader failures during recovery, it does not include code to simulate these, nor does it implement explicit exponential timeouts to enter new views that are necessary for theoretical liveness under partial synchrony.
 
-   Basils current code-base was modified beyond some of the results reported in the paper to include failure handling: While results remain consistent, they may differ slightly across the microbenchmarks (better performance in some cases).
+> **[NOTE]** The Basil codebase is called "*Indicus*". Throughout this document you will find references to this name, and many configuration files are named "Indicus". Any such occurence refers to the Basil prototype.
 
-In addition to Basil, this artifact contains implementations for 3 baselines: 1) An extension of the original codebase for Tapir, a Crash Failure replicated and sharded key-value store, 2) TxHotstuff and 3) TxBFTSmart, two Byzantine Fault tolerant replicated and sharded key-value stores built atop 3rd party implementations of Consensus modules 
+Basils current codebase (Indicus) was modified beyond some of the results reported in the paper to include the fallback protocol used to defend against client failures. While takeaways remain consistent, individual performance results may differ slightly across the microbenchmarks (better performance in some cases) as other minor modifications to the codebase were necessary to support the fallback protocol implementation.
+
+In addition to Basil, this artifact contains prototype implementations for three baselines: 1) An extension of the original codebase for Tapir, a Crash Failure replicated and sharded key-value store, 2) TxHotstuff and 3) TxBFTSmart, two Byzantine Fault tolerant replicated and sharded key-value stores built atop 3rd party implementations of Consensus modules 
 
 ### Concrete claims in the paper
 
@@ -38,9 +40,9 @@ throughput experienced by correct clients drops by less than 25% in the worst-ca
 - **Supplementary**: All other microbenchmarks reported realistically represent Basil.
 
 
-## Artifacts
+## Artifact Organization <a name="artifact"></a>
 
-The artifact is spread across the following four branches. Please checkout the corresponding branch when validating claims for a respective system.
+The artifact spans across the following four branches. Please checkout the corresponding branch when validating claims for a respective system.
 1. Branch main: Contains the Readme, the paper, the exeriment scripts, and all experiment configurations used.
 2. Branch Basil/Tapir: Contains the source code used for all Basil and Tapir evaluation
 3. Branch TxHotstuff: Contains the source code used for TxHotstuff evaluation
@@ -73,11 +75,11 @@ The ReadMe is organized into the following high level sections:
 
 ## Installing Dependencies (Skip if using Cloudlab control machine using supplied images) <a name="installing"></a>
 
-Compiling Basil requires the following high level requirements: 
-- Operating System: Ubuntu 18.04 LTS, Bionic (recommended)
-   - We recommend running on Ubuntu 18.04 LTS, Bionic, as a) binaries were built and run on this operating system, and b) our supplied images use Ubuntu 18.04 LTS. If you cannot do this locally, consider using a CloudLab controller machine - see section "Setting up CloudLab".
-   - You may try to use Ubuntu 20.04.2 LTS instead of 18.04 LTS. However, we do not guarantee a fully documented install process, nor precise repicability of our results. Note, that using Ubuntu 20.04.2 LTS locally (or as control machine) to generate and upload binaries may *not* be compatible with running cloudlab machines using our cloud lab images (as they use 18.04 LTS(. In order to use Ubuntu 20.04.2 LTS you may have to manually create new disk images for CloudLab instead of using our supplied images for 18.04 LTS to guarantee library compatibility.
-   - You may try to run on Mac, which has worked for us in the past, but is not documented in the following ReadMe and may not easily be trouble-shooted by us.
+The high-level requirements for compiling Basil and the baselines are: 
+- Operating System: Ubuntu 18.04 LTS, Bionic 
+   - We recommend running on Ubuntu 18.04 LTS, Bionic, as a) binaries were built and run on this operating system, and b) our supplied images use Ubuntu 18.04 LTS.    - If you cannot do this locally, consider using a CloudLab controller machine - see section "Setting up CloudLab".
+   <!-- You may try to use Ubuntu 20.04.2 LTS instead of 18.04 LTS. However, we do not guarantee a fully documented install process, nor precise repicability of our results. Note, that using Ubuntu 20.04.2 LTS locally (or as control machine) to generate and upload binaries may *not* be compatible with running cloudlab machines using our cloud lab images (as they use 18.04 LTS(. In order to use Ubuntu 20.04.2 LTS you may have to manually create new disk images for CloudLab instead of using our supplied images for 18.04 LTS to guarantee library compatibility. -->
+   <!-- You may try to run on Mac, which has worked for us in the past, but is not documented in the following ReadMe and may not easily be trouble-shooted by us. -->
   
 - Requires python3 
 - Requires C++ 17 
@@ -93,13 +95,13 @@ Before beginning the install process, update your distribution:
 Then, install the following tools:
 
 3. `sudo apt install python3-pip`
-4. `pip3 install numpy` or `python3 -m pip install numpy`
+4. `sudo pip3 install numpy` or `sudo python3 -m pip install numpy`
 5. `sudo apt-get install autoconf automake libtool curl make g++ unzip valgrind cmake gnuplot pkg-config ant`
 
 
 ### Development library dependencies
 
-The artifact depends the following development libraries:
+The prototype implementations depend the following development libraries:
 - libevent-openssl
 - libevent-pthreads
 - libevent-dev
@@ -116,11 +118,12 @@ You may install them directly using:
 In addition, you will need to install the following libraries from source (detailed instructions below):
 - [googletest-1.10](https://github.com/google/googletest/releases/tag/release-1.10.0)
 - [protobuf-3.5.1](https://github.com/protocolbuffers/protobuf/releases/tag/v3.5.1)
-- [cryptopp-8.2](htps://cryptopp.com/cryptopp820.zip)
+- [cryptopp-8.2](https://github.com/weidai11/cryptopp/releases/tag/CRYPTOPP_8_2_0) <!-- (htps://cryptopp.com/cryptopp820.zip)-->
 - [bitcoin-core/secp256k1](https://github.com/bitcoin-core/secp256k1/)
 - [BLAKE3](https://github.com/BLAKE3-team/BLAKE3)
-- [ed25519-donna] (https://github.com/floodyberry/ed25519-donna)
-- [Intel TBB] (https://software.intel.com/content/www/us/en/develop/tools/oneapi/base-toolkit/get-the-toolkit.html). In order to compile, will need to configure CPU: https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html
+- [ed25519-donna](https://github.com/floodyberry/ed25519-donna)
+- [Intel TBB](https://software.intel.com/content/www/us/en/develop/tools/oneapi/base-toolkit/get-the-toolkit.html). 
+   - In order to compile, will need to [configure CPU](https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-intel-oneapi-base-linux/top/before-you-begin.html)
 
 Detailed install instructions:
 
@@ -693,7 +696,7 @@ We report evaluation results for 3 workloads (TPCC, Smallbank, Retwis) and 4 sys
             | stall-late    |      -       |       -      |   [10%, 65]  |  [18%, 62]   |  [25%, 61]   |  [36%, 59]   |  [40%, 56]   |  [42%, 54]
      
  > **[NOTE]** Why does %faulty/total end at different points?/
-     The explanation is not unavailability, or a failure to run the experiment: rather, it is an artifact of how we count transactions. In particular, (faulty_clients x failure_frequency) % (e.g. 45% for Indicus-90-2) of the transactions newly submitted to Basil are faulty. However, contention (and dependencies on equivocating transactions) can require some of the correct transactions to abort and re-execute (faulty transactions instead do not care to retry), which decreases the percentage of faulty transactions that Basil processes (since, again, some correct transactions end up being prepared multiple times). Thus, when measuring the throughout, the percentage of faulty transactions we report is the fraction of faulty transactions among all processed (as opposed to admitted) transactions--the latter is set at (faulty_clients x failure_frequency) %, while the former depends on the number of re-executions of correct transactions.
+     The explanation is not unavailability, or a failure to run the experiment: rather, it is an artefact of how we count transactions. In particular, (faulty_clients x failure_frequency) % (e.g. 45% for Indicus-90-2) of the transactions newly submitted to Basil are faulty. However, contention (and dependencies on equivocating transactions) can require some of the correct transactions to abort and re-execute (faulty transactions instead do not care to retry), which decreases the percentage of faulty transactions that Basil processes (since, again, some correct transactions end up being prepared multiple times). Thus, when measuring the throughout, the percentage of faulty transactions we report is the fraction of faulty transactions among all processed (as opposed to admitted) transactions--the latter is set at (faulty_clients x failure_frequency) %, while the former depends on the number of re-executions of correct transactions.
  
 
 #### **Microbenchmarks**:
