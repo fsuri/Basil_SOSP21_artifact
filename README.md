@@ -240,7 +240,7 @@ Move the shared libary:
 5. `sudo ldconfig`
 6. `cd ..`
 
-#### Innstalling Intel TBB
+#### Installing Intel TBB
 
 Download and execute the installation script:
 
@@ -351,7 +351,7 @@ The client should finish within 10 seconds and the output file `client-0.out` sh
    
 In order to run experiments on [Cloudlab](https://www.cloudlab.us/) you will need to request an account with your academic email and create a new project if you do not already have one. To request an account click [here](https://cloudlab.us/signup.php). You can create a new project either directly while requesting an account, or by selecting "Start/Join project" in your account drop down menu.
 
-We have included screenshots below for easy useability. Follow the [cloudlab manual](http://docs.cloudlab.us/) if you need additional information () for any of the outlined steps. 
+We have included screenshots below for easy useability. Follow the [cloudlab manual](http://docs.cloudlab.us/) if you need additional information for any of the outlined steps. 
 
 If you face any issues with registering, please make a post at the [Cloudlab forum](https://groups.google.com/g/cloudlab-users?pli=1). Replies are usually very swift during workdays on US mountain time (MT). Alternatively -- but *not recommended* --, if you are unable to get access to create a new project, request to join project "morty" and wait to be accepted. Reach out to mlb452@cornell.edu if you are not accepted, or unsure how to join.
 
@@ -363,7 +363,7 @@ Install ssh if you do not already have it: `sudo apt-get install ssh`. To create
 
 Next, you are ready to start up an experiment:
 
-To use a pre-declared profile supplied by us, start an experiment using the following public profile "SOSP108" https://www.cloudlab.us/p/morty/SOSP108. If you face any issues using this profile (or the disk images specified below) please make a post at https://groups.google.com/g/cloudlab-users?pli=1 and contact `fs435@cornell.edu` and `mlb452@cornell.edu`.
+To use a pre-declared profile supplied by us, start an experiment using the public profile ["SOSP108"](https://www.cloudlab.us/p/morty/SOSP108). If you face any issues using this profile (or the disk images specified below) please make a post at the [Cloudlab forum](https://groups.google.com/g/cloudlab-users?pli=1) or contact `fs435@cornell.edu` and `mlb452@cornell.edu`.
 ![image](https://user-images.githubusercontent.com/42611410/129490911-8c97d826-caa7-4f04-95a7-8a2c8f3874f7.png)
 
 This profile by default starts with 18 server machines and 18 client machines, all of which use m510 hardware on the Utah cluster. This profile includes two disk images "SOSP108.server" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.server`) and "SOSP108.client" (`urn:publicid:IDN+utah.cloudlab.us+image+morty-PG0:SOSP108.client`) that already include all dependencies and additional setup necessary to run experiments. Check the box "Use Control Machine" if you want to build binaries and run all experiments from one of the Cloudlab machines.
@@ -388,7 +388,7 @@ Connect to your control machine via ssh: `ssh <cloudlab-user>@control.<experimen
 
 ### Using a custom profile (skip if using pre-supplied profile)
 
-If you decide to instead create a profile of your own (https://www.cloudlab.us/manage_profile.php) use the following parameters (be careful to follow the same naming conventions of our profile for the servers or the experiment scripts/configuration provided will not work). You will need to buid your own disk image from scratch, as the public image is tied to the public profile. (You can try if the above images work, but likely they will not).
+If you decide to instead [create your own profile](https://www.cloudlab.us/manage_profile.php), use the following parameters (be careful to follow the same naming conventions of our profile for the servers or the experiment scripts/configuration provided will not work). You will need to buid your own disk image from scratch, as the public image is tied to the public profile. (You can try if the above images work, but likely they will not).
 
 - Number of Replicas: `['us-east-1-0', 'us-east-1-1', 'us-east-1-2', 'eu-west-1-0', 'eu-west-1-1', 'eu-west-1-2', 'ap-northeast-1-0', 'ap-northeast-1-1', 'ap-northeast-1-2', 'us-west-1-0', 'us-west-1-1', 'us-west-1-2', 'eu-central-1-0', 'eu-central-1-1', 'eu-central-1-2', 'ap-southeast-2-0', 'ap-southeast-2-1', 'ap-southeast-2-2']`
 - Number of sites (DCs): 6
