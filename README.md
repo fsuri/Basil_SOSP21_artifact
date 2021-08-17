@@ -28,27 +28,26 @@ In addition to Basil, this artifact contains prototype implementations for three
 
 ### Concrete claims in the paper
 
-- **Main claim 1**: Basil comes within competitive throughput (within 4x on TPCC, 3x on Smallbank, and 2x on Retwis) compared to Tapir, a state of the art Crash Fault Tolerant database. 
+- **Main claim 1**: Basil's throughput is within a small factor (within 4x on TPCC, 3x on Smallbank, and 2x on Retwis)  of that of Tapir, a state of the art Crash Fault Tolerant database. 
 
 - **Main claim 2**: Basil achieves higher throughput and lower latency than both BFT baselines (>5x over TxHotstuff on TPCC, 4x on Smallbank, and close to 5x on Retwis; close to 4x over TxBFTSmart on TPCC, 3x on Smallbank, and 4x on Retwis).
 
-   All comparisons for claims 1 and 2 are made under gracious system execution, i.e. in the absence of failures for all systems.
+   All comparisons for claims 1 and 2 are made in the absence of failures.
 
-- **Main claim 3**: Basil maintains robust throughput for correct clients under simulated attack by Byzantine Clients. With 30% Byzantine clients,
-throughput experienced by correct clients drops by less than 25% in the worst-case.
+- **Main claim 3**: The throughput of correct clients in Basil is robust to simulated attack by Byzantine Clients. With 30% Byzantine clients, throughput experienced by correct clients drops by less than 25% in the worst-case.
 
 - **Supplementary**: All other microbenchmarks reported realistically represent Basil.
 
 
 ## Artifact Organization <a name="artifact"></a>
 
-The artifact spans across the following four branches. Please checkout the corresponding branch when validating claims for a respective system.
+The artifact spans across the following four branches. Please checkout the corresponding branch when validating claims for a given system.
 1. Branch main: Contains the Readme, the paper, the exeriment scripts, experiment configurations to validate results, and sample validated outputs.
 2. Branch Basil/Tapir: Contains the source code used for all Basil and Tapir evaluation.
 3. Branch TxHotstuff: Contains the source code used for TxHotstuff evaluation.
 4. Branch TxBFTSmart: Contains the source code used for TxBFTSmart evaluation.
 
-For convenience, all branches include the experiment scripts and configurations necessary to re-produce our results. Do however, *make sure* to only run the configs for a specific system on the respective branch (i.e. only run configs for Basil from the Basil branch, Hotstuff from TxHotstuff, etc.).
+For convenience, all branches include the experiment scripts and configurations necessary to reproduce our results. Do however, *make sure* to only run the configs for a specific system on the respective branch (i.e. only run configs for Basil from the Basil branch, Hotstuff from TxHotstuff, etc.).
 We recommend making a separate copy of the configs (and experiment scripts) in order to keep track of changes made to them in a single location while checking out different branches to run the respective source code binaries.
 
 
