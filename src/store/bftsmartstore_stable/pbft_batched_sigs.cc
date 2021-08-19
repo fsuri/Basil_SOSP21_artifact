@@ -1,6 +1,6 @@
 /***********************************************************************
  *
- * Copyright 2021 Florian Suri-Payer <fs435@cornell.edu>
+ * Copyright 2021 Florian Suri-Payer <fsp@cs.cornell.edu>
  *                Zheng Wang <zw494@cornell.edu>
  *
  * Permission is hereby granted, free of charge, to any person
