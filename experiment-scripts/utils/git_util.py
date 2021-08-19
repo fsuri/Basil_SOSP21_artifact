@@ -1,6 +1,6 @@
 '''
  Copyright 2021 Matthew Burke <matthelb@cs.cornell.edu>
-                Florian Suri-Payer <fs435@cornell.edu>
+                Florian Suri-Payer <fsp@cs.cornell.edu>
 
  Permission is hereby granted, free of charge, to any person
  obtaining a copy of this software and associated documentation
