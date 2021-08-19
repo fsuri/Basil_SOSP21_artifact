@@ -1,6 +1,6 @@
 /***********************************************************************
  *
- * Copyright 2021 Florian Suri-Payer <fs435@cornell.edu>
+ * Copyright 2021 Florian Suri-Payer <fsp@cs.cornell.edu>
  *                Yunhao Zhang <yz2327@cornell.edu>
  *
  * Permission is hereby granted, free of charge, to any person

@@ -4,7 +4,7 @@
  * store/indicus/shardclient.h:
  *   Single shard indicus transactional client interface.
  *
- * Copyright 2021 Florian Suri-Payer <fs435@cornell.edu>
+ * Copyright 2021 Florian Suri-Payer <fsp@cs.cornell.edu>
  *                Matthew Burke <matthelb@cs.cornell.edu>
  *
  * Permission is hereby granted, free of charge, to any person
