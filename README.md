@@ -144,7 +144,7 @@ Download the library:
 
 Alternatively, you may download and unzip from source: 
 
-1. `get https://github.com/google/googletest/archive/release-1.10.0.zip`
+1. `wget https://github.com/google/googletest/archive/release-1.10.0.zip`
 2. `unzip release-1.10.0.zip`  
 
 Next, build googletest:
