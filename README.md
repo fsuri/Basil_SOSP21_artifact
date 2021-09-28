@@ -152,9 +152,10 @@ Next, build googletest:
 4. `sudo cmake CMakeLists.txt`
 5. `sudo make -j $(nproc)`
 6. `sudo make install`
-7. `sudo cp -r googletest /usr/src/gtest-1.10.0`
-8. `sudo ldconfig`
-9. `cd ..`
+7. `sudo ldconfig`
+8. `cd ..`
+9. `sudo cp -r googletest /usr/src/gtest-1.10.0` (Move whole folder)
+
 
 
 #### Installing protobuf
