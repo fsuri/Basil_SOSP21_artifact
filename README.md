@@ -512,11 +512,11 @@ To run an experiment, you simply need to run: `python3 SOSP21_artifact_eval/expe
 
 #### **Optional** Modifications 
 1. Experiment duration:
-   - The provided configs are by default, for time convenience, set to run for 30 seconds total, using a warmup and cooldown period of 5 seconds respectively. 
+   - The provided configs are by default -- for time convenience -- set to run for 30 seconds total, using a warmup and cooldown period of 5 seconds respectively. 
       - "client_experiment_length": 30,
       - "client_ramp_down": 5,
       - "client_ramp_up": 5,
-   - All experiment results in the paper were run for longer: 90 seconds total, with a warmup and cooldown period of 30 seconds respectively. If you want to run the experiments as long, replace the above settings with respective durations. For cross-validation purposes shorter experiments will suffice and save you time (and memory, since output files will be smaller)
+   - All experiment results in the paper were run for longer: 90 seconds total, with a warmup and cooldown period of 30 seconds respectively. If you want to run the experiments as long, replace the above settings with respective durations. For cross-validation purposes shorter experiments will suffice and save you time (and memory, since output files will be smaller).
    
 2. Number of experiments:
    - The provided config files by default run the configured experiment once. Experiment results from the paper for 1-Workloads and 2-Failures were instead run several times (four times) and report the mean throughput/latency as well as standard deviations across the runs. For cross-validation purposes, this is not necessary. If you do however want to run the experiment multiple times, you can modify the config entry `num_experiment_runs: 1` to a repitition of your choice, which will automatically run the experiment the specified amount of times, and aggregate the joint statistics.
