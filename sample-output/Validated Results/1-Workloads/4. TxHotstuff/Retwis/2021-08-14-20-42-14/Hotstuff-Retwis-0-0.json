@@ -312,7 +312,7 @@
   },
   "server_rpc_port": 8087,
   "src_commit_hash": "a8c36aa41dddf02d6f0aeec6f6832f506decb925",
-  "src_directory": "/home/florian/Indicus/SOSP21_artifact_eval/src",
+  "src_directory": "/home/florian/Indicus/Basil_SOSP21_artifact/src",
   "stats_file_name": "stats.json",
   "stats_merge_lists": [
     "txn_groups",
