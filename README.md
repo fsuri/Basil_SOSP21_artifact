@@ -1,7 +1,7 @@
-# SOSP21 Artifact Evaluation #108
-This is the repository for the Artifact Evaluation of SOSP'21 submission #108: "Basil: Breaking up BFT with ACID transactions".
+# Basil - SOSP21 Artifact 
+This is the repository for the Artifact Evaluation of SOSP'21 proceeding: "Basil: Breaking up BFT with ACID transactions".
 
-For all questions about the artifact that do not require anonymity please e-mail (or message over google hangouts) Florian Suri-Payer <fs435@cornell.edu>. For specific questions about 1) building the codebase or 2) running TxBFTSmart, additionally please
+For all questions about the artifact please e-mail (or message over google hangouts) Florian Suri-Payer <fsp@cs.cornell.edu>. For specific questions about 1) building the codebase or 2) running TxBFTSmart, additionally please
 CC Zheng Wang <zw494@cornell.edu>. For questions about 3) running TxHotstuff,
 please CC Yunhao Zhang <yz2327@cornell.edu>, and 4) for questions about the
 experiment scripts or Cloudlab, please  CC Matthew Burke <matthelb@cs.cornell.edu>.
@@ -19,11 +19,11 @@ experiment scripts or Cloudlab, please  CC Matthew Burke <matthelb@cs.cornell.ed
 
 ### General
 
-This artifact contains, and allows to reproduce, experiments for all figures included in the paper #108: "Basil: Breaking up BFT with ACID transactions". 
+This artifact contains, and allows to reproduce, experiments for all figures included in the paper "Basil: Breaking up BFT with ACID transactions". 
 
 It contains a prototype implemententation of Basil, a replicated Byzantine Fault Tolerant key-value store offering interactive transactions and sharding. The prototype uses cryptographically secure hash functions and signatures for all replicas, but does not sign client requests on any of the evaluated prototype systems, as we delegate this problem to the application layer. The Basil prototype can simulate Byzantine Clients failing via Stalling or Equivocation, and is robust to both. While the Basil prototype tolerates many obvious faults such as message corruptions and duplications, it does *not* exhaustively implement defences against arbitrary failures or data format corruptions, nor does it simulate all possible behaviors. For example, while the prototype implements fault tolerance (safety) to leader failures during recovery, it does not include code to simulate these, nor does it implement explicit exponential timeouts to enter new views that are necessary for theoretical liveness under partial synchrony.
 
-> **[NOTE]** The Basil codebase is called, for historical reasons,  "*Indicus*". Throughout this document you will find references to Indicus, and many configuration files are named such. All these occurences refer to the Basil prototype.
+> **[NOTE]** The Basil prototype codebase is henceforth called "*Indicus*". Throughout this document you will find references to Indicus, and many configuration files are named accordingly. All these occurences refer to the Basil prototype.
 
 Basils current codebase (Indicus) was modified beyond some of the results reported in the paper to include the fallback protocol used to defend against client failures. While takeaways remain consistent, individual performance results may differ slightly across the microbenchmarks (better performance in some cases) as other minor modifications to the codebase were necessary to support the fallback protocol implementation.
 
