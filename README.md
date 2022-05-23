@@ -494,7 +494,7 @@ On branches TxHotstuff and TxBFTSmart you will need to complete the following pr
 
 ### 2) Using the experiment scripts
 
-To run an experiment, you simply need to run: `python3 Basil_SOSP21_artifact/experiment-scripts/run_multiple_experiments.py <CONFIG>` using a specified configuration JSON file (see below). The script will load all binaries and configurations onto the remote Cloudlab machines, and collect experiment data upon completion. We have provided experiment configurations for all experiments claimed by the paper, which you can find under `SOSP21_artifact_eva./experiment-configs`. In order for you to use them, you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
+To run an experiment, you simply need to run: `python3 Basil_SOSP21_artifact/experiment-scripts/run_multiple_experiments.py <CONFIG>` using a specified configuration JSON file (see below). The script will load all binaries and configurations onto the remote Cloudlab machines, and collect experiment data upon completion. We have provided experiment configurations for all experiments claimed by the paper, which you can find under `Basil_SOSP21_artifact/experiment-configs`. In order for you to use them, you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
 
 #### Required Modifications:
 1. `"project_name": "morty-pg0"`
