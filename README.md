@@ -1,4 +1,4 @@
-# Basil - SOSP21 Artifact 
+# Basil: Breaking up BFT with ACID transactions - SOSP21 Artifact 
 This is the repository for the Artifact Evaluation of SOSP'21 proceeding: "Basil: Breaking up BFT with ACID transactions".
 
 For all questions about the artifact please e-mail (or message over google hangouts) Florian Suri-Payer <fsp@cs.cornell.edu>. For specific questions about 1) building the codebase or 2) running TxBFTSmart, additionally please
