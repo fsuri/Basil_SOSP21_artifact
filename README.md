@@ -294,7 +294,7 @@ If it is not installed in `/usr/lib/jvm` then source the `LD_LIBRARY_PATH` accor
 ### Building binaries:
    
 Finally, you can build the binaries (you will need to do this anew on each branch):
-Navigate to `SOSP21_artifact_eval/src` and build:
+Navigate to `Basil_SOSP21_artifact/src` and build:
 - `make -j $(nproc)`
 
 
@@ -324,10 +324,10 @@ Navigate to `SOSP21_artifact_eval/src` and build:
    1. `git clone https://github.com/google/googletest.git`
    2. `cd googletest`
    3. `git checkout release-1.10.0`
-   4. `rm -rf <Relative-Path>/SOSP21_artifact_eval/src/.obj/gtest`
-   5. `mkdir <Relative-Path>/SOSP21_artifact_eval/src/.obj`
-   6. `cp -r googletest <Relative-Path>/SOSP21_artifact_eval/src/.obj/gtest`
-   7. `cd <Relative-Path>/SOSP21_artifact_eval/src/.obj/gtest`
+   4. `rm -rf <Relative-Path>/Basil_SOSP21_artifact/src/.obj/gtest`
+   5. `mkdir <Relative-Path>/Basil_SOSP21_artifact/src/.obj`
+   6. `cp -r googletest <Relative-Path>/Basil_SOSP21_artifact/src/.obj/gtest`
+   7. `cd <Relative-Path>/Basil_SOSP21_artifact/src/.obj/gtest`
    8. `cmake CMakeLists.txt`
    9. `make -j $(nproc)`
    10. `g++ -isystem ./include -I . -pthread -c ./src/gtest-all.cc`
@@ -336,7 +336,7 @@ Navigate to `SOSP21_artifact_eval/src` and build:
 ### Confirming that Basil binaries work locally (optional sanity check)
 You may want to run a simple toy single server/single client experiment to validate that the binaries you built do not have an obvious error.
 
-Navigate to `SOSP21_artifact_eval/src`. Run `./keygen.sh` to generate local priv/pub key-pairs. 
+Navigate to `Basil_SOSP21_artifact/src`. Run `./keygen.sh` to generate local priv/pub key-pairs. 
 
 Run server:
    
@@ -428,14 +428,14 @@ Additionally, you will have to install the following requisites:
 2. **Data Sets**: Build TPCC/Smallbank data sets and move them to /usr/local/etc/ 
    
       **Store TPCC data:**
-   - Navigate to`SOSP21_artifact_eval/src/store/benchmark/async/tpcc` 
+   - Navigate to`Basil_SOSP21_artifact/src/store/benchmark/async/tpcc` 
    - Run `./tpcc_generator --num_warehouses=<N> > tpcc-<N>-warehouse`
    - We used 20 warehouses, so replace `<N>` with `20`
    - Move output file to `/usr/local/etc/tpcc-<N>-warehouse`
    - You can skip this on client machines and create a separate disk image for cients without. This will considerably reduce image size and speed up experiment startup. 
  
       **Store Smallbank data:**
-   - Navigate to `SOSP21_artifact_eval/src/store/benchmark/async/smallbank/`
+   - Navigate to `Basil_SOSP21_artifact/src/store/benchmark/async/smallbank/`
    - Run `./smallbank_generator_main --num_customers=<N>`
    - We used 1 million customers, so replace `<N>` with `1000000`
    - The script will generate two files, smallbank_names, and smallbank_data. Move them to /usr/local/etc/
@@ -444,13 +444,13 @@ Additionally, you will have to install the following requisites:
    
 3. **Public Keys**: Generate Pub/Priv key-pairs, move them to /usr/local/etc/donna/
 
-    - Navigate to `SOSP21_artifact_eval/src` and run `keygen.sh`
+    - Navigate to `Basil_SOSP21_artifact/src` and run `keygen.sh`
     - By default keygen.sh uses type 4 = Ed25519 (this is what we evaluated unde); it can be modifed secp256k1 (type 3), but this requires editing the config files as well. (do not do this, to re-produce our experiments)
     - Move the key-pairs in the `/keys` folder to `/usr/local/etc/indicus-keys/donna/` (or to `/usr/local/etc/indicus-keys/secp256k1/` depending on what type used)
 
 4. **Helper scripts**: 
 
-    (On branch main) Navigate to SOSP21_artifact_eval/helper-scripts. Copy both these scripts (with the exact name) and place them in `/usr/local/etc` on the Cloudlab machine. Add execution permissions: `chmod +x disable_HT.sh; chmod +x turn_off_turbo.sh` The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
+    (On branch main) Navigate to Basil_SOSP21_artifact/helper-scripts. Copy both these scripts (with the exact name) and place them in `/usr/local/etc` on the Cloudlab machine. Add execution permissions: `chmod +x disable_HT.sh; chmod +x turn_off_turbo.sh` The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
 
    
 Once complete, create a new disk image (separate ones for server and client if you want to save space/time). Then, start the profile by choosing the newly created disk image.
@@ -477,7 +477,7 @@ Confirm these by attempting to ssh into a machine you started (on the Utah clust
 On branches TxHotstuff and TxBFTSmart you will need to complete the following pre-configuration steps before running an experiment script:
 
 1. **TxHotstuff**
-   1. Navigate to `SOSP21_artifact_eval/src/scripts`
+   1. Navigate to `Basil_SOSP21_artifact/src/scripts`
    2. Run `./batch_size <batch_size>` to configure the internal batch size used by the Hotstuff Consensus module. See sub-section "1-by-1 experiment guide" for what settings to use
    3. Open file `config_remote.sh` and edit the following lines to match your Cloudlab credentials:
       - Line 3: `TARGET_DIR="/users/<cloudlab-user>/config/"`
@@ -486,15 +486,15 @@ On branches TxHotstuff and TxBFTSmart you will need to complete the following pr
    5. This will upload the necessary configurations for the Hotstuff Consensus module to the Cloudlab machines.
 
 3. **TxBFTSmart**
-   1. Navigate to `SOSP21_artifact_eval/src/scripts`
-   2. Run `./one_step_config.sh <Local SOSP21_artifact_eval directory> <cloudlab-user> <experiment-name> <project-name> <cluster-domain-name>`
-   3. For example: `./one_step_config.sh /home/florian/Indicus/SOSP21_artifact_eval fs435 indicus morty-pg0 utah.cloudlab.us`
+   1. Navigate to `Basil_SOSP21_artifact/src/scripts`
+   2. Run `./one_step_config.sh <Local Basil_SOSP21_artifact directory> <cloudlab-user> <experiment-name> <project-name> <cluster-domain-name>`
+   3. For example: `./one_step_config.sh /home/florian/Indicus/Basil_SOSP21_artifact fs435 indicus morty-pg0 utah.cloudlab.us`
    4. This will upload the necessary configurations for the BFTSmart Conesnsus module to the Cloudlab machines.
       - Troubleshooting: Make sure files `server-hosts` and `client-hosts` in `/src/scripts/` do not contain empty lines at the end
 
 ### 2) Using the experiment scripts
 
-To run an experiment, you simply need to run: `python3 SOSP21_artifact_eval/experiment-scripts/run_multiple_experiments.py <CONFIG>` using a specified configuration JSON file (see below). The script will load all binaries and configurations onto the remote Cloudlab machines, and collect experiment data upon completion. We have provided experiment configurations for all experiments claimed by the paper, which you can find under `SOSP21_artifact_eva./experiment-configs`. In order for you to use them, you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
+To run an experiment, you simply need to run: `python3 Basil_SOSP21_artifact/experiment-scripts/run_multiple_experiments.py <CONFIG>` using a specified configuration JSON file (see below). The script will load all binaries and configurations onto the remote Cloudlab machines, and collect experiment data upon completion. We have provided experiment configurations for all experiments claimed by the paper, which you can find under `SOSP21_artifact_eva./experiment-configs`. In order for you to use them, you will need to make the following modifications to each file (Ctrl F and Replace in all the configs to save time):
 
 #### Required Modifications:
 1. `"project_name": "morty-pg0"`
@@ -505,7 +505,7 @@ To run an experiment, you simply need to run: `python3 SOSP21_artifact_eval/expe
    - Set the value field to be the local path (on your machine or the control machine) where experiment output files will be downloaded to and aggregated. 
 4. `"base_remote_bin_directory_nfs": “users/<cloudlab-user>/indicus”` 
    - Set the field `<cloudlab-user>`. This is the directory on the Cloudlab machines where the binaries will be uploaded
-5. `"src_directory" : “/home/florian/Indicus/SOSP21_artifact_eval/src”` 
+5. `"src_directory" : “/home/florian/Indicus/Basil_SOSP21_artifact/src”` 
    - Set the value field to your local path (on your machine or the control machine) to the source directory 
 6. `"emulab_user": "<cloudlab-username>"`
    - Set the field `<cloudlab-user>`. 
@@ -536,9 +536,9 @@ To run an experiment, you simply need to run: `python3 SOSP21_artifact_eval/expe
    - For convenience, we have included such series (in comments) in all configuration files. To use them, uncomment them (by removing the underscore `_`) and comment out the pre-specified single settings (by adding an underscore `_`).
    - 
 #### Starting an experiment:
-You are ready to start an experiment. Use any of the provided JSON configs under `SOSP21_artifact_eval/experiment-configs/<PATH>/<config>.json`. **Make sure** to use the binaries from a respective branch when running configs for Basil/Tapir, TxHotstuff, and TxBFTSmart respectively. All microbenchmark configs are Basil exclusive.
+You are ready to start an experiment. Use any of the provided JSON configs under `Basil_SOSP21_artifact/experiment-configs/<PATH>/<config>.json`. **Make sure** to use the binaries from a respective branch when running configs for Basil/Tapir, TxHotstuff, and TxBFTSmart respectively. All microbenchmark configs are Basil exclusive.
 
-Run: `python3 <PATH>/SOSP21_artifact_eval/experiment-scripts/run_multiple_experiments.py <PATH>SOSP21_artifact_eval/experiment-configs/<PATH>/<config>.json` and wait!
+Run: `python3 <PATH>/Basil_SOSP21_artifact/experiment-scripts/run_multiple_experiments.py <PATH>Basil_SOSP21_artifact/experiment-configs/<PATH>/<config>.json` and wait!
 
 Optional: To monitor experiment progress you can ssh into a server machine (us-east-1-0) and run htop. During the experiment run-time the cpus will be loaded (to different degrees depending on contention and client count).
   
@@ -555,7 +555,7 @@ To parse experiment results you have 2 options:
 2. Looking at generated png plots:
    Alternatively, on your local machine you can navigate to `<time_stamped_folder>/plots/tput-clients.png` and `<time_stamped_folder>/plots/lat-tput.png` to look at the data points directly. Currently however, it shows as "Number of Clients" the number of total client **processes** (i.e. `client_total`) and not the number of **Total clients** specified above. Keep this in mind when viewing output that was generated for experiments with a list of client settings.
    
- Find below, some example screenshots from looking at a provided experiment output from `SOSP21_artifact_eval/sample-output/Validated Results`:
+ Find below, some example screenshots from looking at a provided experiment output from `Basil_SOSP21_artifact/sample-output/Validated Results`:
 
    Experiment output folder:
 

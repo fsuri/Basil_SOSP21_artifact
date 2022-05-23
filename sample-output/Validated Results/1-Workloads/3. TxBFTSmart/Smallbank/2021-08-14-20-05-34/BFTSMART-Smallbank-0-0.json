@@ -319,7 +319,7 @@
   "smallbank_transact_saving_ratio": 10,
   "smallbank_write_check_ratio": 10,
   "src_commit_hash": "84a52034bef2f5145f4479e1c95ecd327405dc8b",
-  "src_directory": "/home/florian/Indicus/SOSP21_artifact_eval/src",
+  "src_directory": "/home/florian/Indicus/Basil_SOSP21_artifact/src",
   "stats_file_name": "stats.json",
   "stats_merge_lists": [
     "txn_groups",
