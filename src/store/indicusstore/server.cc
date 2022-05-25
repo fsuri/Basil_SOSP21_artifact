@@ -227,6 +227,11 @@ Server::~Server() {
     ReceiveMessageInternal(remote, type, data, meta_data);
   }
  }
+
+//Calls function handlers for respective message types.
+// Manages Multithread assignments:
+// 1. mainThreadDispatching: Deserialize messages on thread receiving messages, but dispatch message handling to main worker thread
+// 2. dispatchMessageReceive: Dispatch both message deserialization and message handling to main worker thread.
 //TODO: Full CPU utilization parallelism: Assign all handler functions to different threads.
 void Server::ReceiveMessageInternal(const TransportAddress &remote,
       const std::string &type, const std::string &data, void *meta_data) {
@@ -256,7 +261,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     }
   } else if (type == phase1.GetTypeName()) {
 
-//TODO: edit for atomic parallel P1.
+// edit for atomic parallel P1. (OUTDATED)
     // if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_CCC)){
     //  phase1.ParseFromString(data);
     //  HandlePhase1_atomic(remote, phase1);
@@ -282,7 +287,7 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
     //   }
     // }
 
-    //DEPRECATED only OCC parallel, not full P1. Suffers from non-atomicity
+    //Use only with OCC parallel, not full parallel P1. Suffers from non-atomicity in the latter case
     if(!params.mainThreadDispatching || (params.dispatchMessageReceive && !params.parallel_CCC)){
      phase1.ParseFromString(data);
      HandlePhase1(remote, phase1);
@@ -478,6 +483,8 @@ void Server::ReceiveMessageInternal(const TransportAddress &remote,
   }
 }
 
+//Adds new key-value store entry
+//Used for initialization (loading) the key-value store contents at startup.
 //Debug("Stuck at line %d", __LINE__);
 void Server::Load(const std::string &key, const std::string &value,
     const Timestamp timestamp) {
@@ -497,6 +504,9 @@ void Server::Load(const std::string &key, const std::string &value,
   }
 }
 
+//Handle Read Message
+//Dispatches to reader thread if params.parallel_reads = true, and multithreading enabled
+//Returns a signed message including i) the latest committed write (+ cert), and ii) the latest prepared write (both w.r.t to Timestamp of reader)
 void Server::HandleRead(const TransportAddress &remote,
      proto::Read &msg) {
 
@@ -536,6 +546,8 @@ void Server::HandleRead(const TransportAddress &remote,
     FreeReadReply(readReply);
   };
 
+//Sets RTS timestamp. Favors readers commit chances.
+//Disable if worried about Byzantine Readers DDos, or if one wants to favor writers.
   if (occType == MVTSO) {
     /* update rts */
     // TODO: For "proper Aborts": how to track RTS by transaction without knowing transaction digest?
@@ -669,6 +681,8 @@ void Server::HandleRead(const TransportAddress &remote,
 
 //////////////////////
 
+//Optional Code Handler in case one wants to parallelize P1 handling as well. Currently deprecated (possibly not working)
+//Skip to HandlePhase1(...)
 void Server::HandlePhase1_atomic(const TransportAddress &remote,
     proto::Phase1 &msg) {
 
@@ -706,6 +720,7 @@ void Server::HandlePhase1_atomic(const TransportAddress &remote,
     ProcessPhase1_atomic(remote, msg, txn, txnDigest);
   }
 }
+
 void Server::ProcessPhase1_atomic(const TransportAddress &remote,
     proto::Phase1 &msg, proto::Transaction *txn, std::string &txnDigest){
 
@@ -769,24 +784,34 @@ void Server::ProcessPhase1_atomic(const TransportAddress &remote,
   HandlePhase1CB(&msg, result, committedProof, txnDigest, remote, abstain_conflict, false);
 }
 
+//Helper function that forwards a received P1 message to a neighboring replica. Only does so if param.replica_gossip = true
+//Goal: Increases robustness against Byzantine Clients that only send P1 to some replicas. 
+//      This can cause concurrent transactions to miss forming dependencies, but later have to abort due to the conflict.
 void Server::ForwardPhase1(proto::Phase1 &msg){
   //std::vector<uint64_t> recipients;
-  // msg.set_replica_gossip(true);
+  msg.set_replica_gossip(true);
+  //Optionally send to f+1 neighboring replicas instead of 1 for increased robustness
   // for(int i = 1; i <= config.f+1; ++i){
   //   uint64_t nextReplica = (idx + i) % config.n;
   //   transport->SendMessageToReplica(this, groupIdx, nextReplica, msg);
   // }
 
-  // uint64_t nextReplica = (idx + 1) % config.n;
-  // transport->SendMessageToReplica(this, groupIdx, nextReplica, msg);
+  uint64_t nextReplica = (idx + 1) % config.n;
+  transport->SendMessageToReplica(this, groupIdx, nextReplica, msg);
 }
 
+//Helper function to elect a replica leader responsible for completing the commit protocol of a tx if no client leader finishes it 
+//Actual garbage collection (finishing commit protocol NOT currently implemented)
 void Server::Inform_P1_GC_Leader(proto::Phase1Reply &reply, proto::Transaction &txn, std::string &txnDigest, int64_t grpLeader){ //default -1
   int64_t logGrp = GetLogGroup(txn, txnDigest);
   if(grpLeader == -1) grpLeader = txnDigest[0] % config.n; //Default *first* leader,
   transport->SendMessageToReplica(this, logGrp, grpLeader,reply);
 }
 
+//Handler for Phase1 message
+//Manages ongoing transactions
+//Executes Concurrency Control Check
+//Replies with signed Phase1Reply voting on whether to Commit/Abort the transaction
 void Server::HandlePhase1(const TransportAddress &remote,
     proto::Phase1 &msg) {
   //dummyTx = msg.txn(); //PURELY TESTING PURPOSES!!: NOTE WARNING
@@ -856,11 +881,11 @@ void Server::HandlePhase1(const TransportAddress &remote,
   p1MetaData.insert(c, txnDigest);  //TODO: next: make P1 part of ongoing? same for P2?
   //c->second.P1meta_mutex.lock();
   bool hasP1 = c->second.hasP1;
-  if(hasP1 && replicaGossip){
+  if(hasP1 && replicaGossip){  // If P1 has already been received and current message is a gossip one, do nothing.
     //Do not need to reply to forwarded P1. If adding replica GC -> want to forward it to leader.
     //Inform_P1_GC_Leader(proto::Phase1Reply &reply, proto::Transaction &txn, std::string &txnDigest, int64_t grpLeader);
   }
-  else if(hasP1){
+  else if(hasP1){ // If P1 has already been received (sent by a fallback) and current message is from original client, then only inform client of blocked dependencies so it can issue fallbacks of its own
     result = c->second.result;
     // need to check if result is WAIT: if so, need to add to waitingDeps original client..
         //(TODO) Instead: use original client list and store pairs <txnDigest, <reqID, remote>>
@@ -873,7 +898,7 @@ void Server::HandlePhase1(const TransportAddress &remote,
       UW_ASSERT(committedProof != nullptr);
     }
     c.release();
-  } else{
+  } else{ // FIRST P1 request received (i.e. from original client). Gossip if desired and check whether dependencies are valid
     c.release();
     if(params.replicaGossip) ForwardPhase1(msg);
     if(!replicaGossip) msg.set_replica_gossip(false); //unset it.
@@ -950,6 +975,8 @@ void Server::HandlePhase1(const TransportAddress &remote,
   HandlePhase1CB(&msg, result, committedProof, txnDigest, remote, abstain_conflict, replicaGossip);
 }
 
+//Called after Concurrency Control Check completes
+//Sends P1Reply to client. Sends no reply if P1 receives was simply forwarded by another replica.
 //TODO: move p1Decision into this function (not sendp1: Then, can unlock here.)
 void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Result result,
   const proto::CommittedProof* &committedProof, std::string &txnDigest, const TransportAddress &remote, const proto::Transaction *abstain_conflict, bool replicaGossip){
@@ -968,7 +995,8 @@ void Server::HandlePhase1CB(proto::Phase1 *msg, proto::ConcurrencyControl::Resul
   if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1message(msg);
 }
 
-
+//Sends a signed P2 reply to the client, containing Commit/Abort respectively. 
+//Echos the decision carried in P2 if none buffered, and returns previously buffered decision otherwise
 void Server::HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const std::string* txnDigest,
   signedCallback sendCB, proto::Phase2Reply* phase2Reply, cleanCallback cleanCB, void* valid){
 
@@ -1036,6 +1064,7 @@ void Server::HandlePhase2CB(TransportAddress *remote, proto::Phase2 *msg, const 
  }
 }
 
+//Dispatch Message signing and sending to a worker thread
 void Server::SendPhase2Reply(proto::Phase2 *msg, proto::Phase2Reply *phase2Reply, signedCallback sendCB){
 
   if (params.validateProofs && params.signedMessages) {
@@ -1091,6 +1120,9 @@ void Server::SendPhase2Reply(proto::Phase2 *msg, proto::Phase2Reply *phase2Reply
 //
 //     }
 
+//Handler for Phase2
+//Verifies correctness of Phase2 message (quorum signatures of p1 replies) and sends P2 reply
+//Dispatches verification to worker threads if multiThreading enabled.
 void Server::HandlePhase2(const TransportAddress &remote,
        proto::Phase2 &msg) {
 
@@ -1310,6 +1342,9 @@ void Server::HandlePhase2(const TransportAddress &remote,
   }
 }
 
+//Called after Writeback request has been verified
+//Updates committed/aborted datastructures and key-value store accordingly
+//Garbage collects ongoing meta-data
 void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDigest,
   proto::Transaction* txn, void* valid){
 
@@ -1377,7 +1412,9 @@ void Server::WritebackCallback(proto::Writeback *msg, const std::string* txnDige
 
 }
 
-
+//Handler for Writeback Message
+//Verifies correctness of request (quorum of P1replies or P2 replies depending on Fast/Slow Path)
+//Dispatches verification to worker threads if multiThreading enabled
 void Server::HandleWriteback(const TransportAddress &remote,
     proto::Writeback &msg) {
   stats.Increment("total_writeback_received", 1);
