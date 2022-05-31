@@ -1,0 +1,14 @@
+set datafile separator ','
+set title "replication\\\_protocol=tapir"
+set key bottom right
+set xlabel 'Latency (ms)'
+set ylabel 'Cumulative ratio of operations'
+set terminal pngcairo size 800,600 enhanced dashed font 'DejaVu Sans,12'
+set output '/home/floriansuri/Research/Projects/Indicus/output/2021-08-11-20-30-03/2021-08-11-20-30-03/plots/aggregate-balance-0.png'
+set style line 1 linetype 1 linewidth 2
+set style line 2 linetype 1 linecolor "green" linewidth 2
+set style line 3 linetype 1 linecolor "blue" linewidth 2
+set style line 4 linetype 4 linewidth 2
+set style line 5 linetype 5 linewidth 2
+set style line 6 linetype 8 linewidth 2
+plot '/home/floriansuri/Research/Projects/Indicus/output/2021-08-11-20-30-03/2021-08-11-20-30-03/2021-08-11-20-30-21/out/plots/aggregate-balance.csv' title "client\\\_total=71" ls 1 with lines
