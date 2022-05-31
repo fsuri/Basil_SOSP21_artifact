@@ -3,11 +3,11 @@ set key top left
 set xlabel 'Number of Clients'
 set ylabel 'Throughput (txn/s)'
 set terminal pngcairo size 800,600 enhanced dashed font 'DejaVu Sans,12'
-set output '/home/florian/Indicus/output/2021-08-11-20-37-30/plots/tput-clients.png'
+set output '/home/florian/Research/Projects/Indicus/output/2021-08-11-20-37-30/plots/tput-clients.png'
 set style line 1 linetype 1 linewidth 2
 set style line 2 linetype 1 linecolor "green" linewidth 2
 set style line 3 linetype 1 linecolor "blue" linewidth 2
 set style line 4 linetype 4 linewidth 2
 set style line 5 linetype 5 linewidth 2
 set style line 6 linetype 8 linewidth 2
-plot '/home/florian/Indicus/output/2021-08-11-20-37-30/2021-08-11-20-37-30/plots/tput-clients.csv' title 'Indicus-Multi' ls 1 with linespoint
+plot '/home/florian/Research/Projects/Indicus/output/2021-08-11-20-37-30/2021-08-11-20-37-30/plots/tput-clients.csv' title 'Indicus-Multi' ls 1 with linespoint

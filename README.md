@@ -495,7 +495,7 @@ On branches TxHotstuff and TxBFTSmart you will need to complete the following pr
 3. **TxBFTSmart**
    1. Navigate to `Basil_SOSP21_artifact/src/scripts`
    2. Run `./one_step_config.sh <Local Basil_SOSP21_artifact directory> <cloudlab-user> <experiment-name> <project-name> <cluster-domain-name>`
-   3. For example: `./one_step_config.sh /home/florian/Indicus/Basil_SOSP21_artifact fs435 indicus morty-pg0 utah.cloudlab.us`
+   3. For example: `./one_step_config.sh /home/florian/Research/Projects/Indicus/Basil_SOSP21_artifact fs435 indicus morty-pg0 utah.cloudlab.us`
    4. This will upload the necessary configurations for the BFTSmart Conesnsus module to the Cloudlab machines.
       - Troubleshooting: Make sure files `server-hosts` and `client-hosts` in `/src/scripts/` do not contain empty lines at the end
 
@@ -512,7 +512,7 @@ To run an experiment, you simply need to run: `python3 Basil_SOSP21_artifact/exp
    - Set the value field to be the local path (on your machine or the control machine) where experiment output files will be downloaded to and aggregated. 
 4. `"base_remote_bin_directory_nfs": “users/<cloudlab-user>/indicus”` 
    - Set the field `<cloudlab-user>`. This is the directory on the Cloudlab machines where the binaries will be uploaded
-5. `"src_directory" : “/home/florian/Indicus/Basil_SOSP21_artifact/src”` 
+5. `"src_directory" : “/home/florian/Research/Projects/Indicus/Basil_SOSP21_artifact/src”` 
    - Set the value field to your local path (on your machine or the control machine) to the source directory 
 6. `"emulab_user": "<cloudlab-username>"`
    - Set the field `<cloudlab-user>`. 
