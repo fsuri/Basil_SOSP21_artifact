@@ -4,11 +4,11 @@ set key bottom right
 set xlabel 'Latency (ms)'
 set ylabel 'Cumulative ratio of operations'
 set terminal pngcairo size 800,600 enhanced dashed font 'DejaVu Sans,12'
-set output '/home/florian/Indicus/output/2021-08-14-20-38-23/2021-08-14-20-38-23/plots/aggregate-amalgamate-0.png'
+set output '/home/florian/Research/Projects/Indicus/output/2021-08-14-20-38-23/2021-08-14-20-38-23/plots/aggregate-amalgamate-0.png'
 set style line 1 linetype 1 linewidth 2
 set style line 2 linetype 1 linecolor "green" linewidth 2
 set style line 3 linetype 1 linecolor "blue" linewidth 2
 set style line 4 linetype 4 linewidth 2
 set style line 5 linetype 5 linewidth 2
 set style line 6 linetype 8 linewidth 2
-plot '/home/florian/Indicus/output/2021-08-14-20-38-23/2021-08-14-20-38-23/2021-08-14-20-39-02/out/plots/aggregate-amalgamate.csv' title "client\\\_total=96" ls 1 with lines
+plot '/home/florian/Research/Projects/Indicus/output/2021-08-14-20-38-23/2021-08-14-20-38-23/2021-08-14-20-39-02/out/plots/aggregate-amalgamate.csv' title "client\\\_total=96" ls 1 with lines

@@ -26,7 +26,7 @@
   "_client_zipf_coefficient": 0.9,
   "_server_wrap_command": "valgrind --tool=none %s",
   "_src_commit_hash": "threadpool_test",
-  "base_local_exp_directory": "/home/florian/Indicus/output/2021-08-12-18-39-44",
+  "base_local_exp_directory": "/home/florian/Research/Projects/Indicus/output/2021-08-12-18-39-44",
   "base_mounted_fs_path": "/mnt/extra",
   "base_remote_bin_directory_nfs": "/users/fs435/indicus",
   "base_remote_exp_directory": "/mnt/extra/experiments",
@@ -377,7 +377,7 @@
   },
   "server_rpc_port": 8087,
   "src_commit_hash": "f329ddd7318451bbbc9ad4578edd0d0572d71fbe",
-  "src_directory": "/home/florian/Indicus/Basil_SOSP21_artifact/src",
+  "src_directory": "/home/florian/Research/Projects/Indicus/Basil_SOSP21_artifact/src",
   "stats_file_name": "stats.json",
   "stats_merge_lists": [
     "txn_groups",
