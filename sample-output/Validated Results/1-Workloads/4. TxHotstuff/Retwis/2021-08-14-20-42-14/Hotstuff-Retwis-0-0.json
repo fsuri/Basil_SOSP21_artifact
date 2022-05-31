@@ -1,7 +1,7 @@
 {
   "_server_wrap_command": "gdb -ex=r --args %s",
   "_src_commit_hash": "2f1df20be73ae7f0036268c18ac3ce984eb711e5",
-  "base_local_exp_directory": "/home/florian/Research/Projects/Indicus/output/2021-08-14-20-42-14/2021-08-14-20-42-14",
+  "base_local_exp_directory": "/home/floriansuri/Research/Projects/Indicus/output/2021-08-14-20-42-14/2021-08-14-20-42-14",
   "base_mounted_fs_path": "/mnt/extra",
   "base_remote_bin_directory_nfs": "/users/fs435/indicus",
   "base_remote_exp_directory": "/mnt/extra/experiments",
@@ -312,7 +312,7 @@
   },
   "server_rpc_port": 8087,
   "src_commit_hash": "a8c36aa41dddf02d6f0aeec6f6832f506decb925",
-  "src_directory": "/home/florian/Research/Projects/Indicus/Basil_SOSP21_artifact/src",
+  "src_directory": "/home/floriansuri/Research/Projects/Indicus/Basil_SOSP21_artifact/src",
   "stats_file_name": "stats.json",
   "stats_merge_lists": [
     "txn_groups",

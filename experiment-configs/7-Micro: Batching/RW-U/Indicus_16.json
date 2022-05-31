@@ -258,7 +258,7 @@
   "output_latency_scale": 1000,
   "_src_commit_hash": "threadpool_test",
   "stats_file_name": "stats.json",
-  "base_local_exp_directory":  "/home/florian/Research/Projects/Indicus/output",
+  "base_local_exp_directory":  "/home/floriansuri/Research/Projects/Indicus/output",
   "base_mounted_fs_path": "/mnt/extra",
   "base_remote_bin_directory_nfs": "/users/fs435/indicus",
   "base_remote_exp_directory": "/mnt/extra/experiments",
@@ -273,7 +273,7 @@
   "out_directory_name": "out",
   "server_bin_name": "server",
   "server_port": 7087,
-  "src_directory": "/home/florian/Research/Projects/Indicus/Basil_SOSP21_artifact/src",
+  "src_directory": "/home/floriansuri/Research/Projects/Indicus/Basil_SOSP21_artifact/src",
   "make_collect_bins": [
     "store/benchmark/async/benchmark",
     "store/server"
