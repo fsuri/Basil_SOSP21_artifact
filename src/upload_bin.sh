@@ -26,14 +26,14 @@ for host in "${arr_servers[@]}"
 do
    echo "uploading binaries to $host"
    #ssh fs435@$host.indicus.morty-pg0.utah.cloudlab.us "sudo rm -rf /mnt/extra/experiments/*"
-   rsync -v -r -e ssh /home/florian/Research/Projects/Indicus/Basil_SOSP21_artifact/src/bin fs435@$host.indicus.morty-pg0.utah.cloudlab.us:/users/fs435/indicus
+   rsync -v -r -e ssh /home/floriansuri/Research/Projects/Indicus/Basil_SOSP21_artifact/src/bin fs435@$host.indicus.morty-pg0.utah.cloudlab.us:/users/fs435/indicus
 done
 
 for host in "${arr_clients[@]}"
 do
    echo "uploading binaries to $host"
    #ssh fs435@$host.indicus.morty-pg0.utah.cloudlab.us "sudo rm -rf /mnt/extra/experiments/*"
-   rsync -v -r -e ssh /home/florian/Research/Projects/Indicus/Basil_SOSP21_artifact/src/bin fs435@$host.indicus.morty-pg0.utah.cloudlab.us:/users/fs435/indicus
+   rsync -v -r -e ssh /home/floriansuri/Research/Projects/Indicus/Basil_SOSP21_artifact/src/bin fs435@$host.indicus.morty-pg0.utah.cloudlab.us:/users/fs435/indicus
 done
 
 
