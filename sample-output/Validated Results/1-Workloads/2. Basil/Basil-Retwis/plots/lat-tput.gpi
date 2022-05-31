@@ -1,0 +1,13 @@
+set datafile separator ','
+set key top left
+set xlabel 'Throughput (txn/s)'
+set ylabel 'p50 Latency (ms)'
+set terminal pngcairo size 800,600 enhanced dashed font 'DejaVu Sans,12'
+set output '/home/floriansuri/Research/Projects/Indicus/output/2021-08-11-19-42-53/plots/lat-tput.png'
+set style line 1 linetype 1 linewidth 2
+set style line 2 linetype 1 linecolor "green" linewidth 2
+set style line 3 linetype 1 linecolor "blue" linewidth 2
+set style line 4 linetype 4 linewidth 2
+set style line 5 linetype 5 linewidth 2
+set style line 6 linetype 8 linewidth 2
+plot '/home/floriansuri/Research/Projects/Indicus/output/2021-08-11-19-42-53/2021-08-11-19-42-53/plots/lat-tput.csv' title 'Indicus-Multi' ls 1 with linespoint
