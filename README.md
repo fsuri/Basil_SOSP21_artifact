@@ -339,14 +339,21 @@ You may want to run a simple toy single server/single client experiment to valid
 Navigate to `Basil_SOSP21_artifact/src`. Run `./keygen.sh` to generate local priv/pub key-pairs. 
 
 Run server:
+
+`./server-tester.sh`
+
+Alternatively run manually:
    
 `DEBUG=store/indicusstore/* store/server --config_path shard-r0.config --group_idx 0 --num_groups 1 --num_shards 1 --replica_idx 0 --protocol indicus --num_keys 1 --debug_stats --indicus_key_path keys &> server.out`
 
 Run client:
+
+`./client-tester.sh`
    
+Alternatively run manually:
 `store/benchmark/async/benchmark --config_path shard-r0.config --num_groups 1 --num_shards 1 --protocol_mode indicus --num_keys 1 --benchmark rw --num_ops_txn 2 --exp_duration 10 --client_id 0 --warmup_secs 0 --cooldown_secs 0 --key_selector zipf --zipf_coefficient 0.0 --stats_file "stats-0.json" --indicus_key_path keys &> client-0.out`
 
-The client should finish within 10 seconds and the output file `client-0.out` should include summary of the transactions committed at the end. Cancel the server manually using `ctrl C`. 
+The client should finish within 10 seconds and the output file `client-0.out` should include summary of the transactions committed at the end. If running manually, cancel the server afterwards using `ctrl C`. 
 
 
 ## Setting up Cloudlab <a name="cloudlab"></a>
