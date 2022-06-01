@@ -542,11 +542,12 @@ void Server::HandleRead(const TransportAddress &remote,
   TransportAddress *remoteCopy = remote.clone();
 
 
-  auto sendCB = [this, remoteCopy, readReply, c_id = msg.timestamp().id(), req_id=msg.req_id()]() {
+  //auto sendCB = [this, remoteCopy, readReply, c_id = msg.timestamp().id(), req_id=msg.req_id()]() {
+  //Debug("Sent ReadReply[%lu:%lu]", c_id, req_id);  
+  auto sendCB = [this, remoteCopy, readReply]() {
     this->transport->SendMessage(this, *remoteCopy, *readReply);
     delete remoteCopy;
     FreeReadReply(readReply);
-    Debug("Sent ReadReply[%lu:%lu]", c_id, req_id);
   };
 
   //If MVTSO: Read prepared, Set RTS
@@ -2762,7 +2763,6 @@ void Server::CheckDependents(const std::string &txnDigest) {
   //if (dependentsItr != dependents.end()) {
     for (const auto &dependent : e->second) {
     //for (const auto &dependent : dependentsItr->second) {
-      std::cerr << "trying to update waitingDependencies for transaction: " << BytesToHex(dependent, 16).c_str() << std::endl; 
       waitingDependenciesMap::accessor f;
       bool dependenciesItr = waitingDependencies_new.find(f, dependent);
       //if(!dependenciesItr){
