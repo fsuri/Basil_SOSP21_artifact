@@ -267,8 +267,8 @@ void Client::Commit(commit_callback ccb, commit_timeout_callback ctcb,
 }
 
 void Client::Phase1(PendingRequest *req) {
-  Debug("PHASE1 [%lu:%lu] at %lu", client_id, client_seq_num,
-      txn.timestamp().timestamp());
+  Debug("PHASE1 [%lu:%lu] for txn_id %s at TS %lu", client_id, client_seq_num,
+      BytesToHex(TransactionDigest(req->txn, params.hashDigest), 16).c_str(), txn.timestamp().timestamp());
 
 
   UW_ASSERT(txn.involved_groups().size() > 0);
@@ -429,7 +429,7 @@ void Client::Phase1TimeoutCallback(int group, uint64_t txnId, int status) {
   if (itr == this->pendingReqs.end()) {
     return;
   }
-
+  Debug("P1 TIMEOUT IS TRIGGERED for tx_id %d on group %d", txnId, group);
   return;  //TODO:: REMOVE AND REPLACE
 
   PendingRequest *req = itr->second;

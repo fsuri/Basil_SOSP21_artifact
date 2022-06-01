@@ -304,7 +304,7 @@ static bool ValidateTransMode(const char* flagname,
   std::cerr << "Invalid value for --" << flagname << ": " << value << std::endl;
   return false;
 }
-DEFINE_string(trans_protocol, trans_args[0], "transport protocol to use for"
+DEFINE_string(trans_protocol, trans_args[1], "transport protocol to use for"
 		" passing messages");
 DEFINE_validator(trans_protocol, &ValidateTransMode);
 
