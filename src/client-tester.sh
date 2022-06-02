@@ -49,7 +49,7 @@ DEBUG=store/$STORE/* store/benchmark/async/benchmark --config_path $CONFIG --num
   --stats_file "stats-0.json" --indicus_key_path $KEY_PATH &> client-0.out &
 
 
-sleep $((DURATION+2))
+sleep $((DURATION+3))
 echo '[2] Shutting down possibly open servers and clients'
 killall store/benchmark/async/benchmark
 killall store/server

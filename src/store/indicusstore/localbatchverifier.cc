@@ -112,11 +112,11 @@ bool LocalBatchVerifier::Verify(crypto::PubKey *publicKey, const std::string &me
   if (itr == cache.end()) {
     lock.unlock();
     stats.Increment("verify_cache_miss");
-    Latency_Start(&cryptoLats[sched_getcpu()]);
+    //Latency_Start(&cryptoLats[sched_getcpu()]);
     //TODO: here: call AddToBatch  . This function needs to include the callback of the return
     //TODO: add automatic dispatch/ VerifyBatch when batch is full. Pass Callback function that manages all the callbacks.
     bool valid = crypto::Verify(publicKey, &hashStr[0], hashStr.length(), &rootSig[0]);
-    Latency_End(&cryptoLats[sched_getcpu()]);
+    //Latency_End(&cryptoLats[sched_getcpu()]);
     if (valid) {
       Debug("(CPU:%d) Adding rootSig:[%s] and hashStr:[%s].",
           sched_getcpu(),
