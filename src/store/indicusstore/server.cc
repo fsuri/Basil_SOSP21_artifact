@@ -3593,8 +3593,9 @@ void Server::SendRelayP1(const TransportAddress &remote, const std::string &depe
 }
 
 bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, const std::string &txnDigest){
+  
+  Debug("Checking for existing WB message for txn %s", BytesToHex(txnDigest, 16).c_str());
   //1) COMMIT CASE
-  std::cerr<<"called Forward Writeback" << std::endl;
   if(committed.find(txnDigest) != committed.end()){
       Debug("ForwardingWriteback Commit for txn: %s", BytesToHex(txnDigest, 64).c_str());
       proto::Phase1FBReply phase1FBReply;
@@ -3651,8 +3652,8 @@ bool Server::ForwardWriteback(const TransportAddress &remote, uint64_t ReqId, co
       transport->SendMessage(this, remote, phase1FBReply);
       return true;
   }
-   
-  std::cerr<<"triggers no else case" << std::endl;
+  
+  Debug("No existing WB message found for txn %s", BytesToHex(txnDigest, 16).c_str());
   return false;
 }
 
@@ -3726,12 +3727,12 @@ void Server::HandlePhase1FB(const TransportAddress &remote, proto::Phase1FB &msg
 
   //check if already committed. reply with whole proof so client can forward that.
   //1) COMMIT CASE, 2) ABORT CASE
-  std::cerr<<"calling ForwardWriteback" << std::endl;
+
   if(ForwardWriteback(remote, msg.req_id(), txnDigest)){
     if(params.mainThreadDispatching && (!params.dispatchMessageReceive || params.parallel_CCC)) FreePhase1FBmessage(&msg);
     return;
   }
-  std::cerr << "did not find a writeback message" << std::endl;
+  
   //Otherwise, keep track of interested clients to message in the future
   interestedClientsMap::accessor i;
   bool interestedClientsItr = interestedClients.insert(i, txnDigest);
