@@ -46,9 +46,11 @@ DEBUG=store/$STORE/* store/benchmark/async/benchmark --config_path $CONFIG --num
   --num_shards $NUM_GROUPS --protocol_mode $PROTOCOL --num_keys $NUM_KEYS_IN_DB --benchmark rw \
   --num_ops_txn $NUM_OPS_TX --exp_duration $DURATION --client_id 0 --warmup_secs 0 \
   --cooldown_secs 0 --key_selector zipf --zipf_coefficient $ZIPF \
-  --stats_file "stats-0.json" --indicus_key_path $KEY_PATH &> client-0.out
+  --stats_file "stats-0.json" --indicus_key_path $KEY_PATH &> client-0.out &
 
 
-sleep 1
-echo '[2] Shutting down possibly open servers'
+sleep $((DURATION+2))
+echo '[2] Shutting down possibly open servers and clients'
+killall store/benchmark/async/benchmark
 killall store/server
+
