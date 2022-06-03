@@ -430,7 +430,7 @@ Next, follow the above manual installation guide (section "Installing Dependenci
 Additionally, you will have to install the following requisites:
 1. **NTP**:  https://vitux.com/how-to-install-ntp-server-and-client-on-ubuntu/ 
    
-   Confirm that it is running: sudo service ntp status (check for status Active)
+   Confirm that it is running: `sudo service ntp status` (check for status Active)
 
 2. **Data Sets**: Build TPCC/Smallbank data sets and move them to /usr/local/etc/ 
    
