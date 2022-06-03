@@ -452,7 +452,7 @@ Additionally, you will have to install the following requisites:
 3. **Public Keys**: Generate Pub/Priv key-pairs, move them to /usr/local/etc/donna/
 
     - Navigate to `Basil_SOSP21_artifact/src` and run `keygen.sh`
-    - By default keygen.sh uses type 4 = Ed25519 (this is what we evaluated unde); it can be modifed secp256k1 (type 3), but this requires editing the config files as well. (do not do this, to re-produce our experiments)
+    - By default keygen.sh uses type 4 = Ed25519 (this is what we evaluated the systems with); it can be modifed secp256k1 (type 3), but this requires editing the config files as well. (do not do this, to re-produce our experiments)
     - Move the key-pairs in the `/keys` folder to `/usr/local/etc/indicus-keys/donna/` (or to `/usr/local/etc/indicus-keys/secp256k1/` depending on what type used)
 
 4. **Helper scripts**: 
