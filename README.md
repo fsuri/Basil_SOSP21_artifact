@@ -290,6 +290,8 @@ If it is not installed in `/usr/lib/jvm` then source the `LD_LIBRARY_PATH` accor
 - `CFLAGS += -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux`
 - `LDFLAGS += -L/usr/lib/jvm/java-1.11.0-openjdk-amd64/lib/server -ljvm`  (adjust this)
 
+Afterwards, open to `/usr/lib/jvm/java-11-openjdk-amd64/conf/security/java.security`and comment out (or remove) the following line: `jdk.tls.disabledAlgorithms=SSLv3, TLSv1, RC4, DES, MD5withRSA, DH keySize < 1024 EC keySize < 224, 3DES_EDE_CBC, anon, NULL`
+
 
 ### Building binaries:
    
@@ -458,6 +460,10 @@ Additionally, you will have to install the following requisites:
 4. **Helper scripts**: 
 
     (On branch main) Navigate to Basil_SOSP21_artifact/helper-scripts. Copy both these scripts (with the exact name) and place them in `/usr/local/etc` on the Cloudlab machine. Add execution permissions: `chmod +x disable_HT.sh; chmod +x turn_off_turbo.sh` The scripts are used at runtime by the experiments to disable hyperthreading and turbo respectively.
+    
+5. **Pre-Troubleshooting**:
+
+   To avoid any issue when running *TxBFTSmart* locate your `java.security` file (`/usr/lib/jvm/java-11-openjdk-amd64/conf/security/java.security`) and comment out (or remove) the following line: `jdk.tls.disabledAlgorithms=SSLv3, TLSv1, RC4, DES, MD5withRSA, DH keySize < 1024 EC keySize < 224, 3DES_EDE_CBC, anon, NULL`
 
    
 Once complete, create a new disk image (separate ones for server and client if you want to save space/time). Then, start the profile by choosing the newly created disk image.
