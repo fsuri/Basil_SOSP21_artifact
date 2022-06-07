@@ -271,7 +271,7 @@ Note, that this must be done everytime you open a new terminal. You may add it t
 (When building on a Cloudlab controller instead of locally, the setvars.sh must be sourced manually everytime since bashrc will not be persisted across images. All other experiment machines will be source via the experiment scripts, so no further action is necessary there.)
 
 
-This completes all requires installs for branches Basil/Tapir and TxHotstuff. 
+This completes all required installs for branches Basil/Tapir and TxHotstuff. 
 
 When building TxBFTSmart (on branch TxBFTSmart) the following additional steps are necessary:
 
@@ -641,7 +641,7 @@ We report evaluation results for 3 workloads (TPCC, Smallbank, Retwis) and 4 sys
       - Smallbank: Throughput: ~6.4k tx/s Latency: ~42 ms
       - Retwis: Throughput: ~5.2k tx/s, Latency: ~48 ms
       
-   > :warning: **[WARNING]**: Hotstuffs performance is quite volatile with respect to total number of clients and the batch size specified. Since the Hotstuff protocol uses a pipelined consensus mechanism, it requires at least `batch_size x 4` active client requests per shard at any given time for progress. Using too few clients, and too large of a batch size will get Hotstuff stuck. In turn, using too many total clients will result in contention that is too high, causing exponential backoffs which leads to few active clients, hence slowing down the remaining active clients. These slow downs in turn lead to more contention and aborts, resulting in no throughput. The configs provided by us roughly capture the window of balance that allows for peak throughput. \  
+   > :warning: **[WARNING]**: Hotstuffs performance can be quite volatile with respect to total number of clients and the batch size specified. Since the Hotstuff protocol uses a pipelined consensus mechanism, it requires at least `batch_size x 4` active client requests per shard at any given time for progress. Using too few clients, and too large of a batch size will get Hotstuff stuck. In turn, using too many total clients will result in contention that is too high, causing exponential backoffs which leads to few active clients, hence slowing down the remaining active clients. These slow downs in turn lead to more contention and aborts, resulting in no throughput. The configs provided by us roughly capture the window of balance that allows for peak throughput. \  
       
    4. **TxBFTSmart**: 
    > :warning: Make sure to run on branch `TxBFTSmart`. Build the binaries before running (see instructions above)
